@@ -22,6 +22,17 @@ const (
 	OutcomeUnknown  Outcome = "unknown"  // Outcome not determined
 )
 
+// RollbackInfo contains information about reversibility of an action.
+type RollbackInfo struct {
+	Reversible   bool       `json:"reversible"`             // Whether this action can be undone
+	RollbackCmd  string     `json:"rollbackCmd,omitempty"`  // Command to undo
+	PreState     string     `json:"preState,omitempty"`     // JSON snapshot of state before action
+	RolledBack   bool       `json:"rolledBack"`             // Whether this was rolled back
+	RolledBackAt *time.Time `json:"rolledBackAt,omitempty"` // When it was rolled back
+	RolledBackBy string     `json:"rolledBackBy,omitempty"` // Who rolled it back
+	RollbackID   string     `json:"rollbackId,omitempty"`   // ID of the rollback remediation record
+}
+
 // RemediationRecord represents a logged remediation action
 type RemediationRecord struct {
 	ID           string        `json:"id"`
@@ -38,6 +49,9 @@ type RemediationRecord struct {
 	Duration     time.Duration `json:"duration,omitempty"`   // How long until resolved
 	Note         string        `json:"note,omitempty"`       // Optional user/AI note
 	Automatic    bool          `json:"automatic"`            // Was this triggered automatically by AI
+	Rollback     *RollbackInfo `json:"rollback,omitempty"`   // Rollback information (Pro feature)
+	IsRollback   bool          `json:"isRollback,omitempty"` // True if this is a rollback of another action
+	RollbackOf   string        `json:"rollbackOf,omitempty"` // ID of original action if this is a rollback
 }
 
 // RemediationLog stores remediation history
@@ -431,4 +445,62 @@ func countMatches(a, b []string) int {
 		}
 	}
 	return count
+}
+
+// GetByID returns a remediation record by its ID.
+func (r *RemediationLog) GetByID(id string) (*RemediationRecord, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for i := range r.records {
+		if r.records[i].ID == id {
+			return &r.records[i], true
+		}
+	}
+	return nil, false
+}
+
+// MarkRolledBack marks a remediation record as rolled back.
+func (r *RemediationLog) MarkRolledBack(id, rollbackID, username string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range r.records {
+		if r.records[i].ID == id {
+			if r.records[i].Rollback == nil {
+				r.records[i].Rollback = &RollbackInfo{}
+			}
+			now := time.Now()
+			r.records[i].Rollback.RolledBack = true
+			r.records[i].Rollback.RolledBackAt = &now
+			r.records[i].Rollback.RolledBackBy = username
+			r.records[i].Rollback.RollbackID = rollbackID
+
+			// Persist
+			go func() {
+				if err := r.saveToDisk(); err != nil {
+					log.Warn().Err(err).Msg("Failed to save remediation log after rollback")
+				}
+			}()
+
+			return nil
+		}
+	}
+	return fmt.Errorf("remediation record not found: %s", id)
+}
+
+// GetRollbackable returns remediations that can be rolled back.
+func (r *RemediationLog) GetRollbackable(limit int) []RemediationRecord {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var result []RemediationRecord
+	for i := len(r.records) - 1; i >= 0 && len(result) < limit; i-- {
+		rec := r.records[i]
+		// Must have rollback info, be reversible, and not already rolled back
+		if rec.Rollback != nil && rec.Rollback.Reversible && !rec.Rollback.RolledBack && !rec.IsRollback {
+			result = append(result, rec)
+		}
+	}
+	return result
 }

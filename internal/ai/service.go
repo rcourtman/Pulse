@@ -226,6 +226,15 @@ func (s *Service) GetPatrolService() *PatrolService {
 	return s.patrolService
 }
 
+// GetRemediationLog returns the remediation log from the patrol service.
+func (s *Service) GetRemediationLog() *memory.RemediationLog {
+	patrol := s.GetPatrolService()
+	if patrol == nil {
+		return nil
+	}
+	return patrol.GetRemediationLog()
+}
+
 // GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for token-efficient real-time analysis
 func (s *Service) GetAlertTriggeredAnalyzer() *AlertTriggeredAnalyzer {
 	s.mu.RLock()

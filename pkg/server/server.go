@@ -15,6 +15,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -27,6 +28,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
 
@@ -90,22 +92,50 @@ func Run(ctx context.Context, version string) error {
 	// Initialize license public key for Pro feature validation
 	license.InitPublicKey()
 
+	// Create license service early for feature checks
+	licenseService := license.NewService()
+
 	// Initialize RBAC manager for role-based access control
 	dataDir := os.Getenv("PULSE_DATA_DIR")
 	if dataDir == "" {
 		dataDir = "/etc/pulse"
 	}
-	rbacManager, err := auth.NewFileManager(dataDir)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize RBAC manager, role management will be unavailable")
+
+	// Use SQLite-backed manager for Pro features, file-based for Community
+	if licenseService.HasFeature(license.FeatureRBAC) {
+		sqliteManager, err := auth.NewSQLiteManager(auth.SQLiteManagerConfig{
+			DataDir:          dataDir,
+			MigrateFromFiles: true, // Automatically migrate from file-based storage
+		})
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize SQLite RBAC manager, falling back to file-based")
+			// Fall back to file-based manager
+			fileManager, fileErr := auth.NewFileManager(dataDir)
+			if fileErr != nil {
+				log.Warn().Err(fileErr).Msg("Failed to initialize file-based RBAC manager")
+			} else {
+				auth.SetManager(fileManager)
+				log.Info().Msg("RBAC manager initialized (file-based fallback)")
+			}
+		} else {
+			auth.SetManager(sqliteManager)
+			// Set up RBAC authorizer with policy evaluation
+			rbacAuthorizer := auth.NewRBACAuthorizer(sqliteManager)
+			auth.SetAuthorizer(rbacAuthorizer)
+			log.Info().Msg("RBAC Pro manager initialized with SQLite backend (deny policies, inheritance, changelog)")
+		}
 	} else {
-		auth.SetManager(rbacManager)
-		log.Info().Msg("RBAC manager initialized")
+		rbacManager, err := auth.NewFileManager(dataDir)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize RBAC manager, role management will be unavailable")
+		} else {
+			auth.SetManager(rbacManager)
+			log.Info().Msg("RBAC manager initialized (file-based)")
+		}
 	}
 
 	// Initialize SQLite audit logger for Pro/Enterprise
 	// Check if audit logging feature is available via mock mode or license
-	licenseService := license.NewService()
 	if licenseService.HasFeature(license.FeatureAuditLogging) {
 		// Initialize crypto manager for signing key encryption
 		cryptoMgr, err := crypto.NewCryptoManagerAt(dataDir)
@@ -132,6 +162,22 @@ func Run(ctx context.Context, version string) error {
 		}
 	} else {
 		log.Debug().Msg("Audit logging feature not licensed, using console logger")
+	}
+
+	// Initialize AI approval store for Auto-Fix workflows (Pro feature)
+	if licenseService.HasFeature(license.FeatureAIAutoFix) {
+		approvalStore, err := approval.NewStore(approval.StoreConfig{
+			DataDir:        dataDir,
+			DefaultTimeout: 5 * time.Minute,
+			MaxApprovals:   1000,
+		})
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize AI approval store")
+		} else {
+			approval.SetStore(approvalStore)
+			approvalStore.StartCleanup(ctx)
+			log.Info().Msg("AI approval store initialized for Auto-Fix workflows")
+		}
 	}
 
 	log.Info().Msg("Starting Pulse monitoring server")
@@ -205,6 +251,21 @@ func Run(ctx context.Context, version string) error {
 
 	// Start monitoring
 	reloadableMonitor.Start(ctx)
+
+	// Initialize reporting engine for Pro/Enterprise
+	if licenseService.HasFeature(license.FeatureAdvancedReporting) {
+		if store := reloadableMonitor.GetMonitor().GetMetricsStore(); store != nil {
+			reportEngine := reporting.NewReportEngine(reporting.EngineConfig{
+				MetricsStore: store,
+			})
+			reporting.SetEngine(reportEngine)
+			log.Info().Msg("Advanced reporting engine initialized")
+		} else {
+			log.Warn().Msg("Metrics store not available, reporting engine not initialized")
+		}
+	} else {
+		log.Debug().Msg("Advanced reporting feature not licensed")
+	}
 
 	// Initialize API server with reload function
 	var router *api.Router

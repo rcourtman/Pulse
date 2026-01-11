@@ -529,6 +529,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/admin/users", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleGetUsers)))
 	r.mux.HandleFunc("/api/admin/users/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleUserRoleActions)))
 
+	// RBAC Pro routes (role inheritance, changelog, effective permissions)
+	r.mux.HandleFunc("GET /api/admin/rbac/changelog", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRBACChangelog)))
+	r.mux.HandleFunc("GET /api/admin/roles/{id}/effective", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoleEffective)))
+	r.mux.HandleFunc("GET /api/admin/users/{username}/effective-permissions", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleUserEffectivePermissions)))
+
 	// Advanced Reporting routes
 	r.mux.HandleFunc("/api/admin/reports/generate", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAdvancedReporting, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateReport))))
 
@@ -1428,6 +1433,19 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/intelligence/remediations", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRemediations))
 	r.mux.HandleFunc("/api/ai/intelligence/anomalies", RequireAuth(r.config, r.aiSettingsHandler.HandleGetAnomalies))
 	r.mux.HandleFunc("/api/ai/intelligence/learning", RequireAuth(r.config, r.aiSettingsHandler.HandleGetLearningStatus))
+
+	// AI Auto-Fix Approval Workflows (Pro feature)
+	r.mux.HandleFunc("GET /api/ai/approvals", RequireAuth(r.config, r.aiSettingsHandler.HandleListApprovals))
+	r.mux.HandleFunc("GET /api/ai/approvals/{id}", RequireAuth(r.config, r.aiSettingsHandler.HandleGetApproval))
+	r.mux.HandleFunc("POST /api/ai/approvals/{id}/approve", RequireAuth(r.config, r.aiSettingsHandler.HandleApproveCommand))
+	r.mux.HandleFunc("POST /api/ai/approvals/{id}/deny", RequireAuth(r.config, r.aiSettingsHandler.HandleDenyCommand))
+
+	// AI Remediation Rollback (Pro feature)
+	r.mux.HandleFunc("GET /api/ai/remediations/rollbackable", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRollbackable))
+	r.mux.HandleFunc("POST /api/ai/remediations/{id}/rollback", RequireAuth(r.config, r.aiSettingsHandler.HandleRollback))
+
+	// AI Dry-Run Simulation
+	r.mux.HandleFunc("POST /api/ai/simulate", RequireAuth(r.config, r.aiSettingsHandler.HandleDryRunSimulate))
 
 	// AI Chat Sessions - sync across devices
 	r.mux.HandleFunc("/api/ai/chat/sessions", RequireAuth(r.config, r.aiSettingsHandler.HandleListAIChatSessions))

@@ -2241,6 +2241,154 @@ func (c *ConfigPersistence) SaveAgentProfileAssignments(assignments []models.Age
 	return c.writeConfigFileLocked(c.agentAssignmentsFile, data, 0600)
 }
 
+// LoadAgentProfileVersions loads profile version history from file
+func (c *ConfigPersistence) LoadAgentProfileVersions() ([]models.AgentProfileVersion, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	filePath := filepath.Join(c.configDir, "profile-versions.json")
+	data, err := c.fs.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []models.AgentProfileVersion{}, nil
+		}
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return []models.AgentProfileVersion{}, nil
+	}
+
+	var versions []models.AgentProfileVersion
+	if err := json.Unmarshal(data, &versions); err != nil {
+		return nil, err
+	}
+
+	return versions, nil
+}
+
+// SaveAgentProfileVersions saves profile version history to file
+func (c *ConfigPersistence) SaveAgentProfileVersions(versions []models.AgentProfileVersion) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	data, err := json.MarshalIndent(versions, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	filePath := filepath.Join(c.configDir, "profile-versions.json")
+	return c.writeConfigFileLocked(filePath, data, 0600)
+}
+
+// LoadProfileDeploymentStatus loads deployment status from file
+func (c *ConfigPersistence) LoadProfileDeploymentStatus() ([]models.ProfileDeploymentStatus, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	filePath := filepath.Join(c.configDir, "profile-deployments.json")
+	data, err := c.fs.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []models.ProfileDeploymentStatus{}, nil
+		}
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return []models.ProfileDeploymentStatus{}, nil
+	}
+
+	var status []models.ProfileDeploymentStatus
+	if err := json.Unmarshal(data, &status); err != nil {
+		return nil, err
+	}
+
+	return status, nil
+}
+
+// SaveProfileDeploymentStatus saves deployment status to file
+func (c *ConfigPersistence) SaveProfileDeploymentStatus(status []models.ProfileDeploymentStatus) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	data, err := json.MarshalIndent(status, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	filePath := filepath.Join(c.configDir, "profile-deployments.json")
+	return c.writeConfigFileLocked(filePath, data, 0600)
+}
+
+// LoadProfileChangeLogs loads change logs from file
+func (c *ConfigPersistence) LoadProfileChangeLogs() ([]models.ProfileChangeLog, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	filePath := filepath.Join(c.configDir, "profile-changelog.json")
+	data, err := c.fs.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []models.ProfileChangeLog{}, nil
+		}
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return []models.ProfileChangeLog{}, nil
+	}
+
+	var logs []models.ProfileChangeLog
+	if err := json.Unmarshal(data, &logs); err != nil {
+		return nil, err
+	}
+
+	return logs, nil
+}
+
+// SaveProfileChangeLogs saves change logs to file
+func (c *ConfigPersistence) SaveProfileChangeLogs(logs []models.ProfileChangeLog) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	data, err := json.MarshalIndent(logs, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	filePath := filepath.Join(c.configDir, "profile-changelog.json")
+	return c.writeConfigFileLocked(filePath, data, 0600)
+}
+
+// AppendProfileChangeLog adds a new entry to the change log
+func (c *ConfigPersistence) AppendProfileChangeLog(entry models.ProfileChangeLog) error {
+	logs, err := c.LoadProfileChangeLogs()
+	if err != nil {
+		return err
+	}
+
+	// Keep last 1000 entries
+	if len(logs) >= 1000 {
+		logs = logs[len(logs)-999:]
+	}
+
+	logs = append(logs, entry)
+	return c.SaveProfileChangeLogs(logs)
+}
+
 // ============================================
 // AI Chat Sessions Persistence
 // ============================================

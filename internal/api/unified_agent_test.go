@@ -45,6 +45,10 @@ func TestNormalizeUnifiedAgentArch(t *testing.T) {
 		{name: "windows-arm64 canonical", input: "windows-arm64", expected: "windows-arm64"},
 		{name: "windows-386 canonical", input: "windows-386", expected: "windows-386"},
 
+		// FreeBSD variants
+		{name: "freebsd-amd64 canonical", input: "freebsd-amd64", expected: "freebsd-amd64"},
+		{name: "freebsd-arm64 canonical", input: "freebsd-arm64", expected: "freebsd-arm64"},
+
 		// Case insensitivity
 		{name: "uppercase AMD64", input: "AMD64", expected: "linux-amd64"},
 		{name: "mixed case Linux-AMD64", input: "Linux-AMD64", expected: "linux-amd64"},
@@ -52,6 +56,7 @@ func TestNormalizeUnifiedAgentArch(t *testing.T) {
 		{name: "mixed case AARCH64", input: "AARCH64", expected: "linux-arm64"},
 		{name: "uppercase ARMHF", input: "ARMHF", expected: "linux-armv7"},
 		{name: "uppercase DARWIN-ARM64", input: "DARWIN-ARM64", expected: "darwin-arm64"},
+		{name: "uppercase FREEBSD-AMD64", input: "FREEBSD-AMD64", expected: "freebsd-amd64"},
 		{name: "uppercase WINDOWS-AMD64", input: "WINDOWS-AMD64", expected: "windows-amd64"},
 
 		// Whitespace handling

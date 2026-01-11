@@ -22,7 +22,7 @@ const buildDefaultTokenName = () => {
     return `Agent ${stamp}`;
 };
 
-type AgentPlatform = 'linux' | 'macos' | 'windows';
+type AgentPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
 
 // Generate platform-specific commands with the appropriate Pulse URL
 // Uses agentUrl from API (PULSE_PUBLIC_URL) if configured, otherwise falls back to window.location
@@ -61,6 +61,22 @@ const buildCommandsByPlatform = (url: string): Record<
                 note: (
                     <span>
                         Run as root (use <code>sudo</code> if not already root). Creates <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and starts the agent automatically.
+                    </span>
+                ),
+            },
+        ],
+    },
+    freebsd: {
+        title: 'Install on FreeBSD / pfSense / OPNsense',
+        description:
+            'The unified installer downloads the FreeBSD binary and sets up an rc.d service for background monitoring.',
+        snippets: [
+            {
+                label: 'Install with rc.d',
+                command: `curl -fsSL ${url}/install.sh | bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
+                note: (
+                    <span>
+                        Run as root. <strong>Note:</strong> pfSense/OPNsense don't include bash by default. Install it first: <code>pkg install bash</code>. Creates <code>/usr/local/etc/rc.d/pulse-agent</code> and starts the agent automatically.
                     </span>
                 ),
             },

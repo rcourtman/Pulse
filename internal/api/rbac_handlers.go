@@ -237,3 +237,161 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
+
+// HandleRBACChangelog returns the RBAC change history.
+func (h *RBACHandlers) HandleRBACChangelog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	em := auth.GetExtendedManager()
+	if em == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC changelog is not available (requires Pro)", nil)
+		return
+	}
+
+	// Parse query parameters
+	limit := 100
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+		if limit <= 0 || limit > 1000 {
+			limit = 100
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		fmt.Sscanf(o, "%d", &offset)
+		if offset < 0 {
+			offset = 0
+		}
+	}
+
+	// Filter by entity if provided
+	entityType := r.URL.Query().Get("entity_type")
+	entityID := r.URL.Query().Get("entity_id")
+
+	var logs []auth.RBACChangeLog
+	if entityType != "" && entityID != "" {
+		logs = em.GetChangeLogsForEntity(entityType, entityID)
+	} else {
+		logs = em.GetChangeLogs(limit, offset)
+	}
+
+	// Return empty array instead of null
+	if logs == nil {
+		logs = []auth.RBACChangeLog{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(logs)
+}
+
+// HandleRoleEffective returns a role with all inherited permissions.
+func (h *RBACHandlers) HandleRoleEffective(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	em := auth.GetExtendedManager()
+	if em == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "Role inheritance is not available (requires Pro)", nil)
+		return
+	}
+
+	// Extract role ID from path: /api/admin/roles/{id}/effective
+	path := strings.TrimPrefix(r.URL.Path, "/api/admin/roles/")
+	path = strings.TrimSuffix(path, "/effective")
+	roleID := strings.TrimSuffix(path, "/")
+
+	if roleID == "" || !validRoleID.MatchString(roleID) {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_role_id", "Invalid role ID format", nil)
+		return
+	}
+
+	role, effectivePerms, ok := em.GetRoleWithInheritance(roleID)
+	if !ok {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "Role not found", nil)
+		return
+	}
+
+	// Return role with effective permissions
+	response := struct {
+		auth.Role
+		EffectivePermissions []auth.Permission `json:"effectivePermissions"`
+	}{
+		Role:                 role,
+		EffectivePermissions: effectivePerms,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleUserEffectivePermissions returns a user's effective permissions with inheritance.
+func (h *RBACHandlers) HandleUserEffectivePermissions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	manager := auth.GetManager()
+	if manager == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC management is not available", nil)
+		return
+	}
+
+	// Extract username from path: /api/admin/users/{username}/effective-permissions
+	path := strings.TrimPrefix(r.URL.Path, "/api/admin/users/")
+	path = strings.TrimSuffix(path, "/effective-permissions")
+	username := strings.TrimSuffix(path, "/")
+
+	if username == "" || !validUsername.MatchString(username) {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_username", "Invalid username format", nil)
+		return
+	}
+
+	// Check if we have extended manager for inheritance
+	em := auth.GetExtendedManager()
+	if em != nil {
+		roles := em.GetRolesWithInheritance(username)
+
+		// Collect all effective permissions
+		permMap := make(map[string]auth.Permission)
+		for _, role := range roles {
+			for _, perm := range role.Permissions {
+				key := perm.Action + ":" + perm.Resource + ":" + perm.GetEffect()
+				permMap[key] = perm
+			}
+		}
+
+		var perms []auth.Permission
+		for _, perm := range permMap {
+			perms = append(perms, perm)
+		}
+
+		response := struct {
+			Username    string            `json:"username"`
+			Roles       []auth.Role       `json:"roles"`
+			Permissions []auth.Permission `json:"permissions"`
+		}{
+			Username:    username,
+			Roles:       roles,
+			Permissions: perms,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Fall back to basic permissions
+	perms := manager.GetUserPermissions(username)
+	if perms == nil {
+		perms = []auth.Permission{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(perms)
+}

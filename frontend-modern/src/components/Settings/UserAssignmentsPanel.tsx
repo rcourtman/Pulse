@@ -156,7 +156,26 @@ export const UserAssignmentsPanel: Component = () => {
                     </div>
                 </Show>
 
-                <Show when={!loading()}>
+                <Show when={!loading() && filteredAssignments().length === 0}>
+                    <div class="text-center py-12 px-6">
+                        <Users class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                        <h4 class="text-base font-medium text-gray-900 dark:text-gray-100 mb-2">No users yet</h4>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                            Users appear here automatically when they sign in via SSO (OIDC/SAML) or proxy authentication.
+                            Once they've logged in, you can assign roles to control their access.
+                        </p>
+                        <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-gray-400 dark:text-gray-500">
+                            <span class="flex items-center gap-1.5">
+                                <Shield class="w-3.5 h-3.5" />
+                                Configure SSO in Security settings
+                            </span>
+                            <span class="hidden sm:inline">•</span>
+                            <span>Users sync on first login</span>
+                        </div>
+                    </div>
+                </Show>
+
+                <Show when={!loading() && filteredAssignments().length > 0}>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>

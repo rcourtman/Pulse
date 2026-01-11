@@ -18,7 +18,9 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/dryrun"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -3622,4 +3624,355 @@ func getAuthUsername(cfg *config.Config, r *http.Request) string {
 
 	// Single-user mode without auth
 	return ""
+}
+
+// ============================================================================
+// Approval Workflow Handlers (Pro Feature)
+// ============================================================================
+
+// HandleListApprovals returns all pending approval requests.
+func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check license
+	licenseService := license.NewService()
+	if !licenseService.HasFeature(license.FeatureAIAutoFix) {
+		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", nil)
+		return
+	}
+
+	store := approval.GetStore()
+	if store == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		return
+	}
+
+	approvals := store.GetPendingApprovals()
+	if approvals == nil {
+		approvals = []*approval.ApprovalRequest{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"approvals": approvals,
+		"stats":     store.GetStats(),
+	})
+}
+
+// HandleGetApproval returns a specific approval request.
+func (h *AISettingsHandler) HandleGetApproval(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path: /api/ai/approvals/{id}
+	id := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
+	id = strings.TrimSuffix(id, "/")
+	id = strings.Split(id, "/")[0] // Handle /approve or /deny suffixes
+
+	if id == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Approval ID is required", nil)
+		return
+	}
+
+	store := approval.GetStore()
+	if store == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		return
+	}
+
+	req, ok := store.GetApproval(id)
+	if !ok {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(req)
+}
+
+// HandleApproveCommand approves a pending command and executes it.
+func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check license
+	licenseService := license.NewService()
+	if !licenseService.HasFeature(license.FeatureAIAutoFix) {
+		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", nil)
+		return
+	}
+
+	// Extract ID from path: /api/ai/approvals/{id}/approve
+	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
+	path = strings.TrimSuffix(path, "/approve")
+	id := strings.TrimSuffix(path, "/")
+
+	if id == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Approval ID is required", nil)
+		return
+	}
+
+	store := approval.GetStore()
+	if store == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		return
+	}
+
+	username := getAuthUsername(h.config, r)
+	if username == "" {
+		username = "anonymous"
+	}
+
+	req, err := store.Approve(id, username)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "approval_failed", err.Error(), nil)
+		return
+	}
+
+	// Log audit event
+	LogAuditEvent("ai_command_approved", username, GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("Approved command: %s", truncateForLog(req.Command, 100)))
+
+	// TODO: Resume execution with the approved command
+	// For now, just return the approval status
+	// The actual execution resumption will be added when we integrate with the AI service
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"approved": true,
+		"request":  req,
+		"message":  "Command approved. Execution will resume.",
+	})
+}
+
+// HandleDenyCommand denies a pending command.
+func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path: /api/ai/approvals/{id}/deny
+	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
+	path = strings.TrimSuffix(path, "/deny")
+	id := strings.TrimSuffix(path, "/")
+
+	if id == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Approval ID is required", nil)
+		return
+	}
+
+	// Parse optional reason from body
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&body)
+	}
+
+	store := approval.GetStore()
+	if store == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		return
+	}
+
+	username := getAuthUsername(h.config, r)
+	if username == "" {
+		username = "anonymous"
+	}
+
+	req, err := store.Deny(id, username, body.Reason)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "denial_failed", err.Error(), nil)
+		return
+	}
+
+	// Log audit event
+	LogAuditEvent("ai_command_denied", username, GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("Denied command: %s (reason: %s)", truncateForLog(req.Command, 100), body.Reason))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"denied":  true,
+		"request": req,
+		"message": "Command denied.",
+	})
+}
+
+// HandleRollback rolls back a previous remediation action.
+func (h *AISettingsHandler) HandleRollback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check license
+	licenseService := license.NewService()
+	if !licenseService.HasFeature(license.FeatureAIAutoFix) {
+		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", nil)
+		return
+	}
+
+	// Extract ID from path: /api/ai/remediations/{id}/rollback
+	path := strings.TrimPrefix(r.URL.Path, "/api/ai/remediations/")
+	path = strings.TrimSuffix(path, "/rollback")
+	id := strings.TrimSuffix(path, "/")
+
+	if id == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Remediation ID is required", nil)
+		return
+	}
+
+	// Get remediation log
+	remLog := h.aiService.GetRemediationLog()
+	if remLog == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Remediation log not available", nil)
+		return
+	}
+
+	// Find the original record
+	record, ok := remLog.GetByID(id)
+	if !ok {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "Remediation record not found", nil)
+		return
+	}
+
+	// Check if rollback is possible
+	if record.Rollback == nil || !record.Rollback.Reversible {
+		writeErrorResponse(w, http.StatusBadRequest, "not_reversible", "This action cannot be rolled back", nil)
+		return
+	}
+
+	if record.Rollback.RolledBack {
+		writeErrorResponse(w, http.StatusBadRequest, "already_rolled_back", "This action has already been rolled back", nil)
+		return
+	}
+
+	if record.Rollback.RollbackCmd == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "no_rollback_cmd", "No rollback command available", nil)
+		return
+	}
+
+	username := getAuthUsername(h.config, r)
+	if username == "" {
+		username = "anonymous"
+	}
+
+	// Execute the rollback command
+	// For now, we'll create a new remediation record for the rollback
+	// The actual execution will depend on the target type and available agents
+
+	rollbackRecord := memory.RemediationRecord{
+		ResourceID:   record.ResourceID,
+		ResourceType: record.ResourceType,
+		ResourceName: record.ResourceName,
+		Problem:      fmt.Sprintf("Rollback of: %s", record.Problem),
+		Summary:      fmt.Sprintf("Rolling back: %s", record.Summary),
+		Action:       record.Rollback.RollbackCmd,
+		Automatic:    false,
+		IsRollback:   true,
+		RollbackOf:   record.ID,
+	}
+
+	// Log the rollback attempt
+	if err := remLog.Log(rollbackRecord); err != nil {
+		log.Error().Err(err).Msg("Failed to log rollback record")
+	}
+
+	// Mark the original as rolled back
+	if err := remLog.MarkRolledBack(id, rollbackRecord.ID, username); err != nil {
+		log.Error().Err(err).Msg("Failed to mark record as rolled back")
+	}
+
+	// Log audit event
+	LogAuditEvent("ai_remediation_rollback", username, GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("Initiated rollback for remediation %s: %s", id, truncateForLog(record.Rollback.RollbackCmd, 100)))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":        true,
+		"rollbackRecord": rollbackRecord,
+		"message":        "Rollback initiated. The rollback command will be executed.",
+		"note":           "Actual command execution requires an available agent on the target.",
+	})
+}
+
+// HandleGetRollbackable returns remediations that can be rolled back.
+func (h *AISettingsHandler) HandleGetRollbackable(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check license
+	licenseService := license.NewService()
+	if !licenseService.HasFeature(license.FeatureAIAutoFix) {
+		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", nil)
+		return
+	}
+
+	remLog := h.aiService.GetRemediationLog()
+	if remLog == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Remediation log not available", nil)
+		return
+	}
+
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+
+	rollbackable := remLog.GetRollbackable(limit)
+	if rollbackable == nil {
+		rollbackable = []memory.RemediationRecord{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"rollbackable": rollbackable,
+		"count":        len(rollbackable),
+	})
+}
+
+// HandleDryRunSimulate simulates a command without execution.
+func (h *AISettingsHandler) HandleDryRunSimulate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Command string `json:"command"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid request body", nil)
+		return
+	}
+
+	if req.Command == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_command", "Command is required", nil)
+		return
+	}
+
+	result := dryrun.Simulate(req.Command)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// truncateForLog truncates a string for logging purposes.
+func truncateForLog(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

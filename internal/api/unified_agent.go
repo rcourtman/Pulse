@@ -89,6 +89,10 @@ func normalizeUnifiedAgentArch(arch string) string {
 		return "darwin-amd64"
 	case "darwin-arm64", "macos-arm64":
 		return "darwin-arm64"
+	case "freebsd-amd64":
+		return "freebsd-amd64"
+	case "freebsd-arm64":
+		return "freebsd-arm64"
 	case "windows-amd64":
 		return "windows-amd64"
 	case "windows-arm64":
