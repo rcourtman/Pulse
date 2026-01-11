@@ -310,6 +310,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
       generic: 'Generic',
       discord: 'Discord',
       slack: 'Slack',
+      mattermost: 'Mattermost',
       telegram: 'Telegram',
       teams: 'Microsoft Teams',
       'teams-adaptive': 'Teams (Adaptive)',
@@ -440,6 +441,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     'generic',
                     'discord',
                     'slack',
+                    'mattermost',
                     'telegram',
                     'teams',
                     'teams-adaptive',
@@ -469,19 +471,21 @@ export function WebhookConfig(props: WebhookConfigProps) {
                             ? 'Discord server webhook'
                             : service === 'slack'
                               ? 'Slack incoming webhook'
-                              : service === 'telegram'
-                                ? 'Telegram bot notifications'
-                                : service === 'teams'
-                                  ? 'Microsoft Teams webhook'
-                                  : service === 'teams-adaptive'
-                                    ? 'Teams with Adaptive Cards'
-                                    : service === 'pushover'
-                                      ? 'Mobile push notifications'
-                                      : service === 'gotify'
-                                        ? 'Self-hosted push notifications'
-                                        : service === 'ntfy'
-                                          ? 'Push notifications via ntfy.sh'
-                                          : 'PagerDuty Events API v2'}
+                              : service === 'mattermost'
+                                ? 'Mattermost incoming webhook'
+                                : service === 'telegram'
+                                  ? 'Telegram bot notifications'
+                                  : service === 'teams'
+                                    ? 'Microsoft Teams webhook'
+                                    : service === 'teams-adaptive'
+                                      ? 'Teams with Adaptive Cards'
+                                      : service === 'pushover'
+                                        ? 'Mobile push notifications'
+                                        : service === 'gotify'
+                                          ? 'Self-hosted push notifications'
+                                          : service === 'ntfy'
+                                            ? 'Push notifications via ntfy.sh'
+                                            : 'PagerDuty Events API v2'}
                       </div>
                     </button>
                   )}
