@@ -76,6 +76,7 @@ interface DockerUnifiedTableProps {
   dockerHostMetadata?: Record<string, DockerHostMetadata>;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
   batchUpdateState?: Record<string, 'updating' | 'queued' | 'error'>;
+  groupingMode?: 'grouped' | 'flat';
 }
 
 type SortKey =
@@ -2480,6 +2481,17 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
   );
 
   const isGroupedView = createMemo(() => sortKey() === 'host');
+
+  // Sync external groupingMode prop with internal sort state
+  createEffect(() => {
+    const mode = props.groupingMode;
+    if (mode === 'grouped' && sortKey() !== 'host') {
+      setSortKey('host');
+    } else if (mode === 'flat' && sortKey() === 'host') {
+      // Switch to resource sort for flat view
+      setSortKey('resource');
+    }
+  });
 
   const handleSort = (key: SortKey) => {
     if (sortKey() === key) {

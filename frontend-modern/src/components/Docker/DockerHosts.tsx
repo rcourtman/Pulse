@@ -623,6 +623,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                 dockerHostMetadata={dockerHostMetadata()}
                 onCustomUrlUpdate={handleCustomUrlUpdate}
                 batchUpdateState={batchUpdateState}
+                groupingMode={groupingMode() === 'flat' ? 'flat' : 'grouped'}
               />
             }
           >
