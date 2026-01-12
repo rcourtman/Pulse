@@ -2362,6 +2362,16 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		SwapTotal: report.Metrics.Memory.SwapTotal,
 		SwapUsed:  report.Metrics.Memory.SwapUsed,
 	}
+
+	// Fallback for LXC environments: gopsutil may read Total and Free correctly
+	// from cgroup limits but return 0 for Used. Calculate Used from Total - Free.
+	if memory.Used <= 0 && memory.Total > 0 && memory.Free > 0 {
+		memory.Used = memory.Total - memory.Free
+		if memory.Used < 0 {
+			memory.Used = 0
+		}
+	}
+
 	if memory.Usage <= 0 && memory.Total > 0 {
 		memory.Usage = safePercentage(float64(memory.Used), float64(memory.Total))
 	}
