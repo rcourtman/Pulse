@@ -6229,9 +6229,18 @@ func namespaceMatchesInstance(namespace, instance string) bool {
 		return true
 	}
 
-	// Check if namespace is contained in instance or vice versa
+	// Check if namespace is a suffix of instance
 	// e.g., namespace "nat" matches instance "pvenat" (normalized from "pve-nat")
-	if strings.Contains(inst, ns) || strings.Contains(ns, inst) {
+	// This is more precise than substring matching because:
+	// - "nat" should match "pve-nat" but not "natpve"
+	// - "pve" should match "pve" but not "pve-nat" (handled by exact match above)
+	if strings.HasSuffix(inst, ns) {
+		return true
+	}
+
+	// Check if instance is a suffix of namespace (reverse case)
+	// e.g., namespace "pvebackups" could match instance "pve"
+	if strings.HasSuffix(ns, inst) {
 		return true
 	}
 

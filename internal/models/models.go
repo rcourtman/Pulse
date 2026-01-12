@@ -1428,9 +1428,59 @@ func backupKey(instance string, vmid int) string {
 	return instance + "-" + strconv.Itoa(vmid)
 }
 
+// namespaceMatchesInstance checks if a PBS namespace likely corresponds to a PVE instance.
+// This helps disambiguate backups when multiple PVE instances have VMs with the same VMID.
+// Examples: namespace "pve1" matches instance "pve1", namespace "nat" matches instance "pve-nat"
+func namespaceMatchesInstance(namespace, instance string) bool {
+	if namespace == "" || instance == "" {
+		return false
+	}
+
+	// Normalize both strings: lowercase and keep only alphanumeric
+	normalize := func(s string) string {
+		var b strings.Builder
+		for _, r := range strings.ToLower(s) {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+				b.WriteRune(r)
+			}
+		}
+		return b.String()
+	}
+
+	ns := normalize(namespace)
+	inst := normalize(instance)
+
+	if ns == "" || inst == "" {
+		return false
+	}
+
+	// Exact match after normalization
+	if ns == inst {
+		return true
+	}
+
+	// Check if namespace is a suffix of instance
+	// e.g., namespace "nat" matches instance "pvenat" (normalized from "pve-nat")
+	// This is more precise than substring matching because:
+	// - "nat" should match "pve-nat" but not "natpve"
+	// - "pve" should match "pve" but not "pve-nat" (handled by exact match above)
+	if strings.HasSuffix(inst, ns) {
+		return true
+	}
+
+	// Check if instance is a suffix of namespace (reverse case)
+	// e.g., namespace "pvebackups" could match instance "pve"
+	if strings.HasSuffix(ns, inst) {
+		return true
+	}
+
+	return false
+}
+
 // SyncGuestBackupTimes updates LastBackup on VMs and Containers from storage backups and PBS backups.
 // Call this after updating storage backups or PBS backups to ensure guest backup indicators are accurate.
 // Matching is done by instance+VMID to prevent cross-instance VMID collisions.
+// For PBS backups with namespaces, namespace matching is used to disambiguate.
 func (s *State) SyncGuestBackupTimes() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1451,43 +1501,77 @@ func (s *State) SyncGuestBackupTimes() {
 	}
 
 	// Process PBS backups (VMID is string, BackupTime is the timestamp)
-	// Note: PBS backups use Instance field to identify the PBS server, but backups
-	// from different PVE instances can be stored in the same PBS.
-	// For PBS, we need to match against all guests since we can't reliably determine
-	// which PVE instance the backup belongs to.
-	pbsLatestByVMID := make(map[int]time.Time)
+	// PBS backups can have a Namespace field that often corresponds to the PVE instance.
+	// We use namespace matching to associate PBS backups with the correct PVE instance.
+	// Structure: map[vmid][]PBSBackup to handle multiple backups per VMID
+	pbsBackupsByVMID := make(map[int][]PBSBackup)
 	for _, backup := range s.PBSBackups {
 		vmid, err := strconv.Atoi(backup.VMID)
 		if err != nil || vmid <= 0 {
 			continue
 		}
-		if existing, ok := pbsLatestByVMID[vmid]; !ok || backup.BackupTime.After(existing) {
-			pbsLatestByVMID[vmid] = backup.BackupTime
-		}
+		pbsBackupsByVMID[vmid] = append(pbsBackupsByVMID[vmid], backup)
 	}
 
-	// Update VMs - prefer instance-specific PVE backup, fall back to PBS by VMID
+	// findBestPBSBackup finds the most recent PBS backup for a given VMID and instance.
+	// If the backup has a namespace that matches the instance, it's preferred.
+	// Returns zero time if no suitable backup found.
+	findBestPBSBackup := func(vmid int, instance string) time.Time {
+		backups, ok := pbsBackupsByVMID[vmid]
+		if !ok || len(backups) == 0 {
+			return time.Time{}
+		}
+
+		var bestTime time.Time
+		var bestMatchTime time.Time // Best time among namespace-matched backups
+
+		for _, backup := range backups {
+			// If namespace matches this instance, track it separately
+			if backup.Namespace != "" && namespaceMatchesInstance(backup.Namespace, instance) {
+				if backup.BackupTime.After(bestMatchTime) {
+					bestMatchTime = backup.BackupTime
+				}
+			}
+			// Track overall best time as fallback
+			if backup.BackupTime.After(bestTime) {
+				bestTime = backup.BackupTime
+			}
+		}
+
+		// Prefer namespace-matched backup if available
+		if !bestMatchTime.IsZero() {
+			return bestMatchTime
+		}
+
+		// Fall back to any backup with this VMID (original behavior for backwards compat)
+		// This handles cases where namespaces aren't used or don't match
+		return bestTime
+	}
+
+	// Update VMs - prefer instance-specific PVE backup, fall back to PBS
 	for i := range s.VMs {
 		key := backupKey(s.VMs[i].Instance, s.VMs[i].VMID)
 		if backupTime, ok := latestBackup[key]; ok {
 			s.VMs[i].LastBackup = backupTime
 		}
 		// Check if PBS has a more recent backup
-		if pbsTime, ok := pbsLatestByVMID[s.VMs[i].VMID]; ok {
+		pbsTime := findBestPBSBackup(s.VMs[i].VMID, s.VMs[i].Instance)
+		if !pbsTime.IsZero() {
 			if s.VMs[i].LastBackup.IsZero() || pbsTime.After(s.VMs[i].LastBackup) {
 				s.VMs[i].LastBackup = pbsTime
 			}
 		}
 	}
 
-	// Update Containers - prefer instance-specific PVE backup, fall back to PBS by VMID
+	// Update Containers - prefer instance-specific PVE backup, fall back to PBS
 	for i := range s.Containers {
 		key := backupKey(s.Containers[i].Instance, s.Containers[i].VMID)
 		if backupTime, ok := latestBackup[key]; ok {
 			s.Containers[i].LastBackup = backupTime
 		}
 		// Check if PBS has a more recent backup
-		if pbsTime, ok := pbsLatestByVMID[s.Containers[i].VMID]; ok {
+		pbsTime := findBestPBSBackup(s.Containers[i].VMID, s.Containers[i].Instance)
+		if !pbsTime.IsZero() {
 			if s.Containers[i].LastBackup.IsZero() || pbsTime.After(s.Containers[i].LastBackup) {
 				s.Containers[i].LastBackup = pbsTime
 			}

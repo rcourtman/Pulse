@@ -15579,22 +15579,26 @@ func TestNamespaceMatchesInstance(t *testing.T) {
 		{"exact match", "pve", "pve", true},
 		{"exact match with numbers", "pve1", "pve1", true},
 
-		// Partial matches (namespace in instance)
-		{"namespace contained in instance", "nat", "pve-nat", true},
-		{"namespace contained in instance no dash", "nat", "pvenat", true},
-		{"longer namespace in instance", "production", "my-production-server", true},
+		// Suffix matches (namespace is suffix of instance)
+		{"namespace suffix of instance", "nat", "pve-nat", true},
+		{"namespace suffix of instance no dash", "nat", "pvenat", true},
 
-		// Partial matches (instance in namespace)
-		{"instance contained in namespace", "pve-backups", "pve", true},
+		// Suffix matches (instance is suffix of namespace)
+		{"instance suffix of namespace", "pvebackups", "pve", false},  // "pve" is not suffix of "pvebackups"
+		{"instance suffix of namespace 2", "backupspve", "pve", true}, // "pve" IS suffix of "backupspve"
 
 		// Case insensitive
 		{"case insensitive exact", "PVE", "pve", true},
-		{"case insensitive partial", "NAT", "pve-nat", true},
+		{"case insensitive suffix", "NAT", "pve-nat", true},
 
 		// Special characters ignored
 		{"special chars in namespace", "pve_nat", "pvenat", true},
 		{"special chars in instance", "pvenat", "pve-nat", true},
 		{"both have special chars", "pve-1", "pve_1", true},
+
+		// No matches - substring but not suffix
+		{"no match substring not suffix", "production", "my-production-server", false}, // "production" is not suffix of "myproductionserver"
+		{"no match pve not suffix of pvenat", "pve", "pve-nat", false},                 // "pve" is not suffix of "pvenat"
 
 		// No matches
 		{"no match", "production", "staging", false},

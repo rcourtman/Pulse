@@ -866,6 +866,78 @@ func TestSyncGuestBackupTimesCrossInstance(t *testing.T) {
 	}
 }
 
+// TestSyncGuestBackupTimesNamespaceDisambiguation verifies that PBS namespace is used to
+// disambiguate backups when multiple VMs have the same VMID across different PVE instances.
+// This addresses issue #1095 where users have multiple PVE instances with overlapping VMIDs.
+func TestSyncGuestBackupTimesNamespaceDisambiguation(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	pveBackupTime := now.Add(-1 * time.Hour)
+	pveNatBackupTime := now.Add(-2 * time.Hour)
+
+	// Set up VMs with the SAME VMID on DIFFERENT instances
+	state.UpdateVMs([]VM{
+		{VMID: 100, Name: "webserver-pve", Instance: "pve", Node: "node1"},
+		{VMID: 100, Name: "webserver-nat", Instance: "pve-nat", Node: "node2"},
+	})
+
+	// Add PBS backups with namespaces that correspond to the PVE instances
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{
+			ID:         "pbs-pve-100",
+			VMID:       "100",
+			Namespace:  "pve",
+			BackupType: "vm",
+			BackupTime: pveBackupTime,
+			Instance:   "pbs-main",
+		},
+		{
+			ID:         "pbs-nat-100",
+			VMID:       "100",
+			Namespace:  "nat", // Should match "pve-nat" instance
+			BackupType: "vm",
+			BackupTime: pveNatBackupTime,
+			Instance:   "pbs-main",
+		},
+	}
+	state.mu.Unlock()
+
+	// Sync backup times
+	state.SyncGuestBackupTimes()
+
+	snapshot := state.GetSnapshot()
+
+	// Find both VMs
+	var vmPVE, vmNAT *VM
+	for i := range snapshot.VMs {
+		if snapshot.VMs[i].Instance == "pve" && snapshot.VMs[i].VMID == 100 {
+			vmPVE = &snapshot.VMs[i]
+		}
+		if snapshot.VMs[i].Instance == "pve-nat" && snapshot.VMs[i].VMID == 100 {
+			vmNAT = &snapshot.VMs[i]
+		}
+	}
+
+	if vmPVE == nil {
+		t.Fatal("pve VM not found")
+	}
+	if vmNAT == nil {
+		t.Fatal("pve-nat VM not found")
+	}
+
+	// The pve VM should have the backup with namespace "pve"
+	if !vmPVE.LastBackup.Equal(pveBackupTime) {
+		t.Errorf("pve VM LastBackup = %v, expected %v (from namespace 'pve')", vmPVE.LastBackup, pveBackupTime)
+	}
+
+	// The pve-nat VM should have the backup with namespace "nat"
+	if !vmNAT.LastBackup.Equal(pveNatBackupTime) {
+		t.Errorf("pve-nat VM LastBackup = %v, expected %v (from namespace 'nat')", vmNAT.LastBackup, pveNatBackupTime)
+	}
+}
+
 func TestUpdateStorageBackupsForInstance(t *testing.T) {
 	state := NewState()
 
