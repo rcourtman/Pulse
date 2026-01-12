@@ -40,6 +40,10 @@ type sessionPersisted struct {
 	OIDCIssuer          string    `json:"oidc_issuer,omitempty"`
 	OIDCClientID        string    `json:"oidc_client_id,omitempty"`
 	OIDCTokenRefreshing bool      `json:"-"` // transient, not persisted
+	// SAML session fields for Single Logout (SLO) support
+	SAMLProviderID   string `json:"saml_provider_id,omitempty"`
+	SAMLNameID       string `json:"saml_name_id,omitempty"`
+	SAMLSessionIndex string `json:"saml_session_index,omitempty"`
 }
 
 // SessionData represents a user session
@@ -56,6 +60,10 @@ type SessionData struct {
 	OIDCIssuer          string    `json:"oidc_issuer,omitempty"`           // IdP issuer URL
 	OIDCClientID        string    `json:"oidc_client_id,omitempty"`        // OIDC client ID
 	OIDCTokenRefreshing bool      `json:"-"`                               // Prevents concurrent refresh attempts
+	// SAML session fields for Single Logout (SLO) support
+	SAMLProviderID   string `json:"saml_provider_id,omitempty"`   // SAML IdP provider ID
+	SAMLNameID       string `json:"saml_name_id,omitempty"`       // SAML NameID from assertion
+	SAMLSessionIndex string `json:"saml_session_index,omitempty"` // SAML SessionIndex for SLO
 }
 
 // NewSessionStore creates a new persistent session store
@@ -143,6 +151,57 @@ func (s *SessionStore) CreateOIDCSession(token string, duration time.Duration, u
 
 	// Save immediately for important operations
 	s.saveUnsafe()
+}
+
+// SAMLTokenInfo contains SAML session information for Single Logout support
+type SAMLTokenInfo struct {
+	ProviderID   string // SAML IdP provider ID
+	NameID       string // SAML NameID from assertion
+	SessionIndex string // SAML SessionIndex for SLO
+}
+
+// CreateSAMLSession creates a new session with SAML session information
+func (s *SessionStore) CreateSAMLSession(token string, duration time.Duration, userAgent, ip, username string, saml *SAMLTokenInfo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := sessionHash(token)
+	session := &SessionData{
+		Username:         username,
+		ExpiresAt:        time.Now().Add(duration),
+		CreatedAt:        time.Now(),
+		UserAgent:        userAgent,
+		IP:               ip,
+		OriginalDuration: duration,
+	}
+
+	if saml != nil {
+		session.SAMLProviderID = saml.ProviderID
+		session.SAMLNameID = saml.NameID
+		session.SAMLSessionIndex = saml.SessionIndex
+	}
+
+	s.sessions[key] = session
+
+	// Save immediately for important operations
+	s.saveUnsafe()
+}
+
+// GetSAMLSessionInfo returns SAML-specific session info for the given token
+func (s *SessionStore) GetSAMLSessionInfo(token string) *SAMLTokenInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	session, exists := s.sessions[sessionHash(token)]
+	if !exists || session.SAMLProviderID == "" {
+		return nil
+	}
+
+	return &SAMLTokenInfo{
+		ProviderID:   session.SAMLProviderID,
+		NameID:       session.SAMLNameID,
+		SessionIndex: session.SAMLSessionIndex,
+	}
 }
 
 // GetSession returns a copy of the session data for the given token
@@ -293,6 +352,9 @@ func (s *SessionStore) saveUnsafe() {
 			OIDCAccessTokenExp: session.OIDCAccessTokenExp,
 			OIDCIssuer:         session.OIDCIssuer,
 			OIDCClientID:       session.OIDCClientID,
+			SAMLProviderID:     session.SAMLProviderID,
+			SAMLNameID:         session.SAMLNameID,
+			SAMLSessionIndex:   session.SAMLSessionIndex,
 		})
 	}
 
@@ -350,6 +412,9 @@ func (s *SessionStore) load() {
 				OIDCAccessTokenExp: entry.OIDCAccessTokenExp,
 				OIDCIssuer:         entry.OIDCIssuer,
 				OIDCClientID:       entry.OIDCClientID,
+				SAMLProviderID:     entry.SAMLProviderID,
+				SAMLNameID:         entry.SAMLNameID,
+				SAMLSessionIndex:   entry.SAMLSessionIndex,
 			}
 		}
 		log.Info().Int("loaded", len(s.sessions)).Int("total", len(persisted)).Msg("Sessions loaded from disk (hashed format)")

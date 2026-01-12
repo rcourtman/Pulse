@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -385,16 +386,73 @@ type SAMLSessionInfo struct {
 
 // establishSAMLSession creates a session for a SAML-authenticated user
 func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, username string, samlInfo *SAMLSessionInfo) error {
-	// Use the existing session mechanism
-	// For SAML, we don't have refresh tokens, so we pass nil for OIDC tokens
-	return r.establishOIDCSession(w, req, username, nil)
+	token := generateSessionToken()
+	if token == "" {
+		return fmt.Errorf("failed to generate session token")
+	}
+
+	userAgent := req.Header.Get("User-Agent")
+	clientIP := GetClientIP(req)
+
+	// Convert SAMLSessionInfo to SAMLTokenInfo for storage
+	var samlTokens *SAMLTokenInfo
+	if samlInfo != nil {
+		samlTokens = &SAMLTokenInfo{
+			ProviderID:   samlInfo.ProviderID,
+			NameID:       samlInfo.NameID,
+			SessionIndex: samlInfo.SessionIndex,
+		}
+	}
+
+	// Create session with SAML info for SLO support
+	GetSessionStore().CreateSAMLSession(token, 24*time.Hour, userAgent, clientIP, username, samlTokens)
+
+	if username != "" {
+		TrackUserSession(username, token)
+	}
+
+	csrfToken := generateCSRFToken(token)
+	isSecure, sameSitePolicy := getCookieSettings(req)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_session",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
+		MaxAge:   86400,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_csrf",
+		Value:    csrfToken,
+		Path:     "/",
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
+		MaxAge:   86400,
+	})
+
+	return nil
 }
 
 // getSAMLSessionInfo retrieves SAML session info from the current session
 func (r *Router) getSAMLSessionInfo(req *http.Request) *SAMLSessionInfo {
-	// TODO: Implement retrieval of SAML session info from session storage
-	// For now, return nil which causes fallback to regular logout
-	return nil
+	cookie, err := req.Cookie("pulse_session")
+	if err != nil || cookie.Value == "" {
+		return nil
+	}
+
+	samlInfo := GetSessionStore().GetSAMLSessionInfo(cookie.Value)
+	if samlInfo == nil {
+		return nil
+	}
+
+	return &SAMLSessionInfo{
+		ProviderID:   samlInfo.ProviderID,
+		NameID:       samlInfo.NameID,
+		SessionIndex: samlInfo.SessionIndex,
+	}
 }
 
 // clearSession clears the current session
