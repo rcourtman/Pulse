@@ -33,7 +33,6 @@ export const Login: Component<LoginProps> = (props) => {
 
   const supportsOIDC = () => Boolean(authStatus()?.oidcEnabled);
   const ssoProviders = () => authStatus()?.ssoProviders || [];
-  const hasMultipleProviders = () => ssoProviders().length > 0;
 
   const resolveSSOError = (reason?: string | null) => {
     switch (reason) {
