@@ -2040,6 +2040,20 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		memory.Total = report.Host.TotalMemoryBytes
 	}
 
+	// Additional fallback for Docker-in-LXC: gopsutil may read Total and Free
+	// correctly from cgroup limits but return 0 for Used. Calculate Used from
+	// Total - Free when this happens. This fixes the "0B / 7GB" display issue.
+	if memory.Used <= 0 && memory.Total > 0 && memory.Free > 0 {
+		memory.Used = memory.Total - memory.Free
+		if memory.Used < 0 {
+			memory.Used = 0
+		}
+		// Recalculate usage percentage
+		if memory.Total > 0 {
+			memory.Usage = safePercentage(float64(memory.Used), float64(memory.Total))
+		}
+	}
+
 	disks := make([]models.Disk, 0, len(report.Host.Disks))
 	for _, disk := range report.Host.Disks {
 		disks = append(disks, models.Disk{
