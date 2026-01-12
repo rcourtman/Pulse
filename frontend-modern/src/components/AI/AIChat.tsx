@@ -315,6 +315,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   });
 
+  // Sync messages from store when session changes (e.g., newConversation, switchSession)
+  // Track sessionId to detect when we need to reload messages from store
+  createEffect(() => {
+    void aiChatStore.sessionId; // Track session changes (creates reactive dependency)
+    // When session changes, sync messages from store to local state
+    const storeMessages = aiChatStore.messages as Message[] || [];
+    setMessagesLocal(storeMessages);
+  });
+
   // Auto-send queued message when AI finishes processing
   createEffect(() => {
     const loading = isLoading();
