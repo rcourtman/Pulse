@@ -1093,6 +1093,91 @@ func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 	}
 }
 
+func TestCheckBackupsDisambiguatesWithNamespace(t *testing.T) {
+	// Test that when multiple guests have the same VMID from different instances,
+	// the namespace is used to match the backup to the correct guest.
+	// This addresses issue #1095 where users have multiple PVE instances with
+	// overlapping VMIDs and separate PBS instances backing them up.
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  3,
+		CriticalDays: 5,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+
+	// Two guests with the same VMID (100) but on different instances
+	guestsByKey := map[string]GuestLookup{
+		"pve-node1-100": {
+			ResourceID: "qemu/100",
+			Name:       "webserver-pve",
+			Instance:   "pve",
+			Node:       "node1",
+			Type:       "qemu",
+			VMID:       100,
+		},
+		"pve-nat-node2-100": {
+			ResourceID: "qemu/100",
+			Name:       "webserver-nat",
+			Instance:   "pve-nat",
+			Node:       "node2",
+			Type:       "qemu",
+			VMID:       100,
+		},
+	}
+
+	// Both guests have VMID "100"
+	guestsByVMID := map[string][]GuestLookup{
+		"100": {
+			guestsByKey["pve-node1-100"],
+			guestsByKey["pve-nat-node2-100"],
+		},
+	}
+
+	// PBS backup with namespace "nat" should match the "pve-nat" instance
+	pbsBackups := []models.PBSBackup{
+		{
+			ID:         "pbs-backup-100-nat",
+			Instance:   "pbs-main",
+			Datastore:  "backup-store",
+			Namespace:  "nat", // This namespace should match "pve-nat"
+			BackupType: "qemu",
+			VMID:       "100",
+			BackupTime: now.Add(-6 * 24 * time.Hour), // Critical
+		},
+	}
+
+	m.CheckBackups(nil, pbsBackups, nil, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Should find an alert keyed to the pve-nat instance (node2), not pve (node1)
+	expectedKey := "backup-age-pve-nat-node2-100"
+	alert, exists := m.activeAlerts[expectedKey]
+	if !exists {
+		// List what keys we do have for debugging
+		var keys []string
+		for k := range m.activeAlerts {
+			keys = append(keys, k)
+		}
+		t.Fatalf("expected alert with key %q not found; found keys: %v", expectedKey, keys)
+	}
+
+	if alert.ResourceName != "webserver-nat backup" {
+		t.Errorf("expected ResourceName 'webserver-nat backup', got %q", alert.ResourceName)
+	}
+	if alert.Instance != "pve-nat" {
+		t.Errorf("expected Instance 'pve-nat', got %q", alert.Instance)
+	}
+}
+
 func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
@@ -15481,4 +15566,59 @@ func TestLoadActiveAlerts(t *testing.T) {
 			t.Errorf("first alert should win, got type %s", alert.Type)
 		}
 	})
+}
+
+func TestNamespaceMatchesInstance(t *testing.T) {
+	tests := []struct {
+		name      string
+		namespace string
+		instance  string
+		expected  bool
+	}{
+		// Exact matches
+		{"exact match", "pve", "pve", true},
+		{"exact match with numbers", "pve1", "pve1", true},
+
+		// Partial matches (namespace in instance)
+		{"namespace contained in instance", "nat", "pve-nat", true},
+		{"namespace contained in instance no dash", "nat", "pvenat", true},
+		{"longer namespace in instance", "production", "my-production-server", true},
+
+		// Partial matches (instance in namespace)
+		{"instance contained in namespace", "pve-backups", "pve", true},
+
+		// Case insensitive
+		{"case insensitive exact", "PVE", "pve", true},
+		{"case insensitive partial", "NAT", "pve-nat", true},
+
+		// Special characters ignored
+		{"special chars in namespace", "pve_nat", "pvenat", true},
+		{"special chars in instance", "pvenat", "pve-nat", true},
+		{"both have special chars", "pve-1", "pve_1", true},
+
+		// No matches
+		{"no match", "production", "staging", false},
+		{"no match different names", "pve1", "pve2", false},
+		{"no match partial mismatch", "abc", "xyz", false},
+
+		// Empty values
+		{"empty namespace", "", "pve", false},
+		{"empty instance", "pve", "", false},
+		{"both empty", "", "", false},
+
+		// Real-world scenarios from issue #1095
+		{"pve namespace with pve instance", "pve", "pve", true},
+		{"nat namespace with pve-nat instance", "nat", "pve-nat", true},
+		{"pve1 namespace with pve1 instance", "pve1", "pve1", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := namespaceMatchesInstance(tt.namespace, tt.instance)
+			if result != tt.expected {
+				t.Errorf("namespaceMatchesInstance(%q, %q) = %v, want %v",
+					tt.namespace, tt.instance, result, tt.expected)
+			}
+		})
+	}
 }

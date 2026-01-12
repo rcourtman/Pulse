@@ -5157,9 +5157,28 @@ func (m *Manager) CheckBackups(
 		var node string
 
 		if exists && len(guests) > 0 {
-			// If we have exactly one match, use it
-			// If we have multiple matches, use the first one (we can't disambiguate without PVE origin metadata)
-			info = guests[0]
+			// If we have exactly one match, use it directly
+			// If we have multiple matches, try to disambiguate using the PBS namespace
+			if len(guests) == 1 {
+				info = guests[0]
+			} else if backup.Namespace != "" {
+				// Try to match namespace to instance name
+				matched := false
+				for _, g := range guests {
+					if namespaceMatchesInstance(backup.Namespace, g.Instance) {
+						info = g
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					// No namespace match found, fall back to first guest
+					info = guests[0]
+				}
+			} else {
+				// No namespace available, fall back to first guest
+				info = guests[0]
+			}
 			if info.Instance != "" && info.Node != "" {
 				key = BuildGuestKey(info.Instance, info.Node, info.VMID)
 				displayName = info.Name
@@ -6177,6 +6196,46 @@ func abs(x float64) float64 {
 		return -x
 	}
 	return x
+}
+
+// namespaceMatchesInstance checks if a PBS namespace likely corresponds to a PVE instance.
+// This helps disambiguate backups when multiple PVE instances have VMs with the same VMID.
+// Examples: namespace "pve1" matches instance "pve1", namespace "nat" matches instance "pve-nat"
+func namespaceMatchesInstance(namespace, instance string) bool {
+	if namespace == "" || instance == "" {
+		return false
+	}
+
+	// Normalize both strings: lowercase and keep only alphanumeric
+	normalize := func(s string) string {
+		var b strings.Builder
+		for _, r := range strings.ToLower(s) {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+				b.WriteRune(r)
+			}
+		}
+		return b.String()
+	}
+
+	ns := normalize(namespace)
+	inst := normalize(instance)
+
+	if ns == "" || inst == "" {
+		return false
+	}
+
+	// Exact match after normalization
+	if ns == inst {
+		return true
+	}
+
+	// Check if namespace is contained in instance or vice versa
+	// e.g., namespace "nat" matches instance "pvenat" (normalized from "pve-nat")
+	if strings.Contains(inst, ns) || strings.Contains(ns, inst) {
+		return true
+	}
+
+	return false
 }
 
 // AcknowledgeAlert acknowledges an alert
