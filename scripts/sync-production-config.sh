@@ -156,6 +156,20 @@ if [ "$HAVE_PROD_KEY" = true ] && [ -f "$PROD_DIR/webhooks.enc" ]; then
     echo "✓ Synced webhook configuration"
 fi
 
+# Copy API tokens (needed for agents to authenticate in dev mode)
+if [ -f "$PROD_DIR/api_tokens.json" ]; then
+    cp -f "$PROD_DIR/api_tokens.json" "$DEV_DIR/api_tokens.json"
+    chmod 600 "$DEV_DIR/api_tokens.json"
+    echo "✓ Synced API tokens (for agent authentication)"
+fi
+
+# Copy AI config if it exists and we have the key
+if [ "$HAVE_PROD_KEY" = true ] && [ -f "$PROD_DIR/ai.enc" ]; then
+    cp -f "$PROD_DIR/ai.enc" "$DEV_DIR/ai.enc"
+    chmod 600 "$DEV_DIR/ai.enc"
+    echo "✓ Synced AI configuration"
+fi
+
 # Initialize empty runtime files if they don't exist
 touch "$DEV_DIR/sessions.json" "$DEV_DIR/csrf_tokens.json" 2>/dev/null || true
 echo "[]" > "$DEV_DIR/sessions.json" 2>/dev/null || true

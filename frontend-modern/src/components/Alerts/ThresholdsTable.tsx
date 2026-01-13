@@ -47,6 +47,7 @@ type OverrideType =
   | 'guest'
   | 'node'
   | 'hostAgent'
+  | 'hostDisk'
   | 'storage'
   | 'pbs'
   | 'pmg'
@@ -861,6 +862,112 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return hosts;
   }, []);
 
+  // Helper function to create host disk resource ID (matches backend format)
+  const hostDiskResourceID = (hostId: string, mountpoint: string, device?: string): string => {
+    // Use mountpoint if available, otherwise device
+    let label = mountpoint?.trim() || device?.trim() || 'disk';
+    // Sanitize the label (replace slashes with underscores, similar to backend sanitizeHostComponent)
+    label = label.replace(/\//g, '_').replace(/^_/, '');
+    return `host:${hostId}/disk:${label}`;
+  };
+
+  // Process host disks with their overrides
+  const hostDisksWithOverrides = createMemo<Resource[]>((prev = []) => {
+    if (editingId()) {
+      return prev;
+    }
+
+    const search = searchTerm().toLowerCase();
+    const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
+    const seen = new Set<string>();
+    const disks: Resource[] = [];
+
+    // Extract disks from all hosts
+    (props.hosts ?? []).forEach((host) => {
+      const hostDisplayName = host.displayName?.trim() || host.hostname || host.id;
+
+      (host.disks ?? []).forEach((disk) => {
+        const diskLabel = disk.mountpoint?.trim() || disk.device?.trim() || 'disk';
+        const resourceId = hostDiskResourceID(host.id, disk.mountpoint || '', disk.device);
+        const override = overridesMap.get(resourceId);
+
+        const hasCustomThresholds =
+          override?.thresholds?.disk !== undefined &&
+          override.thresholds.disk !== props.hostDefaults.disk;
+
+        seen.add(resourceId);
+
+        disks.push({
+          id: resourceId,
+          name: diskLabel,
+          displayName: diskLabel,
+          rawName: disk.device || diskLabel,
+          type: 'hostDisk' as const,
+          resourceType: 'Host Disk',
+          host: host.id,
+          node: hostDisplayName,
+          instance: disk.type || '',
+          status: host.status || 'online',
+          hasOverride: hasCustomThresholds || Boolean(override?.disabled),
+          disabled: override?.disabled || false,
+          thresholds: override?.thresholds || {},
+          defaults: { disk: props.hostDefaults.disk },
+          subtitle: `${((disk.used || 0) / 1024 / 1024 / 1024).toFixed(1)} / ${((disk.total || 0) / 1024 / 1024 / 1024).toFixed(1)} GB`,
+        } satisfies Resource);
+      });
+    });
+
+    // Include any hostDisk overrides for disks that are no longer present
+    (props.overrides() ?? [])
+      .filter((override) => override.type === 'hostDisk' && !seen.has(override.id))
+      .forEach((override) => {
+        const name = override.name || override.id;
+        disks.push({
+          id: override.id,
+          name,
+          displayName: name,
+          rawName: name,
+          type: 'hostDisk' as const,
+          resourceType: 'Host Disk',
+          host: '',
+          node: 'Unknown Host',
+          instance: '',
+          status: 'unknown',
+          hasOverride: true,
+          disabled: override.disabled || false,
+          thresholds: override.thresholds || {},
+          defaults: { disk: props.hostDefaults.disk },
+        });
+      });
+
+    if (search) {
+      return disks.filter(
+        (d) => d.name.toLowerCase().includes(search) || d.node?.toLowerCase().includes(search),
+      );
+    }
+
+    return disks;
+  }, []);
+
+  // Group host disks by their host
+  const hostDisksGroupedByHost = createMemo<Record<string, Resource[]>>(() => {
+    const grouped: Record<string, Resource[]> = {};
+    hostDisksWithOverrides().forEach((disk) => {
+      const key = disk.node?.trim() || 'Unknown Host';
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(disk);
+    });
+
+    // Sort disks within each host by name
+    Object.values(grouped).forEach((resources) => {
+      resources.sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    return grouped;
+  });
+
   // Process Docker hosts with their overrides (primarily for connectivity toggles)
   const dockerHostsWithOverrides = createMemo<Resource[]>((prev = []) => {
     if (editingId()) {
@@ -1641,6 +1748,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           tab: 'hosts' as const,
         },
         {
+          key: 'hostDisks' as const,
+          label: 'Host Disks',
+          total: hostDisksWithOverrides().length,
+          overrides: countOverrides(hostDisksWithOverrides()),
+          tab: 'hosts' as const,
+        },
+        {
           key: 'storage' as const,
           label: 'Storage',
           total: props.storage?.length ?? 0,
@@ -1721,6 +1835,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const allResources = [
       ...nodesWithOverrides(),
       ...hostAgentsWithOverrides(),
+      ...hostDisksWithOverrides(),
       ...dockerHostsWithOverrides(),
       ...allGuests,
       ...allDockerContainers,
@@ -2065,6 +2180,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       ...storageWithOverrides(),
       ...pbsServersWithOverrides(),
       ...hostAgentsWithOverrides(),
+      ...hostDisksWithOverrides(),
     ];
     const resource = allResources.find((r) => r.id === resourceId);
     if (
@@ -2073,7 +2189,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         resource.type !== 'storage' &&
         resource.type !== 'pbs' &&
         resource.type !== 'dockerContainer' &&
-        resource.type !== 'hostAgent')
+        resource.type !== 'hostAgent' &&
+        resource.type !== 'hostDisk')
     )
       return;
 
@@ -3187,6 +3304,53 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 onResetDefaults={props.resetHostDefaults}
               />
             </div>
+          </Show>
+
+          <Show when={hasSection('hostDisks')}>
+            <CollapsibleSection
+              id="hostDisks"
+              title="Host Disks"
+              resourceCount={hostDisksWithOverrides().length}
+              collapsed={isCollapsed('hostDisks')}
+              onToggle={() => toggleSection('hostDisks')}
+              icon={<HardDrive class="w-5 h-5" />}
+              isGloballyDisabled={props.disableAllHosts()}
+              emptyMessage="No host disks found. Host agents with mounted filesystems will appear here."
+            >
+              <div ref={registerSection('hostDisks')} class="scroll-mt-24">
+                <ResourceTable
+                  title=""
+                  groupedResources={hostDisksGroupedByHost()}
+                  groupHeaderMeta={guestGroupHeaderMeta()}
+                  columns={['Disk %']}
+                  activeAlerts={props.activeAlerts}
+                  emptyMessage="No host disks match the current filters."
+                  onEdit={startEditing}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
+                  onRemoveOverride={removeOverride}
+                  onToggleDisabled={toggleDisabled}
+                  showOfflineAlertsColumn={false}
+                  editingId={editingId}
+                  editingThresholds={editingThresholds}
+                  setEditingThresholds={setEditingThresholds}
+                  editingNote={editingNote}
+                  setEditingNote={setEditingNote}
+                  formatMetricValue={formatMetricValue}
+                  hasActiveAlert={hasActiveAlert}
+                  globalDefaults={{ disk: props.hostDefaults.disk }}
+                  setGlobalDefaults={(value) => {
+                    if (typeof value === 'function') {
+                      const newValue = value({ disk: props.hostDefaults.disk });
+                      props.setHostDefaults((prev) => ({ ...prev, disk: newValue.disk }));
+                    } else {
+                      props.setHostDefaults((prev) => ({ ...prev, disk: value.disk }));
+                    }
+                  }}
+                  setHasUnsavedChanges={props.setHasUnsavedChanges}
+                />
+              </div>
+            </CollapsibleSection>
           </Show>
         </Show>
 

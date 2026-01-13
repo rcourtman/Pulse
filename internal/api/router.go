@@ -28,6 +28,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/mcp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/opencode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -73,6 +74,8 @@ type Router struct {
 	persistence               *config.ConfigPersistence
 	oidcMu                    sync.Mutex
 	oidcService               *OIDCService
+	samlManager               *SAMLServiceManager
+	ssoConfig                 *config.SSOConfig
 	authorizer                auth.Authorizer
 	wrapped                   http.Handler
 	serverVersion             string
@@ -156,6 +159,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	if cfg.AuthUser != "" {
 		auth.SetAdminUser(cfg.AuthUser)
 	}
+
+	// Initialize SAML manager (baseURL will be set dynamically on first use)
+	r.samlManager = NewSAMLServiceManager("")
 
 	r.initializeBootstrapToken()
 
@@ -1248,6 +1254,10 @@ func (r *Router) setupRoutes() {
 	r.aiHandler = NewAIHandler(r.config, r.persistence, r.agentExecServer)
 	// Wire license checker for Pro feature gating (AI Patrol, Alert Analysis, Auto-Fix)
 	r.aiSettingsHandler.SetLicenseChecker(r.licenseHandlers.Service())
+	// Wire model change callback to restart OpenCode sidecar when model is changed
+	r.aiSettingsHandler.SetOnModelChange(func() {
+		r.RestartOpenCodeAI(context.Background())
+	})
 	// Wire license checker for alert manager Pro features (Update Alerts)
 	if r.monitor != nil {
 		alertMgr := r.monitor.GetAlertManager()
@@ -1849,6 +1859,9 @@ func (r *Router) StartOpenCodeAI(ctx context.Context) {
 		return
 	}
 
+	// Wire up MCP tool providers so AI can access real data
+	r.wireOpenCodeProviders()
+
 	// Wire up OpenCode patrol if UseOpenCode is enabled
 	aiCfg := r.aiHandler.GetAIConfig()
 	if aiCfg != nil && aiCfg.UseOpenCode && r.aiHandler.IsRunning() {
@@ -1868,11 +1881,61 @@ func (r *Router) StartOpenCodeAI(ctx context.Context) {
 	}
 }
 
+// wireOpenCodeProviders wires up all MCP tool providers for OpenCode
+func (r *Router) wireOpenCodeProviders() {
+	if r.aiHandler == nil || !r.aiHandler.IsRunning() {
+		return
+	}
+
+	service := r.aiHandler.GetService()
+	if service == nil {
+		return
+	}
+
+	// Wire alert provider
+	if r.monitor != nil {
+		if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+			alertAdapter := mcp.NewAlertManagerMCPAdapter(alertManager)
+			if alertAdapter != nil {
+				service.SetAlertProvider(alertAdapter)
+				log.Debug().Msg("OpenCode: Alert provider wired")
+			}
+		}
+	}
+
+	// Wire findings provider from patrol service
+	if r.aiSettingsHandler != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
+			if findingsStore := patrolSvc.GetFindings(); findingsStore != nil {
+				findingsAdapter := ai.NewFindingsMCPAdapter(findingsStore)
+				if findingsAdapter != nil {
+					service.SetFindingsProvider(findingsAdapter)
+					log.Debug().Msg("OpenCode: Findings provider wired")
+				}
+			}
+		}
+	}
+
+	log.Info().Msg("OpenCode MCP tool providers wired")
+}
+
 // StopOpenCodeAI stops the OpenCode-based AI service
 func (r *Router) StopOpenCodeAI(ctx context.Context) {
 	if r.aiHandler != nil {
 		if err := r.aiHandler.Stop(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to stop OpenCode AI service")
+		}
+	}
+}
+
+// RestartOpenCodeAI restarts the OpenCode service with updated configuration
+// Call this when AI settings change that affect the sidecar (e.g., model selection)
+func (r *Router) RestartOpenCodeAI(ctx context.Context) {
+	if r.aiHandler != nil {
+		if err := r.aiHandler.Restart(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to restart OpenCode AI service")
+		} else {
+			log.Info().Msg("OpenCode AI service restarted with new configuration")
 		}
 	}
 }

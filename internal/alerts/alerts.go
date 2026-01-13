@@ -2837,27 +2837,66 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	seenDisks := make(map[string]struct{}, len(host.Disks))
-	if thresholds.Disk != nil && thresholds.Disk.Trigger > 0 {
-		for _, disk := range host.Disks {
-			diskResourceID, diskName := hostDiskResourceID(host, disk)
-			seenDisks[diskResourceID] = struct{}{}
+	for _, disk := range host.Disks {
+		diskResourceID, diskName := hostDiskResourceID(host, disk)
+		seenDisks[diskResourceID] = struct{}{}
 
-			diskMetadata := cloneMetadata(baseMetadata)
-			diskMetadata["metric"] = "disk"
-			diskMetadata["mountpoint"] = disk.Mountpoint
-			diskMetadata["device"] = disk.Device
-			diskMetadata["diskType"] = disk.Type
-			diskMetadata["diskUsagePercent"] = disk.Usage
-			if disk.Total > 0 {
-				diskMetadata["diskTotalBytes"] = disk.Total
-				diskMetadata["diskUsedBytes"] = disk.Used
-				diskMetadata["diskFreeBytes"] = disk.Free
+		// Check for disk-specific override
+		m.mu.RLock()
+		diskOverride, hasDiskOverride := m.config.Overrides[diskResourceID]
+		m.mu.RUnlock()
+
+		// Determine the effective disk threshold
+		var effectiveDiskThreshold *HysteresisThreshold
+		if hasDiskOverride {
+			// If disk is disabled via override, skip alerting
+			if diskOverride.Disabled {
+				m.clearAlert(fmt.Sprintf("host-%s-disk-%s", host.ID, sanitizeHostComponent(disk.Mountpoint)))
+				continue
 			}
-
-			m.checkMetric(diskResourceID, diskName, nodeName, instanceName, "Host Disk", "disk", disk.Usage, thresholds.Disk, &metricOptions{Metadata: diskMetadata})
+			// Use disk-specific threshold if set
+			if diskOverride.Disk != nil {
+				effectiveDiskThreshold = ensureHysteresisThreshold(diskOverride.Disk)
+			} else if diskOverride.DiskLegacy != nil {
+				effectiveDiskThreshold = m.convertLegacyThreshold(diskOverride.DiskLegacy)
+			}
 		}
-	} else {
-		m.clearHostDiskAlerts(host.ID)
+		// Fall back to host-level threshold
+		if effectiveDiskThreshold == nil {
+			effectiveDiskThreshold = thresholds.Disk
+		}
+
+		// Skip if no threshold configured or threshold is disabled (trigger=0)
+		if effectiveDiskThreshold == nil || effectiveDiskThreshold.Trigger <= 0 {
+			continue
+		}
+
+		diskMetadata := cloneMetadata(baseMetadata)
+		diskMetadata["metric"] = "disk"
+		diskMetadata["mountpoint"] = disk.Mountpoint
+		diskMetadata["device"] = disk.Device
+		diskMetadata["diskType"] = disk.Type
+		diskMetadata["diskUsagePercent"] = disk.Usage
+		if disk.Total > 0 {
+			diskMetadata["diskTotalBytes"] = disk.Total
+			diskMetadata["diskUsedBytes"] = disk.Used
+			diskMetadata["diskFreeBytes"] = disk.Free
+		}
+
+		m.checkMetric(diskResourceID, diskName, nodeName, instanceName, "Host Disk", "disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
+	}
+
+	// Clear all disk alerts if host-level disk alerting is completely disabled and no disk-specific overrides
+	if thresholds.Disk == nil || thresholds.Disk.Trigger <= 0 {
+		// Only clear alerts for disks that don't have their own overrides
+		m.mu.RLock()
+		for _, disk := range host.Disks {
+			diskResourceID, _ := hostDiskResourceID(host, disk)
+			if _, hasDiskOverride := m.config.Overrides[diskResourceID]; !hasDiskOverride {
+				m.clearAlert(fmt.Sprintf("host-%s-disk-%s", host.ID, sanitizeHostComponent(disk.Mountpoint)))
+			}
+		}
+		m.mu.RUnlock()
 	}
 
 	m.cleanupHostDiskAlerts(host, seenDisks)

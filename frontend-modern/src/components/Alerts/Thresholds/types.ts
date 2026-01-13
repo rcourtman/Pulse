@@ -22,6 +22,7 @@ export type ResourceType =
     | 'pbs'
     | 'pmg'
     | 'hostAgent'
+    | 'hostDisk'
     | 'dockerHost'
     | 'dockerContainer';
 
@@ -345,6 +346,9 @@ export const RESOURCE_COLUMNS: Record<ResourceType, ThresholdColumn[]> = {
     hostAgent: [
         { key: 'cpu', label: 'CPU %', unit: '%' },
         { key: 'memory', label: 'Memory %', unit: '%' },
+        { key: 'disk', label: 'Disk %', unit: '%' },
+    ],
+    hostDisk: [
         { key: 'disk', label: 'Disk %', unit: '%' },
     ],
     dockerHost: [],

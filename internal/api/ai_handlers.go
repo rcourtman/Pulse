@@ -31,10 +31,11 @@ import (
 
 // AISettingsHandler handles AI settings endpoints
 type AISettingsHandler struct {
-	config      *config.Config
-	persistence *config.ConfigPersistence
-	aiService   *ai.Service
-	agentServer *agentexec.Server
+	config        *config.Config
+	persistence   *config.ConfigPersistence
+	aiService     *ai.Service
+	agentServer   *agentexec.Server
+	onModelChange func() // Called when model or other OpenCode-affecting settings change
 }
 
 // NewAISettingsHandler creates a new AI settings handler
@@ -159,6 +160,12 @@ func (h *AISettingsHandler) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyz
 // SetLicenseChecker sets the license checker for Pro feature gating
 func (h *AISettingsHandler) SetLicenseChecker(checker ai.LicenseChecker) {
 	h.aiService.SetLicenseChecker(checker)
+}
+
+// SetOnModelChange sets a callback to be invoked when model settings change
+// Used by Router to trigger OpenCode sidecar restart
+func (h *AISettingsHandler) SetOnModelChange(callback func()) {
+	h.onModelChange = callback
 }
 
 // AISettingsResponse is returned by GET /api/settings/ai
@@ -600,6 +607,12 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// Update alert-triggered analyzer if available
 	if analyzer := h.aiService.GetAlertTriggeredAnalyzer(); analyzer != nil {
 		analyzer.SetEnabled(settings.AlertTriggeredAnalysis)
+	}
+
+	// Trigger OpenCode sidecar restart if model changed
+	// This ensures the new model is picked up by the sidecar
+	if h.onModelChange != nil && (req.Model != nil || req.ChatModel != nil) {
+		h.onModelChange()
 	}
 
 	log.Info().

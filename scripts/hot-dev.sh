@@ -180,6 +180,8 @@ Frontend: http://${FRONTEND_DEV_HOST}:${FRONTEND_DEV_PORT} (Local)
           http://${LAN_IP}:${FRONTEND_DEV_PORT} (LAN)
 Backend API: ${PULSE_DEV_API_URL}
 
+Dev Credentials: admin / admin
+
 Mock Mode: ${PULSE_MOCK_MODE:-false}
 Toggle mock mode: npm run mock:on / npm run mock:off
 Mock config: npm run mock:edit
@@ -292,7 +294,14 @@ fi
 
 FRONTEND_PORT=${PULSE_DEV_API_PORT}
 PORT=${PULSE_DEV_API_PORT}
-export FRONTEND_PORT PULSE_DEV_API_PORT PORT
+PULSE_DEV=true  # Enable development mode features (needed for admin bypass etc)
+PULSE_USE_OPENCODE=true  # Enable OpenCode AI backend for chat
+ALLOW_ADMIN_BYPASS=1  # Allow X-Admin-Bypass header in dev mode
+
+# Dev credentials: admin/admin (bcrypt hash of 'admin')
+PULSE_AUTH_USER="admin"
+PULSE_AUTH_PASS='$2a$12$j9/pl2RCHGVGvtv4wocrx.FGBczUw97ZAeO8im0.Ty.fXDGFOviWS'
+export FRONTEND_PORT PULSE_DEV_API_PORT PORT PULSE_DEV PULSE_USE_OPENCODE ALLOW_ADMIN_BYPASS PULSE_AUTH_USER PULSE_AUTH_PASS
 
 # Data Directory Setup
 if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
@@ -405,7 +414,7 @@ log_info "Starting backend file watcher..."
                 fi
             fi
 
-            FRONTEND_PORT=${PULSE_DEV_API_PORT} PORT=${PULSE_DEV_API_PORT} PULSE_DATA_DIR=${PULSE_DATA_DIR} ./pulse &
+            FRONTEND_PORT=${PULSE_DEV_API_PORT} PORT=${PULSE_DEV_API_PORT} PULSE_DATA_DIR=${PULSE_DATA_DIR} PULSE_USE_OPENCODE=${PULSE_USE_OPENCODE:-true} ALLOW_ADMIN_BYPASS=${ALLOW_ADMIN_BYPASS:-1} PULSE_DEV=${PULSE_DEV:-true} ./pulse &
             NEW_PID=$!
             sleep 1
 

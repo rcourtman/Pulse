@@ -207,6 +207,7 @@ type OverrideType =
   | 'guest'
   | 'node'
   | 'hostAgent'
+  | 'hostDisk'
   | 'storage'
   | 'pbs'
   | 'pmg'
