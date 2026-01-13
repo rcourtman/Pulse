@@ -970,6 +970,13 @@ func (s *Service) GetConfig() *config.AIConfig {
 	return &cfg
 }
 
+// GetCommandPolicy returns the command policy for security checks
+func (s *Service) GetCommandPolicy() CommandPolicy {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.policy
+}
+
 // GetDebugContext returns debug information about what context would be sent to the AI
 func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 	s.mu.RLock()
@@ -3223,6 +3230,12 @@ This is a 3-command job. Don't over-investigate.`
 	}
 
 	return prompt
+}
+
+// BuildSystemPromptForOpenCode builds a system prompt for use with OpenCode integration.
+// This is a public wrapper around the internal buildSystemPrompt for the OpenCode service.
+func (s *Service) BuildSystemPromptForOpenCode(req ExecuteRequest) string {
+	return s.buildSystemPrompt(req)
 }
 
 // formatContextKey converts snake_case keys to readable labels

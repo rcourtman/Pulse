@@ -14,7 +14,7 @@ const backendPort = Number(
   process.env.PULSE_DEV_API_PORT ??
   process.env.FRONTEND_PORT ??
   process.env.PORT ??
-  7654,
+  7655,
 );
 
 const backendUrl =

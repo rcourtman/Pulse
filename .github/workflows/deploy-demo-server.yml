@@ -47,7 +47,7 @@ jobs:
           cp -r frontend-modern/dist internal/api/frontend-modern/
 
       - name: Build static binary
-        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o pulse cmd/pulse/main.go
+        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o pulse ./cmd/pulse/
       
       - name: Tailscale
         uses: tailscale/github-action@v2

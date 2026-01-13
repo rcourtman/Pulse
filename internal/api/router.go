@@ -57,6 +57,7 @@ type Router struct {
 	temperatureProxyHandlers  *TemperatureProxyHandlers
 	systemSettingsHandler     *SystemSettingsHandler
 	aiSettingsHandler         *AISettingsHandler
+	aiHandler                 *AIHandler
 	resourceHandlers          *ResourceHandlers
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
@@ -1331,6 +1332,62 @@ func (r *Router) setupRoutes() {
 			})
 		}
 	}
+
+	// OpenCode-powered AI handler for chat
+	r.aiHandler = NewAIHandler(r.config, r.persistence, r.agentExecServer)
+
+	// OpenCode chat endpoints (new SSE-based chat)
+	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, r.aiHandler.HandleChat))
+	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, r.aiHandler.HandleStatus))
+	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			r.aiHandler.HandleSessions(w, req)
+		case http.MethodPost:
+			r.aiHandler.HandleCreateSession(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		// Extract session ID from path: /api/ai/sessions/{id}[/messages|/abort]
+		path := strings.TrimPrefix(req.URL.Path, "/api/ai/sessions/")
+		parts := strings.SplitN(path, "/", 2)
+		sessionID := parts[0]
+		if sessionID == "" {
+			http.Error(w, "Missing session ID", http.StatusBadRequest)
+			return
+		}
+
+		if len(parts) == 1 {
+			// /api/ai/sessions/{id}
+			if req.Method == http.MethodDelete {
+				r.aiHandler.HandleDeleteSession(w, req, sessionID)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		// /api/ai/sessions/{id}/messages or /api/ai/sessions/{id}/abort
+		switch parts[1] {
+		case "messages":
+			if req.Method == http.MethodGet {
+				r.aiHandler.HandleMessages(w, req, sessionID)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		case "abort":
+			if req.Method == http.MethodPost {
+				r.aiHandler.HandleAbort(w, req, sessionID)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		default:
+			http.Error(w, "Not found", http.StatusNotFound)
+		}
+	}))
+
 	r.mux.HandleFunc("/api/settings/ai", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceSettings, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
 	r.mux.HandleFunc("/api/settings/ai/update", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
 	r.mux.HandleFunc("/api/ai/test", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
@@ -1867,6 +1924,24 @@ func (r *Router) StartPatrol(ctx context.Context) {
 func (r *Router) StopPatrol() {
 	if r.aiSettingsHandler != nil {
 		r.aiSettingsHandler.StopPatrol()
+	}
+}
+
+// StartOpenCode starts the OpenCode-powered AI service
+func (r *Router) StartOpenCode(ctx context.Context) {
+	if r.aiHandler != nil && r.monitor != nil {
+		if err := r.aiHandler.Start(ctx, r.monitor); err != nil {
+			log.Error().Err(err).Msg("Failed to start OpenCode AI service")
+		}
+	}
+}
+
+// StopOpenCode stops the OpenCode AI service
+func (r *Router) StopOpenCode(ctx context.Context) {
+	if r.aiHandler != nil {
+		if err := r.aiHandler.Stop(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to stop OpenCode AI service")
+		}
 	}
 }
 
