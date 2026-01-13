@@ -57,7 +57,6 @@ type Router struct {
 	temperatureProxyHandlers  *TemperatureProxyHandlers
 	systemSettingsHandler     *SystemSettingsHandler
 	aiSettingsHandler         *AISettingsHandler
-	aiHandler                 *AIHandler
 	resourceHandlers          *ResourceHandlers
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
@@ -72,8 +71,6 @@ type Router struct {
 	persistence               *config.ConfigPersistence
 	oidcMu                    sync.Mutex
 	oidcService               *OIDCService
-	ssoConfig                 *config.SSOConfig
-	samlManager               *SAMLServiceManager
 	authorizer                auth.Authorizer
 	wrapped                   http.Handler
 	serverVersion             string
@@ -136,12 +133,6 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	updateManager := updates.NewManager(cfg)
 	updateManager.SetHistory(updateHistory)
 
-	// Determine base URL for SSO callbacks
-	baseURL := cfg.PublicURL
-	if baseURL == "" {
-		baseURL = fmt.Sprintf("http://localhost:%d", cfg.FrontendPort)
-	}
-
 	r := &Router{
 		mux:             http.NewServeMux(),
 		config:          cfg,
@@ -157,8 +148,6 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		serverVersion:   strings.TrimSpace(serverVersion),
 		projectRoot:     projectRoot,
 		checksumCache:   make(map[string]checksumCacheEntry),
-		ssoConfig:       config.NewSSOConfig(),
-		samlManager:     NewSAMLServiceManager(baseURL),
 	}
 
 	// Sync the configured admin user to the authorizer (if supported)
@@ -521,19 +510,12 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("GET /api/audit", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
 	r.mux.HandleFunc("GET /api/audit/", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
 	r.mux.HandleFunc("GET /api/audit/{id}/verify", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))))
-	r.mux.HandleFunc("GET /api/audit/export", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleExportAuditEvents))))
-	r.mux.HandleFunc("GET /api/audit/summary", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleAuditSummary))))
 
 	// RBAC routes (Phase 2 - Enterprise feature)
 	r.mux.HandleFunc("/api/admin/roles", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoles)))
 	r.mux.HandleFunc("/api/admin/roles/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoles)))
 	r.mux.HandleFunc("/api/admin/users", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleGetUsers)))
 	r.mux.HandleFunc("/api/admin/users/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleUserRoleActions)))
-
-	// RBAC Pro routes (role inheritance, changelog, effective permissions)
-	r.mux.HandleFunc("GET /api/admin/rbac/changelog", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRBACChangelog)))
-	r.mux.HandleFunc("GET /api/admin/roles/{id}/effective", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoleEffective)))
-	r.mux.HandleFunc("GET /api/admin/users/{username}/effective-permissions", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleUserEffectivePermissions)))
 
 	// Advanced Reporting routes
 	r.mux.HandleFunc("/api/admin/reports/generate", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAdvancedReporting, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateReport))))
@@ -555,38 +537,6 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
-
-	// SAML SSO routes - dynamic provider-based endpoints
-	r.mux.HandleFunc("/api/saml/", func(w http.ResponseWriter, req *http.Request) {
-		// Route SAML requests based on path: /api/saml/{providerID}/{action}
-		path := strings.TrimPrefix(req.URL.Path, "/api/saml/")
-		parts := strings.SplitN(path, "/", 2)
-		if len(parts) < 2 {
-			writeErrorResponse(w, http.StatusBadRequest, "invalid_path", "Invalid SAML endpoint path", nil)
-			return
-		}
-		action := parts[1]
-		switch action {
-		case "login":
-			r.handleSAMLLogin(w, req)
-		case "acs":
-			r.handleSAMLACS(w, req)
-		case "metadata":
-			r.handleSAMLMetadata(w, req)
-		case "logout":
-			r.handleSAMLLogout(w, req)
-		case "slo":
-			r.handleSAMLSLO(w, req)
-		default:
-			writeErrorResponse(w, http.StatusNotFound, "not_found", "Unknown SAML endpoint", nil)
-		}
-	})
-
-	// SSO providers management API
-	r.mux.HandleFunc("/api/security/sso/providers/test", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleTestSSOProvider)))
-	r.mux.HandleFunc("/api/security/sso/providers/metadata/preview", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleMetadataPreview)))
-	r.mux.HandleFunc("/api/security/sso/providers", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleSSOProviders)))
-	r.mux.HandleFunc("/api/security/sso/providers/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleSSOProvider)))
 	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -755,35 +705,6 @@ func (r *Router) setupRoutes() {
 				status["oidcLogoutURL"] = oidcCfg.LogoutURL
 				if len(oidcCfg.EnvOverrides) > 0 {
 					status["oidcEnvOverrides"] = oidcCfg.EnvOverrides
-				}
-			}
-
-			// Add SSO providers for multi-provider support
-			if r.ssoConfig != nil && len(r.ssoConfig.Providers) > 0 {
-				enabledProviders := make([]map[string]interface{}, 0)
-				for _, p := range r.ssoConfig.GetEnabledProviders() {
-					provider := map[string]interface{}{
-						"id":          p.ID,
-						"name":        p.Name,
-						"type":        string(p.Type),
-						"displayName": p.DisplayName,
-					}
-					if provider["displayName"] == "" {
-						provider["displayName"] = p.Name
-					}
-					if p.IconURL != "" {
-						provider["iconUrl"] = p.IconURL
-					}
-					// Add login URL for each provider
-					if p.Type == config.SSOProviderTypeOIDC {
-						provider["loginUrl"] = "/api/oidc/login?provider=" + p.ID
-					} else if p.Type == config.SSOProviderTypeSAML {
-						provider["loginUrl"] = "/api/saml/" + p.ID + "/login"
-					}
-					enabledProviders = append(enabledProviders, provider)
-				}
-				if len(enabledProviders) > 0 {
-					status["ssoProviders"] = enabledProviders
 				}
 			}
 
@@ -1332,62 +1253,6 @@ func (r *Router) setupRoutes() {
 			})
 		}
 	}
-
-	// OpenCode-powered AI handler for chat
-	r.aiHandler = NewAIHandler(r.config, r.persistence, r.agentExecServer)
-
-	// OpenCode chat endpoints (new SSE-based chat)
-	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, r.aiHandler.HandleChat))
-	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, r.aiHandler.HandleStatus))
-	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
-		switch req.Method {
-		case http.MethodGet:
-			r.aiHandler.HandleSessions(w, req)
-		case http.MethodPost:
-			r.aiHandler.HandleCreateSession(w, req)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
-		// Extract session ID from path: /api/ai/sessions/{id}[/messages|/abort]
-		path := strings.TrimPrefix(req.URL.Path, "/api/ai/sessions/")
-		parts := strings.SplitN(path, "/", 2)
-		sessionID := parts[0]
-		if sessionID == "" {
-			http.Error(w, "Missing session ID", http.StatusBadRequest)
-			return
-		}
-
-		if len(parts) == 1 {
-			// /api/ai/sessions/{id}
-			if req.Method == http.MethodDelete {
-				r.aiHandler.HandleDeleteSession(w, req, sessionID)
-			} else {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			}
-			return
-		}
-
-		// /api/ai/sessions/{id}/messages or /api/ai/sessions/{id}/abort
-		switch parts[1] {
-		case "messages":
-			if req.Method == http.MethodGet {
-				r.aiHandler.HandleMessages(w, req, sessionID)
-			} else {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			}
-		case "abort":
-			if req.Method == http.MethodPost {
-				r.aiHandler.HandleAbort(w, req, sessionID)
-			} else {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			}
-		default:
-			http.Error(w, "Not found", http.StatusNotFound)
-		}
-	}))
-
 	r.mux.HandleFunc("/api/settings/ai", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceSettings, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
 	r.mux.HandleFunc("/api/settings/ai/update", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
 	r.mux.HandleFunc("/api/ai/test", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
@@ -1490,19 +1355,6 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/intelligence/remediations", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRemediations))
 	r.mux.HandleFunc("/api/ai/intelligence/anomalies", RequireAuth(r.config, r.aiSettingsHandler.HandleGetAnomalies))
 	r.mux.HandleFunc("/api/ai/intelligence/learning", RequireAuth(r.config, r.aiSettingsHandler.HandleGetLearningStatus))
-
-	// AI Auto-Fix Approval Workflows (Pro feature)
-	r.mux.HandleFunc("GET /api/ai/approvals", RequireAuth(r.config, r.aiSettingsHandler.HandleListApprovals))
-	r.mux.HandleFunc("GET /api/ai/approvals/{id}", RequireAuth(r.config, r.aiSettingsHandler.HandleGetApproval))
-	r.mux.HandleFunc("POST /api/ai/approvals/{id}/approve", RequireAuth(r.config, r.aiSettingsHandler.HandleApproveCommand))
-	r.mux.HandleFunc("POST /api/ai/approvals/{id}/deny", RequireAuth(r.config, r.aiSettingsHandler.HandleDenyCommand))
-
-	// AI Remediation Rollback (Pro feature)
-	r.mux.HandleFunc("GET /api/ai/remediations/rollbackable", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRollbackable))
-	r.mux.HandleFunc("POST /api/ai/remediations/{id}/rollback", RequireAuth(r.config, r.aiSettingsHandler.HandleRollback))
-
-	// AI Dry-Run Simulation
-	r.mux.HandleFunc("POST /api/ai/simulate", RequireAuth(r.config, r.aiSettingsHandler.HandleDryRunSimulate))
 
 	// AI Chat Sessions - sync across devices
 	r.mux.HandleFunc("/api/ai/chat/sessions", RequireAuth(r.config, r.aiSettingsHandler.HandleListAIChatSessions))
@@ -1927,24 +1779,6 @@ func (r *Router) StopPatrol() {
 	}
 }
 
-// StartOpenCode starts the OpenCode-powered AI service
-func (r *Router) StartOpenCode(ctx context.Context) {
-	if r.aiHandler != nil && r.monitor != nil {
-		if err := r.aiHandler.Start(ctx, r.monitor); err != nil {
-			log.Error().Err(err).Msg("Failed to start OpenCode AI service")
-		}
-	}
-}
-
-// StopOpenCode stops the OpenCode AI service
-func (r *Router) StopOpenCode(ctx context.Context) {
-	if r.aiHandler != nil {
-		if err := r.aiHandler.Stop(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to stop OpenCode AI service")
-		}
-	}
-}
-
 // startBaselineLearning runs a background loop that learns baselines from metrics history
 // This enables anomaly detection by understanding what "normal" looks like for each resource
 func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineStore, metricsHistory *monitoring.MetricsHistory) {
@@ -2234,7 +2068,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/login", // Add login endpoint as public
 				"/api/oidc/login",
 				config.DefaultOIDCCallbackPath,
-				"/api/saml/",                                         // All SAML endpoints are public (login, ACS, metadata, etc.)
 				"/install-docker-agent.sh",                           // Docker agent bootstrap script must be public
 				"/install-container-agent.sh",                        // Container agent bootstrap script must be public
 				"/download/pulse-docker-agent",                       // Agent binary download should not require auth

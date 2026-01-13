@@ -226,15 +226,6 @@ func (s *Service) GetPatrolService() *PatrolService {
 	return s.patrolService
 }
 
-// GetRemediationLog returns the remediation log from the patrol service.
-func (s *Service) GetRemediationLog() *memory.RemediationLog {
-	patrol := s.GetPatrolService()
-	if patrol == nil {
-		return nil
-	}
-	return patrol.GetRemediationLog()
-}
-
 // GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for token-efficient real-time analysis
 func (s *Service) GetAlertTriggeredAnalyzer() *AlertTriggeredAnalyzer {
 	s.mu.RLock()
@@ -968,13 +959,6 @@ func (s *Service) GetConfig() *config.AIConfig {
 	}
 	cfg := *s.cfg
 	return &cfg
-}
-
-// GetCommandPolicy returns the command policy for security checks
-func (s *Service) GetCommandPolicy() CommandPolicy {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.policy
 }
 
 // GetDebugContext returns debug information about what context would be sent to the AI
@@ -3230,12 +3214,6 @@ This is a 3-command job. Don't over-investigate.`
 	}
 
 	return prompt
-}
-
-// BuildSystemPromptForOpenCode builds a system prompt for use with OpenCode integration.
-// This is a public wrapper around the internal buildSystemPrompt for the OpenCode service.
-func (s *Service) BuildSystemPromptForOpenCode(req ExecuteRequest) string {
-	return s.buildSystemPrompt(req)
 }
 
 // formatContextKey converts snake_case keys to readable labels
