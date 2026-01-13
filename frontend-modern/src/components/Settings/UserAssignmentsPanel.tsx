@@ -4,7 +4,7 @@ import { RBACAPI } from '@/api/rbac';
 import type { Role, UserRoleAssignment, Permission } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { hasFeature, loadLicenseStatus } from '@/stores/license';
+import { hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
 import Users from 'lucide-solid/icons/users';
 import Shield from 'lucide-solid/icons/shield';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
@@ -129,7 +129,7 @@ export const UserAssignmentsPanel: Component = () => {
                     </div>
                 </div>
 
-                <Show when={!hasFeature('rbac') && !loading()}>
+                <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
                     <div class="p-4 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/20 border border-teal-100 dark:border-teal-800 rounded-xl">
                         <div class="flex flex-col sm:flex-row items-center gap-4">
                             <div class="flex-1">

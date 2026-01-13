@@ -6,7 +6,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { hasFeature, loadLicenseStatus } from '@/stores/license';
+import { hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -507,7 +507,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
   return (
     <div class="space-y-6">
       {/* License banner */}
-      <Show when={!hasAdvancedSSO() && !loading()}>
+      <Show when={licenseLoaded() && !hasAdvancedSSO() && !loading()}>
         <Card padding="md" class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">

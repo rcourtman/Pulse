@@ -6,7 +6,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { hasFeature, loadLicenseStatus } from '@/stores/license';
+import { hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
 
 interface OIDCConfigResponse {
   enabled: boolean;
@@ -279,7 +279,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           />
         </div>
       </div>
-      <Show when={!hasFeature('sso') && !loading()}>
+      <Show when={licenseLoaded() && !hasFeature('sso') && !loading()}>
         <div class="mx-6 mt-6 p-5 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">

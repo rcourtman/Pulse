@@ -16,7 +16,7 @@ import {
     STORAGE_KEYS,
 } from '@/utils/localStorage';
 import { showSuccess, showWarning, showToast } from '@/utils/toast';
-import { hasFeature, loadLicenseStatus } from '@/stores/license';
+import { hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
 
 interface AuditEvent {
     id: string;
@@ -499,7 +499,7 @@ export default function AuditLogPanel() {
             </div>
 
             {/* Upgrade CTA */}
-            <Show when={!hasFeature('audit_logging') && !loading()}>
+            <Show when={licenseLoaded() && !hasFeature('audit_logging') && !loading()}>
                 <div class="p-6 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl">
                     <div class="flex flex-col sm:flex-row items-center gap-4">
                         <div class="flex-1">
