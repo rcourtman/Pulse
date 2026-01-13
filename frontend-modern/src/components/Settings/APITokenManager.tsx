@@ -122,7 +122,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     {
       label: 'Kiosk / Dashboard',
       scopes: [MONITORING_READ_SCOPE],
-      description: 'Read-only dashboard access for kiosk displays. Use with ?token=xxx in the URL.',
+      description: 'Read-only access for wall displays. Use ?token=xxx&kiosk=1 in the URL to hide navigation and filters.',
     },
     {
       label: 'Host agent',

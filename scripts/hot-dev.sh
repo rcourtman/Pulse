@@ -390,6 +390,36 @@ if ! kill -0 "${BACKEND_PID}" 2>/dev/null; then
     exit 1
 fi
 
+# --- Backend Health Monitor ---
+# Restarts Pulse if it dies unexpectedly (not from file watcher rebuild)
+log_info "Starting backend health monitor..."
+(
+    while true; do
+        sleep 10
+        if ! pgrep -f "^\./pulse$" > /dev/null 2>&1; then
+            log_warn "⚠️  Pulse died unexpectedly, restarting..."
+            FRONTEND_PORT=${PULSE_DEV_API_PORT} \
+            PORT=${PULSE_DEV_API_PORT} \
+            PULSE_DATA_DIR=${PULSE_DATA_DIR} \
+            PULSE_ENCRYPTION_KEY=${PULSE_ENCRYPTION_KEY} \
+            PULSE_USE_OPENCODE=${PULSE_USE_OPENCODE:-true} \
+            ALLOW_ADMIN_BYPASS=${ALLOW_ADMIN_BYPASS:-1} \
+            PULSE_DEV=${PULSE_DEV:-true} \
+            PULSE_AUTH_USER=${PULSE_AUTH_USER} \
+            PULSE_AUTH_PASS=${PULSE_AUTH_PASS} \
+            ./pulse &
+            NEW_PID=$!
+            sleep 2
+            if kill -0 "$NEW_PID" 2>/dev/null; then
+                log_info "✓ Backend auto-restarted (PID: $NEW_PID)"
+            else
+                log_error "✗ Backend failed to auto-restart!"
+            fi
+        fi
+    done
+) &
+HEALTH_MONITOR_PID=$!
+
 # --- File Watcher ---
 
 log_info "Starting backend file watcher..."
@@ -465,12 +495,17 @@ WATCHER_PID=$!
 cleanup() {
     echo ""
     log_info "Stopping services..."
-    
+
+    # Kill Health Monitor
+    if [[ -n ${HEALTH_MONITOR_PID:-} ]] && kill -0 "${HEALTH_MONITOR_PID}" 2>/dev/null; then
+        kill "${HEALTH_MONITOR_PID}" 2>/dev/null || true
+    fi
+
     # Kill Watcher
     if [[ -n ${WATCHER_PID:-} ]] && kill -0 "${WATCHER_PID}" 2>/dev/null; then
         kill "${WATCHER_PID}" 2>/dev/null || true
     fi
-    
+
     # Kill Backend
     # We re-find the PID because it might have changed during restart
     CURRENT_BACKEND_PID=$(pgrep -f "^\./pulse$" || true)
@@ -481,7 +516,7 @@ cleanup() {
             kill -9 "${CURRENT_BACKEND_PID}" 2>/dev/null || true
         fi
     fi
-    
+
     # Kill Frontend (Vite)
     if [[ -n ${VITE_PID:-} ]] && kill -0 "${VITE_PID}" 2>/dev/null; then
         kill "${VITE_PID}" 2>/dev/null || true
