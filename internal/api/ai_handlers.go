@@ -52,6 +52,11 @@ func NewAISettingsHandler(cfg *config.Config, persistence *config.ConfigPersiste
 	}
 }
 
+// GetAIService returns the underlying AI service
+func (h *AISettingsHandler) GetAIService() *ai.Service {
+	return h.aiService
+}
+
 // SetConfig updates the configuration reference used by the handler.
 func (h *AISettingsHandler) SetConfig(cfg *config.Config) {
 	if cfg == nil {

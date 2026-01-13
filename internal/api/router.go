@@ -28,6 +28,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/opencode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
@@ -57,6 +58,7 @@ type Router struct {
 	temperatureProxyHandlers  *TemperatureProxyHandlers
 	systemSettingsHandler     *SystemSettingsHandler
 	aiSettingsHandler         *AISettingsHandler
+	aiHandler                 *AIHandler // OpenCode-based AI handler
 	resourceHandlers          *ResourceHandlers
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
@@ -1241,6 +1243,9 @@ func (r *Router) setupRoutes() {
 		hostMetadataHandler.Store(),
 	)
 	r.aiSettingsHandler.SetMetadataProvider(metadataProvider)
+
+	// OpenCode-based AI handler (when UseOpenCode is enabled)
+	r.aiHandler = NewAIHandler(r.config, r.persistence, r.agentExecServer)
 	// Wire license checker for Pro feature gating (AI Patrol, Alert Analysis, Auto-Fix)
 	r.aiSettingsHandler.SetLicenseChecker(r.licenseHandlers.Service())
 	// Wire license checker for alert manager Pro features (Update Alerts)
@@ -1356,7 +1361,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/intelligence/anomalies", RequireAuth(r.config, r.aiSettingsHandler.HandleGetAnomalies))
 	r.mux.HandleFunc("/api/ai/intelligence/learning", RequireAuth(r.config, r.aiSettingsHandler.HandleGetLearningStatus))
 
-	// AI Chat Sessions - sync across devices
+	// AI Chat Sessions - sync across devices (legacy endpoints)
 	r.mux.HandleFunc("/api/ai/chat/sessions", RequireAuth(r.config, r.aiSettingsHandler.HandleListAIChatSessions))
 	r.mux.HandleFunc("/api/ai/chat/sessions/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
@@ -1370,6 +1375,21 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
+
+	// OpenCode AI endpoints - new AI backend powered by OpenCode
+	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, r.aiHandler.HandleStatus))
+	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, r.aiHandler.HandleChat))
+	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			r.aiHandler.HandleSessions(w, req)
+		case http.MethodPost:
+			r.aiHandler.HandleCreateSession(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeOpenCodeSessions))
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
@@ -1407,6 +1427,40 @@ func (r *Router) setupRoutes() {
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
 
+}
+
+// routeOpenCodeSessions routes session-specific OpenCode AI requests
+func (r *Router) routeOpenCodeSessions(w http.ResponseWriter, req *http.Request) {
+	// Extract session ID from path: /api/ai/sessions/{id}[/messages|/abort]
+	path := strings.TrimPrefix(req.URL.Path, "/api/ai/sessions/")
+	parts := strings.SplitN(path, "/", 2)
+	sessionID := parts[0]
+
+	if sessionID == "" {
+		http.Error(w, "Session ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if there's a sub-resource
+	if len(parts) > 1 {
+		switch parts[1] {
+		case "messages":
+			r.aiHandler.HandleMessages(w, req, sessionID)
+		case "abort":
+			r.aiHandler.HandleAbort(w, req, sessionID)
+		default:
+			http.Error(w, "Not found", http.StatusNotFound)
+		}
+		return
+	}
+
+	// Handle session-level operations
+	switch req.Method {
+	case http.MethodDelete:
+		r.aiHandler.HandleDeleteSession(w, req, sessionID)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleAgentWebSocket handles WebSocket connections from agents for AI command execution
@@ -1776,6 +1830,50 @@ func (r *Router) StartPatrol(ctx context.Context) {
 func (r *Router) StopPatrol() {
 	if r.aiSettingsHandler != nil {
 		r.aiSettingsHandler.StopPatrol()
+	}
+}
+
+// StartOpenCodeAI starts the OpenCode-based AI service
+// This is the new AI backend that uses OpenCode for better tool calling and multi-model support
+func (r *Router) StartOpenCodeAI(ctx context.Context) {
+	if r.aiHandler == nil {
+		return
+	}
+	if r.monitor == nil {
+		log.Warn().Msg("Cannot start OpenCode AI: monitor not available")
+		return
+	}
+
+	if err := r.aiHandler.Start(ctx, r.monitor); err != nil {
+		log.Error().Err(err).Msg("Failed to start OpenCode AI service")
+		return
+	}
+
+	// Wire up OpenCode patrol if UseOpenCode is enabled
+	aiCfg := r.aiHandler.GetAIConfig()
+	if aiCfg != nil && aiCfg.UseOpenCode && r.aiHandler.IsRunning() {
+		service := r.aiHandler.GetService()
+		if service != nil {
+			// Create OpenCode patrol service
+			ocPatrol := opencode.NewPatrolService(service)
+
+			// Wire to existing patrol service
+			if r.aiSettingsHandler != nil {
+				if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
+					patrolSvc.SetOpenCodePatrol(ocPatrol, true)
+					log.Info().Msg("OpenCode patrol integration enabled")
+				}
+			}
+		}
+	}
+}
+
+// StopOpenCodeAI stops the OpenCode-based AI service
+func (r *Router) StopOpenCodeAI(ctx context.Context) {
+	if r.aiHandler != nil {
+		if err := r.aiHandler.Stop(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to stop OpenCode AI service")
+		}
 	}
 }
 

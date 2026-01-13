@@ -195,6 +195,9 @@ func Run(ctx context.Context, version string) error {
 	// Start AI patrol service for background infrastructure monitoring
 	router.StartPatrol(ctx)
 
+	// Start OpenCode AI service (when UseOpenCode is enabled in config)
+	router.StartOpenCodeAI(ctx)
+
 	// Wire alert-triggered AI analysis
 	router.WireAlertTriggeredAI()
 

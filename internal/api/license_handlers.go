@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rs/zerolog/log"
 )
 
@@ -13,6 +14,7 @@ import (
 type LicenseHandlers struct {
 	service     *license.Service
 	persistence *license.Persistence
+	configDir   string // Needed for initializing audit logger
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -23,6 +25,12 @@ func NewLicenseHandlers(configDir string) *LicenseHandlers {
 	}
 
 	service := license.NewService()
+
+	h := &LicenseHandlers{
+		service:     service,
+		persistence: persistence,
+		configDir:   configDir,
+	}
 
 	// Try to load existing license with metadata
 	if persistence != nil {
@@ -38,14 +46,40 @@ func NewLicenseHandlers(configDir string) *LicenseHandlers {
 					lic.GracePeriodEnd = &gracePeriodEnd
 				}
 				log.Info().Msg("Loaded saved Pulse Pro license")
+
+				// Initialize audit logger if license has audit_logging feature
+				h.initAuditLoggerIfLicensed()
 			}
 		}
 	}
 
-	return &LicenseHandlers{
-		service:     service,
-		persistence: persistence,
+	return h
+}
+
+// initAuditLoggerIfLicensed initializes the SQLite audit logger if the license
+// includes the audit_logging feature. This enables persistent audit logs with
+// HMAC signing for Pro users.
+func (h *LicenseHandlers) initAuditLoggerIfLicensed() {
+	if !h.service.HasFeature(license.FeatureAuditLogging) {
+		return
 	}
+
+	// Check if we already have a SQLiteLogger (avoid re-initialization)
+	if _, ok := audit.GetLogger().(*audit.SQLiteLogger); ok {
+		return
+	}
+
+	logger, err := audit.NewSQLiteLogger(audit.SQLiteLoggerConfig{
+		DataDir:       h.configDir,
+		RetentionDays: 90, // Default 90 days retention
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize SQLite audit logger, falling back to console")
+		return
+	}
+
+	audit.SetLogger(logger)
+	log.Info().Msg("SQLite audit logger initialized for Pulse Pro")
 }
 
 // Service returns the license service for use by other handlers.
@@ -181,6 +215,9 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 		Str("tier", string(lic.Claims.Tier)).
 		Bool("lifetime", lic.IsLifetime()).
 		Msg("Pulse Pro license activated")
+
+	// Initialize audit logger if the new license has audit_logging feature
+	h.initAuditLoggerIfLicensed()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ActivateLicenseResponse{

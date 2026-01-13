@@ -234,6 +234,12 @@ type PatrolRunRecord struct {
 // MaxPatrolRunHistory is the maximum number of patrol runs to keep in history
 const MaxPatrolRunHistory = 100
 
+// OpenCodePatrolRunner interface allows delegating patrol to OpenCode
+type OpenCodePatrolRunner interface {
+	RunPatrol(ctx context.Context) error
+	IsRunning() bool
+}
+
 // PatrolService runs background AI analysis of infrastructure
 type PatrolService struct {
 	mu sync.RWMutex
@@ -254,6 +260,10 @@ type PatrolService struct {
 
 	// Unified intelligence facade - aggregates all subsystems for unified view
 	intelligence *Intelligence
+
+	// OpenCode integration - when set and UseOpenCode is true, delegate patrol to OpenCode
+	opencodePatrol OpenCodePatrolRunner
+	useOpenCode    bool // Whether to use OpenCode for patrol
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds    PatrolThresholds
@@ -313,6 +323,23 @@ func (p *PatrolService) GetIncidentStore() *memory.IncidentStore {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.incidentStore
+}
+
+// SetOpenCodePatrol sets the OpenCode patrol runner for delegation
+// When set and useOpenCode is true, patrol will be handled by OpenCode
+func (p *PatrolService) SetOpenCodePatrol(runner OpenCodePatrolRunner, enabled bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.opencodePatrol = runner
+	p.useOpenCode = enabled
+	log.Info().Bool("enabled", enabled).Msg("OpenCode patrol integration configured")
+}
+
+// UseOpenCode returns whether OpenCode is configured for patrol
+func (p *PatrolService) UseOpenCode() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.useOpenCode && p.opencodePatrol != nil
 }
 
 // SetConfig updates the patrol configuration
@@ -787,9 +814,20 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 func (p *PatrolService) runPatrol(ctx context.Context) {
 	p.mu.RLock()
 	cfg := p.config
+	opencodePatrol := p.opencodePatrol
+	useOpenCode := p.useOpenCode
 	p.mu.RUnlock()
 
 	if !cfg.Enabled {
+		return
+	}
+
+	// Delegate to OpenCode patrol if configured
+	if useOpenCode && opencodePatrol != nil {
+		log.Info().Msg("AI Patrol: Delegating to OpenCode patrol")
+		if err := opencodePatrol.RunPatrol(ctx); err != nil {
+			log.Error().Err(err).Msg("AI Patrol: OpenCode patrol failed")
+		}
 		return
 	}
 
