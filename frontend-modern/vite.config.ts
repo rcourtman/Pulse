@@ -227,10 +227,7 @@ export default defineConfig({
       // OpenCode API proxies - when OpenCode is embedded in iframe, its frontend
       // makes requests to window.location.origin. We proxy these to the backend
       // which forwards them to OpenCode's actual backend.
-      '/global': {
-        target: backendUrl,
-        changeOrigin: true,
-      },
+      // Note: /global is OpenCode's client-side route, not an API endpoint
       '/session': {
         target: backendUrl,
         changeOrigin: true,

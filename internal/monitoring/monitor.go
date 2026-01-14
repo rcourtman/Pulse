@@ -7374,6 +7374,56 @@ func copyFloatPointer(src *float64) *float64 {
 	return &val
 }
 
+// matchesDatastoreExclude checks if a datastore name matches any exclusion pattern.
+// Patterns can be exact names or wildcards (* for any characters).
+// Examples: "exthdd*" matches "exthdd1500gb", "*backup*" matches "my-backup-store"
+func matchesDatastoreExclude(datastoreName string, excludePatterns []string) bool {
+	if len(excludePatterns) == 0 {
+		return false
+	}
+
+	for _, pattern := range excludePatterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+
+		// Contains pattern: *substring*
+		if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") && len(pattern) > 2 {
+			substring := strings.ToLower(pattern[1 : len(pattern)-1])
+			if strings.Contains(strings.ToLower(datastoreName), substring) {
+				return true
+			}
+			continue
+		}
+
+		// Suffix pattern: *suffix
+		if strings.HasPrefix(pattern, "*") && len(pattern) > 1 {
+			suffix := strings.ToLower(pattern[1:])
+			if strings.HasSuffix(strings.ToLower(datastoreName), suffix) {
+				return true
+			}
+			continue
+		}
+
+		// Prefix pattern: prefix*
+		if strings.HasSuffix(pattern, "*") && len(pattern) > 1 {
+			prefix := strings.ToLower(pattern[:len(pattern)-1])
+			if strings.HasPrefix(strings.ToLower(datastoreName), prefix) {
+				return true
+			}
+			continue
+		}
+
+		// Exact match (case-insensitive)
+		if strings.EqualFold(pattern, datastoreName) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // pollPBSInstance polls a single PBS instance
 func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, client *pbs.Client) {
 	defer recoverFromPanic(fmt.Sprintf("pollPBSInstance-%s", instanceName))
@@ -7537,6 +7587,14 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				Msg("Got PBS datastores")
 
 			for _, ds := range datastores {
+				// Skip excluded datastores (for removable/unmounted datastores)
+				if matchesDatastoreExclude(ds.Store, instanceCfg.ExcludeDatastores) {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("datastore", ds.Store).
+						Msg("Skipping excluded datastore")
+					continue
+				}
 				total := ds.Total
 				if total == 0 && ds.TotalSpace > 0 {
 					total = ds.TotalSpace

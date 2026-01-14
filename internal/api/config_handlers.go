@@ -371,32 +371,33 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(instance *config.PVEInstance) {
 
 // NodeConfigRequest represents a request to add/update a node
 type NodeConfigRequest struct {
-	Type                         string `json:"type"` // "pve", "pbs", or "pmg"
-	Name                         string `json:"name"`
-	Host                         string `json:"host"`
-	GuestURL                     string `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)
-	User                         string `json:"user,omitempty"`
-	Password                     string `json:"password,omitempty"`
-	TokenName                    string `json:"tokenName,omitempty"`
-	TokenValue                   string `json:"tokenValue,omitempty"`
-	Fingerprint                  string `json:"fingerprint,omitempty"`
-	VerifySSL                    *bool  `json:"verifySSL,omitempty"`
-	MonitorVMs                   *bool  `json:"monitorVMs,omitempty"`                   // PVE only
-	MonitorContainers            *bool  `json:"monitorContainers,omitempty"`            // PVE only
-	MonitorStorage               *bool  `json:"monitorStorage,omitempty"`               // PVE only
-	MonitorBackups               *bool  `json:"monitorBackups,omitempty"`               // PVE only
-	MonitorPhysicalDisks         *bool  `json:"monitorPhysicalDisks,omitempty"`         // PVE only (nil = enabled by default)
-	PhysicalDiskPollingMinutes   *int   `json:"physicalDiskPollingMinutes,omitempty"`   // PVE only (0 = default 5m)
-	TemperatureMonitoringEnabled *bool  `json:"temperatureMonitoringEnabled,omitempty"` // All types (nil = use global setting)
-	MonitorDatastores            *bool  `json:"monitorDatastores,omitempty"`            // PBS only
-	MonitorSyncJobs              *bool  `json:"monitorSyncJobs,omitempty"`              // PBS only
-	MonitorVerifyJobs            *bool  `json:"monitorVerifyJobs,omitempty"`            // PBS only
-	MonitorPruneJobs             *bool  `json:"monitorPruneJobs,omitempty"`             // PBS only
-	MonitorGarbageJobs           *bool  `json:"monitorGarbageJobs,omitempty"`           // PBS only
-	MonitorMailStats             *bool  `json:"monitorMailStats,omitempty"`             // PMG only
-	MonitorQueues                *bool  `json:"monitorQueues,omitempty"`                // PMG only
-	MonitorQuarantine            *bool  `json:"monitorQuarantine,omitempty"`            // PMG only
-	MonitorDomainStats           *bool  `json:"monitorDomainStats,omitempty"`           // PMG only
+	Type                         string   `json:"type"` // "pve", "pbs", or "pmg"
+	Name                         string   `json:"name"`
+	Host                         string   `json:"host"`
+	GuestURL                     string   `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)
+	User                         string   `json:"user,omitempty"`
+	Password                     string   `json:"password,omitempty"`
+	TokenName                    string   `json:"tokenName,omitempty"`
+	TokenValue                   string   `json:"tokenValue,omitempty"`
+	Fingerprint                  string   `json:"fingerprint,omitempty"`
+	VerifySSL                    *bool    `json:"verifySSL,omitempty"`
+	MonitorVMs                   *bool    `json:"monitorVMs,omitempty"`                   // PVE only
+	MonitorContainers            *bool    `json:"monitorContainers,omitempty"`            // PVE only
+	MonitorStorage               *bool    `json:"monitorStorage,omitempty"`               // PVE only
+	MonitorBackups               *bool    `json:"monitorBackups,omitempty"`               // PVE only
+	MonitorPhysicalDisks         *bool    `json:"monitorPhysicalDisks,omitempty"`         // PVE only (nil = enabled by default)
+	PhysicalDiskPollingMinutes   *int     `json:"physicalDiskPollingMinutes,omitempty"`   // PVE only (0 = default 5m)
+	TemperatureMonitoringEnabled *bool    `json:"temperatureMonitoringEnabled,omitempty"` // All types (nil = use global setting)
+	MonitorDatastores            *bool    `json:"monitorDatastores,omitempty"`            // PBS only
+	MonitorSyncJobs              *bool    `json:"monitorSyncJobs,omitempty"`              // PBS only
+	MonitorVerifyJobs            *bool    `json:"monitorVerifyJobs,omitempty"`            // PBS only
+	MonitorPruneJobs             *bool    `json:"monitorPruneJobs,omitempty"`             // PBS only
+	MonitorGarbageJobs           *bool    `json:"monitorGarbageJobs,omitempty"`           // PBS only
+	ExcludeDatastores            []string `json:"excludeDatastores,omitempty"`            // PBS only - datastores to exclude from monitoring
+	MonitorMailStats             *bool    `json:"monitorMailStats,omitempty"`             // PMG only
+	MonitorQueues                *bool    `json:"monitorQueues,omitempty"`                // PMG only
+	MonitorQuarantine            *bool    `json:"monitorQuarantine,omitempty"`            // PMG only
+	MonitorDomainStats           *bool    `json:"monitorDomainStats,omitempty"`           // PMG only
 }
 
 // NodeResponse represents a node in API responses
@@ -425,6 +426,7 @@ type NodeResponse struct {
 	MonitorVerifyJobs            bool                     `json:"monitorVerifyJobs,omitempty"`
 	MonitorPruneJobs             bool                     `json:"monitorPruneJobs,omitempty"`
 	MonitorGarbageJobs           bool                     `json:"monitorGarbageJobs,omitempty"`
+	ExcludeDatastores            []string                 `json:"excludeDatastores,omitempty"` // PBS only
 	MonitorMailStats             bool                     `json:"monitorMailStats,omitempty"`
 	MonitorQueues                bool                     `json:"monitorQueues,omitempty"`
 	MonitorQuarantine            bool                     `json:"monitorQuarantine,omitempty"`
@@ -1064,6 +1066,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			MonitorVerifyJobs:            pbs.MonitorVerifyJobs,
 			MonitorPruneJobs:             pbs.MonitorPruneJobs,
 			MonitorGarbageJobs:           pbs.MonitorGarbageJobs,
+			ExcludeDatastores:            pbs.ExcludeDatastores,
 			Status:                       h.getNodeStatus("pbs", pbs.Name),
 			Source:                       pbs.Source,
 		}
@@ -2471,6 +2474,10 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 		if req.TemperatureMonitoringEnabled != nil {
 			pbs.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+		}
+		// Update datastore exclusion list
+		if req.ExcludeDatastores != nil {
+			pbs.ExcludeDatastores = req.ExcludeDatastores
 		}
 	} else if nodeType == "pmg" && index < len(h.config.PMGInstances) {
 		pmgInst := &h.config.PMGInstances[index]

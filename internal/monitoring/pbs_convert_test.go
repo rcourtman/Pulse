@@ -7,6 +7,63 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 )
 
+func TestMatchesDatastoreExclude(t *testing.T) {
+	tests := []struct {
+		name          string
+		datastoreName string
+		patterns      []string
+		expected      bool
+	}{
+		// Empty patterns
+		{"empty patterns returns false", "exthdd1500gb", nil, false},
+		{"empty slice returns false", "exthdd1500gb", []string{}, false},
+
+		// Exact match (case-insensitive)
+		{"exact match", "exthdd1500gb", []string{"exthdd1500gb"}, true},
+		{"exact match case insensitive", "ExtHDD1500GB", []string{"exthdd1500gb"}, true},
+		{"exact match no match", "exthdd1500gb", []string{"backup"}, false},
+
+		// Prefix pattern (name*)
+		{"prefix pattern match", "exthdd1500gb", []string{"ext*"}, true},
+		{"prefix pattern match 2", "backup-external", []string{"backup*"}, true},
+		{"prefix pattern no match", "internal-storage", []string{"ext*"}, false},
+		{"prefix pattern case insensitive", "EXTHDD1500GB", []string{"ext*"}, true},
+
+		// Suffix pattern (*name)
+		{"suffix pattern match", "my-external-hdd", []string{"*hdd"}, true},
+		{"suffix pattern match 2", "backup-store", []string{"*store"}, true},
+		{"suffix pattern no match", "hdd-backup", []string{"*store"}, false},
+		{"suffix pattern case insensitive", "MY-EXTERNAL-HDD", []string{"*hdd"}, true},
+
+		// Contains pattern (*name*)
+		{"contains pattern match", "my-external-hdd", []string{"*external*"}, true},
+		{"contains pattern match middle", "backup-removable-drive", []string{"*removable*"}, true},
+		{"contains pattern no match", "internal-drive", []string{"*external*"}, false},
+		{"contains pattern case insensitive", "BACKUP-REMOVABLE-DRIVE", []string{"*removable*"}, true},
+
+		// Multiple patterns (any match)
+		{"multiple patterns first match", "exthdd1500gb", []string{"backup*", "ext*"}, true},
+		{"multiple patterns second match", "backup-drive", []string{"ext*", "backup*"}, true},
+		{"multiple patterns no match", "internal", []string{"ext*", "backup*"}, false},
+
+		// Edge cases
+		{"empty pattern in list", "exthdd", []string{"", "ext*"}, true},
+		{"whitespace pattern", "exthdd", []string{"   ", "ext*"}, true},
+		{"pattern with whitespace", "exthdd", []string{"  ext*  "}, true},
+		{"single star", "anything", []string{"*"}, false}, // Single star doesn't match (needs prefix/suffix)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchesDatastoreExclude(tt.datastoreName, tt.patterns)
+			if result != tt.expected {
+				t.Errorf("matchesDatastoreExclude(%q, %v) = %t, want %t",
+					tt.datastoreName, tt.patterns, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestConvertPBSSnapshots(t *testing.T) {
 	t.Run("empty input returns empty slice", func(t *testing.T) {
 		result := convertPBSSnapshots("pbs-1", "backup-store", "ns1", nil)

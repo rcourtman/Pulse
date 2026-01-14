@@ -503,6 +503,9 @@ type PBSInstance struct {
 	// Agent tracking
 	Source      string // "agent" or "script" - how this node was registered (empty = legacy/manual)
 	DisableCeph bool   // Disable Ceph status polling for this instance
+
+	// Datastore exclusion (for unmounted/removable datastores that cause log noise)
+	ExcludeDatastores []string
 }
 
 // PMGInstance represents a Proxmox Mail Gateway connection

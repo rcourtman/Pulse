@@ -518,6 +518,11 @@ func (h *AIHandler) HandleOpenCodeAPI(w http.ResponseWriter, r *http.Request) {
 		originalDirector(req)
 		// Keep the path as-is (no stripping)
 		req.Host = target.Host
+		// OpenCode uses Accept header to distinguish API vs SPA requests
+		// Set Accept: application/json for API requests so we get JSON not HTML
+		if req.Header.Get("Accept") == "" || req.Header.Get("Accept") == "*/*" {
+			req.Header.Set("Accept", "application/json")
+		}
 	}
 
 	// Handle WebSocket upgrades (for /pty/ and other real-time endpoints)

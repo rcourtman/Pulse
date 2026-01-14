@@ -1415,8 +1415,8 @@ func (r *Router) setupRoutes() {
 	// NOTE: Register both /path and /path/ because Go's ServeMux treats them differently:
 	// - /path/ matches any path starting with /path/
 	// - /path (no trailing slash) matches exactly /path
+	// Note: /global is a client-side route in OpenCode, not an API endpoint
 	openCodeAPIBases := []string{
-		"/global",
 		"/session",
 		"/tui",
 		"/config",
@@ -2455,7 +2455,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			strings.HasPrefix(req.URL.Path, "/opencode") ||
 			// OpenCode API paths - proxied to OpenCode backend for iframe embedding
 			// Note: Use "/path" (not "/path/") to match both exact and prefix paths
-			strings.HasPrefix(req.URL.Path, "/global") ||
+			// Note: /global is a client-side route, not included here
 			strings.HasPrefix(req.URL.Path, "/session") ||
 			strings.HasPrefix(req.URL.Path, "/tui") ||
 			strings.HasPrefix(req.URL.Path, "/config") ||
