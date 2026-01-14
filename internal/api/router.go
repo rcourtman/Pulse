@@ -1412,24 +1412,29 @@ func (r *Router) setupRoutes() {
 	// OpenCode API proxy - these routes are used by OpenCode's frontend
 	// When embedded in iframe, OpenCode's JS makes requests to window.location.origin
 	// We proxy these to OpenCode's backend so the iframe works correctly
-	openCodeAPIPaths := []string{
-		"/global/",
-		"/session/",
-		"/tui/",
-		"/config/",
-		"/file/",
-		"/find/",
-		"/instance/",
-		"/mcp/",
-		"/permission/",
-		"/project/",
-		"/provider/",
-		"/pty/",
-		"/question/",
-		"/experimental/",
+	// NOTE: Register both /path and /path/ because Go's ServeMux treats them differently:
+	// - /path/ matches any path starting with /path/
+	// - /path (no trailing slash) matches exactly /path
+	openCodeAPIBases := []string{
+		"/global",
+		"/session",
+		"/tui",
+		"/config",
+		"/file",
+		"/find",
+		"/instance",
+		"/mcp",
+		"/permission",
+		"/project",
+		"/provider",
+		"/pty",
+		"/question",
+		"/experimental",
 	}
-	for _, path := range openCodeAPIPaths {
-		r.mux.HandleFunc(path, RequireAuth(r.config, r.aiHandler.HandleOpenCodeAPI))
+	for _, base := range openCodeAPIBases {
+		// Register both exact match and prefix match
+		r.mux.HandleFunc(base, RequireAuth(r.config, r.aiHandler.HandleOpenCodeAPI))
+		r.mux.HandleFunc(base+"/", RequireAuth(r.config, r.aiHandler.HandleOpenCodeAPI))
 	}
 
 	// Agent WebSocket for AI command execution
@@ -2449,20 +2454,21 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			strings.HasPrefix(req.URL.Path, "/download/") ||
 			strings.HasPrefix(req.URL.Path, "/opencode") ||
 			// OpenCode API paths - proxied to OpenCode backend for iframe embedding
-			strings.HasPrefix(req.URL.Path, "/global/") ||
-			strings.HasPrefix(req.URL.Path, "/session/") ||
-			strings.HasPrefix(req.URL.Path, "/tui/") ||
-			strings.HasPrefix(req.URL.Path, "/config/") ||
-			strings.HasPrefix(req.URL.Path, "/file/") ||
-			strings.HasPrefix(req.URL.Path, "/find/") ||
-			strings.HasPrefix(req.URL.Path, "/instance/") ||
-			strings.HasPrefix(req.URL.Path, "/mcp/") ||
-			strings.HasPrefix(req.URL.Path, "/permission/") ||
-			strings.HasPrefix(req.URL.Path, "/project/") ||
-			strings.HasPrefix(req.URL.Path, "/provider/") ||
-			strings.HasPrefix(req.URL.Path, "/pty/") ||
-			strings.HasPrefix(req.URL.Path, "/question/") ||
-			strings.HasPrefix(req.URL.Path, "/experimental/") ||
+			// Note: Use "/path" (not "/path/") to match both exact and prefix paths
+			strings.HasPrefix(req.URL.Path, "/global") ||
+			strings.HasPrefix(req.URL.Path, "/session") ||
+			strings.HasPrefix(req.URL.Path, "/tui") ||
+			strings.HasPrefix(req.URL.Path, "/config") ||
+			strings.HasPrefix(req.URL.Path, "/file") ||
+			strings.HasPrefix(req.URL.Path, "/find") ||
+			strings.HasPrefix(req.URL.Path, "/instance") ||
+			strings.HasPrefix(req.URL.Path, "/mcp") ||
+			strings.HasPrefix(req.URL.Path, "/permission") ||
+			strings.HasPrefix(req.URL.Path, "/project") ||
+			strings.HasPrefix(req.URL.Path, "/provider") ||
+			strings.HasPrefix(req.URL.Path, "/pty") ||
+			strings.HasPrefix(req.URL.Path, "/question") ||
+			strings.HasPrefix(req.URL.Path, "/experimental") ||
 			req.URL.Path == "/simple-stats" ||
 			req.URL.Path == "/install-docker-agent.sh" ||
 			req.URL.Path == "/install-container-agent.sh" ||

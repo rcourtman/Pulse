@@ -444,27 +444,36 @@ func (h *AIHandler) HandleOpenCodeUI(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Rewrite asset paths in HTML responses
+		// Rewrite asset paths in HTML and CSS responses
 		// OpenCode uses absolute paths like /assets/... which need to be /opencode/assets/...
 		contentType := resp.Header.Get("Content-Type")
-		if strings.Contains(contentType, "text/html") && resp.Body != nil {
+		if resp.Body != nil && (strings.Contains(contentType, "text/html") || strings.Contains(contentType, "text/css")) {
 			body, err := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			if err != nil {
 				return err
 			}
 
-			// Rewrite absolute paths to include /opencode/ prefix
-			html := string(body)
-			// Rewrite src="/..." and href="/..." to src="/opencode/..." and href="/opencode/..."
-			// Be careful not to rewrite already-prefixed paths or external URLs
-			html = strings.ReplaceAll(html, `src="/`, `src="/opencode/`)
-			html = strings.ReplaceAll(html, `href="/`, `href="/opencode/`)
+			content := string(body)
+
+			if strings.Contains(contentType, "text/html") {
+				// Rewrite src="/..." and href="/..." to src="/opencode/..." and href="/opencode/..."
+				// Be careful not to rewrite already-prefixed paths or external URLs
+				content = strings.ReplaceAll(content, `src="/`, `src="/opencode/`)
+				content = strings.ReplaceAll(content, `href="/`, `href="/opencode/`)
+			}
+
+			if strings.Contains(contentType, "text/css") {
+				// Rewrite url(/...) and url("/...") and url('/...') in CSS for fonts and other assets
+				content = strings.ReplaceAll(content, `url(/`, `url(/opencode/`)
+				content = strings.ReplaceAll(content, `url("/`, `url("/opencode/`)
+				content = strings.ReplaceAll(content, `url('/`, `url('/opencode/`)
+			}
 
 			// Update response body
-			resp.Body = io.NopCloser(strings.NewReader(html))
-			resp.ContentLength = int64(len(html))
-			resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(html)))
+			resp.Body = io.NopCloser(strings.NewReader(content))
+			resp.ContentLength = int64(len(content))
+			resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(content)))
 		}
 
 		return nil

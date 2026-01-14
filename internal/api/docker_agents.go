@@ -72,8 +72,9 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Limit request body to 512KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 512*1024)
+	// Limit request body to 2MB to prevent memory exhaustion
+	// (512KB was too small for users with 100+ containers)
+	r.Body = http.MaxBytesReader(w, r.Body, 2*1024*1024)
 	defer r.Body.Close()
 
 	var report agentsdocker.Report
