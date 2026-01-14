@@ -409,8 +409,14 @@ func ResetLockout(identifier string) {
 // SecurityHeadersWithConfig applies security headers with embedding configuration
 func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOrigins string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip frame-related headers for /opencode/ paths - these are managed by the proxy
+		// The OpenCode proxy modifies headers to allow embedding within Pulse's AI panel
+		isOpenCodePath := strings.HasPrefix(r.URL.Path, "/opencode")
+
 		// Configure clickjacking protection based on embedding settings
-		if allowEmbedding {
+		if isOpenCodePath {
+			// OpenCode proxy manages its own iframe headers
+		} else if allowEmbedding {
 			// When embedding is allowed, don't set X-Frame-Options header
 			// This allows embedding from any origin
 			// Security note: User explicitly enabled this for iframe embedding
@@ -436,7 +442,10 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 		}
 
 		// Add frame-ancestors based on embedding settings
-		if allowEmbedding {
+		// Skip for /opencode/ paths - the proxy manages its own CSP
+		if isOpenCodePath {
+			// OpenCode proxy manages its own CSP headers
+		} else if allowEmbedding {
 			if allowedOrigins != "" {
 				// Parse comma-separated origins and add them to frame-ancestors
 				origins := strings.Split(allowedOrigins, ",")
@@ -457,7 +466,10 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 			cspDirectives = append(cspDirectives, "frame-ancestors 'none'")
 		}
 
-		w.Header().Set("Content-Security-Policy", strings.Join(cspDirectives, "; "))
+		// Only set CSP for non-OpenCode paths (OpenCode proxy manages its own headers)
+		if !isOpenCodePath {
+			w.Header().Set("Content-Security-Policy", strings.Join(cspDirectives, "; "))
+		}
 
 		// Referrer Policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")

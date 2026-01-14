@@ -421,6 +421,30 @@ func (h *AIHandler) HandleOpenCodeUI(w http.ResponseWriter, r *http.Request) {
 		req.Host = target.Host
 	}
 
+	// Modify response to allow embedding in iframe
+	// OpenCode sets X-Frame-Options: DENY and CSP frame-ancestors 'none'
+	// which prevents embedding - we need to remove these for the Pulse panel
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		log.Debug().Msg("ModifyResponse called")
+		// Remove X-Frame-Options to allow iframe embedding
+		resp.Header.Del("X-Frame-Options")
+
+		// Handle multiple CSP headers - get all values, modify, and set back
+		cspHeaders := resp.Header.Values("Content-Security-Policy")
+		if len(cspHeaders) > 0 {
+			// Delete all existing CSP headers
+			resp.Header.Del("Content-Security-Policy")
+			// Add back modified versions
+			for _, csp := range cspHeaders {
+				// Replace frame-ancestors 'none' with 'self' to allow embedding
+				modified := strings.ReplaceAll(csp, "frame-ancestors 'none'", "frame-ancestors 'self'")
+				resp.Header.Add("Content-Security-Policy", modified)
+			}
+		}
+
+		return nil
+	}
+
 	// Handle WebSocket upgrades
 	if r.Header.Get("Upgrade") == "websocket" {
 		proxy.ServeHTTP(w, r)
