@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -421,11 +423,11 @@ func (h *AIHandler) HandleOpenCodeUI(w http.ResponseWriter, r *http.Request) {
 		req.Host = target.Host
 	}
 
-	// Modify response to allow embedding in iframe
+	// Modify response to allow embedding in iframe and fix asset paths
 	// OpenCode sets X-Frame-Options: DENY and CSP frame-ancestors 'none'
 	// which prevents embedding - we need to remove these for the Pulse panel
+	// Also, OpenCode uses absolute paths for assets which need to be prefixed
 	proxy.ModifyResponse = func(resp *http.Response) error {
-		log.Debug().Msg("ModifyResponse called")
 		// Remove X-Frame-Options to allow iframe embedding
 		resp.Header.Del("X-Frame-Options")
 
@@ -440,6 +442,29 @@ func (h *AIHandler) HandleOpenCodeUI(w http.ResponseWriter, r *http.Request) {
 				modified := strings.ReplaceAll(csp, "frame-ancestors 'none'", "frame-ancestors 'self'")
 				resp.Header.Add("Content-Security-Policy", modified)
 			}
+		}
+
+		// Rewrite asset paths in HTML responses
+		// OpenCode uses absolute paths like /assets/... which need to be /opencode/assets/...
+		contentType := resp.Header.Get("Content-Type")
+		if strings.Contains(contentType, "text/html") && resp.Body != nil {
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				return err
+			}
+
+			// Rewrite absolute paths to include /opencode/ prefix
+			html := string(body)
+			// Rewrite src="/..." and href="/..." to src="/opencode/..." and href="/opencode/..."
+			// Be careful not to rewrite already-prefixed paths or external URLs
+			html = strings.ReplaceAll(html, `src="/`, `src="/opencode/`)
+			html = strings.ReplaceAll(html, `href="/`, `href="/opencode/`)
+
+			// Update response body
+			resp.Body = io.NopCloser(strings.NewReader(html))
+			resp.ContentLength = int64(len(html))
+			resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(html)))
 		}
 
 		return nil
