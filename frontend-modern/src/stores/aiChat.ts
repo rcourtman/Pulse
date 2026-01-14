@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
 import { logger } from '@/utils/logger';
-import { AIAPI } from '@/api/ai';
-import type { AIChatSession, AIChatSessionSummary } from '@/types/ai';
+// NOTE: AIAPI import removed - session management is handled by OpenCode's embedded UI
+import type { AIChatSessionSummary } from '@/types/ai';
 
 interface AIChatContext {
   targetType?: string;
@@ -111,31 +111,10 @@ const SAVE_DEBOUNCE_MS = 2000; // Save 2 seconds after last change
 let aiInputRef: HTMLTextAreaElement | null = null;
 
 // Sync current session to server (debounced)
+// NOTE: Session sync is disabled - OpenCode handles session management internally
 const syncToServer = async () => {
-  if (!syncEnabled()) return;
-
-  const msgs = messages();
-  if (msgs.length === 0) return; // Don't save empty sessions
-
-  setIsSyncing(true);
-  try {
-    const session: AIChatSession = {
-      id: currentSessionId(),
-      username: '', // Server will set from auth
-      title: sessionTitle() || '',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      messages: msgs,
-    };
-
-    await AIAPI.saveChatSession(session);
-    logger.debug('Chat session synced to server', { sessionId: session.id, messageCount: msgs.length });
-  } catch (e) {
-    logger.error('Failed to sync chat session to server:', e);
-    // Keep local storage as fallback
-  } finally {
-    setIsSyncing(false);
-  }
+  // Disabled: OpenCode manages sessions through its embedded UI
+  return;
 };
 
 // Debounced sync
@@ -147,23 +126,10 @@ const debouncedSync = () => {
 };
 
 // Load session from server
-const loadSessionFromServer = async (sessionId: string): Promise<boolean> => {
-  try {
-    const session = await AIAPI.getChatSession(sessionId);
-    setMessages(session.messages);
-    setSessionTitle(session.title);
-    saveMessagesToStorage(session.messages); // Update local cache
-    logger.debug('Chat session loaded from server', { sessionId, messageCount: session.messages.length });
-    return true;
-  } catch (e: any) {
-    if (e?.message?.includes('404') || e?.message?.includes('not found')) {
-      // Session doesn't exist on server yet, that's fine
-      logger.debug('Chat session not found on server, using local', { sessionId });
-      return false;
-    }
-    logger.error('Failed to load chat session from server:', e);
-    return false;
-  }
+// NOTE: Session sync is disabled - OpenCode handles session management internally
+const loadSessionFromServer = async (_sessionId: string): Promise<boolean> => {
+  // Disabled: OpenCode manages sessions through its embedded UI
+  return false;
 };
 
 export const aiChatStore = {
@@ -260,13 +226,10 @@ export const aiChatStore = {
   },
 
   // Refresh session list from server
+  // NOTE: Session sync is disabled - OpenCode handles session management internally
   async refreshSessions() {
-    try {
-      const sessionList = await AIAPI.listChatSessions();
-      setSessions(sessionList);
-    } catch (e) {
-      logger.error('Failed to load chat sessions:', e);
-    }
+    // Disabled: OpenCode manages sessions through its embedded UI
+    return;
   },
 
   // Switch to a different session
@@ -316,20 +279,10 @@ export const aiChatStore = {
   },
 
   // Delete a session
-  async deleteSession(sessionId: string) {
-    try {
-      await AIAPI.deleteChatSession(sessionId);
-
-      // If we deleted the current session, start a new one
-      if (sessionId === currentSessionId()) {
-        await this.newConversation();
-      } else {
-        // Just refresh the list
-        await this.refreshSessions();
-      }
-    } catch (e) {
-      logger.error('Failed to delete chat session:', e);
-    }
+  // NOTE: Session management is handled by OpenCode's embedded UI
+  async deleteSession(_sessionId: string) {
+    // Disabled: OpenCode manages sessions through its embedded UI
+    return;
   },
 
   // Toggle the AI chat panel
