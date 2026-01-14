@@ -1,0 +1,259 @@
+import { Component, Show, createSignal, onMount, For } from 'solid-js';
+import { OpenCodeAPI, type ChatSession } from '@/api/opencode';
+import { notificationStore } from '@/stores/notifications';
+import { logger } from '@/utils/logger';
+import { useChat } from './hooks/useChat';
+import { ChatMessages } from './ChatMessages';
+import type { PendingApproval } from './types';
+
+interface AIChatProps {
+  onClose: () => void;
+}
+
+export const AIChat: Component<AIChatProps> = (props) => {
+  // UI state
+  const [isOpen] = createSignal(true);
+  const [input, setInput] = createSignal('');
+  const [sessions, setSessions] = createSignal<ChatSession[]>([]);
+  const [showSessions, setShowSessions] = createSignal(false);
+
+  // Chat hook
+  const chat = useChat();
+
+  // Load sessions on mount
+  onMount(async () => {
+    try {
+      const status = await OpenCodeAPI.getStatus();
+      if (!status.running) {
+        notificationStore.warning('AI is not running');
+        return;
+      }
+      const sessionList = await OpenCodeAPI.listSessions();
+      setSessions(sessionList);
+    } catch (error) {
+      logger.error('[AIChat] Failed to initialize:', error);
+    }
+  });
+
+  // Handle submit
+  const handleSubmit = () => {
+    const prompt = input().trim();
+    if (!prompt) return;
+    chat.sendMessage(prompt);
+    setInput('');
+  };
+
+  // Handle key down
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  // New conversation
+  const handleNewConversation = async () => {
+    await chat.newSession();
+    setShowSessions(false);
+  };
+
+  // Load session
+  const handleLoadSession = async (sessionId: string) => {
+    await chat.loadSession(sessionId);
+    setShowSessions(false);
+  };
+
+  // Delete session
+  const handleDeleteSession = async (sessionId: string, e: Event) => {
+    e.stopPropagation();
+    if (!confirm('Delete this conversation?')) return;
+    try {
+      await OpenCodeAPI.deleteSession(sessionId);
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      if (chat.sessionId() === sessionId) {
+        chat.clearMessages();
+      }
+    } catch (error) {
+      notificationStore.error('Failed to delete session');
+    }
+  };
+
+  // Empty state for approval (not used with OpenCode but keeping interface)
+  const handleApprove = (_messageId: string, _approval: PendingApproval) => {};
+  const handleSkip = (_messageId: string, _toolId: string) => {};
+
+  return (
+    <div
+      class={`flex-shrink-0 h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 overflow-hidden ${
+        isOpen() ? 'w-[420px]' : 'w-0 border-l-0'
+      }`}
+    >
+      <Show when={isOpen()}>
+        {/* Header */}
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20">
+          <div class="flex items-center gap-3">
+            <div class="p-2 bg-gradient-to-br from-purple-500 to-violet-500 rounded-xl shadow-lg">
+              <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611l-2.576.43a18.003 18.003 0 01-5.118 0l-2.576-.43c-1.717-.293-2.299-2.379-1.067-3.611L5 14.5" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">AI Assistant</h2>
+              <p class="text-xs text-gray-500 dark:text-gray-400">
+                Powered by OpenCode
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            {/* Session picker */}
+            <div class="relative">
+              <button
+                onClick={() => setShowSessions(!showSessions())}
+                class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                title="Chat sessions"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </button>
+
+              <Show when={showSessions()}>
+                <div class="absolute right-0 top-full mt-1 w-72 max-h-96 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                  <button
+                    onClick={handleNewConversation}
+                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-b border-gray-200 dark:border-gray-700"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span class="font-medium">New conversation</span>
+                  </button>
+
+                  <div class="max-h-64 overflow-y-auto">
+                    <Show when={sessions().length > 0} fallback={
+                      <div class="px-3 py-6 text-center text-xs text-gray-500 dark:text-gray-400">
+                        No previous conversations
+                      </div>
+                    }>
+                      <For each={sessions()}>
+                        {(session) => (
+                          <div
+                            class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${chat.sessionId() === session.id ? 'bg-purple-50 dark:bg-purple-900/20' : ''}`}
+                            onClick={() => handleLoadSession(session.id)}
+                          >
+                            <div class="flex-1 min-w-0">
+                              <div class="text-sm font-medium truncate text-gray-900 dark:text-gray-100">
+                                {session.title || 'Untitled'}
+                              </div>
+                              <div class="text-xs text-gray-500 dark:text-gray-400">
+                                {session.message_count} messages
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-opacity"
+                              onClick={(e) => handleDeleteSession(session.id, e)}
+                            >
+                              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </For>
+                    </Show>
+                  </div>
+                </div>
+              </Show>
+            </div>
+
+            {/* Close button */}
+            <button
+              onClick={props.onClose}
+              class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M6 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <ChatMessages
+          messages={chat.messages()}
+          onApprove={handleApprove}
+          onSkip={handleSkip}
+          emptyState={{
+            title: 'Start a conversation',
+            subtitle: 'Ask about your infrastructure, diagnose issues, or get help.',
+            suggestions: [
+              'What VMs are running?',
+              'Show me resource usage',
+              'Any issues to investigate?',
+            ],
+            onSuggestionClick: (s) => setInput(s),
+          }}
+        />
+
+        {/* Loading indicator */}
+        <Show when={chat.isLoading()}>
+          <div class="px-4 py-2 bg-purple-50 dark:bg-purple-900/20 border-t border-purple-200 dark:border-purple-800 flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300">
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <span>Thinking...</span>
+          </div>
+        </Show>
+
+        {/* Input */}
+        <div class="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="flex gap-2">
+            <textarea
+              value={input()}
+              onInput={(e) => setInput(e.currentTarget.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask about your infrastructure..."
+              rows={2}
+              class="flex-1 px-4 py-3 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+            />
+            <div class="flex flex-col gap-1.5 self-end">
+              <Show
+                when={chat.isLoading()}
+                fallback={
+                  <button
+                    type="submit"
+                    disabled={!input().trim()}
+                    class="px-4 py-3 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+                  >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
+                }
+              >
+                <button
+                  type="button"
+                  onClick={chat.stop}
+                  class="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors shadow-sm"
+                  title="Stop"
+                >
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="1" />
+                  </svg>
+                </button>
+              </Show>
+            </div>
+          </form>
+          <p class="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
+            Press Enter to send, Shift+Enter for new line
+          </p>
+        </div>
+      </Show>
+    </div>
+  );
+};
+
+export default AIChat;

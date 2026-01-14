@@ -1401,6 +1401,14 @@ func (r *Router) setupRoutes() {
 	}))
 	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeOpenCodeSessions))
 
+	// OpenCode Web UI proxy - serves OpenCode's built-in web interface
+	// This allows users to access OpenCode directly through Pulse with auth
+	r.mux.HandleFunc("/opencode/", RequireAuth(r.config, r.aiHandler.HandleOpenCodeUI))
+	r.mux.HandleFunc("/opencode", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		// Redirect /opencode to /opencode/ for proper asset loading
+		http.Redirect(w, req, "/opencode/", http.StatusMovedPermanently)
+	}))
+
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
 
@@ -2416,6 +2424,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			strings.HasPrefix(req.URL.Path, "/ws") ||
 			strings.HasPrefix(req.URL.Path, "/socket.io/") ||
 			strings.HasPrefix(req.URL.Path, "/download/") ||
+			strings.HasPrefix(req.URL.Path, "/opencode") ||
 			req.URL.Path == "/simple-stats" ||
 			req.URL.Path == "/install-docker-agent.sh" ||
 			req.URL.Path == "/install-container-agent.sh" ||

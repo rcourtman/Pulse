@@ -224,6 +224,13 @@ export default defineConfig({
         target: backendUrl,
         changeOrigin: true,
       },
+      // OpenCode Web UI proxy - serves OpenCode's built-in interface
+      '/opencode': {
+        target: backendUrl,
+        changeOrigin: true,
+        // WebSocket support for OpenCode's real-time features
+        ws: true,
+      },
     },
   },
   build: {
