@@ -479,3 +479,43 @@ func (h *AIHandler) HandleOpenCodeUI(w http.ResponseWriter, r *http.Request) {
 	// Serve the proxied request
 	proxy.ServeHTTP(w, r)
 }
+
+// HandleOpenCodeAPI proxies OpenCode's API requests
+// When OpenCode is embedded in an iframe, its frontend makes requests to window.location.origin
+// which is Pulse. This handler proxies those requests to OpenCode's actual backend.
+func (h *AIHandler) HandleOpenCodeAPI(w http.ResponseWriter, r *http.Request) {
+	if !h.IsRunning() {
+		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	baseURL := h.service.GetBaseURL()
+	if baseURL == "" {
+		http.Error(w, "OpenCode URL not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	target, err := url.Parse(baseURL)
+	if err != nil {
+		http.Error(w, "Invalid OpenCode URL", http.StatusInternalServerError)
+		return
+	}
+
+	// Create reverse proxy - no path modification needed
+	proxy := httputil.NewSingleHostReverseProxy(target)
+
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		originalDirector(req)
+		// Keep the path as-is (no stripping)
+		req.Host = target.Host
+	}
+
+	// Handle WebSocket upgrades (for /pty/ and other real-time endpoints)
+	if r.Header.Get("Upgrade") == "websocket" {
+		proxy.ServeHTTP(w, r)
+		return
+	}
+
+	proxy.ServeHTTP(w, r)
+}

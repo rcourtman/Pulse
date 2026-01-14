@@ -1409,6 +1409,29 @@ func (r *Router) setupRoutes() {
 		http.Redirect(w, req, "/opencode/", http.StatusMovedPermanently)
 	}))
 
+	// OpenCode API proxy - these routes are used by OpenCode's frontend
+	// When embedded in iframe, OpenCode's JS makes requests to window.location.origin
+	// We proxy these to OpenCode's backend so the iframe works correctly
+	openCodeAPIPaths := []string{
+		"/global/",
+		"/session/",
+		"/tui/",
+		"/config/",
+		"/file/",
+		"/find/",
+		"/instance/",
+		"/mcp/",
+		"/permission/",
+		"/project/",
+		"/provider/",
+		"/pty/",
+		"/question/",
+		"/experimental/",
+	}
+	for _, path := range openCodeAPIPaths {
+		r.mux.HandleFunc(path, RequireAuth(r.config, r.aiHandler.HandleOpenCodeAPI))
+	}
+
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
 
@@ -2425,6 +2448,21 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			strings.HasPrefix(req.URL.Path, "/socket.io/") ||
 			strings.HasPrefix(req.URL.Path, "/download/") ||
 			strings.HasPrefix(req.URL.Path, "/opencode") ||
+			// OpenCode API paths - proxied to OpenCode backend for iframe embedding
+			strings.HasPrefix(req.URL.Path, "/global/") ||
+			strings.HasPrefix(req.URL.Path, "/session/") ||
+			strings.HasPrefix(req.URL.Path, "/tui/") ||
+			strings.HasPrefix(req.URL.Path, "/config/") ||
+			strings.HasPrefix(req.URL.Path, "/file/") ||
+			strings.HasPrefix(req.URL.Path, "/find/") ||
+			strings.HasPrefix(req.URL.Path, "/instance/") ||
+			strings.HasPrefix(req.URL.Path, "/mcp/") ||
+			strings.HasPrefix(req.URL.Path, "/permission/") ||
+			strings.HasPrefix(req.URL.Path, "/project/") ||
+			strings.HasPrefix(req.URL.Path, "/provider/") ||
+			strings.HasPrefix(req.URL.Path, "/pty/") ||
+			strings.HasPrefix(req.URL.Path, "/question/") ||
+			strings.HasPrefix(req.URL.Path, "/experimental/") ||
 			req.URL.Path == "/simple-stats" ||
 			req.URL.Path == "/install-docker-agent.sh" ||
 			req.URL.Path == "/install-container-agent.sh" ||
