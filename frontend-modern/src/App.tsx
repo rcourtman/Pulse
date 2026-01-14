@@ -753,15 +753,18 @@ function App() {
       logger.error('Logout error', error);
     }
 
-    // Clear all local storage EXCEPT theme preference and logout flag
-    const currentTheme = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-    localStorage.clear();
+    // Clear only auth and session-specific storage, preserve user preferences
+    // Keys to clear on logout (auth and per-session caches)
+    const keysToRemove = [
+      STORAGE_KEYS.AUTH,
+      STORAGE_KEYS.LEGACY_TOKEN,
+      STORAGE_KEYS.GUEST_METADATA,
+      STORAGE_KEYS.DOCKER_METADATA,
+      STORAGE_KEYS.DOCKER_METADATA + '_hosts',
+    ];
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
     sessionStorage.clear();
     localStorage.setItem('just_logged_out', 'true');
-    // Preserve theme preference across logout
-    if (currentTheme) {
-      localStorage.setItem(STORAGE_KEYS.DARK_MODE, currentTheme);
-    }
 
     // Clear WebSocket connection
     if (wsStore()) {
