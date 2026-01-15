@@ -46,7 +46,7 @@ export function formatUptime(seconds: number, condensed = false): string {
   }
 }
 
-export function formatAbsoluteTime(timestamp: number): string {
+export function formatAbsoluteTime(timestamp: number | undefined): string {
   if (!timestamp) return '';
   const date = new Date(timestamp);
 
@@ -73,7 +73,7 @@ export function formatAbsoluteTime(timestamp: number): string {
   return `${day} ${month} ${hours}:${minutes}`;
 }
 
-export function formatRelativeTime(timestamp: number): string {
+export function formatRelativeTime(timestamp: number | undefined): string {
   if (!timestamp) return '';
 
   const now = Date.now();

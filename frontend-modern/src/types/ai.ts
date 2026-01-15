@@ -46,6 +46,10 @@ export interface AISettings {
 
   // Request timeout (in seconds) - for slow Ollama hardware
   request_timeout_seconds?: number;
+
+  // Infrastructure control settings
+  control_level?: 'read_only' | 'suggest' | 'controlled' | 'autonomous';
+  protected_guests?: string[];
 }
 
 export interface AISettingsUpdateRequest {
@@ -85,6 +89,10 @@ export interface AISettingsUpdateRequest {
 
   // Request timeout (in seconds) - for slow Ollama hardware
   request_timeout_seconds?: number;
+
+  // Infrastructure control settings
+  control_level?: 'read_only' | 'suggest' | 'controlled' | 'autonomous';
+  protected_guests?: string[];
 }
 
 

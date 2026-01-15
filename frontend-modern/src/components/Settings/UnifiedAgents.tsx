@@ -658,7 +658,7 @@ export const UnifiedAgents: Component = () => {
     const filteredRows = createMemo(() => {
         const query = filterSearch().trim().toLowerCase();
         return unifiedRows().filter(row => {
-            if (filterType() !== 'all' && !row.types.includes(filterType())) {
+            if (filterType() !== 'all' && !row.types.includes(filterType() as UnifiedAgentType)) {
                 return false;
             }
             if (filterStatus() !== 'all' && row.status !== filterStatus()) {
