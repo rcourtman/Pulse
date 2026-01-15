@@ -6,7 +6,7 @@ import { logger } from '@/utils/logger';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { PROVIDER_DISPLAY_NAMES, getProviderFromModelId, groupModelsByProvider } from '../aiChatUtils';
-import type { PendingApproval, ModelInfo } from './types';
+import type { PendingApproval, PendingQuestion, ModelInfo } from './types';
 
 const MODEL_LEGACY_STORAGE_KEY = 'pulse:ai_chat_model';
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
@@ -342,6 +342,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
+  // Question handlers
+  const handleAnswerQuestion = async (messageId: string, question: PendingQuestion, answers: Array<{ id: string; value: string }>) => {
+    await chat.answerQuestion(messageId, question.questionId, answers);
+  };
+
+  const handleSkipQuestion = (messageId: string, questionId: string) => {
+    // Just remove from UI - skipping a question
+    chat.updateQuestion(messageId, questionId, { removed: true });
+  };
+
   const toggleModelSelector = () => {
     const next = !showModelSelector();
     setShowModelSelector(next);
@@ -597,6 +607,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
           messages={chat.messages()}
           onApprove={handleApprove}
           onSkip={handleSkip}
+          onAnswerQuestion={handleAnswerQuestion}
+          onSkipQuestion={handleSkipQuestion}
           emptyState={{
             title: 'Start a conversation',
             subtitle: 'Ask about your infrastructure, diagnose issues, or get help.',

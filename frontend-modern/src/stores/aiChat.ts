@@ -99,9 +99,9 @@ const [aiEnabled, setAiEnabled] = createSignal<boolean | null>(null); // null = 
 // Session management state
 const [currentSessionId, setCurrentSessionId] = createSignal<string>(loadOrCreateSessionId());
 const [sessionTitle, setSessionTitle] = createSignal<string>('');
-const [sessions, setSessions] = createSignal<AIChatSessionSummary[]>([]);
-const [syncEnabled, _setSyncEnabled] = createSignal<boolean>(true);
-const [isSyncing, setIsSyncing] = createSignal<boolean>(false);
+const [_sessions, _setSessions] = createSignal<AIChatSessionSummary[]>([]);
+const [_syncEnabled, _setSyncEnabled] = createSignal<boolean>(true);
+const [_isSyncing, _setIsSyncing] = createSignal<boolean>(false);
 
 // Debounce timer for saving
 let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -170,12 +170,12 @@ export const aiChatStore = {
 
   // Get all sessions (for session picker)
   get sessions() {
-    return sessions();
+    return _sessions();
   },
 
   // Check if syncing
   get syncing() {
-    return isSyncing();
+    return _isSyncing();
   },
 
   // Check if a specific item is in context
