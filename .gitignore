@@ -127,6 +127,9 @@ tmp/
 # Master plan documents (local only)
 PULSE_V4_ISSUES_MASTER_PLAN.md
 FIX_SUMMARY_*.md
+docs/*_PLAN.md
+docs/*_ROADMAP.md
+docs/*IMPLEMENTATION*.md
 
 # Development documentation
 TYPING_*.md

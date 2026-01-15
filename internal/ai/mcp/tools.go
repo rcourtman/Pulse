@@ -32,22 +32,6 @@ type AgentServer interface {
 	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
 }
 
-// AgentProfileManager manages centralized agent profiles and assignments.
-type AgentProfileManager interface {
-	ApplyAgentScope(ctx context.Context, agentID, agentLabel string, settings map[string]interface{}) (profileID, profileName string, created bool, err error)
-	AssignProfile(ctx context.Context, agentID, profileID string) (profileName string, err error)
-	GetAgentScope(ctx context.Context, agentID string) (*AgentScope, error)
-}
-
-// AgentScope summarizes profile scope applied to an agent.
-type AgentScope struct {
-	AgentID        string
-	ProfileID      string
-	ProfileName    string
-	ProfileVersion int
-	Settings       map[string]interface{}
-}
-
 // MetadataUpdater updates resource metadata
 type MetadataUpdater interface {
 	SetResourceURL(resourceType, resourceID, url string) error
@@ -320,6 +304,23 @@ func (e *PulseToolExecutor) SetContext(targetType, targetID string, autonomous b
 // ListTools returns the list of available tools
 func (e *PulseToolExecutor) ListTools() []Tool {
 	tools := []Tool{
+		{
+			Name:        "get_agent_scope",
+			Description: "Get the current unified agent scope (profile assignment and settings).",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"agent_id": {
+						Type:        "string",
+						Description: "Unified agent ID (preferred if known)",
+					},
+					"hostname": {
+						Type:        "string",
+						Description: "Hostname or display name to resolve the agent ID",
+					},
+				},
+			},
+		},
 		{
 			Name:        "pulse_get_agent_scope",
 			Description: "Get the current unified agent scope (profile assignment and settings).",
@@ -613,6 +614,50 @@ func (e *PulseToolExecutor) ListTools() []Tool {
 				},
 			},
 			{
+				Name:        "apply_agent_scope",
+				Description: "Create or update a scope profile for an agent using settings, then assign it.",
+				InputSchema: InputSchema{
+					Type: "object",
+					Properties: map[string]PropertySchema{
+						"agent_id": {
+							Type:        "string",
+							Description: "Unified agent ID (preferred if known)",
+						},
+						"hostname": {
+							Type:        "string",
+							Description: "Hostname or display name to resolve the agent ID",
+						},
+						"settings": {
+							Type:        "object",
+							Description: "Profile settings (e.g., enable_host, enable_docker, enable_kubernetes, enable_proxmox, proxmox_type, docker_runtime, disable_auto_update, disable_docker_update_checks, kube_include_all_pods, kube_include_all_deployments, log_level, interval, report_ip, disable_ceph)",
+						},
+					},
+					Required: []string{"settings"},
+				},
+			},
+			{
+				Name:        "assign_agent_profile",
+				Description: "Assign an existing profile to a unified agent.",
+				InputSchema: InputSchema{
+					Type: "object",
+					Properties: map[string]PropertySchema{
+						"agent_id": {
+							Type:        "string",
+							Description: "Unified agent ID (preferred if known)",
+						},
+						"hostname": {
+							Type:        "string",
+							Description: "Hostname or display name to resolve the agent ID",
+						},
+						"profile_id": {
+							Type:        "string",
+							Description: "Profile ID to assign to the agent",
+						},
+					},
+					Required: []string{"profile_id"},
+				},
+			},
+			{
 				Name:        "pulse_set_agent_scope",
 				Description: "Update a unified agent's scope via safe profile settings. Use this instead of running raw commands to enable/disable modules like Docker, Kubernetes, or Proxmox.",
 				InputSchema: InputSchema{
@@ -658,6 +703,8 @@ func (e *PulseToolExecutor) ExecuteTool(ctx context.Context, name string, args m
 		return e.executeFetchURL(ctx, args)
 	case "pulse_get_infrastructure_state":
 		return e.executeGetInfrastructureState(ctx)
+	case "get_agent_scope":
+		return e.executeGetAgentScope(ctx, args)
 	case "pulse_get_agent_scope":
 		return e.executeGetAgentScope(ctx, args)
 	case "pulse_set_resource_url":
@@ -688,6 +735,10 @@ func (e *PulseToolExecutor) ExecuteTool(ctx context.Context, name string, args m
 		return e.executeControlGuest(ctx, args)
 	case "pulse_control_docker":
 		return e.executeControlDocker(ctx, args)
+	case "apply_agent_scope":
+		return e.executeApplyAgentScope(ctx, args)
+	case "assign_agent_profile":
+		return e.executeAssignAgentProfile(ctx, args)
 	case "pulse_set_agent_scope":
 		return e.executeSetAgentScope(ctx, args)
 	default:
@@ -764,6 +815,31 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 	}
 
 	return NewTextResult(output), nil
+}
+
+func (e *PulseToolExecutor) executeApplyAgentScope(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if profileID, _ := args["profile_id"].(string); strings.TrimSpace(profileID) != "" {
+		return NewErrorResult(fmt.Errorf("profile_id is not supported for apply_agent_scope")), nil
+	}
+
+	return e.executeSetAgentScope(ctx, args)
+}
+
+func (e *PulseToolExecutor) executeAssignAgentProfile(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	profileID, _ := args["profile_id"].(string)
+	if strings.TrimSpace(profileID) == "" {
+		return NewErrorResult(fmt.Errorf("profile_id is required")), nil
+	}
+
+	if rawSettings, ok := args["settings"].(map[string]interface{}); ok {
+		for _, value := range rawSettings {
+			if value != nil {
+				return NewErrorResult(fmt.Errorf("settings are not supported for assign_agent_profile")), nil
+			}
+		}
+	}
+
+	return e.executeSetAgentScope(ctx, args)
 }
 
 func (e *PulseToolExecutor) executeSetAgentScope(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
