@@ -320,9 +320,14 @@ export const UnifiedAgents: Component = () => {
 
     const getUninstallCommand = () => {
         const url = customAgentUrl() || agentUrl();
-        const token = currentToken() || latestRecord()?.id || TOKEN_PLACEHOLDER;
+        const token = currentToken() || latestRecord()?.id;
         const insecure = insecureMode() ? ' --insecure' : '';
-        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --uninstall --url ${url} --token ${token}${insecure}`;
+        // Only include token if we have a real one - the uninstall script works without it
+        // Avoid including <api-token> placeholder which causes shell syntax errors
+        if (token) {
+            return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --uninstall --url ${url} --token ${token}${insecure}`;
+        }
+        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --uninstall --url ${url}${insecure}`;
     };
 
     // Track previously seen host types to prevent flapping when one source temporarily has no data
