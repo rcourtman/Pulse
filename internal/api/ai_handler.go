@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/opencode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -59,6 +60,25 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 	if err := h.service.Start(ctx); err != nil {
 		log.Error().Err(err).Msg("Failed to start OpenCode service")
 		return err
+	}
+
+	// Initialize approval store for command approval workflow
+	dataDir := aiCfg.OpenCodeDataDir
+	if dataDir == "" {
+		dataDir = "/tmp/pulse-opencode"
+	}
+
+	approvalStore, err := approval.NewStore(approval.StoreConfig{
+		DataDir:        dataDir,
+		DefaultTimeout: 5 * time.Minute,
+		MaxApprovals:   100,
+	})
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to create approval store, approvals will not be persisted")
+	} else {
+		approval.SetStore(approvalStore)
+		approvalStore.StartCleanup(ctx)
+		log.Info().Str("data_dir", dataDir).Msg("Approval store initialized")
 	}
 
 	log.Info().Msg("Pulse AI started (powered by OpenCode)")
@@ -353,6 +373,49 @@ func (h *AIHandler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
+}
+
+// AnswerQuestionRequest represents a request to answer a question
+type AnswerQuestionRequest struct {
+	Answers []struct {
+		ID    string `json:"id"`
+		Value string `json:"value"`
+	} `json:"answers"`
+}
+
+// HandleAnswerQuestion handles POST /api/ai/question/{questionID}/answer
+func (h *AIHandler) HandleAnswerQuestion(w http.ResponseWriter, r *http.Request, questionID string) {
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	if !h.IsRunning() {
+		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req AnswerQuestionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Convert to opencode.QuestionAnswer
+	answers := make([]opencode.QuestionAnswer, len(req.Answers))
+	for i, a := range req.Answers {
+		answers[i] = opencode.QuestionAnswer{
+			ID:    a.ID,
+			Value: a.Value,
+		}
+	}
+
+	if err := h.service.AnswerQuestion(r.Context(), questionID, answers); err != nil {
+		log.Error().Err(err).Str("questionID", questionID).Msg("Failed to answer question")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // SetAlertProvider sets the alert provider for MCP tools

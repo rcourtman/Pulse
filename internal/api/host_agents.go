@@ -1,19 +1,32 @@
 package api
 
 import (
+	"crypto/ed25519"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
+
+const configSignatureTTL = 15 * time.Minute
+
+var configSigningState struct {
+	once sync.Once
+	key  ed25519.PrivateKey
+	err  error
+}
 
 // HostAgentHandlers manages ingest from the pulse-host-agent.
 type HostAgentHandlers struct {
@@ -246,23 +259,152 @@ func (h *HostAgentHandlers) HandleConfig(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+func (h *HostAgentHandlers) canReadConfig(record *config.APITokenRecord) bool {
+	if record == nil {
+		return true
+	}
+	return record.HasScope(config.ScopeHostConfigRead) ||
+		record.HasScope(config.ScopeHostManage) ||
+		record.HasScope(config.ScopeSettingsWrite)
+}
+
+func (h *HostAgentHandlers) resolveConfigHost(hostID string, record *config.APITokenRecord) (models.Host, bool) {
+	state := h.monitor.GetState()
+
+	if record == nil || record.HasScope(config.ScopeHostManage) || record.HasScope(config.ScopeSettingsWrite) {
+		for _, candidate := range state.Hosts {
+			if candidate.ID == hostID {
+				return candidate, true
+			}
+		}
+		return models.Host{}, false
+	}
+
+	for _, candidate := range state.Hosts {
+		if candidate.TokenID != "" && candidate.TokenID == record.ID {
+			return candidate, true
+		}
+	}
+
+	return models.Host{}, false
+}
+
+func (h *HostAgentHandlers) signHostConfig(hostID string, cfg monitoring.HostAgentConfig) (monitoring.HostAgentConfig, error) {
+	signatureRequired := isConfigSignatureRequired()
+	key, err := getConfigSigningKey()
+	if err != nil {
+		if signatureRequired {
+			return cfg, fmt.Errorf("failed to load config signing key: %w", err)
+		}
+		log.Warn().Err(err).Msg("Failed to load config signing key")
+		return cfg, nil
+	}
+	if len(key) == 0 {
+		if signatureRequired {
+			return cfg, fmt.Errorf("config signing required but PULSE_AGENT_CONFIG_SIGNING_KEY is not set")
+		}
+		return cfg, nil
+	}
+
+	issuedAt := time.Now().UTC()
+	expiresAt := issuedAt.Add(configSignatureTTL)
+
+	payload := remoteconfig.SignedConfigPayload{
+		HostID:          hostID,
+		IssuedAt:        issuedAt,
+		ExpiresAt:       expiresAt,
+		CommandsEnabled: cfg.CommandsEnabled,
+		Settings:        cfg.Settings,
+	}
+
+	signature, err := remoteconfig.SignConfigPayload(payload, key)
+	if err != nil {
+		if signatureRequired {
+			return cfg, fmt.Errorf("failed to sign host config payload: %w", err)
+		}
+		log.Warn().Err(err).Msg("Failed to sign host config payload")
+		return cfg, nil
+	}
+
+	cfg.IssuedAt = &issuedAt
+	cfg.ExpiresAt = &expiresAt
+	cfg.Signature = signature
+	return cfg, nil
+}
+
+func getConfigSigningKey() (ed25519.PrivateKey, error) {
+	configSigningState.once.Do(func() {
+		raw := utils.GetenvTrim("PULSE_AGENT_CONFIG_SIGNING_KEY")
+		if raw == "" {
+			return
+		}
+		key, err := remoteconfig.DecodeEd25519PrivateKey(raw)
+		if err != nil {
+			configSigningState.err = err
+			return
+		}
+		configSigningState.key = key
+	})
+
+	return configSigningState.key, configSigningState.err
+}
+
+func isConfigSignatureRequired() bool {
+	return utils.ParseBool(utils.GetenvTrim("PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED"))
+}
+
 // handleGetConfig returns the server-side config for an agent to apply.
 func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Request, hostID string) {
-	if !h.ensureHostTokenMatch(w, r, hostID) {
+	record := getAPITokenRecordFromRequest(r)
+	if !h.canReadConfig(record) {
+		respondMissingScope(w, config.ScopeHostConfigRead)
+		LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 		return
 	}
 
+	host, ok := h.resolveConfigHost(hostID, record)
+	if !ok {
+		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Host has not registered with Pulse yet", nil)
+		LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
+		return
+	}
+
+	hostID = host.ID
+
 	config := h.monitor.GetHostAgentConfig(hostID)
+	signedConfig, err := h.signHostConfig(hostID, config)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to sign host config payload")
+		writeErrorResponse(w, http.StatusInternalServerError, "config_signing_failed", "Failed to sign host config", nil)
+		LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
+		return
+	}
 
 	resp := map[string]any{
 		"success": true,
 		"hostId":  hostID,
-		"config":  config,
+		"config":  signedConfig,
 	}
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize host config response")
+		LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
+		return
 	}
+
+	LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
+}
+
+func tokenID(record *config.APITokenRecord) string {
+	if record == nil {
+		return ""
+	}
+	return record.ID
 }
 
 func (h *HostAgentHandlers) ensureHostTokenMatch(w http.ResponseWriter, r *http.Request, hostID string) bool {

@@ -6945,6 +6945,7 @@ func (h *ConfigHandlers) HandleAgentInstallCommand(w http.ResponseWriter, r *htt
 	tokenName := fmt.Sprintf("proxmox-agent-%s-%d", req.Type, time.Now().Unix())
 	scopes := []string{
 		config.ScopeHostReport,
+		config.ScopeHostConfigRead,
 		config.ScopeHostManage,
 	}
 

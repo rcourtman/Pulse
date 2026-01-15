@@ -1395,6 +1395,9 @@ func (m *Monitor) UnlinkHostAgent(hostID string) error {
 type HostAgentConfig struct {
 	CommandsEnabled *bool                  `json:"commandsEnabled,omitempty"` // nil = use agent default
 	Settings        map[string]interface{} `json:"settings,omitempty"`        // Merged profile settings
+	IssuedAt        *time.Time             `json:"issuedAt,omitempty"`
+	ExpiresAt       *time.Time             `json:"expiresAt,omitempty"`
+	Signature       string                 `json:"signature,omitempty"`
 }
 
 // GetHostAgentConfig returns the server-side configuration for a host agent.

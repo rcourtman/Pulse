@@ -19,10 +19,31 @@ export interface PendingApproval {
   runOnHost: boolean;
   targetHost?: string;
   isExecuting?: boolean;
+  approvalId?: string; // ID of the approval record for API calls
+}
+
+// Question from OpenCode
+export interface QuestionOption {
+  label: string;
+  value: string;
+}
+
+export interface Question {
+  id: string;
+  type: 'text' | 'select';
+  question: string;
+  options?: QuestionOption[];
+}
+
+export interface PendingQuestion {
+  questionId: string;
+  sessionId: string;
+  questions: Question[];
+  isAnswering?: boolean;
 }
 
 // Unified event for chronological display
-export type StreamEventType = 'thinking' | 'tool' | 'content' | 'pending_tool';
+export type StreamEventType = 'thinking' | 'tool' | 'content' | 'pending_tool' | 'approval' | 'question';
 
 export interface StreamDisplayEvent {
   type: StreamEventType;
@@ -31,6 +52,8 @@ export interface StreamDisplayEvent {
   pendingTool?: PendingTool;
   content?: string;
   toolId?: string; // Used to match pending_tool with completed tool
+  approval?: PendingApproval; // For approval_needed events
+  question?: PendingQuestion; // For question events
 }
 
 export interface ChatMessage {
@@ -47,6 +70,7 @@ export interface ChatMessage {
   isStreaming?: boolean;
   pendingTools?: PendingTool[];
   pendingApprovals?: PendingApproval[];
+  pendingQuestions?: PendingQuestion[];
 }
 
 export interface ModelInfo {
@@ -71,10 +95,22 @@ export type StreamEventKind =
   | 'tool_start'
   | 'tool_end'
   | 'approval_needed'
+  | 'question'
   | 'processing'
   | 'complete'
   | 'done'
   | 'error';
+
+export interface StreamQuestionData {
+  question_id: string;
+  session_id: string;
+  questions: Array<{
+    id: string;
+    type: 'text' | 'select';
+    question: string;
+    options?: Array<{ label: string; value: string }>;
+  }>;
+}
 
 export interface StreamToolStartData {
   name: string;
@@ -94,6 +130,7 @@ export interface StreamApprovalNeededData {
   tool_name: string;
   run_on_host: boolean;
   target_host?: string;
+  approval_id?: string;
 }
 
 export interface StreamCompleteData {

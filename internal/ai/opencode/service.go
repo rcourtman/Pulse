@@ -46,6 +46,21 @@ type AgentServer interface {
 // StreamCallback is called for each streaming event
 type StreamCallback func(event StreamEvent)
 
+// convertModelToOpenCode converts Pulse model format (provider:model) to OpenCode format (provider/model)
+// Also handles provider name mappings (e.g., gemini -> google)
+func convertModelToOpenCode(pulseModel string) string {
+	// Replace first colon with slash
+	model := strings.Replace(pulseModel, ":", "/", 1)
+
+	// Map Pulse provider names to OpenCode provider names
+	// OpenCode uses "google" instead of "gemini" for Gemini models
+	if strings.HasPrefix(model, "gemini/") {
+		model = "google/" + strings.TrimPrefix(model, "gemini/")
+	}
+
+	return model
+}
+
 // Service manages OpenCode as Pulse's AI engine
 type Service struct {
 	mu sync.RWMutex
@@ -84,14 +99,20 @@ func NewService(cfg Config) *Service {
 		agentServer = &agentServerAdapter{cfg.AgentServer}
 	}
 
-	executor := mcp.NewPulseToolExecutor(stateProvider, policy, agentServer)
-
-	// Set control level from config
-	if cfg.AIConfig != nil {
-		controlLevel := cfg.AIConfig.GetControlLevel()
-		executor.SetControlLevel(mcp.ControlLevel(controlLevel))
-		executor.SetProtectedGuests(cfg.AIConfig.GetProtectedGuests())
+	// Build executor config
+	execCfg := mcp.ExecutorConfig{
+		StateProvider: stateProvider,
+		Policy:        policy,
+		AgentServer:   agentServer,
 	}
+
+	// Set control level from AI config
+	if cfg.AIConfig != nil {
+		execCfg.ControlLevel = mcp.ControlLevel(cfg.AIConfig.GetControlLevel())
+		execCfg.ProtectedGuests = cfg.AIConfig.GetProtectedGuests()
+	}
+
+	executor := mcp.NewPulseToolExecutor(execCfg)
 
 	return &Service{
 		cfg:      cfg.AIConfig,
@@ -182,8 +203,7 @@ func (s *Service) Start(ctx context.Context) error {
 		// Convert model from Pulse format (provider:model) to OpenCode format (provider/model)
 		chatModel := s.cfg.GetChatModel()
 		if chatModel != "" {
-			// Replace first colon with slash for OpenCode format
-			sidecarCfg.Model = strings.Replace(chatModel, ":", "/", 1)
+			sidecarCfg.Model = convertModelToOpenCode(chatModel)
 		}
 	}
 	s.sidecar = NewSidecar(sidecarCfg)
@@ -260,8 +280,7 @@ func (s *Service) Restart(ctx context.Context, newCfg *config.AIConfig) error {
 
 		chatModel := cfg.GetChatModel()
 		if chatModel != "" {
-			// Convert from Pulse format (provider:model) to OpenCode format (provider/model)
-			model := strings.Replace(chatModel, ":", "/", 1)
+			model := convertModelToOpenCode(chatModel)
 			s.sidecar.UpdateModel(model)
 			log.Info().Str("model", model).Msg("Updating OpenCode model")
 		}
@@ -331,6 +350,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Model:     req.Model,
 	})
 
+	// Use bridge to transform specific events (tool_end -> approval_needed for approvals)
+	bridge := NewBridge()
+
 	// Relay events to callback
 	for {
 		select {
@@ -346,10 +368,28 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			if !ok {
 				return nil
 			}
+
+			// Only transform tool_end events (to detect approvals)
+			// Pass through all other events directly for best compatibility
+			if event.Type == "tool_end" {
+				transformed, err := bridge.TransformEvent(event)
+				if err == nil && transformed.Type == "approval_needed" {
+					// This is an approval event - marshal and send
+					transformedData, _ := json.Marshal(transformed.Data)
+					callback(StreamEvent{
+						Type: transformed.Type,
+						Data: transformedData,
+					})
+					continue
+				}
+			}
+
+			// Pass through event directly
 			callback(StreamEvent{
 				Type: event.Type,
 				Data: event.Data,
 			})
+
 			if event.Type == "done" || event.Type == "error" {
 				return nil
 			}
@@ -420,6 +460,19 @@ func (s *Service) AbortSession(ctx context.Context, sessionID string) error {
 	}
 
 	return client.AbortSession(ctx, sessionID)
+}
+
+// AnswerQuestion answers a pending question from OpenCode
+func (s *Service) AnswerQuestion(ctx context.Context, questionID string, answers []QuestionAnswer) error {
+	s.mu.RLock()
+	client := s.client
+	s.mu.RUnlock()
+
+	if client == nil {
+		return fmt.Errorf("OpenCode not initialized")
+	}
+
+	return client.AnswerQuestion(ctx, questionID, answers)
 }
 
 // GetClient returns the underlying OpenCode client for direct access

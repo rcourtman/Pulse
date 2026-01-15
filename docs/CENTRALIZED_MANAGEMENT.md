@@ -94,6 +94,8 @@ GET /api/agents/host/{agent_id}/config
 Authorization: Bearer <agent-or-admin-token>
 ```
 
+Requires `host-agent:config:read` (or admin tokens with management scopes).
+
 ## Agent Behavior
 
 1.  On startup, the agent computes its Agent ID.

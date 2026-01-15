@@ -316,12 +316,18 @@ func (c *Client) PromptStream(ctx context.Context, req PromptRequest) (<-chan St
 		// OpenCode session anyway
 		sessionID := req.SessionID
 		if sessionID == "" || !strings.HasPrefix(sessionID, "ses") {
+			log.Debug().
+				Str("provided_session_id", req.SessionID).
+				Msg("OpenCode: Creating new session (no valid session ID provided)")
 			session, err := c.CreateSession(ctx)
 			if err != nil {
 				errs <- fmt.Errorf("failed to create session: %w", err)
 				return
 			}
 			sessionID = session.ID
+			log.Debug().Str("new_session_id", sessionID).Msg("OpenCode: Created new session")
+		} else {
+			log.Debug().Str("session_id", sessionID).Msg("OpenCode: Using existing session")
 		}
 
 		// OpenCode uses /session/{id}/prompt_async for async/streaming with parts array format
@@ -590,6 +596,34 @@ func (c *Client) PromptStream(ctx context.Context, req PromptRequest) (<-chan St
 						return
 					}
 				}
+
+			case "question.asked":
+				// OpenCode is asking the user a question
+				var props struct {
+					ID        string `json:"id"`
+					Questions []struct {
+						ID       string `json:"id"`
+						Type     string `json:"type"` // "text" or "select"
+						Question string `json:"question"`
+						Options  []struct {
+							Label string `json:"label"`
+							Value string `json:"value"`
+						} `json:"options,omitempty"`
+					} `json:"questions"`
+				}
+				if err := json.Unmarshal(envelope.Payload.Properties, &props); err != nil {
+					log.Warn().Err(err).Msg("OpenCode: Failed to parse question.asked event")
+					continue
+				}
+				log.Debug().Str("questionID", props.ID).Int("count", len(props.Questions)).Msg("OpenCode: Question asked")
+
+				// Send question event to frontend
+				questionData, _ := json.Marshal(map[string]interface{}{
+					"question_id": props.ID,
+					"questions":   props.Questions,
+					"session_id":  sessionID,
+				})
+				events <- StreamEvent{Type: "question", Data: questionData}
 			}
 		}
 
@@ -644,6 +678,44 @@ func (c *Client) AbortSession(ctx context.Context, sessionID string) error {
 	}
 
 	return nil
+}
+
+// AnswerQuestion answers a pending question from OpenCode
+func (c *Client) AnswerQuestion(ctx context.Context, questionID string, answers []QuestionAnswer) error {
+	// Build answers in OpenCode format
+	answerReq := map[string]interface{}{
+		"answers": answers,
+	}
+
+	body, err := json.Marshal(answerReq)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/question/"+questionID+"/answer", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("answer question failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// QuestionAnswer represents an answer to a question
+type QuestionAnswer struct {
+	ID    string `json:"id"`    // Question ID this answer is for
+	Value string `json:"value"` // The answer value (text or selected option)
 }
 
 // ListModels returns available models

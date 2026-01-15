@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -35,6 +36,9 @@ type Response struct {
 	Config  struct {
 		CommandsEnabled *bool                  `json:"commandsEnabled,omitempty"`
 		Settings        map[string]interface{} `json:"settings,omitempty"`
+		IssuedAt        time.Time              `json:"issuedAt,omitempty"`
+		ExpiresAt       time.Time              `json:"expiresAt,omitempty"`
+		Signature       string                 `json:"signature,omitempty"`
 	} `json:"config"`
 }
 
@@ -76,6 +80,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 		return nil, nil, fmt.Errorf("agent ID is required to fetch remote config")
 	}
 
+	signatureRequired := isConfigSignatureRequired()
 	hostID := c.cfg.AgentID
 	if resolved, err := c.resolveHostID(ctx); err != nil {
 		return nil, nil, err
@@ -108,7 +113,39 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 		return nil, nil, fmt.Errorf("decode response: %w", err)
 	}
 
+	if configResp.Config.Signature != "" {
+		if configResp.Config.IssuedAt.IsZero() || configResp.Config.ExpiresAt.IsZero() {
+			return nil, nil, fmt.Errorf("config signature missing timestamp metadata")
+		}
+		now := time.Now().UTC()
+		if now.After(configResp.Config.ExpiresAt.Add(2 * time.Minute)) {
+			return nil, nil, fmt.Errorf("config signature expired")
+		}
+		if configResp.Config.IssuedAt.After(now.Add(2 * time.Minute)) {
+			return nil, nil, fmt.Errorf("config signature issued in the future")
+		}
+
+		payload := SignedConfigPayload{
+			HostID:          configResp.HostID,
+			IssuedAt:        configResp.Config.IssuedAt,
+			ExpiresAt:       configResp.Config.ExpiresAt,
+			CommandsEnabled: configResp.Config.CommandsEnabled,
+			Settings:        configResp.Config.Settings,
+		}
+		if err := VerifyConfigPayloadSignature(payload, configResp.Config.Signature); err != nil {
+			return nil, nil, fmt.Errorf("config signature verification failed: %w", err)
+		}
+	} else if signatureRequired {
+		return nil, nil, fmt.Errorf("config signature required but missing")
+	} else if len(configResp.Config.Settings) > 0 || configResp.Config.CommandsEnabled != nil {
+		c.cfg.Logger.Warn().Msg("Remote config response missing signature - skipping verification")
+	}
+
 	return configResp.Config.Settings, configResp.Config.CommandsEnabled, nil
+}
+
+func isConfigSignatureRequired() bool {
+	return utils.ParseBool(utils.GetenvTrim("PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED"))
 }
 
 func (c *Client) resolveHostID(ctx context.Context) (string, error) {

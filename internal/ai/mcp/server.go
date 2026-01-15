@@ -115,20 +115,17 @@ func (s *Server) handleMethod(ctx context.Context, req Request) (interface{}, *E
 	case "initialize":
 		return s.handleInitialize(req.Params)
 	case "initialized":
-		// Client notification that initialization is complete
 		return nil, nil
 	case "tools/list":
 		return s.handleListTools()
 	case "tools/call":
 		return s.handleCallTool(ctx, req.Params)
 	case "resources/list":
-		return s.handleListResources()
-	case "resources/read":
-		return s.handleReadResource(ctx, req.Params)
+		// Return empty list - resources not implemented
+		return &ListResourcesResult{Resources: []Resource{}}, nil
 	case "prompts/list":
-		return s.handleListPrompts()
-	case "prompts/get":
-		return s.handleGetPrompt(req.Params)
+		// Return empty list - prompts not implemented
+		return &ListPromptsResult{Prompts: []Prompt{}}, nil
 	case "ping":
 		return map[string]interface{}{}, nil
 	default:
@@ -162,10 +159,7 @@ func (s *Server) handleInitialize(params json.RawMessage) (*InitializeResult, *E
 			Tools: &ToolsCapability{
 				ListChanged: false,
 			},
-			Resources: &ResourcesCapability{
-				Subscribe:   false,
-				ListChanged: false,
-			},
+			// Resources and Prompts not advertised - not implemented
 		},
 		ServerInfo: ServerInfo{
 			Name:    ServerName,
@@ -222,106 +216,6 @@ func (s *Server) handleCallTool(ctx context.Context, params json.RawMessage) (*C
 	}
 
 	return &result, nil
-}
-
-func (s *Server) handleListResources() (*ListResourcesResult, *Error) {
-	// Pulse exposes infrastructure state as a resource
-	return &ListResourcesResult{
-		Resources: []Resource{
-			{
-				URI:         "pulse://infrastructure/state",
-				Name:        "Infrastructure State",
-				Description: "Current state of all monitored infrastructure",
-				MimeType:    "application/json",
-			},
-			{
-				URI:         "pulse://infrastructure/alerts",
-				Name:        "Active Alerts",
-				Description: "Currently active alerts",
-				MimeType:    "application/json",
-			},
-		},
-	}, nil
-}
-
-func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage) (*ReadResourceResult, *Error) {
-	var readParams ReadResourceParams
-	if err := json.Unmarshal(params, &readParams); err != nil {
-		return nil, &Error{
-			Code:    ErrInvalidParams,
-			Message: "Failed to parse resource read params",
-		}
-	}
-
-	// TODO: Implement resource reading via executor
-	// For now, return empty result
-	return &ReadResourceResult{
-		Contents: []ResourceContent{
-			{
-				URI:      readParams.URI,
-				MimeType: "application/json",
-				Text:     "{}",
-			},
-		},
-	}, nil
-}
-
-func (s *Server) handleListPrompts() (*ListPromptsResult, *Error) {
-	// Pulse provides some built-in prompts
-	return &ListPromptsResult{
-		Prompts: []Prompt{
-			{
-				Name:        "analyze_infrastructure",
-				Description: "Analyze the current infrastructure state and identify issues",
-			},
-			{
-				Name:        "investigate_alert",
-				Description: "Investigate a specific alert",
-				Arguments: []PromptArgument{
-					{Name: "alert_id", Description: "The alert ID to investigate", Required: true},
-				},
-			},
-		},
-	}, nil
-}
-
-func (s *Server) handleGetPrompt(params json.RawMessage) (*GetPromptResult, *Error) {
-	var getParams GetPromptParams
-	if err := json.Unmarshal(params, &getParams); err != nil {
-		return nil, &Error{
-			Code:    ErrInvalidParams,
-			Message: "Failed to parse prompt get params",
-		}
-	}
-
-	switch getParams.Name {
-	case "analyze_infrastructure":
-		return &GetPromptResult{
-			Description: "Analyze current infrastructure",
-			Messages: []PromptMessage{
-				{
-					Role:    "user",
-					Content: NewTextContent("Analyze the current infrastructure state. Look for any issues, capacity concerns, or optimization opportunities."),
-				},
-			},
-		}, nil
-	case "investigate_alert":
-		alertID := getParams.Arguments["alert_id"]
-		return &GetPromptResult{
-			Description: fmt.Sprintf("Investigate alert %s", alertID),
-			Messages: []PromptMessage{
-				{
-					Role:    "user",
-					Content: NewTextContent(fmt.Sprintf("Investigate alert %s. Identify the root cause and suggest remediation steps.", alertID)),
-				},
-			},
-		}, nil
-	default:
-		return nil, &Error{
-			Code:    ErrInvalidParams,
-			Message: fmt.Sprintf("Unknown prompt: %s", getParams.Name),
-		}
-	}
 }
 
 func (s *Server) writeResult(w http.ResponseWriter, id interface{}, result interface{}) {

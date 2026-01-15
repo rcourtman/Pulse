@@ -233,13 +233,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/agents/host/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		// Route /api/agents/host/{id}/config to HandleConfig
 		if strings.HasSuffix(req.URL.Path, "/config") {
-			// GET is for agents to fetch config (host_report scope)
+			// GET is for agents to fetch config (host config scope)
 			// PATCH is for UI to update config (host_manage scope, admin only)
-			if req.Method == http.MethodGet {
-				if !ensureScope(w, req, config.ScopeHostReport) {
-					return
-				}
-			} else if req.Method == http.MethodPatch {
+			if req.Method == http.MethodPatch {
 				if !ensureScope(w, req, config.ScopeHostManage) {
 					return
 				}
@@ -1415,6 +1411,13 @@ func (r *Router) setupRoutes() {
 	}))
 	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeOpenCodeSessions))
 
+	// AI approval endpoints - for command approval workflow
+	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, r.aiSettingsHandler.HandleListApprovals))
+	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, r.routeApprovals))
+
+	// AI question endpoints - for answering OpenCode questions
+	r.mux.HandleFunc("/api/ai/question/", RequireAuth(r.config, r.routeQuestions))
+
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
 
@@ -1485,6 +1488,65 @@ func (r *Router) routeOpenCodeSessions(w http.ResponseWriter, req *http.Request)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// routeApprovals routes approval-specific requests
+func (r *Router) routeApprovals(w http.ResponseWriter, req *http.Request) {
+	// Extract approval ID and action from path: /api/ai/approvals/{id}[/approve|/deny]
+	path := strings.TrimPrefix(req.URL.Path, "/api/ai/approvals/")
+	parts := strings.SplitN(path, "/", 2)
+
+	if parts[0] == "" {
+		http.Error(w, "Approval ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if there's an action
+	if len(parts) > 1 {
+		switch parts[1] {
+		case "approve":
+			r.aiSettingsHandler.HandleApproveCommand(w, req)
+		case "deny":
+			r.aiSettingsHandler.HandleDenyCommand(w, req)
+		default:
+			http.Error(w, "Not found", http.StatusNotFound)
+		}
+		return
+	}
+
+	// Handle approval-level operations (GET specific approval)
+	switch req.Method {
+	case http.MethodGet:
+		r.aiSettingsHandler.HandleGetApproval(w, req)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// routeQuestions routes question-specific requests
+func (r *Router) routeQuestions(w http.ResponseWriter, req *http.Request) {
+	// Extract question ID and action from path: /api/ai/question/{id}/answer
+	path := strings.TrimPrefix(req.URL.Path, "/api/ai/question/")
+	parts := strings.SplitN(path, "/", 2)
+
+	if parts[0] == "" {
+		http.Error(w, "Question ID required", http.StatusBadRequest)
+		return
+	}
+
+	questionID := parts[0]
+
+	// Check if there's an action
+	if len(parts) > 1 && parts[1] == "answer" {
+		if req.Method == http.MethodPost {
+			r.aiHandler.HandleAnswerQuestion(w, req, questionID)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	}
+
+	http.Error(w, "Not found", http.StatusNotFound)
 }
 
 // handleAgentWebSocket handles WebSocket connections from agents for AI command execution

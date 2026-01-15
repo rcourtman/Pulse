@@ -9,7 +9,7 @@ import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
 import type { HostLookupResponse } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
-import { HOST_AGENT_SCOPE, DOCKER_REPORT_SCOPE, KUBERNETES_REPORT_SCOPE } from '@/constants/apiScopes';
+import { HOST_AGENT_SCOPE, HOST_AGENT_CONFIG_READ_SCOPE, DOCKER_REPORT_SCOPE, KUBERNETES_REPORT_SCOPE } from '@/constants/apiScopes';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
@@ -262,14 +262,14 @@ export const UnifiedAgents: Component = () => {
         try {
             const desiredName = tokenName().trim() || buildDefaultTokenName();
             // Generate token with unified agent reporting scopes
-            const scopes = [HOST_AGENT_SCOPE, DOCKER_REPORT_SCOPE, KUBERNETES_REPORT_SCOPE];
+            const scopes = [HOST_AGENT_SCOPE, HOST_AGENT_CONFIG_READ_SCOPE, DOCKER_REPORT_SCOPE, KUBERNETES_REPORT_SCOPE];
             const { token, record } = await SecurityAPI.createToken(desiredName, scopes);
 
             setCurrentToken(token);
             setLatestRecord(record);
             setTokenName('');
             setConfirmedNoToken(false);
-            notificationStore.success('Token generated with Host, Docker, and Kubernetes permissions.', 4000);
+            notificationStore.success('Token generated with Host config + reporting, Docker, and Kubernetes permissions.', 4000);
         } catch (err) {
             logger.error('Failed to generate agent token', err);
             notificationStore.error('Failed to generate agent token. Confirm you are signed in as an administrator.', 6000);
@@ -938,7 +938,7 @@ export const UnifiedAgents: Component = () => {
                                 </div>
                                 <Show when={insecureMode()}>
                                     <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
-                                        <span class="font-medium">TLS verification disabled</span> — commands will skip certificate checks (for self-signed certs).
+                                        <span class="font-medium">TLS verification disabled</span> — skip cert checks for self-signed setups. Not recommended for production.
                                     </div>
                                 </Show>
                                 <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
@@ -948,7 +948,7 @@ export const UnifiedAgents: Component = () => {
                                         onChange={(e) => setInsecureMode(e.currentTarget.checked)}
                                         class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
                                     />
-                                    Skip TLS certificate verification (self-signed certs)
+                                    Skip TLS certificate verification (self-signed certs; not recommended)
                                 </label>
                                 <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Allow AI Patrol to execute diagnostic and fix commands on this agent (requires Pulse Pro)">
                                     <input
@@ -964,6 +964,9 @@ export const UnifiedAgents: Component = () => {
                                         <span class="font-medium">AI commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse AI features.
                                     </div>
                                 </Show>
+                                <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                                    <span class="font-medium">Config signing (optional)</span> — Require signed remote config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
+                                </div>
                             </div>
 
                             <div class="space-y-4">

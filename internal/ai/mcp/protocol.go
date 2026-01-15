@@ -231,3 +231,16 @@ func NewTextResult(text string) CallToolResult {
 		IsError: false,
 	}
 }
+
+// NewJSONResult creates a successful JSON tool result
+// The data is marshaled to JSON and returned as text content
+func NewJSONResult(data interface{}) CallToolResult {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return NewErrorResult(err)
+	}
+	return CallToolResult{
+		Content: []Content{NewTextContent(string(b))},
+		IsError: false,
+	}
+}

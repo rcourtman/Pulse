@@ -1,10 +1,16 @@
-import { Component, Show, createSignal, onMount, For, createMemo } from 'solid-js';
+import { Component, Show, createSignal, onMount, For, createMemo, createEffect } from 'solid-js';
+import { AIAPI } from '@/api/ai';
 import { OpenCodeAPI, type ChatSession } from '@/api/opencode';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
-import type { PendingApproval } from './types';
+import { PROVIDER_DISPLAY_NAMES, getProviderFromModelId, groupModelsByProvider } from '../aiChatUtils';
+import type { PendingApproval, ModelInfo } from './types';
+
+const MODEL_LEGACY_STORAGE_KEY = 'pulse:ai_chat_model';
+const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
+const DEFAULT_SESSION_KEY = '__default__';
 
 interface AIChatProps {
   onClose: () => void;
@@ -22,9 +28,176 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [input, setInput] = createSignal('');
   const [sessions, setSessions] = createSignal<ChatSession[]>([]);
   const [showSessions, setShowSessions] = createSignal(false);
+  const [showModelSelector, setShowModelSelector] = createSignal(false);
+  const [models, setModels] = createSignal<ModelInfo[]>([]);
+  const [modelsLoading, setModelsLoading] = createSignal(false);
+  const [modelsError, setModelsError] = createSignal('');
+  const [modelQuery, setModelQuery] = createSignal('');
+  const [defaultModel, setDefaultModel] = createSignal('');
+  const [chatOverrideModel, setChatOverrideModel] = createSignal('');
+
+  const loadModelSelections = (): Record<string, string> => {
+    try {
+      const raw = localStorage.getItem(MODEL_SESSION_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const selections = typeof parsed === 'object' && parsed ? parsed as Record<string, string> : {};
+      const legacy = localStorage.getItem(MODEL_LEGACY_STORAGE_KEY);
+      if (legacy && !selections[DEFAULT_SESSION_KEY]) {
+        selections[DEFAULT_SESSION_KEY] = legacy;
+      }
+      if (legacy) {
+        localStorage.removeItem(MODEL_LEGACY_STORAGE_KEY);
+      }
+      return selections;
+    } catch (error) {
+      logger.warn('[AIChat] Failed to read stored models:', error);
+      return {};
+    }
+  };
+
+  const persistModelSelections = (selections: Record<string, string>) => {
+    try {
+      localStorage.setItem(MODEL_SESSION_STORAGE_KEY, JSON.stringify(selections));
+    } catch (error) {
+      logger.warn('[AIChat] Failed to persist model selections:', error);
+    }
+  };
+
+  const initialModelSelections = loadModelSelections();
+  const [modelSelections, setModelSelections] = createSignal<Record<string, string>>(initialModelSelections);
+
+  const getStoredModel = (sessionId: string) => {
+    const key = sessionId || DEFAULT_SESSION_KEY;
+    return modelSelections()[key] || '';
+  };
+
+  const updateStoredModel = (sessionId: string, modelId: string) => {
+    const key = sessionId || DEFAULT_SESSION_KEY;
+    setModelSelections((prev) => {
+      const next = { ...prev };
+      if (modelId) {
+        next[key] = modelId;
+      } else {
+        delete next[key];
+      }
+      persistModelSelections(next);
+      return next;
+    });
+  };
 
   // Chat hook
-  const chat = useChat();
+  const chat = useChat({ model: initialModelSelections[DEFAULT_SESSION_KEY] || '' });
+
+  const defaultModelLabel = createMemo(() => {
+    const fallback = defaultModel().trim();
+    if (!fallback) return '';
+    const match = models().find((model) => model.id === fallback);
+    return match ? (match.name || match.id.split(':').pop() || match.id) : fallback;
+  });
+
+  const chatOverrideLabel = createMemo(() => {
+    const override = chatOverrideModel().trim();
+    if (!override) return '';
+    const match = models().find((model) => model.id === override);
+    return match ? (match.name || match.id.split(':').pop() || match.id) : override;
+  });
+
+  const selectedModelLabel = createMemo(() => {
+    const selected = chat.model().trim();
+    if (!selected) {
+      const fallback = defaultModelLabel();
+      return fallback ? `Default (${fallback})` : 'Default';
+    }
+    const match = models().find((model) => model.id === selected);
+    if (match) return match.name || match.id.split(':').pop() || match.id;
+    return selected;
+  });
+
+  const filteredModels = createMemo(() => {
+    const query = modelQuery().trim().toLowerCase();
+    if (!query) return models();
+    return models().filter((model) => {
+      const provider = getProviderFromModelId(model.id);
+      const providerName = PROVIDER_DISPLAY_NAMES[provider] || provider;
+      const modelName = model.name || '';
+      return (
+        model.id.toLowerCase().includes(query) ||
+        modelName.toLowerCase().includes(query) ||
+        (model.description || '').toLowerCase().includes(query) ||
+        provider.toLowerCase().includes(query) ||
+        providerName.toLowerCase().includes(query)
+      );
+    });
+  });
+
+  const customModelCandidate = createMemo(() => modelQuery().trim());
+  const showCustomModelOption = createMemo(() => {
+    const candidate = customModelCandidate();
+    if (!candidate) return false;
+    return !models().some((model) => model.id === candidate);
+  });
+
+  const loadModels = async (notify = false) => {
+    if (notify) {
+      notificationStore.info('Refreshing models...', 2000);
+    }
+    setModelsLoading(true);
+    setModelsError('');
+    try {
+      const result = await AIAPI.getModels();
+      const nextModels = result.models || [];
+      setModels(nextModels);
+      if (result.error) {
+        setModelsError(result.error);
+        if (notify) {
+          notificationStore.warning(result.error, 6000);
+        }
+      } else if (notify) {
+        notificationStore.success(`Models refreshed (${nextModels.length})`, 2000);
+      }
+    } catch (error) {
+      logger.error('[AIChat] Failed to load models:', error);
+      setModels([]);
+      const message = error instanceof Error ? error.message : 'Failed to load models.';
+      setModelsError(message);
+      notificationStore.error(message);
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const settings = await AIAPI.getSettings();
+      const chatOverride = (settings.chat_model || '').trim();
+      const fallback = chatOverride || (settings.model || '').trim();
+      setDefaultModel(fallback);
+      setChatOverrideModel(chatOverride);
+    } catch (error) {
+      logger.error('[AIChat] Failed to load AI settings:', error);
+    }
+  };
+
+  const selectModel = (modelId: string) => {
+    chat.setModel(modelId);
+    updateStoredModel(chat.sessionId(), modelId);
+    setShowModelSelector(false);
+    setModelQuery('');
+  };
+
+  createEffect(() => {
+    const sessionId = chat.sessionId();
+    const storedModel = getStoredModel(sessionId);
+    if (storedModel) {
+      if (chat.model() !== storedModel) {
+        chat.setModel(storedModel);
+      }
+      return;
+    }
+    if (chat.model()) {
+      chat.setModel('');
+    }
+  });
 
   // Compute current status for display
   const currentStatus = createMemo(() => {
@@ -60,6 +233,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
       }
       const sessionList = await OpenCodeAPI.listSessions();
       setSessions(sessionList);
+      await loadSettings();
+      await loadModels();
     } catch (error) {
       logger.error('[AIChat] Failed to initialize:', error);
     }
@@ -100,6 +275,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     try {
       await OpenCodeAPI.deleteSession(sessionId);
       setSessions(prev => prev.filter(s => s.id !== sessionId));
+      updateStoredModel(sessionId, '');
       if (chat.sessionId() === sessionId) {
         chat.clearMessages();
       }
@@ -108,9 +284,84 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
-  // Empty state for approval (not used with OpenCode but keeping interface)
-  const handleApprove = (_messageId: string, _approval: PendingApproval) => { };
-  const handleSkip = (_messageId: string, _toolId: string) => { };
+  // Approval handlers
+  const handleApprove = async (messageId: string, approval: PendingApproval) => {
+    if (!approval.approvalId) {
+      notificationStore.error('No approval ID available');
+      return;
+    }
+
+    // Mark as executing
+    chat.updateApproval(messageId, approval.toolId, { isExecuting: true });
+
+    try {
+      const result = await OpenCodeAPI.approveCommand(approval.approvalId);
+
+      // Remove from pending approvals
+      chat.updateApproval(messageId, approval.toolId, { removed: true });
+
+      // Add tool result if command was executed
+      if (result.approved) {
+        const execResult = (result as { result?: { stdout?: string; stderr?: string; exit_code?: number } }).result;
+        const output = execResult
+          ? `Exit code: ${execResult.exit_code}\n${execResult.stdout || ''}${execResult.stderr ? '\nStderr: ' + execResult.stderr : ''}`
+          : 'Command approved but no execution result available.';
+
+        chat.addToolResult(messageId, {
+          name: approval.toolName,
+          input: approval.command,
+          output: output.trim(),
+          success: execResult ? execResult.exit_code === 0 : false,
+        });
+      }
+    } catch (error) {
+      logger.error('[AIChat] Approval failed:', error);
+      notificationStore.error('Failed to approve command');
+      chat.updateApproval(messageId, approval.toolId, { isExecuting: false });
+    }
+  };
+
+  const handleSkip = async (messageId: string, toolId: string) => {
+    // Find the approval to get the approvalId
+    const msg = chat.messages().find((m) => m.id === messageId);
+    const approval = msg?.pendingApprovals?.find((a) => a.toolId === toolId);
+
+    if (!approval?.approvalId) {
+      // Just remove from UI if no approval ID
+      chat.updateApproval(messageId, toolId, { removed: true });
+      return;
+    }
+
+    try {
+      await OpenCodeAPI.denyCommand(approval.approvalId, 'User skipped');
+      chat.updateApproval(messageId, toolId, { removed: true });
+    } catch (error) {
+      logger.error('[AIChat] Skip/deny failed:', error);
+      // Still remove from UI even if API fails
+      chat.updateApproval(messageId, toolId, { removed: true });
+    }
+  };
+
+  const toggleModelSelector = () => {
+    const next = !showModelSelector();
+    setShowModelSelector(next);
+    if (next) {
+      setShowSessions(false);
+      setModelQuery('');
+      if (models().length === 0 && !modelsLoading()) {
+        loadModels();
+      }
+    }
+  };
+
+  const handleModelInputKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const candidate = customModelCandidate();
+    if (candidate) {
+      selectModel(candidate);
+    }
+  };
 
   return (
     <div
@@ -135,10 +386,142 @@ export const AIChat: Component<AIChatProps> = (props) => {
           </div>
 
           <div class="flex items-center gap-1.5">
+            {/* Model selector */}
+            <div class="relative">
+              <button
+                onClick={toggleModelSelector}
+                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 transition-colors"
+                title="Select model for this chat"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span class="max-w-[120px] truncate font-medium">{selectedModelLabel()}</span>
+                <Show when={modelsLoading()}>
+                  <svg class="w-3 h-3 text-slate-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                </Show>
+                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              <Show when={showModelSelector()}>
+                <div class="absolute right-0 top-full mt-1 w-80 max-h-96 overflow-hidden bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50">
+                  <div class="flex items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+                    <input
+                      type="text"
+                      value={modelQuery()}
+                      onInput={(e) => setModelQuery(e.currentTarget.value)}
+                      onKeyDown={handleModelInputKeyDown}
+                      placeholder="Search or enter model ID"
+                      class="flex-1 text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => loadModels(true)}
+                      disabled={modelsLoading()}
+                      class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
+                      title="Refresh models"
+                    >
+                      <svg class={`w-3.5 h-3.5 ${modelsLoading() ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v6h6M20 20v-6h-6M5.32 9A7.5 7.5 0 0119 12.5M18.68 15A7.5 7.5 0 015 11.5" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <Show when={modelsError()}>
+                    <div class="px-3 py-2 text-[11px] text-red-500 border-b border-slate-200 dark:border-slate-700">
+                      {modelsError()}
+                    </div>
+                  </Show>
+
+                  <div class="max-h-72 overflow-y-auto py-1">
+                    <button
+                      onClick={() => selectModel('')}
+                      class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${!chat.model() ? 'bg-purple-50 dark:bg-purple-900/30' : ''}`}
+                    >
+                      <div class="font-medium text-slate-900 dark:text-slate-100">Default</div>
+                      <div class="text-[11px] text-slate-500 dark:text-slate-400">
+                        {defaultModelLabel() ? `Use configured default model (${defaultModelLabel()})` : 'Use configured default model'}
+                      </div>
+                    </button>
+
+                    <Show when={chatOverrideModel()}>
+                      <button
+                        onClick={() => selectModel(chatOverrideModel())}
+                        class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${chat.model() === chatOverrideModel() ? 'bg-purple-50 dark:bg-purple-900/30' : ''}`}
+                      >
+                        <div class="font-medium text-slate-900 dark:text-slate-100">Chat override</div>
+                        <div class="text-[11px] text-slate-500 dark:text-slate-400">
+                          {chatOverrideLabel() || chatOverrideModel()}
+                        </div>
+                      </button>
+                    </Show>
+
+                    <Show when={showCustomModelOption()}>
+                      <button
+                        onClick={() => selectModel(customModelCandidate())}
+                        class="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                      >
+                        <div class="font-medium text-slate-900 dark:text-slate-100">
+                          Use "{customModelCandidate()}"
+                        </div>
+                        <div class="text-[11px] text-slate-500 dark:text-slate-400">Custom model ID</div>
+                      </button>
+                    </Show>
+
+                    <Show when={!modelsLoading() && filteredModels().length === 0}>
+                      <div class="px-3 py-4 text-center text-[11px] text-slate-500 dark:text-slate-400">
+                        No matching models.
+                      </div>
+                    </Show>
+
+                    <For each={Array.from(groupModelsByProvider(filteredModels()).entries())}>
+                      {([provider, providerModels]) => (
+                        <>
+                          <div class="px-3 py-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 sticky top-0">
+                            {PROVIDER_DISPLAY_NAMES[provider] || provider}
+                          </div>
+                          <For each={providerModels}>
+                            {(model) => (
+                              <button
+                                onClick={() => selectModel(model.id)}
+                                class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${chat.model() === model.id ? 'bg-purple-50 dark:bg-purple-900/30' : ''}`}
+                              >
+                                <div class="font-medium text-slate-900 dark:text-slate-100">
+                                  {model.name || model.id.split(':').pop() || model.id}
+                                </div>
+                                <Show when={model.description}>
+                                  <div class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">
+                                    {model.description}
+                                  </div>
+                                </Show>
+                                <Show when={model.name && model.name !== model.id}>
+                                  <div class="text-[10px] text-slate-400 dark:text-slate-500">
+                                    {model.id}
+                                  </div>
+                                </Show>
+                              </button>
+                            )}
+                          </For>
+                        </>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+            </div>
+
             {/* Session picker */}
             <div class="relative">
               <button
-                onClick={() => setShowSessions(!showSessions())}
+                onClick={() => {
+                  setShowModelSelector(false);
+                  setShowSessions(!showSessions());
+                }}
                 class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 title="Chat sessions"
               >

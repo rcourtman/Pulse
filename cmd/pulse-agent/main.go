@@ -110,6 +110,10 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	logger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Logger()
 	cfg.Logger = &logger
 
+	if cfg.InsecureSkipVerify {
+		logger.Warn().Msg("TLS verification disabled for agent connections (self-signed cert mode)")
+	}
+
 	// 2a. Handle Self-Test
 	if cfg.SelfTest {
 		logger.Info().Msg("Self-test passed: config loaded and logger initialized")

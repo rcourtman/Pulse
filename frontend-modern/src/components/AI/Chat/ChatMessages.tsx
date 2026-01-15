@@ -1,11 +1,13 @@
 import { Component, Show, For, createEffect } from 'solid-js';
 import { MessageItem } from './MessageItem';
-import type { ChatMessage, PendingApproval } from './types';
+import type { ChatMessage, PendingApproval, PendingQuestion } from './types';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
   onApprove: (messageId: string, approval: PendingApproval) => void;
   onSkip: (messageId: string, toolId: string) => void;
+  onAnswerQuestion: (messageId: string, question: PendingQuestion, answers: Array<{ id: string; value: string }>) => void;
+  onSkipQuestion: (messageId: string, questionId: string) => void;
   emptyState?: {
     title: string;
     subtitle: string;
@@ -98,6 +100,8 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
             message={message}
             onApprove={(approval) => props.onApprove(message.id, approval)}
             onSkip={(toolId) => props.onSkip(message.id, toolId)}
+            onAnswerQuestion={(question, answers) => props.onAnswerQuestion(message.id, question, answers)}
+            onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
           />
         )}
       </For>

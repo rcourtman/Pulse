@@ -220,6 +220,9 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 }
 
 func (a *Agent) pruneStaleCPUSamples(active map[string]struct{}) {
+	a.cpuMu.Lock()
+	defer a.cpuMu.Unlock()
+
 	if len(a.prevContainerCPU) == 0 {
 		return
 	}
@@ -269,7 +272,9 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		memUsage, memLimit, memPercent = calculateMemoryUsage(stats)
 		blockIO = summarizeBlockIO(stats)
 	} else {
+		a.cpuMu.Lock()
 		delete(a.prevContainerCPU, summary.ID)
+		a.cpuMu.Unlock()
 	}
 
 	createdAt := time.Unix(summary.Created, 0)
@@ -590,6 +595,9 @@ func extractPodmanMetadata(labels map[string]string) *agentsdocker.PodmanContain
 }
 
 func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.StatsResponse) float64 {
+	a.cpuMu.Lock()
+	defer a.cpuMu.Unlock()
+
 	current := cpuSample{
 		totalUsage:  stats.CPUStats.CPUUsage.TotalUsage,
 		systemUsage: stats.CPUStats.SystemUsage,

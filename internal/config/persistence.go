@@ -2179,6 +2179,14 @@ func (c *ConfigPersistence) LoadAgentProfiles() ([]models.AgentProfile, error) {
 		return []models.AgentProfile{}, nil
 	}
 
+	if c.crypto != nil {
+		if decrypted, err := c.crypto.Decrypt(data); err == nil {
+			data = decrypted
+		} else {
+			log.Warn().Err(err).Msg("Failed to decrypt agent profiles - falling back to plaintext")
+		}
+	}
+
 	var profiles []models.AgentProfile
 	if err := json.Unmarshal(data, &profiles); err != nil {
 		return nil, err
@@ -2195,6 +2203,14 @@ func (c *ConfigPersistence) SaveAgentProfiles(profiles []models.AgentProfile) er
 	data, err := json.MarshalIndent(profiles, "", "  ")
 	if err != nil {
 		return err
+	}
+
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
@@ -2221,6 +2237,14 @@ func (c *ConfigPersistence) LoadAgentProfileAssignments() ([]models.AgentProfile
 		return []models.AgentProfileAssignment{}, nil
 	}
 
+	if c.crypto != nil {
+		if decrypted, err := c.crypto.Decrypt(data); err == nil {
+			data = decrypted
+		} else {
+			log.Warn().Err(err).Msg("Failed to decrypt agent profile assignments - falling back to plaintext")
+		}
+	}
+
 	var assignments []models.AgentProfileAssignment
 	if err := json.Unmarshal(data, &assignments); err != nil {
 		return nil, err
@@ -2237,6 +2261,14 @@ func (c *ConfigPersistence) SaveAgentProfileAssignments(assignments []models.Age
 	data, err := json.MarshalIndent(assignments, "", "  ")
 	if err != nil {
 		return err
+	}
+
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
@@ -2264,6 +2296,14 @@ func (c *ConfigPersistence) LoadAgentProfileVersions() ([]models.AgentProfileVer
 		return []models.AgentProfileVersion{}, nil
 	}
 
+	if c.crypto != nil {
+		if decrypted, err := c.crypto.Decrypt(data); err == nil {
+			data = decrypted
+		} else {
+			log.Warn().Err(err).Msg("Failed to decrypt agent profile versions - falling back to plaintext")
+		}
+	}
+
 	var versions []models.AgentProfileVersion
 	if err := json.Unmarshal(data, &versions); err != nil {
 		return nil, err
@@ -2280,6 +2320,14 @@ func (c *ConfigPersistence) SaveAgentProfileVersions(versions []models.AgentProf
 	data, err := json.MarshalIndent(versions, "", "  ")
 	if err != nil {
 		return err
+	}
+
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
@@ -2308,6 +2356,14 @@ func (c *ConfigPersistence) LoadProfileDeploymentStatus() ([]models.ProfileDeplo
 		return []models.ProfileDeploymentStatus{}, nil
 	}
 
+	if c.crypto != nil {
+		if decrypted, err := c.crypto.Decrypt(data); err == nil {
+			data = decrypted
+		} else {
+			log.Warn().Err(err).Msg("Failed to decrypt profile deployment status - falling back to plaintext")
+		}
+	}
+
 	var status []models.ProfileDeploymentStatus
 	if err := json.Unmarshal(data, &status); err != nil {
 		return nil, err
@@ -2324,6 +2380,14 @@ func (c *ConfigPersistence) SaveProfileDeploymentStatus(status []models.ProfileD
 	data, err := json.MarshalIndent(status, "", "  ")
 	if err != nil {
 		return err
+	}
+
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {

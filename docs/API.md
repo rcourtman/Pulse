@@ -32,6 +32,7 @@ Some endpoints require admin privileges and/or scopes. Common scopes include:
 - `monitoring:read`
 - `settings:read`
 - `settings:write`
+- `host-agent:config:read`
 
 Endpoints that require admin access are noted below.
 
@@ -531,7 +532,7 @@ Removes a host agent from state.
 
 ### Agent Remote Config
 `GET /api/agents/host/{agent_id}/config`  
-Returns the server-side config payload for an agent (used by remote config and debugging). Requires `host-agent:report`.
+Returns the server-side config payload for an agent (used by remote config and debugging). Requires `host-agent:config:read`.
 
 `PATCH /api/agents/host/{agent_id}/config` (admin, `host-agent:manage`)  
 Updates server-side config for an agent (e.g., `commandsEnabled`).

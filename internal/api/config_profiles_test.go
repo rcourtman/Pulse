@@ -233,4 +233,87 @@ func TestConfigProfileHandlers(t *testing.T) {
 			t.Errorf("expected 0 assignments after profile delete, got %d", len(assignments))
 		}
 	})
+
+	// 11. Get Schema
+	t.Run("GetSchema", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/schema", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rec.Code)
+		}
+
+		var defs []models.ConfigKeyDefinition
+		if err := json.NewDecoder(rec.Body).Decode(&defs); err != nil {
+			t.Fatalf("failed to decode: %v", err)
+		}
+		if len(defs) == 0 {
+			t.Fatalf("expected schema definitions, got 0")
+		}
+
+		found := false
+		for _, def := range defs {
+			if def.Key == "interval" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected schema to include interval")
+		}
+	})
+
+	// 12. Validate Config
+	t.Run("ValidateConfig", func(t *testing.T) {
+		payload := map[string]interface{}{
+			"interval":    5,
+			"unknown_key": true,
+		}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewBuffer(body))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		var result models.ValidationResult
+		if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+			t.Fatalf("failed to decode: %v", err)
+		}
+
+		if result.Valid {
+			t.Fatalf("expected invalid result, got valid")
+		}
+		if len(result.Errors) == 0 {
+			t.Fatalf("expected validation errors, got none")
+		}
+		if len(result.Warnings) == 0 {
+			t.Fatalf("expected validation warnings, got none")
+		}
+
+		hasIntervalError := false
+		for _, err := range result.Errors {
+			if err.Key == "interval" {
+				hasIntervalError = true
+				break
+			}
+		}
+		if !hasIntervalError {
+			t.Errorf("expected interval error, got %+v", result.Errors)
+		}
+
+		hasUnknownWarning := false
+		for _, warn := range result.Warnings {
+			if warn.Key == "unknown_key" {
+				hasUnknownWarning = true
+				break
+			}
+		}
+		if !hasUnknownWarning {
+			t.Errorf("expected unknown_key warning, got %+v", result.Warnings)
+		}
+	})
 }

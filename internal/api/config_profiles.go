@@ -501,6 +501,13 @@ func (h *ConfigProfileHandler) AssignProfile(w http.ResponseWriter, r *http.Requ
 		Timestamp:   time.Now(),
 	})
 
+	tokenID := ""
+	if record := getAPITokenRecordFromRequest(r); record != nil {
+		tokenID = record.ID
+	}
+	LogAuditEvent("agent_profile_assigned", username, GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("agent_id=%s profile_id=%s token_id=%s", input.AgentID, input.ProfileID, tokenID))
+
 	json.NewEncoder(w).Encode(input)
 }
 
@@ -561,6 +568,13 @@ func (h *ConfigProfileHandler) UnassignProfile(w http.ResponseWriter, r *http.Re
 				User:        username,
 				Timestamp:   time.Now(),
 			})
+
+			tokenID := ""
+			if record := getAPITokenRecordFromRequest(r); record != nil {
+				tokenID = record.ID
+			}
+			LogAuditEvent("agent_profile_unassigned", username, GetClientIP(r), r.URL.Path, true,
+				fmt.Sprintf("agent_id=%s profile_id=%s token_id=%s", agentID, removedAssignment.ProfileID, tokenID))
 		}
 	}
 

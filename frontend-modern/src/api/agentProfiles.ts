@@ -39,6 +39,52 @@ export interface ProfileSuggestion {
     rationale: string[];
 }
 
+export interface ConfigKeyDefinition {
+    key: string;
+    type: string;
+    description: string;
+    defaultValue?: unknown;
+    required: boolean;
+    min?: number;
+    max?: number;
+    pattern?: string;
+    enum?: string[];
+}
+
+export interface ConfigValidationError {
+    key: string;
+    message: string;
+}
+
+export interface ConfigValidationResult {
+    valid: boolean;
+    errors: ConfigValidationError[];
+    warnings: ConfigValidationError[];
+}
+
+type ConfigKeyDefinitionResponse = {
+    Key: string;
+    Type: string;
+    Description: string;
+    Default: unknown;
+    Required: boolean;
+    Min?: number;
+    Max?: number;
+    Pattern?: string;
+    Enum?: string[];
+};
+
+type ConfigValidationErrorResponse = {
+    Key: string;
+    Message: string;
+};
+
+type ConfigValidationResultResponse = {
+    Valid: boolean;
+    Errors?: ConfigValidationErrorResponse[];
+    Warnings?: ConfigValidationErrorResponse[];
+};
+
 /**
  * API client for agent profiles (Pro feature).
  * Endpoints are gated behind license - returns 402 if not licensed.
@@ -191,5 +237,45 @@ export class AgentProfilesAPI {
         }
 
         return response.json();
+    }
+
+    /**
+     * Fetch config schema definitions for agent profiles.
+     */
+    static async getConfigSchema(): Promise<ConfigKeyDefinition[]> {
+        const response = await apiFetchJSON<ConfigKeyDefinitionResponse[]>(`${this.baseUrl}/schema`);
+        const defs = response || [];
+        return defs.map(def => ({
+            key: def.Key,
+            type: def.Type,
+            description: def.Description,
+            defaultValue: def.Default,
+            required: def.Required,
+            min: def.Min,
+            max: def.Max,
+            pattern: def.Pattern,
+            enum: def.Enum,
+        }));
+    }
+
+    /**
+     * Validate a config without saving.
+     */
+    static async validateConfig(config: Record<string, unknown>): Promise<ConfigValidationResult> {
+        const response = await apiFetchJSON<ConfigValidationResultResponse>(`${this.baseUrl}/validate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+        });
+
+        if (!response) {
+            return { valid: true, errors: [], warnings: [] };
+        }
+
+        return {
+            valid: response.Valid,
+            errors: (response.Errors || []).map(err => ({ key: err.Key, message: err.Message })),
+            warnings: (response.Warnings || []).map(err => ({ key: err.Key, message: err.Message })),
+        };
     }
 }

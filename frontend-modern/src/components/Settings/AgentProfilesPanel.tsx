@@ -7,6 +7,7 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
 import { SuggestProfileModal } from './SuggestProfileModal';
+import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -15,60 +16,6 @@ import Users from 'lucide-solid/icons/users';
 import Settings from 'lucide-solid/icons/settings';
 import Sparkles from 'lucide-solid/icons/sparkles';
 
-// Known agent settings with their types and descriptions
-interface BooleanSetting {
-    key: string;
-    type: 'boolean';
-    label: string;
-    description: string;
-}
-
-interface SelectSetting {
-    key: string;
-    type: 'select';
-    label: string;
-    description: string;
-    options: string[];
-}
-
-interface DurationSetting {
-    key: string;
-    type: 'duration';
-    label: string;
-    description: string;
-}
-
-interface StringSetting {
-    key: string;
-    type: 'string';
-    label: string;
-    description: string;
-    placeholder?: string;
-}
-
-type KnownSetting = BooleanSetting | SelectSetting | DurationSetting | StringSetting;
-
-// Settings that the agent actually supports (from applyRemoteSettings in cmd/pulse-agent/main.go)
-const KNOWN_SETTINGS: KnownSetting[] = [
-    // Core monitoring
-    { key: 'enable_host', type: 'boolean', label: 'Enable Host Monitoring', description: 'Collect host metrics and allow command execution' },
-    { key: 'enable_docker', type: 'boolean', label: 'Enable Docker Monitoring', description: 'Monitor Docker or Podman containers on this agent' },
-    { key: 'docker_runtime', type: 'select', label: 'Docker Runtime', description: 'Force a specific container runtime', options: ['auto', 'docker', 'podman'] },
-    { key: 'enable_kubernetes', type: 'boolean', label: 'Enable Kubernetes Monitoring', description: 'Monitor Kubernetes workloads' },
-    { key: 'kube_include_all_pods', type: 'boolean', label: 'Include All Pods', description: 'Include all non-succeeded pods in reports' },
-    { key: 'kube_include_all_deployments', type: 'boolean', label: 'Include All Deployments', description: 'Include all deployments, not just problem ones' },
-    { key: 'enable_proxmox', type: 'boolean', label: 'Enable Proxmox Mode', description: 'Auto-detect and configure Proxmox API access' },
-    { key: 'proxmox_type', type: 'select', label: 'Proxmox Type', description: 'Force PVE or PBS mode', options: ['auto', 'pve', 'pbs'] },
-    { key: 'disable_ceph', type: 'boolean', label: 'Disable Ceph Monitoring', description: 'Skip local Ceph status polling' },
-    // Timing
-    { key: 'interval', type: 'duration', label: 'Reporting Interval', description: 'How often the agent reports metrics (e.g., 30s, 1m)' },
-    // Network
-    { key: 'report_ip', type: 'string', label: 'Report IP Override', description: 'Override the reported IP address', placeholder: '' },
-    // Operations
-    { key: 'disable_auto_update', type: 'boolean', label: 'Disable Auto Updates', description: 'Stop the unified agent from auto-updating' },
-    { key: 'disable_docker_update_checks', type: 'boolean', label: 'Disable Docker Update Checks', description: 'Skip Docker image update detection (avoid registry rate limits)' },
-    { key: 'log_level', type: 'select', label: 'Log Level', description: 'Agent logging verbosity', options: ['debug', 'info', 'warn', 'error'] },
-];
 
 export const AgentProfilesPanel: Component = () => {
     const { state } = useWebSocket();

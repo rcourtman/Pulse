@@ -9,7 +9,7 @@ interface ToolExecutionBlockProps {
  * ToolExecutionBlock - Displays completed tool executions in a compact terminal-like style.
  */
 export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) => {
-  const [showOutput, setShowOutput] = createSignal(false);
+  const [showOutput, setShowOutput] = createSignal(true);
 
   // Get display name for tool
   const toolLabel = createMemo(() => {

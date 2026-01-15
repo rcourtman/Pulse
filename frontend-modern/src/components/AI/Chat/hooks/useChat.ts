@@ -6,6 +6,7 @@ import type {
   ChatMessage,
   ToolExecution,
   StreamDisplayEvent,
+  PendingQuestion,
 } from '../types';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -173,6 +174,63 @@ export function useChat(options: UseChatOptions = {}) {
             };
           }
 
+          case 'approval_needed': {
+            const data = event.data as {
+              command: string;
+              tool_id: string;
+              tool_name: string;
+              run_on_host: boolean;
+              target_host?: string;
+              approval_id?: string;
+            };
+
+            const approval = {
+              command: data.command,
+              toolId: data.tool_id,
+              toolName: data.tool_name,
+              runOnHost: data.run_on_host,
+              targetHost: data.target_host,
+              isExecuting: false,
+              approvalId: data.approval_id,
+            };
+
+            // Add to streamEvents for chronological display
+            const updated = addStreamEvent(msg, { type: 'approval', approval });
+
+            return {
+              ...updated,
+              pendingApprovals: [...(msg.pendingApprovals || []), approval],
+            };
+          }
+
+          case 'question': {
+            const data = event.data as {
+              question_id: string;
+              session_id: string;
+              questions: Array<{
+                id: string;
+                type: 'text' | 'select';
+                question: string;
+                options?: Array<{ label: string; value: string }>;
+              }>;
+            };
+
+            const pendingQuestion: PendingQuestion = {
+              questionId: data.question_id,
+              sessionId: data.session_id,
+              questions: data.questions,
+              isAnswering: false,
+            };
+
+            // Add to streamEvents for chronological display
+            const updated = addStreamEvent(msg, { type: 'question', question: pendingQuestion });
+
+            return {
+              ...updated,
+              pendingQuestions: [...(msg.pendingQuestions || []), pendingQuestion],
+            };
+          }
+
           case 'done': {
             return { ...msg, isStreaming: false, pendingTools: [] };
           }
@@ -197,6 +255,22 @@ export function useChat(options: UseChatOptions = {}) {
   // Send a message
   const sendMessage = async (prompt: string) => {
     if (!prompt.trim() || isLoading()) return;
+
+    // Ensure we have a session for conversation continuity
+    // Without this, every message creates a new session and loses context
+    let currentSessionId = sessionId();
+    if (!currentSessionId) {
+      try {
+        const session = await OpenCodeAPI.createSession();
+        currentSessionId = session.id;
+        setSessionId(currentSessionId);
+        logger.debug('[useChat] Created new session', { sessionId: currentSessionId });
+      } catch (error) {
+        logger.error('[useChat] Failed to create session:', error);
+        notificationStore.error('Failed to create chat session');
+        return;
+      }
+    }
 
     // Add user message
     const userMessage: ChatMessage = {
@@ -227,7 +301,7 @@ export function useChat(options: UseChatOptions = {}) {
     try {
       await OpenCodeAPI.chat(
         prompt,
-        sessionId() || undefined,
+        currentSessionId,
         model() || undefined,
         (event: StreamEvent) => {
           processEvent(assistantId, event);
@@ -256,9 +330,10 @@ export function useChat(options: UseChatOptions = {}) {
     }
   };
 
-  // Clear messages
+  // Clear messages and reset session (for starting fresh)
   const clearMessages = () => {
     setMessages([]);
+    setSessionId(''); // Clear session so next message creates a new one
   };
 
   // Load session messages
@@ -293,6 +368,84 @@ export function useChat(options: UseChatOptions = {}) {
     }
   };
 
+  // Update pending approval state (e.g., to mark as executing or remove)
+  const updateApproval = (messageId: string, toolId: string, update: Partial<{ isExecuting: boolean; removed: boolean }>) => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        if (update.removed) {
+          // Remove from pendingApprovals
+          return {
+            ...msg,
+            pendingApprovals: (msg.pendingApprovals || []).filter((a) => a.toolId !== toolId),
+          };
+        }
+        // Update the approval in place
+        return {
+          ...msg,
+          pendingApprovals: (msg.pendingApprovals || []).map((a) =>
+            a.toolId === toolId ? { ...a, ...update } : a
+          ),
+        };
+      })
+    );
+  };
+
+  // Add a tool call result to a message (after approval execution)
+  const addToolResult = (messageId: string, toolCall: { name: string; input: string; output: string; success: boolean }) => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        return {
+          ...msg,
+          toolCalls: [...(msg.toolCalls || []), toolCall],
+          streamEvents: [
+            ...(msg.streamEvents || []),
+            { type: 'tool' as const, tool: toolCall },
+          ],
+        };
+      })
+    );
+  };
+
+  // Update pending question state (e.g., to mark as answering or remove)
+  const updateQuestion = (messageId: string, questionId: string, update: Partial<{ isAnswering: boolean; removed: boolean }>) => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        if (update.removed) {
+          // Remove from pendingQuestions
+          return {
+            ...msg,
+            pendingQuestions: (msg.pendingQuestions || []).filter((q) => q.questionId !== questionId),
+          };
+        }
+        // Update the question in place
+        return {
+          ...msg,
+          pendingQuestions: (msg.pendingQuestions || []).map((q) =>
+            q.questionId === questionId ? { ...q, ...update } : q
+          ),
+        };
+      })
+    );
+  };
+
+  // Answer a pending question
+  const answerQuestion = async (messageId: string, questionId: string, answers: Array<{ id: string; value: string }>) => {
+    updateQuestion(messageId, questionId, { isAnswering: true });
+
+    try {
+      await OpenCodeAPI.answerQuestion(questionId, answers);
+      // Remove the question after successful answer
+      updateQuestion(messageId, questionId, { removed: true });
+    } catch (error) {
+      logger.error('[useChat] Failed to answer question:', error);
+      notificationStore.error('Failed to answer question');
+      updateQuestion(messageId, questionId, { isAnswering: false });
+    }
+  };
+
   return {
     messages,
     isLoading,
@@ -304,5 +457,9 @@ export function useChat(options: UseChatOptions = {}) {
     clearMessages,
     loadSession,
     newSession,
+    updateApproval,
+    addToolResult,
+    updateQuestion,
+    answerQuestion,
   };
 }

@@ -1167,6 +1167,7 @@ type ApprovalNeededData struct {
 	ToolName   string `json:"tool_name"` // "run_command"
 	RunOnHost  bool   `json:"run_on_host"`
 	TargetHost string `json:"target_host,omitempty"` // Explicit host to route to
+	ApprovalID string `json:"approval_id,omitempty"` // ID of the approval record in the store
 }
 
 // Execute sends a prompt to the AI and returns the response

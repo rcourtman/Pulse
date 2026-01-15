@@ -19,7 +19,7 @@ func (b *Bridge) TransformEvent(ocEvent StreamEvent) (ai.StreamEvent, error) {
 	switch ocEvent.Type {
 	case "tool_use", "tool_call":
 		return b.transformToolUse(ocEvent)
-	case "tool_result":
+	case "tool_result", "tool_end":
 		return b.transformToolResult(ocEvent)
 	case "content", "text":
 		return b.transformContent(ocEvent)
@@ -170,26 +170,60 @@ func (b *Bridge) handleApprovalNeeded(toolResult ToolResultEvent) (ai.StreamEven
 			ToolName:   mapToolName(toolResult.Name),
 			RunOnHost:  approvalData.RunOnHost,
 			TargetHost: approvalData.TargetHost,
+			ApprovalID: approvalData.ApprovalID,
 		},
 	}, nil
 }
 
 // mapToolName maps OpenCode/MCP tool names to Pulse tool names
 func mapToolName(name string) string {
-	// Map pulse_ prefixed MCP tools back to original names
+	// Map pulse_ prefixed MCP tools back to display names
 	switch name {
+	// Control tools
 	case "pulse_run_command":
 		return "run_command"
-	case "pulse_fetch_url":
-		return "fetch_url"
+	case "pulse_control_guest":
+		return "control_guest"
+	case "pulse_control_docker":
+		return "control_docker"
+	// Query tools
+	case "pulse_get_capabilities":
+		return "get_capabilities"
+	case "pulse_get_url_content":
+		return "get_url_content"
+	case "pulse_list_infrastructure":
+		return "list_infrastructure"
 	case "pulse_set_resource_url":
 		return "set_resource_url"
+	case "pulse_get_resource":
+		return "get_resource"
+	// Patrol tools
+	case "pulse_get_metrics":
+		return "get_metrics"
+	case "pulse_get_baselines":
+		return "get_baselines"
+	case "pulse_get_patterns":
+		return "get_patterns"
+	case "pulse_list_alerts":
+		return "list_alerts"
+	case "pulse_list_findings":
+		return "list_findings"
 	case "pulse_resolve_finding":
 		return "resolve_finding"
 	case "pulse_dismiss_finding":
 		return "dismiss_finding"
-	case "pulse_get_infrastructure_state":
-		return "get_infrastructure_state"
+	// Infrastructure tools
+	case "pulse_list_backups":
+		return "list_backups"
+	case "pulse_list_storage":
+		return "list_storage"
+	case "pulse_get_disk_health":
+		return "get_disk_health"
+	// Profile tools
+	case "pulse_get_agent_scope":
+		return "get_agent_scope"
+	case "pulse_set_agent_scope":
+		return "set_agent_scope"
 	default:
 		return name
 	}
@@ -223,6 +257,7 @@ type approvalInfo struct {
 	Command    string
 	RunOnHost  bool
 	TargetHost string
+	ApprovalID string
 }
 
 // parseApprovalFromOutput parses approval data from tool output
@@ -237,6 +272,7 @@ func parseApprovalFromOutput(output string) approvalInfo {
 		Command    string `json:"command"`
 		RunOnHost  bool   `json:"run_on_host"`
 		TargetHost string `json:"target_host"`
+		ApprovalID string `json:"approval_id"`
 	}
 
 	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
@@ -248,6 +284,7 @@ func parseApprovalFromOutput(output string) approvalInfo {
 		Command:    data.Command,
 		RunOnHost:  data.RunOnHost,
 		TargetHost: data.TargetHost,
+		ApprovalID: data.ApprovalID,
 	}
 }
 

@@ -207,6 +207,9 @@ Behavior:
 - Profile settings override local flags/env for supported keys.
 - Profile changes take effect on the next agent restart.
 - Command execution (`commandsEnabled`) is controlled per agent in **Settings → Agents → Unified Agents** and can change live.
+- Remote config responses can be signed with `PULSE_AGENT_CONFIG_SIGNING_KEY` (base64 Ed25519 private key).
+- To require signed payloads, set `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true` on Pulse and agents.
+- If you use a custom signing key, set `PULSE_AGENT_CONFIG_PUBLIC_KEYS` on agents to trust the matching public key.
 
 See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md) for supported keys and profile setup.
 

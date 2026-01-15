@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	systemtypes "github.com/docker/docker/api/types/system"
@@ -92,6 +93,7 @@ type Agent struct {
 	stateFilters        []string
 	hostID              string
 	prevContainerCPU    map[string]cpuSample
+	cpuMu               sync.Mutex // protects prevContainerCPU and preCPUStatsFailures
 	preCPUStatsFailures int
 	reportBuffer        *buffer.Queue[agentsdocker.Report]
 	registryChecker     *RegistryChecker // For checking container image updates

@@ -201,14 +201,11 @@ kill_port() {
 log_info "Cleaning up existing processes..."
 
 # OS-Specific Cleanup
+# Note: When running under systemd (INVOCATION_ID is set), skip stopping our own service
 OS_NAME=$(uname -s)
-if [[ "$OS_NAME" == "Linux" ]]; then
-    if [[ -z "${INVOCATION_ID:-}" ]]; then
-        sudo systemctl stop pulse-hot-dev 2>/dev/null || true
-    fi
-    sudo systemctl stop pulse-backend 2>/dev/null || true
-    sudo systemctl stop pulse 2>/dev/null || true
-    sudo systemctl stop pulse-frontend 2>/dev/null || true
+if [[ "$OS_NAME" == "Linux" ]] && [[ -z "${INVOCATION_ID:-}" ]]; then
+    # Only stop pulse-dev if we're NOT running under systemd
+    sudo systemctl stop pulse-dev 2>/dev/null || true
 fi
 
 pkill -f "backend-watch.sh" 2>/dev/null || true
@@ -414,6 +411,7 @@ log_info "Starting backend health monitor..."
             PULSE_DEV=${PULSE_DEV:-true} \
             PULSE_AUTH_USER=${PULSE_AUTH_USER} \
             PULSE_AUTH_PASS=${PULSE_AUTH_PASS} \
+            ALLOWED_ORIGINS=${ALLOWED_ORIGINS} \
             ./pulse >> /opt/pulse/hotdev.log 2>&1 &
             NEW_PID=$!
             sleep 2
@@ -455,7 +453,17 @@ log_info "Starting backend file watcher..."
             # This prevents stale sidecars with lost session context
             pkill -f "opencode.*serve" 2>/dev/null || true
 
-            FRONTEND_PORT=${PULSE_DEV_API_PORT} PORT=${PULSE_DEV_API_PORT} PULSE_DATA_DIR=${PULSE_DATA_DIR} PULSE_USE_OPENCODE=${PULSE_USE_OPENCODE:-true} ALLOW_ADMIN_BYPASS=${ALLOW_ADMIN_BYPASS:-1} PULSE_DEV=${PULSE_DEV:-true} ./pulse >> /opt/pulse/hotdev.log 2>&1 &
+            FRONTEND_PORT=${PULSE_DEV_API_PORT} \
+            PORT=${PULSE_DEV_API_PORT} \
+            PULSE_DATA_DIR=${PULSE_DATA_DIR} \
+            PULSE_ENCRYPTION_KEY=${PULSE_ENCRYPTION_KEY} \
+            PULSE_USE_OPENCODE=${PULSE_USE_OPENCODE:-true} \
+            ALLOW_ADMIN_BYPASS=${ALLOW_ADMIN_BYPASS:-1} \
+            PULSE_DEV=${PULSE_DEV:-true} \
+            PULSE_AUTH_USER=${PULSE_AUTH_USER} \
+            PULSE_AUTH_PASS=${PULSE_AUTH_PASS} \
+            ALLOWED_ORIGINS=${ALLOWED_ORIGINS} \
+            ./pulse >> /opt/pulse/hotdev.log 2>&1 &
             NEW_PID=$!
             sleep 1
 

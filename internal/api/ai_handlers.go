@@ -3809,16 +3809,59 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	LogAuditEvent("ai_command_approved", username, GetClientIP(r), r.URL.Path, true,
 		fmt.Sprintf("Approved command: %s", truncateForLog(req.Command, 100)))
 
-	// TODO: Resume execution with the approved command
-	// For now, just return the approval status
-	// The actual execution resumption will be added when we integrate with the AI service
+	// Execute the approved command
+	var execResult *agentexec.CommandResultPayload
+	var execErr error
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if h.agentServer != nil && req.TargetName != "" {
+		// Find agent for the target host
+		agentID, found := h.agentServer.GetAgentForHost(req.TargetName)
+		if found {
+			ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+			defer cancel()
+
+			execResult, execErr = h.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+				Command:    req.Command,
+				TargetType: req.TargetType,
+				TargetID:   req.TargetID,
+			})
+
+			if execErr == nil {
+				LogAuditEvent("ai_command_executed", username, GetClientIP(r), r.URL.Path, true,
+					fmt.Sprintf("Executed command: %s (exit: %d)", truncateForLog(req.Command, 100), execResult.ExitCode))
+			} else {
+				LogAuditEvent("ai_command_failed", username, GetClientIP(r), r.URL.Path, false,
+					fmt.Sprintf("Failed to execute command: %s - %v", truncateForLog(req.Command, 100), execErr))
+			}
+		} else {
+			execErr = fmt.Errorf("no agent available for host %s", req.TargetName)
+		}
+	}
+
+	response := map[string]interface{}{
 		"approved": true,
 		"request":  req,
-		"message":  "Command approved. Execution will resume.",
-	})
+	}
+
+	if execResult != nil {
+		response["executed"] = true
+		response["result"] = map[string]interface{}{
+			"stdout":    execResult.Stdout,
+			"stderr":    execResult.Stderr,
+			"exit_code": execResult.ExitCode,
+		}
+		response["message"] = "Command approved and executed."
+	} else if execErr != nil {
+		response["executed"] = false
+		response["error"] = execErr.Error()
+		response["message"] = "Command approved but execution failed."
+	} else {
+		response["executed"] = false
+		response["message"] = "Command approved. No agent available for execution."
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 // HandleDenyCommand denies a pending command.

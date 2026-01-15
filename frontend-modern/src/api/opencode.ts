@@ -28,7 +28,7 @@ export interface ToolCall {
 }
 
 export interface StreamEvent {
-  type: 'content' | 'thinking' | 'tool_start' | 'tool_end' | 'tool' | 'done' | 'error';
+  type: 'content' | 'thinking' | 'tool_start' | 'tool_end' | 'tool' | 'approval_needed' | 'question' | 'done' | 'error';
   data?: any;
 }
 
@@ -73,6 +73,29 @@ export class OpenCodeAPI {
   static async abortSession(sessionId: string): Promise<void> {
     await apiFetch(`${this.baseUrl}/sessions/${sessionId}/abort`, {
       method: 'POST',
+    });
+  }
+
+  // Approve a pending command
+  static async approveCommand(approvalId: string): Promise<{ approved: boolean; message: string }> {
+    return apiFetchJSON(`${this.baseUrl}/approvals/${approvalId}/approve`, {
+      method: 'POST',
+    }) as Promise<{ approved: boolean; message: string }>;
+  }
+
+  // Deny a pending command
+  static async denyCommand(approvalId: string, reason?: string): Promise<{ denied: boolean; message: string }> {
+    return apiFetchJSON(`${this.baseUrl}/approvals/${approvalId}/deny`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || 'User skipped' }),
+    }) as Promise<{ denied: boolean; message: string }>;
+  }
+
+  // Answer a pending question from OpenCode
+  static async answerQuestion(questionId: string, answers: Array<{ id: string; value: string }>): Promise<void> {
+    await apiFetch(`${this.baseUrl}/question/${questionId}/answer`, {
+      method: 'POST',
+      body: JSON.stringify({ answers }),
     });
   }
 

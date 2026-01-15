@@ -19,6 +19,7 @@ const (
 	ScopeKubernetesReport = "kubernetes:report"
 	ScopeKubernetesManage = "kubernetes:manage"
 	ScopeHostReport       = "host-agent:report"
+	ScopeHostConfigRead   = "host-agent:config:read"
 	ScopeHostManage       = "host-agent:manage"
 	ScopeSettingsRead     = "settings:read"
 	ScopeSettingsWrite    = "settings:write"
@@ -33,6 +34,7 @@ var AllKnownScopes = []string{
 	ScopeKubernetesReport,
 	ScopeKubernetesManage,
 	ScopeHostReport,
+	ScopeHostConfigRead,
 	ScopeHostManage,
 	ScopeSettingsRead,
 	ScopeSettingsWrite,

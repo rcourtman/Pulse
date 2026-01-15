@@ -3,12 +3,15 @@ import { renderMarkdown } from '../aiChatUtils';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolExecutionBlock, PendingToolBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
-import type { ChatMessage, PendingApproval, StreamDisplayEvent } from './types';
+import { QuestionCard } from './QuestionCard';
+import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from './types';
 
 interface MessageItemProps {
   message: ChatMessage;
   onApprove: (approval: PendingApproval) => void;
   onSkip: (toolId: string) => void;
+  onAnswerQuestion: (question: PendingQuestion, answers: Array<{ id: string; value: string }>) => void;
+  onSkipQuestion: (questionId: string) => void;
 }
 
 /**
@@ -24,7 +27,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     props.message.streamEvents && props.message.streamEvents.length > 0;
 
   // Group stream events for cleaner rendering
-  // Combine consecutive content events, separate thinking and tools
+  // Combine consecutive content events, separate thinking, tools, and approvals
   const groupedEvents = createMemo(() => {
     const events = props.message.streamEvents || [];
     const grouped: StreamDisplayEvent[] = [];
@@ -38,6 +41,24 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
       // Tool events are kept separate
       if (evt.type === 'tool') {
+        grouped.push(evt);
+        continue;
+      }
+
+      // Pending tool events are kept separate
+      if (evt.type === 'pending_tool') {
+        grouped.push(evt);
+        continue;
+      }
+
+      // Approval events are kept separate
+      if (evt.type === 'approval') {
+        grouped.push(evt);
+        continue;
+      }
+
+      // Question events are kept separate
+      if (evt.type === 'question') {
         grouped.push(evt);
         continue;
       }
@@ -119,18 +140,40 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                     {/* Content/text block */}
                     <Match when={evt.type === 'content' && evt.content}>
                       <div
-                        class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none 
+                        class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none
                                prose-p:leading-relaxed prose-p:my-2
                                prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs
-                               prose-code:text-purple-600 dark:prose-code:text-purple-400 
-                               prose-code:bg-purple-50 dark:prose-code:bg-purple-900/30 
-                               prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded 
+                               prose-code:text-purple-600 dark:prose-code:text-purple-400
+                               prose-code:bg-purple-50 dark:prose-code:bg-purple-900/30
+                               prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
                                prose-code:before:content-none prose-code:after:content-none
                                prose-headings:text-slate-900 dark:prose-headings:text-slate-100
                                prose-strong:text-slate-900 dark:prose-strong:text-slate-100
                                prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5"
                         innerHTML={renderMarkdown(evt.content!)}
                       />
+                    </Match>
+
+                    {/* Approval card - inline in stream */}
+                    <Match when={evt.type === 'approval' && evt.approval}>
+                      <div class="my-3">
+                        <ApprovalCard
+                          approval={evt.approval!}
+                          onApprove={() => props.onApprove(evt.approval!)}
+                          onSkip={() => props.onSkip(evt.approval!.toolId)}
+                        />
+                      </div>
+                    </Match>
+
+                    {/* Question card - inline in stream */}
+                    <Match when={evt.type === 'question' && evt.question}>
+                      <div class="my-3">
+                        <QuestionCard
+                          question={evt.question!}
+                          onAnswer={(answers) => props.onAnswerQuestion(evt.question!, answers)}
+                          onSkip={() => props.onSkipQuestion(evt.question!.questionId)}
+                        />
+                      </div>
                     </Match>
                   </Switch>
                 )}
@@ -152,21 +195,6 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                        prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5"
                 innerHTML={renderMarkdown(props.message.content)}
               />
-            </Show>
-
-            {/* Pending approvals */}
-            <Show when={props.message.pendingApprovals && props.message.pendingApprovals.length > 0}>
-              <div class="mt-3 space-y-2">
-                <For each={props.message.pendingApprovals}>
-                  {(approval) => (
-                    <ApprovalCard
-                      approval={approval}
-                      onApprove={() => props.onApprove(approval)}
-                      onSkip={() => props.onSkip(approval.toolId)}
-                    />
-                  )}
-                </For>
-              </div>
             </Show>
 
             {/* Streaming text indicator */}
