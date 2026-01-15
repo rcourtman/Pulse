@@ -32,7 +32,8 @@ const (
 	ConfigTypeEnum     ConfigType = "enum"
 )
 
-// ValidConfigKeys defines all valid agent configuration keys.
+// ValidConfigKeys defines agent configuration keys that are actually applied by the agent.
+// These match the keys handled in applyRemoteSettings() in cmd/pulse-agent/main.go.
 var ValidConfigKeys = []ConfigKeyDefinition{
 	{
 		Key:         "interval",
@@ -41,28 +42,66 @@ var ValidConfigKeys = []ConfigKeyDefinition{
 		Default:     "30s",
 	},
 	{
+		Key:         "enable_host",
+		Type:        ConfigTypeBool,
+		Description: "Enable host monitoring (metrics + command execution)",
+		Default:     true,
+	},
+	{
 		Key:         "enable_docker",
 		Type:        ConfigTypeBool,
 		Description: "Enable Docker container monitoring",
 		Default:     true,
 	},
 	{
-		Key:         "enable_system_metrics",
+		Key:         "enable_kubernetes",
 		Type:        ConfigTypeBool,
-		Description: "Enable system-level metrics (CPU, memory, disk)",
-		Default:     true,
-	},
-	{
-		Key:         "enable_process_metrics",
-		Type:        ConfigTypeBool,
-		Description: "Enable process-level metrics",
+		Description: "Enable Kubernetes workload monitoring",
 		Default:     false,
 	},
 	{
-		Key:         "enable_network_metrics",
+		Key:         "enable_proxmox",
 		Type:        ConfigTypeBool,
-		Description: "Enable network interface metrics",
-		Default:     true,
+		Description: "Enable Proxmox mode for node registration",
+		Default:     false,
+	},
+	{
+		Key:         "proxmox_type",
+		Type:        ConfigTypeEnum,
+		Description: "Proxmox type override (pve or pbs; auto-detect if unset)",
+		Default:     "auto",
+		Enum:        []string{"pve", "pbs", "auto"},
+	},
+	{
+		Key:         "docker_runtime",
+		Type:        ConfigTypeEnum,
+		Description: "Container runtime preference (auto, docker, podman)",
+		Default:     "auto",
+		Enum:        []string{"auto", "docker", "podman"},
+	},
+	{
+		Key:         "disable_auto_update",
+		Type:        ConfigTypeBool,
+		Description: "Disable automatic agent updates",
+		Default:     false,
+	},
+	{
+		Key:         "disable_docker_update_checks",
+		Type:        ConfigTypeBool,
+		Description: "Disable Docker image update detection",
+		Default:     false,
+	},
+	{
+		Key:         "kube_include_all_pods",
+		Type:        ConfigTypeBool,
+		Description: "Include all non-succeeded pods in Kubernetes reports",
+		Default:     false,
+	},
+	{
+		Key:         "kube_include_all_deployments",
+		Type:        ConfigTypeBool,
+		Description: "Include all deployments in Kubernetes reports",
+		Default:     false,
 	},
 	{
 		Key:         "log_level",
@@ -72,98 +111,16 @@ var ValidConfigKeys = []ConfigKeyDefinition{
 		Enum:        []string{"debug", "info", "warn", "error"},
 	},
 	{
-		Key:         "metric_buffer_size",
-		Type:        ConfigTypeInt,
-		Description: "Size of the metric buffer before flush",
-		Default:     100,
-		Min:         ptrFloat(10),
-		Max:         ptrFloat(10000),
-	},
-	{
-		Key:         "connection_timeout",
-		Type:        ConfigTypeDuration,
-		Description: "Timeout for server connections",
-		Default:     "30s",
-	},
-	{
-		Key:         "retry_interval",
-		Type:        ConfigTypeDuration,
-		Description: "Interval between connection retries",
-		Default:     "5s",
-	},
-	{
-		Key:         "max_retries",
-		Type:        ConfigTypeInt,
-		Description: "Maximum number of connection retries",
-		Default:     3,
-		Min:         ptrFloat(0),
-		Max:         ptrFloat(100),
-	},
-	{
-		Key:         "disk_paths",
+		Key:         "report_ip",
 		Type:        ConfigTypeString,
-		Description: "Comma-separated list of disk paths to monitor",
-		Default:     "/",
-	},
-	{
-		Key:         "exclude_containers",
-		Type:        ConfigTypeString,
-		Description: "Regex pattern for container names to exclude",
+		Description: "Override the reported IP address for the agent",
 		Default:     "",
 	},
 	{
-		Key:         "include_containers",
-		Type:        ConfigTypeString,
-		Description: "Regex pattern for container names to include (empty = all)",
-		Default:     "",
-	},
-	{
-		Key:         "cpu_threshold_warning",
-		Type:        ConfigTypeFloat,
-		Description: "CPU usage threshold for warnings (%)",
-		Default:     80.0,
-		Min:         ptrFloat(0),
-		Max:         ptrFloat(100),
-	},
-	{
-		Key:         "cpu_threshold_critical",
-		Type:        ConfigTypeFloat,
-		Description: "CPU usage threshold for critical alerts (%)",
-		Default:     95.0,
-		Min:         ptrFloat(0),
-		Max:         ptrFloat(100),
-	},
-	{
-		Key:         "memory_threshold_warning",
-		Type:        ConfigTypeFloat,
-		Description: "Memory usage threshold for warnings (%)",
-		Default:     80.0,
-		Min:         ptrFloat(0),
-		Max:         ptrFloat(100),
-	},
-	{
-		Key:         "memory_threshold_critical",
-		Type:        ConfigTypeFloat,
-		Description: "Memory usage threshold for critical alerts (%)",
-		Default:     95.0,
-		Min:         ptrFloat(0),
-		Max:         ptrFloat(100),
-	},
-	{
-		Key:         "disk_threshold_warning",
-		Type:        ConfigTypeFloat,
-		Description: "Disk usage threshold for warnings (%)",
-		Default:     80.0,
-		Min:         ptrFloat(0),
-		Max:         ptrFloat(100),
-	},
-	{
-		Key:         "disk_threshold_critical",
-		Type:        ConfigTypeFloat,
-		Description: "Disk usage threshold for critical alerts (%)",
-		Default:     95.0,
-		Min:         ptrFloat(0),
-		Max:         ptrFloat(100),
+		Key:         "disable_ceph",
+		Type:        ConfigTypeBool,
+		Description: "Disable local Ceph status polling",
+		Default:     false,
 	},
 }
 
@@ -357,9 +314,4 @@ func GetConfigKeyDefinition(key string) (ConfigKeyDefinition, bool) {
 		}
 	}
 	return ConfigKeyDefinition{}, false
-}
-
-// ptrFloat returns a pointer to a float64.
-func ptrFloat(v float64) *float64 {
-	return &v
 }

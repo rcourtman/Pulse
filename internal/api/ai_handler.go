@@ -3,12 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -43,12 +38,18 @@ type AIStateProvider interface {
 
 // Start initializes and starts the OpenCode service
 func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) error {
+	log.Info().Msg("AIHandler.Start called")
 	aiCfg := h.loadAIConfig()
-	if aiCfg == nil || !aiCfg.Enabled {
-		log.Info().Msg("AI is disabled")
+	if aiCfg == nil {
+		log.Info().Msg("AI config is nil, AI is disabled")
+		return nil
+	}
+	if !aiCfg.Enabled {
+		log.Info().Bool("enabled", aiCfg.Enabled).Msg("AI is disabled in config")
 		return nil
 	}
 
+	log.Info().Bool("enabled", aiCfg.Enabled).Str("model", aiCfg.Model).Msg("Starting OpenCode service")
 	h.service = opencode.NewService(opencode.Config{
 		AIConfig:      aiCfg,
 		StateProvider: stateProvider,
@@ -56,6 +57,7 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 	})
 
 	if err := h.service.Start(ctx); err != nil {
+		log.Error().Err(err).Msg("Failed to start OpenCode service")
 		return err
 	}
 
@@ -386,150 +388,4 @@ func (h *AIHandler) SetMetricsHistory(provider opencode.MCPMetricsHistoryProvide
 	if h.service != nil {
 		h.service.SetMetricsHistory(provider)
 	}
-}
-
-// HandleOpenCodeUI proxies requests to OpenCode's built-in web UI
-// This allows Pulse to embed OpenCode's UI while maintaining auth
-func (h *AIHandler) HandleOpenCodeUI(w http.ResponseWriter, r *http.Request) {
-	if !h.IsRunning() {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	baseURL := h.service.GetBaseURL()
-	if baseURL == "" {
-		http.Error(w, "OpenCode URL not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	target, err := url.Parse(baseURL)
-	if err != nil {
-		http.Error(w, "Invalid OpenCode URL", http.StatusInternalServerError)
-		return
-	}
-
-	// Create reverse proxy
-	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	// Customize the director to rewrite the path
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-		// Strip the /opencode prefix from the path
-		req.URL.Path = strings.TrimPrefix(req.URL.Path, "/opencode")
-		if req.URL.Path == "" {
-			req.URL.Path = "/"
-		}
-		req.Host = target.Host
-	}
-
-	// Modify response to allow embedding in iframe and fix asset paths
-	// OpenCode sets X-Frame-Options: DENY and CSP frame-ancestors 'none'
-	// which prevents embedding - we need to remove these for the Pulse panel
-	// Also, OpenCode uses absolute paths for assets which need to be prefixed
-	proxy.ModifyResponse = func(resp *http.Response) error {
-		// Remove X-Frame-Options to allow iframe embedding
-		resp.Header.Del("X-Frame-Options")
-
-		// Handle multiple CSP headers - get all values, modify, and set back
-		cspHeaders := resp.Header.Values("Content-Security-Policy")
-		if len(cspHeaders) > 0 {
-			// Delete all existing CSP headers
-			resp.Header.Del("Content-Security-Policy")
-			// Add back modified versions
-			for _, csp := range cspHeaders {
-				// Replace frame-ancestors 'none' with 'self' to allow embedding
-				modified := strings.ReplaceAll(csp, "frame-ancestors 'none'", "frame-ancestors 'self'")
-				resp.Header.Add("Content-Security-Policy", modified)
-			}
-		}
-
-		// Rewrite asset paths in HTML and CSS responses
-		// OpenCode uses absolute paths like /assets/... which need to be /opencode/assets/...
-		contentType := resp.Header.Get("Content-Type")
-		if resp.Body != nil && (strings.Contains(contentType, "text/html") || strings.Contains(contentType, "text/css")) {
-			body, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if err != nil {
-				return err
-			}
-
-			content := string(body)
-
-			if strings.Contains(contentType, "text/html") {
-				// Rewrite src="/..." and href="/..." to src="/opencode/..." and href="/opencode/..."
-				// Be careful not to rewrite already-prefixed paths or external URLs
-				content = strings.ReplaceAll(content, `src="/`, `src="/opencode/`)
-				content = strings.ReplaceAll(content, `href="/`, `href="/opencode/`)
-			}
-
-			if strings.Contains(contentType, "text/css") {
-				// Rewrite url(/...) and url("/...") and url('/...') in CSS for fonts and other assets
-				content = strings.ReplaceAll(content, `url(/`, `url(/opencode/`)
-				content = strings.ReplaceAll(content, `url("/`, `url("/opencode/`)
-				content = strings.ReplaceAll(content, `url('/`, `url('/opencode/`)
-			}
-
-			// Update response body
-			resp.Body = io.NopCloser(strings.NewReader(content))
-			resp.ContentLength = int64(len(content))
-			resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(content)))
-		}
-
-		return nil
-	}
-
-	// Handle WebSocket upgrades
-	if r.Header.Get("Upgrade") == "websocket" {
-		proxy.ServeHTTP(w, r)
-		return
-	}
-
-	// Serve the proxied request
-	proxy.ServeHTTP(w, r)
-}
-
-// HandleOpenCodeAPI proxies OpenCode's API requests
-// When OpenCode is embedded in an iframe, its frontend makes requests to window.location.origin
-// which is Pulse. This handler proxies those requests to OpenCode's actual backend.
-func (h *AIHandler) HandleOpenCodeAPI(w http.ResponseWriter, r *http.Request) {
-	if !h.IsRunning() {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	baseURL := h.service.GetBaseURL()
-	if baseURL == "" {
-		http.Error(w, "OpenCode URL not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	target, err := url.Parse(baseURL)
-	if err != nil {
-		http.Error(w, "Invalid OpenCode URL", http.StatusInternalServerError)
-		return
-	}
-
-	// Create reverse proxy - no path modification needed
-	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-		// Keep the path as-is (no stripping)
-		req.Host = target.Host
-		// OpenCode uses Accept header to distinguish API vs SPA requests
-		// Set Accept: application/json for API requests so we get JSON not HTML
-		if req.Header.Get("Accept") == "" || req.Header.Get("Accept") == "*/*" {
-			req.Header.Set("Accept", "application/json")
-		}
-	}
-
-	// Handle WebSocket upgrades (for /pty/ and other real-time endpoints)
-	if r.Header.Get("Upgrade") == "websocket" {
-		proxy.ServeHTTP(w, r)
-		return
-	}
-
-	proxy.ServeHTTP(w, r)
 }

@@ -1,17 +1,19 @@
 import { Component, createSignal, createMemo, onMount, Show, For } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
-import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '@/api/agentProfiles';
+import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment, type ProfileSuggestion } from '@/api/agentProfiles';
 import { LicenseAPI } from '@/api/license';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
+import { SuggestProfileModal } from './SuggestProfileModal';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import Crown from 'lucide-solid/icons/crown';
 import Users from 'lucide-solid/icons/users';
 import Settings from 'lucide-solid/icons/settings';
+import Sparkles from 'lucide-solid/icons/sparkles';
 
 // Known agent settings with their types and descriptions
 interface BooleanSetting {
@@ -36,14 +38,36 @@ interface DurationSetting {
     description: string;
 }
 
-type KnownSetting = BooleanSetting | SelectSetting | DurationSetting;
+interface StringSetting {
+    key: string;
+    type: 'string';
+    label: string;
+    description: string;
+    placeholder?: string;
+}
 
+type KnownSetting = BooleanSetting | SelectSetting | DurationSetting | StringSetting;
+
+// Settings that the agent actually supports (from applyRemoteSettings in cmd/pulse-agent/main.go)
 const KNOWN_SETTINGS: KnownSetting[] = [
-    { key: 'enable_docker', type: 'boolean', label: 'Enable Docker Monitoring', description: 'Monitor Docker containers on this agent' },
+    // Core monitoring
+    { key: 'enable_host', type: 'boolean', label: 'Enable Host Monitoring', description: 'Collect host metrics and allow command execution' },
+    { key: 'enable_docker', type: 'boolean', label: 'Enable Docker Monitoring', description: 'Monitor Docker or Podman containers on this agent' },
+    { key: 'docker_runtime', type: 'select', label: 'Docker Runtime', description: 'Force a specific container runtime', options: ['auto', 'docker', 'podman'] },
     { key: 'enable_kubernetes', type: 'boolean', label: 'Enable Kubernetes Monitoring', description: 'Monitor Kubernetes workloads' },
+    { key: 'kube_include_all_pods', type: 'boolean', label: 'Include All Pods', description: 'Include all non-succeeded pods in reports' },
+    { key: 'kube_include_all_deployments', type: 'boolean', label: 'Include All Deployments', description: 'Include all deployments, not just problem ones' },
     { key: 'enable_proxmox', type: 'boolean', label: 'Enable Proxmox Mode', description: 'Auto-detect and configure Proxmox API access' },
-    { key: 'log_level', type: 'select', label: 'Log Level', description: 'Agent logging verbosity', options: ['debug', 'info', 'warn', 'error'] },
+    { key: 'proxmox_type', type: 'select', label: 'Proxmox Type', description: 'Force PVE or PBS mode', options: ['auto', 'pve', 'pbs'] },
+    { key: 'disable_ceph', type: 'boolean', label: 'Disable Ceph Monitoring', description: 'Skip local Ceph status polling' },
+    // Timing
     { key: 'interval', type: 'duration', label: 'Reporting Interval', description: 'How often the agent reports metrics (e.g., 30s, 1m)' },
+    // Network
+    { key: 'report_ip', type: 'string', label: 'Report IP Override', description: 'Override the reported IP address', placeholder: '' },
+    // Operations
+    { key: 'disable_auto_update', type: 'boolean', label: 'Disable Auto Updates', description: 'Stop the unified agent from auto-updating' },
+    { key: 'disable_docker_update_checks', type: 'boolean', label: 'Disable Docker Update Checks', description: 'Skip Docker image update detection (avoid registry rate limits)' },
+    { key: 'log_level', type: 'select', label: 'Log Level', description: 'Agent logging verbosity', options: ['debug', 'info', 'warn', 'error'] },
 ];
 
 export const AgentProfilesPanel: Component = () => {
@@ -60,11 +84,13 @@ export const AgentProfilesPanel: Component = () => {
 
     // Modal state
     const [showModal, setShowModal] = createSignal(false);
+    const [showSuggestModal, setShowSuggestModal] = createSignal(false);
     const [editingProfile, setEditingProfile] = createSignal<AgentProfile | null>(null);
     const [saving, setSaving] = createSignal(false);
 
     // Form state
     const [formName, setFormName] = createSignal('');
+    const [formDescription, setFormDescription] = createSignal('');
     const [formSettings, setFormSettings] = createSignal<Record<string, unknown>>({});
 
     // Connected agents from WebSocket state
@@ -98,6 +124,15 @@ export const AgentProfilesPanel: Component = () => {
     const getSettingsCount = (profile: AgentProfile) => {
         return Object.keys(profile.config || {}).length;
     };
+
+    // Get known setting keys for filtering
+    const knownKeys = KNOWN_SETTINGS.map(s => s.key);
+
+    // Get unknown keys in the form settings
+    const unknownKeys = createMemo(() => {
+        const settings = formSettings();
+        return Object.keys(settings).filter(key => !knownKeys.includes(key));
+    });
 
     // Load data
     const loadData = async () => {
@@ -140,7 +175,23 @@ export const AgentProfilesPanel: Component = () => {
     const handleCreate = () => {
         setEditingProfile(null);
         setFormName('');
+        setFormDescription('');
         setFormSettings({});
+        setShowModal(true);
+    };
+
+    // Open suggest modal
+    const handleSuggest = () => {
+        setShowSuggestModal(true);
+    };
+
+    // Handle AI suggestion acceptance
+    const handleSuggestionAccepted = (suggestion: ProfileSuggestion) => {
+        setShowSuggestModal(false);
+        setEditingProfile(null);
+        setFormName(suggestion.name);
+        setFormDescription(suggestion.description || '');
+        setFormSettings(suggestion.config);
         setShowModal(true);
     };
 
@@ -148,6 +199,7 @@ export const AgentProfilesPanel: Component = () => {
     const handleEdit = (profile: AgentProfile) => {
         setEditingProfile(profile);
         setFormName(profile.name);
+        setFormDescription(profile.description || '');
         setFormSettings({ ...profile.config });
         setShowModal(true);
     };
@@ -182,13 +234,14 @@ export const AgentProfilesPanel: Component = () => {
         setSaving(true);
         try {
             const config = formSettings();
+            const description = formDescription().trim() || undefined;
             const existing = editingProfile();
 
             if (existing) {
-                await AgentProfilesAPI.updateProfile(existing.id, name, config);
+                await AgentProfilesAPI.updateProfile(existing.id, name, config, description);
                 notificationStore.success(`Profile "${name}" updated`);
             } else {
-                await AgentProfilesAPI.createProfile(name, config);
+                await AgentProfilesAPI.createProfile(name, config, description);
                 notificationStore.success(`Profile "${name}" created`);
             }
 
@@ -287,14 +340,24 @@ export const AgentProfilesPanel: Component = () => {
                             <p class="text-sm text-gray-600 dark:text-gray-400">Reusable agent configurations</p>
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        onClick={handleCreate}
-                        class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                    >
-                        <Plus class="w-4 h-4" />
-                        New Profile
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handleSuggest}
+                            class="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700"
+                        >
+                            <Sparkles class="w-4 h-4" />
+                            Suggest Profile
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleCreate}
+                            class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                        >
+                            <Plus class="w-4 h-4" />
+                            New Profile
+                        </button>
+                    </div>
                 </div>
 
                 <Show when={loading()}>
@@ -485,6 +548,20 @@ export const AgentProfilesPanel: Component = () => {
                                 />
                             </div>
 
+                            {/* Profile Description */}
+                            <div class="space-y-1">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Description <span class="text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <textarea
+                                    value={formDescription()}
+                                    onInput={(e) => setFormDescription(e.currentTarget.value)}
+                                    placeholder="What is this profile for?"
+                                    rows={2}
+                                    class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800/60 resize-none"
+                                />
+                            </div>
+
                             {/* Settings */}
                             <div class="space-y-3">
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -549,11 +626,66 @@ export const AgentProfilesPanel: Component = () => {
                                                         class="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
                                                     />
                                                 </Show>
+                                                <Show when={setting.type === 'string'}>
+                                                    <input
+                                                        type="text"
+                                                        value={(formSettings()[setting.key] as string) || ''}
+                                                        onInput={(e) => updateSetting(setting.key, e.currentTarget.value || undefined)}
+                                                        placeholder={(setting as StringSetting).placeholder || ''}
+                                                        class="w-40 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                                    />
+                                                </Show>
                                             </div>
                                             <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
                                         </div>
                                     )}
                                 </For>
+
+                                {/* Unknown Keys Section */}
+                                <Show when={unknownKeys().length > 0}>
+                                    <div class="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+                                        <p class="text-xs text-amber-600 dark:text-amber-400 mb-2">
+                                            Additional settings (not in standard list):
+                                        </p>
+                                        <For each={unknownKeys()}>
+                                            {(key) => (
+                                                <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 mb-2">
+                                                    <div class="flex items-center justify-between">
+                                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300 font-mono">
+                                                            {key}
+                                                        </label>
+                                                        <div class="flex items-center gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={String(formSettings()[key] ?? '')}
+                                                                onInput={(e) => {
+                                                                    const val = e.currentTarget.value;
+                                                                    // Try to parse as JSON for complex values
+                                                                    try {
+                                                                        updateSetting(key, JSON.parse(val));
+                                                                    } catch {
+                                                                        updateSetting(key, val || undefined);
+                                                                    }
+                                                                }}
+                                                                class="w-32 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => updateSetting(key, undefined)}
+                                                                class="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                                                title="Remove this setting"
+                                                            >
+                                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </For>
+                                    </div>
+                                </Show>
                             </div>
                         </div>
 
@@ -576,6 +708,14 @@ export const AgentProfilesPanel: Component = () => {
                         </div>
                     </div>
                 </div>
+            </Show>
+
+            {/* Suggest Profile Modal */}
+            <Show when={showSuggestModal()}>
+                <SuggestProfileModal
+                    onClose={() => setShowSuggestModal(false)}
+                    onSuggestionAccepted={handleSuggestionAccepted}
+                />
             </Show>
         </div>
             </Show>

@@ -1,9 +1,9 @@
-import { Component, Show, For, Switch, Match } from 'solid-js';
+import { Component, Show, For, Switch, Match, createMemo } from 'solid-js';
 import { renderMarkdown } from '../aiChatUtils';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolExecutionBlock, PendingToolBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
-import type { ChatMessage, PendingApproval } from './types';
+import type { ChatMessage, PendingApproval, StreamDisplayEvent } from './types';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -11,72 +11,152 @@ interface MessageItemProps {
   onSkip: (toolId: string) => void;
 }
 
+/**
+ * MessageItem - Renders a single message in the chat.
+ * 
+ * User messages: Compact, right-aligned bubble
+ * Assistant messages: Full-width, terminal-like with clear sections
+ */
 export const MessageItem: Component<MessageItemProps> = (props) => {
   const isUser = () => props.message.role === 'user';
+
   const hasStreamEvents = () =>
     props.message.streamEvents && props.message.streamEvents.length > 0;
 
+  // Group stream events for cleaner rendering
+  // Combine consecutive content events, separate thinking and tools
+  const groupedEvents = createMemo(() => {
+    const events = props.message.streamEvents || [];
+    const grouped: StreamDisplayEvent[] = [];
+
+    for (const evt of events) {
+      // Thinking events are kept separate
+      if (evt.type === 'thinking') {
+        grouped.push(evt);
+        continue;
+      }
+
+      // Tool events are kept separate
+      if (evt.type === 'tool') {
+        grouped.push(evt);
+        continue;
+      }
+
+      // Content events can be merged with previous content
+      if (evt.type === 'content' && evt.content) {
+        const lastIdx = grouped.length - 1;
+        if (lastIdx >= 0 && grouped[lastIdx].type === 'content') {
+          grouped[lastIdx] = {
+            ...grouped[lastIdx],
+            content: (grouped[lastIdx].content || '') + evt.content,
+          };
+        } else {
+          grouped.push(evt);
+        }
+      }
+    }
+
+    return grouped;
+  });
+
+  // Check if currently streaming content (no tools pending, still streaming)
+  const isStreamingText = () =>
+    props.message.isStreaming &&
+    (!props.message.pendingTools || props.message.pendingTools.length === 0);
+
   return (
-    <div class={`flex ${isUser() ? 'justify-end' : 'justify-start'}`}>
-      <div
-        class={`max-w-[90%] rounded-2xl overflow-hidden transition-all ${
-          isUser()
-            ? 'bg-gradient-to-br from-purple-600 to-violet-600 text-white shadow-lg'
-            : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-md border border-gray-100 dark:border-gray-700'
-        }`}
-      >
-        <div class="px-4 py-3">
-          {/* User messages */}
-          <Show when={isUser()}>
-            <p class="text-sm whitespace-pre-wrap">{props.message.content}</p>
-          </Show>
+    <div class={`${isUser() ? 'flex justify-end' : ''} mb-4`}>
+      {/* User message - compact bubble */}
+      <Show when={isUser()}>
+        <div class="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-br-md bg-gradient-to-br from-purple-600 to-violet-600 text-white shadow-md">
+          <p class="text-sm whitespace-pre-wrap">{props.message.content}</p>
+        </div>
+      </Show>
 
-          {/* Assistant messages with stream events */}
-          <Show when={!isUser()}>
-            {/* Stream events (chronological order) */}
-            <Show when={hasStreamEvents()}>
-              <div class="space-y-3">
-                <For each={props.message.streamEvents}>
-                  {(evt) => (
-                    <Switch>
-                      <Match when={evt.type === 'thinking' && evt.thinking}>
-                        <ThinkingBlock content={evt.thinking!} />
-                      </Match>
-                      <Match when={evt.type === 'tool' && evt.tool}>
-                        <ToolExecutionBlock tool={evt.tool!} />
-                      </Match>
-                      <Match when={evt.type === 'content' && evt.content}>
-                        <div
-                          class="text-sm prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-purple-600 dark:prose-code:text-purple-400 prose-code:before:content-none prose-code:after:content-none"
-                          innerHTML={renderMarkdown(evt.content!)}
-                        />
-                      </Match>
-                    </Switch>
-                  )}
-                </For>
-              </div>
+      {/* Assistant message - full width, terminal-like */}
+      <Show when={!isUser()}>
+        <div class="w-full">
+          {/* Assistant indicator */}
+          <div class="flex items-center gap-2 mb-2 text-xs text-slate-500 dark:text-slate-400">
+            <div class="w-5 h-5 rounded-md bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center">
+              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082" />
+              </svg>
+            </div>
+            <span class="font-medium">Assistant</span>
+            <Show when={props.message.model && !props.message.isStreaming}>
+              <span class="text-[10px] text-slate-400 dark:text-slate-500">
+                · {props.message.model}
+              </span>
             </Show>
+          </div>
 
-            {/* Pending tools (running) */}
-            <Show when={props.message.pendingTools && props.message.pendingTools.length > 0}>
-              <div class="mt-3 space-y-2">
-                <For each={props.message.pendingTools}>
-                  {(tool) => <PendingToolBlock tool={tool} />}
-                </For>
-              </div>
+          {/* Main content area */}
+          <div class="pl-7">
+            {/* Stream events - chronological display */}
+            <Show when={hasStreamEvents()}>
+              <For each={groupedEvents()}>
+                {(evt) => (
+                  <Switch>
+                    {/* Thinking block - collapsed by default */}
+                    <Match when={evt.type === 'thinking' && evt.thinking}>
+                      <ThinkingBlock
+                        content={evt.thinking!}
+                        isStreaming={props.message.isStreaming}
+                      />
+                    </Match>
+
+                    {/* Pending tool (currently running) - shown in chronological position */}
+                    <Match when={evt.type === 'pending_tool' && evt.pendingTool}>
+                      <PendingToolBlock tool={evt.pendingTool!} />
+                    </Match>
+
+                    {/* Completed tool execution block */}
+                    <Match when={evt.type === 'tool' && evt.tool}>
+                      <ToolExecutionBlock tool={evt.tool!} />
+                    </Match>
+
+                    {/* Content/text block */}
+                    <Match when={evt.type === 'content' && evt.content}>
+                      <div
+                        class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none 
+                               prose-p:leading-relaxed prose-p:my-2
+                               prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs
+                               prose-code:text-purple-600 dark:prose-code:text-purple-400 
+                               prose-code:bg-purple-50 dark:prose-code:bg-purple-900/30 
+                               prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded 
+                               prose-code:before:content-none prose-code:after:content-none
+                               prose-headings:text-slate-900 dark:prose-headings:text-slate-100
+                               prose-strong:text-slate-900 dark:prose-strong:text-slate-100
+                               prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5"
+                        innerHTML={renderMarkdown(evt.content!)}
+                      />
+                    </Match>
+                  </Switch>
+                )}
+              </For>
             </Show>
 
             {/* Fallback: show content if no stream events */}
             <Show when={props.message.content && !hasStreamEvents()}>
               <div
-                class="text-sm prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-purple-600 dark:prose-code:text-purple-400 prose-code:before:content-none prose-code:after:content-none"
+                class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none 
+                       prose-p:leading-relaxed prose-p:my-2
+                       prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs
+                       prose-code:text-purple-600 dark:prose-code:text-purple-400 
+                       prose-code:bg-purple-50 dark:prose-code:bg-purple-900/30 
+                       prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded 
+                       prose-code:before:content-none prose-code:after:content-none
+                       prose-headings:text-slate-900 dark:prose-headings:text-slate-100
+                       prose-strong:text-slate-900 dark:prose-strong:text-slate-100
+                       prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5"
                 innerHTML={renderMarkdown(props.message.content)}
               />
             </Show>
 
             {/* Pending approvals */}
             <Show when={props.message.pendingApprovals && props.message.pendingApprovals.length > 0}>
-              <div class="mt-4 space-y-3">
+              <div class="mt-3 space-y-2">
                 <For each={props.message.pendingApprovals}>
                   {(approval) => (
                     <ApprovalCard
@@ -89,31 +169,22 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               </div>
             </Show>
 
-            {/* Streaming indicator */}
-            <Show when={props.message.isStreaming && !props.message.pendingTools?.length}>
-              <div class="mt-2 flex items-center gap-2 text-purple-500 dark:text-purple-400">
-                <div class="flex gap-1">
-                  <span class="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style="animation-delay: 0ms" />
-                  <span class="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style="animation-delay: 150ms" />
-                  <span class="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style="animation-delay: 300ms" />
-                </div>
+            {/* Streaming text indicator */}
+            <Show when={isStreamingText()}>
+              <span class="inline-block w-2 h-4 ml-0.5 bg-purple-500 dark:bg-purple-400 animate-pulse rounded-sm" />
+            </Show>
+
+            {/* Token count footer */}
+            <Show when={props.message.tokens && !props.message.isStreaming}>
+              <div class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 dark:text-slate-500">
+                {props.message.tokens!.input + props.message.tokens!.output} tokens
+                <span class="mx-1">·</span>
+                {props.message.tokens!.input} in / {props.message.tokens!.output} out
               </div>
             </Show>
-          </Show>
-        </div>
-
-        {/* Message metadata footer */}
-        <Show when={!isUser() && props.message.model && !props.message.isStreaming}>
-          <div class="px-4 py-1.5 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-500">
-            <span>{props.message.model}</span>
-            <Show when={props.message.tokens}>
-              <span>
-                {props.message.tokens!.input + props.message.tokens!.output} tokens
-              </span>
-            </Show>
           </div>
-        </Show>
-      </div>
+        </div>
+      </Show>
     </div>
   );
 };

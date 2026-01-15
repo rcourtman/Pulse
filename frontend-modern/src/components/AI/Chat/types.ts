@@ -22,13 +22,15 @@ export interface PendingApproval {
 }
 
 // Unified event for chronological display
-export type StreamEventType = 'thinking' | 'tool' | 'content';
+export type StreamEventType = 'thinking' | 'tool' | 'content' | 'pending_tool';
 
 export interface StreamDisplayEvent {
   type: StreamEventType;
   thinking?: string;
   tool?: ToolExecution;
+  pendingTool?: PendingTool;
   content?: string;
+  toolId?: string; // Used to match pending_tool with completed tool
 }
 
 export interface ChatMessage {

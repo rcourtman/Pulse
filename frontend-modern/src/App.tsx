@@ -48,7 +48,7 @@ import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
 import { UpdateProgressModal } from './components/UpdateProgressModal';
 import type { UpdateStatus } from './api/updates';
-import { AIChat } from './components/AI/AIChat';
+import { AIChat } from './components/AI/Chat';
 import { AIStatusIndicator } from './components/AI/AIStatusIndicator';
 import { aiChatStore } from './stores/aiChat';
 import { useResourcesAsLegacy } from './hooks/useResources';
@@ -1194,17 +1194,17 @@ function AppLayout(props: {
       breakdown: { warning: number; critical: number } | undefined;
       icon: JSX.Element;
     }> = [
-      {
-        id: 'alerts',
-        label: 'Alerts',
-        route: '/alerts',
-        tooltip: 'Review active alerts and automation rules',
-        badge: null,
-        count: activeAlertCount,
-        breakdown,
-        icon: <BellIcon class="w-4 h-4 shrink-0" />,
-      },
-    ];
+        {
+          id: 'alerts',
+          label: 'Alerts',
+          route: '/alerts',
+          tooltip: 'Review active alerts and automation rules',
+          badge: null,
+          count: activeAlertCount,
+          breakdown,
+          icon: <BellIcon class="w-4 h-4 shrink-0" />,
+        },
+      ];
 
     // Only show settings tab if user has access
     if (hasSettingsAccess) {

@@ -266,10 +266,36 @@ func (c *Client) Prompt(ctx context.Context, req PromptRequest) (*PromptResponse
 		return nil, fmt.Errorf("prompt failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
+	// Parse the OpenCode response format which has info and parts fields
+	var rawResponse struct {
+		Info struct {
+			ID        string `json:"id"`
+			SessionID string `json:"sessionID"`
+			Role      string `json:"role"`
+		} `json:"info"`
+		Parts []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"parts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rawResponse); err != nil {
+		return nil, err
+	}
+
+	// Extract text content from parts
+	var contentParts []string
+	for _, part := range rawResponse.Parts {
+		if part.Type == "text" && part.Text != "" {
+			contentParts = append(contentParts, part.Text)
+		}
+	}
+
 	var result PromptResponse
 	result.SessionID = sessionID
-	if err := json.NewDecoder(resp.Body).Decode(&result.Message); err != nil {
-		return nil, err
+	result.Message = Message{
+		ID:      rawResponse.Info.ID,
+		Role:    rawResponse.Info.Role,
+		Content: strings.Join(contentParts, ""),
 	}
 
 	return &result, nil

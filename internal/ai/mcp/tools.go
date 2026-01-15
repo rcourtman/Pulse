@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,6 +30,22 @@ type CommandPolicy interface {
 type AgentServer interface {
 	GetConnectedAgents() []agentexec.ConnectedAgent
 	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
+}
+
+// AgentProfileManager manages centralized agent profiles and assignments.
+type AgentProfileManager interface {
+	ApplyAgentScope(ctx context.Context, agentID, agentLabel string, settings map[string]interface{}) (profileID, profileName string, created bool, err error)
+	AssignProfile(ctx context.Context, agentID, profileID string) (profileName string, err error)
+	GetAgentScope(ctx context.Context, agentID string) (*AgentScope, error)
+}
+
+// AgentScope summarizes profile scope applied to an agent.
+type AgentScope struct {
+	AgentID        string
+	ProfileID      string
+	ProfileName    string
+	ProfileVersion int
+	Settings       map[string]interface{}
 }
 
 // MetadataUpdater updates resource metadata
@@ -168,6 +186,20 @@ type DiskHealthProvider interface {
 	GetHosts() []models.Host
 }
 
+// ControlLevel represents the AI's permission level for infrastructure control
+type ControlLevel string
+
+const (
+	// ControlLevelReadOnly - AI can only query, no control tools available
+	ControlLevelReadOnly ControlLevel = "read_only"
+	// ControlLevelSuggest - AI suggests commands, user must copy/paste to execute
+	ControlLevelSuggest ControlLevel = "suggest"
+	// ControlLevelControlled - AI can execute with per-command approval
+	ControlLevelControlled ControlLevel = "controlled"
+	// ControlLevelAutonomous - AI executes without approval (requires Pro license)
+	ControlLevelAutonomous ControlLevel = "autonomous"
+)
+
 // PulseToolExecutor implements ToolExecutor for Pulse-specific tools
 type PulseToolExecutor struct {
 	stateProvider   StateProvider
@@ -187,6 +219,12 @@ type PulseToolExecutor struct {
 	backupProvider     BackupProvider
 	storageProvider    StorageProvider
 	diskHealthProvider DiskHealthProvider
+
+	agentProfileManager AgentProfileManager
+
+	// Control settings
+	controlLevel    ControlLevel
+	protectedGuests []string // VMIDs that AI cannot control
 
 	// Current execution context
 	targetType   string
@@ -257,6 +295,21 @@ func (e *PulseToolExecutor) SetDiskHealthProvider(provider DiskHealthProvider) {
 	e.diskHealthProvider = provider
 }
 
+// SetAgentProfileManager sets the manager for centralized agent profiles.
+func (e *PulseToolExecutor) SetAgentProfileManager(manager AgentProfileManager) {
+	e.agentProfileManager = manager
+}
+
+// SetControlLevel sets the AI control permission level
+func (e *PulseToolExecutor) SetControlLevel(level ControlLevel) {
+	e.controlLevel = level
+}
+
+// SetProtectedGuests sets the list of VMIDs that AI cannot control
+func (e *PulseToolExecutor) SetProtectedGuests(vmids []string) {
+	e.protectedGuests = vmids
+}
+
 // SetContext sets the current execution context
 func (e *PulseToolExecutor) SetContext(targetType, targetID string, autonomous bool) {
 	e.targetType = targetType
@@ -266,27 +319,22 @@ func (e *PulseToolExecutor) SetContext(targetType, targetID string, autonomous b
 
 // ListTools returns the list of available tools
 func (e *PulseToolExecutor) ListTools() []Tool {
-	return []Tool{
+	tools := []Tool{
 		{
-			Name:        "pulse_run_command",
-			Description: "Execute a shell command on Pulse-managed infrastructure. By default runs on the current target, set run_on_host=true for host commands.",
+			Name:        "pulse_get_agent_scope",
+			Description: "Get the current unified agent scope (profile assignment and settings).",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
-					"command": {
+					"agent_id": {
 						Type:        "string",
-						Description: "The shell command to execute",
+						Description: "Unified agent ID (preferred if known)",
 					},
-					"run_on_host": {
-						Type:        "boolean",
-						Description: "If true, run on the host instead of inside the container/VM",
-					},
-					"target_host": {
+					"hostname": {
 						Type:        "string",
-						Description: "Optional hostname of the specific host/node to run the command on",
+						Description: "Hostname or display name to resolve the agent ID",
 					},
 				},
-				Required: []string{"command"},
 			},
 		},
 		{
@@ -492,6 +540,108 @@ func (e *PulseToolExecutor) ListTools() []Tool {
 			},
 		},
 	}
+
+	// Add control tools if not in read_only mode
+	if e.controlLevel != ControlLevelReadOnly && e.controlLevel != "" {
+		controlTools := []Tool{
+			{
+				Name:        "pulse_run_command",
+				Description: "Execute a shell command on Pulse-managed infrastructure. By default runs on the current target, set run_on_host=true for host commands.",
+				InputSchema: InputSchema{
+					Type: "object",
+					Properties: map[string]PropertySchema{
+						"command": {
+							Type:        "string",
+							Description: "The shell command to execute",
+						},
+						"run_on_host": {
+							Type:        "boolean",
+							Description: "If true, run on the host instead of inside the container/VM",
+						},
+						"target_host": {
+							Type:        "string",
+							Description: "Optional hostname of the specific host/node to run the command on",
+						},
+					},
+					Required: []string{"command"},
+				},
+			},
+			{
+				Name:        "pulse_control_guest",
+				Description: "Control Proxmox VMs and LXC containers. Actions: start, stop, shutdown (graceful), restart. Requires an agent on the Proxmox host.",
+				InputSchema: InputSchema{
+					Type: "object",
+					Properties: map[string]PropertySchema{
+						"guest_id": {
+							Type:        "string",
+							Description: "The VMID (e.g., '101') or name of the VM/container to control",
+						},
+						"action": {
+							Type:        "string",
+							Description: "Action to perform: start, stop, shutdown, restart",
+							Enum:        []string{"start", "stop", "shutdown", "restart"},
+						},
+						"force": {
+							Type:        "boolean",
+							Description: "If true, force stop without graceful shutdown (use with caution)",
+						},
+					},
+					Required: []string{"guest_id", "action"},
+				},
+			},
+			{
+				Name:        "pulse_control_docker",
+				Description: "Control Docker containers. Actions: start, stop, restart. Requires an agent on the Docker host.",
+				InputSchema: InputSchema{
+					Type: "object",
+					Properties: map[string]PropertySchema{
+						"container": {
+							Type:        "string",
+							Description: "The container name or ID to control",
+						},
+						"host": {
+							Type:        "string",
+							Description: "The Docker host name (required if multiple hosts)",
+						},
+						"action": {
+							Type:        "string",
+							Description: "Action to perform: start, stop, restart",
+							Enum:        []string{"start", "stop", "restart"},
+						},
+					},
+					Required: []string{"container", "action"},
+				},
+			},
+			{
+				Name:        "pulse_set_agent_scope",
+				Description: "Update a unified agent's scope via safe profile settings. Use this instead of running raw commands to enable/disable modules like Docker, Kubernetes, or Proxmox.",
+				InputSchema: InputSchema{
+					Type: "object",
+					Properties: map[string]PropertySchema{
+						"agent_id": {
+							Type:        "string",
+							Description: "Unified agent ID (preferred if known)",
+						},
+						"hostname": {
+							Type:        "string",
+							Description: "Hostname or display name to resolve the agent ID",
+						},
+						"profile_id": {
+							Type:        "string",
+							Description: "Assign an existing profile ID (optional; omit to use settings)",
+						},
+						"settings": {
+							Type:        "object",
+							Description: "Profile settings (e.g., enable_host, enable_docker, enable_kubernetes, enable_proxmox, proxmox_type, docker_runtime, disable_auto_update, disable_docker_update_checks, kube_include_all_pods, kube_include_all_deployments, log_level, interval, report_ip, disable_ceph)",
+						},
+					},
+				},
+			},
+		}
+		tools = append(tools, controlTools...)
+	}
+
+	return tools
 }
 
 // ExecuteTool executes a tool and returns the result
@@ -508,6 +658,8 @@ func (e *PulseToolExecutor) ExecuteTool(ctx context.Context, name string, args m
 		return e.executeFetchURL(ctx, args)
 	case "pulse_get_infrastructure_state":
 		return e.executeGetInfrastructureState(ctx)
+	case "pulse_get_agent_scope":
+		return e.executeGetAgentScope(ctx, args)
 	case "pulse_set_resource_url":
 		return e.executeSetResourceURL(ctx, args)
 	case "pulse_resolve_finding":
@@ -532,6 +684,12 @@ func (e *PulseToolExecutor) ExecuteTool(ctx context.Context, name string, args m
 		return e.executeGetResourceDetails(ctx, args)
 	case "pulse_get_disk_health":
 		return e.executeGetDiskHealth(ctx, args)
+	case "pulse_control_guest":
+		return e.executeControlGuest(ctx, args)
+	case "pulse_control_docker":
+		return e.executeControlDocker(ctx, args)
+	case "pulse_set_agent_scope":
+		return e.executeSetAgentScope(ctx, args)
 	default:
 		return NewErrorResult(fmt.Errorf("unknown tool: %s", name)), nil
 	}
@@ -546,15 +704,28 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		return NewErrorResult(fmt.Errorf("command is required")), nil
 	}
 
+	if e.controlLevel == ControlLevelReadOnly || e.controlLevel == "" {
+		return NewTextResult("Control tools are disabled. Enable them in Settings > AI > Control Level."), nil
+	}
+
 	// Check security policy
+	decision := agentexec.PolicyAllow
 	if e.policy != nil {
-		decision := e.policy.Evaluate(command)
+		decision = e.policy.Evaluate(command)
 		if decision == agentexec.PolicyBlock {
 			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
 		}
-		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-			return NewTextResult(formatApprovalNeeded(command, "Security policy requires approval")), nil
-		}
+	}
+
+	if e.controlLevel == ControlLevelSuggest {
+		return NewTextResult(formatCommandSuggestion(command, runOnHost, targetHost)), nil
+	}
+
+	if e.controlLevel == ControlLevelControlled {
+		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval")), nil
+	}
+	if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
+		return NewTextResult(formatApprovalNeeded(command, "Security policy requires approval")), nil
 	}
 
 	// Execute via agent server
@@ -593,6 +764,297 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 	}
 
 	return NewTextResult(output), nil
+}
+
+func (e *PulseToolExecutor) executeSetAgentScope(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.agentProfileManager == nil {
+		return NewTextResult("Agent scope management is not available."), nil
+	}
+	if e.controlLevel == ControlLevelReadOnly || e.controlLevel == "" {
+		return NewTextResult("Agent scope tools are disabled. Enable them in Settings > AI > Control Level."), nil
+	}
+
+	agentID, _ := args["agent_id"].(string)
+	hostname, _ := args["hostname"].(string)
+	profileID, _ := args["profile_id"].(string)
+
+	agentID = strings.TrimSpace(agentID)
+	hostname = strings.TrimSpace(hostname)
+	profileID = strings.TrimSpace(profileID)
+
+	settings := map[string]interface{}{}
+	if rawSettings, ok := args["settings"].(map[string]interface{}); ok {
+		for key, value := range rawSettings {
+			if value != nil {
+				settings[key] = value
+			}
+		}
+	}
+
+	if agentID == "" && hostname == "" {
+		return NewErrorResult(fmt.Errorf("agent_id or hostname is required")), nil
+	}
+
+	agentLabel := agentID
+	if agentID == "" {
+		if e.stateProvider == nil {
+			return NewErrorResult(fmt.Errorf("state provider not available to resolve hostname")), nil
+		}
+		resolvedID, resolvedLabel := resolveAgentFromHostname(e.stateProvider.GetState(), hostname)
+		if resolvedID == "" {
+			return NewTextResult(fmt.Sprintf("No agent found for hostname '%s'.", hostname)), nil
+		}
+		agentID = resolvedID
+		agentLabel = resolvedLabel
+	} else if e.stateProvider != nil {
+		if resolvedLabel := resolveAgentLabel(e.stateProvider.GetState(), agentID); resolvedLabel != "" {
+			agentLabel = resolvedLabel
+		}
+	}
+
+	if profileID != "" && len(settings) > 0 {
+		return NewErrorResult(fmt.Errorf("use either profile_id or settings, not both")), nil
+	}
+
+	if e.controlLevel == ControlLevelSuggest {
+		if profileID != "" {
+			return NewTextResult(fmt.Sprintf("Suggestion: assign profile %s to agent %s.", profileID, agentLabel)), nil
+		}
+		if len(settings) == 0 {
+			return NewErrorResult(fmt.Errorf("settings are required when profile_id is not provided")), nil
+		}
+		return NewTextResult(fmt.Sprintf("Suggestion: apply agent scope to %s with settings: %s", agentLabel, formatSettingsSummary(settings))), nil
+	}
+
+	if profileID != "" {
+		profileName, err := e.agentProfileManager.AssignProfile(ctx, agentID, profileID)
+		if err != nil {
+			return NewErrorResult(err), nil
+		}
+		return NewTextResult(fmt.Sprintf("Assigned profile '%s' (%s) to agent %s. Restart the agent to apply changes.", profileName, profileID, agentLabel)), nil
+	}
+
+	if len(settings) == 0 {
+		return NewErrorResult(fmt.Errorf("settings are required when profile_id is not provided")), nil
+	}
+
+	profileID, profileName, created, err := e.agentProfileManager.ApplyAgentScope(ctx, agentID, agentLabel, settings)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	action := "Updated"
+	if created {
+		action = "Created"
+	}
+	return NewTextResult(fmt.Sprintf("%s profile '%s' (%s) and assigned to agent %s. Restart the agent to apply changes. Settings: %s", action, profileName, profileID, agentLabel, formatSettingsSummary(settings))), nil
+}
+
+func (e *PulseToolExecutor) executeGetAgentScope(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	agentID, _ := args["agent_id"].(string)
+	hostname, _ := args["hostname"].(string)
+	agentID = strings.TrimSpace(agentID)
+	hostname = strings.TrimSpace(hostname)
+
+	if agentID == "" && hostname == "" {
+		return NewErrorResult(fmt.Errorf("agent_id or hostname is required")), nil
+	}
+
+	agentLabel := agentID
+	if agentID == "" {
+		if e.stateProvider == nil {
+			return NewErrorResult(fmt.Errorf("state provider not available to resolve hostname")), nil
+		}
+		resolvedID, resolvedLabel := resolveAgentFromHostname(e.stateProvider.GetState(), hostname)
+		if resolvedID == "" {
+			return NewTextResult(fmt.Sprintf("No agent found for hostname '%s'.", hostname)), nil
+		}
+		agentID = resolvedID
+		agentLabel = resolvedLabel
+	} else if e.stateProvider != nil {
+		if resolvedLabel := resolveAgentLabel(e.stateProvider.GetState(), agentID); resolvedLabel != "" {
+			agentLabel = resolvedLabel
+		}
+	}
+
+	var scope *AgentScope
+	if e.agentProfileManager != nil {
+		var err error
+		scope, err = e.agentProfileManager.GetAgentScope(ctx, agentID)
+		if err != nil {
+			return NewTextResult(fmt.Sprintf("Failed to load agent scope for %s: %v", agentLabel, err)), nil
+		}
+	}
+
+	var observed []string
+	var commandsEnabled *bool
+	if e.stateProvider != nil {
+		observed, commandsEnabled = detectAgentModules(e.stateProvider.GetState(), agentID)
+	}
+
+	var summary strings.Builder
+	summary.WriteString(fmt.Sprintf("Agent: %s\n", agentLabel))
+	summary.WriteString(fmt.Sprintf("Agent ID: %s\n", agentID))
+
+	if scope == nil {
+		summary.WriteString("Assigned profile: none\n")
+	} else {
+		summary.WriteString(fmt.Sprintf("Assigned profile: %s (%s)\n", scope.ProfileName, scope.ProfileID))
+		if scope.ProfileVersion > 0 {
+			summary.WriteString(fmt.Sprintf("Profile version: %d\n", scope.ProfileVersion))
+		}
+	}
+
+	if len(observed) > 0 {
+		summary.WriteString(fmt.Sprintf("Observed modules: %s\n", strings.Join(observed, ", ")))
+	}
+	if commandsEnabled != nil {
+		if *commandsEnabled {
+			summary.WriteString("AI commands: enabled\n")
+		} else {
+			summary.WriteString("AI commands: disabled\n")
+		}
+	}
+
+	if scope != nil && len(scope.Settings) > 0 {
+		summary.WriteString("Profile settings:\n")
+		for _, line := range formatSettingsLines(scope.Settings) {
+			summary.WriteString(line)
+		}
+	} else {
+		summary.WriteString("Profile settings: none\n")
+	}
+
+	summary.WriteString("Note: profile changes apply after the agent restarts.")
+
+	return NewTextResult(summary.String()), nil
+}
+
+func resolveAgentFromHostname(state models.StateSnapshot, hostname string) (string, string) {
+	needle := strings.TrimSpace(hostname)
+	if needle == "" {
+		return "", ""
+	}
+	for _, host := range state.Hosts {
+		if strings.EqualFold(host.Hostname, needle) || strings.EqualFold(host.DisplayName, needle) || strings.EqualFold(host.ID, needle) {
+			label := firstNonEmpty(host.DisplayName, host.Hostname, host.ID)
+			return host.ID, label
+		}
+	}
+	for _, host := range state.DockerHosts {
+		if strings.EqualFold(host.Hostname, needle) || strings.EqualFold(host.DisplayName, needle) || strings.EqualFold(host.CustomDisplayName, needle) || strings.EqualFold(host.ID, needle) {
+			label := firstNonEmpty(host.CustomDisplayName, host.DisplayName, host.Hostname, host.ID)
+			agentID := strings.TrimSpace(host.AgentID)
+			if agentID == "" {
+				agentID = host.ID
+			}
+			return agentID, label
+		}
+	}
+	return "", ""
+}
+
+func resolveAgentLabel(state models.StateSnapshot, agentID string) string {
+	needle := strings.TrimSpace(agentID)
+	if needle == "" {
+		return ""
+	}
+	for _, host := range state.Hosts {
+		if strings.EqualFold(host.ID, needle) {
+			return firstNonEmpty(host.DisplayName, host.Hostname, host.ID)
+		}
+	}
+	for _, host := range state.DockerHosts {
+		if strings.EqualFold(host.AgentID, needle) || strings.EqualFold(host.ID, needle) {
+			return firstNonEmpty(host.CustomDisplayName, host.DisplayName, host.Hostname, host.ID)
+		}
+	}
+	return ""
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func formatSettingsSummary(settings map[string]interface{}) string {
+	if len(settings) == 0 {
+		return "none"
+	}
+	keys := make([]string, 0, len(settings))
+	for key := range settings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%v", key, settings[key]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatSettingsLines(settings map[string]interface{}) []string {
+	if len(settings) == 0 {
+		return []string{"  - none\n"}
+	}
+	keys := make([]string, 0, len(settings))
+	for key := range settings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	lines := make([]string, 0, len(keys))
+	for _, key := range keys {
+		lines = append(lines, fmt.Sprintf("  - %s: %v\n", key, settings[key]))
+	}
+	return lines
+}
+
+func detectAgentModules(state models.StateSnapshot, agentID string) ([]string, *bool) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, nil
+	}
+
+	var modules []string
+	var commandsEnabled *bool
+
+	for _, host := range state.Hosts {
+		if strings.EqualFold(host.ID, agentID) {
+			modules = append(modules, "host")
+			val := host.CommandsEnabled
+			commandsEnabled = &val
+			if host.LinkedNodeID != "" {
+				modules = append(modules, "proxmox")
+			}
+			break
+		}
+	}
+
+	for _, dockerHost := range state.DockerHosts {
+		if strings.EqualFold(dockerHost.AgentID, agentID) || strings.EqualFold(dockerHost.ID, agentID) {
+			modules = append(modules, "docker")
+			break
+		}
+	}
+
+	for _, cluster := range state.KubernetesClusters {
+		if strings.EqualFold(cluster.AgentID, agentID) {
+			modules = append(modules, "kubernetes")
+			break
+		}
+	}
+
+	if len(modules) == 0 {
+		return nil, commandsEnabled
+	}
+
+	sort.Strings(modules)
+	return modules, commandsEnabled
 }
 
 func (e *PulseToolExecutor) executeFetchURL(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -772,6 +1234,17 @@ func formatPolicyBlocked(command, reason string) string {
 	}
 	b, _ := json.Marshal(payload)
 	return "POLICY_BLOCKED: " + string(b)
+}
+
+func formatCommandSuggestion(command string, runOnHost bool, targetHost string) string {
+	target := "current target"
+	if runOnHost {
+		target = "host"
+	}
+	if strings.TrimSpace(targetHost) != "" {
+		target = fmt.Sprintf("host %s", targetHost)
+	}
+	return fmt.Sprintf("Suggested command for %s:\n%s", target, command)
 }
 
 // Patrol context tool implementations
@@ -1422,4 +1895,384 @@ func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string
 	}
 
 	return NewTextResult(result.String()), nil
+}
+
+// Control tool implementations
+
+// GuestInfo represents resolved guest information
+type GuestInfo struct {
+	VMID     int
+	Name     string
+	Node     string
+	Type     string // "vm" or "lxc"
+	Status   string
+	Instance string
+}
+
+func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	guestID, _ := args["guest_id"].(string)
+	action, _ := args["action"].(string)
+	force, _ := args["force"].(bool)
+
+	if guestID == "" {
+		return NewErrorResult(fmt.Errorf("guest_id is required")), nil
+	}
+	if action == "" {
+		return NewErrorResult(fmt.Errorf("action is required")), nil
+	}
+
+	// Validate action
+	validActions := map[string]bool{"start": true, "stop": true, "shutdown": true, "restart": true}
+	if !validActions[action] {
+		return NewErrorResult(fmt.Errorf("invalid action: %s. Use start, stop, shutdown, or restart", action)), nil
+	}
+
+	// Check control level
+	if e.controlLevel == ControlLevelReadOnly || e.controlLevel == "" {
+		return NewTextResult("Control tools are disabled. Enable them in Settings > AI > Control Level."), nil
+	}
+
+	// Resolve guest to find VMID, node, and type
+	guest, err := e.resolveGuest(guestID)
+	if err != nil {
+		return NewTextResult(fmt.Sprintf("Could not find guest '%s': %v", guestID, err)), nil
+	}
+
+	// Check if guest is protected
+	vmidStr := fmt.Sprintf("%d", guest.VMID)
+	for _, protected := range e.protectedGuests {
+		if protected == vmidStr || protected == guest.Name {
+			return NewTextResult(fmt.Sprintf("Guest %s (VMID %d) is protected and cannot be controlled by AI.", guest.Name, guest.VMID)), nil
+		}
+	}
+
+	// Build the command based on guest type and action
+	var command string
+	cmdTool := "pct" // LXC containers
+	if guest.Type == "vm" {
+		cmdTool = "qm"
+	}
+
+	switch action {
+	case "start":
+		command = fmt.Sprintf("%s start %d", cmdTool, guest.VMID)
+	case "stop":
+		command = fmt.Sprintf("%s stop %d", cmdTool, guest.VMID)
+	case "shutdown":
+		command = fmt.Sprintf("%s shutdown %d", cmdTool, guest.VMID)
+	case "restart":
+		// Restart is shutdown + start, but we'll use reboot for simplicity
+		command = fmt.Sprintf("%s reboot %d", cmdTool, guest.VMID)
+	}
+
+	// Add force flag if requested (only for stop)
+	if force && action == "stop" {
+		command = fmt.Sprintf("%s stop %d --skiplock", cmdTool, guest.VMID)
+	}
+
+	// Check security policy
+	if e.policy != nil {
+		decision := e.policy.Evaluate(command)
+		if decision == agentexec.PolicyBlock {
+			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
+		}
+		// For control level "controlled", always require approval
+		if e.controlLevel == ControlLevelControlled || (decision == agentexec.PolicyRequireApproval && !e.isAutonomous) {
+			return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command)), nil
+		}
+	}
+
+	// For "suggest" mode, just return the command suggestion
+	if e.controlLevel == ControlLevelSuggest {
+		return NewTextResult(formatControlSuggestion(guest.Name, guest.VMID, action, command, guest.Node)), nil
+	}
+
+	// Execute the command via agent
+	if e.agentServer == nil {
+		return NewErrorResult(fmt.Errorf("no agent server available")), nil
+	}
+
+	// Find agent for the node that owns this guest
+	agentID := e.findAgentForNode(guest.Node)
+	if agentID == "" {
+		return NewTextResult(fmt.Sprintf("No agent available on node '%s'. Install Pulse Unified Agent on the Proxmox host to enable control.", guest.Node)), nil
+	}
+
+	// Execute command
+	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+		Command:    command,
+		TargetType: "host",
+		TargetID:   "",
+	})
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	// Format result
+	output := result.Stdout
+	if result.Stderr != "" {
+		output += "\n" + result.Stderr
+	}
+
+	if result.ExitCode == 0 {
+		return NewTextResult(fmt.Sprintf("Successfully executed '%s' on %s (VMID %d).\n%s", action, guest.Name, guest.VMID, output)), nil
+	}
+
+	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+}
+
+func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	containerName, _ := args["container"].(string)
+	hostName, _ := args["host"].(string)
+	action, _ := args["action"].(string)
+
+	if containerName == "" {
+		return NewErrorResult(fmt.Errorf("container name is required")), nil
+	}
+	if action == "" {
+		return NewErrorResult(fmt.Errorf("action is required")), nil
+	}
+
+	// Validate action
+	validActions := map[string]bool{"start": true, "stop": true, "restart": true}
+	if !validActions[action] {
+		return NewErrorResult(fmt.Errorf("invalid action: %s. Use start, stop, or restart", action)), nil
+	}
+
+	// Check control level
+	if e.controlLevel == ControlLevelReadOnly || e.controlLevel == "" {
+		return NewTextResult("Control tools are disabled. Enable them in Settings > AI > Control Level."), nil
+	}
+
+	// Find the Docker container and its host
+	container, dockerHost, err := e.resolveDockerContainer(containerName, hostName)
+	if err != nil {
+		return NewTextResult(fmt.Sprintf("Could not find Docker container '%s': %v", containerName, err)), nil
+	}
+
+	// Build the command
+	command := fmt.Sprintf("docker %s %s", action, container.Name)
+
+	// Check security policy
+	if e.policy != nil {
+		decision := e.policy.Evaluate(command)
+		if decision == agentexec.PolicyBlock {
+			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
+		}
+		if e.controlLevel == ControlLevelControlled || (decision == agentexec.PolicyRequireApproval && !e.isAutonomous) {
+			return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, action, command)), nil
+		}
+	}
+
+	// For "suggest" mode, just return the command suggestion
+	if e.controlLevel == ControlLevelSuggest {
+		return NewTextResult(formatDockerSuggestion(container.Name, dockerHost.Hostname, action, command)), nil
+	}
+
+	// Execute the command via agent
+	if e.agentServer == nil {
+		return NewErrorResult(fmt.Errorf("no agent server available")), nil
+	}
+
+	// Find agent for this Docker host
+	agentID := e.findAgentForDockerHost(dockerHost)
+	if agentID == "" {
+		return NewTextResult(fmt.Sprintf("No agent available on Docker host '%s'. Install Pulse Unified Agent on the host to enable control.", dockerHost.Hostname)), nil
+	}
+
+	// Execute command
+	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+		Command:    command,
+		TargetType: "host",
+		TargetID:   "",
+	})
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	// Format result
+	output := result.Stdout
+	if result.Stderr != "" {
+		output += "\n" + result.Stderr
+	}
+
+	if result.ExitCode == 0 {
+		return NewTextResult(fmt.Sprintf("Successfully executed 'docker %s' on container '%s' (host: %s).\n%s", action, container.Name, dockerHost.Hostname, output)), nil
+	}
+
+	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+}
+
+// resolveGuest finds a guest (VM or container) by VMID or name
+func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
+	if e.stateProvider == nil {
+		return nil, fmt.Errorf("state provider not available")
+	}
+
+	state := e.stateProvider.GetState()
+
+	// Try to parse as VMID
+	vmid, err := strconv.Atoi(guestID)
+
+	// Search VMs
+	for _, vm := range state.VMs {
+		if (err == nil && vm.VMID == vmid) || vm.Name == guestID || vm.ID == guestID {
+			return &GuestInfo{
+				VMID:     vm.VMID,
+				Name:     vm.Name,
+				Node:     vm.Node,
+				Type:     "vm",
+				Status:   vm.Status,
+				Instance: vm.Instance,
+			}, nil
+		}
+	}
+
+	// Search containers
+	for _, ct := range state.Containers {
+		if (err == nil && ct.VMID == vmid) || ct.Name == guestID || ct.ID == guestID {
+			return &GuestInfo{
+				VMID:     ct.VMID,
+				Name:     ct.Name,
+				Node:     ct.Node,
+				Type:     "lxc",
+				Status:   ct.Status,
+				Instance: ct.Instance,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no VM or container found with ID or name '%s'", guestID)
+}
+
+// resolveDockerContainer finds a Docker container by name or ID
+func (e *PulseToolExecutor) resolveDockerContainer(containerName, hostName string) (*models.DockerContainer, *models.DockerHost, error) {
+	if e.stateProvider == nil {
+		return nil, nil, fmt.Errorf("state provider not available")
+	}
+
+	state := e.stateProvider.GetState()
+
+	for _, host := range state.DockerHosts {
+		// If host name specified, only search that host
+		if hostName != "" && host.Hostname != hostName && host.DisplayName != hostName {
+			continue
+		}
+
+		for i, container := range host.Containers {
+			if container.Name == containerName ||
+				container.ID == containerName ||
+				strings.HasPrefix(container.ID, containerName) {
+				return &host.Containers[i], &host, nil
+			}
+		}
+	}
+
+	if hostName != "" {
+		return nil, nil, fmt.Errorf("container '%s' not found on host '%s'", containerName, hostName)
+	}
+	return nil, nil, fmt.Errorf("container '%s' not found on any Docker host", containerName)
+}
+
+// findAgentForNode finds an agent connected to a specific Proxmox node
+func (e *PulseToolExecutor) findAgentForNode(nodeName string) string {
+	if e.agentServer == nil {
+		return ""
+	}
+
+	agents := e.agentServer.GetConnectedAgents()
+	for _, agent := range agents {
+		// Check if agent hostname matches node name (common setup)
+		if agent.Hostname == nodeName {
+			return agent.AgentID
+		}
+		// Also check if agent has a linked node
+		// Note: This requires the Host model to have LinkedNodeID populated
+	}
+
+	// If no exact match, check hosts for linked agents
+	if e.stateProvider != nil {
+		state := e.stateProvider.GetState()
+		for _, host := range state.Hosts {
+			if host.LinkedNodeID != "" {
+				// Check if this host's linked node matches
+				for _, node := range state.Nodes {
+					if node.ID == host.LinkedNodeID && node.Name == nodeName {
+						// Find agent for this host
+						for _, agent := range agents {
+							if agent.Hostname == host.Hostname || agent.AgentID == host.ID {
+								return agent.AgentID
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// findAgentForDockerHost finds an agent connected to a Docker host
+func (e *PulseToolExecutor) findAgentForDockerHost(dockerHost *models.DockerHost) string {
+	if e.agentServer == nil {
+		return ""
+	}
+
+	agents := e.agentServer.GetConnectedAgents()
+	for _, agent := range agents {
+		if agent.Hostname == dockerHost.Hostname {
+			return agent.AgentID
+		}
+	}
+
+	return ""
+}
+
+// formatControlApprovalNeeded formats a response for guest control needing approval
+func formatControlApprovalNeeded(name string, vmid int, action, command string) string {
+	payload := map[string]interface{}{
+		"type":           "control_approval_required",
+		"guest_name":     name,
+		"guest_vmid":     vmid,
+		"action":         action,
+		"command":        command,
+		"how_to_approve": "This action requires approval. Ask the user to confirm they want to proceed.",
+		"do_not_retry":   true,
+	}
+	b, _ := json.Marshal(payload)
+	return "APPROVAL_REQUIRED: " + string(b)
+}
+
+// formatDockerApprovalNeeded formats a response for Docker control needing approval
+func formatDockerApprovalNeeded(name, host, action, command string) string {
+	payload := map[string]interface{}{
+		"type":           "control_approval_required",
+		"container_name": name,
+		"docker_host":    host,
+		"action":         action,
+		"command":        command,
+		"how_to_approve": "This action requires approval. Ask the user to confirm they want to proceed.",
+		"do_not_retry":   true,
+	}
+	b, _ := json.Marshal(payload)
+	return "APPROVAL_REQUIRED: " + string(b)
+}
+
+// formatControlSuggestion formats a command suggestion for "suggest" mode
+func formatControlSuggestion(name string, vmid int, action, command, node string) string {
+	return fmt.Sprintf(`To %s %s (VMID %d), run this command on node %s:
+
+%s
+
+Copy and paste this command to execute it manually.`, action, name, vmid, node, command)
+}
+
+// formatDockerSuggestion formats a Docker command suggestion for "suggest" mode
+func formatDockerSuggestion(name, host, action, command string) string {
+	return fmt.Sprintf(`To %s container '%s' on host %s, run:
+
+%s
+
+Copy and paste this command to execute it manually.`, action, name, host, command)
 }

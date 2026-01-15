@@ -6,7 +6,9 @@ import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 export interface AgentProfile {
     id: string;
     name: string;
+    description?: string;
     config: Record<string, unknown>;
+    version?: number;
     created_at: string;
     updated_at: string;
 }
@@ -18,6 +20,23 @@ export interface AgentProfileAssignment {
     agent_id: string;
     profile_id: string;
     updated_at: string;
+}
+
+/**
+ * Request for AI-assisted profile suggestion.
+ */
+export interface ProfileSuggestionRequest {
+    prompt: string;
+}
+
+/**
+ * AI-generated profile suggestion.
+ */
+export interface ProfileSuggestion {
+    name: string;
+    description: string;
+    config: Record<string, unknown>;
+    rationale: string[];
 }
 
 /**
@@ -60,11 +79,11 @@ export class AgentProfilesAPI {
     /**
      * Create a new profile.
      */
-    static async createProfile(name: string, config: Record<string, unknown>): Promise<AgentProfile> {
+    static async createProfile(name: string, config: Record<string, unknown>, description?: string): Promise<AgentProfile> {
         const response = await apiFetch(this.baseUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, config }),
+            body: JSON.stringify({ name, description, config }),
         });
 
         if (!response.ok) {
@@ -78,11 +97,11 @@ export class AgentProfilesAPI {
     /**
      * Update an existing profile.
      */
-    static async updateProfile(id: string, name: string, config: Record<string, unknown>): Promise<AgentProfile> {
+    static async updateProfile(id: string, name: string, config: Record<string, unknown>, description?: string): Promise<AgentProfile> {
         const response = await apiFetch(`${this.baseUrl}/${encodeURIComponent(id)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, name, config }),
+            body: JSON.stringify({ id, name, description, config }),
         });
 
         if (!response.ok) {
@@ -150,5 +169,27 @@ export class AgentProfilesAPI {
             const text = await response.text();
             throw new Error(text || `Failed to unassign profile: ${response.status}`);
         }
+    }
+
+    /**
+     * Get AI-assisted profile suggestion.
+     * Requires AI to be enabled and running.
+     */
+    static async suggestProfile(request: ProfileSuggestionRequest): Promise<ProfileSuggestion> {
+        const response = await apiFetch(`${this.baseUrl}/suggestions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            if (response.status === 503) {
+                throw new Error('AI service is not available. Please check AI settings.');
+            }
+            throw new Error(text || `Failed to get suggestion: ${response.status}`);
+        }
+
+        return response.json();
     }
 }

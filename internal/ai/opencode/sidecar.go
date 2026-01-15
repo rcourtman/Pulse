@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -95,42 +96,9 @@ func (s *Sidecar) Start(ctx context.Context) error {
 		}
 	}
 
-	// Create OpenCode config with MCP server connection and model
-	if s.dataDir != "" {
-		configPath := s.dataDir + "/opencode.json"
-
-		// Build config with optional model
-		modelLine := ""
-		if s.model != "" {
-			modelLine = fmt.Sprintf(`  "model": "%s",
-`, s.model)
-		}
-
-		mcpConfig := ""
-		if s.mcpURL != "" {
-			mcpConfig = fmt.Sprintf(`  "mcp": {
-    "pulse": {
-      "type": "remote",
-      "url": "%s",
-      "enabled": true
-    }
-  }`, s.mcpURL)
-		}
-
-		// Note: API keys are passed via environment variables (not in config file)
-		// OpenCode reads them from ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
-		providerConfig := ""
-
-		config := fmt.Sprintf(`{
-  "$schema": "https://opencode.ai/config.json",
-%s%s%s
-}`, modelLine, providerConfig, mcpConfig)
-
-		if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
-			log.Warn().Err(err).Msg("Failed to write OpenCode config")
-		} else {
-			log.Info().Str("config", configPath).Str("model", s.model).Str("mcpURL", s.mcpURL).Msg("Created OpenCode config")
-		}
+	// Write OpenCode config with MCP server connection, model, and system instructions
+	if err := s.writeConfig(); err != nil {
+		log.Warn().Err(err).Msg("Failed to write OpenCode config")
 	}
 
 	// Create a cancellable context for the process
@@ -138,11 +106,14 @@ func (s *Sidecar) Start(ctx context.Context) error {
 	s.cancelCtx = cancel
 
 	// Build command - using npx to run opencode
+	// Using globally installed binary to avoid npx cache issues
+	// Note: Temporarily using 0.0.0.0 to test direct access
 	s.cmd = exec.CommandContext(processCtx,
-		"npx", "-y", "opencode-ai@latest",
+		"opencode",
 		"serve",
 		"--port", fmt.Sprintf("%d", s.port),
-		"--hostname", "127.0.0.1",
+		"--hostname", "0.0.0.0",
+		"--print-logs", // Enable logging output for debugging
 	)
 
 	// Set working directory
@@ -154,20 +125,32 @@ func (s *Sidecar) Start(ctx context.Context) error {
 	env := append(os.Environ(),
 		fmt.Sprintf("OPENCODE_PORT=%d", s.port),
 	)
+
+	// Pass model via environment variable (more reliable than config file)
+	if s.model != "" {
+		env = append(env, fmt.Sprintf("OPENCODE_MODEL=%s", s.model))
+	}
+
+	var configuredKeys []string
 	if s.anthropicAPIKey != "" {
 		env = append(env, fmt.Sprintf("ANTHROPIC_API_KEY=%s", s.anthropicAPIKey))
+		configuredKeys = append(configuredKeys, "anthropic")
 	}
 	if s.openAIAPIKey != "" {
 		env = append(env, fmt.Sprintf("OPENAI_API_KEY=%s", s.openAIAPIKey))
+		configuredKeys = append(configuredKeys, "openai")
 	}
 	if s.deepSeekAPIKey != "" {
 		env = append(env, fmt.Sprintf("DEEPSEEK_API_KEY=%s", s.deepSeekAPIKey))
+		configuredKeys = append(configuredKeys, "deepseek")
 	}
 	if s.geminiAPIKey != "" {
 		env = append(env, fmt.Sprintf("GEMINI_API_KEY=%s", s.geminiAPIKey))
 		// OpenCode also accepts GOOGLE_GENERATIVE_AI_API_KEY - set both to ensure compatibility
 		env = append(env, fmt.Sprintf("GOOGLE_GENERATIVE_AI_API_KEY=%s", s.geminiAPIKey))
+		configuredKeys = append(configuredKeys, "gemini")
 	}
+	log.Info().Strs("api_keys", configuredKeys).Str("model", s.model).Int("port", s.port).Msg("Starting OpenCode sidecar")
 	s.cmd.Env = env
 
 	// Capture output for debugging
@@ -181,6 +164,17 @@ func (s *Sidecar) Start(ctx context.Context) error {
 	}
 
 	s.started = true
+	log.Info().Int("pid", s.cmd.Process.Pid).Int("port", s.port).Msg("OpenCode process started")
+
+	// Monitor process exit in background
+	go func() {
+		err := s.cmd.Wait()
+		if err != nil {
+			log.Error().Err(err).Int("pid", s.cmd.Process.Pid).Msg("OpenCode process exited with error")
+		} else {
+			log.Info().Int("pid", s.cmd.Process.Pid).Msg("OpenCode process exited normally")
+		}
+	}()
 
 	// Release lock before waitForReady (which also needs the lock)
 	s.mu.Unlock()
@@ -189,7 +183,7 @@ func (s *Sidecar) Start(ctx context.Context) error {
 	go s.healthLoop(ctx)
 
 	// Wait for server to be ready
-	if err := s.waitForReady(ctx, 30*time.Second); err != nil {
+	if err := s.waitForReady(ctx, 120*time.Second); err != nil {
 		log.Error().Err(err).Msg("waitForReady failed")
 		s.Stop()
 		return fmt.Errorf("opencode failed to become ready: %w", err)
@@ -257,27 +251,47 @@ func (s *Sidecar) writeConfig() error {
 	configPath := s.dataDir + "/opencode.json"
 
 	// Build config with optional model
-	modelLine := ""
+	var configParts []string
+	configParts = append(configParts, `  "$schema": "https://opencode.ai/config.json"`)
+
+	// Inject System Instructions
+	instructions := `  "instructions": [
+    "You are Pulse's AI assistant for infrastructure monitoring and management.",
+    "You have access to pulse_* MCP tools. ALWAYS use them for infrastructure questions:",
+    "- pulse_get_infrastructure_state: Get all VMs, containers, hosts",
+    "- pulse_get_active_alerts: Get current alerts and warnings",
+    "- pulse_get_metrics_history: Get CPU/memory/disk history for resources",
+    "- pulse_get_resource_details: Get details for a specific VM/container",
+    "- pulse_get_baselines: Get learned normal behavior",
+    "- pulse_get_patterns: Get detected patterns and predictions",
+    "- pulse_get_disk_health: Get SMART data and disk status",
+    "- pulse_get_storage: Get storage pool information",
+    "- pulse_get_agent_scope: Inspect agent scope and profile settings",
+    "- pulse_set_agent_scope: Safely update unified agent scope via profiles",
+    "- pulse_run_command: Execute commands on managed hosts (only when control level allows)",
+    "When asked about infrastructure, VMs, containers, alerts, metrics, or system status, ALWAYS use pulse_* tools.",
+    "Use pulse_set_agent_scope for agent module changes instead of running shell commands.",
+    "Do NOT use webfetch for infrastructure questions - use the MCP tools.",
+    "Be concise and direct. Focus on actionable insights."
+  ]`
+	configParts = append(configParts, instructions)
+
 	if s.model != "" {
-		modelLine = fmt.Sprintf(`  "model": "%s",
-`, s.model)
+		configParts = append(configParts, fmt.Sprintf(`  "model": "%s"`, s.model))
 	}
 
-	mcpConfig := ""
 	if s.mcpURL != "" {
-		mcpConfig = fmt.Sprintf(`  "mcp": {
+		mcpConfig := fmt.Sprintf(`  "mcp": {
     "pulse": {
       "type": "remote",
       "url": "%s",
       "enabled": true
     }
   }`, s.mcpURL)
+		configParts = append(configParts, mcpConfig)
 	}
 
-	config := fmt.Sprintf(`{
-  "$schema": "https://opencode.ai/config.json",
-%s%s
-}`, modelLine, mcpConfig)
+	config := fmt.Sprintf("{\n%s\n}", strings.Join(configParts, ",\n"))
 
 	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
 		return fmt.Errorf("failed to write OpenCode config: %w", err)
@@ -350,7 +364,8 @@ func (s *Sidecar) waitForReady(ctx context.Context, timeout time.Duration) error
 // checkHealth performs a health check against the OpenCode server
 func (s *Sidecar) checkHealth() bool {
 	client := newHTTPClient(5 * time.Second)
-	resp, err := client.Get(s.baseURL + "/global/health")
+	// Use /config endpoint for health check - it returns JSON and indicates the server is ready
+	resp, err := client.Get(s.baseURL + "/config")
 	if err != nil {
 		return false
 	}
@@ -411,7 +426,8 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 	case "error":
 		log.Error().Str("source", w.prefix).Msg(msg)
 	default:
-		log.Debug().Str("source", w.prefix).Msg(msg)
+		// Use Info level to ensure OpenCode output is visible in logs
+		log.Info().Str("source", w.prefix).Msg(msg)
 	}
 	return len(p), nil
 }

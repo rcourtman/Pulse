@@ -14,23 +14,41 @@ interface ChatMessagesProps {
   };
 }
 
+/**
+ * ChatMessages - Renders the scrollable message list.
+ * 
+ * Features:
+ * - Auto-scroll to bottom on new messages
+ * - Empty state with suggestions
+ * - Smooth scrolling behavior
+ */
 export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   let messagesEndRef: HTMLDivElement | undefined;
+  let containerRef: HTMLDivElement | undefined;
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom on new messages
   createEffect(() => {
-    if (props.messages.length > 0 && messagesEndRef) {
-      messagesEndRef.scrollIntoView({ behavior: 'smooth' });
+    if (props.messages.length > 0 && messagesEndRef && containerRef) {
+      // Only auto-scroll if user is near the bottom
+      const { scrollTop, scrollHeight, clientHeight } = containerRef;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+
+      if (isNearBottom) {
+        messagesEndRef.scrollIntoView({ behavior: 'smooth' });
+      }
     }
   });
 
   return (
-    <div class="flex-1 overflow-y-auto p-4 space-y-4">
+    <div
+      ref={containerRef}
+      class="flex-1 overflow-y-auto px-4 py-3 bg-white dark:bg-slate-900"
+    >
       {/* Empty state */}
       <Show when={props.messages.length === 0 && props.emptyState}>
         <div class="flex flex-col items-center justify-center h-full text-center py-12">
           {/* AI Icon */}
-          <div class="w-16 h-16 mb-4 rounded-2xl bg-gradient-to-br from-purple-100 to-violet-100 dark:from-purple-900/30 dark:to-violet-900/30 flex items-center justify-center">
+          <div class="w-16 h-16 mb-4 rounded-2xl bg-gradient-to-br from-purple-100 to-violet-100 dark:from-purple-900/30 dark:to-violet-900/30 flex items-center justify-center shadow-lg shadow-purple-500/10">
             <svg
               class="w-8 h-8 text-purple-500 dark:text-purple-400"
               fill="none"
@@ -46,10 +64,10 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
             </svg>
           </div>
 
-          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
+          <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">
             {props.emptyState!.title}
           </h3>
-          <p class="text-sm text-gray-500 dark:text-gray-400 max-w-xs mb-6">
+          <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs mb-6">
             {props.emptyState!.subtitle}
           </p>
 
@@ -61,9 +79,10 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                   <button
                     type="button"
                     onClick={() => props.emptyState!.onSuggestionClick?.(suggestion)}
-                    class="w-full text-left px-4 py-2.5 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-sm hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors border border-purple-100 dark:border-purple-800"
+                    class="w-full text-left px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 hover:border-purple-300 dark:hover:border-purple-700"
                   >
-                    "{suggestion}"
+                    <span class="text-purple-500 dark:text-purple-400 mr-2">→</span>
+                    {suggestion}
                   </button>
                 )}
               </For>
@@ -84,7 +103,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
       </For>
 
       {/* Scroll anchor */}
-      <div ref={messagesEndRef} />
+      <div ref={messagesEndRef} class="h-1" />
     </div>
   );
 };

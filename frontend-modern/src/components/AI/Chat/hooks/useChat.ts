@@ -49,6 +49,7 @@ export function useChat(options: UseChatOptions = {}) {
   // Helper to add stream event for chronological display
   const addStreamEvent = (msg: ChatMessage, event: StreamDisplayEvent): ChatMessage => {
     const events = msg.streamEvents || [];
+
     // For content events, merge consecutive content into one
     if (event.type === 'content' && events.length > 0) {
       const last = events[events.length - 1];
@@ -62,6 +63,21 @@ export function useChat(options: UseChatOptions = {}) {
         };
       }
     }
+
+    // For thinking events, merge consecutive thinking into one
+    if (event.type === 'thinking' && events.length > 0) {
+      const last = events[events.length - 1];
+      if (last.type === 'thinking') {
+        return {
+          ...msg,
+          streamEvents: [
+            ...events.slice(0, -1),
+            { ...last, thinking: (last.thinking || '') + (event.thinking || '') },
+          ],
+        };
+      }
+    }
+
     return {
       ...msg,
       streamEvents: [...events, event],
@@ -103,18 +119,31 @@ export function useChat(options: UseChatOptions = {}) {
 
           case 'tool_start': {
             const data = event.data as { name: string; input: string };
+            const toolId = generateId(); // Unique ID to track this tool
+            const pendingTool = { name: data.name, input: data.input };
+
+            // Add to streamEvents in chronological position
+            const updated = addStreamEvent(msg, {
+              type: 'pending_tool',
+              pendingTool,
+              toolId,
+            });
+
             return {
-              ...msg,
-              pendingTools: [...(msg.pendingTools || []), { name: data.name, input: data.input }],
+              ...updated,
+              pendingTools: [...(msg.pendingTools || []), { ...pendingTool, id: toolId } as any],
             };
           }
 
           case 'tool_end': {
             const data = event.data as { name: string; input: string; output: string; success: boolean };
             const pendingTools = msg.pendingTools || [];
-            const matchingIndex = pendingTools.findIndex((t) => t.name === data.name);
-            const updatedPending = matchingIndex >= 0
-              ? [...pendingTools.slice(0, matchingIndex), ...pendingTools.slice(matchingIndex + 1)]
+            const events = msg.streamEvents || [];
+
+            // Find the matching pending tool (by name, since we may not have ID in the event)
+            const matchingPendingIndex = pendingTools.findIndex((t) => t.name === data.name);
+            const updatedPending = matchingPendingIndex >= 0
+              ? [...pendingTools.slice(0, matchingPendingIndex), ...pendingTools.slice(matchingPendingIndex + 1)]
               : pendingTools;
 
             const newToolCall: ToolExecution = {
@@ -124,10 +153,21 @@ export function useChat(options: UseChatOptions = {}) {
               success: data.success,
             };
 
-            // Add tool to streamEvents for chronological display
-            const updated = addStreamEvent(msg, { type: 'tool', tool: newToolCall });
+            // Find the pending_tool event in streamEvents and replace it with completed tool
+            // Search from the end to find the most recent matching pending tool
+            let updatedEvents = [...events];
+            for (let i = events.length - 1; i >= 0; i--) {
+              const evt = events[i];
+              if (evt.type === 'pending_tool' && evt.pendingTool?.name === data.name) {
+                // Replace pending with completed
+                updatedEvents[i] = { type: 'tool', tool: newToolCall };
+                break;
+              }
+            }
+
             return {
-              ...updated,
+              ...msg,
+              streamEvents: updatedEvents,
               pendingTools: updatedPending,
               toolCalls: [...(msg.toolCalls || []), newToolCall],
             };

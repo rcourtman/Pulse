@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, onMount, For } from 'solid-js';
+import { Component, Show, createSignal, onMount, For, createMemo } from 'solid-js';
 import { OpenCodeAPI, type ChatSession } from '@/api/opencode';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -10,6 +10,12 @@ interface AIChatProps {
   onClose: () => void;
 }
 
+/**
+ * AIChat - Main chat panel component.
+ * 
+ * Provides a terminal-like chat experience with clear status indicators,
+ * session management, and streaming response display.
+ */
 export const AIChat: Component<AIChatProps> = (props) => {
   // UI state
   const [isOpen] = createSignal(true);
@@ -19,6 +25,30 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   // Chat hook
   const chat = useChat();
+
+  // Compute current status for display
+  const currentStatus = createMemo(() => {
+    if (!chat.isLoading()) return null;
+
+    const messages = chat.messages();
+    const lastMessage = messages[messages.length - 1];
+
+    if (!lastMessage || lastMessage.role !== 'assistant') {
+      return { type: 'thinking', text: 'Thinking...' };
+    }
+
+    if (lastMessage.pendingTools && lastMessage.pendingTools.length > 0) {
+      const tool = lastMessage.pendingTools[0];
+      const toolName = tool.name.replace(/^pulse_/, '').replace(/_/g, ' ');
+      return { type: 'tool', text: `Running ${toolName}...` };
+    }
+
+    if (lastMessage.isStreaming) {
+      return { type: 'generating', text: 'Generating response...' };
+    }
+
+    return { type: 'thinking', text: 'Thinking...' };
+  });
 
   // Load sessions on mount
   onMount(async () => {
@@ -79,38 +109,37 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   // Empty state for approval (not used with OpenCode but keeping interface)
-  const handleApprove = (_messageId: string, _approval: PendingApproval) => {};
-  const handleSkip = (_messageId: string, _toolId: string) => {};
+  const handleApprove = (_messageId: string, _approval: PendingApproval) => { };
+  const handleSkip = (_messageId: string, _toolId: string) => { };
 
   return (
     <div
-      class={`flex-shrink-0 h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 overflow-hidden ${
-        isOpen() ? 'w-[420px]' : 'w-0 border-l-0'
-      }`}
+      class={`flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 overflow-hidden ${isOpen() ? 'w-[480px]' : 'w-0 border-l-0'
+        }`}
     >
       <Show when={isOpen()}>
         {/* Header */}
-        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
           <div class="flex items-center gap-3">
-            <div class="p-2 bg-gradient-to-br from-purple-500 to-violet-500 rounded-xl shadow-lg">
+            <div class="p-2 bg-gradient-to-br from-purple-500 to-violet-500 rounded-xl shadow-lg shadow-purple-500/20">
               <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611l-2.576.43a18.003 18.003 0 01-5.118 0l-2.576-.43c-1.717-.293-2.299-2.379-1.067-3.611L5 14.5" />
               </svg>
             </div>
             <div>
-              <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">AI Assistant</h2>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">AI Assistant</h2>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">
                 Powered by OpenCode
               </p>
             </div>
           </div>
 
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5">
             {/* Session picker */}
             <div class="relative">
               <button
                 onClick={() => setShowSessions(!showSessions())}
-                class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 title="Chat sessions"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -119,10 +148,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </button>
 
               <Show when={showSessions()}>
-                <div class="absolute right-0 top-full mt-1 w-72 max-h-96 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                <div class="absolute right-0 top-full mt-1 w-72 max-h-96 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden">
                   <button
                     onClick={handleNewConversation}
-                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-b border-gray-200 dark:border-gray-700"
+                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-b border-slate-200 dark:border-slate-700"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -132,27 +161,27 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                   <div class="max-h-64 overflow-y-auto">
                     <Show when={sessions().length > 0} fallback={
-                      <div class="px-3 py-6 text-center text-xs text-gray-500 dark:text-gray-400">
+                      <div class="px-3 py-6 text-center text-xs text-slate-500 dark:text-slate-400">
                         No previous conversations
                       </div>
                     }>
                       <For each={sessions()}>
                         {(session) => (
                           <div
-                            class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${chat.sessionId() === session.id ? 'bg-purple-50 dark:bg-purple-900/20' : ''}`}
+                            class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer ${chat.sessionId() === session.id ? 'bg-purple-50 dark:bg-purple-900/20' : ''}`}
                             onClick={() => handleLoadSession(session.id)}
                           >
                             <div class="flex-1 min-w-0">
-                              <div class="text-sm font-medium truncate text-gray-900 dark:text-gray-100">
+                              <div class="text-sm font-medium truncate text-slate-900 dark:text-slate-100">
                                 {session.title || 'Untitled'}
                               </div>
-                              <div class="text-xs text-gray-500 dark:text-gray-400">
+                              <div class="text-xs text-slate-500 dark:text-slate-400">
                                 {session.message_count} messages
                               </div>
                             </div>
                             <button
                               type="button"
-                              class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-opacity"
+                              class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-opacity"
                               onClick={(e) => handleDeleteSession(session.id, e)}
                             >
                               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -171,7 +200,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             {/* Close button */}
             <button
               onClick={props.onClose}
-              class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M6 5l7 7-7 7" />
@@ -197,19 +226,48 @@ export const AIChat: Component<AIChatProps> = (props) => {
           }}
         />
 
-        {/* Loading indicator */}
-        <Show when={chat.isLoading()}>
-          <div class="px-4 py-2 bg-purple-50 dark:bg-purple-900/20 border-t border-purple-200 dark:border-purple-800 flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300">
-            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            <span>Thinking...</span>
+        {/* Status indicator bar */}
+        <Show when={currentStatus()}>
+          <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2.5 text-xs">
+            {/* Status icon based on type */}
+            <Show when={currentStatus()?.type === 'thinking'}>
+              <div class="flex items-center justify-center w-4 h-4">
+                <svg class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+            </Show>
+            <Show when={currentStatus()?.type === 'tool'}>
+              <div class="flex items-center justify-center w-4 h-4">
+                <svg class="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              </div>
+            </Show>
+            <Show when={currentStatus()?.type === 'generating'}>
+              <div class="flex items-center justify-center w-4 h-4">
+                <svg class="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </div>
+            </Show>
+
+            <span class="text-slate-600 dark:text-slate-400 font-medium">
+              {currentStatus()?.text}
+            </span>
+
+            {/* Subtle animated dots */}
+            <div class="flex gap-0.5 ml-1">
+              <span class="w-1 h-1 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" style="animation-delay: 0ms; animation-duration: 1s" />
+              <span class="w-1 h-1 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" style="animation-delay: 150ms; animation-duration: 1s" />
+              <span class="w-1 h-1 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" style="animation-delay: 300ms; animation-duration: 1s" />
+            </div>
           </div>
         </Show>
 
         {/* Input */}
-        <div class="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
+        <div class="border-t border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900">
           <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="flex gap-2">
             <textarea
               value={input()}
@@ -217,7 +275,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
               onKeyDown={handleKeyDown}
               placeholder="Ask about your infrastructure..."
               rows={2}
-              class="flex-1 px-4 py-3 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              disabled={chat.isLoading()}
+              class="flex-1 px-4 py-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <div class="flex flex-col gap-1.5 self-end">
               <Show
@@ -226,7 +285,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   <button
                     type="submit"
                     disabled={!input().trim()}
-                    class="px-4 py-3 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+                    class="px-4 py-3 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -237,7 +296,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <button
                   type="button"
                   onClick={chat.stop}
-                  class="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors shadow-sm"
+                  class="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors shadow-lg shadow-red-500/20"
                   title="Stop"
                 >
                   <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -247,8 +306,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </Show>
             </div>
           </form>
-          <p class="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
-            Press Enter to send, Shift+Enter for new line
+          <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-2 text-center">
+            Press Enter to send · Shift+Enter for new line
           </p>
         </div>
       </Show>

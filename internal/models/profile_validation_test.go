@@ -15,14 +15,19 @@ func TestProfileValidator_ValidateStringType(t *testing.T) {
 	}{
 		{
 			name:    "valid string",
-			config:  AgentConfigMap{"disk_paths": "/,/home"},
+			config:  AgentConfigMap{"report_ip": "192.168.1.100"},
+			wantErr: false,
+		},
+		{
+			name:    "valid empty string",
+			config:  AgentConfigMap{"report_ip": ""},
 			wantErr: false,
 		},
 		{
 			name:    "invalid string type",
-			config:  AgentConfigMap{"disk_paths": 123},
+			config:  AgentConfigMap{"report_ip": 123},
 			wantErr: true,
-			errKey:  "disk_paths",
+			errKey:  "report_ip",
 		},
 	}
 
@@ -97,103 +102,11 @@ func TestProfileValidator_ValidateBoolType(t *testing.T) {
 	}
 }
 
-func TestProfileValidator_ValidateIntType(t *testing.T) {
-	validator := NewProfileValidator()
+// Note: Int type validation tests removed - no schema keys currently use ConfigTypeInt.
+// The validation logic exists in validateValue() and can be tested if int keys are added.
 
-	tests := []struct {
-		name    string
-		config  AgentConfigMap
-		wantErr bool
-		errKey  string
-	}{
-		{
-			name:    "valid int",
-			config:  AgentConfigMap{"metric_buffer_size": 100},
-			wantErr: false,
-		},
-		{
-			name:    "valid int as float64 (JSON unmarshal)",
-			config:  AgentConfigMap{"metric_buffer_size": float64(100)},
-			wantErr: false,
-		},
-		{
-			name:    "int below minimum",
-			config:  AgentConfigMap{"metric_buffer_size": 5},
-			wantErr: true,
-			errKey:  "metric_buffer_size",
-		},
-		{
-			name:    "int above maximum",
-			config:  AgentConfigMap{"metric_buffer_size": 20000},
-			wantErr: true,
-			errKey:  "metric_buffer_size",
-		},
-		{
-			name:    "invalid int type - string",
-			config:  AgentConfigMap{"metric_buffer_size": "100"},
-			wantErr: true,
-			errKey:  "metric_buffer_size",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := validator.Validate(tt.config)
-			if tt.wantErr && result.Valid {
-				t.Errorf("expected validation to fail, but it passed")
-			}
-			if !tt.wantErr && !result.Valid {
-				t.Errorf("expected validation to pass, but it failed: %v", result.Errors)
-			}
-		})
-	}
-}
-
-func TestProfileValidator_ValidateFloatType(t *testing.T) {
-	validator := NewProfileValidator()
-
-	tests := []struct {
-		name    string
-		config  AgentConfigMap
-		wantErr bool
-		errKey  string
-	}{
-		{
-			name:    "valid float",
-			config:  AgentConfigMap{"cpu_threshold_warning": 80.5},
-			wantErr: false,
-		},
-		{
-			name:    "valid float as int",
-			config:  AgentConfigMap{"cpu_threshold_warning": 80},
-			wantErr: false,
-		},
-		{
-			name:    "float below minimum",
-			config:  AgentConfigMap{"cpu_threshold_warning": -10.0},
-			wantErr: true,
-			errKey:  "cpu_threshold_warning",
-		},
-		{
-			name:    "float above maximum",
-			config:  AgentConfigMap{"cpu_threshold_warning": 150.0},
-			wantErr: true,
-			errKey:  "cpu_threshold_warning",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := validator.Validate(tt.config)
-			if tt.wantErr && result.Valid {
-				t.Errorf("expected validation to fail, but it passed")
-			}
-			if !tt.wantErr && !result.Valid {
-				t.Errorf("expected validation to pass, but it failed: %v", result.Errors)
-			}
-		})
-	}
-}
+// Note: Float type validation tests removed - no schema keys currently use ConfigTypeFloat.
+// The validation logic exists in validateValue() and can be tested if float keys are added.
 
 func TestProfileValidator_ValidateDurationType(t *testing.T) {
 	validator := NewProfileValidator()
@@ -343,15 +256,17 @@ func TestProfileValidator_ComplexConfig(t *testing.T) {
 	validator := NewProfileValidator()
 
 	config := AgentConfigMap{
-		"interval":               "30s",
-		"enable_docker":          true,
-		"enable_system_metrics":  true,
-		"enable_process_metrics": false,
-		"log_level":              "info",
-		"metric_buffer_size":     100,
-		"cpu_threshold_warning":  80.0,
-		"cpu_threshold_critical": 95.0,
-		"disk_paths":             "/,/home",
+		"interval":                     "30s",
+		"enable_host":                  true,
+		"enable_docker":                true,
+		"enable_kubernetes":            false,
+		"enable_proxmox":               true,
+		"proxmox_type":                 "pve",
+		"docker_runtime":               "auto",
+		"log_level":                    "info",
+		"disable_auto_update":          false,
+		"disable_docker_update_checks": false,
+		"report_ip":                    "192.168.1.100",
 	}
 
 	result := validator.Validate(config)
@@ -383,8 +298,8 @@ func TestGetConfigKeyDefinitions(t *testing.T) {
 		t.Error("expected config key definitions to be non-empty")
 	}
 
-	// Check some known keys exist
-	expectedKeys := []string{"interval", "enable_docker", "log_level", "metric_buffer_size"}
+	// Check some known keys exist (keys actually applied by the agent)
+	expectedKeys := []string{"interval", "enable_docker", "log_level", "enable_host", "docker_runtime"}
 	for _, key := range expectedKeys {
 		found := false
 		for _, def := range defs {

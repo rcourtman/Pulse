@@ -138,6 +138,9 @@ export const AISettings: Component = () => {
     costBudgetUSD30d: '',
     // Request timeout (seconds) - for slow Ollama hardware
     requestTimeoutSeconds: 300,
+    // Infrastructure control settings
+    controlLevel: 'read_only' as 'read_only' | 'suggest' | 'controlled' | 'autonomous',
+    protectedGuests: '' as string, // Comma-separated VMIDs/names
   });
 
   const resetForm = (data: AISettingsType | null) => {
@@ -166,6 +169,8 @@ export const AISettings: Component = () => {
         openaiBaseUrl: '',
         costBudgetUSD30d: '',
         requestTimeoutSeconds: 300,
+        controlLevel: 'read_only',
+        protectedGuests: '',
       });
       return;
     }
@@ -197,6 +202,8 @@ export const AISettings: Component = () => {
           ? String(data.cost_budget_usd_30d)
           : '',
       requestTimeoutSeconds: data.request_timeout_seconds ?? 300,
+      controlLevel: (data.control_level as 'read_only' | 'suggest' | 'controlled' | 'autonomous') || 'read_only',
+      protectedGuests: Array.isArray(data.protected_guests) ? data.protected_guests.join(', ') : '',
     });
 
     // Auto-expand providers that are configured
@@ -404,6 +411,24 @@ export const AISettings: Component = () => {
       // Request timeout (for slow Ollama hardware)
       if (form.requestTimeoutSeconds !== (settings()?.request_timeout_seconds ?? 300)) {
         payload.request_timeout_seconds = form.requestTimeoutSeconds;
+      }
+
+      // Infrastructure control settings
+      if (form.controlLevel !== (settings()?.control_level || 'read_only')) {
+        payload.control_level = form.controlLevel;
+      }
+
+      // Protected guests (comma-separated string to array)
+      const currentProtected = settings()?.protected_guests || [];
+      const newProtected = form.protectedGuests
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length > 0);
+      const protectedChanged =
+        newProtected.length !== currentProtected.length ||
+        newProtected.some((g: string, i: number) => g !== currentProtected[i]);
+      if (protectedChanged) {
+        payload.protected_guests = newProtected;
       }
 
       const updated = await AIAPI.updateSettings(payload);
@@ -1441,6 +1466,69 @@ export const AISettings: Component = () => {
                 💡 Increase for slow Ollama hardware (default: 300s / 5 min)
               </p>
 
+              {/* Infrastructure Control Settings */}
+              <div class="space-y-3 p-4 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
+                <div class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Infrastructure Control</span>
+                  <Show when={form.controlLevel !== 'read_only'}>
+                    <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                      form.controlLevel === 'autonomous'
+                        ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                        : form.controlLevel === 'controlled'
+                        ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
+                        : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                    }`}>
+                      {form.controlLevel}
+                    </span>
+                  </Show>
+                </div>
+
+                {/* Control Level */}
+                <div class="flex items-center gap-3">
+                  <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-28 flex-shrink-0">Control Level</label>
+                  <select
+                    value={form.controlLevel}
+                    onChange={(e) => setForm('controlLevel', e.currentTarget.value as 'read_only' | 'suggest' | 'controlled' | 'autonomous')}
+                    class="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                    disabled={saving()}
+                  >
+                    <option value="read_only">Read Only - AI can only observe</option>
+                    <option value="suggest">Suggest - AI suggests commands to copy/paste</option>
+                    <option value="controlled">Controlled - AI executes with approval</option>
+                    <option value="autonomous">Autonomous - AI executes without approval (Pro)</option>
+                  </select>
+                </div>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 ml-[7.5rem]">
+                  {form.controlLevel === 'read_only' && '🔒 AI can only query infrastructure, no control actions'}
+                  {form.controlLevel === 'suggest' && '💬 AI suggests commands like "pct stop 101" for you to run'}
+                  {form.controlLevel === 'controlled' && '✅ AI can start/stop VMs and containers with your approval'}
+                  {form.controlLevel === 'autonomous' && '⚠️ AI executes control actions without asking'}
+                </p>
+
+                {/* Protected Guests - Only show if control is enabled */}
+                <Show when={form.controlLevel !== 'read_only'}>
+                  <div class="flex items-start gap-3 pt-2 border-t border-purple-200 dark:border-purple-700">
+                    <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-28 flex-shrink-0 pt-1">Protected</label>
+                    <div class="flex-1">
+                      <input
+                        type="text"
+                        value={form.protectedGuests}
+                        onInput={(e) => setForm('protectedGuests', e.currentTarget.value)}
+                        placeholder="e.g., 100, 101, prod-db"
+                        class="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                        disabled={saving()}
+                      />
+                      <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                        Comma-separated VMIDs or names that AI cannot control
+                      </p>
+                    </div>
+                  </div>
+                </Show>
+              </div>
 
             </div>
 

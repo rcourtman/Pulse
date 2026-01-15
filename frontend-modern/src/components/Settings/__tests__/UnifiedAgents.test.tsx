@@ -1,11 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, fireEvent, screen, waitFor, cleanup } from '@solidjs/testing-library';
+import { render, fireEvent, screen, waitFor, cleanup, within } from '@solidjs/testing-library';
 import { createStore } from 'solid-js/store';
 import { UnifiedAgents } from '../UnifiedAgents';
-import type { Host, DockerHost } from '@/types/api';
+import type { Host, DockerHost, KubernetesCluster, RemovedDockerHost, RemovedKubernetesCluster } from '@/types/api';
 
 let mockWsStore: {
-  state: { hosts: Host[]; dockerHosts: DockerHost[] };
+  state: {
+    hosts: Host[];
+    dockerHosts: DockerHost[];
+    kubernetesClusters?: KubernetesCluster[];
+    removedDockerHosts?: RemovedDockerHost[];
+    removedKubernetesClusters?: RemovedKubernetesCluster[];
+  };
   connected: () => boolean;
   reconnecting: () => boolean;
   activeAlerts: unknown[];
@@ -20,6 +26,8 @@ const notificationErrorMock = vi.fn();
 const notificationInfoMock = vi.fn();
 const clipboardSpy = vi.fn();
 const fetchMock = vi.fn();
+const listProfilesMock = vi.fn();
+const listAssignmentsMock = vi.fn();
 
 vi.mock('@/App', () => ({
   useWebSocket: () => mockWsStore,
@@ -37,6 +45,13 @@ vi.mock('@/api/security', () => ({
   SecurityAPI: {
     createToken: (...args: unknown[]) => createTokenMock(...args),
     getStatus: () => Promise.resolve({ requiresAuth: true, apiTokenConfigured: false }),
+  },
+}));
+
+vi.mock('@/api/agentProfiles', () => ({
+  AgentProfilesAPI: {
+    listProfiles: (...args: unknown[]) => listProfilesMock(...args),
+    listAssignments: (...args: unknown[]) => listAssignmentsMock(...args),
   },
 }));
 
@@ -100,10 +115,37 @@ const createDockerHost = (overrides?: Partial<DockerHost>): DockerHost => ({
   ...overrides,
 });
 
-const setupComponent = (hosts: Host[] = [], dockerHosts: DockerHost[] = []) => {
+const createKubernetesCluster = (overrides?: Partial<KubernetesCluster>): KubernetesCluster => ({
+  id: 'cluster-1',
+  agentId: 'cluster-agent-1',
+  name: 'cluster-1',
+  displayName: 'Cluster One',
+  status: 'online',
+  lastSeen: Date.now(),
+  intervalSeconds: 30,
+  ...overrides,
+});
+
+const createRemovedDockerHost = (overrides?: Partial<RemovedDockerHost>): RemovedDockerHost => ({
+  id: 'removed-docker-1',
+  hostname: 'old-docker.local',
+  removedAt: Date.now() - 60_000,
+  ...overrides,
+});
+
+const setupComponent = (
+  hosts: Host[] = [],
+  dockerHosts: DockerHost[] = [],
+  kubernetesClusters: KubernetesCluster[] = [],
+  removedDockerHosts: RemovedDockerHost[] = [],
+  removedKubernetesClusters: RemovedKubernetesCluster[] = [],
+) => {
   const [state] = createStore({
     hosts,
     dockerHosts,
+    kubernetesClusters,
+    removedDockerHosts,
+    removedKubernetesClusters,
   });
 
   mockWsStore = {
@@ -124,6 +166,8 @@ beforeEach(() => {
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
   notificationInfoMock.mockReset();
+  listProfilesMock.mockReset();
+  listAssignmentsMock.mockReset();
   clipboardSpy.mockReset().mockResolvedValue(undefined);
   fetchMock.mockReset();
   fetchMock.mockResolvedValue(
@@ -134,6 +178,9 @@ beforeEach(() => {
   );
   vi.stubGlobal('fetch', fetchMock);
   vi.stubGlobal('navigator', { clipboard: { writeText: clipboardSpy } } as unknown as Navigator);
+
+  listProfilesMock.mockResolvedValue([]);
+  listAssignmentsMock.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -298,8 +345,15 @@ describe('UnifiedAgents managed agents table', () => {
     });
 
     expect(screen.getByText('Test Server')).toBeInTheDocument();
-    expect(screen.getByText('Host')).toBeInTheDocument();
     expect(screen.getByText('online')).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: /details for Test Server/i });
+    fireEvent.click(toggle);
+
+    const detailsRow = document.getElementById('agent-details-agent-host-1');
+    expect(detailsRow).not.toBeNull();
+    const details = within(detailsRow as HTMLElement);
+    expect(details.getByText('Host')).toBeInTheDocument();
   });
 
   it('displays docker hosts in the table', async () => {
@@ -314,7 +368,14 @@ describe('UnifiedAgents managed agents table', () => {
     });
 
     expect(screen.getByText('Docker Server')).toBeInTheDocument();
-    expect(screen.getByText('Docker')).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: /details for Docker Server/i });
+    fireEvent.click(toggle);
+
+    const detailsRow = document.getElementById('agent-details-agent-docker-host-1');
+    expect(detailsRow).not.toBeNull();
+    const details = within(detailsRow as HTMLElement);
+    expect(details.getByText('Docker')).toBeInTheDocument();
   });
 
   it('shows empty state when no agents are installed', async () => {
@@ -332,7 +393,49 @@ describe('UnifiedAgents managed agents table', () => {
     await waitFor(() => {
       expect(screen.getByText(/legacy agent.*detected/i)).toBeInTheDocument();
     });
-    expect(screen.getByText('Legacy')).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: /details for Host One/i });
+    fireEvent.click(toggle);
+
+    const detailsRow = document.getElementById('agent-details-agent-host-1');
+    expect(detailsRow).not.toBeNull();
+    const details = within(detailsRow as HTMLElement);
+    expect(details.getByText('Legacy')).toBeInTheDocument();
+  });
+
+  it('filters removed agents with the status filter', async () => {
+    const host = createHost({ displayName: 'Active Host' });
+    const removedHost = createRemovedDockerHost();
+    setupComponent([host], [], [], [removedHost]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Managed Agents')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Active Host')).toBeInTheDocument();
+    expect(screen.getByText('old-docker.local')).toBeInTheDocument();
+
+    const statusSelect = screen.getByLabelText('Status');
+    fireEvent.change(statusSelect, { target: { value: 'removed' } });
+
+    expect(screen.queryByText('Active Host')).not.toBeInTheDocument();
+    expect(screen.getByText('old-docker.local')).toBeInTheDocument();
+  });
+
+  it('shows Kubernetes clusters in the unified table', async () => {
+    const cluster = createKubernetesCluster({ displayName: 'K8s Alpha' });
+    setupComponent([], [], [cluster]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Managed Agents')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('K8s Alpha')).toBeInTheDocument();
+
+    const typeSelect = screen.getByLabelText('Type');
+    fireEvent.change(typeSelect, { target: { value: 'kubernetes' } });
+
+    expect(screen.getByText('K8s Alpha')).toBeInTheDocument();
   });
 });
 

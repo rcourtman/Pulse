@@ -11,7 +11,7 @@
 #   HOT_DEV_USE_PRO=true         Build Pro binary (default: true if module available)
 #   PULSE_MOCK_MODE=true         Use isolated mock data directory
 #   PULSE_DATA_DIR=/path         Override data directory
-#   PULSE_DEV_API_PORT=7656      Backend API port (default: 7656)
+#   PULSE_DEV_API_PORT=7655      Backend API port (default: 7655)
 #   FRONTEND_DEV_PORT=5173       Frontend dev server port (default: 5173)
 #
 # Pro Features Mode:
@@ -104,7 +104,7 @@ fi
 FRONTEND_DEV_HOST=${FRONTEND_DEV_HOST:-0.0.0.0}
 FRONTEND_DEV_PORT=${FRONTEND_DEV_PORT:-${FRONTEND_PORT}}
 PULSE_DEV_API_HOST=${PULSE_DEV_API_HOST:-${LAN_IP}}
-PULSE_DEV_API_PORT=${PULSE_DEV_API_PORT:-7656}
+PULSE_DEV_API_PORT=${PULSE_DEV_API_PORT:-7655}
 
 if [[ -z ${PULSE_DEV_API_URL:-} ]]; then
     PULSE_DEV_API_URL="http://${PULSE_DEV_API_HOST}:${PULSE_DEV_API_PORT}"
@@ -219,6 +219,13 @@ pkill -f "npm run dev" 2>/dev/null || true
 pkill -x "pulse" 2>/dev/null || true
 sleep 1
 pkill -9 -x "pulse" 2>/dev/null || true
+
+# Kill any stale OpenCode sidecar processes
+# These accumulate when Pulse restarts without proper cleanup
+log_info "Cleaning up stale OpenCode processes..."
+pkill -f "opencode.*serve" 2>/dev/null || true
+sleep 1
+pkill -9 -f "opencode.*serve" 2>/dev/null || true
 
 kill_port "${FRONTEND_DEV_PORT}"
 kill_port "${PULSE_DEV_API_PORT}"
@@ -407,7 +414,7 @@ log_info "Starting backend health monitor..."
             PULSE_DEV=${PULSE_DEV:-true} \
             PULSE_AUTH_USER=${PULSE_AUTH_USER} \
             PULSE_AUTH_PASS=${PULSE_AUTH_PASS} \
-            ./pulse &
+            ./pulse >> /opt/pulse/hotdev.log 2>&1 &
             NEW_PID=$!
             sleep 2
             if kill -0 "$NEW_PID" 2>/dev/null; then
@@ -444,7 +451,11 @@ log_info "Starting backend file watcher..."
                 fi
             fi
 
-            FRONTEND_PORT=${PULSE_DEV_API_PORT} PORT=${PULSE_DEV_API_PORT} PULSE_DATA_DIR=${PULSE_DATA_DIR} PULSE_USE_OPENCODE=${PULSE_USE_OPENCODE:-true} ALLOW_ADMIN_BYPASS=${ALLOW_ADMIN_BYPASS:-1} PULSE_DEV=${PULSE_DEV:-true} ./pulse &
+            # Kill OpenCode sidecar - Pulse will spawn a fresh one
+            # This prevents stale sidecars with lost session context
+            pkill -f "opencode.*serve" 2>/dev/null || true
+
+            FRONTEND_PORT=${PULSE_DEV_API_PORT} PORT=${PULSE_DEV_API_PORT} PULSE_DATA_DIR=${PULSE_DATA_DIR} PULSE_USE_OPENCODE=${PULSE_USE_OPENCODE:-true} ALLOW_ADMIN_BYPASS=${ALLOW_ADMIN_BYPASS:-1} PULSE_DEV=${PULSE_DEV:-true} ./pulse >> /opt/pulse/hotdev.log 2>&1 &
             NEW_PID=$!
             sleep 1
 
@@ -516,6 +527,11 @@ cleanup() {
             kill -9 "${CURRENT_BACKEND_PID}" 2>/dev/null || true
         fi
     fi
+
+    # Kill OpenCode sidecar (spawned by Pulse)
+    pkill -f "opencode.*serve" 2>/dev/null || true
+    sleep 1
+    pkill -9 -f "opencode.*serve" 2>/dev/null || true
 
     # Kill Frontend (Vite)
     if [[ -n ${VITE_PID:-} ]] && kill -0 "${VITE_PID}" 2>/dev/null; then

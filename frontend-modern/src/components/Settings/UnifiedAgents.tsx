@@ -3,6 +3,7 @@ import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { MonitoringAPI } from '@/api/monitoring';
+import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '@/api/agentProfiles';
 import { SecurityAPI } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
@@ -23,6 +24,38 @@ const buildDefaultTokenName = () => {
 };
 
 type AgentPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
+type UnifiedAgentType = 'host' | 'docker' | 'kubernetes';
+type UnifiedAgentStatus = 'active' | 'removed';
+type ScopeCategory = 'default' | 'profile' | 'ai-managed' | 'na';
+
+type UnifiedAgentRow = {
+    rowKey: string;
+    id: string;
+    name: string;
+    hostname?: string;
+    displayName?: string;
+    types: UnifiedAgentType[];
+    status: UnifiedAgentStatus;
+    healthStatus?: string;
+    lastSeen?: number;
+    removedAt?: number;
+    version?: string;
+    isLegacy?: boolean;
+    linkedNodeId?: string;
+    commandsEnabled?: boolean;
+    agentId?: string;
+    scope: {
+        label: string;
+        detail?: string;
+        category: ScopeCategory;
+    };
+    searchText: string;
+    kubernetesInfo?: {
+        server?: string;
+        context?: string;
+        tokenName?: string;
+    };
+};
 
 // Generate platform-specific commands with the appropriate Pulse URL
 // Uses agentUrl from API (PULSE_PUBLIC_URL) if configured, otherwise falls back to window.location
@@ -127,8 +160,16 @@ export const UnifiedAgents: Component = () => {
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
     const [enableCommands, setEnableCommands] = createSignal(false); // Enable AI command execution (issue #903)
     const [customAgentUrl, setCustomAgentUrl] = createSignal('');
+    const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
+    const [assignments, setAssignments] = createSignal<AgentProfileAssignment[]>([]);
     // Track pending command config changes: hostId -> { desired value, timestamp }
     const [pendingCommandConfig, setPendingCommandConfig] = createSignal<Record<string, { enabled: boolean; timestamp: number }>>({});
+    const [pendingScopeUpdates, setPendingScopeUpdates] = createSignal<Record<string, boolean>>({});
+    const [expandedRowKey, setExpandedRowKey] = createSignal<string | null>(null);
+    const [filterType, setFilterType] = createSignal<'all' | UnifiedAgentType>('all');
+    const [filterStatus, setFilterStatus] = createSignal<'all' | UnifiedAgentStatus>('all');
+    const [filterScope, setFilterScope] = createSignal<'all' | Exclude<ScopeCategory, 'na'>>('all');
+    const [filterSearch, setFilterSearch] = createSignal('');
 
     createEffect(() => {
         if (requiresToken()) {
@@ -174,6 +215,22 @@ export const UnifiedAgents: Component = () => {
             }
         };
         fetchSecurityStatus();
+
+        const fetchAgentProfiles = async () => {
+            try {
+                const [profilesData, assignmentsData] = await Promise.all([
+                    AgentProfilesAPI.listProfiles(),
+                    AgentProfilesAPI.listAssignments(),
+                ]);
+                setProfiles(profilesData);
+                setAssignments(assignmentsData);
+            } catch (err) {
+                logger.debug('Failed to load agent profiles', err);
+                setProfiles([]);
+                setAssignments([]);
+            }
+        };
+        fetchAgentProfiles();
     });
 
     const requiresToken = () => {
@@ -288,6 +345,7 @@ export const UnifiedAgents: Component = () => {
             isLegacy?: boolean;
             linkedNodeId?: string;
             commandsEnabled?: boolean;
+            agentId?: string;
         }>();
 
         // Process Host Agents (include linked ones with a badge)
@@ -296,6 +354,7 @@ export const UnifiedAgents: Component = () => {
             const key = h.id;
             unified.set(key, {
                 id: h.id,
+                agentId: h.id,
                 hostname: h.hostname || 'Unknown',
                 displayName: h.displayName,
                 types: ['host'],
@@ -317,12 +376,16 @@ export const UnifiedAgents: Component = () => {
                 if (!existing.types.includes('docker')) {
                     existing.types.push('docker');
                 }
+                if (!existing.agentId && d.agentId) {
+                    existing.agentId = d.agentId;
+                }
                 // Update version/status if newer
                 if (!existing.version && d.agentVersion) existing.version = d.agentVersion;
                 if (d.isLegacy) existing.isLegacy = true;
             } else {
                 unified.set(key, {
                     id: d.id,
+                    agentId: d.agentId || d.id,
                     hostname: d.hostname || 'Unknown',
                     displayName: d.displayName,
                     types: ['docker'],
@@ -375,6 +438,88 @@ export const UnifiedAgents: Component = () => {
         return Array.from(unified.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
     });
 
+    const profileById = createMemo(() => {
+        const map = new Map<string, AgentProfile>();
+        for (const profile of profiles()) {
+            map.set(profile.id, profile);
+        }
+        return map;
+    });
+
+    const assignmentByAgent = createMemo(() => {
+        const map = new Map<string, AgentProfileAssignment>();
+        for (const assignment of assignments()) {
+            map.set(assignment.agent_id, assignment);
+        }
+        return map;
+    });
+
+    const getScopeInfo = (agentId: string | undefined) => {
+        if (!agentId) {
+            return { label: 'N/A', detail: '', category: 'na' as const };
+        }
+        const assignment = assignmentByAgent().get(agentId);
+        if (!assignment) {
+            return { label: 'Default', detail: 'Auto-detect', category: 'default' as const };
+        }
+        const profile = profileById().get(assignment.profile_id);
+        if (!profile) {
+            return { label: 'Profile assigned', detail: assignment.profile_id, category: 'profile' as const };
+        }
+        const name = profile.name || assignment.profile_id;
+        const isAIManaged =
+            profile.description?.toLowerCase().includes('pulse ai') ||
+            name.toLowerCase().startsWith('ai scope');
+        return isAIManaged
+            ? { label: 'AI-managed', detail: name, category: 'ai-managed' as const }
+            : { label: name, detail: 'Assigned profile', category: 'profile' as const };
+    };
+
+    const updateScopeAssignment = async (agentId: string, profileId: string | null, agentName: string) => {
+        if (!agentId) {
+            return;
+        }
+        if (pendingScopeUpdates()[agentId]) {
+            return;
+        }
+
+        setPendingScopeUpdates(prev => ({ ...prev, [agentId]: true }));
+        try {
+            if (profileId) {
+                await AgentProfilesAPI.assignProfile(agentId, profileId);
+                setAssignments(prev => {
+                    const updatedAt = new Date().toISOString();
+                    const next = prev.filter(a => a.agent_id !== agentId);
+                    next.push({ agent_id: agentId, profile_id: profileId, updated_at: updatedAt });
+                    return next;
+                });
+                notificationStore.success(`Scope updated for ${agentName}. Restart the agent to apply changes.`);
+            } else {
+                await AgentProfilesAPI.unassignProfile(agentId);
+                setAssignments(prev => prev.filter(a => a.agent_id !== agentId));
+                notificationStore.success(`Scope reset for ${agentName}. Restart the agent to apply changes.`);
+            }
+        } catch (err) {
+            logger.error('Failed to update agent scope', err);
+            notificationStore.error('Failed to update agent scope');
+        } finally {
+            setPendingScopeUpdates(prev => {
+                const next = { ...prev };
+                delete next[agentId];
+                return next;
+            });
+        }
+    };
+
+    const handleResetScope = async (agentId: string, agentName: string) => {
+        if (!confirm(`Reset scope for ${agentName}? This removes any assigned profile and reverts to auto-detect.`)) return;
+        await updateScopeAssignment(agentId, null, agentName);
+    };
+
+    const toggleAgentDetails = (rowKey: string) => {
+        setExpandedRowKey(prev => (prev === rowKey ? null : rowKey));
+    };
+
     const legacyAgents = createMemo(() => allHosts().filter(h => h.isLegacy));
     const hasLegacyAgents = createMemo(() => legacyAgents().length > 0);
 
@@ -382,7 +527,6 @@ export const UnifiedAgents: Component = () => {
         const removed = state.removedDockerHosts || [];
         return removed.sort((a, b) => b.removedAt - a.removedAt);
     });
-    const hasRemovedDockerHosts = createMemo(() => removedDockerHosts().length > 0);
 
     const kubernetesClusters = createMemo(() => {
         const clusters = state.kubernetesClusters || [];
@@ -393,7 +537,6 @@ export const UnifiedAgents: Component = () => {
         const removed = state.removedKubernetesClusters || [];
         return removed.sort((a, b) => b.removedAt - a.removedAt);
     });
-    const hasRemovedKubernetesClusters = createMemo(() => removedKubernetesClusters().length > 0);
 
     // Host agents linked to PVE nodes (shown separately with unlink option)
     const linkedHostAgents = createMemo(() => {
@@ -409,6 +552,138 @@ export const UnifiedAgents: Component = () => {
         }));
     });
     const hasLinkedAgents = createMemo(() => linkedHostAgents().length > 0);
+
+    const unifiedRows = createMemo<UnifiedAgentRow[]>(() => {
+        const rows: UnifiedAgentRow[] = [];
+
+        allHosts().forEach(agent => {
+            const resolvedAgentId = agent.agentId || agent.id;
+            const scopeInfo = getScopeInfo(resolvedAgentId);
+            const name = agent.displayName || agent.hostname;
+            const searchText = [name, agent.hostname, agent.id, resolvedAgentId]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+
+            rows.push({
+                rowKey: `agent-${agent.id}`,
+                id: agent.id,
+                name,
+                hostname: agent.hostname,
+                displayName: agent.displayName,
+                types: agent.types,
+                status: 'active',
+                healthStatus: agent.status,
+                lastSeen: agent.lastSeen,
+                version: agent.version,
+                isLegacy: agent.isLegacy,
+                linkedNodeId: agent.linkedNodeId,
+                commandsEnabled: agent.commandsEnabled,
+                agentId: resolvedAgentId,
+                scope: scopeInfo,
+                searchText,
+            });
+        });
+
+        kubernetesClusters().forEach(cluster => {
+            const name = cluster.customDisplayName || cluster.displayName || cluster.name || cluster.id;
+            rows.push({
+                rowKey: `k8s-${cluster.id}`,
+                id: cluster.id,
+                name,
+                types: ['kubernetes'],
+                status: 'active',
+                healthStatus: cluster.status,
+                lastSeen: cluster.lastSeen,
+                version: cluster.version || cluster.agentVersion,
+                agentId: cluster.agentId,
+                scope: getScopeInfo(undefined),
+                searchText: [name, cluster.name, cluster.displayName, cluster.id, cluster.server, cluster.context]
+                    .filter(Boolean)
+                    .join(' ')
+                    .toLowerCase(),
+                kubernetesInfo: {
+                    server: cluster.server,
+                    context: cluster.context,
+                    tokenName: cluster.tokenName,
+                },
+            });
+        });
+
+        removedDockerHosts().forEach(host => {
+            const name = host.displayName || host.hostname || host.id;
+            rows.push({
+                rowKey: `removed-docker-${host.id}`,
+                id: host.id,
+                name,
+                hostname: host.hostname,
+                displayName: host.displayName,
+                types: ['docker'],
+                status: 'removed',
+                removedAt: host.removedAt,
+                scope: getScopeInfo(undefined),
+                searchText: [name, host.hostname, host.id].filter(Boolean).join(' ').toLowerCase(),
+            });
+        });
+
+        removedKubernetesClusters().forEach(cluster => {
+            const name = cluster.displayName || cluster.name || cluster.id;
+            rows.push({
+                rowKey: `removed-k8s-${cluster.id}`,
+                id: cluster.id,
+                name,
+                types: ['kubernetes'],
+                status: 'removed',
+                removedAt: cluster.removedAt,
+                scope: getScopeInfo(undefined),
+                searchText: [name, cluster.name, cluster.id].filter(Boolean).join(' ').toLowerCase(),
+            });
+        });
+
+        rows.sort((a, b) => {
+            if (a.status !== b.status) {
+                return a.status === 'active' ? -1 : 1;
+            }
+            return a.name.localeCompare(b.name);
+        });
+
+        return rows;
+    });
+
+    const filteredRows = createMemo(() => {
+        const query = filterSearch().trim().toLowerCase();
+        return unifiedRows().filter(row => {
+            if (filterType() !== 'all' && !row.types.includes(filterType())) {
+                return false;
+            }
+            if (filterStatus() !== 'all' && row.status !== filterStatus()) {
+                return false;
+            }
+            if (filterScope() !== 'all' && row.scope.category !== filterScope()) {
+                return false;
+            }
+            if (query && !row.searchText.includes(query)) {
+                return false;
+            }
+            return true;
+        });
+    });
+
+    const hasFilters = createMemo(() => {
+        return (
+            filterType() !== 'all' ||
+            filterStatus() !== 'all' ||
+            filterScope() !== 'all' ||
+            filterSearch().trim().length > 0
+        );
+    });
+
+    const resetFilters = () => {
+        setFilterType('all');
+        setFilterStatus('all');
+        setFilterScope('all');
+        setFilterSearch('');
+    };
 
     const getUpgradeCommand = (_hostname: string) => {
         const token = resolvedToken();
@@ -894,19 +1169,17 @@ export const UnifiedAgents: Component = () => {
                 <div class="space-y-1">
                     <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Managed Agents</h3>
                     <p class="text-sm text-gray-600 dark:text-gray-400">
-                        Overview of all agents currently reporting to Pulse.
+                        All active and removed agents, including Kubernetes clusters.
                     </p>
                 </div>
 
-                {/* Note about linked agents */}
                 <Show when={hasLinkedAgents()}>
                     <div class="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/20">
                         <svg class="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <p class="text-xs text-blue-700 dark:text-blue-300">
-                            <span class="font-medium">{linkedHostAgents().length}</span> host agent{linkedHostAgents().length > 1 ? 's are' : ' is'} linked to Proxmox node{linkedHostAgents().length > 1 ? 's' : ''} and shown in the Dashboard with a <span class="font-medium text-purple-600 dark:text-purple-400">+Agent</span> badge.
-                            <a href="#linked-agents" class="ml-1 underline hover:text-blue-900 dark:hover:text-blue-100">Manage linked agents →</a>
+                            <span class="font-medium">{linkedHostAgents().length}</span> host agent{linkedHostAgents().length > 1 ? 's are' : ' is'} linked to Proxmox node{linkedHostAgents().length > 1 ? 's' : ''} and flagged with a <span class="font-medium text-indigo-700 dark:text-indigo-300">Linked</span> badge.
                         </p>
                     </div>
                 </Show>
@@ -917,351 +1190,449 @@ export const UnifiedAgents: Component = () => {
                             <svg class="h-5 w-5 flex-shrink-0 text-amber-500 dark:text-amber-400 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                             </svg>
-                            <div class="flex-1 space-y-2">
+                            <div class="flex-1 space-y-1">
                                 <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
                                     {legacyAgents().length} legacy agent{legacyAgents().length > 1 ? 's' : ''} detected
                                 </p>
                                 <p class="text-sm text-amber-700 dark:text-amber-300">
-                                    Legacy agents (pulse-host-agent, pulse-docker-agent) are deprecated. Upgrade to the unified agent for auto-updates and combined host + Docker monitoring.
+                                    Legacy agents (pulse-host-agent, pulse-docker-agent) are deprecated. Expand a row to copy the upgrade command.
                                 </p>
-                                <p class="text-xs text-amber-600 dark:text-amber-400">
-                                    Run this command on each legacy host to upgrade:
-                                </p>
-                                <div class="relative">
-                                    <button
-                                        type="button"
-                                        onClick={async () => {
-                                            const success = await copyToClipboard(getUpgradeCommand(''));
-                                            if (success) {
-                                                notificationStore.success('Copied to clipboard');
-                                            } else {
-                                                notificationStore.error('Failed to copy');
-                                            }
-                                        }}
-                                        class="absolute top-2 right-2 p-1.5 text-amber-700/60 hover:text-amber-900 bg-amber-200/50 hover:bg-amber-300/50 rounded-md transition-colors dark:text-amber-400 dark:hover:text-amber-200 dark:bg-amber-800/50 dark:hover:bg-amber-700/50"
-                                        title="Copy command"
-                                    >
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                        </svg>
-                                    </button>
-                                    <pre class="overflow-x-auto rounded-md bg-amber-100 px-3 py-3 pr-12 font-mono text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
-                                        <code>{getUpgradeCommand('')}</code>
-                                    </pre>
-                                </div>
                             </div>
                         </div>
                     </div>
                 </Show>
 
-                <Card id="linked-agents" padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-                    <table class="w-full min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-800">
-                            <tr>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Hostname</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Type</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Version</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">AI Commands</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Last Seen</th>
-                                <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-                            <For each={allHosts()} fallback={
-                                <tr>
-                                    <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                                        No agents installed yet.
-                                    </td>
-                                </tr>
-                            }>
-                                {(agent) => (
-                                    <tr>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
-                                            {agent.displayName || agent.hostname}
-                                            <Show when={agent.displayName && agent.displayName !== agent.hostname}>
-                                                <span class="ml-2 text-xs text-gray-500">({agent.hostname})</span>
-                                            </Show>
-                                            <Show when={agent.linkedNodeId}>
-                                                <span class="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300" title="This agent is linked to a Proxmox node and shown merged in the Dashboard">
-                                                    Linked
-                                                </span>
-                                            </Show>
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                                            <div class="flex gap-1">
-                                                <For each={agent.types}>
-                                                    {(type) => (
-                                                        <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${type === 'host'
-                                                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-                                                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                                                            }`}>
-                                                            {type === 'host' ? 'Host' : 'Docker'}
-                                                        </span>
-                                                    )}
-                                                </For>
-                                            </div>
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm">
-                                            <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${connectedFromStatus(agent.status)
-                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                                }`}>
-                                                {agent.status}
-                                            </span>
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                                            {agent.version || '—'}
-                                            <Show when={agent.isLegacy}>
-                                                <span class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200" title="This agent is using an old version. Please update to the unified agent.">
-                                                    Legacy
-                                                </span>
-                                            </Show>
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm">
-                                            <Show when={agent.types.includes('host')}
-                                                fallback={
-                                                    <span class="text-gray-400 dark:text-gray-500">—</span>
-                                                }
-                                            >
-                                                {(() => {
-                                                    // Use pending state if set, otherwise use agent-reported state
-                                                    const pending = pendingCommandConfig();
-                                                    const isPending = agent.id in pending;
-                                                    const effectiveEnabled = isPending ? pending[agent.id].enabled : agent.commandsEnabled;
+                <div class="flex flex-wrap items-end gap-3">
+                    <div class="space-y-1">
+                        <label for="agent-filter-type" class="text-xs font-medium text-gray-600 dark:text-gray-400">Type</label>
+                        <select
+                            id="agent-filter-type"
+                            value={filterType()}
+                            onChange={(event) => setFilterType(event.currentTarget.value as 'all' | UnifiedAgentType)}
+                            class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                        >
+                            <option value="all">All types</option>
+                            <option value="host">Host</option>
+                            <option value="docker">Docker</option>
+                            <option value="kubernetes">Kubernetes</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label for="agent-filter-status" class="text-xs font-medium text-gray-600 dark:text-gray-400">Status</label>
+                        <select
+                            id="agent-filter-status"
+                            value={filterStatus()}
+                            onChange={(event) => setFilterStatus(event.currentTarget.value as 'all' | UnifiedAgentStatus)}
+                            class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                        >
+                            <option value="all">All statuses</option>
+                            <option value="active">Active</option>
+                            <option value="removed">Removed/Blocked</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label for="agent-filter-scope" class="text-xs font-medium text-gray-600 dark:text-gray-400">Scope</label>
+                        <select
+                            id="agent-filter-scope"
+                            value={filterScope()}
+                            onChange={(event) => setFilterScope(event.currentTarget.value as 'all' | Exclude<ScopeCategory, 'na'>)}
+                            class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                        >
+                            <option value="all">All scopes</option>
+                            <option value="default">Default</option>
+                            <option value="profile">Profile assigned</option>
+                            <option value="ai-managed">AI-managed</option>
+                        </select>
+                    </div>
+                    <div class="min-w-[220px] flex-1 space-y-1">
+                        <label for="agent-filter-search" class="text-xs font-medium text-gray-600 dark:text-gray-400">Search</label>
+                        <input
+                            id="agent-filter-search"
+                            type="text"
+                            value={filterSearch()}
+                            onInput={(event) => setFilterSearch(event.currentTarget.value)}
+                            placeholder="Search name, hostname, or ID"
+                            class="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={resetFilters}
+                        disabled={!hasFilters()}
+                        class={`rounded-md px-3 py-2 text-xs font-medium transition-colors ${hasFilters()
+                            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                            : 'bg-gray-50 text-gray-400 cursor-not-allowed dark:bg-gray-900 dark:text-gray-500'
+                            }`}
+                    >
+                        Clear
+                    </button>
+                </div>
 
-                                                    return (
-                                                        <div class="flex items-center gap-2">
-                                                            <button
-                                                                onClick={() => handleToggleCommands(agent.id, !effectiveEnabled)}
-                                                                disabled={isPending}
-                                                                class={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isPending ? 'opacity-60 cursor-wait' : ''
-                                                                    } ${effectiveEnabled
-                                                                        ? 'bg-blue-600'
-                                                                        : 'bg-gray-200 dark:bg-gray-700'
-                                                                    }`}
-                                                                title={isPending
-                                                                    ? 'Syncing with agent...'
-                                                                    : effectiveEnabled
-                                                                        ? 'AI command execution enabled'
-                                                                        : 'AI command execution disabled'
-                                                                }
-                                                            >
-                                                                <span
-                                                                    class={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${effectiveEnabled ? 'translate-x-4' : 'translate-x-0'
-                                                                        }`}
-                                                                />
-                                                            </button>
-                                                            <Show when={isPending}>
-                                                                <svg class="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                                </svg>
-                                                            </Show>
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </Show>
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                                            {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : '—'}
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
-                                            <div class="flex items-center justify-end gap-3">
-                                                <button
-                                                    onClick={async () => {
-                                                        const cmd = getUninstallCommand();
-                                                        const success = await copyToClipboard(cmd);
-                                                        if (success) {
-                                                            notificationStore.success('Uninstall command copied');
-                                                        } else {
-                                                            notificationStore.error('Failed to copy');
-                                                        }
-                                                    }}
-                                                    class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-                                                    title="Copy uninstall command"
-                                                >
-                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                                    </svg>
-                                                </button>
-                                                <button
-                                                    onClick={() => handleRemoveAgent(agent.id, agent.types)}
-                                                    class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
-                            </For>
-                        </tbody>
-                    </table>
-                </Card>
-            </Card>
-
-            <Card padding="lg" class="space-y-4">
-                <div class="space-y-1">
-                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Kubernetes Clusters</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">
-                        Kubernetes clusters currently reporting to Pulse.
-                    </p>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                    Showing {filteredRows().length} of {unifiedRows().length} records.
                 </div>
 
                 <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-                    <table class="w-full min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
+                    <table class="w-full min-w-[960px] divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-800">
                             <tr>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Cluster</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Name</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Type</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Version</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Scope</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">AI Commands</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Last Seen</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Version</th>
                                 <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-                            <For each={kubernetesClusters()} fallback={
+                            <For each={filteredRows()} fallback={
                                 <tr>
-                                    <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                                        No Kubernetes clusters reporting yet.
+                                    <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                        <Show when={hasFilters()} fallback="No agents installed yet.">
+                                            No agents match the current filters.
+                                        </Show>
                                     </td>
                                 </tr>
                             }>
-                                {(cluster) => (
-                                    <tr>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
-                                            {cluster.customDisplayName || cluster.displayName || cluster.name || cluster.id}
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm">
-                                            <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${connectedFromStatus(cluster.status)
-                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                                }`}>
-                                                {cluster.status}
-                                            </span>
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                                            {cluster.version || cluster.agentVersion || '—'}
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                                            {cluster.lastSeen ? formatRelativeTime(cluster.lastSeen) : '—'}
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
-                                            <button
-                                                onClick={() => handleRemoveKubernetesCluster(cluster.id)}
-                                                class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                            >
-                                                Remove
-                                            </button>
-                                        </td>
-                                    </tr>
-                                )}
+                                {(row) => {
+                                    const expanded = () => expandedRowKey() === row.rowKey;
+                                    const isActive = () => row.status === 'active';
+                                    const isRemoved = () => row.status === 'removed';
+                                    const isKubernetes = () => row.types.includes('kubernetes');
+                                    const resolvedAgentId = row.agentId || '';
+                                    const assignment = () => resolvedAgentId ? assignmentByAgent().get(resolvedAgentId) : undefined;
+                                    const isScopeUpdating = () => resolvedAgentId ? Boolean(pendingScopeUpdates()[resolvedAgentId]) : false;
+                                    const agentName = row.displayName || row.hostname || row.name;
+                                    const typeBadgeClass = (type: UnifiedAgentType) => {
+                                        if (type === 'host') {
+                                            return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+                                        }
+                                        if (type === 'docker') {
+                                            return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+                                        }
+                                        return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
+                                    };
+                                    const statusBadgeClass = () => {
+                                        if (isRemoved()) {
+                                            return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200';
+                                        }
+                                        if (connectedFromStatus(row.healthStatus)) {
+                                            return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+                                        }
+                                        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+                                    };
+                                    const lastSeenLabel = () => {
+                                        if (isRemoved()) {
+                                            return row.removedAt ? `Removed ${formatRelativeTime(row.removedAt)}` : 'Removed';
+                                        }
+                                        return row.lastSeen ? formatRelativeTime(row.lastSeen) : '—';
+                                    };
+
+                                    return (
+                                        <>
+                                            <tr>
+                                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                                    <div class="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                                                {row.name}
+                                                            </div>
+                                                            <Show when={row.displayName && row.hostname && row.displayName !== row.hostname}>
+                                                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                    {row.hostname}
+                                                                </div>
+                                                            </Show>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleAgentDetails(row.rowKey)}
+                                                            class="inline-flex items-center justify-center rounded-md p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                                            aria-label={`${expanded() ? 'Hide' : 'Show'} details for ${agentName}`}
+                                                            aria-expanded={expanded()}
+                                                            aria-controls={`agent-details-${row.rowKey}`}
+                                                        >
+                                                            <svg
+                                                                class={`h-4 w-4 transition-transform ${expanded() ? 'rotate-180' : ''}`}
+                                                                viewBox="0 0 20 20"
+                                                                fill="currentColor"
+                                                            >
+                                                                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.7a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td class="whitespace-nowrap px-4 py-3 text-sm">
+                                                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                                                        <For each={row.types}>
+                                                            {(type) => (
+                                                                <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${typeBadgeClass(type)}`}>
+                                                                    {type === 'host' ? 'Host' : type === 'docker' ? 'Docker' : 'Kubernetes'}
+                                                                </span>
+                                                            )}
+                                                        </For>
+                                                    </div>
+                                                </td>
+                                                <td class="whitespace-nowrap px-4 py-3 text-sm">
+                                                    <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass()}`}>
+                                                        {isRemoved() ? 'Removed' : row.healthStatus || 'unknown'}
+                                                    </span>
+                                                </td>
+                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                    <Show when={isActive() && !isKubernetes() && resolvedAgentId} fallback={
+                                                        <span class="text-xs text-gray-400 dark:text-gray-500">N/A</span>
+                                                    }>
+                                                        <Show when={profiles().length > 0} fallback={
+                                                            <span class="text-gray-700 dark:text-gray-300" title={row.scope.detail}>
+                                                                {row.scope.label}
+                                                            </span>
+                                                        }>
+                                                            <div class="flex items-center gap-2">
+                                                                <select
+                                                                    value={assignment()?.profile_id || ''}
+                                                                    onChange={(event) => {
+                                                                        const nextValue = event.currentTarget.value;
+                                                                        const currentValue = assignment()?.profile_id || '';
+                                                                        if (nextValue === currentValue) {
+                                                                            return;
+                                                                        }
+                                                                        void updateScopeAssignment(resolvedAgentId, nextValue || null, agentName);
+                                                                    }}
+                                                                    disabled={isScopeUpdating()}
+                                                                    class="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                                                >
+                                                                    <option value="">Default (Auto-detect)</option>
+                                                                    <For each={profiles()}>
+                                                                        {(profile) => (
+                                                                            <option value={profile.id}>{profile.name || profile.id}</option>
+                                                                        )}
+                                                                    </For>
+                                                                </select>
+                                                                <Show when={isScopeUpdating()}>
+                                                                    <span class="text-[10px] text-gray-400 dark:text-gray-500">Updating…</span>
+                                                                </Show>
+                                                            </div>
+                                                        </Show>
+                                                    </Show>
+                                                </td>
+                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                    <Show when={isActive() && row.types.includes('host')} fallback={
+                                                        <span class="text-xs text-gray-400 dark:text-gray-500">N/A</span>
+                                                    }>
+                                                        {(() => {
+                                                            const pending = pendingCommandConfig();
+                                                            const isPending = row.id in pending;
+                                                            const effectiveEnabled = isPending ? pending[row.id].enabled : Boolean(row.commandsEnabled);
+
+                                                            return (
+                                                                <div class="flex items-center gap-2">
+                                                                    <button
+                                                                        onClick={() => handleToggleCommands(row.id, !effectiveEnabled)}
+                                                                        disabled={isPending}
+                                                                        class={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isPending ? 'opacity-60 cursor-wait' : ''
+                                                                            } ${effectiveEnabled
+                                                                                ? 'bg-blue-600'
+                                                                                : 'bg-gray-200 dark:bg-gray-700'
+                                                                            }`}
+                                                                        title={isPending
+                                                                            ? 'Syncing with agent...'
+                                                                            : effectiveEnabled
+                                                                                ? 'AI command execution enabled'
+                                                                                : 'AI command execution disabled'
+                                                                        }
+                                                                    >
+                                                                        <span
+                                                                            class={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${effectiveEnabled ? 'translate-x-4' : 'translate-x-0'
+                                                                                }`}
+                                                                        />
+                                                                    </button>
+                                                                    <Show when={isPending}>
+                                                                        <svg class="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                                        </svg>
+                                                                    </Show>
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </Show>
+                                                </td>
+                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                    {lastSeenLabel()}
+                                                </td>
+                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                    {row.version || '—'}
+                                                </td>
+                                                <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
+                                                    <Show when={isRemoved()} fallback={
+                                                        <Show when={isKubernetes()} fallback={
+                                                            <button
+                                                                onClick={() => handleRemoveAgent(row.id, row.types.filter(type => type !== 'kubernetes') as ('host' | 'docker')[])}
+                                                                class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        }>
+                                                            <button
+                                                                onClick={() => handleRemoveKubernetesCluster(row.id)}
+                                                                class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </Show>
+                                                    }>
+                                                        <Show when={row.types.includes('docker')} fallback={
+                                                            <button
+                                                                onClick={() => handleAllowKubernetesReenroll(row.id, row.name)}
+                                                                class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                                            >
+                                                                Allow re-enroll
+                                                            </button>
+                                                        }>
+                                                            <button
+                                                                onClick={() => handleAllowReenroll(row.id, row.hostname)}
+                                                                class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                                            >
+                                                                Allow re-enroll
+                                                            </button>
+                                                        </Show>
+                                                    </Show>
+                                                </td>
+                                            </tr>
+                                            <Show when={expanded()}>
+                                                <tr id={`agent-details-${row.rowKey}`} class="bg-gray-50 dark:bg-gray-800/40">
+                                                    <td colspan="8" class="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                                        <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+                                                            <div class="space-y-3">
+                                                                <div class="flex flex-wrap items-center gap-2 text-xs">
+                                                                    <For each={row.types}>
+                                                                        {(type) => (
+                                                                            <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${typeBadgeClass(type)}`}>
+                                                                                {type === 'host' ? 'Host' : type === 'docker' ? 'Docker' : 'Kubernetes'}
+                                                                            </span>
+                                                                        )}
+                                                                    </For>
+                                                                    <Show when={row.isLegacy}>
+                                                                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                                                                            Legacy
+                                                                        </span>
+                                                                    </Show>
+                                                                    <Show when={row.linkedNodeId}>
+                                                                        <span class="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                                                            Linked
+                                                                        </span>
+                                                                    </Show>
+                                                                </div>
+                                                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                    ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.id}</span>
+                                                                </div>
+                                                                <Show when={row.agentId && row.agentId !== row.id}>
+                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                        Agent ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.agentId}</span>
+                                                                    </div>
+                                                                </Show>
+                                                                <Show when={row.linkedNodeId}>
+                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                        Linked node ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.linkedNodeId}</span>
+                                                                    </div>
+                                                                </Show>
+                                                                <Show when={row.status === 'active' && row.lastSeen}>
+                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                        Last seen {formatRelativeTime(row.lastSeen)} ({formatAbsoluteTime(row.lastSeen)})
+                                                                    </div>
+                                                                </Show>
+                                                                <Show when={row.status === 'removed' && row.removedAt}>
+                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                        Removed {formatRelativeTime(row.removedAt)} ({formatAbsoluteTime(row.removedAt)})
+                                                                    </div>
+                                                                </Show>
+                                                                <Show when={row.kubernetesInfo && (row.kubernetesInfo.server || row.kubernetesInfo.context || row.kubernetesInfo.tokenName)}>
+                                                                    <div class="space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                        <Show when={row.kubernetesInfo?.server}>
+                                                                            <div>Server: <span class="text-gray-700 dark:text-gray-200">{row.kubernetesInfo?.server}</span></div>
+                                                                        </Show>
+                                                                        <Show when={row.kubernetesInfo?.context}>
+                                                                            <div>Context: <span class="text-gray-700 dark:text-gray-200">{row.kubernetesInfo?.context}</span></div>
+                                                                        </Show>
+                                                                        <Show when={row.kubernetesInfo?.tokenName}>
+                                                                            <div>Token: <span class="text-gray-700 dark:text-gray-200">{row.kubernetesInfo?.tokenName}</span></div>
+                                                                        </Show>
+                                                                    </div>
+                                                                </Show>
+                                                                <Show when={row.scope.category !== 'na'}>
+                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                        Scope profile: <span class="text-gray-700 dark:text-gray-200">{row.scope.label}</span>
+                                                                        <Show when={row.scope.detail}>
+                                                                            <span class="ml-1 text-gray-400 dark:text-gray-500">{row.scope.detail}</span>
+                                                                        </Show>
+                                                                    </div>
+                                                                    <Show when={assignment()}>
+                                                                        <div class="text-[11px] text-amber-600 dark:text-amber-400">
+                                                                            Restart required to apply scope changes.
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleResetScope(resolvedAgentId, agentName || resolvedAgentId)}
+                                                                            class="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-left"
+                                                                        >
+                                                                            Reset to default
+                                                                        </button>
+                                                                    </Show>
+                                                                </Show>
+                                                            </div>
+                                                            <div class="space-y-2 md:justify-self-end">
+                                                                <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                                                    Utilities
+                                                                </div>
+                                                                <div class="flex flex-col gap-2">
+                                                                    <Show when={row.status === 'active' && !isKubernetes()}>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={async () => {
+                                                                                const cmd = getUninstallCommand();
+                                                                                const success = await copyToClipboard(cmd);
+                                                                                if (success) {
+                                                                                    notificationStore.success('Uninstall command copied');
+                                                                                } else {
+                                                                                    notificationStore.error('Failed to copy');
+                                                                                }
+                                                                            }}
+                                                                            class="text-xs text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 text-left"
+                                                                        >
+                                                                            Copy uninstall command
+                                                                        </button>
+                                                                    </Show>
+                                                                    <Show when={row.isLegacy}>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={async () => {
+                                                                                const success = await copyToClipboard(getUpgradeCommand(row.hostname || ''));
+                                                                                if (success) {
+                                                                                    notificationStore.success('Upgrade command copied');
+                                                                                } else {
+                                                                                    notificationStore.error('Failed to copy');
+                                                                                }
+                                                                            }}
+                                                                            class="text-xs text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 text-left"
+                                                                        >
+                                                                            Copy upgrade command
+                                                                        </button>
+                                                                    </Show>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </Show>
+                                        </>
+                                    );
+                                }}
                             </For>
                         </tbody>
                     </table>
                 </Card>
             </Card>
-
-            <Show when={hasRemovedDockerHosts()}>
-                <Card padding="lg" class="space-y-4">
-                    <div class="space-y-1">
-                        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Removed Docker Hosts</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">
-                            Docker hosts that were removed and are blocked from re-enrolling. Allow re-enrollment to let them report again.
-                        </p>
-                    </div>
-
-                    <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-                        <table class="w-full min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead class="bg-gray-50 dark:bg-gray-800">
-                                <tr>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Hostname</th>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Host ID</th>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Removed</th>
-                                    <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-                                <For each={removedDockerHosts()}>
-                                    {(host) => (
-                                        <tr>
-                                            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
-                                                {host.displayName || host.hostname || 'Unknown'}
-                                            </td>
-                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400 font-mono text-xs">
-                                                {host.id.slice(0, 8)}...
-                                            </td>
-                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                                                {formatRelativeTime(host.removedAt)}
-                                            </td>
-                                            <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
-                                                <button
-                                                    onClick={() => handleAllowReenroll(host.id, host.hostname)}
-                                                    class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                                                >
-                                                    Allow re-enroll
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </For>
-                            </tbody>
-                        </table>
-                    </Card>
-                </Card>
-            </Show>
-
-            <Show when={hasRemovedKubernetesClusters()}>
-                <Card padding="lg" class="space-y-4">
-                    <div class="space-y-1">
-                        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Removed Kubernetes Clusters</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">
-                            Kubernetes clusters that were removed and are blocked from re-enrolling. Allow re-enrollment to let them report again.
-                        </p>
-                    </div>
-
-                    <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-                        <table class="w-full min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead class="bg-gray-50 dark:bg-gray-800">
-                                <tr>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Cluster</th>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Cluster ID</th>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Removed</th>
-                                    <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-                                <For each={removedKubernetesClusters()}>
-                                    {(cluster) => (
-                                        <tr>
-                                            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
-                                                {cluster.displayName || cluster.name || 'Unknown'}
-                                            </td>
-                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400 font-mono text-xs">
-                                                {cluster.id.slice(0, 8)}...
-                                            </td>
-                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                                                {formatRelativeTime(cluster.removedAt)}
-                                            </td>
-                                            <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
-                                                <button
-                                                    onClick={() => handleAllowKubernetesReenroll(cluster.id, cluster.displayName || cluster.name)}
-                                                    class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                                                >
-                                                    Allow re-enroll
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </For>
-                            </tbody>
-                        </table>
-                    </Card>
-                </Card>
-            </Show>
         </div >
     );
 };

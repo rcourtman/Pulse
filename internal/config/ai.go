@@ -67,6 +67,11 @@ type AIConfig struct {
 	UseOpenCode     bool   `json:"use_opencode,omitempty"`      // Enable OpenCode backend
 	OpenCodeDataDir string `json:"opencode_data_dir,omitempty"` // Data directory for OpenCode (default: /tmp/pulse-opencode)
 	OpenCodePort    int    `json:"opencode_port,omitempty"`     // Port for OpenCode server (0 = auto-assign)
+
+	// AI Infrastructure Control settings
+	// These control whether AI can take actions on infrastructure (start/stop VMs, containers, etc.)
+	ControlLevel    string   `json:"control_level,omitempty"`    // "read_only", "suggest", "controlled", "autonomous"
+	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs or names that AI cannot control
 }
 
 // AIProvider constants
@@ -78,9 +83,21 @@ const (
 	AIProviderGemini    = "gemini"
 )
 
+// AI Control Level constants
+const (
+	// ControlLevelReadOnly - AI can only query infrastructure, no control tools available
+	ControlLevelReadOnly = "read_only"
+	// ControlLevelSuggest - AI suggests commands, user must copy/paste to execute
+	ControlLevelSuggest = "suggest"
+	// ControlLevelControlled - AI can execute with per-command approval
+	ControlLevelControlled = "controlled"
+	// ControlLevelAutonomous - AI executes without approval (requires Pro license)
+	ControlLevelAutonomous = "autonomous"
+)
+
 // Default models per provider
 const (
-	DefaultAIModelAnthropic = "claude-opus-4-5-20251101"
+	DefaultAIModelAnthropic = "claude-3-5-haiku-latest"
 	DefaultAIModelOpenAI    = "gpt-4o"
 	DefaultAIModelOllama    = "llama3"
 	DefaultAIModelDeepSeek  = "deepseek-chat"    // V3.2 with tool-use support
@@ -482,4 +499,36 @@ func (c *AIConfig) GetRequestTimeout() time.Duration {
 		return time.Duration(c.RequestTimeoutSeconds) * time.Second
 	}
 	return 300 * time.Second // 5 minutes default
+}
+
+// GetControlLevel returns the AI control level, defaulting to read_only if not set
+func (c *AIConfig) GetControlLevel() string {
+	if c.ControlLevel == "" {
+		return ControlLevelReadOnly
+	}
+	return c.ControlLevel
+}
+
+// IsControlEnabled returns true if AI has any control capability beyond read-only
+func (c *AIConfig) IsControlEnabled() bool {
+	level := c.GetControlLevel()
+	return level != ControlLevelReadOnly
+}
+
+// IsValidControlLevel checks if a control level string is valid
+func IsValidControlLevel(level string) bool {
+	switch level {
+	case ControlLevelReadOnly, ControlLevelSuggest, ControlLevelControlled, ControlLevelAutonomous:
+		return true
+	default:
+		return false
+	}
+}
+
+// GetProtectedGuests returns the list of protected guests (VMIDs or names)
+func (c *AIConfig) GetProtectedGuests() []string {
+	if c.ProtectedGuests == nil {
+		return []string{}
+	}
+	return c.ProtectedGuests
 }

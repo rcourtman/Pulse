@@ -86,6 +86,13 @@ func NewService(cfg Config) *Service {
 
 	executor := mcp.NewPulseToolExecutor(stateProvider, policy, agentServer)
 
+	// Set control level from config
+	if cfg.AIConfig != nil {
+		controlLevel := cfg.AIConfig.GetControlLevel()
+		executor.SetControlLevel(mcp.ControlLevel(controlLevel))
+		executor.SetProtectedGuests(cfg.AIConfig.GetProtectedGuests())
+	}
+
 	return &Service{
 		cfg:      cfg.AIConfig,
 		executor: executor,
@@ -257,6 +264,13 @@ func (s *Service) Restart(ctx context.Context, newCfg *config.AIConfig) error {
 			model := strings.Replace(chatModel, ":", "/", 1)
 			s.sidecar.UpdateModel(model)
 			log.Info().Str("model", model).Msg("Updating OpenCode model")
+		}
+
+		// Update control settings on the executor (no restart needed)
+		if s.executor != nil {
+			s.executor.SetControlLevel(mcp.ControlLevel(cfg.GetControlLevel()))
+			s.executor.SetProtectedGuests(cfg.GetProtectedGuests())
+			log.Info().Str("control_level", cfg.GetControlLevel()).Msg("Updated MCP control settings")
 		}
 	}
 
@@ -523,4 +537,43 @@ func (s *Service) SetDiskHealthProvider(provider mcp.DiskHealthProvider) {
 	if s.executor != nil {
 		s.executor.SetDiskHealthProvider(provider)
 	}
+}
+
+// SetAgentProfileManager sets the profile manager for agent scope updates.
+func (s *Service) SetAgentProfileManager(manager mcp.AgentProfileManager) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.executor != nil {
+		s.executor.SetAgentProfileManager(manager)
+	}
+}
+
+// SetControlLevel sets the AI control level (read_only, suggest, controlled, autonomous)
+func (s *Service) SetControlLevel(level string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.executor != nil {
+		s.executor.SetControlLevel(mcp.ControlLevel(level))
+	}
+}
+
+// SetProtectedGuests sets the list of VMIDs/names that AI cannot control
+func (s *Service) SetProtectedGuests(guests []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.executor != nil {
+		s.executor.SetProtectedGuests(guests)
+	}
+}
+
+// UpdateControlSettings updates both control level and protected guests from config
+func (s *Service) UpdateControlSettings(cfg *config.AIConfig) {
+	if cfg == nil {
+		return
+	}
+	s.SetControlLevel(cfg.GetControlLevel())
+	s.SetProtectedGuests(cfg.GetProtectedGuests())
 }

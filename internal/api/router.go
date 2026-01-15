@@ -1258,6 +1258,20 @@ func (r *Router) setupRoutes() {
 	r.aiSettingsHandler.SetOnModelChange(func() {
 		r.RestartOpenCodeAI(context.Background())
 	})
+	// Wire control settings change callback to update MCP tool visibility
+	r.aiSettingsHandler.SetOnControlSettingsChange(func() {
+		if r.aiHandler != nil {
+			if svc := r.aiHandler.GetService(); svc != nil {
+				cfg := r.aiHandler.GetAIConfig()
+				if cfg != nil {
+					svc.UpdateControlSettings(cfg)
+					log.Info().Str("control_level", cfg.GetControlLevel()).Msg("Updated AI control settings")
+				}
+			}
+		}
+	})
+	// Wire AI handler to profile handler for AI-assisted suggestions
+	r.configProfileHandler.SetAIHandler(r.aiHandler)
 	// Wire license checker for alert manager Pro features (Update Alerts)
 	if r.monitor != nil {
 		alertMgr := r.monitor.GetAlertManager()
@@ -1400,42 +1414,6 @@ func (r *Router) setupRoutes() {
 		}
 	}))
 	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeOpenCodeSessions))
-
-	// OpenCode Web UI proxy - serves OpenCode's built-in web interface
-	// This allows users to access OpenCode directly through Pulse with auth
-	r.mux.HandleFunc("/opencode/", RequireAuth(r.config, r.aiHandler.HandleOpenCodeUI))
-	r.mux.HandleFunc("/opencode", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
-		// Redirect /opencode to /opencode/ for proper asset loading
-		http.Redirect(w, req, "/opencode/", http.StatusMovedPermanently)
-	}))
-
-	// OpenCode API proxy - these routes are used by OpenCode's frontend
-	// When embedded in iframe, OpenCode's JS makes requests to window.location.origin
-	// We proxy these to OpenCode's backend so the iframe works correctly
-	// NOTE: Register both /path and /path/ because Go's ServeMux treats them differently:
-	// - /path/ matches any path starting with /path/
-	// - /path (no trailing slash) matches exactly /path
-	// Note: /global is a client-side route in OpenCode, not an API endpoint
-	openCodeAPIBases := []string{
-		"/session",
-		"/tui",
-		"/config",
-		"/file",
-		"/find",
-		"/instance",
-		"/mcp",
-		"/permission",
-		"/project",
-		"/provider",
-		"/pty",
-		"/question",
-		"/experimental",
-	}
-	for _, base := range openCodeAPIBases {
-		// Register both exact match and prefix match
-		r.mux.HandleFunc(base, RequireAuth(r.config, r.aiHandler.HandleOpenCodeAPI))
-		r.mux.HandleFunc(base+"/", RequireAuth(r.config, r.aiHandler.HandleOpenCodeAPI))
-	}
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
@@ -1952,6 +1930,12 @@ func (r *Router) wireOpenCodeProviders() {
 		}
 	}
 
+	if r.persistence != nil {
+		manager := NewMCPAgentProfileManager(r.persistence, r.licenseHandlers.Service())
+		service.SetAgentProfileManager(manager)
+		log.Debug().Msg("OpenCode: Agent profile manager wired")
+	}
+
 	log.Info().Msg("OpenCode MCP tool providers wired")
 }
 
@@ -2452,23 +2436,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			strings.HasPrefix(req.URL.Path, "/ws") ||
 			strings.HasPrefix(req.URL.Path, "/socket.io/") ||
 			strings.HasPrefix(req.URL.Path, "/download/") ||
-			strings.HasPrefix(req.URL.Path, "/opencode") ||
-			// OpenCode API paths - proxied to OpenCode backend for iframe embedding
-			// Note: Use "/path" (not "/path/") to match both exact and prefix paths
-			// Note: /global is a client-side route, not included here
-			strings.HasPrefix(req.URL.Path, "/session") ||
-			strings.HasPrefix(req.URL.Path, "/tui") ||
-			strings.HasPrefix(req.URL.Path, "/config") ||
-			strings.HasPrefix(req.URL.Path, "/file") ||
-			strings.HasPrefix(req.URL.Path, "/find") ||
-			strings.HasPrefix(req.URL.Path, "/instance") ||
-			strings.HasPrefix(req.URL.Path, "/mcp") ||
-			strings.HasPrefix(req.URL.Path, "/permission") ||
-			strings.HasPrefix(req.URL.Path, "/project") ||
-			strings.HasPrefix(req.URL.Path, "/provider") ||
-			strings.HasPrefix(req.URL.Path, "/pty") ||
-			strings.HasPrefix(req.URL.Path, "/question") ||
-			strings.HasPrefix(req.URL.Path, "/experimental") ||
 			req.URL.Path == "/simple-stats" ||
 			req.URL.Path == "/install-docker-agent.sh" ||
 			req.URL.Path == "/install-container-agent.sh" ||

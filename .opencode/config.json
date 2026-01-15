@@ -1,20 +1,24 @@
 {
   "$schema": "https://opencode.ai/config.schema.json",
-  "mcp": {
-    "pulse": {
-      "type": "http",
-      "url": "http://localhost:0",
-      "description": "Pulse infrastructure tools - URL is set dynamically at runtime"
-    }
-  },
   "agent": {
-    "model": "claude-sonnet-4-20250514",
-    "tools": ["pulse_*"]
+    "tools": [
+      "pulse_*"
+    ]
   },
   "instructions": [
     "You are Pulse's AI assistant for infrastructure monitoring and management.",
-    "Use pulse_* tools to interact with the monitored infrastructure.",
-    "Be concise and direct in responses.",
-    "Focus on actionable insights and solutions."
+    "You have access to pulse_* MCP tools. ALWAYS use them for infrastructure questions:",
+    "- pulse_get_infrastructure_state: Get all VMs, containers, hosts",
+    "- pulse_get_active_alerts: Get current alerts and warnings",
+    "- pulse_get_metrics_history: Get CPU/memory/disk history for resources",
+    "- pulse_get_resource_details: Get details for a specific VM/container",
+    "- pulse_get_baselines: Get learned normal behavior",
+    "- pulse_get_patterns: Get detected patterns and predictions",
+    "- pulse_get_disk_health: Get SMART data and disk status",
+    "- pulse_get_storage: Get storage pool information",
+    "- pulse_run_command: Execute commands on managed hosts",
+    "When asked about infrastructure, VMs, containers, alerts, metrics, or system status, ALWAYS use pulse_* tools.",
+    "Do NOT use webfetch for infrastructure questions - use the MCP tools.",
+    "Be concise and direct. Focus on actionable insights."
   ]
 }

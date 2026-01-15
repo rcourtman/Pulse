@@ -16,9 +16,10 @@ import (
 
 // ConfigProfileHandler handles configuration profile operations
 type ConfigProfileHandler struct {
-	persistence *config.ConfigPersistence
-	validator   *models.ProfileValidator
-	mu          sync.RWMutex
+	persistence       *config.ConfigPersistence
+	validator         *models.ProfileValidator
+	mu                sync.RWMutex
+	suggestionHandler *ProfileSuggestionHandler
 }
 
 // NewConfigProfileHandler creates a new handler
@@ -27,6 +28,11 @@ func NewConfigProfileHandler(persistence *config.ConfigPersistence) *ConfigProfi
 		persistence: persistence,
 		validator:   models.NewProfileValidator(),
 	}
+}
+
+// SetAIHandler sets the AI handler for profile suggestions
+func (h *ConfigProfileHandler) SetAIHandler(aiHandler *AIHandler) {
+	h.suggestionHandler = NewProfileSuggestionHandler(h.persistence, aiHandler)
 }
 
 // ServeHTTP implements the http.Handler interface
@@ -66,6 +72,16 @@ func (h *ConfigProfileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		// POST /validate - Validate a config without saving
 		if r.Method == http.MethodPost {
 			h.ValidateConfig(w, r)
+			return
+		}
+	} else if path == "/suggestions" {
+		// POST /suggestions - AI-assisted profile suggestion
+		if r.Method == http.MethodPost {
+			if h.suggestionHandler != nil {
+				h.suggestionHandler.HandleSuggestProfile(w, r)
+			} else {
+				http.Error(w, "AI service not configured", http.StatusServiceUnavailable)
+			}
 			return
 		}
 	} else if path == "/changelog" {

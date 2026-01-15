@@ -43,6 +43,7 @@ type DiagnosticsInfo struct {
 	APITokens        *APITokenDiagnostic         `json:"apiTokens,omitempty"`
 	DockerAgents     *DockerAgentDiagnostic      `json:"dockerAgents,omitempty"`
 	Alerts           *AlertsDiagnostic           `json:"alerts,omitempty"`
+	OpenCode         *OpenCodeDiagnostic         `json:"openCode,omitempty"`
 	Errors           []string                    `json:"errors"`
 	// NodeSnapshots captures the raw memory payload and derived usage Pulse last observed per node.
 	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots,omitempty"`
@@ -355,6 +356,19 @@ type AlertsDiagnostic struct {
 	Notes                    []string `json:"notes,omitempty"`
 }
 
+// OpenCodeDiagnostic reports on the OpenCode AI sidecar status.
+type OpenCodeDiagnostic struct {
+	Enabled      bool     `json:"enabled"`
+	Running      bool     `json:"running"`
+	Healthy      bool     `json:"healthy"`
+	Port         int      `json:"port,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	Model        string   `json:"model,omitempty"`
+	MCPConnected bool     `json:"mcpConnected"`
+	MCPToolCount int      `json:"mcpToolCount,omitempty"`
+	Notes        []string `json:"notes,omitempty"`
+}
+
 // handleDiagnostics returns comprehensive diagnostic information
 func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	diagnosticsMetricsOnce.Do(func() {
@@ -555,6 +569,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 
 	diag.DockerAgents = buildDockerAgentDiagnostic(r.monitor, diag.Version)
 	diag.Alerts = buildAlertsDiagnostic(r.monitor)
+	diag.OpenCode = buildOpenCodeDiagnostic(r.config, r.aiHandler)
 
 	diag.Discovery = buildDiscoveryDiagnostic(r.config, r.monitor)
 
@@ -1859,4 +1874,61 @@ func interfaceToStringSlice(value interface{}) []string {
 	default:
 		return nil
 	}
+}
+
+func buildOpenCodeDiagnostic(cfg *config.Config, aiHandler *AIHandler) *OpenCodeDiagnostic {
+	if cfg == nil {
+		return nil
+	}
+
+	diag := &OpenCodeDiagnostic{
+		Enabled: false,
+		Notes:   []string{},
+	}
+
+	// Calculate enabled state based on AI config
+	// NOTE: aiHandler might be nil during early startup
+	if aiHandler != nil {
+		aiCfg := aiHandler.GetAIConfig()
+		if aiCfg != nil {
+			diag.Enabled = aiCfg.UseOpenCode
+			diag.Model = aiCfg.GetChatModel()
+
+			// Pulse legacy config check
+			if !diag.Enabled && aiCfg.Enabled {
+				diag.Notes = append(diag.Notes, "AI is enabled but UseOpenCode is false - using legacy implementation")
+			}
+		}
+
+		svc := aiHandler.GetService()
+		if svc != nil {
+			diag.Running = svc.IsRunning()
+			diag.Healthy = svc.IsRunning() // Consolidate for now
+
+			// Get connection details
+			baseURL := svc.GetBaseURL()
+			if baseURL != "" {
+				diag.URL = baseURL
+				// Parse port from URL
+				if parts := strings.Split(baseURL, ":"); len(parts) > 2 {
+					if port, err := strconv.Atoi(parts[2]); err == nil {
+						diag.Port = port
+					}
+				}
+			}
+
+			// Check MCP connection (if we had access to check it)
+			diag.MCPConnected = diag.Running // Assume connected if running for now
+
+			if !diag.Running && diag.Enabled {
+				diag.Notes = append(diag.Notes, "OpenCode service is enabled but not running")
+			}
+		} else if diag.Enabled {
+			diag.Notes = append(diag.Notes, "OpenCode service is nil")
+		}
+	} else {
+		diag.Notes = append(diag.Notes, "AI Handler not initialized")
+	}
+
+	return diag
 }

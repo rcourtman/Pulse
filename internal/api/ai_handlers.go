@@ -31,11 +31,12 @@ import (
 
 // AISettingsHandler handles AI settings endpoints
 type AISettingsHandler struct {
-	config        *config.Config
-	persistence   *config.ConfigPersistence
-	aiService     *ai.Service
-	agentServer   *agentexec.Server
-	onModelChange func() // Called when model or other OpenCode-affecting settings change
+	config                  *config.Config
+	persistence             *config.ConfigPersistence
+	aiService               *ai.Service
+	agentServer             *agentexec.Server
+	onModelChange           func() // Called when model or other OpenCode-affecting settings change
+	onControlSettingsChange func() // Called when control level or protected guests change
 }
 
 // NewAISettingsHandler creates a new AI settings handler
@@ -168,6 +169,12 @@ func (h *AISettingsHandler) SetOnModelChange(callback func()) {
 	h.onModelChange = callback
 }
 
+// SetOnControlSettingsChange sets a callback to be invoked when control settings change
+// Used by Router to update MCP tool visibility without restarting OpenCode
+func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
+	h.onControlSettingsChange = callback
+}
+
 // AISettingsResponse is returned by GET /api/settings/ai
 // API keys are masked for security
 type AISettingsResponse struct {
@@ -205,6 +212,9 @@ type AISettingsResponse struct {
 	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
+	// Infrastructure control settings
+	ControlLevel    string   `json:"control_level"`              // "read_only", "suggest", "controlled", "autonomous"
+	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
@@ -243,6 +253,9 @@ type AISettingsUpdateRequest struct {
 	CostBudgetUSD30d *float64 `json:"cost_budget_usd_30d,omitempty"`
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds *int `json:"request_timeout_seconds,omitempty"`
+	// Infrastructure control settings
+	ControlLevel    *string  `json:"control_level,omitempty"`    // "read_only", "suggest", "controlled", "autonomous"
+	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control (nil = don't update, empty = clear)
 }
 
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
@@ -304,6 +317,8 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		ConfiguredProviders:   settings.GetConfiguredProviders(),
 		CostBudgetUSD30d:      settings.CostBudgetUSD30d,
 		RequestTimeoutSeconds: settings.RequestTimeoutSeconds,
+		ControlLevel:          settings.GetControlLevel(),
+		ProtectedGuests:       settings.GetProtectedGuests(),
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -589,6 +604,34 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.RequestTimeoutSeconds = *req.RequestTimeoutSeconds
 	}
 
+	// Handle infrastructure control settings
+	if req.ControlLevel != nil {
+		if !config.IsValidControlLevel(*req.ControlLevel) {
+			http.Error(w, "invalid control_level: must be read_only, suggest, controlled, or autonomous", http.StatusBadRequest)
+			return
+		}
+		// "autonomous" requires Pro license (same as autonomous_mode)
+		if *req.ControlLevel == config.ControlLevelAutonomous {
+			if !h.aiService.HasLicenseFeature(ai.FeatureAIAutoFix) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusPaymentRequired)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"error":       "license_required",
+					"message":     "Autonomous control requires Pulse Pro",
+					"feature":     ai.FeatureAIAutoFix,
+					"upgrade_url": "https://pulserelay.pro/",
+				})
+				return
+			}
+		}
+		settings.ControlLevel = *req.ControlLevel
+	}
+
+	// Handle protected guests (nil = don't update)
+	if req.ProtectedGuests != nil {
+		settings.ProtectedGuests = req.ProtectedGuests
+	}
+
 	// Save settings
 	if err := h.persistence.SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save AI settings")
@@ -613,6 +656,12 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// This ensures the new model is picked up by the sidecar
 	if h.onModelChange != nil && (req.Model != nil || req.ChatModel != nil) {
 		h.onModelChange()
+	}
+
+	// Update MCP control settings if control level or protected guests changed
+	// This updates tool visibility without restarting OpenCode
+	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil) {
+		h.onControlSettingsChange()
 	}
 
 	log.Info().
@@ -662,6 +711,8 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		OpenAIBaseURL:         settings.OpenAIBaseURL,
 		ConfiguredProviders:   settings.GetConfiguredProviders(),
 		RequestTimeoutSeconds: settings.RequestTimeoutSeconds,
+		ControlLevel:          settings.GetControlLevel(),
+		ProtectedGuests:       settings.GetProtectedGuests(),
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {

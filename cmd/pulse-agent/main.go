@@ -901,18 +901,32 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 
 // applyRemoteSettings merges remote settings into the local configuration.
 // Supported keys:
+// - enable_host (bool)
 // - enable_docker (bool)
 // - enable_kubernetes (bool)
 // - enable_proxmox (bool)
 // - proxmox_type (string)
+// - docker_runtime (string)
+// - disable_auto_update (bool)
+// - disable_docker_update_checks (bool)
+// - kube_include_all_pods (bool)
+// - kube_include_all_deployments (bool)
 // - log_level (string)
 // - interval (string/duration)
+// - report_ip (string)
+// - disable_ceph (bool)
 func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *zerolog.Logger) {
 	for k, v := range settings {
 		switch k {
+		case "enable_host":
+			if b, ok := v.(bool); ok {
+				cfg.EnableHost = b
+				logger.Info().Bool("val", b).Msg("Remote config: enable_host")
+			}
 		case "enable_docker":
 			if b, ok := v.(bool); ok {
 				cfg.EnableDocker = b
+				cfg.DockerConfigured = true
 				logger.Info().Bool("val", b).Msg("Remote config: enable_docker")
 			}
 		case "enable_kubernetes":
@@ -927,8 +941,17 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 			}
 		case "proxmox_type":
 			if s, ok := v.(string); ok {
-				cfg.ProxmoxType = s
+				normalized := strings.TrimSpace(strings.ToLower(s))
+				if normalized == "auto" {
+					normalized = ""
+				}
+				cfg.ProxmoxType = normalized
 				logger.Info().Str("val", s).Msg("Remote config: proxmox_type")
+			}
+		case "docker_runtime":
+			if s, ok := v.(string); ok {
+				cfg.DockerRuntime = strings.TrimSpace(strings.ToLower(s))
+				logger.Info().Str("val", s).Msg("Remote config: docker_runtime")
 			}
 		case "log_level":
 			if s, ok := v.(string); ok {
@@ -951,6 +974,26 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 				// JSON numbers are floats, assume seconds
 				cfg.Interval = time.Duration(f) * time.Second
 				logger.Info().Float64("val", f).Msg("Remote config: interval (s)")
+			}
+		case "disable_auto_update":
+			if b, ok := v.(bool); ok {
+				cfg.DisableAutoUpdate = b
+				logger.Info().Bool("val", b).Msg("Remote config: disable_auto_update")
+			}
+		case "disable_docker_update_checks":
+			if b, ok := v.(bool); ok {
+				cfg.DisableDockerUpdateChecks = b
+				logger.Info().Bool("val", b).Msg("Remote config: disable_docker_update_checks")
+			}
+		case "kube_include_all_pods":
+			if b, ok := v.(bool); ok {
+				cfg.KubeIncludeAllPods = b
+				logger.Info().Bool("val", b).Msg("Remote config: kube_include_all_pods")
+			}
+		case "kube_include_all_deployments":
+			if b, ok := v.(bool); ok {
+				cfg.KubeIncludeAllDeployments = b
+				logger.Info().Bool("val", b).Msg("Remote config: kube_include_all_deployments")
 			}
 		case "report_ip":
 			if s, ok := v.(string); ok {

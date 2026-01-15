@@ -1,66 +1,100 @@
-import { Component, Show, createSignal } from 'solid-js';
+import { Component, Show, createSignal, createMemo, For } from 'solid-js';
 import type { ToolExecution, PendingTool } from './types';
 
 interface ToolExecutionBlockProps {
   tool: ToolExecution;
-  maxOutputLength?: number;
 }
 
+/**
+ * ToolExecutionBlock - Displays completed tool executions in a compact terminal-like style.
+ */
 export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) => {
-  const [expanded, setExpanded] = createSignal(false);
+  const [showOutput, setShowOutput] = createSignal(false);
 
-  const truncatedOutput = () => {
-    const max = props.maxOutputLength ?? 500;
-    const output = props.tool.output;
-    if (!output) return '';
-    return output.length > max && !expanded() ? output.substring(0, max) + '...' : output;
-  };
+  // Get display name for tool
+  const toolLabel = createMemo(() => {
+    const name = props.tool.name;
+    if (name === 'run_command' || name === 'pulse_run_command') return 'cmd';
+    if (name === 'fetch_url' || name === 'pulse_fetch_url') return 'fetch';
+    if (name === 'get_infrastructure_state' || name === 'pulse_get_infrastructure_state') return 'infra';
+    if (name === 'get_active_alerts' || name === 'pulse_get_active_alerts') return 'alerts';
+    if (name === 'get_metrics_history' || name === 'pulse_get_metrics_history') return 'metrics';
+    if (name === 'get_baselines' || name === 'pulse_get_baselines') return 'baselines';
+    if (name === 'get_patterns' || name === 'pulse_get_patterns') return 'patterns';
+    if (name === 'get_disk_health' || name === 'pulse_get_disk_health') return 'disks';
+    if (name === 'get_storage' || name === 'pulse_get_storage') return 'storage';
+    if (name === 'get_resource_details' || name === 'pulse_get_resource_details') return 'resource';
+    if (name.includes('finding')) return 'finding';
+    return name.replace(/^pulse_/, '').replace(/_/g, ' ').substring(0, 12);
+  });
 
-  const needsTruncation = () => {
-    const max = props.maxOutputLength ?? 500;
-    return props.tool.output && props.tool.output.length > max;
-  };
+  // Check if output is non-empty and interesting
+  const hasOutput = createMemo(() => {
+    const output = props.tool.output || '';
+    return output.trim().length > 0 && !output.includes('not available');
+  });
+
+  // Truncate output
+  const displayOutput = createMemo(() => {
+    const output = props.tool.output || '';
+    const maxLen = 300;
+    if (!showOutput() && output.length > maxLen) {
+      return output.substring(0, maxLen) + '...';
+    }
+    return output;
+  });
+
+  const statusIcon = () => props.tool.success ? '✓' : '✗';
+  const statusColor = () => props.tool.success
+    ? 'text-emerald-600 dark:text-emerald-400'
+    : 'text-red-600 dark:text-red-400';
 
   return (
-    <div class="rounded-lg border overflow-hidden shadow-sm transition-all hover:shadow-md">
-      {/* Header */}
+    <div class="my-1 font-mono text-[11px]">
+      {/* Compact single-line header */}
       <div
-        class={`px-3 py-2 text-xs font-medium flex items-center gap-2 ${
-          props.tool.success
-            ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 text-green-800 dark:text-green-200 border-b border-green-200 dark:border-green-800'
-            : 'bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 text-red-800 dark:text-red-200 border-b border-red-200 dark:border-red-800'
-        }`}
+        class={`flex items-center gap-1.5 px-2 py-1 rounded ${hasOutput() ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800' : ''
+          } ${showOutput() ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}
+        onClick={() => hasOutput() && setShowOutput(!showOutput())}
       >
-        <div class={`p-1 rounded ${props.tool.success ? 'bg-green-100 dark:bg-green-800/50' : 'bg-red-100 dark:bg-red-800/50'}`}>
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-        </div>
-        <code class="font-mono flex-1 truncate">{props.tool.input}</code>
-        <Show when={props.tool.success}>
-          <svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-          </svg>
-        </Show>
-        <Show when={!props.tool.success}>
-          <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+        {/* Status icon */}
+        <span class={`${statusColor()} font-bold`}>{statusIcon()}</span>
+
+        {/* Tool label */}
+        <span class="text-slate-500 dark:text-slate-400 uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
+          {toolLabel()}
+        </span>
+
+        {/* Command/input - truncated */}
+        <code class="text-slate-700 dark:text-slate-300 truncate flex-1">
+          {props.tool.input.length > 60 ? props.tool.input.substring(0, 60) + '...' : props.tool.input}
+        </code>
+
+        {/* Expand indicator if has output */}
+        <Show when={hasOutput()}>
+          <svg
+            class={`w-3 h-3 text-slate-400 transition-transform ${showOutput() ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
           </svg>
         </Show>
       </div>
 
-      {/* Output */}
-      <Show when={props.tool.output}>
-        <div class="relative">
-          <pre class="px-3 py-2 text-xs font-mono bg-gray-50 dark:bg-gray-900/80 text-gray-700 dark:text-gray-300 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
-            {truncatedOutput()}
+      {/* Expanded output */}
+      <Show when={showOutput() && hasOutput()}>
+        <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-slate-200 dark:border-slate-700">
+          <pre class="text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words leading-relaxed max-h-40 overflow-y-auto">
+            {displayOutput()}
           </pre>
-          <Show when={needsTruncation()}>
+          <Show when={(props.tool.output || '').length > 300}>
             <button
-              onClick={() => setExpanded(!expanded())}
-              class="absolute bottom-2 right-2 px-2 py-1 text-[10px] font-medium bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded transition-colors"
+              onClick={(e) => { e.stopPropagation(); setShowOutput(!showOutput()); }}
+              class="mt-1 text-[9px] text-purple-600 dark:text-purple-400 hover:underline"
             >
-              {expanded() ? 'Show less' : 'Show more'}
+              {showOutput() && (props.tool.output || '').length > 300 ? 'Show less' : 'Show all'}
             </button>
           </Show>
         </div>
@@ -69,24 +103,126 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   );
 };
 
-// Pending tool (still running)
+/**
+ * PendingToolBlock - Compact single-line display for running tools
+ */
 interface PendingToolBlockProps {
   tool: PendingTool;
 }
 
 export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
+  const toolLabel = createMemo(() => {
+    const name = props.tool.name;
+    if (name === 'run_command' || name === 'pulse_run_command') return 'cmd';
+    if (name === 'fetch_url' || name === 'pulse_fetch_url') return 'fetch';
+    if (name === 'get_infrastructure_state' || name === 'pulse_get_infrastructure_state') return 'infra';
+    if (name === 'get_active_alerts' || name === 'pulse_get_active_alerts') return 'alerts';
+    if (name === 'get_metrics_history' || name === 'pulse_get_metrics_history') return 'metrics';
+    if (name === 'get_baselines' || name === 'pulse_get_baselines') return 'baselines';
+    if (name === 'get_patterns' || name === 'pulse_get_patterns') return 'patterns';
+    if (name === 'get_disk_health' || name === 'pulse_get_disk_health') return 'disks';
+    if (name === 'get_storage' || name === 'pulse_get_storage') return 'storage';
+    if (name === 'get_resource_details' || name === 'pulse_get_resource_details') return 'resource';
+    if (name.includes('finding')) return 'finding';
+    return name.replace(/^pulse_/, '').replace(/_/g, ' ').substring(0, 12);
+  });
+
   return (
-    <div class="rounded-lg border border-purple-300 dark:border-purple-700 overflow-hidden animate-pulse">
-      <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/30 dark:to-violet-900/30 text-purple-800 dark:text-purple-200">
-        <div class="p-1 rounded bg-purple-100 dark:bg-purple-800/50">
-          <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-        </div>
-        <code class="font-mono flex-1 truncate">{props.tool.input}</code>
-        <span class="text-[10px] text-purple-600 dark:text-purple-400 font-semibold uppercase tracking-wider">Running</span>
-      </div>
+    <div class="my-0.5 font-mono text-[11px] flex items-center gap-1.5 px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/20">
+      {/* Spinner */}
+      <svg class="w-3 h-3 text-purple-500 dark:text-purple-400 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+      </svg>
+
+      {/* Tool label */}
+      <span class="text-purple-600 dark:text-purple-400 uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
+        {toolLabel()}
+      </span>
+
+      {/* Command - truncated */}
+      <code class="text-purple-700 dark:text-purple-300 truncate flex-1">
+        {props.tool.input.length > 50 ? props.tool.input.substring(0, 50) + '...' : props.tool.input}
+      </code>
+    </div>
+  );
+};
+
+/**
+ * PendingToolsList - Groups multiple pending tools into a compact list
+ */
+interface PendingToolsListProps {
+  tools: PendingTool[];
+}
+
+export const PendingToolsList: Component<PendingToolsListProps> = (props) => {
+  const [expanded, setExpanded] = createSignal(false);
+
+  // If 3 or fewer, show all. Otherwise show collapsed.
+  const shouldCollapse = () => props.tools.length > 3;
+  const visibleTools = () => {
+    if (!shouldCollapse() || expanded()) return props.tools;
+    return props.tools.slice(0, 2);
+  };
+  const hiddenCount = () => props.tools.length - 2;
+
+  return (
+    <div class="my-1">
+      <For each={visibleTools()}>
+        {(tool) => <PendingToolBlock tool={tool} />}
+      </For>
+
+      <Show when={shouldCollapse() && !expanded()}>
+        <button
+          onClick={() => setExpanded(true)}
+          class="w-full mt-0.5 py-1 text-[10px] text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded text-center font-medium"
+        >
+          + {hiddenCount()} more tools running...
+        </button>
+      </Show>
+    </div>
+  );
+};
+
+/**
+ * ToolExecutionsList - Compact list for multiple completed tools
+ */
+interface ToolExecutionsListProps {
+  tools: ToolExecution[];
+}
+
+export const ToolExecutionsList: Component<ToolExecutionsListProps> = (props) => {
+  const [showAll, setShowAll] = createSignal(false);
+
+  // If more than 5 tools, collapse them
+  const shouldCollapse = () => props.tools.length > 5;
+  const visibleTools = () => {
+    if (!shouldCollapse() || showAll()) return props.tools;
+    return props.tools.slice(0, 3);
+  };
+  const hiddenCount = () => props.tools.length - 3;
+
+  // Count successes/failures
+  const stats = createMemo(() => {
+    const success = props.tools.filter(t => t.success).length;
+    const failed = props.tools.length - success;
+    return { success, failed };
+  });
+
+  return (
+    <div class="my-1">
+      <For each={visibleTools()}>
+        {(tool) => <ToolExecutionBlock tool={tool} />}
+      </For>
+
+      <Show when={shouldCollapse() && !showAll()}>
+        <button
+          onClick={() => setShowAll(true)}
+          class="w-full mt-0.5 py-1 text-[10px] text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-center font-medium"
+        >
+          + {hiddenCount()} more tools ({stats().success} ✓ / {stats().failed} ✗)
+        </button>
+      </Show>
     </div>
   );
 };
