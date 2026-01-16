@@ -3,6 +3,7 @@ import { WelcomeStep } from './steps/WelcomeStep';
 import { SecurityStep } from './steps/SecurityStep';
 import { CompleteStep } from './steps/CompleteStep';
 import { StepIndicator } from './StepIndicator';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 export type WizardStep = 'welcome' | 'security' | 'complete';
 
@@ -26,8 +27,7 @@ interface SetupWizardProps {
 }
 
 export const SetupWizard: Component<SetupWizardProps> = (props) => {
-    const [currentStep, setCurrentStep] = createSignal<WizardStep>('welcome');
-    const [wizardState, setWizardState] = createSignal<WizardState>({
+    const defaultWizardState: WizardState = {
         username: 'admin',
         password: '',
         apiToken: '',
@@ -35,9 +35,39 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
         nodeName: '',
         aiEnabled: false,
         autoUpdatesEnabled: true,
-    });
+    };
+
+    const loadStoredCredentials = (): WizardState | null => {
+        if (typeof window === 'undefined') return null;
+        try {
+            const raw = sessionStorage.getItem(STORAGE_KEYS.SETUP_CREDENTIALS);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw) as Partial<WizardState>;
+            if (!parsed.username || !parsed.password || !parsed.apiToken) {
+                sessionStorage.removeItem(STORAGE_KEYS.SETUP_CREDENTIALS);
+                return null;
+            }
+            return {
+                ...defaultWizardState,
+                username: parsed.username,
+                password: parsed.password,
+                apiToken: parsed.apiToken,
+            };
+        } catch (_err) {
+            try {
+                sessionStorage.removeItem(STORAGE_KEYS.SETUP_CREDENTIALS);
+            } catch (_removeErr) {
+                // Ignore cleanup errors
+            }
+            return null;
+        }
+    };
+
+    const storedCredentials = loadStoredCredentials();
+    const [currentStep, setCurrentStep] = createSignal<WizardStep>(storedCredentials ? 'complete' : 'welcome');
+    const [wizardState, setWizardState] = createSignal<WizardState>(storedCredentials ?? defaultWizardState);
     const [bootstrapToken, setBootstrapToken] = createSignal(props.bootstrapToken || '');
-    const [isUnlocked, setIsUnlocked] = createSignal(props.isUnlocked || false);
+    const [isUnlocked, setIsUnlocked] = createSignal(props.isUnlocked || Boolean(storedCredentials));
 
     const steps: WizardStep[] = ['welcome', 'security', 'complete'];
 
@@ -59,6 +89,20 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
 
     const updateState = (updates: Partial<WizardState>) => {
         setWizardState(prev => ({ ...prev, ...updates }));
+    };
+
+    const clearStoredCredentials = () => {
+        if (typeof window === 'undefined') return;
+        try {
+            sessionStorage.removeItem(STORAGE_KEYS.SETUP_CREDENTIALS);
+        } catch (_err) {
+            // Ignore storage errors
+        }
+    };
+
+    const handleComplete = () => {
+        clearStoredCredentials();
+        props.onComplete();
     };
 
     return (
@@ -110,7 +154,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
                     <Show when={currentStep() === 'complete'}>
                         <CompleteStep
                             state={wizardState()}
-                            onComplete={props.onComplete}
+                            onComplete={handleComplete}
                         />
                     </Show>
                 </div>

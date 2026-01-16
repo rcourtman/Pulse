@@ -288,9 +288,18 @@ export const Login: Component<LoginProps> = (props) => {
     authStatus: authStatus(),
   });
 
+  const hasStoredSetupCredentials = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return Boolean(sessionStorage.getItem(STORAGE_KEYS.SETUP_CREDENTIALS));
+    } catch (_err) {
+      return false;
+    }
+  };
+
   const legacyDisableAuth = () => authStatus()?.deprecatedDisableAuth === true;
   const showFirstRunSetup = () =>
-    authStatus()?.hasAuthentication === false || legacyDisableAuth();
+    authStatus()?.hasAuthentication === false || legacyDisableAuth() || hasStoredSetupCredentials();
 
   const shouldShowLocalLogin = () => {
     const params = new URLSearchParams(window.location.search);

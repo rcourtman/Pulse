@@ -97,6 +97,7 @@ export const STORAGE_KEYS = {
   // Authentication
   AUTH: 'pulse_auth',
   LEGACY_TOKEN: 'pulse_api_token',
+  SETUP_CREDENTIALS: 'pulse_setup_credentials',
 
   // UI preferences
   DARK_MODE: 'darkMode',

@@ -1,6 +1,7 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { showError, showSuccess } from '@/utils/toast';
 import { setApiToken as setApiClientToken, apiFetchJSON } from '@/utils/apiClient';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { WizardState } from '../SetupWizard';
 
 interface SecurityStepProps {
@@ -71,6 +72,22 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 password: finalPassword,
                 apiToken: token,
             });
+
+            if (typeof window !== 'undefined') {
+                try {
+                    sessionStorage.setItem(
+                        STORAGE_KEYS.SETUP_CREDENTIALS,
+                        JSON.stringify({
+                            username: username(),
+                            password: finalPassword,
+                            apiToken: token,
+                            createdAt: new Date().toISOString(),
+                        }),
+                    );
+                } catch (_err) {
+                    // Ignore storage errors (private browsing, quota limits, etc.)
+                }
+            }
 
             showSuccess('Security configured!');
             props.onNext();
