@@ -40,12 +40,18 @@ services:
       - "7655:7655"
     volumes:
       - pulse_data:/data
-    environment:
-      - PULSE_AUTH_USER=admin
-      - PULSE_AUTH_PASS=secret123
-
+    env_file:
+      - .env
 volumes:
   pulse_data:
+```
+
+*If not specified this will be created on first login*
+
+Create a `.env` for credetials:
+```
+- PULSE_AUTH_USER=admin
+- PULSE_AUTH_PASS= <password>
 ```
 
 > **Note**: Plain text passwords set via `PULSE_AUTH_PASS` are auto-hashed on startup. For production, prefer Quick Security Setup or a pre-hashed bcrypt value.
