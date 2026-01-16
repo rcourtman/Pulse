@@ -89,31 +89,36 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	h.monitor.GetAlertManager().UpdateConfig(config)
-
-	// Update notification manager with schedule settings
-	h.monitor.GetNotificationManager().SetCooldown(config.Schedule.Cooldown)
-
-	// Migrate deprecated GroupingWindow to Grouping.Window if needed
+	// Migrate deprecated GroupingWindow to Grouping.Window if needed before applying.
 	groupWindow := config.Schedule.Grouping.Window
 	if groupWindow == 0 && config.Schedule.GroupingWindow != 0 {
 		groupWindow = config.Schedule.GroupingWindow
-		// Migrate the value to the new location
 		config.Schedule.Grouping.Window = groupWindow
 		config.Schedule.GroupingWindow = 0 // Clear deprecated field
 		log.Info().
 			Int("window", groupWindow).
 			Msg("Migrated deprecated GroupingWindow to Grouping.Window")
 	}
+
+	h.monitor.GetAlertManager().UpdateConfig(config)
+	updatedConfig := h.monitor.GetAlertManager().GetConfig()
+
+	// Update notification manager with schedule settings
+	h.monitor.GetNotificationManager().SetCooldown(updatedConfig.Schedule.Cooldown)
+
+	groupWindow = updatedConfig.Schedule.Grouping.Window
+	if groupWindow == 0 && updatedConfig.Schedule.GroupingWindow != 0 {
+		groupWindow = updatedConfig.Schedule.GroupingWindow
+	}
 	h.monitor.GetNotificationManager().SetGroupingWindow(groupWindow)
 	h.monitor.GetNotificationManager().SetGroupingOptions(
-		config.Schedule.Grouping.ByNode,
-		config.Schedule.Grouping.ByGuest,
+		updatedConfig.Schedule.Grouping.ByNode,
+		updatedConfig.Schedule.Grouping.ByGuest,
 	)
-	h.monitor.GetNotificationManager().SetNotifyOnResolve(config.Schedule.NotifyOnResolve)
+	h.monitor.GetNotificationManager().SetNotifyOnResolve(updatedConfig.Schedule.NotifyOnResolve)
 
 	// Save to persistent storage
-	if err := h.monitor.GetConfigPersistence().SaveAlertConfig(config); err != nil {
+	if err := h.monitor.GetConfigPersistence().SaveAlertConfig(updatedConfig); err != nil {
 		// Log error but don't fail the request
 		log.Error().Err(err).Msg("Failed to save alert configuration")
 	}
