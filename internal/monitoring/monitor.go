@@ -775,6 +775,9 @@ type Monitor struct {
 	mockMetricsCancel        context.CancelFunc
 	mockMetricsWg            sync.WaitGroup
 	dockerChecker            DockerChecker // Optional Docker checker for LXC containers
+	// Agent profile cache to avoid disk I/O on every report (refs #1094)
+	agentProfileCacheMu sync.RWMutex
+	agentProfileCache   *agentProfileCacheEntry
 }
 
 type rrdMemCacheEntry struct {
@@ -783,6 +786,16 @@ type rrdMemCacheEntry struct {
 	total     uint64
 	fetchedAt time.Time
 }
+
+// agentProfileCacheEntry caches agent profiles and assignments to avoid disk I/O on every agent report.
+// TTL is 60 seconds to balance freshness with performance.
+type agentProfileCacheEntry struct {
+	profiles    []models.AgentProfile
+	assignments []models.AgentProfileAssignment
+	loadedAt    time.Time
+}
+
+const agentProfileCacheTTL = 60 * time.Second
 
 // safePercentage calculates percentage safely, returning 0 if divisor is 0
 func safePercentage(used, total float64) float64 {
@@ -1403,6 +1416,7 @@ type HostAgentConfig struct {
 
 // GetHostAgentConfig returns the server-side configuration for a host agent.
 // The agent can poll this to apply remote config overrides.
+// Uses in-memory caching to avoid disk I/O on every agent report (refs #1094).
 func (m *Monitor) GetHostAgentConfig(hostID string) HostAgentConfig {
 	hostID = strings.TrimSpace(hostID)
 	if hostID == "" {
@@ -1411,47 +1425,92 @@ func (m *Monitor) GetHostAgentConfig(hostID string) HostAgentConfig {
 
 	cfg := HostAgentConfig{}
 
-	// 1. Load Host Metadata (CommandsEnabled)
+	// 1. Load Host Metadata (CommandsEnabled) - this is already in-memory
 	if m.hostMetadataStore != nil {
 		if meta := m.hostMetadataStore.Get(hostID); meta != nil {
 			cfg.CommandsEnabled = meta.CommandsEnabled
 		}
 	}
 
-	// 2. Load Profile Configuration
-	// We handle errors gracefully by logging them and continuing with partial config
+	// 2. Load Profile Configuration from cache
 	if m.persistence != nil {
-		// Load Assignments
-		assignments, err := m.persistence.LoadAgentProfileAssignments()
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to load agent profile assignments during config fetch")
-		} else {
-			var profileID string
-			for _, a := range assignments {
-				if a.AgentID == hostID {
-					profileID = a.ProfileID
-					break
-				}
-			}
+		profiles, assignments := m.getAgentProfileCache()
 
-			if profileID != "" {
-				// Load Profiles
-				profiles, err := m.persistence.LoadAgentProfiles()
-				if err != nil {
-					log.Warn().Err(err).Msg("Failed to load agent profiles during config fetch")
-				} else {
-					for _, p := range profiles {
-						if p.ID == profileID {
-							cfg.Settings = p.Config
-							break
-						}
-					}
+		var profileID string
+		for _, a := range assignments {
+			if a.AgentID == hostID {
+				profileID = a.ProfileID
+				break
+			}
+		}
+
+		if profileID != "" {
+			for _, p := range profiles {
+				if p.ID == profileID {
+					cfg.Settings = p.Config
+					break
 				}
 			}
 		}
 	}
 
 	return cfg
+}
+
+// getAgentProfileCache returns cached profiles and assignments, refreshing if stale.
+func (m *Monitor) getAgentProfileCache() ([]models.AgentProfile, []models.AgentProfileAssignment) {
+	now := time.Now()
+
+	// Fast path: check if cache is valid
+	m.agentProfileCacheMu.RLock()
+	cache := m.agentProfileCache
+	if cache != nil && now.Sub(cache.loadedAt) < agentProfileCacheTTL {
+		profiles := cache.profiles
+		assignments := cache.assignments
+		m.agentProfileCacheMu.RUnlock()
+		return profiles, assignments
+	}
+	m.agentProfileCacheMu.RUnlock()
+
+	// Slow path: reload from disk
+	m.agentProfileCacheMu.Lock()
+	defer m.agentProfileCacheMu.Unlock()
+
+	// Double-check after acquiring write lock
+	if m.agentProfileCache != nil && now.Sub(m.agentProfileCache.loadedAt) < agentProfileCacheTTL {
+		return m.agentProfileCache.profiles, m.agentProfileCache.assignments
+	}
+
+	var profiles []models.AgentProfile
+	var assignments []models.AgentProfileAssignment
+
+	if loadedAssignments, err := m.persistence.LoadAgentProfileAssignments(); err != nil {
+		log.Warn().Err(err).Msg("Failed to load agent profile assignments for cache")
+	} else {
+		assignments = loadedAssignments
+	}
+
+	if loadedProfiles, err := m.persistence.LoadAgentProfiles(); err != nil {
+		log.Warn().Err(err).Msg("Failed to load agent profiles for cache")
+	} else {
+		profiles = loadedProfiles
+	}
+
+	m.agentProfileCache = &agentProfileCacheEntry{
+		profiles:    profiles,
+		assignments: assignments,
+		loadedAt:    now,
+	}
+
+	return profiles, assignments
+}
+
+// InvalidateAgentProfileCache clears the agent profile cache, forcing a reload on next access.
+// Call this when profiles or assignments are modified.
+func (m *Monitor) InvalidateAgentProfileCache() {
+	m.agentProfileCacheMu.Lock()
+	m.agentProfileCache = nil
+	m.agentProfileCacheMu.Unlock()
 }
 
 // UpdateHostAgentConfig updates the server-side configuration for a host agent.
