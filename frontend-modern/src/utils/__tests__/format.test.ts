@@ -14,46 +14,56 @@ import {
 } from '@/utils/format';
 
 describe('formatBytes', () => {
-    it('formats bytes correctly', () => {
+    it('formats bytes with auto precision (small values get 2 decimals)', () => {
         expect(formatBytes(0)).toBe('0 B');
-        expect(formatBytes(512)).toBe('512.0 B');
-        expect(formatBytes(1024)).toBe('1.0 KB');
-        expect(formatBytes(1536)).toBe('1.5 KB');
+        expect(formatBytes(512)).toBe('512 B');  // >= 100, 0 decimals
+        expect(formatBytes(1024)).toBe('1.00 KB'); // < 10, 2 decimals
+        expect(formatBytes(1536)).toBe('1.50 KB'); // < 10, 2 decimals
     });
 
-    it('formats kilobytes correctly', () => {
-        expect(formatBytes(1024 * 1024)).toBe('1.0 MB');
-        expect(formatBytes(1536 * 1024)).toBe('1.5 MB');
+    it('formats kilobytes with auto precision', () => {
+        expect(formatBytes(1024 * 1024)).toBe('1.00 MB'); // < 10, 2 decimals
+        expect(formatBytes(1536 * 1024)).toBe('1.50 MB'); // < 10, 2 decimals
+        expect(formatBytes(50 * 1024 * 1024)).toBe('50.0 MB'); // 10-100, 1 decimal
+        expect(formatBytes(256 * 1024 * 1024)).toBe('256 MB'); // >= 100, 0 decimals
     });
 
-    it('formats megabytes correctly', () => {
-        expect(formatBytes(1024 * 1024 * 1024)).toBe('1.0 GB');
-        expect(formatBytes(1.5 * 1024 * 1024 * 1024)).toBe('1.5 GB');
+    it('formats megabytes with auto precision', () => {
+        expect(formatBytes(1024 * 1024 * 1024)).toBe('1.00 GB'); // < 10, 2 decimals
+        expect(formatBytes(1.5 * 1024 * 1024 * 1024)).toBe('1.50 GB'); // < 10, 2 decimals
+        expect(formatBytes(45 * 1024 * 1024 * 1024)).toBe('45.0 GB'); // 10-100, 1 decimal
     });
 
-    it('formats gigabytes correctly', () => {
-        expect(formatBytes(1024 * 1024 * 1024 * 1024)).toBe('1.0 TB');
+    it('formats gigabytes with auto precision', () => {
+        expect(formatBytes(1024 * 1024 * 1024 * 1024)).toBe('1.00 TB'); // < 10, 2 decimals
     });
 
     it('handles negative values', () => {
         expect(formatBytes(-1024)).toBe('0 B');
     });
 
-    it('handles custom decimal places', () => {
+    it('handles explicit decimal places', () => {
         expect(formatBytes(1536 * 1024, 2)).toBe('1.50 MB');
         expect(formatBytes(1536 * 1024, 0)).toBe('2 MB');
+        expect(formatBytes(1536 * 1024, 1)).toBe('1.5 MB');
     });
 });
 
 describe('formatSpeed', () => {
-    it('formats speed correctly', () => {
+    it('formats speed with auto precision', () => {
         expect(formatSpeed(0)).toBe('0 B/s');
-        expect(formatSpeed(1024)).toBe('1 KB/s');
-        expect(formatSpeed(1024 * 1024)).toBe('1 MB/s');
+        expect(formatSpeed(1024)).toBe('1.00 KB/s'); // < 10, 2 decimals
+        expect(formatSpeed(1024 * 1024)).toBe('1.00 MB/s'); // < 10, 2 decimals
+        expect(formatSpeed(50 * 1024 * 1024)).toBe('50.0 MB/s'); // 10-100, 1 decimal
     });
 
     it('handles negative values', () => {
         expect(formatSpeed(-1024)).toBe('0 B/s');
+    });
+
+    it('handles explicit decimal places', () => {
+        expect(formatSpeed(1024, 0)).toBe('1 KB/s');
+        expect(formatSpeed(1024 * 1024, 1)).toBe('1.0 MB/s');
     });
 });
 

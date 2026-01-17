@@ -1,16 +1,35 @@
 // Type-safe formatting utilities
 
-export function formatBytes(bytes: number, decimals = 1): string {
+/**
+ * Format bytes to human-readable string with dynamic precision.
+ * @param bytes - Number of bytes to format
+ * @param decimals - Number of decimal places, or 'auto' for dynamic precision:
+ *   - Values < 10: 2 decimals (e.g., "5.94 GB")
+ *   - Values 10-100: 1 decimal (e.g., "45.2 GB")
+ *   - Values >= 100: 0 decimals (e.g., "256 GB")
+ */
+export function formatBytes(bytes: number, decimals: number | 'auto' = 'auto'): string {
   if (!bytes || bytes < 0) return '0 B';
 
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const value = bytes / Math.pow(k, i);
 
-  return `${(bytes / Math.pow(k, i)).toFixed(decimals)} ${sizes[i]}`;
+  // Determine precision
+  let precision: number;
+  if (decimals === 'auto') {
+    if (value < 10) precision = 2;
+    else if (value < 100) precision = 1;
+    else precision = 0;
+  } else {
+    precision = decimals;
+  }
+
+  return `${value.toFixed(precision)} ${sizes[i]}`;
 }
 
-export function formatSpeed(bytesPerSecond: number, decimals = 0): string {
+export function formatSpeed(bytesPerSecond: number, decimals: number | 'auto' = 'auto'): string {
   if (!bytesPerSecond || bytesPerSecond < 0) return '0 B/s';
   return `${formatBytes(bytesPerSecond, decimals)}/s`;
 }
