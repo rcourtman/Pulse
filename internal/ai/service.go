@@ -944,7 +944,8 @@ func (s *Service) LoadConfig() error {
 	log.Info().
 		Str("provider", selectedProvider).
 		Str("model", selectedModel).
-		Bool("autonomous_mode", cfg.AutonomousMode).
+		Str("control_level", cfg.GetControlLevel()).
+		Bool("autonomous", cfg.IsAutonomous()).
 		Msg("AI service initialized")
 
 	return nil
@@ -1062,7 +1063,7 @@ func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 func (s *Service) IsAutonomous() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.cfg == nil || !s.cfg.AutonomousMode {
+	if s.cfg == nil || !s.cfg.IsAutonomous() {
 		return false
 	}
 	// Autonomous mode requires Pro license with ai_autofix feature

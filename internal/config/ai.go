@@ -501,9 +501,15 @@ func (c *AIConfig) GetRequestTimeout() time.Duration {
 	return 300 * time.Second // 5 minutes default
 }
 
-// GetControlLevel returns the AI control level, defaulting to read_only if not set
+// GetControlLevel returns the AI control level, defaulting to read_only if not set.
+// For backwards compatibility, if ControlLevel is empty but legacy AutonomousMode is true,
+// returns autonomous to preserve existing behavior.
 func (c *AIConfig) GetControlLevel() string {
 	if c.ControlLevel == "" {
+		// Legacy migration: honor old autonomous_mode field if set
+		if c.AutonomousMode {
+			return ControlLevelAutonomous
+		}
 		return ControlLevelReadOnly
 	}
 	return c.ControlLevel
@@ -513,6 +519,11 @@ func (c *AIConfig) GetControlLevel() string {
 func (c *AIConfig) IsControlEnabled() bool {
 	level := c.GetControlLevel()
 	return level != ControlLevelReadOnly
+}
+
+// IsAutonomous returns true if AI is configured for autonomous operation (no approval needed)
+func (c *AIConfig) IsAutonomous() bool {
+	return c.GetControlLevel() == ControlLevelAutonomous
 }
 
 // IsValidControlLevel checks if a control level string is valid

@@ -254,25 +254,11 @@ func (s *Sidecar) writeConfig() error {
 	var configParts []string
 	configParts = append(configParts, `  "$schema": "https://opencode.ai/config.json"`)
 
-	// Inject System Instructions
+	// Inject System Instructions - kept minimal since tool descriptions contain detailed guidance
 	instructions := `  "instructions": [
-    "You are Pulse's AI assistant for infrastructure monitoring and management.",
-    "You have access to pulse_* MCP tools. ALWAYS use them for infrastructure questions:",
-    "- pulse_get_infrastructure_state: Get all VMs, containers, hosts",
-    "- pulse_get_active_alerts: Get current alerts and warnings",
-    "- pulse_get_metrics_history: Get CPU/memory/disk history for resources",
-    "- pulse_get_resource_details: Get details for a specific VM/container",
-    "- pulse_get_baselines: Get learned normal behavior",
-    "- pulse_get_patterns: Get detected patterns and predictions",
-    "- pulse_get_disk_health: Get SMART data and disk status",
-    "- pulse_get_storage: Get storage pool information",
-    "- pulse_get_agent_scope: Inspect agent scope and profile settings",
-    "- pulse_set_agent_scope: Safely update unified agent scope via profiles",
-    "- pulse_run_command: Execute commands on managed hosts (only when control level allows)",
-    "When asked about infrastructure, VMs, containers, alerts, metrics, or system status, ALWAYS use pulse_* tools.",
-    "Use pulse_set_agent_scope for agent module changes instead of running shell commands.",
-    "Do NOT use webfetch for infrastructure questions - use the MCP tools.",
-    "Be concise and direct. Focus on actionable insights."
+    "You are Pulse's infrastructure assistant. Be concise and direct.",
+    "Read tool descriptions carefully - they explain what each tool returns and when to use it.",
+    "For status questions, one tool call is usually enough. Trust the data returned."
   ]`
 	configParts = append(configParts, instructions)
 

@@ -36,9 +36,11 @@ func newHTTPClient(timeout time.Duration) *http.Client {
 
 // Session represents an OpenCode chat session
 type Session struct {
-	ID        string    `json:"id"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID           string    `json:"id"`
+	Title        string    `json:"title,omitempty"`         // Generated from first user message
+	MessageCount int       `json:"message_count,omitempty"` // Number of messages in the session
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Message represents a message in a session
@@ -167,9 +169,31 @@ func (c *Client) ListSessions(ctx context.Context) ([]Session, error) {
 		return nil, fmt.Errorf("list sessions failed: status %d", resp.StatusCode)
 	}
 
-	var sessions []Session
-	if err := json.NewDecoder(resp.Body).Decode(&sessions); err != nil {
+	// OpenCode returns sessions with nested time structure
+	type openCodeTime struct {
+		Created int64 `json:"created"` // Unix timestamp in ms
+		Updated int64 `json:"updated"` // Unix timestamp in ms
+	}
+	type openCodeSession struct {
+		ID    string       `json:"id"`
+		Title string       `json:"title"`
+		Time  openCodeTime `json:"time"`
+	}
+
+	var ocSessions []openCodeSession
+	if err := json.NewDecoder(resp.Body).Decode(&ocSessions); err != nil {
 		return nil, err
+	}
+
+	// Convert to Pulse's Session format
+	sessions := make([]Session, len(ocSessions))
+	for i, oc := range ocSessions {
+		sessions[i] = Session{
+			ID:        oc.ID,
+			Title:     oc.Title,
+			CreatedAt: time.UnixMilli(oc.Time.Created),
+			UpdatedAt: time.UnixMilli(oc.Time.Updated),
+		}
 	}
 
 	return sessions, nil
@@ -241,7 +265,24 @@ func (c *Client) Prompt(ctx context.Context, req PromptRequest) (*PromptResponse
 		},
 	}
 	if req.Model != "" {
-		messageReq["model"] = req.Model
+		// OpenCode expects model as an object with providerID and modelID
+		parts := strings.SplitN(req.Model, "/", 2)
+		if len(parts) == 2 {
+			messageReq["model"] = map[string]string{
+				"providerID": parts[0],
+				"modelID":    parts[1],
+			}
+		} else {
+			// Model doesn't contain a "/" - try to infer provider from model name
+			provider := inferProviderFromModel(req.Model)
+			if provider != "" {
+				messageReq["model"] = map[string]string{
+					"providerID": provider,
+					"modelID":    req.Model,
+				}
+			}
+			// If we can't infer provider, skip setting model and let OpenCode use its default
+		}
 	}
 
 	body, err := json.Marshal(messageReq)
@@ -337,7 +378,25 @@ func (c *Client) PromptStream(ctx context.Context, req PromptRequest) (<-chan St
 			},
 		}
 		if req.Model != "" {
-			messageReq["model"] = req.Model
+			// OpenCode expects model as an object with providerID and modelID
+			parts := strings.SplitN(req.Model, "/", 2)
+			if len(parts) == 2 {
+				messageReq["model"] = map[string]string{
+					"providerID": parts[0],
+					"modelID":    parts[1],
+				}
+			} else {
+				// Model doesn't contain a "/" - try to infer provider from model name
+				// OpenCode requires model as an object, not a string
+				provider := inferProviderFromModel(req.Model)
+				if provider != "" {
+					messageReq["model"] = map[string]string{
+						"providerID": provider,
+						"modelID":    req.Model,
+					}
+				}
+				// If we can't infer provider, skip setting model and let OpenCode use its default
+			}
 		}
 
 		body, err := json.Marshal(messageReq)
@@ -529,15 +588,22 @@ func (c *Client) PromptStream(ctx context.Context, req PromptRequest) (<-chan St
 					continue
 				}
 				log.Debug().Str("partType", props.Part.Type).Str("delta", props.Delta).Str("reason", props.Part.Reason).Msg("OpenCode: Processing message part")
-				if props.Part.Type == "text" || props.Part.Type == "reasoning" {
-					// Stream both text and reasoning content
+				if props.Part.Type == "text" {
+					// Stream text content
 					if props.Delta != "" {
 						contentBuffer.WriteString(props.Delta)
-						receivedContent = true // Mark that we've received actual content
-						// Frontend expects just the delta string as data
+						receivedContent = true
 						deltaData, _ := json.Marshal(props.Delta)
-						log.Debug().Str("type", props.Part.Type).Str("delta", props.Delta).Msg("OpenCode: Sending content event")
+						log.Debug().Str("delta", props.Delta).Msg("OpenCode: Sending content event")
 						events <- StreamEvent{Type: "content", Data: deltaData}
+					}
+				} else if props.Part.Type == "reasoning" {
+					// Stream reasoning/thinking content separately
+					if props.Delta != "" {
+						receivedContent = true
+						deltaData, _ := json.Marshal(props.Delta)
+						log.Debug().Str("delta", props.Delta).Msg("OpenCode: Sending thinking event")
+						events <- StreamEvent{Type: "thinking", Data: deltaData}
 					}
 				} else if props.Part.Type == "tool" {
 					// Tool execution - translate to frontend format
@@ -599,15 +665,17 @@ func (c *Client) PromptStream(ctx context.Context, req PromptRequest) (<-chan St
 
 			case "question.asked":
 				// OpenCode is asking the user a question
+				// OpenCode format: id, sessionID, questions[{question, header, multiple, options[{label, description}]}]
 				var props struct {
 					ID        string `json:"id"`
+					SessionID string `json:"sessionID"`
 					Questions []struct {
-						ID       string `json:"id"`
-						Type     string `json:"type"` // "text" or "select"
 						Question string `json:"question"`
+						Header   string `json:"header"`
+						Multiple bool   `json:"multiple"`
 						Options  []struct {
-							Label string `json:"label"`
-							Value string `json:"value"`
+							Label       string `json:"label"`
+							Description string `json:"description"`
 						} `json:"options,omitempty"`
 					} `json:"questions"`
 				}
@@ -617,10 +685,36 @@ func (c *Client) PromptStream(ctx context.Context, req PromptRequest) (<-chan St
 				}
 				log.Debug().Str("questionID", props.ID).Int("count", len(props.Questions)).Msg("OpenCode: Question asked")
 
+				// Transform to frontend format
+				transformedQuestions := make([]map[string]interface{}, len(props.Questions))
+				for i, q := range props.Questions {
+					// Determine type: if options exist -> select, else -> text
+					qType := "text"
+					if len(q.Options) > 0 {
+						qType = "select"
+					}
+
+					// Transform options: use label as value if value not provided
+					var options []map[string]string
+					for _, opt := range q.Options {
+						options = append(options, map[string]string{
+							"label": opt.Label,
+							"value": opt.Label, // Use label as value since OpenCode doesn't provide value
+						})
+					}
+
+					transformedQuestions[i] = map[string]interface{}{
+						"id":       q.Header, // Use header as id
+						"type":     qType,
+						"question": q.Question,
+						"options":  options,
+					}
+				}
+
 				// Send question event to frontend
 				questionData, _ := json.Marshal(map[string]interface{}{
 					"question_id": props.ID,
-					"questions":   props.Questions,
+					"questions":   transformedQuestions,
 					"session_id":  sessionID,
 				})
 				events <- StreamEvent{Type: "question", Data: questionData}
@@ -718,6 +812,146 @@ type QuestionAnswer struct {
 	Value string `json:"value"` // The answer value (text or selected option)
 }
 
+// SummarizeSession compresses context when nearing model limits
+func (c *Client) SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/session/"+sessionID+"/summarize", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return nil, fmt.Errorf("summarize session failed: status %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if resp.ContentLength != 0 {
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, err
+		}
+	}
+	if result == nil {
+		result = map[string]interface{}{"success": true}
+	}
+
+	return result, nil
+}
+
+// GetSessionDiff returns file changes made during a session
+func (c *Client) GetSessionDiff(ctx context.Context, sessionID string) (map[string]interface{}, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/session/"+sessionID+"/diff", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("get session diff failed: status %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// ForkSession creates a branch point in the conversation
+func (c *Client) ForkSession(ctx context.Context, sessionID string) (*Session, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/session/"+sessionID+"/fork", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("fork session failed: status %d", resp.StatusCode)
+	}
+
+	var session Session
+	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
+		return nil, err
+	}
+
+	return &session, nil
+}
+
+// RevertSession reverts file changes from a session
+func (c *Client) RevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/session/"+sessionID+"/revert", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return nil, fmt.Errorf("revert session failed: status %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if resp.ContentLength != 0 {
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, err
+		}
+	}
+	if result == nil {
+		result = map[string]interface{}{"success": true}
+	}
+
+	return result, nil
+}
+
+// UnrevertSession restores previously reverted changes
+func (c *Client) UnrevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/session/"+sessionID+"/unrevert", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return nil, fmt.Errorf("unrevert session failed: status %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if resp.ContentLength != 0 {
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, err
+		}
+	}
+	if result == nil {
+		result = map[string]interface{}{"success": true}
+	}
+
+	return result, nil
+}
+
 // ListModels returns available models
 func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/config/providers", nil)
@@ -750,4 +984,41 @@ func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 
 	return models, nil
+}
+
+// inferProviderFromModel attempts to determine the provider from a model name
+// Returns empty string if provider cannot be determined
+func inferProviderFromModel(model string) string {
+	modelLower := strings.ToLower(model)
+
+	// Anthropic/Claude models
+	if strings.HasPrefix(modelLower, "claude") {
+		return "anthropic"
+	}
+
+	// OpenAI models
+	if strings.HasPrefix(modelLower, "gpt") || strings.HasPrefix(modelLower, "o1") || strings.HasPrefix(modelLower, "o3") {
+		return "openai"
+	}
+
+	// Google/Gemini models
+	if strings.HasPrefix(modelLower, "gemini") {
+		return "google"
+	}
+
+	// DeepSeek models
+	if strings.HasPrefix(modelLower, "deepseek") {
+		return "deepseek"
+	}
+
+	// Ollama/local models (common ones)
+	if strings.HasPrefix(modelLower, "llama") ||
+		strings.HasPrefix(modelLower, "mistral") ||
+		strings.HasPrefix(modelLower, "codellama") ||
+		strings.HasPrefix(modelLower, "phi") ||
+		strings.HasPrefix(modelLower, "qwen") {
+		return "ollama"
+	}
+
+	return ""
 }

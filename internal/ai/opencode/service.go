@@ -70,8 +70,11 @@ type Service struct {
 	mcpServer *mcp.Server
 	executor  *mcp.PulseToolExecutor
 
-	cfg     *config.AIConfig
-	started bool
+	cfg           *config.AIConfig
+	stateProvider StateProvider     // For real-time infrastructure context
+	agentServer   AgentServer       // For agent connectivity info
+	alertProvider mcp.AlertProvider // For real-time alert context
+	started       bool
 }
 
 // Config holds OpenCode service configuration
@@ -115,8 +118,10 @@ func NewService(cfg Config) *Service {
 	executor := mcp.NewPulseToolExecutor(execCfg)
 
 	return &Service{
-		cfg:      cfg.AIConfig,
-		executor: executor,
+		cfg:           cfg.AIConfig,
+		stateProvider: cfg.StateProvider,
+		agentServer:   cfg.AgentServer,
+		executor:      executor,
 	}
 }
 
@@ -343,11 +348,20 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		return fmt.Errorf("OpenCode not initialized")
 	}
 
+	// NOTE: Context injection disabled - let the AI use MCP tools to get context when needed
+	// The proactive context was making the AI too eager to take action on greetings
+	// infraContext := s.buildInfraContext()
+
 	// Stream from OpenCode
+	promptModel := req.Model
+	if promptModel != "" {
+		promptModel = convertModelToOpenCode(promptModel)
+	}
+
 	events, errors := client.PromptStream(ctx, PromptRequest{
 		Prompt:    req.Prompt,
 		SessionID: req.SessionID,
-		Model:     req.Model,
+		Model:     promptModel,
 	})
 
 	// Use bridge to transform specific events (tool_end -> approval_needed for approvals)
@@ -408,6 +422,77 @@ func (s *Service) ListSessions(ctx context.Context) ([]Session, error) {
 	}
 
 	return client.ListSessions(ctx)
+}
+
+// ListSessionsWithTitles returns all chat sessions with generated titles from the first user message
+func (s *Service) ListSessionsWithTitles(ctx context.Context) ([]Session, error) {
+	s.mu.RLock()
+	client := s.client
+	s.mu.RUnlock()
+
+	if client == nil {
+		return nil, fmt.Errorf("OpenCode not initialized")
+	}
+
+	sessions, err := client.ListSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enrich each session with title from first user message
+	for i := range sessions {
+		messages, err := client.GetMessages(ctx, sessions[i].ID)
+		if err != nil {
+			log.Debug().Err(err).Str("session_id", sessions[i].ID).Msg("Failed to get messages for session")
+			continue
+		}
+
+		sessions[i].MessageCount = len(messages)
+
+		// Find first user message to use as title
+		for _, msg := range messages {
+			if msg.Role == "user" && msg.Content != "" {
+				sessions[i].Title = generateSessionTitle(msg.Content)
+				break
+			}
+		}
+	}
+
+	return sessions, nil
+}
+
+// generateSessionTitle creates a title from the first user message
+// Truncates to ~50 chars at word boundary and adds ellipsis if needed
+func generateSessionTitle(content string) string {
+	// Clean up the content - remove extra whitespace and newlines
+	content = strings.TrimSpace(content)
+	content = strings.ReplaceAll(content, "\n", " ")
+	content = strings.ReplaceAll(content, "\r", " ")
+
+	// Collapse multiple spaces
+	for strings.Contains(content, "  ") {
+		content = strings.ReplaceAll(content, "  ", " ")
+	}
+
+	const maxLen = 50
+
+	// Use rune count for proper Unicode handling
+	runes := []rune(content)
+	if len(runes) <= maxLen {
+		return content
+	}
+
+	// Find a good break point (space) before maxLen
+	truncated := string(runes[:maxLen])
+	lastSpace := strings.LastIndex(truncated, " ")
+
+	if lastSpace > 20 {
+		// Break at the last space if it's not too early
+		return truncated[:lastSpace] + "..."
+	}
+
+	// No good break point, just truncate
+	return truncated + "..."
 }
 
 // CreateSession creates a new chat session
@@ -475,6 +560,71 @@ func (s *Service) AnswerQuestion(ctx context.Context, questionID string, answers
 	return client.AnswerQuestion(ctx, questionID, answers)
 }
 
+// SummarizeSession compresses context when nearing model limits
+func (s *Service) SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
+	s.mu.RLock()
+	client := s.client
+	s.mu.RUnlock()
+
+	if client == nil {
+		return nil, fmt.Errorf("OpenCode not initialized")
+	}
+
+	return client.SummarizeSession(ctx, sessionID)
+}
+
+// GetSessionDiff returns file changes made during a session
+func (s *Service) GetSessionDiff(ctx context.Context, sessionID string) (map[string]interface{}, error) {
+	s.mu.RLock()
+	client := s.client
+	s.mu.RUnlock()
+
+	if client == nil {
+		return nil, fmt.Errorf("OpenCode not initialized")
+	}
+
+	return client.GetSessionDiff(ctx, sessionID)
+}
+
+// ForkSession creates a branch point in the conversation
+func (s *Service) ForkSession(ctx context.Context, sessionID string) (*Session, error) {
+	s.mu.RLock()
+	client := s.client
+	s.mu.RUnlock()
+
+	if client == nil {
+		return nil, fmt.Errorf("OpenCode not initialized")
+	}
+
+	return client.ForkSession(ctx, sessionID)
+}
+
+// RevertSession reverts file changes from the session
+func (s *Service) RevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
+	s.mu.RLock()
+	client := s.client
+	s.mu.RUnlock()
+
+	if client == nil {
+		return nil, fmt.Errorf("OpenCode not initialized")
+	}
+
+	return client.RevertSession(ctx, sessionID)
+}
+
+// UnrevertSession restores previously reverted changes
+func (s *Service) UnrevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
+	s.mu.RLock()
+	client := s.client
+	s.mu.RUnlock()
+
+	if client == nil {
+		return nil, fmt.Errorf("OpenCode not initialized")
+	}
+
+	return client.UnrevertSession(ctx, sessionID)
+}
+
 // GetClient returns the underlying OpenCode client for direct access
 func (s *Service) GetClient() *Client {
 	s.mu.RLock()
@@ -517,6 +667,7 @@ func (s *Service) SetAlertProvider(provider mcp.AlertProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	s.alertProvider = provider // Store for context injection
 	if s.executor != nil {
 		s.executor.SetAlertProvider(provider)
 	}
@@ -629,4 +780,116 @@ func (s *Service) UpdateControlSettings(cfg *config.AIConfig) {
 	}
 	s.SetControlLevel(cfg.GetControlLevel())
 	s.SetProtectedGuests(cfg.GetProtectedGuests())
+}
+
+// buildInfraContext creates a compact real-time infrastructure context string
+// This is injected into every message so the AI always has accurate infrastructure awareness
+func (s *Service) buildInfraContext() string {
+	s.mu.RLock()
+	stateProvider := s.stateProvider
+	agentServer := s.agentServer
+	s.mu.RUnlock()
+
+	if stateProvider == nil {
+		return ""
+	}
+
+	state := stateProvider.GetState()
+
+	// Build a map of connected agents for quick lookup
+	connectedAgents := make(map[string]bool)
+	if agentServer != nil {
+		for _, agent := range agentServer.GetConnectedAgents() {
+			// Key by both AgentID and Hostname for flexible matching
+			connectedAgents[agent.AgentID] = true
+			connectedAgents[agent.Hostname] = true
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\n\n[CONTEXT: Infrastructure state for reference - use pulse_get_active_alerts tool to check alerts]\n")
+
+	// Group VMs and containers by node
+	nodeVMs := make(map[string][]models.VM)
+	nodeLXCs := make(map[string][]models.Container)
+	for _, vm := range state.VMs {
+		nodeVMs[vm.Node] = append(nodeVMs[vm.Node], vm)
+	}
+	for _, ct := range state.Containers {
+		nodeLXCs[ct.Node] = append(nodeLXCs[ct.Node], ct)
+	}
+
+	// Proxmox nodes
+	if len(state.Nodes) > 0 {
+		sb.WriteString("\nPROXMOX:\n")
+		for _, node := range state.Nodes {
+			canExec := connectedAgents[node.Name] || connectedAgents[node.ID]
+			execStr := "✗"
+			if canExec {
+				execStr = "✓"
+			}
+			sb.WriteString(fmt.Sprintf("  %s [%s] exec=%s\n", node.Name, node.Status, execStr))
+
+			// VMs on this node
+			if vms := nodeVMs[node.Name]; len(vms) > 0 {
+				for _, vm := range vms {
+					sb.WriteString(fmt.Sprintf("    VM %d: %s [%s]\n", vm.VMID, vm.Name, vm.Status))
+				}
+			}
+
+			// LXCs on this node
+			if lxcs := nodeLXCs[node.Name]; len(lxcs) > 0 {
+				for _, ct := range lxcs {
+					sb.WriteString(fmt.Sprintf("    LXC %d: %s [%s]\n", ct.VMID, ct.Name, ct.Status))
+				}
+			}
+		}
+	}
+
+	// Docker hosts with containers
+	if len(state.DockerHosts) > 0 {
+		sb.WriteString("\nDOCKER:\n")
+		for _, host := range state.DockerHosts {
+			canExec := connectedAgents[host.AgentID] || connectedAgents[host.Hostname]
+			execStr := "✗"
+			if canExec {
+				execStr = "✓"
+			}
+			displayName := host.Hostname
+			if host.DisplayName != "" {
+				displayName = host.DisplayName
+			}
+			sb.WriteString(fmt.Sprintf("  %s exec=%s\n", displayName, execStr))
+
+			// Containers on this host
+			running, stopped := 0, 0
+			for _, ct := range host.Containers {
+				if ct.State == "running" {
+					running++
+				} else {
+					stopped++
+				}
+			}
+			if running > 0 || stopped > 0 {
+				sb.WriteString(fmt.Sprintf("    %d running, %d stopped containers\n", running, stopped))
+			}
+		}
+	}
+
+	// Summary
+	sb.WriteString(fmt.Sprintf("\nTOTALS: %d nodes, %d VMs, %d LXCs, %d docker hosts\n",
+		len(state.Nodes), len(state.VMs), len(state.Containers), len(state.DockerHosts)))
+
+	// Execution model explanation
+	sb.WriteString(`
+[EXECUTION MODEL]
+- exec=✓ on a NODE means commands can run on that Proxmox host
+- VMs/LXCs do NOT have agents - to run commands INSIDE them:
+  * For LXC: use pulse_run_command on the NODE with command="pct exec <vmid> -- <your_command>"
+  * For VM: use pulse_run_command on the NODE with command="qm guest exec <vmid> -- <your_command>"
+  * Example: To check memory in LXC 150 on node delly, run "pct exec 150 -- ps aux" on host "delly"
+- Docker hosts with exec=✓ can run docker commands directly
+`)
+
+	return sb.String()
 }
