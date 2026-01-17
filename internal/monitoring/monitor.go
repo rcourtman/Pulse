@@ -774,6 +774,7 @@ type Monitor struct {
 	resourceStore            ResourceStoreInterface // Optional unified resource store for polling optimization
 	mockMetricsCancel        context.CancelFunc
 	mockMetricsWg            sync.WaitGroup
+	dockerChecker            DockerChecker // Optional Docker checker for LXC containers
 }
 
 type rrdMemCacheEntry struct {
@@ -7120,6 +7121,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	// Always update state when using efficient polling path
 	// Even if arrays are empty, we need to update to clear out VMs from genuinely offline nodes
 	m.state.UpdateVMsForInstance(instanceName, allVMs)
+
+	// Check Docker presence for containers that need it (new, restarted, started)
+	allContainers = m.CheckContainersForDocker(ctx, allContainers)
+
 	m.state.UpdateContainersForInstance(instanceName, allContainers)
 
 	// Record guest metrics history for running guests (enables sparkline/trends view)

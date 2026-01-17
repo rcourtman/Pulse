@@ -1151,6 +1151,9 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 		}
 	}
 
+	// Check Docker presence for containers that need it (new, restarted, started)
+	allContainers = m.CheckContainersForDocker(ctx, allContainers)
+
 	// Update state with all containers
 	m.state.UpdateContainersForInstance(instanceName, allContainers)
 

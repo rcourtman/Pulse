@@ -155,6 +155,10 @@ type Container struct {
 	// OCI container support (Proxmox VE 9.1+)
 	IsOCI      bool   `json:"isOci,omitempty"`      // True if this is an OCI container
 	OSTemplate string `json:"osTemplate,omitempty"` // Template or OCI image used (e.g., "docker:alpine:latest")
+
+	// Docker detection - automatically detected by checking for Docker socket inside the container
+	HasDocker       bool      `json:"hasDocker,omitempty"`       // True if Docker is installed inside this LXC
+	DockerCheckedAt time.Time `json:"dockerCheckedAt,omitempty"` // When Docker presence was last checked
 }
 
 // Host represents a generic infrastructure host reporting via external agents.
@@ -2749,4 +2753,29 @@ func (s *State) UpdatePMGBackups(instanceName string, backups []PMGBackup) {
 	s.PMGBackups = combined
 	s.syncBackupsLocked()
 	s.LastUpdate = time.Now()
+}
+
+// GetContainers returns a copy of all LXC containers.
+func (s *State) GetContainers() []Container {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	containers := make([]Container, len(s.Containers))
+	copy(containers, s.Containers)
+	return containers
+}
+
+// UpdateContainerDockerStatus updates the Docker detection status for a specific container.
+func (s *State) UpdateContainerDockerStatus(containerID string, hasDocker bool, checkedAt time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i := range s.Containers {
+		if s.Containers[i].ID == containerID {
+			s.Containers[i].HasDocker = hasDocker
+			s.Containers[i].DockerCheckedAt = checkedAt
+			return true
+		}
+	}
+	return false
 }
