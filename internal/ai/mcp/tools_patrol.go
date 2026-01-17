@@ -68,23 +68,29 @@ func (e *PulseToolExecutor) registerPatrolTools() {
 
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_list_alerts",
-			Description: "List all currently active alerts. Use to understand current problems in the infrastructure.",
+			Name: "pulse_list_alerts",
+			Description: `List active threshold alerts (CPU > 80%, disk full, etc).
+
+Returns: JSON array of alerts with resource, type, severity, value, threshold.
+
+Use when: User asks about alerts, warnings, or "what's wrong" with infrastructure.
+
+Do NOT use for: Checking if something is running (use pulse_get_topology).`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"severity": {
 						Type:        "string",
-						Description: "Filter by severity: 'critical', 'warning', 'info'. Omit for all.",
+						Description: "Filter: 'critical', 'warning', or 'info'. Omit for all.",
 						Enum:        []string{"critical", "warning", "info"},
 					},
 					"limit": {
 						Type:        "integer",
-						Description: "Maximum number of results (default: 100)",
+						Description: "Max results (default 100)",
 					},
 					"offset": {
 						Type:        "integer",
-						Description: "Number of results to skip",
+						Description: "Skip N results for pagination",
 					},
 				},
 			},
@@ -96,27 +102,33 @@ func (e *PulseToolExecutor) registerPatrolTools() {
 
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_list_findings",
-			Description: "List AI patrol findings. Active findings are current issues; dismissed findings show user feedback.",
+			Name: "pulse_list_findings",
+			Description: `List AI patrol findings - issues detected by automated analysis.
+
+Returns: JSON with active findings (current issues) and counts.
+
+Use when: User asks about findings, issues, or "what did the AI find".
+
+Do NOT use for: Checking if something is running (use pulse_get_topology), or threshold alerts (use pulse_list_alerts).`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"include_dismissed": {
 						Type:        "boolean",
-						Description: "If true, also include dismissed findings",
+						Description: "Include previously dismissed findings",
 					},
 					"severity": {
 						Type:        "string",
-						Description: "Filter by severity: 'critical', 'warning', 'info'. Omit for all.",
+						Description: "Filter: 'critical', 'warning', or 'info'. Omit for all.",
 						Enum:        []string{"critical", "warning", "info"},
 					},
 					"limit": {
 						Type:        "integer",
-						Description: "Maximum number of results (default: 100)",
+						Description: "Max results (default 100)",
 					},
 					"offset": {
 						Type:        "integer",
-						Description: "Number of results to skip",
+						Description: "Skip N results for pagination",
 					},
 				},
 			},

@@ -375,6 +375,116 @@ func (h *AIHandler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(status)
 }
 
+// HandleSummarize handles POST /api/ai/sessions/{id}/summarize
+// Compresses context when nearing model limits
+func (h *AIHandler) HandleSummarize(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	if !h.IsRunning() {
+		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	result, err := h.service.SummarizeSession(r.Context(), sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// HandleDiff handles GET /api/ai/sessions/{id}/diff
+// Returns file changes made during the session
+func (h *AIHandler) HandleDiff(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	if !h.IsRunning() {
+		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	diff, err := h.service.GetSessionDiff(r.Context(), sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(diff)
+}
+
+// HandleFork handles POST /api/ai/sessions/{id}/fork
+// Creates a branch point in the conversation
+func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	if !h.IsRunning() {
+		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	session, err := h.service.ForkSession(r.Context(), sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(session)
+}
+
+// HandleRevert handles POST /api/ai/sessions/{id}/revert
+// Reverts file changes from the session
+func (h *AIHandler) HandleRevert(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	if !h.IsRunning() {
+		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	result, err := h.service.RevertSession(r.Context(), sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// HandleUnrevert handles POST /api/ai/sessions/{id}/unrevert
+// Restores previously reverted changes
+func (h *AIHandler) HandleUnrevert(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	if !h.IsRunning() {
+		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	result, err := h.service.UnrevertSession(r.Context(), sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
 // AnswerQuestionRequest represents a request to answer a question
 type AnswerQuestionRequest struct {
 	Answers []struct {

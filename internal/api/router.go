@@ -1458,7 +1458,7 @@ func (r *Router) setupRoutes() {
 
 // routeOpenCodeSessions routes session-specific OpenCode AI requests
 func (r *Router) routeOpenCodeSessions(w http.ResponseWriter, req *http.Request) {
-	// Extract session ID from path: /api/ai/sessions/{id}[/messages|/abort]
+	// Extract session ID from path: /api/ai/sessions/{id}[/messages|/abort|/summarize|/diff|/fork|/revert|/unrevert]
 	path := strings.TrimPrefix(req.URL.Path, "/api/ai/sessions/")
 	parts := strings.SplitN(path, "/", 2)
 	sessionID := parts[0]
@@ -1475,6 +1475,16 @@ func (r *Router) routeOpenCodeSessions(w http.ResponseWriter, req *http.Request)
 			r.aiHandler.HandleMessages(w, req, sessionID)
 		case "abort":
 			r.aiHandler.HandleAbort(w, req, sessionID)
+		case "summarize":
+			r.aiHandler.HandleSummarize(w, req, sessionID)
+		case "diff":
+			r.aiHandler.HandleDiff(w, req, sessionID)
+		case "fork":
+			r.aiHandler.HandleFork(w, req, sessionID)
+		case "revert":
+			r.aiHandler.HandleRevert(w, req, sessionID)
+		case "unrevert":
+			r.aiHandler.HandleUnrevert(w, req, sessionID)
 		default:
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
@@ -1740,6 +1750,30 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 		} else {
 			log.Warn().Msg("[Router] resourceHandlers is nil, cannot inject resource store")
 		}
+
+		// Set up Docker detector for automatic Docker detection in LXC containers
+		if r.agentExecServer != nil {
+			// Create a command executor function that wraps the agent exec server
+			execFunc := func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+				agentID, found := r.agentExecServer.GetAgentForHost(hostname)
+				if !found {
+					return "", -1, fmt.Errorf("no agent connected for host %s", hostname)
+				}
+				result, err := r.agentExecServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+					RequestID: fmt.Sprintf("docker-check-%d", time.Now().UnixNano()),
+					Command:   command,
+					Timeout:   timeout,
+				})
+				if err != nil {
+					return "", -1, err
+				}
+				return result.Stdout + result.Stderr, result.ExitCode, nil
+			}
+
+			checker := monitoring.NewAgentDockerChecker(execFunc)
+			m.SetDockerChecker(checker)
+			log.Info().Msg("[Router] Docker detector configured for automatic LXC Docker detection")
+		}
 	}
 }
 
@@ -1998,7 +2032,232 @@ func (r *Router) wireOpenCodeProviders() {
 		log.Debug().Msg("OpenCode: Agent profile manager wired")
 	}
 
+	// Wire storage provider
+	if r.monitor != nil {
+		storageAdapter := mcp.NewStorageMCPAdapter(r.monitor)
+		if storageAdapter != nil {
+			service.SetStorageProvider(storageAdapter)
+			log.Debug().Msg("OpenCode: Storage provider wired")
+		}
+	}
+
+	// Wire backup provider
+	if r.monitor != nil {
+		backupAdapter := mcp.NewBackupMCPAdapter(r.monitor)
+		if backupAdapter != nil {
+			service.SetBackupProvider(backupAdapter)
+			log.Debug().Msg("OpenCode: Backup provider wired")
+		}
+	}
+
+	// Wire disk health provider
+	if r.monitor != nil {
+		diskHealthAdapter := mcp.NewDiskHealthMCPAdapter(r.monitor)
+		if diskHealthAdapter != nil {
+			service.SetDiskHealthProvider(diskHealthAdapter)
+			log.Debug().Msg("OpenCode: Disk health provider wired")
+		}
+	}
+
+	// Wire metrics history provider
+	if r.monitor != nil {
+		if metricsHistory := r.monitor.GetMetricsHistory(); metricsHistory != nil {
+			metricsAdapter := mcp.NewMetricsHistoryMCPAdapter(
+				r.monitor,
+				&metricsSourceWrapper{history: metricsHistory},
+			)
+			if metricsAdapter != nil {
+				service.SetMetricsHistory(metricsAdapter)
+				log.Debug().Msg("OpenCode: Metrics history provider wired")
+			}
+		}
+	}
+
+	// Wire baseline provider
+	if r.aiSettingsHandler != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
+			if baselineStore := patrolSvc.GetBaselineStore(); baselineStore != nil {
+				baselineAdapter := mcp.NewBaselineMCPAdapter(&baselineSourceWrapper{store: baselineStore})
+				if baselineAdapter != nil {
+					service.SetBaselineProvider(baselineAdapter)
+					log.Debug().Msg("OpenCode: Baseline provider wired")
+				}
+			}
+		}
+	}
+
+	// Wire pattern provider
+	if r.aiSettingsHandler != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
+			if patternDetector := patrolSvc.GetPatternDetector(); patternDetector != nil {
+				patternAdapter := mcp.NewPatternMCPAdapter(
+					&patternSourceWrapper{detector: patternDetector},
+					r.monitor,
+				)
+				if patternAdapter != nil {
+					service.SetPatternProvider(patternAdapter)
+					log.Debug().Msg("OpenCode: Pattern provider wired")
+				}
+			}
+		}
+	}
+
+	// Wire findings manager
+	if r.aiSettingsHandler != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
+			findingsManagerAdapter := mcp.NewFindingsManagerMCPAdapter(patrolSvc)
+			if findingsManagerAdapter != nil {
+				service.SetFindingsManager(findingsManagerAdapter)
+				log.Debug().Msg("OpenCode: Findings manager wired")
+			}
+		}
+	}
+
+	// Wire metadata updater
+	if r.aiSettingsHandler != nil {
+		metadataAdapter := mcp.NewMetadataUpdaterMCPAdapter(r.aiSettingsHandler.GetAIService())
+		if metadataAdapter != nil {
+			service.SetMetadataUpdater(metadataAdapter)
+			log.Debug().Msg("OpenCode: Metadata updater wired")
+		}
+	}
+
 	log.Info().Msg("OpenCode MCP tool providers wired")
+}
+
+// metricsSourceWrapper wraps monitoring.MetricsHistory to implement mcp.MetricsSource
+type metricsSourceWrapper struct {
+	history *monitoring.MetricsHistory
+}
+
+func (w *metricsSourceWrapper) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []mcp.RawMetricPoint {
+	points := w.history.GetGuestMetrics(guestID, metricType, duration)
+	return convertMetricPoints(points)
+}
+
+func (w *metricsSourceWrapper) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []mcp.RawMetricPoint {
+	points := w.history.GetNodeMetrics(nodeID, metricType, duration)
+	return convertMetricPoints(points)
+}
+
+func (w *metricsSourceWrapper) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]mcp.RawMetricPoint {
+	metricsMap := w.history.GetAllGuestMetrics(guestID, duration)
+	result := make(map[string][]mcp.RawMetricPoint, len(metricsMap))
+	for key, points := range metricsMap {
+		result[key] = convertMetricPoints(points)
+	}
+	return result
+}
+
+func convertMetricPoints(points []monitoring.MetricPoint) []mcp.RawMetricPoint {
+	result := make([]mcp.RawMetricPoint, len(points))
+	for i, p := range points {
+		result[i] = mcp.RawMetricPoint{
+			Value:     p.Value,
+			Timestamp: p.Timestamp,
+		}
+	}
+	return result
+}
+
+// baselineSourceWrapper wraps baseline.Store to implement mcp.BaselineSource
+type baselineSourceWrapper struct {
+	store *ai.BaselineStore
+}
+
+func (w *baselineSourceWrapper) GetBaseline(resourceID, metric string) (mean, stddev float64, sampleCount int, ok bool) {
+	if w.store == nil {
+		return 0, 0, 0, false
+	}
+	baseline, found := w.store.GetBaseline(resourceID, metric)
+	if !found || baseline == nil {
+		return 0, 0, 0, false
+	}
+	return baseline.Mean, baseline.StdDev, baseline.SampleCount, true
+}
+
+func (w *baselineSourceWrapper) GetAllBaselines() map[string]map[string]mcp.BaselineData {
+	if w.store == nil {
+		return nil
+	}
+	allFlat := w.store.GetAllBaselines()
+	if allFlat == nil {
+		return nil
+	}
+
+	result := make(map[string]map[string]mcp.BaselineData)
+	for key, flat := range allFlat {
+		// key format is "resourceID:metric"
+		parts := strings.SplitN(key, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		resourceID, metric := parts[0], parts[1]
+
+		if result[resourceID] == nil {
+			result[resourceID] = make(map[string]mcp.BaselineData)
+		}
+		result[resourceID][metric] = mcp.BaselineData{
+			Mean:        flat.Mean,
+			StdDev:      flat.StdDev,
+			SampleCount: flat.Samples,
+		}
+	}
+	return result
+}
+
+// patternSourceWrapper wraps patterns.Detector to implement mcp.PatternSource
+type patternSourceWrapper struct {
+	detector *ai.PatternDetector
+}
+
+func (w *patternSourceWrapper) GetPatterns() []mcp.PatternData {
+	if w.detector == nil {
+		return nil
+	}
+
+	patterns := w.detector.GetPatterns()
+	if patterns == nil {
+		return nil
+	}
+
+	result := make([]mcp.PatternData, 0, len(patterns))
+	for _, p := range patterns {
+		if p == nil {
+			continue
+		}
+		result = append(result, mcp.PatternData{
+			ResourceID:  p.ResourceID,
+			PatternType: string(p.EventType),
+			Description: fmt.Sprintf("%s pattern with %d occurrences", p.EventType, p.Occurrences),
+			Confidence:  p.Confidence,
+			LastSeen:    p.LastOccurrence,
+		})
+	}
+	return result
+}
+
+func (w *patternSourceWrapper) GetPredictions() []mcp.PredictionData {
+	if w.detector == nil {
+		return nil
+	}
+
+	predictions := w.detector.GetPredictions()
+	if predictions == nil {
+		return nil
+	}
+
+	result := make([]mcp.PredictionData, 0, len(predictions))
+	for _, p := range predictions {
+		result = append(result, mcp.PredictionData{
+			ResourceID:     p.ResourceID,
+			IssueType:      string(p.EventType),
+			PredictedTime:  p.PredictedAt,
+			Confidence:     p.Confidence,
+			Recommendation: p.Basis,
+		})
+	}
+	return result
 }
 
 // StopOpenCodeAI stops the OpenCode-based AI service
@@ -5548,3 +5807,5 @@ func normalizeDockerAgentArch(arch string) string {
 		return ""
 	}
 }
+
+// trigger rebuild Fri Jan 16 10:52:41 UTC 2026

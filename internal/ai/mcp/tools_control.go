@@ -17,22 +17,30 @@ import (
 func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_run_command",
-			Description: "Execute a shell command on Pulse-managed infrastructure. By default runs on the current target, set run_on_host=true for host commands.",
+			Name: "pulse_run_command",
+			Description: `Execute a shell command on infrastructure via a connected agent.
+
+Returns: Command output (stdout/stderr) and exit code. Exit code 0 = success.
+
+Use when: User explicitly asks to run a command, or you need to investigate something inside a system.
+
+Do NOT use for: Checking if something is running (use pulse_get_topology), or starting/stopping VMs/containers (use pulse_control_guest or pulse_control_docker).
+
+Important: Commands run on the HOST, not inside VMs/containers. To run inside an LXC, use: pct exec <vmid> -- <command>`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"command": {
 						Type:        "string",
-						Description: "The shell command to execute",
+						Description: "Shell command to execute (runs via sh -c)",
 					},
 					"run_on_host": {
 						Type:        "boolean",
-						Description: "If true, run on the host instead of inside the container/VM",
+						Description: "If true, run on host. If false/omitted, runs on host anyway (use pct exec for LXC internals)",
 					},
 					"target_host": {
 						Type:        "string",
-						Description: "Optional hostname of the specific host/node to run the command on",
+						Description: "Hostname to run on (e.g. 'delly'). Required if multiple agents connected.",
 					},
 				},
 				Required: []string{"command"},
@@ -46,23 +54,31 @@ func (e *PulseToolExecutor) registerControlTools() {
 
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_control_guest",
-			Description: "Control Proxmox VMs and LXC containers. Actions: start, stop, shutdown (graceful), restart. Requires an agent on the Proxmox host.",
+			Name: "pulse_control_guest",
+			Description: `Start, stop, or restart Proxmox VMs and LXC containers.
+
+Returns: Success message with VM/container name, or error if failed.
+
+Use when: User asks to start, stop, restart, or shutdown a VM or LXC container.
+
+Do NOT use for: Docker containers (use pulse_control_docker), or checking status (use pulse_get_topology).
+
+Note: These are LXC containers managed by Proxmox, NOT Docker containers. Uses 'pct' commands internally.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"guest_id": {
 						Type:        "string",
-						Description: "The VMID (e.g., '101') or name of the VM/container to control",
+						Description: "VMID number (e.g. '101') or exact name of the VM/LXC container",
 					},
 					"action": {
 						Type:        "string",
-						Description: "Action to perform: start, stop, shutdown, restart",
+						Description: "start, stop (immediate), shutdown (graceful), or restart",
 						Enum:        []string{"start", "stop", "shutdown", "restart"},
 					},
 					"force": {
 						Type:        "boolean",
-						Description: "If true, force stop without graceful shutdown (use with caution)",
+						Description: "Force stop without graceful shutdown (rarely needed)",
 					},
 				},
 				Required: []string{"guest_id", "action"},
@@ -76,22 +92,30 @@ func (e *PulseToolExecutor) registerControlTools() {
 
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_control_docker",
-			Description: "Control Docker containers. Actions: start, stop, restart. Requires an agent on the Docker host.",
+			Name: "pulse_control_docker",
+			Description: `Start, stop, or restart Docker containers.
+
+Returns: Success message with container name and host, or error if failed.
+
+Use when: User asks to start, stop, or restart a Docker container.
+
+Do NOT use for: Proxmox VMs/LXC containers (use pulse_control_guest), or checking status (use pulse_get_topology).
+
+Note: These are Docker containers, not Proxmox LXC containers. Uses 'docker' commands internally.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"container": {
 						Type:        "string",
-						Description: "The container name or ID to control",
+						Description: "Container name (e.g. 'nginx') or container ID",
 					},
 					"host": {
 						Type:        "string",
-						Description: "The Docker host name (required if multiple hosts)",
+						Description: "Docker host name (e.g. 'Tower'). Required if multiple Docker hosts exist.",
 					},
 					"action": {
 						Type:        "string",
-						Description: "Action to perform: start, stop, restart",
+						Description: "start, stop, or restart",
 						Enum:        []string{"start", "stop", "restart"},
 					},
 				},
@@ -175,10 +199,14 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		output += "\n" + result.Stderr
 	}
 	if result.ExitCode != 0 {
-		output = fmt.Sprintf("Exit code %d:\n%s", result.ExitCode, output)
+		return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
 	}
 
-	return NewTextResult(output), nil
+	// Success - include guidance to prevent unnecessary verification
+	if output == "" {
+		return NewTextResult("✓ Command completed successfully (exit code 0). No verification needed."), nil
+	}
+	return NewTextResult(fmt.Sprintf("✓ Command completed successfully (exit code 0). No verification needed.\n%s", output)), nil
 }
 
 func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -241,10 +269,18 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		if decision == agentexec.PolicyBlock {
 			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
 		}
-		if e.controlLevel == ControlLevelControlled || (decision == agentexec.PolicyRequireApproval && !e.isAutonomous) {
-			approvalID := createApprovalRecord(command, guest.Type, fmt.Sprintf("%d", guest.VMID), guest.Name, fmt.Sprintf("%s guest %s", action, guest.Name))
+		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
+			// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
+			approvalID := createApprovalRecord(command, guest.Type, fmt.Sprintf("%d", guest.VMID), guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
 			return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 		}
+	}
+
+	// Check control level - this must be outside policy check since policy may be nil
+	if e.controlLevel == ControlLevelControlled {
+		// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
+		approvalID := createApprovalRecord(command, guest.Type, fmt.Sprintf("%d", guest.VMID), guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
+		return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 	}
 
 	if e.controlLevel == ControlLevelSuggest {
@@ -275,7 +311,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	}
 
 	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("Successfully executed '%s' on %s (VMID %d).\n%s", action, guest.Name, guest.VMID, output)), nil
+		return NewTextResult(fmt.Sprintf("✓ Successfully executed '%s' on %s (VMID %d). Action complete - no verification needed (state updates in ~10s).\n%s", action, guest.Name, guest.VMID, output)), nil
 	}
 
 	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
@@ -307,15 +343,24 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 
 	command := fmt.Sprintf("docker %s %s", action, container.Name)
 
+	// Get the agent hostname for approval records (may differ from docker host display name)
+	agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
+
 	if e.policy != nil {
 		decision := e.policy.Evaluate(command)
 		if decision == agentexec.PolicyBlock {
 			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
 		}
-		if e.controlLevel == ControlLevelControlled || (decision == agentexec.PolicyRequireApproval && !e.isAutonomous) {
-			approvalID := createApprovalRecord(command, "docker", container.Name, dockerHost.Hostname, fmt.Sprintf("%s Docker container %s", action, container.Name))
+		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
+			approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", action, container.Name))
 			return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, action, command, approvalID)), nil
 		}
+	}
+
+	// Check control level - this must be outside policy check since policy may be nil
+	if e.controlLevel == ControlLevelControlled {
+		approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", action, container.Name))
+		return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, action, command, approvalID)), nil
 	}
 
 	if e.controlLevel == ControlLevelSuggest {
@@ -346,7 +391,7 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 	}
 
 	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("Successfully executed 'docker %s' on container '%s' (host: %s).\n%s", action, container.Name, dockerHost.Hostname, output)), nil
+		return NewTextResult(fmt.Sprintf("✓ Successfully executed 'docker %s' on container '%s' (host: %s). Action complete - no verification needed (state updates in ~10s).\n%s", action, container.Name, dockerHost.Hostname, output)), nil
 	}
 
 	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
@@ -477,6 +522,17 @@ func (e *PulseToolExecutor) findAgentForDockerHost(dockerHost *models.DockerHost
 	}
 
 	agents := e.agentServer.GetConnectedAgents()
+
+	// First try to match by AgentID (most reliable)
+	if dockerHost.AgentID != "" {
+		for _, agent := range agents {
+			if agent.AgentID == dockerHost.AgentID {
+				return agent.AgentID
+			}
+		}
+	}
+
+	// Fall back to hostname match
 	for _, agent := range agents {
 		if agent.Hostname == dockerHost.Hostname {
 			return agent.AgentID
@@ -484,6 +540,27 @@ func (e *PulseToolExecutor) findAgentForDockerHost(dockerHost *models.DockerHost
 	}
 
 	return ""
+}
+
+// getAgentHostnameForDockerHost finds the agent hostname for a Docker host (for approval records)
+func (e *PulseToolExecutor) getAgentHostnameForDockerHost(dockerHost *models.DockerHost) string {
+	if e.agentServer == nil {
+		return dockerHost.Hostname // fallback
+	}
+
+	agents := e.agentServer.GetConnectedAgents()
+
+	// Try to match by AgentID first
+	if dockerHost.AgentID != "" {
+		for _, agent := range agents {
+			if agent.AgentID == dockerHost.AgentID {
+				return agent.Hostname
+			}
+		}
+	}
+
+	// Fall back to the docker host's hostname
+	return dockerHost.Hostname
 }
 
 // createApprovalRecord creates an approval record in the store and returns the approval ID.

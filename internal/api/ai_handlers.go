@@ -295,7 +295,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		AutoFixModel:   settings.AutoFixModel,
 		BaseURL:        settings.BaseURL,
 		Configured:     settings.IsConfigured() || isDemo,
-		AutonomousMode: settings.AutonomousMode,
+		AutonomousMode: settings.IsAutonomous(), // Derived from control_level
 		CustomContext:  settings.CustomContext,
 		AuthMethod:     authMethod,
 		OAuthConnected: settings.OAuthAccessToken != "",
@@ -442,19 +442,28 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	if req.AutonomousMode != nil {
-		// Autonomous mode requires Pro license with ai_autofix feature
-		if *req.AutonomousMode && !h.aiService.HasLicenseFeature(ai.FeatureAIAutoFix) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "license_required",
-				"message":     "Autonomous Mode requires Pulse Pro",
-				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulserelay.pro/",
-			})
-			return
+		// Legacy: autonomous_mode now maps to control_level for backwards compatibility
+		if *req.AutonomousMode {
+			// Autonomous mode requires Pro license with ai_autofix feature
+			if !h.aiService.HasLicenseFeature(ai.FeatureAIAutoFix) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusPaymentRequired)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error":       "license_required",
+					"message":     "Autonomous Mode requires Pulse Pro",
+					"feature":     ai.FeatureAIAutoFix,
+					"upgrade_url": "https://pulserelay.pro/",
+				})
+				return
+			}
+			settings.ControlLevel = config.ControlLevelAutonomous
+			settings.AutonomousMode = true
+		} else if settings.GetControlLevel() == config.ControlLevelAutonomous {
+			// Only downgrade from autonomous to controlled; preserve other levels
+			// (e.g., don't change read_only or suggest to controlled)
+			settings.ControlLevel = config.ControlLevelControlled
+			settings.AutonomousMode = false
 		}
-		settings.AutonomousMode = *req.AutonomousMode
 	}
 
 	if req.CustomContext != nil {
@@ -625,6 +634,8 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 			}
 		}
 		settings.ControlLevel = *req.ControlLevel
+		// Keep legacy AutonomousMode in sync to prevent fallback issues
+		settings.AutonomousMode = (*req.ControlLevel == config.ControlLevelAutonomous)
 	}
 
 	// Handle protected guests (nil = don't update)
@@ -660,7 +671,8 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	// Update MCP control settings if control level or protected guests changed
 	// This updates tool visibility without restarting OpenCode
-	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil) {
+	// Note: req.AutonomousMode also maps to control_level for backwards compatibility
+	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil || req.AutonomousMode != nil) {
 		h.onControlSettingsChange()
 	}
 
@@ -691,7 +703,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		AutoFixModel:           settings.AutoFixModel,
 		BaseURL:                settings.BaseURL,
 		Configured:             settings.IsConfigured(),
-		AutonomousMode:         settings.AutonomousMode,
+		AutonomousMode:         settings.IsAutonomous(), // Derived from control_level
 		CustomContext:          settings.CustomContext,
 		AuthMethod:             authMethod,
 		OAuthConnected:         settings.OAuthAccessToken != "",
@@ -3707,9 +3719,19 @@ func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.R
 	}
 
 	// Check license
-	licenseService := license.NewService()
-	if !licenseService.HasFeature(license.FeatureAIAutoFix) {
-		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", nil)
+	licenseState, hasFeatures := h.aiService.GetLicenseState()
+	if !h.aiService.HasLicenseFeature(license.FeatureAIAutoFix) {
+		log.Warn().
+			Str("license_state", licenseState).
+			Bool("license_features_available", hasFeatures).
+			Str("feature", license.FeatureAIAutoFix).
+			Str("data_path", h.config.DataPath).
+			Msg("AI Auto-Fix feature not available for approvals")
+		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", map[string]string{
+			"license_state":              licenseState,
+			"license_features_available": strconv.FormatBool(hasFeatures),
+			"feature":                    license.FeatureAIAutoFix,
+		})
 		return
 	}
 
@@ -3772,9 +3794,19 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	}
 
 	// Check license
-	licenseService := license.NewService()
-	if !licenseService.HasFeature(license.FeatureAIAutoFix) {
-		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", nil)
+	licenseState, hasFeatures := h.aiService.GetLicenseState()
+	if !h.aiService.HasLicenseFeature(license.FeatureAIAutoFix) {
+		log.Warn().
+			Str("license_state", licenseState).
+			Bool("license_features_available", hasFeatures).
+			Str("feature", license.FeatureAIAutoFix).
+			Str("data_path", h.config.DataPath).
+			Msg("AI Auto-Fix feature not available for approvals")
+		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", map[string]string{
+			"license_state":              licenseState,
+			"license_features_available": strconv.FormatBool(hasFeatures),
+			"feature":                    license.FeatureAIAutoFix,
+		})
 		return
 	}
 
@@ -3814,6 +3846,18 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	var execErr error
 
 	if h.agentServer != nil && req.TargetName != "" {
+		// Debug: list connected agents
+		connectedAgents := h.agentServer.GetConnectedAgents()
+		agentHostnames := make([]string, len(connectedAgents))
+		for i, a := range connectedAgents {
+			agentHostnames[i] = a.Hostname
+		}
+		log.Debug().
+			Str("target_name", req.TargetName).
+			Strs("connected_agents", agentHostnames).
+			Int("agent_count", len(connectedAgents)).
+			Msg("Looking for agent to execute approved command")
+
 		// Find agent for the target host
 		agentID, found := h.agentServer.GetAgentForHost(req.TargetName)
 		if found {
@@ -3834,7 +3878,13 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 					fmt.Sprintf("Failed to execute command: %s - %v", truncateForLog(req.Command, 100), execErr))
 			}
 		} else {
-			execErr = fmt.Errorf("no agent available for host %s", req.TargetName)
+			// Agent not found - provide helpful error message
+			connectedAgents := h.agentServer.GetConnectedAgents()
+			hostnames := make([]string, len(connectedAgents))
+			for i, a := range connectedAgents {
+				hostnames[i] = a.Hostname
+			}
+			execErr = fmt.Errorf("no exec agent connected for host '%s'. Connected agents: %v. The host agent may need to be updated to support remote execution. See /api/ai/agents for details", req.TargetName, hostnames)
 		}
 	}
 
@@ -3926,9 +3976,19 @@ func (h *AISettingsHandler) HandleRollback(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Check license
-	licenseService := license.NewService()
-	if !licenseService.HasFeature(license.FeatureAIAutoFix) {
-		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", nil)
+	licenseState, hasFeatures := h.aiService.GetLicenseState()
+	if !h.aiService.HasLicenseFeature(license.FeatureAIAutoFix) {
+		log.Warn().
+			Str("license_state", licenseState).
+			Bool("license_features_available", hasFeatures).
+			Str("feature", license.FeatureAIAutoFix).
+			Str("data_path", h.config.DataPath).
+			Msg("AI Auto-Fix feature not available for rollback")
+		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", map[string]string{
+			"license_state":              licenseState,
+			"license_features_available": strconv.FormatBool(hasFeatures),
+			"feature":                    license.FeatureAIAutoFix,
+		})
 		return
 	}
 
@@ -4024,9 +4084,19 @@ func (h *AISettingsHandler) HandleGetRollbackable(w http.ResponseWriter, r *http
 	}
 
 	// Check license
-	licenseService := license.NewService()
-	if !licenseService.HasFeature(license.FeatureAIAutoFix) {
-		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", nil)
+	licenseState, hasFeatures := h.aiService.GetLicenseState()
+	if !h.aiService.HasLicenseFeature(license.FeatureAIAutoFix) {
+		log.Warn().
+			Str("license_state", licenseState).
+			Bool("license_features_available", hasFeatures).
+			Str("feature", license.FeatureAIAutoFix).
+			Str("data_path", h.config.DataPath).
+			Msg("AI Auto-Fix feature not available for rollbackable list")
+		writeErrorResponse(w, http.StatusForbidden, "license_required", "AI Auto-Fix feature requires Pro license", map[string]string{
+			"license_state":              licenseState,
+			"license_features_available": strconv.FormatBool(hasFeatures),
+			"feature":                    license.FeatureAIAutoFix,
+		})
 		return
 	}
 

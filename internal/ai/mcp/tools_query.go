@@ -13,8 +13,12 @@ import (
 func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_get_capabilities",
-			Description: "Get server capabilities, available features, and current configuration. Call this first to understand what tools and data are available.",
+			Name: "pulse_get_capabilities",
+			Description: `Get server capabilities and connected agents.
+
+Returns: JSON with control_level, enabled features, connected agent count and details.
+
+Use when: You need to check if control features are enabled or verify agent connectivity before running commands.`,
 			InputSchema: InputSchema{
 				Type:       "object",
 				Properties: map[string]PropertySchema{},
@@ -47,34 +51,23 @@ func (e *PulseToolExecutor) registerQueryTools() {
 
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_list_infrastructure",
-			Description: "List all monitored infrastructure including VMs, containers, Docker hosts, and Proxmox nodes.",
+			Name: "pulse_get_topology",
+			Description: `Get live infrastructure state - all Proxmox nodes with VMs/LXC containers, and Docker hosts with containers.
+
+Returns: JSON with 'proxmox.nodes[]' (each with vms[], containers[], status, agent_connected), 'docker.hosts[]' (each with containers[], status), and 'summary' counts.
+
+Use when: Checking if something is running, finding a VM/container by name, getting current infrastructure state.
+
+Example: User asks "is nginx running?" → call this, find nginx in the response, report its status field directly.
+
+This data is authoritative and updates every ~10 seconds. Trust it for status questions - no verification needed.`,
 			InputSchema: InputSchema{
-				Type: "object",
-				Properties: map[string]PropertySchema{
-					"type": {
-						Type:        "string",
-						Description: "Filter by type: 'nodes', 'vms', 'containers', 'docker'. Omit for all.",
-						Enum:        []string{"nodes", "vms", "containers", "docker"},
-					},
-					"status": {
-						Type:        "string",
-						Description: "Filter by status: 'running', 'stopped', 'all'. Default: all.",
-						Enum:        []string{"running", "stopped", "all"},
-					},
-					"limit": {
-						Type:        "integer",
-						Description: "Maximum number of results per category (default: 100)",
-					},
-					"offset": {
-						Type:        "integer",
-						Description: "Number of results to skip per category",
-					},
-				},
+				Type:       "object",
+				Properties: map[string]PropertySchema{},
 			},
 		},
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
-			return exec.executeListInfrastructure(ctx, args)
+			return exec.executeGetTopology(ctx)
 		},
 	})
 
@@ -109,19 +102,25 @@ func (e *PulseToolExecutor) registerQueryTools() {
 
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_get_resource",
-			Description: "Get detailed information about a specific VM, container, or Docker container including IPs, ports, labels, mounts, and network configuration.",
+			Name: "pulse_get_resource",
+			Description: `Get detailed information about a specific VM, LXC container, or Docker container.
+
+Returns: JSON with name, status, IPs, ports, labels, mounts, network config, CPU/memory stats.
+
+Use when: You need detailed info about ONE specific resource (IPs, ports, config) that topology doesn't provide.
+
+Note: For simple status checks, use pulse_get_topology instead - it's faster and shows all resources.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"resource_type": {
 						Type:        "string",
-						Description: "Type of resource: 'vm', 'container', 'docker'",
+						Description: "Type: 'vm' (Proxmox VM), 'container' (Proxmox LXC), or 'docker' (Docker container)",
 						Enum:        []string{"vm", "container", "docker"},
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "The resource ID, VMID, or name to look up",
+						Description: "VMID number (e.g. '101') or container name",
 					},
 				},
 				Required: []string{"resource_type", "resource_id"},
@@ -134,9 +133,17 @@ func (e *PulseToolExecutor) registerQueryTools() {
 }
 
 func (e *PulseToolExecutor) executeGetCapabilities(_ context.Context) (CallToolResult, error) {
-	connectedAgents := 0
+	var agents []AgentInfo
 	if e.agentServer != nil {
-		connectedAgents = len(e.agentServer.GetConnectedAgents())
+		connectedAgents := e.agentServer.GetConnectedAgents()
+		for _, a := range connectedAgents {
+			agents = append(agents, AgentInfo{
+				Hostname:    a.Hostname,
+				Version:     a.Version,
+				Platform:    a.Platform,
+				ConnectedAt: a.ConnectedAt.Format("2006-01-02T15:04:05Z"),
+			})
+		}
 	}
 
 	response := CapabilitiesResponse{
@@ -154,7 +161,8 @@ func (e *PulseToolExecutor) executeGetCapabilities(_ context.Context) (CallToolR
 			Control:        e.controlLevel != ControlLevelReadOnly && e.controlLevel != "",
 		},
 		ProtectedGuests: e.protectedGuests,
-		ConnectedAgents: connectedAgents,
+		ConnectedAgents: len(agents),
+		Agents:          agents,
 		Version:         ServerVersion,
 	}
 
@@ -211,6 +219,15 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	offset := intArg(args, "offset", 0)
 
 	state := e.stateProvider.GetState()
+
+	// Build a set of connected agent hostnames for quick lookup
+	connectedAgentHostnames := make(map[string]bool)
+	if e.agentServer != nil {
+		for _, agent := range e.agentServer.GetConnectedAgents() {
+			connectedAgentHostnames[agent.Hostname] = true
+		}
+	}
+
 	response := InfrastructureResponse{
 		Total: TotalCounts{
 			Nodes:       len(state.Nodes),
@@ -233,9 +250,10 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				continue
 			}
 			response.Nodes = append(response.Nodes, NodeSummary{
-				Name:   node.Name,
-				Status: node.Status,
-				ID:     node.ID,
+				Name:           node.Name,
+				Status:         node.Status,
+				ID:             node.ID,
+				AgentConnected: connectedAgentHostnames[node.Name],
 			})
 		}
 	}
@@ -300,6 +318,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				Hostname:       host.Hostname,
 				DisplayName:    host.DisplayName,
 				ContainerCount: len(host.Containers),
+				AgentConnected: connectedAgentHostnames[host.Hostname],
 			}
 			for _, c := range host.Containers {
 				if filterStatus != "" && filterStatus != "all" && c.State != filterStatus {
@@ -315,6 +334,170 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			}
 			response.DockerHosts = append(response.DockerHosts, dockerHost)
 		}
+	}
+
+	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) executeGetTopology(_ context.Context) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewErrorResult(fmt.Errorf("state provider not available")), nil
+	}
+
+	state := e.stateProvider.GetState()
+
+	// Build a set of connected agent hostnames for quick lookup
+	connectedAgentHostnames := make(map[string]bool)
+	if e.agentServer != nil {
+		for _, agent := range e.agentServer.GetConnectedAgents() {
+			connectedAgentHostnames[agent.Hostname] = true
+		}
+	}
+
+	// Check if control is enabled
+	controlEnabled := e.controlLevel != ControlLevelReadOnly && e.controlLevel != ""
+
+	// Build Proxmox topology - group VMs and containers by node
+	nodeMap := make(map[string]*ProxmoxNodeTopology)
+
+	// Initialize nodes from state
+	for _, node := range state.Nodes {
+		hasAgent := connectedAgentHostnames[node.Name]
+		nodeMap[node.Name] = &ProxmoxNodeTopology{
+			Name:           node.Name,
+			ID:             node.ID,
+			Status:         node.Status,
+			AgentConnected: hasAgent,
+			CanExecute:     hasAgent && controlEnabled,
+			VMs:            []TopologyVM{},
+			Containers:     []TopologyLXC{},
+		}
+	}
+
+	// Summary counters
+	summary := TopologySummary{
+		TotalNodes:         len(state.Nodes),
+		TotalVMs:           len(state.VMs),
+		TotalLXCContainers: len(state.Containers),
+		TotalDockerHosts:   len(state.DockerHosts),
+	}
+
+	// Add VMs to their nodes
+	for _, vm := range state.VMs {
+		nodeTopology, exists := nodeMap[vm.Node]
+		if !exists {
+			// Create node entry if it doesn't exist (shouldn't happen normally)
+			hasAgent := connectedAgentHostnames[vm.Node]
+			nodeTopology = &ProxmoxNodeTopology{
+				Name:           vm.Node,
+				Status:         "unknown",
+				AgentConnected: hasAgent,
+				CanExecute:     hasAgent && controlEnabled,
+				VMs:            []TopologyVM{},
+				Containers:     []TopologyLXC{},
+			}
+			nodeMap[vm.Node] = nodeTopology
+		}
+
+		nodeTopology.VMs = append(nodeTopology.VMs, TopologyVM{
+			VMID:   vm.VMID,
+			Name:   vm.Name,
+			Status: vm.Status,
+			CPU:    vm.CPU * 100,
+			Memory: vm.Memory.Usage * 100,
+			OS:     vm.OSName,
+			Tags:   vm.Tags,
+		})
+		nodeTopology.VMCount++
+
+		if vm.Status == "running" {
+			summary.RunningVMs++
+		}
+	}
+
+	// Add containers to their nodes
+	for _, ct := range state.Containers {
+		nodeTopology, exists := nodeMap[ct.Node]
+		if !exists {
+			hasAgent := connectedAgentHostnames[ct.Node]
+			nodeTopology = &ProxmoxNodeTopology{
+				Name:           ct.Node,
+				Status:         "unknown",
+				AgentConnected: hasAgent,
+				CanExecute:     hasAgent && controlEnabled,
+				VMs:            []TopologyVM{},
+				Containers:     []TopologyLXC{},
+			}
+			nodeMap[ct.Node] = nodeTopology
+		}
+
+		nodeTopology.Containers = append(nodeTopology.Containers, TopologyLXC{
+			VMID:      ct.VMID,
+			Name:      ct.Name,
+			Status:    ct.Status,
+			CPU:       ct.CPU * 100,
+			Memory:    ct.Memory.Usage * 100,
+			OS:        ct.OSName,
+			Tags:      ct.Tags,
+			HasDocker: ct.HasDocker,
+		})
+		nodeTopology.ContainerCount++
+
+		if ct.Status == "running" {
+			summary.RunningLXC++
+		}
+	}
+
+	// Convert node map to slice
+	var proxmoxNodes []ProxmoxNodeTopology
+	for _, node := range nodeMap {
+		if node.AgentConnected {
+			summary.NodesWithAgents++
+		}
+		proxmoxNodes = append(proxmoxNodes, *node)
+	}
+
+	// Build Docker topology
+	var dockerHosts []DockerHostTopology
+	for _, host := range state.DockerHosts {
+		hasAgent := connectedAgentHostnames[host.Hostname]
+		runningCount := 0
+		var containers []DockerContainerSummary
+
+		for _, c := range host.Containers {
+			containers = append(containers, DockerContainerSummary{
+				ID:     c.ID,
+				Name:   c.Name,
+				State:  c.State,
+				Image:  c.Image,
+				Health: c.Health,
+			})
+			summary.TotalDockerContainers++
+			if c.State == "running" {
+				runningCount++
+				summary.RunningDocker++
+			}
+		}
+
+		if hasAgent {
+			summary.DockerHostsWithAgents++
+		}
+
+		dockerHosts = append(dockerHosts, DockerHostTopology{
+			Hostname:       host.Hostname,
+			DisplayName:    host.DisplayName,
+			AgentConnected: hasAgent,
+			CanExecute:     hasAgent && controlEnabled,
+			Containers:     containers,
+			ContainerCount: len(containers),
+			RunningCount:   runningCount,
+		})
+	}
+
+	response := TopologyResponse{
+		Proxmox: ProxmoxTopology{Nodes: proxmoxNodes},
+		Docker:  DockerTopology{Hosts: dockerHosts},
+		Summary: summary,
 	}
 
 	return NewJSONResult(response), nil

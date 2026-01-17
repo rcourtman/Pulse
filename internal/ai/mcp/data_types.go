@@ -96,11 +96,20 @@ type GuestInfo struct {
 // ========== JSON Response Types ==========
 
 // CapabilitiesResponse is returned by pulse_get_capabilities
+// AgentInfo represents a connected execution agent
+type AgentInfo struct {
+	Hostname    string `json:"hostname"`
+	Version     string `json:"version,omitempty"`
+	Platform    string `json:"platform,omitempty"`
+	ConnectedAt string `json:"connected_at,omitempty"`
+}
+
 type CapabilitiesResponse struct {
 	ControlLevel    string       `json:"control_level"`
 	Features        FeatureFlags `json:"features"`
 	ProtectedGuests []string     `json:"protected_guests,omitempty"`
 	ConnectedAgents int          `json:"connected_agents"`
+	Agents          []AgentInfo  `json:"agents,omitempty"` // List of connected agents with hostnames
 	Version         string       `json:"version"`
 }
 
@@ -130,9 +139,10 @@ type InfrastructureResponse struct {
 
 // NodeSummary is a summarized node for list responses
 type NodeSummary struct {
-	Name   string `json:"name"`
-	Status string `json:"status"`
-	ID     string `json:"id,omitempty"`
+	Name           string `json:"name"`
+	Status         string `json:"status"`
+	ID             string `json:"id,omitempty"`
+	AgentConnected bool   `json:"agent_connected"` // True if an execution agent is connected for this node
 }
 
 // VMSummary is a summarized VM for list responses
@@ -161,6 +171,7 @@ type DockerHostSummary struct {
 	Hostname       string                   `json:"hostname"`
 	DisplayName    string                   `json:"display_name,omitempty"`
 	ContainerCount int                      `json:"container_count"`
+	AgentConnected bool                     `json:"agent_connected"` // True if an execution agent is connected for this host
 	Containers     []DockerContainerSummary `json:"containers,omitempty"`
 }
 
@@ -186,6 +197,87 @@ type PaginationInfo struct {
 	Total  int `json:"total"`
 	Limit  int `json:"limit"`
 	Offset int `json:"offset"`
+}
+
+// ========== Topology Response Types (Hierarchical View) ==========
+
+// TopologyResponse provides a fully hierarchical view of infrastructure
+// This is the recommended tool for understanding infrastructure relationships
+type TopologyResponse struct {
+	Proxmox ProxmoxTopology `json:"proxmox"`
+	Docker  DockerTopology  `json:"docker"`
+	Summary TopologySummary `json:"summary"`
+}
+
+// ProxmoxTopology shows Proxmox nodes with their nested VMs and containers
+type ProxmoxTopology struct {
+	Nodes []ProxmoxNodeTopology `json:"nodes"`
+}
+
+// ProxmoxNodeTopology represents a Proxmox node with its guests
+type ProxmoxNodeTopology struct {
+	Name           string        `json:"name"`
+	ID             string        `json:"id,omitempty"`
+	Status         string        `json:"status"`
+	AgentConnected bool          `json:"agent_connected"`
+	CanExecute     bool          `json:"can_execute"` // True if commands can be executed on this node
+	VMs            []TopologyVM  `json:"vms,omitempty"`
+	Containers     []TopologyLXC `json:"containers,omitempty"`
+	VMCount        int           `json:"vm_count"`
+	ContainerCount int           `json:"container_count"`
+}
+
+// TopologyVM represents a VM in the topology
+type TopologyVM struct {
+	VMID   int      `json:"vmid"`
+	Name   string   `json:"name"`
+	Status string   `json:"status"`
+	CPU    float64  `json:"cpu_percent,omitempty"`
+	Memory float64  `json:"memory_percent,omitempty"`
+	OS     string   `json:"os,omitempty"`
+	Tags   []string `json:"tags,omitempty"`
+}
+
+// TopologyLXC represents an LXC container in the topology
+type TopologyLXC struct {
+	VMID      int      `json:"vmid"`
+	Name      string   `json:"name"`
+	Status    string   `json:"status"`
+	CPU       float64  `json:"cpu_percent,omitempty"`
+	Memory    float64  `json:"memory_percent,omitempty"`
+	OS        string   `json:"os,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
+	HasDocker bool     `json:"has_docker,omitempty"` // True if Docker is installed inside this container
+}
+
+// DockerTopology shows Docker hosts with their nested containers
+type DockerTopology struct {
+	Hosts []DockerHostTopology `json:"hosts"`
+}
+
+// DockerHostTopology represents a Docker host with its containers
+type DockerHostTopology struct {
+	Hostname       string                   `json:"hostname"`
+	DisplayName    string                   `json:"display_name,omitempty"`
+	AgentConnected bool                     `json:"agent_connected"`
+	CanExecute     bool                     `json:"can_execute"` // True if commands can be executed on this host
+	Containers     []DockerContainerSummary `json:"containers,omitempty"`
+	ContainerCount int                      `json:"container_count"`
+	RunningCount   int                      `json:"running_count"`
+}
+
+// TopologySummary provides aggregate counts and status
+type TopologySummary struct {
+	TotalNodes            int `json:"total_nodes"`
+	TotalVMs              int `json:"total_vms"`
+	TotalLXCContainers    int `json:"total_lxc_containers"`
+	TotalDockerHosts      int `json:"total_docker_hosts"`
+	TotalDockerContainers int `json:"total_docker_containers"`
+	NodesWithAgents       int `json:"nodes_with_agents"`
+	DockerHostsWithAgents int `json:"docker_hosts_with_agents"`
+	RunningVMs            int `json:"running_vms"`
+	RunningLXC            int `json:"running_lxc"`
+	RunningDocker         int `json:"running_docker"`
 }
 
 // ResourceResponse is returned by pulse_get_resource
