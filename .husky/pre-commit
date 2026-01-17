@@ -49,7 +49,8 @@ if [ -f frontend-modern/package.json ]; then
     cd ..
 fi
 
-# Stage formatted files
-git add -u
+# Re-stage only files that were already staged (to pick up formatter changes)
+# This avoids accidentally committing unrelated work-in-progress files
+git diff --cached --name-only -z | xargs -0 -r git add
 
 echo "Pre-commit checks passed!"
