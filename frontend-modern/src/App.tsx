@@ -52,7 +52,7 @@ import { AIChat } from './components/AI/Chat';
 import { AIStatusIndicator } from './components/AI/AIStatusIndicator';
 import { aiChatStore } from './stores/aiChat';
 import { useResourcesAsLegacy } from './hooks/useResources';
-import { updateSystemSettingsFromResponse } from './stores/systemSettings';
+import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
 import { initKioskMode } from './utils/url';
 
 
@@ -589,6 +589,8 @@ function App() {
             setHasLoadedServerTheme(true);
           } catch (error) {
             logger.error('Failed to load theme from server', error);
+            // Ensure settings are marked as loaded so UI doesn't stay in loading state
+            markSystemSettingsLoadedWithDefaults();
           }
         }
 
@@ -637,6 +639,8 @@ function App() {
             setHasLoadedServerTheme(true);
           } catch (error) {
             logger.error('Failed to load theme from server', error);
+            // Ensure settings are marked as loaded so UI doesn't stay in loading state
+            markSystemSettingsLoadedWithDefaults();
           }
         }
 
@@ -703,7 +707,11 @@ function App() {
           // Still load system settings for other features (Docker update actions, etc.)
           SettingsAPI.getSystemSettings()
             .then((settings) => updateSystemSettingsFromResponse(settings))
-            .catch((error) => logger.warn('Failed to load system settings', error));
+            .catch((error) => {
+              logger.warn('Failed to load system settings', error);
+              // Ensure settings are marked as loaded so UI doesn't stay in loading state
+              markSystemSettingsLoadedWithDefaults();
+            });
         }
       }
     } catch (error) {

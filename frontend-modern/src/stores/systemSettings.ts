@@ -61,6 +61,16 @@ export function areSystemSettingsLoaded(): boolean {
 }
 
 /**
+ * Mark settings as loaded with default values.
+ * Call this when settings fail to load but the app should continue working.
+ */
+export function markSystemSettingsLoadedWithDefaults(): void {
+    setDisableDockerUpdateActions(false);
+    setSystemSettingsLoaded(true);
+    logger.debug('System settings marked as loaded with defaults');
+}
+
+/**
  * Update the local state when settings change (e.g., from Settings page).
  */
 export function updateDockerUpdateActionsSetting(disabled: boolean): void {
