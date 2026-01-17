@@ -226,8 +226,8 @@ func (s *Service) IsValid() bool {
 
 // HasFeature checks if the current license grants a feature.
 func (s *Service) HasFeature(feature string) bool {
-	// In demo mode, grant all Pro features for showcase purposes
-	if isDemoMode() {
+	// In demo mode or dev mode, grant all Pro features
+	if isDemoMode() || isDevMode() {
 		return true
 	}
 
@@ -255,6 +255,11 @@ func (s *Service) HasFeature(feature string) bool {
 // isDemoMode returns true if the demo/mock mode is enabled
 func isDemoMode() bool {
 	return strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true")
+}
+
+// isDevMode returns true if running in development mode
+func isDevMode() bool {
+	return strings.EqualFold(os.Getenv("PULSE_DEV"), "true")
 }
 
 // LicenseState represents the current state of the license
