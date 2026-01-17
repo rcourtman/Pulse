@@ -1,7 +1,7 @@
 import { Component, Show, For, Switch, Match, createMemo } from 'solid-js';
 import { renderMarkdown } from '../aiChatUtils';
 import { ThinkingBlock } from './ThinkingBlock';
-import { ToolExecutionBlock, PendingToolBlock } from './ToolExecutionBlock';
+import { ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
 import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from './types';
@@ -127,9 +127,9 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                       />
                     </Match>
 
-                    {/* Pending tool (currently running) - shown in chronological position */}
+                    {/* Pending tool - hidden, we only show completed tools */}
                     <Match when={evt.type === 'pending_tool' && evt.pendingTool}>
-                      <PendingToolBlock tool={evt.pendingTool!} />
+                      <></>
                     </Match>
 
                     {/* Completed tool execution block */}
@@ -140,12 +140,12 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                     {/* Content/text block */}
                     <Match when={evt.type === 'content' && evt.content}>
                       <div
-                        class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none
+                        class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none overflow-x-auto
                                prose-p:leading-relaxed prose-p:my-2
-                               prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs
+                               prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs prose-pre:overflow-x-auto prose-pre:max-w-full
                                prose-code:text-purple-600 dark:prose-code:text-purple-400
                                prose-code:bg-purple-50 dark:prose-code:bg-purple-900/30
-                               prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
+                               prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:break-all
                                prose-code:before:content-none prose-code:after:content-none
                                prose-headings:text-slate-900 dark:prose-headings:text-slate-100
                                prose-strong:text-slate-900 dark:prose-strong:text-slate-100
@@ -183,12 +183,12 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
             {/* Fallback: show content if no stream events */}
             <Show when={props.message.content && !hasStreamEvents()}>
               <div
-                class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none 
+                class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none overflow-x-auto
                        prose-p:leading-relaxed prose-p:my-2
-                       prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs
-                       prose-code:text-purple-600 dark:prose-code:text-purple-400 
-                       prose-code:bg-purple-50 dark:prose-code:bg-purple-900/30 
-                       prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded 
+                       prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs prose-pre:overflow-x-auto prose-pre:max-w-full
+                       prose-code:text-purple-600 dark:prose-code:text-purple-400
+                       prose-code:bg-purple-50 dark:prose-code:bg-purple-900/30
+                       prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:break-all
                        prose-code:before:content-none prose-code:after:content-none
                        prose-headings:text-slate-900 dark:prose-headings:text-slate-100
                        prose-strong:text-slate-900 dark:prose-strong:text-slate-100

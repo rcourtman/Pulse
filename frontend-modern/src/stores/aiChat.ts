@@ -133,10 +133,13 @@ const loadSessionFromServer = async (_sessionId: string): Promise<boolean> => {
 };
 
 export const aiChatStore = {
-  // Check if chat is open
+  // Check if chat is open (non-reactive getter for simple checks)
   get isOpen() {
     return isAIChatOpen();
   },
+
+  // Reactive accessor - use this in Show/createEffect for proper reactivity
+  isOpenSignal: isAIChatOpen,
 
   // Get current context (legacy single-item)
   get context() {

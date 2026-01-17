@@ -880,9 +880,8 @@ function App() {
                   </div>
                   <ToastContainer />
                   <TokenRevealDialog />
-                  {/* Fixed AI Assistant Button - always visible on the side when AI is enabled */}
-                  <Show when={aiChatStore.enabled === true && !aiChatStore.isOpen}>
-                    {/* This component only shows when chat is closed */}
+                  {/* Fixed AI Assistant Button - only shows when chat is CLOSED */}
+                  <Show when={aiChatStore.enabled === true && !aiChatStore.isOpenSignal()}>
                     <button
                       type="button"
                       onClick={() => aiChatStore.toggle()}

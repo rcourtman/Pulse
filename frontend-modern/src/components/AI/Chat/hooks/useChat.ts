@@ -120,6 +120,12 @@ export function useChat(options: UseChatOptions = {}) {
 
           case 'tool_start': {
             const data = event.data as { name: string; input: string };
+
+            // Skip tool_start for "question" - these are handled by the question event type
+            if (data.name === 'question' || data.name === 'Question') {
+              return msg;
+            }
+
             const toolId = generateId(); // Unique ID to track this tool
             const pendingTool = { name: data.name, input: data.input };
 
@@ -141,8 +147,14 @@ export function useChat(options: UseChatOptions = {}) {
             const pendingTools = msg.pendingTools || [];
             const events = msg.streamEvents || [];
 
-            // Find the matching pending tool (by name, since we may not have ID in the event)
-            const matchingPendingIndex = pendingTools.findIndex((t) => t.name === data.name);
+            // Normalize tool name for matching - strip MCP server prefix (pulse_) which may be doubled
+            const normalizeToolName = (name: string) => name.replace(/^(pulse_)+/, '');
+            const normalizedEndName = normalizeToolName(data.name);
+
+            // Find the matching pending tool (by normalized name)
+            const matchingPendingIndex = pendingTools.findIndex(
+              (t) => normalizeToolName(t.name) === normalizedEndName
+            );
             const updatedPending = matchingPendingIndex >= 0
               ? [...pendingTools.slice(0, matchingPendingIndex), ...pendingTools.slice(matchingPendingIndex + 1)]
               : pendingTools;
@@ -159,7 +171,7 @@ export function useChat(options: UseChatOptions = {}) {
             let updatedEvents = [...events];
             for (let i = events.length - 1; i >= 0; i--) {
               const evt = events[i];
-              if (evt.type === 'pending_tool' && evt.pendingTool?.name === data.name) {
+              if (evt.type === 'pending_tool' && normalizeToolName(evt.pendingTool?.name || '') === normalizedEndName) {
                 // Replace pending with completed
                 updatedEvents[i] = { type: 'tool', tool: newToolCall };
                 break;
@@ -252,9 +264,24 @@ export function useChat(options: UseChatOptions = {}) {
     );
   };
 
-  // Send a message
+  // Send a message - allows sending mid-stream (aborts current response like OpenCode TUI)
   const sendMessage = async (prompt: string) => {
-    if (!prompt.trim() || isLoading()) return;
+    if (!prompt.trim()) return;
+
+    // If already streaming, abort the current request first
+    if (isLoading() && abortControllerRef) {
+      logger.debug('[useChat] Aborting current stream to send new message');
+      abortControllerRef.abort();
+      abortControllerRef = null;
+      // Mark any streaming messages as stopped
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.isStreaming
+            ? { ...msg, isStreaming: false, pendingTools: [] }
+            : msg
+        )
+      );
+    }
 
     // Ensure we have a session for conversation continuity
     // Without this, every message creates a new session and loses context
@@ -436,14 +463,75 @@ export function useChat(options: UseChatOptions = {}) {
     updateQuestion(messageId, questionId, { isAnswering: true });
 
     try {
+      // Send answer to OpenCode via API
       await OpenCodeAPI.answerQuestion(questionId, answers);
-      // Remove the question after successful answer
+      // Remove the question card after successful answer
       updateQuestion(messageId, questionId, { removed: true });
+
+      // After answering, OpenCode continues processing but the SSE stream has closed.
+      // We need to send a follow-up message to get the continuation.
+      const answerSummary = answers.map(a => a.value).join(', ');
+      logger.debug('[useChat] Question answered, sending continuation', { questionId, answerSummary });
+
+      // Wait for any previous stream to finish
+      if (isLoading()) {
+        logger.debug('[useChat] Waiting for stream to finish before sending answer');
+        const idle = await waitForIdleInternal(10000);
+        if (!idle) {
+          logger.warn('[useChat] Timeout waiting for stream, sending anyway');
+        }
+      }
+
+      // Send the answer as a message to continue the conversation
+      await sendMessage(answerSummary || 'Continue');
     } catch (error) {
       logger.error('[useChat] Failed to answer question:', error);
       notificationStore.error('Failed to answer question');
       updateQuestion(messageId, questionId, { isAnswering: false });
     }
+  };
+
+  // Internal helper to wait for idle state
+  const waitForIdleInternal = (timeoutMs: number): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!isLoading()) {
+        resolve(true);
+        return;
+      }
+      const startTime = Date.now();
+      const checkInterval = setInterval(() => {
+        if (!isLoading()) {
+          clearInterval(checkInterval);
+          resolve(true);
+        } else if (Date.now() - startTime > timeoutMs) {
+          clearInterval(checkInterval);
+          resolve(false);
+        }
+      }, 100);
+    });
+  };
+
+  // Wait for the chat to become idle (not loading)
+  // Useful for sending follow-up messages after approvals
+  const waitForIdle = (timeoutMs = 30000): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!isLoading()) {
+        resolve(true);
+        return;
+      }
+
+      const startTime = Date.now();
+      const checkInterval = setInterval(() => {
+        if (!isLoading()) {
+          clearInterval(checkInterval);
+          resolve(true);
+        } else if (Date.now() - startTime > timeoutMs) {
+          clearInterval(checkInterval);
+          logger.warn('[useChat] waitForIdle timed out');
+          resolve(false);
+        }
+      }, 100);
+    });
   };
 
   return {
@@ -461,5 +549,6 @@ export function useChat(options: UseChatOptions = {}) {
     addToolResult,
     updateQuestion,
     answerQuestion,
+    waitForIdle,
   };
 }

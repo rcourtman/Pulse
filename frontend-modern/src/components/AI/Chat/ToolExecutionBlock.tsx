@@ -9,7 +9,7 @@ interface ToolExecutionBlockProps {
  * ToolExecutionBlock - Displays completed tool executions in a compact terminal-like style.
  */
 export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) => {
-  const [showOutput, setShowOutput] = createSignal(true);
+  const [showOutput, setShowOutput] = createSignal(false); // Collapsed by default like Claude Code
 
   // Get display name for tool
   const toolLabel = createMemo(() => {
@@ -34,14 +34,26 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     return output.trim().length > 0 && !output.includes('not available');
   });
 
-  // Truncate output
+  // Show only last few lines by default, full output when expanded
   const displayOutput = createMemo(() => {
     const output = props.tool.output || '';
-    const maxLen = 300;
-    if (!showOutput() && output.length > maxLen) {
-      return output.substring(0, maxLen) + '...';
+    if (showOutput()) {
+      // Show full output when expanded
+      return output;
     }
-    return output;
+    // Show last 3 lines by default
+    const lines = output.split('\n').filter(line => line.trim());
+    if (lines.length <= 3) {
+      return output.trim();
+    }
+    const lastLines = lines.slice(-3).join('\n');
+    return '...\n' + lastLines;
+  });
+
+  const hasMoreOutput = createMemo(() => {
+    const output = props.tool.output || '';
+    const lines = output.split('\n').filter(line => line.trim());
+    return lines.length > 3;
   });
 
   const statusIcon = () => props.tool.success ? '✓' : '✗';
@@ -53,9 +65,9 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     <div class="my-1 font-mono text-[11px]">
       {/* Compact single-line header */}
       <div
-        class={`flex items-center gap-1.5 px-2 py-1 rounded ${hasOutput() ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800' : ''
+        class={`flex items-center gap-1.5 px-2 py-1 rounded ${hasMoreOutput() ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800' : ''
           } ${showOutput() ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}
-        onClick={() => hasOutput() && setShowOutput(!showOutput())}
+        onClick={() => hasMoreOutput() && setShowOutput(!showOutput())}
       >
         {/* Status icon */}
         <span class={`${statusColor()} font-bold`}>{statusIcon()}</span>
@@ -70,8 +82,8 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
           {props.tool.input.length > 60 ? props.tool.input.substring(0, 60) + '...' : props.tool.input}
         </code>
 
-        {/* Expand indicator if has output */}
-        <Show when={hasOutput()}>
+        {/* Expand indicator if has more output */}
+        <Show when={hasMoreOutput()}>
           <svg
             class={`w-3 h-3 text-slate-400 transition-transform ${showOutput() ? 'rotate-180' : ''}`}
             fill="none"
@@ -83,18 +95,18 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
         </Show>
       </div>
 
-      {/* Expanded output */}
-      <Show when={showOutput() && hasOutput()}>
-        <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-slate-200 dark:border-slate-700">
-          <pre class="text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words leading-relaxed max-h-40 overflow-y-auto">
+      {/* Output - always show last few lines, expandable for full output */}
+      <Show when={hasOutput()}>
+        <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-slate-200 dark:border-slate-700 overflow-hidden">
+          <pre class={`text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-all leading-relaxed overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-slate-900/50 rounded p-2 ${showOutput() ? 'max-h-64' : 'max-h-20'}`}>
             {displayOutput()}
           </pre>
-          <Show when={(props.tool.output || '').length > 300}>
+          <Show when={hasMoreOutput()}>
             <button
               onClick={(e) => { e.stopPropagation(); setShowOutput(!showOutput()); }}
               class="mt-1 text-[9px] text-purple-600 dark:text-purple-400 hover:underline"
             >
-              {showOutput() && (props.tool.output || '').length > 300 ? 'Show less' : 'Show all'}
+              {showOutput() ? 'Show less' : 'Show full output'}
             </button>
           </Show>
         </div>

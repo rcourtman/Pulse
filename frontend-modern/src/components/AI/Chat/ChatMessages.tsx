@@ -1,4 +1,4 @@
-import { Component, Show, For, createEffect } from 'solid-js';
+import { Component, Show, For, createEffect, createMemo } from 'solid-js';
 import { MessageItem } from './MessageItem';
 import type { ChatMessage, PendingApproval, PendingQuestion } from './types';
 
@@ -18,7 +18,7 @@ interface ChatMessagesProps {
 
 /**
  * ChatMessages - Renders the scrollable message list.
- * 
+ *
  * Features:
  * - Auto-scroll to bottom on new messages
  * - Empty state with suggestions
@@ -28,15 +28,34 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   let messagesEndRef: HTMLDivElement | undefined;
   let containerRef: HTMLDivElement | undefined;
 
-  // Auto-scroll to bottom on new messages
+  // Track content changes for auto-scroll (not just array length)
+  // This tracks: message count, last message content length, streaming state, and stream events
+  const scrollTrigger = createMemo(() => {
+    const msgs = props.messages;
+    if (msgs.length === 0) return 0;
+    const lastMsg = msgs[msgs.length - 1];
+    // Combine multiple signals to ensure we detect all content updates
+    return msgs.length +
+      (lastMsg.content?.length || 0) +
+      (lastMsg.isStreaming ? 1000000 : 0) +
+      (lastMsg.streamEvents?.length || 0);
+  });
+
+  // Auto-scroll to bottom on new messages or streaming content
   createEffect(() => {
+    // Access the trigger to establish dependency (void suppresses unused var warning)
+    void scrollTrigger();
+
     if (props.messages.length > 0 && messagesEndRef && containerRef) {
-      // Only auto-scroll if user is near the bottom
+      // Only auto-scroll if user is near the bottom (within 200px)
       const { scrollTop, scrollHeight, clientHeight } = containerRef;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
 
       if (isNearBottom) {
-        messagesEndRef.scrollIntoView({ behavior: 'smooth' });
+        // Use instant scroll during active streaming for smoother experience
+        const lastMsg = props.messages[props.messages.length - 1];
+        const behavior = lastMsg.isStreaming ? 'instant' : 'smooth';
+        messagesEndRef.scrollIntoView({ behavior: behavior as ScrollBehavior });
       }
     }
   });

@@ -1,7 +1,8 @@
-import { Component, Show, createSignal, onMount, For, createMemo, createEffect } from 'solid-js';
+import { Component, Show, createSignal, onMount, onCleanup, For, createMemo, createEffect } from 'solid-js';
 import { AIAPI } from '@/api/ai';
 import { OpenCodeAPI, type ChatSession } from '@/api/opencode';
 import { notificationStore } from '@/stores/notifications';
+import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
@@ -23,8 +24,8 @@ interface AIChatProps {
  * session management, and streaming response display.
  */
 export const AIChat: Component<AIChatProps> = (props) => {
-  // UI state
-  const [isOpen] = createSignal(true);
+  // UI state - use store's isOpenSignal for reactivity
+  const isOpen = aiChatStore.isOpenSignal;
   const [input, setInput] = createSignal('');
   const [sessions, setSessions] = createSignal<ChatSession[]>([]);
   const [showSessions, setShowSessions] = createSignal(false);
@@ -35,6 +36,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [modelQuery, setModelQuery] = createSignal('');
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
+  const [showSessionActions, setShowSessionActions] = createSignal(false);
+  const [sessionActionLoading, setSessionActionLoading] = createSignal<string | null>(null);
 
   const loadModelSelections = (): Record<string, string> => {
     try {
@@ -240,6 +243,21 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   });
 
+  // Click outside handler to close all dropdowns
+  onMount(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Only close if click is outside dropdown containers
+      if (!target.closest('[data-dropdown]')) {
+        setShowModelSelector(false);
+        setShowSessions(false);
+        setShowSessionActions(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    onCleanup(() => document.removeEventListener('click', handleClickOutside));
+  });
+
   // Handle submit
   const handleSubmit = () => {
     const prompt = input().trim();
@@ -248,7 +266,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setInput('');
   };
 
-  // Handle key down
+  // Handle key down - allow sending even while loading (will abort and send)
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -302,17 +320,55 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
       // Add tool result if command was executed
       if (result.approved) {
-        const execResult = (result as { result?: { stdout?: string; stderr?: string; exit_code?: number } }).result;
-        const output = execResult
-          ? `Exit code: ${execResult.exit_code}\n${execResult.stdout || ''}${execResult.stderr ? '\nStderr: ' + execResult.stderr : ''}`
-          : 'Command approved but no execution result available.';
+        const typedResult = result as {
+          result?: { stdout?: string; stderr?: string; exit_code?: number };
+          error?: string;
+          message?: string;
+          executed?: boolean;
+        };
+        const execResult = typedResult.result;
+
+        let output: string;
+        let success: boolean;
+
+        if (execResult) {
+          output = `Exit code: ${execResult.exit_code}\n${execResult.stdout || ''}${execResult.stderr ? '\nStderr: ' + execResult.stderr : ''}`;
+          success = execResult.exit_code === 0;
+        } else if (typedResult.error) {
+          output = `Execution failed: ${typedResult.error}`;
+          success = false;
+        } else if (typedResult.message) {
+          output = typedResult.message;
+          success = false;
+        } else {
+          output = 'Command approved but no execution result available.';
+          success = false;
+        }
 
         chat.addToolResult(messageId, {
           name: approval.toolName,
           input: approval.command,
           output: output.trim(),
-          success: execResult ? execResult.exit_code === 0 : false,
+          success,
         });
+
+        // Continue the conversation - short message, output is already in the tool result
+        const continuationMessage = success
+          ? 'Command executed. Please analyze the result and continue.'
+          : 'Command completed with issues. Please analyze and advise.';
+
+        // Wait for any ongoing stream to complete before sending continuation
+        if (chat.isLoading()) {
+          logger.debug('[AIChat] Waiting for chat to become idle before continuation');
+          const isIdle = await chat.waitForIdle(30000);
+          if (!isIdle) {
+            logger.warn('[AIChat] Timeout waiting for chat to become idle');
+            notificationStore.warning('Chat is busy. Sending continuation anyway...');
+          }
+        }
+
+        logger.debug('[AIChat] Sending continuation message', { sessionId: chat.sessionId() });
+        await chat.sendMessage(continuationMessage);
       }
     } catch (error) {
       logger.error('[AIChat] Approval failed:', error);
@@ -373,6 +429,61 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
+  // Session action handlers
+  const handleSummarize = async () => {
+    const sessionId = chat.sessionId();
+    if (!sessionId) return;
+
+    setSessionActionLoading('summarize');
+    setShowSessionActions(false);
+    try {
+      await OpenCodeAPI.summarizeSession(sessionId);
+      notificationStore.success('Session summarized to save context');
+    } catch (error) {
+      notificationStore.error('Failed to summarize session');
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
+
+  const handleGetDiff = async () => {
+    const sessionId = chat.sessionId();
+    if (!sessionId) return;
+
+    setSessionActionLoading('diff');
+    setShowSessionActions(false);
+    try {
+      const diff = await OpenCodeAPI.getSessionDiff(sessionId);
+      const files = diff.files || [];
+      if (files.length === 0) {
+        notificationStore.info('No file changes in this session');
+      } else {
+        notificationStore.success(`${files.length} file(s) changed in this session`);
+        // Could open a modal here to show detailed diff
+      }
+    } catch (error) {
+      notificationStore.error('Failed to get session diff');
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
+
+  const handleRevert = async () => {
+    const sessionId = chat.sessionId();
+    if (!sessionId) return;
+
+    setSessionActionLoading('revert');
+    setShowSessionActions(false);
+    try {
+      await OpenCodeAPI.revertSession(sessionId);
+      notificationStore.success('Session changes reverted');
+    } catch (error) {
+      notificationStore.error('Failed to revert session');
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
+
   return (
     <div
       class={`flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 overflow-hidden ${isOpen() ? 'w-[480px]' : 'w-0 border-l-0'
@@ -397,7 +508,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           <div class="flex items-center gap-1.5">
             {/* Model selector */}
-            <div class="relative">
+            <div class="relative" data-dropdown>
               <button
                 onClick={toggleModelSelector}
                 class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 transition-colors"
@@ -526,7 +637,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             </div>
 
             {/* Session picker */}
-            <div class="relative">
+            <div class="relative" data-dropdown>
               <button
                 onClick={() => {
                   setShowModelSelector(false);
@@ -590,10 +701,75 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </Show>
             </div>
 
+            {/* Session Actions Menu */}
+            <div class="relative" data-dropdown>
+              <button
+                onClick={() => {
+                  if (!chat.sessionId()) {
+                    notificationStore.info('Send a message first to start a session');
+                    return;
+                  }
+                  setShowModelSelector(false);
+                  setShowSessions(false);
+                  setShowSessionActions(!showSessionActions());
+                }}
+                disabled={sessionActionLoading() !== null}
+                class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Session actions (summarize, diff, revert)"
+              >
+                <Show when={sessionActionLoading()} fallback={
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  </svg>
+                }>
+                  <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                </Show>
+              </button>
+
+              <Show when={showSessionActions()}>
+                <div class="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden">
+                  <button
+                    onClick={handleSummarize}
+                    class="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  >
+                    <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+                    </svg>
+                    Summarize context
+                  </button>
+                  <button
+                    onClick={handleGetDiff}
+                    class="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  >
+                    <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    View file changes
+                  </button>
+                  <button
+                    onClick={handleRevert}
+                    class="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border-t border-slate-200 dark:border-slate-700"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                    Revert changes
+                  </button>
+                </div>
+              </Show>
+            </div>
+
             {/* Close button */}
             <button
-              onClick={props.onClose}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onClose();
+              }}
               class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              title="Close panel"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M6 5l7 7-7 7" />
@@ -670,24 +846,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
               onKeyDown={handleKeyDown}
               placeholder="Ask about your infrastructure..."
               rows={2}
-              disabled={chat.isLoading()}
-              class="flex-1 px-4 py-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+              class="flex-1 px-4 py-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
             />
-            <div class="flex flex-col gap-1.5 self-end">
-              <Show
-                when={chat.isLoading()}
-                fallback={
-                  <button
-                    type="submit"
-                    disabled={!input().trim()}
-                    class="px-4 py-3 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30"
-                  >
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                  </button>
-                }
+            <div class="flex gap-1.5 self-end">
+              {/* Send button - always visible, sends new message (aborts current if streaming) */}
+              <button
+                type="submit"
+                disabled={!input().trim()}
+                class="px-4 py-3 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30"
+                title={chat.isLoading() ? "Send (will interrupt current response)" : "Send"}
               >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+              {/* Stop button - only visible while streaming */}
+              <Show when={chat.isLoading()}>
                 <button
                   type="button"
                   onClick={chat.stop}

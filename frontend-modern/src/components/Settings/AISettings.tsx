@@ -122,7 +122,6 @@ export const AISettings: Component = () => {
     autoFixModel: '', // Empty means use patrol model
     baseUrl: '', // Legacy - kept for compatibility
     clearApiKey: false,
-    autonomousMode: false,
     authMethod: 'api_key' as AuthMethod,
     patrolIntervalMinutes: 360, // 6 hours default
     alertTriggeredAnalysis: true,
@@ -155,7 +154,6 @@ export const AISettings: Component = () => {
         autoFixModel: '',
         baseUrl: '',
         clearApiKey: false,
-        autonomousMode: false,
         authMethod: 'api_key',
         patrolIntervalMinutes: 360, // 6 hours default
         alertTriggeredAnalysis: true,
@@ -185,7 +183,6 @@ export const AISettings: Component = () => {
       autoFixModel: data.auto_fix_model || '',
       baseUrl: data.base_url || '',
       clearApiKey: false,
-      autonomousMode: data.autonomous_mode || false,
       authMethod: data.auth_method || 'api_key',
       patrolIntervalMinutes: data.patrol_interval_minutes ?? 360, // Use minutes, default to 6hr
       alertTriggeredAnalysis: data.alert_triggered_analysis !== false, // default to true
@@ -339,11 +336,6 @@ export const AISettings: Component = () => {
       // Only include enabled if we're toggling it
       if (form.enabled !== settings()?.enabled) {
         payload.enabled = form.enabled;
-      }
-
-      // Include autonomous mode if changed
-      if (form.autonomousMode !== settings()?.autonomous_mode) {
-        payload.autonomous_mode = form.autonomousMode;
       }
 
       // Include patrol settings if changed
@@ -1187,48 +1179,6 @@ export const AISettings: Component = () => {
                 </div>
               </div>
 
-              {/* Autonomous Mode */}
-              <div class={`${formField} p-4 rounded-lg border ${form.autonomousMode ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'}`}>
-                <div class="flex items-start justify-between gap-4">
-                  <div class="flex-1">
-                    <label class={`${labelClass()} flex items-center gap-2`}>
-                      Autonomous Mode
-                      <Show when={form.autonomousMode}>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 rounded">
-                          ENABLED
-                        </span>
-                      </Show>
-                    </label>
-                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                      {form.autonomousMode
-                        ? 'AI will execute all commands without asking for approval. Only enable if you trust your configured model.'
-                        : 'AI will ask for approval before running commands that modify your system. Read-only commands (like df, ps, docker stats) run automatically.'}
-                    </p>
-                    <div class="mt-2 p-2 bg-amber-100/50 dark:bg-amber-900/30 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
-                      <strong>⚠️ Legal Disclaimer:</strong> AI models can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" class="underline">Terms of Service</a>.
-                    </div>
-                    <Show when={autoFixLocked()}>
-                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        <a
-                          class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
-                          href="https://pulserelay.pro/"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Upgrade to Pro
-                        </a>{' '}
-                        to enable autonomous mode.
-                      </p>
-                    </Show>
-                  </div>
-                  <Toggle
-                    checked={form.autonomousMode}
-                    onChange={(event) => setForm('autonomousMode', event.currentTarget.checked)}
-                    disabled={saving() || autoFixLocked()}
-                  />
-                </div>
-              </div>
-
               {/* AI Patrol & Efficiency Settings - Collapsible */}
               <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                 <button
@@ -1466,14 +1416,13 @@ export const AISettings: Component = () => {
                 💡 Increase for slow Ollama hardware (default: 300s / 5 min)
               </p>
 
-              {/* Infrastructure Control Settings */}
-              <div class="space-y-3 p-4 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
+              {/* AI Permission Level */}
+              <div class={`space-y-3 p-4 rounded-lg border ${form.controlLevel === 'autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20' : 'border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20'}`}>
                 <div class="flex items-center gap-2">
                   <svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
-                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Infrastructure Control</span>
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">AI Permission Level</span>
                   <Show when={form.controlLevel !== 'read_only'}>
                     <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
                       form.controlLevel === 'autonomous'
@@ -1487,9 +1436,9 @@ export const AISettings: Component = () => {
                   </Show>
                 </div>
 
-                {/* Control Level */}
+                {/* Permission Level */}
                 <div class="flex items-center gap-3">
-                  <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-28 flex-shrink-0">Control Level</label>
+                  <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-28 flex-shrink-0">Permission</label>
                   <select
                     value={form.controlLevel}
                     onChange={(e) => setForm('controlLevel', e.currentTarget.value as 'read_only' | 'suggest' | 'controlled' | 'autonomous')}
@@ -1497,17 +1446,35 @@ export const AISettings: Component = () => {
                     disabled={saving()}
                   >
                     <option value="read_only">Read Only - AI can only observe</option>
-                    <option value="suggest">Suggest - AI suggests commands to copy/paste</option>
-                    <option value="controlled">Controlled - AI executes with approval</option>
+                    <option value="suggest">Suggest - AI suggests commands for you to run</option>
+                    <option value="controlled">Controlled - AI executes with your approval</option>
                     <option value="autonomous">Autonomous - AI executes without approval (Pro)</option>
                   </select>
                 </div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 ml-[7.5rem]">
-                  {form.controlLevel === 'read_only' && '🔒 AI can only query infrastructure, no control actions'}
-                  {form.controlLevel === 'suggest' && '💬 AI suggests commands like "pct stop 101" for you to run'}
-                  {form.controlLevel === 'controlled' && '✅ AI can start/stop VMs and containers with your approval'}
-                  {form.controlLevel === 'autonomous' && '⚠️ AI executes control actions without asking'}
+                  {form.controlLevel === 'read_only' && '🔒 AI can only query and observe - no commands or control actions'}
+                  {form.controlLevel === 'suggest' && '💬 AI suggests commands for you to copy/paste and run manually'}
+                  {form.controlLevel === 'controlled' && '✅ AI can execute commands and control VMs/containers with your approval'}
+                  {form.controlLevel === 'autonomous' && '⚠️ AI executes all commands and control actions without asking'}
                 </p>
+                <Show when={form.controlLevel === 'autonomous'}>
+                  <div class="p-2 bg-amber-100/50 dark:bg-amber-900/30 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
+                    <strong>Legal Disclaimer:</strong> AI models can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" class="underline">Terms of Service</a>.
+                  </div>
+                </Show>
+                <Show when={form.controlLevel === 'autonomous' && autoFixLocked()}>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    <a
+                      class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
+                      href="https://pulserelay.pro/"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Upgrade to Pro
+                    </a>{' '}
+                    to enable autonomous mode.
+                  </p>
+                </Show>
 
                 {/* Protected Guests - Only show if control is enabled */}
                 <Show when={form.controlLevel !== 'read_only'}>

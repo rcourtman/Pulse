@@ -37,6 +37,34 @@ export interface AIStatus {
   engine: string;
 }
 
+// OpenCode Agent (build, code, etc.) with specific permissions and model
+export interface Agent {
+  name: string;
+  description?: string;
+  mode: 'subagent' | 'primary' | 'all';
+  native?: boolean;
+  hidden?: boolean;
+  color?: string;
+  model?: {
+    providerID: string;
+    modelID: string;
+  };
+}
+
+// File change from a session
+export interface FileChange {
+  path: string;
+  status: 'added' | 'modified' | 'deleted';
+  added: number;
+  removed: number;
+}
+
+// Session diff showing all file changes
+export interface SessionDiff {
+  files: FileChange[];
+  summary?: string;
+}
+
 export class OpenCodeAPI {
   private static baseUrl = '/api/ai';
 
@@ -99,6 +127,48 @@ export class OpenCodeAPI {
     });
   }
 
+  // ============================================
+  // OpenCode Extended Features
+  // ============================================
+
+  // List available agents (build, code, etc.)
+  static async listAgents(): Promise<Agent[]> {
+    return apiFetchJSON(`${this.baseUrl}/agents`) as Promise<Agent[]>;
+  }
+
+  // Summarize a session (compress context when nearing limits)
+  static async summarizeSession(sessionId: string): Promise<{ success: boolean; message?: string }> {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/summarize`, {
+      method: 'POST',
+    }) as Promise<{ success: boolean; message?: string }>;
+  }
+
+  // Get file changes/diff for a session
+  static async getSessionDiff(sessionId: string): Promise<SessionDiff> {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/diff`) as Promise<SessionDiff>;
+  }
+
+  // Fork a session (create a branch point)
+  static async forkSession(sessionId: string): Promise<ChatSession> {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/fork`, {
+      method: 'POST',
+    }) as Promise<ChatSession>;
+  }
+
+  // Revert session changes
+  static async revertSession(sessionId: string): Promise<{ success: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/revert`, {
+      method: 'POST',
+    }) as Promise<{ success: boolean }>;
+  }
+
+  // Unrevert session changes (redo)
+  static async unrevertSession(sessionId: string): Promise<{ success: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/unrevert`, {
+      method: 'POST',
+    }) as Promise<{ success: boolean }>;
+  }
+
   // Stream chat - the main chat interface
   static async chat(
     prompt: string,
@@ -139,7 +209,7 @@ export class OpenCodeAPI {
     const STREAM_TIMEOUT_MS = 300000; // 5 minutes
 
     try {
-      for (;;) {
+      for (; ;) {
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
           logger.warn('[OpenCode] Stream timeout');
           break;
