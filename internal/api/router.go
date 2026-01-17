@@ -2059,6 +2059,15 @@ func (r *Router) wireOpenCodeProviders() {
 		}
 	}
 
+	// Wire updates provider for Docker container updates
+	if r.monitor != nil {
+		updatesAdapter := mcp.NewUpdatesMCPAdapter(r.monitor, &updatesConfigWrapper{cfg: r.config})
+		if updatesAdapter != nil {
+			service.SetUpdatesProvider(updatesAdapter)
+			log.Debug().Msg("OpenCode: Updates provider wired")
+		}
+	}
+
 	// Wire metrics history provider
 	if r.monitor != nil {
 		if metricsHistory := r.monitor.GetMetricsHistory(); metricsHistory != nil {
@@ -2258,6 +2267,18 @@ func (w *patternSourceWrapper) GetPredictions() []mcp.PredictionData {
 		})
 	}
 	return result
+}
+
+// updatesConfigWrapper wraps config.Config to implement mcp.UpdatesConfig
+type updatesConfigWrapper struct {
+	cfg *config.Config
+}
+
+func (w *updatesConfigWrapper) IsDockerUpdateActionsEnabled() bool {
+	if w.cfg == nil {
+		return true // Default to enabled
+	}
+	return !w.cfg.DisableDockerUpdateActions
 }
 
 // StopOpenCodeAI stops the OpenCode-based AI service

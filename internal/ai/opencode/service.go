@@ -753,6 +753,16 @@ func (s *Service) SetAgentProfileManager(manager mcp.AgentProfileManager) {
 	}
 }
 
+// SetUpdatesProvider sets the updates provider for Docker container updates
+func (s *Service) SetUpdatesProvider(provider mcp.UpdatesProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.executor != nil {
+		s.executor.SetUpdatesProvider(provider)
+	}
+}
+
 // SetControlLevel sets the AI control level (read_only, suggest, controlled, autonomous)
 func (s *Service) SetControlLevel(level string) {
 	s.mu.Lock()

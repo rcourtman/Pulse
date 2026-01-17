@@ -566,3 +566,55 @@ type ControlActionResponse struct {
 	Output     string `json:"output,omitempty"`
 	Error      string `json:"error,omitempty"`
 }
+
+// ========== Docker Updates Types ==========
+
+// ContainerUpdateInfo represents a container with an available update
+type ContainerUpdateInfo struct {
+	HostID          string `json:"host_id"`
+	HostName        string `json:"host_name"`
+	ContainerID     string `json:"container_id"`
+	ContainerName   string `json:"container_name"`
+	Image           string `json:"image"`
+	CurrentDigest   string `json:"current_digest,omitempty"`
+	LatestDigest    string `json:"latest_digest,omitempty"`
+	UpdateAvailable bool   `json:"update_available"`
+	LastChecked     int64  `json:"last_checked,omitempty"`
+	Error           string `json:"error,omitempty"`
+}
+
+// DockerCommandStatus represents the status of a queued Docker command
+type DockerCommandStatus struct {
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+// DockerUpdatesResponse is returned by pulse_list_docker_updates
+type DockerUpdatesResponse struct {
+	Updates []ContainerUpdateInfo `json:"updates"`
+	Total   int                   `json:"total"`
+	HostID  string                `json:"host_id,omitempty"`
+}
+
+// DockerCheckUpdatesResponse is returned by pulse_check_docker_updates
+type DockerCheckUpdatesResponse struct {
+	Success   bool                `json:"success"`
+	HostID    string              `json:"host_id"`
+	HostName  string              `json:"host_name"`
+	CommandID string              `json:"command_id"`
+	Message   string              `json:"message"`
+	Command   DockerCommandStatus `json:"command"`
+}
+
+// DockerUpdateContainerResponse is returned by pulse_update_docker_container
+type DockerUpdateContainerResponse struct {
+	Success       bool                `json:"success"`
+	HostID        string              `json:"host_id"`
+	ContainerID   string              `json:"container_id"`
+	ContainerName string              `json:"container_name"`
+	CommandID     string              `json:"command_id"`
+	Message       string              `json:"message"`
+	Command       DockerCommandStatus `json:"command"`
+}

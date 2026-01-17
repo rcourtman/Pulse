@@ -599,3 +599,139 @@ func (a *MetadataUpdaterMCPAdapter) SetResourceURL(resourceType, resourceID, url
 	}
 	return a.source.SetResourceURL(resourceType, resourceID, url)
 }
+
+// ========== Updates Provider Adapter ==========
+
+// UpdatesMonitor is the subset of Monitor methods needed for update operations
+type UpdatesMonitor interface {
+	GetState() models.StateSnapshot
+	QueueDockerCheckUpdatesCommand(hostID string) (models.DockerHostCommandStatus, error)
+	QueueDockerContainerUpdateCommand(hostID, containerID, containerName string) (models.DockerHostCommandStatus, error)
+}
+
+// UpdatesConfig provides configuration for update operations
+type UpdatesConfig interface {
+	IsDockerUpdateActionsEnabled() bool
+}
+
+// UpdatesMCPAdapter adapts Monitor to MCP UpdatesProvider interface
+type UpdatesMCPAdapter struct {
+	monitor UpdatesMonitor
+	config  UpdatesConfig
+}
+
+// NewUpdatesMCPAdapter creates a new adapter for update operations
+func NewUpdatesMCPAdapter(monitor UpdatesMonitor, config UpdatesConfig) *UpdatesMCPAdapter {
+	if monitor == nil {
+		return nil
+	}
+	return &UpdatesMCPAdapter{monitor: monitor, config: config}
+}
+
+// GetPendingUpdates implements mcp.UpdatesProvider
+func (a *UpdatesMCPAdapter) GetPendingUpdates(hostID string) []ContainerUpdateInfo {
+	if a.monitor == nil {
+		return nil
+	}
+
+	state := a.monitor.GetState()
+	var updates []ContainerUpdateInfo
+
+	for _, host := range state.DockerHosts {
+		// Filter by host ID if specified
+		if hostID != "" && host.ID != hostID {
+			continue
+		}
+
+		for _, container := range host.Containers {
+			if container.UpdateStatus == nil {
+				continue
+			}
+
+			// Only include containers with updates available or errors
+			if !container.UpdateStatus.UpdateAvailable && container.UpdateStatus.Error == "" {
+				continue
+			}
+
+			update := ContainerUpdateInfo{
+				HostID:          host.ID,
+				HostName:        host.DisplayName,
+				ContainerID:     container.ID,
+				ContainerName:   trimContainerName(container.Name),
+				Image:           container.Image,
+				UpdateAvailable: container.UpdateStatus.UpdateAvailable,
+			}
+
+			if container.UpdateStatus.CurrentDigest != "" {
+				update.CurrentDigest = container.UpdateStatus.CurrentDigest
+			}
+			if container.UpdateStatus.LatestDigest != "" {
+				update.LatestDigest = container.UpdateStatus.LatestDigest
+			}
+			if !container.UpdateStatus.LastChecked.IsZero() {
+				update.LastChecked = container.UpdateStatus.LastChecked.Unix()
+			}
+			if container.UpdateStatus.Error != "" {
+				update.Error = container.UpdateStatus.Error
+			}
+
+			updates = append(updates, update)
+		}
+	}
+
+	return updates
+}
+
+// TriggerUpdateCheck implements mcp.UpdatesProvider
+func (a *UpdatesMCPAdapter) TriggerUpdateCheck(hostID string) (DockerCommandStatus, error) {
+	if a.monitor == nil {
+		return DockerCommandStatus{}, fmt.Errorf("monitor not available")
+	}
+
+	cmdStatus, err := a.monitor.QueueDockerCheckUpdatesCommand(hostID)
+	if err != nil {
+		return DockerCommandStatus{}, err
+	}
+
+	return DockerCommandStatus{
+		ID:      cmdStatus.ID,
+		Type:    cmdStatus.Type,
+		Status:  cmdStatus.Status,
+		Message: cmdStatus.Message,
+	}, nil
+}
+
+// UpdateContainer implements mcp.UpdatesProvider
+func (a *UpdatesMCPAdapter) UpdateContainer(hostID, containerID, containerName string) (DockerCommandStatus, error) {
+	if a.monitor == nil {
+		return DockerCommandStatus{}, fmt.Errorf("monitor not available")
+	}
+
+	cmdStatus, err := a.monitor.QueueDockerContainerUpdateCommand(hostID, containerID, containerName)
+	if err != nil {
+		return DockerCommandStatus{}, err
+	}
+
+	return DockerCommandStatus{
+		ID:      cmdStatus.ID,
+		Type:    cmdStatus.Type,
+		Status:  cmdStatus.Status,
+		Message: cmdStatus.Message,
+	}, nil
+}
+
+// IsUpdateActionsEnabled implements mcp.UpdatesProvider
+func (a *UpdatesMCPAdapter) IsUpdateActionsEnabled() bool {
+	if a.config == nil {
+		return true // Default to enabled if no config
+	}
+	return a.config.IsDockerUpdateActionsEnabled()
+}
+
+// trimContainerName removes the leading slash from container names
+func trimContainerName(name string) string {
+	if len(name) > 0 && name[0] == '/' {
+		return name[1:]
+	}
+	return name
+}

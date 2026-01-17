@@ -82,6 +82,14 @@ type DiskHealthProvider interface {
 	GetHosts() []models.Host
 }
 
+// UpdatesProvider provides Docker update operations for MCP tools
+type UpdatesProvider interface {
+	GetPendingUpdates(hostID string) []ContainerUpdateInfo
+	TriggerUpdateCheck(hostID string) (DockerCommandStatus, error)
+	UpdateContainer(hostID, containerID, containerName string) (DockerCommandStatus, error)
+	IsUpdateActionsEnabled() bool
+}
+
 // ControlLevel represents the AI's permission level for infrastructure control
 type ControlLevel string
 
@@ -114,6 +122,7 @@ type ExecutorConfig struct {
 	BackupProvider     BackupProvider
 	StorageProvider    StorageProvider
 	DiskHealthProvider DiskHealthProvider
+	UpdatesProvider    UpdatesProvider
 
 	// Optional providers - management
 	MetadataUpdater     MetadataUpdater
@@ -143,6 +152,7 @@ type PulseToolExecutor struct {
 	backupProvider     BackupProvider
 	storageProvider    StorageProvider
 	diskHealthProvider DiskHealthProvider
+	updatesProvider    UpdatesProvider
 
 	// Management providers
 	metadataUpdater     MetadataUpdater
@@ -262,6 +272,11 @@ func (e *PulseToolExecutor) SetDiskHealthProvider(provider DiskHealthProvider) {
 // SetAgentProfileManager sets the agent profile manager
 func (e *PulseToolExecutor) SetAgentProfileManager(manager AgentProfileManager) {
 	e.agentProfileManager = manager
+}
+
+// SetUpdatesProvider sets the updates provider for Docker container updates
+func (e *PulseToolExecutor) SetUpdatesProvider(provider UpdatesProvider) {
+	e.updatesProvider = provider
 }
 
 // ListTools returns the list of available tools

@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 )
 
 // registerInfrastructureTools registers infrastructure context tools (backup, storage, disk health)
@@ -72,6 +74,86 @@ func (e *PulseToolExecutor) registerInfrastructureTools() {
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeGetDiskHealth(ctx, args)
 		},
+	})
+
+	// Docker Updates Tools
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
+			Name: "pulse_list_docker_updates",
+			Description: `List Docker containers with pending image updates.
+
+Returns: JSON with containers that have newer images available in their registry, including image names, current/latest digests, and any check errors.
+
+Use when: User asks about available Docker updates, which containers need updating, or wants to see update status across Docker hosts.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"host": {
+						Type:        "string",
+						Description: "Optional: filter by Docker host name or ID",
+					},
+				},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeListDockerUpdates(ctx, args)
+		},
+	})
+
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
+			Name: "pulse_check_docker_updates",
+			Description: `Trigger an update check for Docker containers on a host.
+
+The Docker agent will check registries for newer images and report back. Results appear in pulse_list_docker_updates after the next agent report cycle (~30 seconds).
+
+Use when: User wants to refresh/rescan for available Docker updates on a specific host.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"host": {
+						Type:        "string",
+						Description: "Docker host name or ID to check for updates",
+					},
+				},
+				Required: []string{"host"},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeCheckDockerUpdates(ctx, args)
+		},
+		RequireControl: true,
+	})
+
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
+			Name: "pulse_update_docker_container",
+			Description: `Update a Docker container to its latest image.
+
+This pulls the latest image, stops the container, recreates it with the same configuration, and starts it. The old container is kept as a backup and automatically cleaned up after 5 minutes if the new container is stable.
+
+Use when: User explicitly asks to update a specific Docker container to its latest version.
+
+Do NOT use for: Checking what updates are available (use pulse_list_docker_updates), or just restarting a container (use pulse_control_docker).`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"container": {
+						Type:        "string",
+						Description: "Container name or ID to update",
+					},
+					"host": {
+						Type:        "string",
+						Description: "Docker host name or ID where the container runs",
+					},
+				},
+				Required: []string{"container", "host"},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeUpdateDockerContainer(ctx, args)
+		},
+		RequireControl: true,
 	})
 }
 
@@ -336,4 +418,198 @@ func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string
 	}
 
 	return NewJSONResult(response), nil
+}
+
+// ========== Docker Updates Tool Implementations ==========
+
+func (e *PulseToolExecutor) executeListDockerUpdates(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.updatesProvider == nil {
+		return NewTextResult("Docker update information not available. Ensure updates provider is configured."), nil
+	}
+
+	hostFilter, _ := args["host"].(string)
+
+	// Resolve host name to ID if needed
+	hostID := e.resolveDockerHostID(hostFilter)
+
+	updates := e.updatesProvider.GetPendingUpdates(hostID)
+
+	// Ensure non-nil slice
+	if updates == nil {
+		updates = []ContainerUpdateInfo{}
+	}
+
+	response := DockerUpdatesResponse{
+		Updates: updates,
+		Total:   len(updates),
+		HostID:  hostID,
+	}
+
+	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) executeCheckDockerUpdates(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.updatesProvider == nil {
+		return NewTextResult("Docker update checking not available. Ensure updates provider is configured."), nil
+	}
+
+	hostArg, _ := args["host"].(string)
+	if hostArg == "" {
+		return NewErrorResult(fmt.Errorf("host is required")), nil
+	}
+
+	// Resolve host name to ID
+	hostID := e.resolveDockerHostID(hostArg)
+	if hostID == "" {
+		return NewTextResult(fmt.Sprintf("Docker host '%s' not found.", hostArg)), nil
+	}
+
+	hostName := e.getDockerHostName(hostID)
+
+	// Control level check - suggest mode just returns the suggestion
+	if e.controlLevel == ControlLevelSuggest {
+		return NewTextResult(fmt.Sprintf("To check for Docker updates on host '%s', use the UI or API:\n\nPOST /api/agents/docker/hosts/%s/check-updates", hostName, hostID)), nil
+	}
+
+	// Trigger the update check
+	cmdStatus, err := e.updatesProvider.TriggerUpdateCheck(hostID)
+	if err != nil {
+		return NewTextResult(fmt.Sprintf("Failed to trigger update check: %v", err)), nil
+	}
+
+	response := DockerCheckUpdatesResponse{
+		Success:   true,
+		HostID:    hostID,
+		HostName:  hostName,
+		CommandID: cmdStatus.ID,
+		Message:   "Update check command queued. Results will be available after the next agent report cycle (~30 seconds).",
+		Command:   cmdStatus,
+	}
+
+	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) executeUpdateDockerContainer(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.updatesProvider == nil {
+		return NewTextResult("Docker update functionality not available. Ensure updates provider is configured."), nil
+	}
+
+	containerArg, _ := args["container"].(string)
+	hostArg, _ := args["host"].(string)
+
+	if containerArg == "" {
+		return NewErrorResult(fmt.Errorf("container is required")), nil
+	}
+	if hostArg == "" {
+		return NewErrorResult(fmt.Errorf("host is required")), nil
+	}
+
+	// Check if update actions are enabled
+	if !e.updatesProvider.IsUpdateActionsEnabled() {
+		return NewTextResult("Docker container updates are disabled by server configuration. Set PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=false or enable in Settings to allow updates."), nil
+	}
+
+	// Resolve container and host
+	container, dockerHost, err := e.resolveDockerContainer(containerArg, hostArg)
+	if err != nil {
+		return NewTextResult(fmt.Sprintf("Could not find container '%s' on host '%s': %v", containerArg, hostArg, err)), nil
+	}
+
+	containerName := trimContainerName(container.Name)
+
+	// Control level handling
+	if e.controlLevel == ControlLevelSuggest {
+		return NewTextResult(fmt.Sprintf(`To update container '%s' on host '%s', use the UI or run:
+
+POST /api/agents/docker/containers/update
+{
+  "hostId": "%s",
+  "containerId": "%s",
+  "containerName": "%s"
+}`, containerName, dockerHost.Hostname, dockerHost.ID, container.ID, containerName)), nil
+	}
+
+	// Controlled mode - require approval
+	if e.controlLevel == ControlLevelControlled {
+		command := fmt.Sprintf("docker update %s", containerName)
+		agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
+		approvalID := createApprovalRecord(command, "docker", container.ID, agentHostname, fmt.Sprintf("Update container %s to latest image", containerName))
+		return NewTextResult(formatDockerUpdateApprovalNeeded(containerName, dockerHost.Hostname, approvalID)), nil
+	}
+
+	// Autonomous mode - execute directly
+	cmdStatus, err := e.updatesProvider.UpdateContainer(dockerHost.ID, container.ID, containerName)
+	if err != nil {
+		return NewTextResult(fmt.Sprintf("Failed to queue update command: %v", err)), nil
+	}
+
+	response := DockerUpdateContainerResponse{
+		Success:       true,
+		HostID:        dockerHost.ID,
+		ContainerID:   container.ID,
+		ContainerName: containerName,
+		CommandID:     cmdStatus.ID,
+		Message:       fmt.Sprintf("Update command queued for container '%s'. The agent will pull the latest image and recreate the container.", containerName),
+		Command:       cmdStatus,
+	}
+
+	return NewJSONResult(response), nil
+}
+
+// Helper methods for Docker updates
+
+func (e *PulseToolExecutor) resolveDockerHostID(hostArg string) string {
+	if hostArg == "" {
+		return ""
+	}
+	if e.stateProvider == nil {
+		return hostArg
+	}
+
+	state := e.stateProvider.GetState()
+	for _, host := range state.DockerHosts {
+		if host.ID == hostArg || host.Hostname == hostArg || host.DisplayName == hostArg {
+			return host.ID
+		}
+	}
+	return hostArg // Return as-is if not found (provider will handle error)
+}
+
+func (e *PulseToolExecutor) getDockerHostName(hostID string) string {
+	if e.stateProvider == nil {
+		return hostID
+	}
+
+	state := e.stateProvider.GetState()
+	for _, host := range state.DockerHosts {
+		if host.ID == hostID {
+			if host.DisplayName != "" {
+				return host.DisplayName
+			}
+			return host.Hostname
+		}
+	}
+	return hostID
+}
+
+func formatDockerUpdateApprovalNeeded(containerName, hostName, approvalID string) string {
+	payload := map[string]interface{}{
+		"type":           "approval_required",
+		"approval_id":    approvalID,
+		"container_name": containerName,
+		"docker_host":    hostName,
+		"action":         "update",
+		"command":        fmt.Sprintf("docker update %s (pull latest + recreate)", containerName),
+		"how_to_approve": "Click the approval button in the chat to execute this update.",
+		"do_not_retry":   true,
+	}
+	b, _ := json.Marshal(payload)
+	return "APPROVAL_REQUIRED: " + string(b)
+}
+
+func trimLeadingSlash(name string) string {
+	if len(name) > 0 && name[0] == '/' {
+		return name[1:]
+	}
+	return name
 }
