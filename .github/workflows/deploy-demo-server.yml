@@ -101,7 +101,7 @@ jobs:
           # Swap and restart production service
           ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
             sudo systemctl stop pulse &&
-            mv /tmp/pulse-new /opt/pulse/bin/pulse &&
+            sudo mv /tmp/pulse-new /opt/pulse/bin/pulse &&
             sudo systemctl start pulse
           "
       
