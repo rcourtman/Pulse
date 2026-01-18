@@ -2,8 +2,8 @@ name: Deploy Demo Server
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * *' # Nightly at midnight
+  # schedule:
+  #   - cron: '0 0 * * *' # Nightly at midnight
 
 jobs:
   deploy:
@@ -52,9 +52,7 @@ jobs:
       - name: Tailscale
         uses: tailscale/github-action@v2
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:infra
+          authkey: ${{ secrets.TS_AUTHKEY }}
 
       - name: Deploy to server
         run: |
