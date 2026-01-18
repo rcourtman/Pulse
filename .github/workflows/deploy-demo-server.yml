@@ -100,9 +100,9 @@ jobs:
           
           # Swap and restart production service
           ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-            systemctl stop pulse &&
+            sudo systemctl stop pulse &&
             mv /tmp/pulse-new /opt/pulse/bin/pulse &&
-            systemctl start pulse
+            sudo systemctl start pulse
           "
       
       - name: Verify production
