@@ -74,7 +74,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
             chmod +x /tmp/pulse-new &&
             PULSE_DATA_DIR=/tmp/pulse-demo-test \
-            PULSE_ADDR=127.0.0.1:8082 \
+            FRONTEND_PORT=8082 \
             PULSE_MOCK_MODE=true \
             PULSE_AUTH_USER=test \
             PULSE_AUTH_PASS=test \
