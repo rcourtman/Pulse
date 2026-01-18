@@ -22,6 +22,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"username": "Pulse Monitoring",
+				{{if .Mention}}"content": "{{.Mention}}",{{end}}
 				"embeds": [{
 					"title": "Pulse Alert: {{.Level | title}}",
 					"description": "{{.Message}}",
@@ -40,7 +41,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 					}
 				}]
 			}`,
-			Instructions: "1. In Discord, go to Server Settings > Integrations > Webhooks\n2. Create a new webhook and copy the URL\n3. Paste the URL here (format: https://discord.com/api/webhooks/...)",
+			Instructions: "1. In Discord, go to Server Settings > Integrations > Webhooks\n2. Create a new webhook and copy the URL\n3. Paste the URL here (format: https://discord.com/api/webhooks/...)\n4. Optional: Add a mention in the Mention field (e.g., @everyone, <@USER_ID>, <@&ROLE_ID>)",
 		},
 		{
 			Service:    "telegram",
@@ -63,8 +64,15 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:     "POST",
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
-				"text": "Pulse Alert: {{.Level | title}} - {{.ResourceName}}",
+				"text": "{{if .Mention}}{{.Mention}} {{end}}Pulse Alert: {{.Level | title}} - {{.ResourceName}}",
 				"blocks": [
+					{{if .Mention}}{
+						"type": "section",
+						"text": {
+							"type": "mrkdwn",
+							"text": "{{.Mention}}"
+						}
+					},{{end}}
 					{
 						"type": "header",
 						"text": {
@@ -102,7 +110,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 					}
 				]
 			}`,
-			Instructions: "1. In Slack, go to Apps > Incoming Webhooks\n2. Add to Slack and choose a channel\n3. Copy the webhook URL and paste it here (format: https://hooks.slack.com/services/...)",
+			Instructions: "1. In Slack, go to Apps > Incoming Webhooks\n2. Add to Slack and choose a channel\n3. Copy the webhook URL and paste it here (format: https://hooks.slack.com/services/...)\n4. Optional: Add a mention in the Mention field (e.g., @channel, @here, <@USER_ID>, <!subteam^ID>)",
 		},
 		{
 			Service:    "teams",
@@ -115,6 +123,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 				"@context": "http://schema.org/extensions",
 				"themeColor": "{{if eq .Level "critical"}}FF0000{{else if eq .Level "warning"}}FFA500{{else}}00FF00{{end}}",
 				"summary": "Pulse Alert: {{.Level | title}} - {{.ResourceName}}",
+				{{if .Mention}}"text": "{{.Mention}}",{{end}}
 				"sections": [{
 					"activityTitle": "Pulse Alert: {{.Level | title}}",
 					"activitySubtitle": "{{.Message}}",
@@ -138,7 +147,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 					}]
 				}]
 			}`,
-			Instructions: "1. In Teams channel, click ... > Connectors\n2. Configure Incoming Webhook\n3. Copy the URL and paste it here\n\nNote: MessageCard format is supported until December 2025. For new implementations, consider using Adaptive Cards.",
+			Instructions: "1. In Teams channel, click ... > Connectors\n2. Configure Incoming Webhook\n3. Copy the URL and paste it here\n4. Optional: Add a mention in the Mention field (e.g., @General)\n\nNote: MessageCard format is supported until December 2025. For new implementations, consider using Adaptive Cards.",
 		},
 		{
 			Service:    "pagerduty",

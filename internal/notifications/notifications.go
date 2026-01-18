@@ -318,6 +318,7 @@ type WebhookConfig struct {
 	Service      string            `json:"service"`  // discord, slack, teams, etc.
 	Template     string            `json:"template"` // Custom payload template
 	CustomFields map[string]string `json:"customFields,omitempty"`
+	Mention      string            `json:"mention,omitempty"` // Platform-specific mention (e.g., @everyone, @channel, <@USER_ID>)
 }
 
 // AppriseMode identifies how Pulse should deliver notifications through Apprise.
@@ -1539,6 +1540,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			prepared := n.prepareWebhookData(primaryAlert, customFields)
 			prepared.AlertCount = len(alertList)
 			prepared.Alerts = alertList
+			prepared.Mention = webhook.Mention
 			templateData = prepared
 			dataPrepared = true
 		}

@@ -55,6 +55,7 @@ export interface Webhook {
   enabled: boolean;
   service?: string; // Added to support Discord, Slack, etc.
   customFields?: Record<string, string>;
+  mention?: string; // Platform-specific mention (e.g., @everyone, @channel, <@USER_ID>)
 }
 
 export interface AppriseConfig {

@@ -121,6 +121,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
     enabled: true,
     payloadTemplate: '',
     customFields: {},
+    mention: '',
   });
   const [templates, setTemplates] = createSignal<WebhookTemplate[]>([]);
   const [showServiceDropdown, setShowServiceDropdown] = createSignal(false);
@@ -190,6 +191,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         service: data.service,
         template: data.payloadTemplate,
         customFields,
+        mention: data.mention,
       });
       setEditingId(null);
       setAdding(false);
@@ -206,6 +208,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         service: data.service,
         template: data.payloadTemplate,
         customFields,
+        mention: data.mention,
       };
       props.onAdd(newWebhook);
       // Reset form and close the adding panel
@@ -218,9 +221,10 @@ export function WebhookConfig(props: WebhookConfigProps) {
         enabled: true,
         payloadTemplate: '',
         customFields: {},
+        mention: '',
       });
       setHeaderInputs([]);
-       setCustomFieldInputs([]);
+      setCustomFieldInputs([]);
       setAdding(false);
     }
   };
@@ -237,6 +241,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
       enabled: true,
       payloadTemplate: '',
       customFields: {},
+      mention: '',
     });
     setHeaderInputs([]);
     setCustomFieldInputs([]);
@@ -251,6 +256,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
       service: webhook.service || 'generic',
       payloadTemplate: webhook.template || '',
       customFields: webhook.customFields || {},
+      mention: webhook.mention || '',
     });
     // Set up header inputs for editing
     const headers = webhook.headers || {};
@@ -366,11 +372,10 @@ export function WebhookConfig(props: WebhookConfigProps) {
                   <span class="font-medium text-gray-800 dark:text-gray-200">{webhook.name}</span>
                   <button
                     onClick={() => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
-                    class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${
-                      webhook.enabled
-                        ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/20'
-                        : 'border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
-                    }`}
+                    class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${webhook.enabled
+                      ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/20'
+                      : 'border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
+                      }`}
                   >
                     {webhook.enabled ? 'Enabled' : 'Disabled'}
                   </button>
@@ -455,11 +460,10 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     <button
                       type="button"
                       onClick={() => selectService(service)}
-                      class={`px-2 py-1.5 text-left border transition-colors text-xs ${
-                        formData().service === service
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30'
-                      }`}
+                      class={`px-2 py-1.5 text-left border transition-colors text-xs ${formData().service === service
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30'
+                        }`}
                     >
                       <div class="font-medium text-xs text-gray-800 dark:text-gray-200">
                         {serviceName(service)}
@@ -555,6 +559,37 @@ export function WebhookConfig(props: WebhookConfigProps) {
               to keep dynamic values URL-safe.
             </p>
           </div>
+
+          {/* Mention Field - show for supported services */}
+          <Show when={['discord', 'slack', 'teams', 'teams-adaptive', 'mattermost'].includes(formData().service)}>
+            <div class={formField}>
+              <label class={labelClass('flex items-center gap-2')}>
+                Mention
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  Optional — tag users or groups
+                </span>
+              </label>
+              <input
+                type="text"
+                value={formData().mention || ''}
+                onInput={(e) => setFormData({ ...formData(), mention: e.currentTarget.value })}
+                placeholder={
+                  formData().service === 'discord' ? '@everyone or <@USER_ID> or <@&ROLE_ID>' :
+                    formData().service === 'slack' ? '@channel, @here, or <@USER_ID>' :
+                      formData().service === 'teams' || formData().service === 'teams-adaptive' ? '@General or user email' :
+                        formData().service === 'mattermost' ? '@channel, @all, or @username' :
+                          '@everyone'
+                }
+                class={controlClass('px-2 py-1.5')}
+              />
+              <p class={formHelpText + ' mt-1'}>
+                {formData().service === 'discord' && 'Discord: Use @everyone, @here, <@USER_ID>, or <@&ROLE_ID>'}
+                {formData().service === 'slack' && 'Slack: Use @channel, @here, <@USER_ID>, or <!subteam^ID>'}
+                {(formData().service === 'teams' || formData().service === 'teams-adaptive') && 'Teams: Use channel names like @General'}
+                {formData().service === 'mattermost' && 'Mattermost: Use @channel, @all, or @username'}
+              </p>
+            </div>
+          </Show>
 
           {/* Custom Payload Template - only show for generic service */}
           <Show when={formData().service === 'generic'}>

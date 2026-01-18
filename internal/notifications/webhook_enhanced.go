@@ -63,6 +63,7 @@ type WebhookPayloadData struct {
 	AlertCount   int
 	Alerts       []*alerts.Alert // For grouped alerts
 	ChatID       string          // For Telegram webhooks
+	Mention      string          // Platform-specific mention text
 }
 
 // SendEnhancedWebhook sends a webhook with template support

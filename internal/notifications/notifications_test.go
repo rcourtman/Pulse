@@ -163,7 +163,7 @@ func TestSendGroupedAppriseInvokesExecutor(t *testing.T) {
 	nm.SetGroupingWindow(0)
 	nm.SetEmailConfig(EmailConfig{Enabled: false})
 
-	done := make(chan struct{})
+	done := make(chan struct{}, 1)
 	var capturedArgs []string
 
 	nm.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
@@ -171,7 +171,10 @@ func TestSendGroupedAppriseInvokesExecutor(t *testing.T) {
 			t.Fatalf("expected CLI path 'apprise', got %q", path)
 		}
 		capturedArgs = append([]string(nil), args...)
-		close(done)
+		select {
+		case done <- struct{}{}:
+		default:
+		}
 		return []byte("success"), nil
 	}
 
