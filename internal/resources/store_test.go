@@ -387,6 +387,113 @@ func TestNoDeduplicationForWorkloads(t *testing.T) {
 	}
 }
 
+// TestFindDuplicateWithOrphanedIndex verifies that findDuplicate doesn't panic
+// when a resource exists in an index (byHostname, byIP) but has been removed
+// from the main resources map. This is a regression test for issue #1119.
+func TestFindDuplicateWithOrphanedIndex(t *testing.T) {
+	store := NewStore()
+	now := time.Now()
+
+	// Add a resource with hostname
+	r1 := Resource{
+		ID:           "host-1",
+		Type:         ResourceTypeHost,
+		Name:         "server1",
+		PlatformType: PlatformHostAgent,
+		SourceType:   SourceAgent,
+		Status:       StatusOnline,
+		LastSeen:     now,
+		Identity: &ResourceIdentity{
+			Hostname: "test-server",
+			IPs:      []string{"192.168.1.100"},
+		},
+	}
+	store.Upsert(r1)
+
+	// Verify it's in the store
+	_, ok := store.Get("host-1")
+	if !ok {
+		t.Fatal("Resource should exist after upsert")
+	}
+
+	// Now manually corrupt the store state by removing from resources but not indexes
+	// This simulates a race condition or bug where indexes become out of sync
+	store.mu.Lock()
+	delete(store.resources, "host-1")
+	// byHostname and byIP still contain "host-1"
+	store.mu.Unlock()
+
+	// Trying to upsert a new resource with matching hostname should NOT panic
+	r2 := Resource{
+		ID:           "host-2",
+		Type:         ResourceTypeHost,
+		Name:         "server2",
+		PlatformType: PlatformHostAgent,
+		SourceType:   SourceAgent,
+		Status:       StatusOnline,
+		LastSeen:     now.Add(time.Second),
+		Identity: &ResourceIdentity{
+			Hostname: "test-server", // Same hostname as orphaned index entry
+		},
+	}
+
+	// This should not panic - it should handle the nil resource gracefully
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("Upsert panicked with orphaned hostname index: %v", r)
+			}
+		}()
+		store.Upsert(r2)
+	}()
+
+	// Also test with IP index
+	store2 := NewStore()
+	r3 := Resource{
+		ID:           "host-3",
+		Type:         ResourceTypeHost,
+		Name:         "server3",
+		PlatformType: PlatformHostAgent,
+		SourceType:   SourceAgent,
+		Status:       StatusOnline,
+		LastSeen:     now,
+		Identity: &ResourceIdentity{
+			Hostname: "other-server",
+			IPs:      []string{"10.0.0.50"},
+		},
+	}
+	store2.Upsert(r3)
+
+	// Corrupt the store state
+	store2.mu.Lock()
+	delete(store2.resources, "host-3")
+	store2.mu.Unlock()
+
+	// Trying to upsert with matching IP should NOT panic
+	r4 := Resource{
+		ID:           "host-4",
+		Type:         ResourceTypeHost,
+		Name:         "server4",
+		PlatformType: PlatformHostAgent,
+		SourceType:   SourceAgent,
+		Status:       StatusOnline,
+		LastSeen:     now.Add(time.Second),
+		Identity: &ResourceIdentity{
+			Hostname: "different-hostname",
+			IPs:      []string{"10.0.0.50"}, // Same IP as orphaned index entry
+		},
+	}
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("Upsert panicked with orphaned IP index: %v", r)
+			}
+		}()
+		store2.Upsert(r4)
+	}()
+}
+
 func TestNoDeduplicationForLocalhost(t *testing.T) {
 	store := NewStore()
 

@@ -463,7 +463,7 @@ func (s *Store) findDuplicate(r *Resource) string {
 					existing := s.resources[existingID]
 					// Only match same infrastructure type (e.g., host with host, node with node)
 					// Different types represent different data sources and should coexist
-					if existing.Type == r.Type {
+					if existing != nil && existing.Type == r.Type {
 						return existingID
 					}
 				}
@@ -482,7 +482,7 @@ func (s *Store) findDuplicate(r *Resource) string {
 					if existingID != r.ID {
 						existing := s.resources[existingID]
 						// Only match same infrastructure type
-						if existing.Type == r.Type {
+						if existing != nil && existing.Type == r.Type {
 							return existingID
 						}
 					}
