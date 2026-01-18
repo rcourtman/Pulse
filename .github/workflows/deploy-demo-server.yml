@@ -54,14 +54,24 @@ jobs:
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
 
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEMO_SERVER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.DEMO_SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
       - name: Deploy to server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEPLOY_USER: ${{ secrets.DEMO_SERVER_USER }}
         run: |
           # Upload new binary
-          scp -o StrictHostKeyChecking=no pulse root@pulse-relay:/tmp/pulse-new
+          scp -o StrictHostKeyChecking=no pulse ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/pulse-new
           
           # Health check: Run on test port 8082 and verify
           # We use a subshell to background the process and then kill it after the check
-          ssh -o StrictHostKeyChecking=no root@pulse-relay "
+          ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
             chmod +x /tmp/pulse-new &&
             PULSE_DATA_DIR=/tmp/pulse-demo-test \
             PULSE_ADDR=127.0.0.1:8082 \
@@ -86,7 +96,7 @@ jobs:
           "
           
           # Swap and restart production service
-          ssh -o StrictHostKeyChecking=no root@pulse-relay "
+          ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
             systemctl stop pulse &&
             mv /tmp/pulse-new /opt/pulse/bin/pulse &&
             systemctl start pulse
