@@ -66,6 +66,9 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEPLOY_USER: ${{ secrets.DEMO_SERVER_USER }}
         run: |
+          # Clean up any stale files from previous runs
+          ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "rm -f /tmp/pulse-new; rm -rf /tmp/pulse-demo-test" || true
+          
           # Upload new binary
           scp -o StrictHostKeyChecking=no pulse ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/pulse-new
           
