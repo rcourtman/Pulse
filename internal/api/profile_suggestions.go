@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/opencode"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
@@ -115,7 +115,7 @@ Only include settings that are relevant to the user's request. Do not include se
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
-	response, err := h.aiHandler.GetService().Execute(ctx, opencode.ExecuteRequest{
+	response, err := h.aiHandler.GetService().Execute(ctx, chat.ExecuteRequest{
 		Prompt: fullPrompt,
 	})
 	if err != nil {
@@ -124,7 +124,7 @@ Only include settings that are relevant to the user's request. Do not include se
 		return
 	}
 
-	fullResponse := response.Message.Content
+	fullResponse, _ := response["content"].(string)
 	if fullResponse == "" {
 		log.Error().Msg("AI returned empty response")
 		http.Error(w, "AI returned empty response", http.StatusInternalServerError)

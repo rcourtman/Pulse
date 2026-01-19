@@ -362,17 +362,17 @@ func (h *AuditHandlers) HandleExportAuditEvents(w http.ResponseWriter, r *http.R
 	// Parse verification flag
 	includeVerification := query.Get("verify") == "true"
 
-	// Get the SQLite logger
+	// Get the logger and check if it's persistent
 	logger := audit.GetLogger()
-	sqliteLogger, ok := logger.(*audit.SQLiteLogger)
+	persistentLogger, ok := logger.(audit.PersistentLogger)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotImplemented, "export_unavailable",
-			"Export requires SQLite audit logger", nil)
+			"Export requires persistent audit logger", nil)
 		return
 	}
 
 	// Create exporter and export
-	exporter := audit.NewExporter(sqliteLogger)
+	exporter := audit.NewExporter(persistentLogger)
 	result, err := exporter.Export(filter, format, includeVerification)
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "export_failed",
@@ -426,17 +426,17 @@ func (h *AuditHandlers) HandleAuditSummary(w http.ResponseWriter, r *http.Reques
 	// Parse verification flag
 	verifySignatures := query.Get("verify") == "true"
 
-	// Get the SQLite logger
+	// Get the logger and check if it's persistent
 	logger := audit.GetLogger()
-	sqliteLogger, ok := logger.(*audit.SQLiteLogger)
+	persistentLogger, ok := logger.(audit.PersistentLogger)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotImplemented, "summary_unavailable",
-			"Summary requires SQLite audit logger", nil)
+			"Summary requires persistent audit logger", nil)
 		return
 	}
 
 	// Create exporter and generate summary
-	exporter := audit.NewExporter(sqliteLogger)
+	exporter := audit.NewExporter(persistentLogger)
 	summary, err := exporter.GenerateSummary(filter, verifySignatures)
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "summary_failed",

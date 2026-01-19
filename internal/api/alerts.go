@@ -13,20 +13,49 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
 
+// AlertManager defines the interface for alert management operations.
+type AlertManager interface {
+	GetConfig() alerts.AlertConfig
+	UpdateConfig(alerts.AlertConfig)
+	GetActiveAlerts() []alerts.Alert
+	NotifyExistingAlert(id string)
+	ClearAlertHistory() error
+	UnacknowledgeAlert(id string) error
+	AcknowledgeAlert(id, user string) error
+	ClearAlert(id string) bool
+	GetAlertHistory(limit int) []alerts.Alert
+	GetAlertHistorySince(since time.Time, limit int) []alerts.Alert
+}
+
+// ConfigPersistence defines the interface for saving configuration.
+type ConfigPersistence interface {
+	SaveAlertConfig(alerts.AlertConfig) error
+}
+
+// AlertMonitor defines the interface for monitoring operations used by alert handlers.
+type AlertMonitor interface {
+	GetAlertManager() AlertManager
+	GetConfigPersistence() ConfigPersistence
+	GetIncidentStore() *memory.IncidentStore
+	GetNotificationManager() *notifications.NotificationManager
+	SyncAlertState()
+	GetState() models.StateSnapshot
+}
+
 // AlertHandlers handles alert-related HTTP endpoints
 type AlertHandlers struct {
-	monitor *monitoring.Monitor
+	monitor AlertMonitor
 	wsHub   *websocket.Hub
 }
 
 // NewAlertHandlers creates new alert handlers
-func NewAlertHandlers(monitor *monitoring.Monitor, wsHub *websocket.Hub) *AlertHandlers {
+func NewAlertHandlers(monitor AlertMonitor, wsHub *websocket.Hub) *AlertHandlers {
 	return &AlertHandlers{
 		monitor: monitor,
 		wsHub:   wsHub,
@@ -34,7 +63,7 @@ func NewAlertHandlers(monitor *monitoring.Monitor, wsHub *websocket.Hub) *AlertH
 }
 
 // SetMonitor updates the monitor reference for alert handlers.
-func (h *AlertHandlers) SetMonitor(m *monitoring.Monitor) {
+func (h *AlertHandlers) SetMonitor(m AlertMonitor) {
 	h.monitor = m
 }
 

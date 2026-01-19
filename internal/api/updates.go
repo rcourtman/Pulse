@@ -17,15 +17,25 @@ import (
 
 // UpdateHandlers handles update-related API requests
 type UpdateHandlers struct {
-	manager          *updates.Manager
+	manager          UpdateManager
 	history          *updates.UpdateHistory
 	registry         *updates.UpdaterRegistry
 	statusRateLimits map[string]time.Time // IP -> last request time
 	statusMu         sync.RWMutex
 }
 
+// UpdateManager defines the interface for update management operations
+type UpdateManager interface {
+	CheckForUpdatesWithChannel(ctx context.Context, channel string) (*updates.UpdateInfo, error)
+	ApplyUpdate(ctx context.Context, req updates.ApplyUpdateRequest) error
+	GetStatus() updates.UpdateStatus
+	GetSSECachedStatus() (updates.UpdateStatus, time.Time)
+	AddSSEClient(w http.ResponseWriter, clientID string) *updates.SSEClient
+	RemoveSSEClient(clientID string)
+}
+
 // NewUpdateHandlers creates new update handlers
-func NewUpdateHandlers(manager *updates.Manager, history *updates.UpdateHistory) *UpdateHandlers {
+func NewUpdateHandlers(manager UpdateManager, history *updates.UpdateHistory) *UpdateHandlers {
 	// Initialize updater registry
 	registry := updates.NewUpdaterRegistry()
 
@@ -142,7 +152,7 @@ func (h *UpdateHandlers) HandleUpdateStatus(w http.ResponseWriter, r *http.Reque
 		h.statusMu.Unlock()
 
 		// Get cached status from SSE broadcaster (more recent than manager status)
-		cachedStatus, cacheTime := h.manager.GetSSEBroadcaster().GetCachedStatus()
+		cachedStatus, cacheTime := h.manager.GetSSECachedStatus()
 
 		// Add cache headers
 		w.Header().Set("X-Cache", "HIT")
@@ -193,8 +203,7 @@ func (h *UpdateHandlers) HandleUpdateStream(w http.ResponseWriter, r *http.Reque
 	clientID := fmt.Sprintf("%s-%d", clientIP, time.Now().UnixNano())
 
 	// Register client with SSE broadcaster
-	broadcaster := h.manager.GetSSEBroadcaster()
-	client := broadcaster.AddClient(w, clientID)
+	client := h.manager.AddSSEClient(w, clientID)
 	if client == nil {
 		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
 		return
@@ -222,7 +231,7 @@ func (h *UpdateHandlers) HandleUpdateStream(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Clean up
-	broadcaster.RemoveClient(clientID)
+	h.manager.RemoveSSEClient(clientID)
 }
 
 // cleanupRateLimits periodically cleans up old entries from the rate limit map
@@ -231,17 +240,19 @@ func (h *UpdateHandlers) cleanupRateLimits() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		now := time.Now()
-		h.statusMu.Lock()
+		h.doCleanupRateLimits(time.Now())
+	}
+}
 
-		// Remove entries older than 10 minutes
-		for ip, lastTime := range h.statusRateLimits {
-			if now.Sub(lastTime) > 10*time.Minute {
-				delete(h.statusRateLimits, ip)
-			}
+func (h *UpdateHandlers) doCleanupRateLimits(now time.Time) {
+	h.statusMu.Lock()
+	defer h.statusMu.Unlock()
+
+	// Remove entries older than 10 minutes
+	for ip, lastTime := range h.statusRateLimits {
+		if now.Sub(lastTime) > 10*time.Minute {
+			delete(h.statusRateLimits, ip)
 		}
-
-		h.statusMu.Unlock()
 	}
 }
 

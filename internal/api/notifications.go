@@ -8,26 +8,61 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
+// NotificationManager defines the interface for notification management operations.
+type NotificationManager interface {
+	GetEmailConfig() notifications.EmailConfig
+	SetEmailConfig(notifications.EmailConfig)
+	GetAppriseConfig() notifications.AppriseConfig
+	SetAppriseConfig(notifications.AppriseConfig)
+	GetWebhooks() []notifications.WebhookConfig
+	ValidateWebhookURL(string) error
+	AddWebhook(notifications.WebhookConfig)
+	UpdateWebhook(string, notifications.WebhookConfig) error
+	DeleteWebhook(string) error
+	SendTestWebhook(notifications.WebhookConfig) error
+	SendTestNotificationWithConfig(string, *notifications.EmailConfig, *notifications.TestNodeInfo) error
+	SendTestAppriseWithConfig(notifications.AppriseConfig) error
+	SendTestNotification(string) error
+	GetWebhookHistory() []notifications.WebhookDelivery
+	TestEnhancedWebhook(notifications.EnhancedWebhookConfig) (int, string, error)
+	GetQueueStats() (map[string]int, error)
+}
+
+// NotificationConfigPersistence defines the interface for saving notification configuration.
+type NotificationConfigPersistence interface {
+	SaveEmailConfig(notifications.EmailConfig) error
+	SaveAppriseConfig(notifications.AppriseConfig) error
+	SaveWebhooks([]notifications.WebhookConfig) error
+	IsEncryptionEnabled() bool
+}
+
+// NotificationMonitor defines the interface for monitoring operations used by notification handlers.
+type NotificationMonitor interface {
+	GetNotificationManager() NotificationManager
+	GetConfigPersistence() NotificationConfigPersistence
+	GetState() models.StateSnapshot
+}
+
 // NotificationHandlers handles notification-related HTTP endpoints
 type NotificationHandlers struct {
-	monitor *monitoring.Monitor
+	monitor NotificationMonitor
 }
 
 // NewNotificationHandlers creates new notification handlers
-func NewNotificationHandlers(monitor *monitoring.Monitor) *NotificationHandlers {
+func NewNotificationHandlers(monitor NotificationMonitor) *NotificationHandlers {
 	return &NotificationHandlers{
 		monitor: monitor,
 	}
 }
 
 // SetMonitor updates the monitor reference for notification handlers.
-func (h *NotificationHandlers) SetMonitor(m *monitoring.Monitor) {
+func (h *NotificationHandlers) SetMonitor(m NotificationMonitor) {
 	h.monitor = m
 }
 
@@ -697,25 +732,20 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *http.Request) {
 	// Get queue stats
 	queueStats := make(map[string]interface{})
-	if queue := h.monitor.GetNotificationManager().GetQueue(); queue != nil {
-		stats, err := queue.GetQueueStats()
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to get queue stats for health check")
-			queueStats["error"] = err.Error()
-			queueStats["healthy"] = false
-		} else {
-			queueStats = map[string]interface{}{
-				"pending": stats["pending"],
-				"sending": stats["sending"],
-				"sent":    stats["sent"],
-				"failed":  stats["failed"],
-				"dlq":     stats["dlq"],
-				"healthy": true,
-			}
-		}
-	} else {
-		queueStats["error"] = "queue not initialized"
+	stats, err := h.monitor.GetNotificationManager().GetQueueStats()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to get queue stats for health check")
+		queueStats["error"] = err.Error()
 		queueStats["healthy"] = false
+	} else {
+		queueStats = map[string]interface{}{
+			"pending": stats["pending"],
+			"sending": stats["sending"],
+			"sent":    stats["sent"],
+			"failed":  stats["failed"],
+			"dlq":     stats["dlq"],
+			"healthy": true,
+		}
 	}
 
 	// Get config status
