@@ -43,8 +43,11 @@ const (
 	proxmoxUserPVE = "pulse-monitor@pam"
 	proxmoxUserPBS = "pulse-monitor@pbs"
 	proxmoxComment = "Pulse monitoring service"
-	stateFilePath  = "/var/lib/pulse-agent/proxmox-registered" // Legacy, kept for backward compat
-	stateFileDir   = "/var/lib/pulse-agent"
+)
+
+var (
+	stateFilePath = "/var/lib/pulse-agent/proxmox-registered" // Legacy, kept for backward compat
+	stateFileDir  = "/var/lib/pulse-agent"
 	// Per-type state files for multi-product support (PVE+PBS on same host)
 	stateFilePVE = "/var/lib/pulse-agent/proxmox-pve-registered"
 	stateFilePBS = "/var/lib/pulse-agent/proxmox-pbs-registered"
@@ -213,16 +216,19 @@ func (p *ProxmoxSetup) detectProxmoxType() string {
 // detectProxmoxTypes checks for ALL Proxmox products on this system.
 // Returns a slice of detected types (e.g., ["pve", "pbs"] if both are installed).
 // This is common when PBS is installed directly on a PVE host.
+// detectProxmoxTypes checks for ALL Proxmox products on this system.
+// Returns a slice of detected types (e.g., ["pve", "pbs"] if both are installed).
+// This is common when PBS is installed directly on a PVE host.
 func (p *ProxmoxSetup) detectProxmoxTypes() []string {
 	var types []string
 
 	// Check for PVE
-	if _, err := exec.LookPath("pvesh"); err == nil {
+	if _, err := lookPath("pvesh"); err == nil {
 		types = append(types, "pve")
 	}
 
 	// Check for PBS
-	if _, err := exec.LookPath("proxmox-backup-manager"); err == nil {
+	if _, err := lookPath("proxmox-backup-manager"); err == nil {
 		types = append(types, "pbs")
 	}
 
@@ -707,14 +713,16 @@ func (p *ProxmoxSetup) markTypeAsRegistered(ptype string) {
 }
 
 // runCommand executes a command and returns any error.
-func runCommand(ctx context.Context, name string, args ...string) error {
+var runCommand = func(ctx context.Context, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	return cmd.Run()
 }
 
-// runCommandOutput executes a command and returns the output.
-func runCommandOutput(ctx context.Context, name string, args ...string) (string, error) {
+var runCommandOutput = func(ctx context.Context, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
+
+// lookPath searches for an executable in the directories named by the PATH environment variable.
+var lookPath = exec.LookPath

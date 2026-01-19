@@ -142,6 +142,29 @@ func (m *Manager) GetQueue() *UpdateQueue {
 	return m.queue
 }
 
+// AddSSEClient adds a new SSE client for update progress streaming
+func (m *Manager) AddSSEClient(w http.ResponseWriter, clientID string) *SSEClient {
+	if m.sseBroadcast == nil {
+		return nil
+	}
+	return m.sseBroadcast.AddClient(w, clientID)
+}
+
+// RemoveSSEClient removes an SSE client
+func (m *Manager) RemoveSSEClient(clientID string) {
+	if m.sseBroadcast != nil {
+		m.sseBroadcast.RemoveClient(clientID)
+	}
+}
+
+// GetCachedStatus returns the last broadcasted status
+func (m *Manager) GetSSECachedStatus() (UpdateStatus, time.Time) {
+	if m.sseBroadcast == nil {
+		return UpdateStatus{}, time.Time{}
+	}
+	return m.sseBroadcast.GetCachedStatus()
+}
+
 // CheckForUpdates checks GitHub for available updates using saved config channel
 func (m *Manager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
 	return m.CheckForUpdatesWithChannel(ctx, "")

@@ -38,13 +38,19 @@ type ExportEvent struct {
 	SignatureValid *bool     `json:"signature_valid,omitempty"`
 }
 
+// PersistentLogger defines the interface for loggers that support querying and verification.
+type PersistentLogger interface {
+	Query(filter QueryFilter) ([]Event, error)
+	VerifySignature(event Event) bool
+}
+
 // Exporter provides export functionality for audit logs.
 type Exporter struct {
-	logger *SQLiteLogger
+	logger PersistentLogger
 }
 
 // NewExporter creates a new exporter for the given logger.
-func NewExporter(logger *SQLiteLogger) *Exporter {
+func NewExporter(logger PersistentLogger) *Exporter {
 	return &Exporter{logger: logger}
 }
 

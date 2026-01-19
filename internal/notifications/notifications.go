@@ -2585,6 +2585,18 @@ func buildNotificationTestAlert() *alerts.Alert {
 	}
 }
 
+// GetQueueStats returns statistics about the notification queue
+func (n *NotificationManager) GetQueueStats() (map[string]int, error) {
+	n.mu.RLock()
+	queue := n.queue
+	n.mu.RUnlock()
+
+	if queue == nil {
+		return nil, fmt.Errorf("notification queue not initialized")
+	}
+	return queue.GetQueueStats()
+}
+
 // SendTestNotification sends a test notification
 func (n *NotificationManager) SendTestNotification(method string) error {
 	testAlert := buildNotificationTestAlert()

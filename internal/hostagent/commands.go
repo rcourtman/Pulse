@@ -17,6 +17,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+var execCommandContext = exec.CommandContext
+
 // CommandClient handles WebSocket connection to Pulse for AI command execution
 type CommandClient struct {
 	pulseURL           string
@@ -413,9 +415,9 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	// Execute the command
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(cmdCtx, "cmd", "/C", command)
+		cmd = execCommandContext(cmdCtx, "cmd", "/C", command)
 	} else {
-		cmd = exec.CommandContext(cmdCtx, "sh", "-c", command)
+		cmd = execCommandContext(cmdCtx, "sh", "-c", command)
 	}
 
 	var stdout, stderr bytes.Buffer
