@@ -1,4 +1,4 @@
-package mcp
+package tools
 
 import (
 	"context"
@@ -8,6 +8,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
+
+// ServerVersion is the version of the MCP tool implementation
+const ServerVersion = "1.0.0"
 
 // StateProvider provides access to infrastructure state
 type StateProvider interface {
@@ -299,11 +302,17 @@ func (e *PulseToolExecutor) registerTools() {
 	// Query tools (always available)
 	e.registerQueryTools()
 
+	// Kubernetes tools (always available)
+	e.registerKubernetesTools()
+
 	// Patrol context tools (always available)
 	e.registerPatrolTools()
 
 	// Infrastructure tools (always available)
 	e.registerInfrastructureTools()
+
+	// PMG (Mail Gateway) tools (always available)
+	e.registerPMGTools()
 
 	// Profile tools - read operations always available
 	e.registerProfileTools()

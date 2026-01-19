@@ -1,7 +1,8 @@
-package mcp
+package tools
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -171,10 +172,10 @@ func TestExecuteGetInfrastructureState(t *testing.T) {
 			{Name: "pve1", Status: "online"},
 		},
 		VMs: []models.VM{
-			{Name: "test-vm", VMID: 100, Status: "running"},
+			{Name: "test-vm", VMID: 100, Status: "running", Node: "pve1"},
 		},
 		Containers: []models.Container{
-			{Name: "test-ct", VMID: 101, Status: "running"},
+			{Name: "test-ct", VMID: 101, Status: "running", Node: "pve1"},
 		},
 	}
 
@@ -183,7 +184,7 @@ func TestExecuteGetInfrastructureState(t *testing.T) {
 	}
 
 	executor := NewPulseToolExecutor(cfg)
-	result, err := executor.ExecuteTool(context.Background(), "pulse_get_infrastructure_state", nil)
+	result, err := executor.ExecuteTool(context.Background(), "pulse_get_topology", nil)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -195,15 +196,21 @@ func TestExecuteGetInfrastructureState(t *testing.T) {
 		t.Fatal("expected content in result")
 	}
 
-	text := result.Content[0].Text
-	if !contains(text, "pve1") {
-		t.Error("expected node name in output")
+	var response TopologyResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
 	}
-	if !contains(text, "test-vm") {
-		t.Error("expected VM name in output")
+	if response.Summary.TotalNodes != 1 || response.Summary.TotalVMs != 1 || response.Summary.TotalLXCContainers != 1 {
+		t.Fatalf("unexpected summary totals: %+v", response.Summary)
 	}
-	if !contains(text, "test-ct") {
-		t.Error("expected container name in output")
+	if len(response.Proxmox.Nodes) != 1 || response.Proxmox.Nodes[0].Name != "pve1" {
+		t.Fatalf("expected node pve1, got %+v", response.Proxmox.Nodes)
+	}
+	if len(response.Proxmox.Nodes[0].VMs) != 1 || response.Proxmox.Nodes[0].VMs[0].Name != "test-vm" {
+		t.Fatalf("expected VM test-vm, got %+v", response.Proxmox.Nodes[0].VMs)
+	}
+	if len(response.Proxmox.Nodes[0].Containers) != 1 || response.Proxmox.Nodes[0].Containers[0].Name != "test-ct" {
+		t.Fatalf("expected container test-ct, got %+v", response.Proxmox.Nodes[0].Containers)
 	}
 }
 
@@ -318,7 +325,7 @@ func TestExecuteGetActiveAlerts(t *testing.T) {
 	}
 
 	executor := NewPulseToolExecutor(cfg)
-	result, err := executor.ExecuteTool(context.Background(), "pulse_get_active_alerts", nil)
+	result, err := executor.ExecuteTool(context.Background(), "pulse_list_alerts", nil)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -327,12 +334,15 @@ func TestExecuteGetActiveAlerts(t *testing.T) {
 		t.Fatal("expected successful result")
 	}
 
-	text := result.Content[0].Text
-	if !contains(text, "test-vm") {
-		t.Error("expected resource name in output")
+	var response AlertsResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
 	}
-	if !contains(text, "95.0%") {
-		t.Error("expected value in output")
+	if response.Count != 1 || len(response.Alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %+v", response)
+	}
+	if response.Alerts[0].ResourceName != "test-vm" || response.Alerts[0].Value != 95.0 {
+		t.Fatalf("unexpected alert: %+v", response.Alerts[0])
 	}
 }
 
@@ -352,24 +362,30 @@ func TestExecuteGetFindingsWithDismissed(t *testing.T) {
 	executor := NewPulseToolExecutor(cfg)
 
 	// Without dismissed
-	result, _ := executor.ExecuteTool(context.Background(), "pulse_get_findings", map[string]interface{}{
+	result, _ := executor.ExecuteTool(context.Background(), "pulse_list_findings", map[string]interface{}{
 		"include_dismissed": false,
 	})
-	text := result.Content[0].Text
-	if !contains(text, "Active Issue") {
-		t.Error("expected active finding")
+	var response FindingsResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
 	}
-	if contains(text, "Dismissed Issue") {
-		t.Error("should not include dismissed findings")
+	if len(response.Active) != 1 || response.Active[0].Title != "Active Issue" {
+		t.Fatalf("expected active finding, got %+v", response.Active)
+	}
+	if len(response.Dismissed) != 0 {
+		t.Fatalf("expected no dismissed findings, got %+v", response.Dismissed)
 	}
 
 	// With dismissed
-	result, _ = executor.ExecuteTool(context.Background(), "pulse_get_findings", map[string]interface{}{
+	result, _ = executor.ExecuteTool(context.Background(), "pulse_list_findings", map[string]interface{}{
 		"include_dismissed": true,
 	})
-	text = result.Content[0].Text
-	if !contains(text, "Dismissed Issue") {
-		t.Error("expected dismissed findings when included")
+	response = FindingsResponse{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if len(response.Dismissed) != 1 || response.Dismissed[0].Title != "Dismissed Issue" {
+		t.Fatalf("expected dismissed findings, got %+v", response.Dismissed)
 	}
 }
 

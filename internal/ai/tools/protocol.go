@@ -1,4 +1,4 @@
-package mcp
+package tools
 
 import (
 	"encoding/json"

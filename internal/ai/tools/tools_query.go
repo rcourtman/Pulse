@@ -1,4 +1,4 @@
-package mcp
+package tools
 
 import (
 	"context"
@@ -714,4 +714,403 @@ func intArg(args map[string]interface{}, key string, defaultVal int) int {
 		}
 	}
 	return defaultVal
+}
+
+// ========== Kubernetes Tools ==========
+
+// registerKubernetesTools registers Kubernetes query tools
+func (e *PulseToolExecutor) registerKubernetesTools() {
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
+			Name: "pulse_get_kubernetes_clusters",
+			Description: `List Kubernetes clusters monitored by Pulse with health summary.
+
+Returns: JSON with clusters array containing id, name, status, version, node count, pod count, deployment count.
+
+Use when: User asks about Kubernetes clusters, wants an overview of K8s infrastructure, or needs to find a specific cluster.`,
+			InputSchema: InputSchema{
+				Type:       "object",
+				Properties: map[string]PropertySchema{},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeGetKubernetesClusters(ctx)
+		},
+	})
+
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
+			Name: "pulse_get_kubernetes_nodes",
+			Description: `List nodes in a Kubernetes cluster with capacity and status.
+
+Returns: JSON with nodes array containing name, ready status, roles, kubelet version, capacity (CPU, memory, pods), allocatable resources.
+
+Use when: User asks about Kubernetes nodes, node health, or cluster capacity.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"cluster": {
+						Type:        "string",
+						Description: "Cluster name or ID (required)",
+					},
+				},
+				Required: []string{"cluster"},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeGetKubernetesNodes(ctx, args)
+		},
+	})
+
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
+			Name: "pulse_get_kubernetes_pods",
+			Description: `List pods in a Kubernetes cluster, optionally filtered by namespace or status.
+
+Returns: JSON with pods array containing name, namespace, node, phase, restarts, containers with their states.
+
+Use when: User asks about pods, wants to find a specific pod, or check pod health in a namespace.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"cluster": {
+						Type:        "string",
+						Description: "Cluster name or ID (required)",
+					},
+					"namespace": {
+						Type:        "string",
+						Description: "Optional: filter by namespace",
+					},
+					"status": {
+						Type:        "string",
+						Description: "Optional: filter by pod phase (Running, Pending, Failed, Succeeded)",
+					},
+					"limit": {
+						Type:        "integer",
+						Description: "Maximum number of results (default: 100)",
+					},
+					"offset": {
+						Type:        "integer",
+						Description: "Number of results to skip",
+					},
+				},
+				Required: []string{"cluster"},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeGetKubernetesPods(ctx, args)
+		},
+	})
+
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
+			Name: "pulse_get_kubernetes_deployments",
+			Description: `List deployments in a Kubernetes cluster with replica status.
+
+Returns: JSON with deployments array containing name, namespace, desired/ready/available/updated replicas.
+
+Use when: User asks about deployments, wants to check deployment health, or find unhealthy deployments.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"cluster": {
+						Type:        "string",
+						Description: "Cluster name or ID (required)",
+					},
+					"namespace": {
+						Type:        "string",
+						Description: "Optional: filter by namespace",
+					},
+					"limit": {
+						Type:        "integer",
+						Description: "Maximum number of results (default: 100)",
+					},
+					"offset": {
+						Type:        "integer",
+						Description: "Number of results to skip",
+					},
+				},
+				Required: []string{"cluster"},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeGetKubernetesDeployments(ctx, args)
+		},
+	})
+}
+
+func (e *PulseToolExecutor) executeGetKubernetesClusters(_ context.Context) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewTextResult("State provider not available."), nil
+	}
+
+	state := e.stateProvider.GetState()
+
+	if len(state.KubernetesClusters) == 0 {
+		return NewTextResult("No Kubernetes clusters found. Kubernetes monitoring may not be configured."), nil
+	}
+
+	var clusters []KubernetesClusterSummary
+	for _, c := range state.KubernetesClusters {
+		readyNodes := 0
+		for _, node := range c.Nodes {
+			if node.Ready {
+				readyNodes++
+			}
+		}
+
+		displayName := c.DisplayName
+		if c.CustomDisplayName != "" {
+			displayName = c.CustomDisplayName
+		}
+
+		clusters = append(clusters, KubernetesClusterSummary{
+			ID:              c.ID,
+			Name:            c.Name,
+			DisplayName:     displayName,
+			Server:          c.Server,
+			Version:         c.Version,
+			Status:          c.Status,
+			NodeCount:       len(c.Nodes),
+			PodCount:        len(c.Pods),
+			DeploymentCount: len(c.Deployments),
+			ReadyNodes:      readyNodes,
+		})
+	}
+
+	response := KubernetesClustersResponse{
+		Clusters: clusters,
+		Total:    len(clusters),
+	}
+
+	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) executeGetKubernetesNodes(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewTextResult("State provider not available."), nil
+	}
+
+	clusterArg, _ := args["cluster"].(string)
+	if clusterArg == "" {
+		return NewErrorResult(fmt.Errorf("cluster is required")), nil
+	}
+
+	state := e.stateProvider.GetState()
+
+	// Find the cluster (also match CustomDisplayName)
+	var cluster *KubernetesClusterSummary
+	for _, c := range state.KubernetesClusters {
+		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
+			displayName := c.DisplayName
+			if c.CustomDisplayName != "" {
+				displayName = c.CustomDisplayName
+			}
+			cluster = &KubernetesClusterSummary{
+				ID:          c.ID,
+				Name:        c.Name,
+				DisplayName: displayName,
+			}
+
+			var nodes []KubernetesNodeSummary
+			for _, node := range c.Nodes {
+				nodes = append(nodes, KubernetesNodeSummary{
+					UID:                     node.UID,
+					Name:                    node.Name,
+					Ready:                   node.Ready,
+					Unschedulable:           node.Unschedulable,
+					Roles:                   node.Roles,
+					KubeletVersion:          node.KubeletVersion,
+					ContainerRuntimeVersion: node.ContainerRuntimeVersion,
+					OSImage:                 node.OSImage,
+					Architecture:            node.Architecture,
+					CapacityCPU:             node.CapacityCPU,
+					CapacityMemoryBytes:     node.CapacityMemoryBytes,
+					CapacityPods:            node.CapacityPods,
+					AllocatableCPU:          node.AllocCPU,
+					AllocatableMemoryBytes:  node.AllocMemoryBytes,
+					AllocatablePods:         node.AllocPods,
+				})
+			}
+
+			response := KubernetesNodesResponse{
+				Cluster: cluster.DisplayName,
+				Nodes:   nodes,
+				Total:   len(nodes),
+			}
+			if response.Nodes == nil {
+				response.Nodes = []KubernetesNodeSummary{}
+			}
+			return NewJSONResult(response), nil
+		}
+	}
+
+	return NewTextResult(fmt.Sprintf("Kubernetes cluster '%s' not found.", clusterArg)), nil
+}
+
+func (e *PulseToolExecutor) executeGetKubernetesPods(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewTextResult("State provider not available."), nil
+	}
+
+	clusterArg, _ := args["cluster"].(string)
+	if clusterArg == "" {
+		return NewErrorResult(fmt.Errorf("cluster is required")), nil
+	}
+
+	namespaceFilter, _ := args["namespace"].(string)
+	statusFilter, _ := args["status"].(string)
+	limit := intArg(args, "limit", 100)
+	offset := intArg(args, "offset", 0)
+
+	state := e.stateProvider.GetState()
+
+	// Find the cluster (also match CustomDisplayName)
+	for _, c := range state.KubernetesClusters {
+		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
+			displayName := c.DisplayName
+			if c.CustomDisplayName != "" {
+				displayName = c.CustomDisplayName
+			}
+
+			var pods []KubernetesPodSummary
+			totalPods := 0
+			filteredCount := 0
+
+			for _, pod := range c.Pods {
+				// Apply filters
+				if namespaceFilter != "" && pod.Namespace != namespaceFilter {
+					continue
+				}
+				if statusFilter != "" && !strings.EqualFold(pod.Phase, statusFilter) {
+					continue
+				}
+
+				filteredCount++
+
+				// Apply pagination
+				if totalPods < offset {
+					totalPods++
+					continue
+				}
+				if len(pods) >= limit {
+					totalPods++
+					continue
+				}
+
+				var containers []KubernetesPodContainerSummary
+				for _, container := range pod.Containers {
+					containers = append(containers, KubernetesPodContainerSummary{
+						Name:         container.Name,
+						Ready:        container.Ready,
+						State:        container.State,
+						RestartCount: container.RestartCount,
+						Reason:       container.Reason,
+					})
+				}
+
+				pods = append(pods, KubernetesPodSummary{
+					UID:        pod.UID,
+					Name:       pod.Name,
+					Namespace:  pod.Namespace,
+					NodeName:   pod.NodeName,
+					Phase:      pod.Phase,
+					Reason:     pod.Reason,
+					Restarts:   pod.Restarts,
+					QoSClass:   pod.QoSClass,
+					OwnerKind:  pod.OwnerKind,
+					OwnerName:  pod.OwnerName,
+					Containers: containers,
+				})
+				totalPods++
+			}
+
+			response := KubernetesPodsResponse{
+				Cluster:  displayName,
+				Pods:     pods,
+				Total:    len(c.Pods),
+				Filtered: filteredCount,
+			}
+			if response.Pods == nil {
+				response.Pods = []KubernetesPodSummary{}
+			}
+			return NewJSONResult(response), nil
+		}
+	}
+
+	return NewTextResult(fmt.Sprintf("Kubernetes cluster '%s' not found.", clusterArg)), nil
+}
+
+func (e *PulseToolExecutor) executeGetKubernetesDeployments(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewTextResult("State provider not available."), nil
+	}
+
+	clusterArg, _ := args["cluster"].(string)
+	if clusterArg == "" {
+		return NewErrorResult(fmt.Errorf("cluster is required")), nil
+	}
+
+	namespaceFilter, _ := args["namespace"].(string)
+	limit := intArg(args, "limit", 100)
+	offset := intArg(args, "offset", 0)
+
+	state := e.stateProvider.GetState()
+
+	// Find the cluster (also match CustomDisplayName)
+	for _, c := range state.KubernetesClusters {
+		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
+			displayName := c.DisplayName
+			if c.CustomDisplayName != "" {
+				displayName = c.CustomDisplayName
+			}
+
+			var deployments []KubernetesDeploymentSummary
+			filteredCount := 0
+			count := 0
+
+			for _, dep := range c.Deployments {
+				// Apply namespace filter
+				if namespaceFilter != "" && dep.Namespace != namespaceFilter {
+					continue
+				}
+
+				filteredCount++
+
+				// Apply pagination
+				if count < offset {
+					count++
+					continue
+				}
+				if len(deployments) >= limit {
+					count++
+					continue
+				}
+
+				deployments = append(deployments, KubernetesDeploymentSummary{
+					UID:               dep.UID,
+					Name:              dep.Name,
+					Namespace:         dep.Namespace,
+					DesiredReplicas:   dep.DesiredReplicas,
+					ReadyReplicas:     dep.ReadyReplicas,
+					AvailableReplicas: dep.AvailableReplicas,
+					UpdatedReplicas:   dep.UpdatedReplicas,
+				})
+				count++
+			}
+
+			response := KubernetesDeploymentsResponse{
+				Cluster:     displayName,
+				Deployments: deployments,
+				Total:       len(c.Deployments),
+				Filtered:    filteredCount,
+			}
+			if response.Deployments == nil {
+				response.Deployments = []KubernetesDeploymentSummary{}
+			}
+			return NewJSONResult(response), nil
+		}
+	}
+
+	return NewTextResult(fmt.Sprintf("Kubernetes cluster '%s' not found.", clusterArg)), nil
 }

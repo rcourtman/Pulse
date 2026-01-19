@@ -1,4 +1,4 @@
-package mcp
+package tools
 
 import (
 	"context"
@@ -140,7 +140,10 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 
 	// Note: Control level read_only check is now centralized in registry.Execute()
 
-	// Check security policy
+	// Check if this is a pre-approved execution (agentic loop re-executing after user approval)
+	preApproved := isPreApproved(args)
+
+	// Check security policy (skip block check - blocks cannot be pre-approved)
 	decision := agentexec.PolicyAllow
 	if e.policy != nil {
 		decision = e.policy.Evaluate(command)
@@ -153,7 +156,8 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		return NewTextResult(formatCommandSuggestion(command, runOnHost, targetHost)), nil
 	}
 
-	if e.controlLevel == ControlLevelControlled {
+	// Skip approval checks if pre-approved
+	if !preApproved && e.controlLevel == ControlLevelControlled {
 		targetType := "container"
 		if runOnHost {
 			targetType = "host"
@@ -161,7 +165,7 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Control level requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
 	}
-	if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
+	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
 		targetType := "container"
 		if runOnHost {
 			targetType = "host"
@@ -263,8 +267,11 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		command = fmt.Sprintf("%s stop %d --skiplock", cmdTool, guest.VMID)
 	}
 
-	// Check security policy
-	if e.policy != nil {
+	// Check if this is a pre-approved execution (agentic loop re-executing after user approval)
+	preApproved := isPreApproved(args)
+
+	// Check security policy (skip if pre-approved)
+	if !preApproved && e.policy != nil {
 		decision := e.policy.Evaluate(command)
 		if decision == agentexec.PolicyBlock {
 			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
@@ -276,8 +283,8 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		}
 	}
 
-	// Check control level - this must be outside policy check since policy may be nil
-	if e.controlLevel == ControlLevelControlled {
+	// Check control level - this must be outside policy check since policy may be nil (skip if pre-approved)
+	if !preApproved && e.controlLevel == ControlLevelControlled {
 		// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
 		approvalID := createApprovalRecord(command, guest.Type, fmt.Sprintf("%d", guest.VMID), guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
 		return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
@@ -336,6 +343,9 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 
 	// Note: Control level read_only check is now centralized in registry.Execute()
 
+	// Check if this is a pre-approved execution (agentic loop re-executing after user approval)
+	preApproved := isPreApproved(args)
+
 	container, dockerHost, err := e.resolveDockerContainer(containerName, hostName)
 	if err != nil {
 		return NewTextResult(fmt.Sprintf("Could not find Docker container '%s': %v", containerName, err)), nil
@@ -346,7 +356,8 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 	// Get the agent hostname for approval records (may differ from docker host display name)
 	agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
 
-	if e.policy != nil {
+	// Skip approval checks if pre-approved
+	if !preApproved && e.policy != nil {
 		decision := e.policy.Evaluate(command)
 		if decision == agentexec.PolicyBlock {
 			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
@@ -357,8 +368,8 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 		}
 	}
 
-	// Check control level - this must be outside policy check since policy may be nil
-	if e.controlLevel == ControlLevelControlled {
+	// Check control level - this must be outside policy check since policy may be nil (skip if pre-approved)
+	if !preApproved && e.controlLevel == ControlLevelControlled {
 		approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", action, container.Name))
 		return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, action, command, approvalID)), nil
 	}
@@ -587,6 +598,34 @@ func createApprovalRecord(command, targetType, targetID, targetName, context str
 
 	log.Debug().Str("approval_id", req.ID).Str("command", command).Msg("Created approval record")
 	return req.ID
+}
+
+// isPreApproved checks if the args contain a valid, approved approval_id.
+// This is used when the agentic loop re-executes a tool after user approval.
+func isPreApproved(args map[string]interface{}) bool {
+	approvalID, ok := args["_approval_id"].(string)
+	if !ok || approvalID == "" {
+		return false
+	}
+
+	store := approval.GetStore()
+	if store == nil {
+		return false
+	}
+
+	req, found := store.GetApproval(approvalID)
+	if !found {
+		log.Debug().Str("approval_id", approvalID).Msg("Pre-approval check: approval not found")
+		return false
+	}
+
+	if req.Status == approval.StatusApproved {
+		log.Debug().Str("approval_id", approvalID).Msg("Pre-approval check: approved, skipping approval flow")
+		return true
+	}
+
+	log.Debug().Str("approval_id", approvalID).Str("status", string(req.Status)).Msg("Pre-approval check: not approved")
+	return false
 }
 
 // Formatting helpers for control tools

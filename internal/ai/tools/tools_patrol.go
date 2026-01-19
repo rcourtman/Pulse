@@ -1,8 +1,9 @@
-package mcp
+package tools
 
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -188,6 +189,39 @@ Do NOT use for: Checking if something is running (use pulse_get_topology), or th
 		},
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeDismissFinding(ctx, args)
+		},
+	})
+
+	// ========== Resolved Alerts Tool ==========
+
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
+			Name: "pulse_list_resolved_alerts",
+			Description: `List recently resolved alerts (alerts that were active but have since cleared).
+
+Returns: JSON with alerts array containing alert details including type, level, resource info, message, start time, and when it was resolved.
+
+Use when: User asks about alerts that cleared, what issues resolved themselves, or wants to see recent alert history.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"type": {
+						Type:        "string",
+						Description: "Optional: filter by alert type",
+					},
+					"level": {
+						Type:        "string",
+						Description: "Optional: filter by level (critical, warning)",
+					},
+					"limit": {
+						Type:        "integer",
+						Description: "Maximum number of results (default: 50)",
+					},
+				},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeListResolvedAlerts(ctx, args)
 		},
 	})
 }
@@ -463,4 +497,64 @@ func (e *PulseToolExecutor) executeDismissFinding(_ context.Context, args map[st
 		"reason":     reason,
 		"note":       note,
 	}), nil
+}
+
+// ========== Resolved Alerts Tool Implementation ==========
+
+func (e *PulseToolExecutor) executeListResolvedAlerts(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewTextResult("State provider not available."), nil
+	}
+
+	typeFilter, _ := args["type"].(string)
+	levelFilter, _ := args["level"].(string)
+	limit := intArg(args, "limit", 50)
+
+	state := e.stateProvider.GetState()
+
+	if len(state.RecentlyResolved) == 0 {
+		return NewTextResult("No recently resolved alerts."), nil
+	}
+
+	var alerts []ResolvedAlertSummary
+
+	for _, alert := range state.RecentlyResolved {
+		// Apply filters
+		if typeFilter != "" && !strings.EqualFold(alert.Type, typeFilter) {
+			continue
+		}
+		if levelFilter != "" && !strings.EqualFold(alert.Level, levelFilter) {
+			continue
+		}
+
+		if len(alerts) >= limit {
+			break
+		}
+
+		alerts = append(alerts, ResolvedAlertSummary{
+			ID:           alert.ID,
+			Type:         alert.Type,
+			Level:        alert.Level,
+			ResourceID:   alert.ResourceID,
+			ResourceName: alert.ResourceName,
+			Node:         alert.Node,
+			Instance:     alert.Instance,
+			Message:      alert.Message,
+			Value:        alert.Value,
+			Threshold:    alert.Threshold,
+			StartTime:    alert.StartTime,
+			ResolvedTime: alert.ResolvedTime,
+		})
+	}
+
+	if alerts == nil {
+		alerts = []ResolvedAlertSummary{}
+	}
+
+	response := ResolvedAlertsResponse{
+		Alerts: alerts,
+		Total:  len(state.RecentlyResolved),
+	}
+
+	return NewJSONResult(response), nil
 }
