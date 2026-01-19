@@ -335,6 +335,12 @@ func (p *PatrolService) SetOpenCodePatrol(runner OpenCodePatrolRunner, enabled b
 	log.Info().Bool("enabled", enabled).Msg("OpenCode patrol integration configured")
 }
 
+// SetChatPatrol sets the chat-based patrol runner for delegation
+// This is functionally equivalent to SetOpenCodePatrol
+func (p *PatrolService) SetChatPatrol(runner OpenCodePatrolRunner, enabled bool) {
+	p.SetOpenCodePatrol(runner, enabled)
+}
+
 // UseOpenCode returns whether OpenCode is configured for patrol
 func (p *PatrolService) UseOpenCode() bool {
 	p.mu.RLock()

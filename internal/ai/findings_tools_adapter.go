@@ -1,7 +1,7 @@
 package ai
 
 import (
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/mcp"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
 
 // FindingsMCPAdapter adapts FindingsStore to MCP FindingsProvider interface
@@ -17,18 +17,18 @@ func NewFindingsMCPAdapter(store *FindingsStore) *FindingsMCPAdapter {
 	return &FindingsMCPAdapter{store: store}
 }
 
-// GetActiveFindings implements mcp.FindingsProvider
-func (a *FindingsMCPAdapter) GetActiveFindings() []mcp.Finding {
+// GetActiveFindings implements tools.FindingsProvider
+func (a *FindingsMCPAdapter) GetActiveFindings() []tools.Finding {
 	if a.store == nil {
 		return nil
 	}
 
 	// Get all active findings (empty severity means all)
 	internal := a.store.GetActive("")
-	result := make([]mcp.Finding, 0, len(internal))
+	result := make([]tools.Finding, 0, len(internal))
 
 	for _, f := range internal {
-		result = append(result, mcp.Finding{
+		result = append(result, tools.Finding{
 			ID:             f.ID,
 			Key:            f.Key,
 			Severity:       string(f.Severity),
@@ -48,17 +48,17 @@ func (a *FindingsMCPAdapter) GetActiveFindings() []mcp.Finding {
 	return result
 }
 
-// GetDismissedFindings implements mcp.FindingsProvider
-func (a *FindingsMCPAdapter) GetDismissedFindings() []mcp.Finding {
+// GetDismissedFindings implements tools.FindingsProvider
+func (a *FindingsMCPAdapter) GetDismissedFindings() []tools.Finding {
 	if a.store == nil {
 		return nil
 	}
 
 	internal := a.store.GetDismissedFindings()
-	result := make([]mcp.Finding, 0, len(internal))
+	result := make([]tools.Finding, 0, len(internal))
 
 	for _, f := range internal {
-		result = append(result, mcp.Finding{
+		result = append(result, tools.Finding{
 			ID:             f.ID,
 			Key:            f.Key,
 			Severity:       string(f.Severity),
