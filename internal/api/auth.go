@@ -183,6 +183,16 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 
 // CheckAuth checks both basic auth and API token
 func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool {
+	// Dev mode bypass for all auth (disabled by default)
+	if adminBypassEnabled() {
+		if w != nil {
+			// Set headers for standard admin user
+			w.Header().Set("X-Authenticated-User", "admin")
+			w.Header().Set("X-Auth-Method", "bypass")
+		}
+		return true
+	}
+
 	config.Mu.RLock()
 	defer config.Mu.RUnlock()
 

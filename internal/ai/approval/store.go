@@ -221,6 +221,11 @@ func (s *Store) Approve(id, username string) (*ApprovalRequest, error) {
 		return nil, fmt.Errorf("approval request not found: %s", id)
 	}
 
+	// Idempotent: if already approved, return success (handles double-clicks, race conditions)
+	if req.Status == StatusApproved {
+		return req, nil
+	}
+
 	if req.Status != StatusPending {
 		return nil, fmt.Errorf("approval request is not pending (status: %s)", req.Status)
 	}

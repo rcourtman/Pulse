@@ -304,6 +304,9 @@ shutdown:
 		log.Error().Err(err).Msg("Server shutdown error")
 	}
 
+	// Stop OpenCode AI service (kills sidecar process group)
+	router.StopOpenCodeAI(shutdownCtx)
+
 	cancel()
 	reloadableMonitor.Stop()
 
