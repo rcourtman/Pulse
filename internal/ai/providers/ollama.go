@@ -257,6 +257,200 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	return chatResp, nil
 }
 
+// SupportsThinking returns true if the model supports extended thinking
+func (c *OllamaClient) SupportsThinking(model string) bool {
+	// Ollama models don't currently support extended thinking in stream output
+	return false
+}
+
+// ollamaStreamResponse is a single chunk from the Ollama streaming API
+type ollamaStreamResponse struct {
+	Model           string            `json:"model"`
+	CreatedAt       string            `json:"created_at"`
+	Message         ollamaMessageResp `json:"message"`
+	Done            bool              `json:"done"`
+	DoneReason      string            `json:"done_reason,omitempty"`
+	TotalDuration   int64             `json:"total_duration,omitempty"`
+	LoadDuration    int64             `json:"load_duration,omitempty"`
+	PromptEvalCount int               `json:"prompt_eval_count,omitempty"`
+	EvalCount       int               `json:"eval_count,omitempty"`
+}
+
+// ChatStream sends a chat request and streams the response via callback
+func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
+	// Convert messages to Ollama format (same as Chat)
+	messages := make([]ollamaMessage, 0, len(req.Messages)+1)
+
+	if req.System != "" {
+		messages = append(messages, ollamaMessage{
+			Role:    "system",
+			Content: req.System,
+		})
+	}
+
+	for _, m := range req.Messages {
+		msg := ollamaMessage{
+			Role:    m.Role,
+			Content: m.Content,
+		}
+		if len(m.ToolCalls) > 0 {
+			for _, tc := range m.ToolCalls {
+				msg.ToolCalls = append(msg.ToolCalls, ollamaToolCall{
+					Function: ollamaFunctionCall{
+						Name:      tc.Name,
+						Arguments: tc.Input,
+					},
+				})
+			}
+		}
+		if m.ToolResult != nil {
+			msg.Role = "tool"
+			msg.Content = m.ToolResult.Content
+		}
+		messages = append(messages, msg)
+	}
+
+	model := req.Model
+	if strings.HasPrefix(model, "ollama:") {
+		model = strings.TrimPrefix(model, "ollama:")
+	}
+	if model == "" {
+		model = c.model
+	}
+	if model == "" {
+		model = "llama3"
+	}
+
+	ollamaReq := ollamaRequest{
+		Model:    model,
+		Messages: messages,
+		Stream:   true, // Enable streaming
+	}
+
+	if len(req.Tools) > 0 {
+		ollamaReq.Tools = make([]ollamaTool, 0, len(req.Tools))
+		for _, t := range req.Tools {
+			if t.Type != "" && t.Type != "function" {
+				continue
+			}
+			ollamaReq.Tools = append(ollamaReq.Tools, ollamaTool{
+				Type: "function",
+				Function: ollamaToolFunction{
+					Name:        t.Name,
+					Description: t.Description,
+					Parameters:  t.InputSchema,
+				},
+			})
+		}
+	}
+
+	if req.MaxTokens > 0 || req.Temperature > 0 {
+		ollamaReq.Options = &ollamaOptions{}
+		if req.MaxTokens > 0 {
+			ollamaReq.Options.NumPredict = req.MaxTokens
+		}
+		if req.Temperature > 0 {
+			ollamaReq.Options.Temperature = req.Temperature
+		}
+	}
+
+	body, err := json.Marshal(ollamaReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	url := c.baseURL + "/api/chat"
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse NDJSON stream (newline-delimited JSON, not SSE)
+	decoder := json.NewDecoder(resp.Body)
+	var toolCalls []ToolCall
+	var inputTokens, outputTokens int
+	var doneReason string
+
+	for {
+		var chunk ollamaStreamResponse
+		if err := decoder.Decode(&chunk); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("stream decode error: %w", err)
+		}
+
+		// Regular content
+		if chunk.Message.Content != "" {
+			callback(StreamEvent{
+				Type: "content",
+				Data: ContentEvent{Text: chunk.Message.Content},
+			})
+		}
+
+		// Tool calls
+		for _, tc := range chunk.Message.ToolCalls {
+			toolCallID := tc.ID
+			if toolCallID == "" {
+				toolCallID = fmt.Sprintf("ollama_%s_%d", tc.Function.Name, len(toolCalls))
+			}
+			callback(StreamEvent{
+				Type: "tool_start",
+				Data: ToolStartEvent{
+					ID:    toolCallID,
+					Name:  tc.Function.Name,
+					Input: tc.Function.Arguments,
+				},
+			})
+			toolCalls = append(toolCalls, ToolCall{
+				ID:    toolCallID,
+				Name:  tc.Function.Name,
+				Input: tc.Function.Arguments,
+			})
+		}
+
+		if chunk.Done {
+			inputTokens = chunk.PromptEvalCount
+			outputTokens = chunk.EvalCount
+			doneReason = chunk.DoneReason
+			break
+		}
+	}
+
+	// Send done event
+	stopReason := doneReason
+	if len(toolCalls) > 0 {
+		stopReason = "tool_use"
+	} else if stopReason == "" || stopReason == "stop" {
+		stopReason = "end_turn"
+	}
+
+	callback(StreamEvent{
+		Type: "done",
+		Data: DoneEvent{
+			StopReason:   stopReason,
+			ToolCalls:    toolCalls,
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+		},
+	})
+
+	return nil
+}
+
 // TestConnection validates connectivity by checking the Ollama version endpoint
 func (c *OllamaClient) TestConnection(ctx context.Context) error {
 	url := c.baseURL + "/api/version"
@@ -312,8 +506,9 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	models := make([]ModelInfo, 0, len(result.Models))
 	for _, m := range result.Models {
 		models = append(models, ModelInfo{
-			ID:   m.Name,
-			Name: m.Name,
+			ID:      m.Name,
+			Name:    m.Name,
+			Notable: true, // Ollama models are always notable - user explicitly pulled them
 		})
 	}
 

@@ -523,6 +523,338 @@ func (c *OpenAIClient) modelsEndpoint() string {
 	return u.Scheme + "://" + u.Host + path
 }
 
+// SupportsThinking returns true if the model supports extended thinking
+func (c *OpenAIClient) SupportsThinking(model string) bool {
+	// DeepSeek reasoner models support extended thinking
+	if c.isDeepSeek() && strings.Contains(model, "reasoner") {
+		return true
+	}
+	// OpenAI o1/o3/o4 models have reasoning but not in the same streaming format
+	return false
+}
+
+// openaiStreamRequest extends openaiRequest with streaming field
+type openaiStreamRequest struct {
+	Model               string          `json:"model"`
+	Messages            []openaiMessage `json:"messages"`
+	MaxTokens           int             `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"`
+	Temperature         float64         `json:"temperature,omitempty"`
+	Tools               []openaiTool    `json:"tools,omitempty"`
+	ToolChoice          interface{}     `json:"tool_choice,omitempty"`
+	Stream              bool            `json:"stream"`
+	StreamOptions       *streamOptions  `json:"stream_options,omitempty"`
+}
+
+type streamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
+}
+
+// openaiStreamEvent represents a streaming event from the OpenAI API
+type openaiStreamEvent struct {
+	ID      string               `json:"id"`
+	Object  string               `json:"object"`
+	Created int64                `json:"created"`
+	Model   string               `json:"model"`
+	Choices []openaiStreamChoice `json:"choices"`
+	Usage   *openaiUsage         `json:"usage,omitempty"`
+}
+
+type openaiStreamChoice struct {
+	Index        int               `json:"index"`
+	Delta        openaiStreamDelta `json:"delta"`
+	FinishReason string            `json:"finish_reason"`
+}
+
+type openaiStreamDelta struct {
+	Role             string                `json:"role,omitempty"`
+	Content          string                `json:"content,omitempty"`
+	ReasoningContent string                `json:"reasoning_content,omitempty"`
+	ToolCalls        []openaiToolCallDelta `json:"tool_calls,omitempty"`
+}
+
+type openaiToolCallDelta struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Function struct {
+		Name      string `json:"name,omitempty"`
+		Arguments string `json:"arguments,omitempty"`
+	} `json:"function,omitempty"`
+}
+
+// ChatStream sends a chat request and streams the response via callback
+func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
+	// Convert messages to OpenAI format (same as Chat)
+	messages := make([]openaiMessage, 0, len(req.Messages)+1)
+
+	if req.System != "" {
+		messages = append(messages, openaiMessage{
+			Role:    "system",
+			Content: req.System,
+		})
+	}
+
+	for _, m := range req.Messages {
+		msg := openaiMessage{
+			Role: m.Role,
+		}
+
+		if len(m.ToolCalls) > 0 {
+			msg.Content = nil
+			if m.Content != "" {
+				msg.Content = m.Content
+			}
+			if c.isDeepSeekReasoner() && m.ReasoningContent != "" {
+				msg.ReasoningContent = m.ReasoningContent
+			}
+			for _, tc := range m.ToolCalls {
+				argsJSON, _ := json.Marshal(tc.Input)
+				msg.ToolCalls = append(msg.ToolCalls, openaiToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Function: openaiToolFunction{
+						Name:      tc.Name,
+						Arguments: string(argsJSON),
+					},
+				})
+			}
+		} else if m.ToolResult != nil {
+			msg.Role = "tool"
+			msg.Content = m.ToolResult.Content
+			msg.ToolCallID = m.ToolResult.ToolUseID
+		} else {
+			msg.Content = m.Content
+			if c.isDeepSeekReasoner() && m.ReasoningContent != "" {
+				msg.ReasoningContent = m.ReasoningContent
+			}
+		}
+
+		messages = append(messages, msg)
+	}
+
+	model := req.Model
+	if strings.HasPrefix(model, "openai:") {
+		model = strings.TrimPrefix(model, "openai:")
+	} else if strings.HasPrefix(model, "deepseek:") {
+		model = strings.TrimPrefix(model, "deepseek:")
+	}
+	if model == "" {
+		model = c.model
+	}
+
+	openaiReq := openaiStreamRequest{
+		Model:    model,
+		Messages: messages,
+		Stream:   true,
+		StreamOptions: &streamOptions{
+			IncludeUsage: true,
+		},
+	}
+
+	if req.MaxTokens > 0 {
+		if c.isDeepSeek() {
+			openaiReq.MaxTokens = req.MaxTokens
+		} else {
+			openaiReq.MaxCompletionTokens = req.MaxTokens
+		}
+	}
+
+	if req.Temperature > 0 && !c.isDeepSeekReasoner() && !c.requiresMaxCompletionTokens(model) {
+		openaiReq.Temperature = req.Temperature
+	}
+
+	if len(req.Tools) > 0 {
+		for _, t := range req.Tools {
+			if t.Type != "" && t.Type != "function" {
+				continue
+			}
+			openaiReq.Tools = append(openaiReq.Tools, openaiTool{
+				Type: "function",
+				Function: openaiFunction{
+					Name:        t.Name,
+					Description: t.Description,
+					Parameters:  t.InputSchema,
+				},
+			})
+		}
+		if len(openaiReq.Tools) > 0 {
+			openaiReq.ToolChoice = "auto"
+		}
+	}
+
+	body, err := json.Marshal(openaiReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	httpReq.Header.Set("Accept", "text/event-stream")
+
+	resp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		var errResp openaiError
+		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+			return fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+		}
+		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse SSE stream
+	reader := resp.Body
+	buf := make([]byte, 4096)
+	var pendingData string
+	var toolCalls []ToolCall
+	toolCallBuilders := make(map[int]*struct {
+		id   string
+		name string
+		args strings.Builder
+	})
+	var inputTokens, outputTokens int
+	var finishReason string
+
+	for {
+		n, err := reader.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("stream read error: %w", err)
+		}
+
+		pendingData += string(buf[:n])
+		lines := strings.Split(pendingData, "\n")
+
+		// Keep the last incomplete line for next iteration
+		pendingData = lines[len(lines)-1]
+		lines = lines[:len(lines)-1]
+
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+
+			data := strings.TrimPrefix(line, "data:")
+			data = strings.TrimSpace(data)
+
+			if data == "[DONE]" {
+				// Build final tool calls from builders
+				for _, builder := range toolCallBuilders {
+					var input map[string]interface{}
+					if err := json.Unmarshal([]byte(builder.args.String()), &input); err != nil {
+						input = map[string]interface{}{"raw": builder.args.String()}
+					}
+					toolCalls = append(toolCalls, ToolCall{
+						ID:    builder.id,
+						Name:  builder.name,
+						Input: input,
+					})
+				}
+
+				stopReason := finishReason
+				if len(toolCalls) > 0 {
+					stopReason = "tool_use"
+				} else if stopReason == "stop" {
+					stopReason = "end_turn"
+				}
+
+				callback(StreamEvent{
+					Type: "done",
+					Data: DoneEvent{
+						StopReason:   stopReason,
+						ToolCalls:    toolCalls,
+						InputTokens:  inputTokens,
+						OutputTokens: outputTokens,
+					},
+				})
+				return nil
+			}
+
+			var event openaiStreamEvent
+			if err := json.Unmarshal([]byte(data), &event); err != nil {
+				log.Debug().Err(err).Str("data", data).Msg("Failed to parse stream event")
+				continue
+			}
+
+			// Handle usage info
+			if event.Usage != nil {
+				inputTokens = event.Usage.PromptTokens
+				outputTokens = event.Usage.CompletionTokens
+			}
+
+			for _, choice := range event.Choices {
+				if choice.FinishReason != "" {
+					finishReason = choice.FinishReason
+				}
+
+				delta := choice.Delta
+
+				// Regular content
+				if delta.Content != "" {
+					callback(StreamEvent{
+						Type: "content",
+						Data: ContentEvent{Text: delta.Content},
+					})
+				}
+
+				// Reasoning content (DeepSeek)
+				if delta.ReasoningContent != "" {
+					callback(StreamEvent{
+						Type: "thinking",
+						Data: ThinkingEvent{Text: delta.ReasoningContent},
+					})
+				}
+
+				// Tool calls
+				for _, tc := range delta.ToolCalls {
+					builder, exists := toolCallBuilders[tc.Index]
+					if !exists {
+						builder = &struct {
+							id   string
+							name string
+							args strings.Builder
+						}{}
+						toolCallBuilders[tc.Index] = builder
+					}
+
+					if tc.ID != "" {
+						builder.id = tc.ID
+					}
+					if tc.Function.Name != "" {
+						builder.name = tc.Function.Name
+						callback(StreamEvent{
+							Type: "tool_start",
+							Data: ToolStartEvent{
+								ID:   builder.id,
+								Name: builder.name,
+							},
+						})
+					}
+					if tc.Function.Arguments != "" {
+						builder.args.WriteString(tc.Function.Arguments)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // ListModels fetches available models from the OpenAI API
 func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	modelsURL := c.modelsEndpoint()
@@ -558,14 +890,22 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 
 	models := make([]ModelInfo, 0, len(result.Data))
+	cache := GetNotableCache()
 	for _, m := range result.Data {
 		// Filter to only chat-capable models
 		if strings.Contains(m.ID, "gpt") || strings.Contains(m.ID, "o1") ||
-			strings.Contains(m.ID, "o3") || strings.Contains(m.ID, "deepseek") {
+			strings.Contains(m.ID, "o3") || strings.Contains(m.ID, "o4") ||
+			strings.Contains(m.ID, "deepseek") {
+			// Use correct provider for notable detection
+			provider := "openai"
+			if strings.Contains(m.ID, "deepseek") {
+				provider = "deepseek"
+			}
 			models = append(models, ModelInfo{
 				ID:        m.ID,
 				Name:      m.ID, // OpenAI uses ID as name
 				CreatedAt: m.Created,
+				Notable:   cache.IsNotable(provider, m.ID, m.Created),
 			})
 		}
 	}

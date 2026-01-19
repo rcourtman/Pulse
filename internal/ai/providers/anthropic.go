@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -405,12 +406,326 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 
 	models := make([]ModelInfo, 0, len(result.Data))
+	cache := GetNotableCache()
+	notableCount := 0
 	for _, m := range result.Data {
+		isNotable := cache.IsNotable("anthropic", m.ID, 0)
+		if isNotable {
+			notableCount++
+		}
 		models = append(models, ModelInfo{
-			ID:   m.ID,
-			Name: m.DisplayName,
+			ID:      m.ID,
+			Name:    m.DisplayName,
+			Notable: isNotable,
 		})
 	}
 
+	log.Info().Int("total", len(models)).Int("notable", notableCount).Msg("Anthropic ListModels returned")
+
+	// Log model IDs for debugging
+	var modelIDs []string
+	for _, m := range models {
+		modelIDs = append(modelIDs, m.ID)
+	}
+	log.Debug().Strs("models", modelIDs).Msg("Anthropic models")
+
 	return models, nil
+}
+
+// SupportsThinking returns true if the model supports extended thinking
+func (c *AnthropicClient) SupportsThinking(model string) bool {
+	// Claude 3.5+ models with "thinking" capability
+	// Currently no public Claude models have extended thinking like DeepSeek
+	return false
+}
+
+// anthropicStreamRequest is the request body for streaming API calls
+type anthropicStreamRequest struct {
+	Model       string             `json:"model"`
+	Messages    []anthropicMessage `json:"messages"`
+	MaxTokens   int                `json:"max_tokens"`
+	System      string             `json:"system,omitempty"`
+	Temperature float64            `json:"temperature,omitempty"`
+	Tools       []anthropicTool    `json:"tools,omitempty"`
+	Stream      bool               `json:"stream"`
+}
+
+// anthropicStreamEvent represents a streaming event from the Anthropic API
+type anthropicStreamEvent struct {
+	Type         string             `json:"type"`
+	Index        int                `json:"index,omitempty"`
+	ContentBlock *anthropicContent  `json:"content_block,omitempty"`
+	Delta        *anthropicDelta    `json:"delta,omitempty"`
+	Message      *anthropicResponse `json:"message,omitempty"`
+	Usage        *anthropicUsage    `json:"usage,omitempty"`
+}
+
+type anthropicDelta struct {
+	Type        string `json:"type,omitempty"`
+	Text        string `json:"text,omitempty"`
+	PartialJSON string `json:"partial_json,omitempty"`
+	StopReason  string `json:"stop_reason,omitempty"`
+}
+
+// ChatStream sends a chat request and streams the response via callback
+func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
+	// Convert messages to Anthropic format (same as Chat)
+	messages := make([]anthropicMessage, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		if m.Role == "system" {
+			continue
+		}
+
+		if m.ToolResult != nil {
+			contentJSON, _ := json.Marshal(m.ToolResult.Content)
+			messages = append(messages, anthropicMessage{
+				Role: "user",
+				Content: []anthropicContent{
+					{
+						Type:      "tool_result",
+						ToolUseID: m.ToolResult.ToolUseID,
+						Content:   contentJSON,
+						IsError:   m.ToolResult.IsError,
+					},
+				},
+			})
+			continue
+		}
+
+		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+			contentBlocks := make([]anthropicContent, 0)
+			if m.Content != "" {
+				contentBlocks = append(contentBlocks, anthropicContent{
+					Type: "text",
+					Text: m.Content,
+				})
+			}
+			for _, tc := range m.ToolCalls {
+				contentBlocks = append(contentBlocks, anthropicContent{
+					Type:  "tool_use",
+					ID:    tc.ID,
+					Name:  tc.Name,
+					Input: tc.Input,
+				})
+			}
+			messages = append(messages, anthropicMessage{
+				Role:    "assistant",
+				Content: contentBlocks,
+			})
+			continue
+		}
+
+		messages = append(messages, anthropicMessage{
+			Role:    m.Role,
+			Content: m.Content,
+		})
+	}
+
+	model := req.Model
+	if len(model) > 10 && model[:10] == "anthropic:" {
+		model = model[10:]
+	}
+	if model == "" {
+		model = c.model
+	}
+
+	maxTokens := req.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+
+	anthropicReq := anthropicStreamRequest{
+		Model:     model,
+		Messages:  messages,
+		MaxTokens: maxTokens,
+		System:    req.System,
+		Stream:    true,
+	}
+
+	if req.Temperature > 0 {
+		anthropicReq.Temperature = req.Temperature
+	}
+
+	if len(req.Tools) > 0 {
+		anthropicReq.Tools = make([]anthropicTool, len(req.Tools))
+		for i, t := range req.Tools {
+			if t.Type == "web_search_20250305" {
+				anthropicReq.Tools[i] = anthropicTool{
+					Type:    t.Type,
+					Name:    t.Name,
+					MaxUses: t.MaxUses,
+				}
+			} else {
+				anthropicReq.Tools[i] = anthropicTool{
+					Name:        t.Name,
+					Description: t.Description,
+					InputSchema: t.InputSchema,
+				}
+			}
+		}
+	}
+
+	body, err := json.Marshal(anthropicReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-api-key", c.apiKey)
+	httpReq.Header.Set("anthropic-version", anthropicAPIVersion)
+	httpReq.Header.Set("Accept", "text/event-stream")
+
+	resp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		var errResp anthropicError
+		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+			return fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+		}
+		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse SSE stream
+	reader := resp.Body
+	buf := make([]byte, 4096)
+	var eventData string
+	var toolCalls []ToolCall
+	var currentToolID string
+	var currentToolName string
+	var currentToolInput strings.Builder
+	var inputTokens, outputTokens int
+
+	for {
+		n, err := reader.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("stream read error: %w", err)
+		}
+
+		data := string(buf[:n])
+		lines := strings.Split(data, "\n")
+
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+
+			if strings.HasPrefix(line, "event:") {
+				// New event type, reset data
+				eventData = ""
+				continue
+			}
+
+			if strings.HasPrefix(line, "data:") {
+				eventData = strings.TrimPrefix(line, "data:")
+				eventData = strings.TrimSpace(eventData)
+
+				if eventData == "" {
+					continue
+				}
+
+				var event anthropicStreamEvent
+				if err := json.Unmarshal([]byte(eventData), &event); err != nil {
+					log.Debug().Err(err).Str("data", eventData).Msg("Failed to parse stream event")
+					continue
+				}
+
+				switch event.Type {
+				case "message_start":
+					if event.Message != nil && event.Message.Usage.InputTokens > 0 {
+						inputTokens = event.Message.Usage.InputTokens
+					}
+
+				case "content_block_start":
+					if event.ContentBlock != nil {
+						switch event.ContentBlock.Type {
+						case "tool_use":
+							currentToolID = event.ContentBlock.ID
+							currentToolName = event.ContentBlock.Name
+							currentToolInput.Reset()
+							callback(StreamEvent{
+								Type: "tool_start",
+								Data: ToolStartEvent{
+									ID:   currentToolID,
+									Name: currentToolName,
+								},
+							})
+						}
+					}
+
+				case "content_block_delta":
+					if event.Delta != nil {
+						switch event.Delta.Type {
+						case "text_delta":
+							if event.Delta.Text != "" {
+								callback(StreamEvent{
+									Type: "content",
+									Data: ContentEvent{Text: event.Delta.Text},
+								})
+							}
+						case "input_json_delta":
+							currentToolInput.WriteString(event.Delta.PartialJSON)
+						}
+					}
+
+				case "content_block_stop":
+					if currentToolID != "" {
+						// Parse the accumulated tool input
+						var input map[string]interface{}
+						if err := json.Unmarshal([]byte(currentToolInput.String()), &input); err != nil {
+							input = map[string]interface{}{"raw": currentToolInput.String()}
+						}
+						toolCalls = append(toolCalls, ToolCall{
+							ID:    currentToolID,
+							Name:  currentToolName,
+							Input: input,
+						})
+						currentToolID = ""
+						currentToolName = ""
+					}
+
+				case "message_delta":
+					if event.Delta != nil && event.Delta.StopReason != "" {
+						if event.Usage != nil {
+							outputTokens = event.Usage.OutputTokens
+						}
+					}
+
+				case "message_stop":
+					stopReason := "end_turn"
+					if len(toolCalls) > 0 {
+						stopReason = "tool_use"
+					}
+					callback(StreamEvent{
+						Type: "done",
+						Data: DoneEvent{
+							StopReason:   stopReason,
+							ToolCalls:    toolCalls,
+							InputTokens:  inputTokens,
+							OutputTokens: outputTokens,
+						},
+					})
+
+				case "error":
+					callback(StreamEvent{
+						Type: "error",
+						Data: ErrorEvent{Message: "Stream error from Anthropic"},
+					})
+					return fmt.Errorf("stream error from Anthropic")
+				}
+			}
+		}
+	}
+
+	return nil
 }

@@ -195,6 +195,11 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			continue
 		}
 
+		// Skip messages with empty content - Gemini requires at least one of text, functionCall, or functionResponse
+		if m.Content == "" {
+			continue
+		}
+
 		// Simple text message
 		contents = append(contents, geminiContent{
 			Role: role,
@@ -441,6 +446,264 @@ func (c *GeminiClient) TestConnection(ctx context.Context) error {
 	return err
 }
 
+// SupportsThinking returns true if the model supports extended thinking
+func (c *GeminiClient) SupportsThinking(model string) bool {
+	// Gemini models don't currently expose extended thinking in the streaming API
+	return false
+}
+
+// geminiStreamEvent represents a streaming event from the Gemini API
+type geminiStreamEvent struct {
+	Candidates    []geminiCandidate    `json:"candidates,omitempty"`
+	UsageMetadata *geminiUsageMetadata `json:"usageMetadata,omitempty"`
+}
+
+// ChatStream sends a chat request and streams the response via callback
+func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
+	// Convert messages to Gemini format (same as Chat)
+	contents := make([]geminiContent, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		if m.Role == "system" {
+			continue
+		}
+
+		role := m.Role
+		if role == "assistant" {
+			role = "model"
+		}
+
+		if m.ToolResult != nil {
+			contents = append(contents, geminiContent{
+				Role: "user",
+				Parts: []geminiPart{
+					{
+						FunctionResponse: &geminiFunctionResponse{
+							Name: m.ToolResult.ToolUseID,
+							Response: struct {
+								Content string `json:"content"`
+							}{
+								Content: m.ToolResult.Content,
+							},
+						},
+					},
+				},
+			})
+			continue
+		}
+
+		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+			parts := make([]geminiPart, 0)
+			if m.Content != "" {
+				parts = append(parts, geminiPart{Text: m.Content})
+			}
+			for _, tc := range m.ToolCalls {
+				parts = append(parts, geminiPart{
+					FunctionCall: &geminiFunctionCall{
+						Name: tc.Name,
+						Args: tc.Input,
+					},
+				})
+			}
+			contents = append(contents, geminiContent{
+				Role:  "model",
+				Parts: parts,
+			})
+			continue
+		}
+
+		// Skip messages with empty content - Gemini requires at least one of text, functionCall, or functionResponse
+		if m.Content == "" {
+			continue
+		}
+
+		contents = append(contents, geminiContent{
+			Role: role,
+			Parts: []geminiPart{
+				{Text: m.Content},
+			},
+		})
+	}
+
+	model := req.Model
+	if strings.HasPrefix(model, "gemini:") {
+		model = strings.TrimPrefix(model, "gemini:")
+	}
+	if model == "" {
+		model = c.model
+	}
+
+	geminiReq := geminiRequest{
+		Contents: contents,
+	}
+
+	if req.System != "" {
+		geminiReq.SystemInstruction = &geminiContent{
+			Parts: []geminiPart{{Text: req.System}},
+		}
+	}
+
+	geminiReq.GenerationConfig = &geminiGenerationConfig{}
+	if req.MaxTokens > 0 {
+		geminiReq.GenerationConfig.MaxOutputTokens = req.MaxTokens
+	} else {
+		geminiReq.GenerationConfig.MaxOutputTokens = 8192
+	}
+	if req.Temperature > 0 {
+		geminiReq.GenerationConfig.Temperature = req.Temperature
+	}
+
+	if len(req.Tools) > 0 {
+		funcDecls := make([]geminiFunctionDeclaration, 0, len(req.Tools))
+		for _, t := range req.Tools {
+			if t.Type != "" && t.Type != "function" {
+				continue
+			}
+			funcDecls = append(funcDecls, geminiFunctionDeclaration{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  t.InputSchema,
+			})
+		}
+		if len(funcDecls) > 0 {
+			geminiReq.Tools = []geminiToolDef{{FunctionDeclarations: funcDecls}}
+		}
+	}
+
+	body, err := json.Marshal(geminiReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Use streamGenerateContent endpoint for streaming
+	url := fmt.Sprintf("%s/models/%s:streamGenerateContent?key=%s&alt=sse", c.baseURL, model, c.apiKey)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
+
+	resp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		var errResp geminiError
+		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+			return fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+		}
+		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse SSE stream
+	reader := resp.Body
+	buf := make([]byte, 4096)
+	var pendingData string
+	var toolCalls []ToolCall
+	var inputTokens, outputTokens int
+	var finishReason string
+
+	for {
+		n, err := reader.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("stream read error: %w", err)
+		}
+
+		pendingData += string(buf[:n])
+		lines := strings.Split(pendingData, "\n")
+
+		// Keep the last incomplete line for next iteration
+		pendingData = lines[len(lines)-1]
+		lines = lines[:len(lines)-1]
+
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+
+			data := strings.TrimPrefix(line, "data:")
+			data = strings.TrimSpace(data)
+
+			if data == "" {
+				continue
+			}
+
+			var event geminiStreamEvent
+			if err := json.Unmarshal([]byte(data), &event); err != nil {
+				log.Debug().Err(err).Str("data", data).Msg("Failed to parse Gemini stream event")
+				continue
+			}
+
+			if event.UsageMetadata != nil {
+				inputTokens = event.UsageMetadata.PromptTokenCount
+				outputTokens = event.UsageMetadata.CandidatesTokenCount
+			}
+
+			for _, candidate := range event.Candidates {
+				if candidate.FinishReason != "" {
+					finishReason = candidate.FinishReason
+				}
+
+				for _, part := range candidate.Content.Parts {
+					if part.Text != "" {
+						callback(StreamEvent{
+							Type: "content",
+							Data: ContentEvent{Text: part.Text},
+						})
+					}
+
+					if part.FunctionCall != nil {
+						toolID := fmt.Sprintf("%s_%d", part.FunctionCall.Name, len(toolCalls))
+						callback(StreamEvent{
+							Type: "tool_start",
+							Data: ToolStartEvent{
+								ID:    toolID,
+								Name:  part.FunctionCall.Name,
+								Input: part.FunctionCall.Args,
+							},
+						})
+						toolCalls = append(toolCalls, ToolCall{
+							ID:    toolID,
+							Name:  part.FunctionCall.Name,
+							Input: part.FunctionCall.Args,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	// Send done event
+	stopReason := finishReason
+	if len(toolCalls) > 0 {
+		stopReason = "tool_use"
+	} else if stopReason == "STOP" {
+		stopReason = "end_turn"
+	}
+
+	callback(StreamEvent{
+		Type: "done",
+		Data: DoneEvent{
+			StopReason:   stopReason,
+			ToolCalls:    toolCalls,
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+		},
+	})
+
+	return nil
+}
+
 // ListModels fetches available models from the Gemini API
 func (c *GeminiClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	url := fmt.Sprintf("%s/models?key=%s", c.baseURL, c.apiKey)
@@ -475,6 +738,7 @@ func (c *GeminiClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 
 	models := make([]ModelInfo, 0, len(result.Models))
+	cache := GetNotableCache()
 	for _, m := range result.Models {
 		// Only include models that support generateContent (chat)
 		supportsChat := false
@@ -524,6 +788,7 @@ func (c *GeminiClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			ID:          modelID,
 			Name:        m.DisplayName,
 			Description: m.Description,
+			Notable:     cache.IsNotable("gemini", modelID, 0),
 		})
 	}
 

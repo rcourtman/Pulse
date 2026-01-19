@@ -1,0 +1,73 @@
+package providers
+
+import (
+	"context"
+	"testing"
+	"time"
+)
+
+func TestNotableModelsCache_Refresh(t *testing.T) {
+	// Test that we can successfully fetch and parse models.dev API
+	cache := NewNotableModelsCache(modelsDevAPIURL, 1*time.Hour)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err := cache.Refresh(ctx)
+	if err != nil {
+		t.Fatalf("Failed to refresh cache: %v", err)
+	}
+
+	if len(cache.data) == 0 {
+		t.Fatal("Cache is empty after refresh")
+	}
+
+	t.Logf("Cache contains %d models", len(cache.data))
+
+	// Check for some known models
+	testCases := []struct {
+		provider string
+		modelID  string
+	}{
+		{"anthropic", "claude-opus-4-5"},
+		{"anthropic", "claude-sonnet-4-5"},
+		{"openai", "gpt-4o"},
+	}
+
+	for _, tc := range testCases {
+		key := normalizeKey(tc.provider, tc.modelID)
+		if info, found := cache.data[key]; found {
+			t.Logf("Found %s: release_date=%s, last_updated=%s", key, info.ReleaseDate, info.LastUpdated)
+		} else {
+			t.Logf("Model %s not found in cache (key=%s)", tc.modelID, key)
+			// Try fuzzy match
+			fuzzyKey := normalizeModelID(tc.modelID)
+			if info, found := cache.data[fuzzyKey]; found {
+				t.Logf("Found via fuzzy match %s: release_date=%s", fuzzyKey, info.ReleaseDate)
+			}
+		}
+	}
+}
+
+func TestIsNotable_Integration(t *testing.T) {
+	cache := GetNotableCache()
+
+	// Test Ollama - should always be notable
+	if !cache.IsNotable("ollama", "llama3", 0) {
+		t.Error("Ollama models should always be notable")
+	}
+
+	// Test Anthropic models
+	// claude-opus-4-5 was released 2025-11-21, should be notable
+	notable := cache.IsNotable("anthropic", "claude-opus-4-5", 0)
+	t.Logf("claude-opus-4-5 notable: %v", notable)
+
+	// claude-3-5-sonnet-20241022 was released 2024-10-22, should NOT be notable (>6 months old)
+	notable = cache.IsNotable("anthropic", "claude-3-5-sonnet-20241022", 0)
+	t.Logf("claude-3-5-sonnet-20241022 notable: %v", notable)
+
+	// Print cache size
+	cache.mu.RLock()
+	t.Logf("Cache size: %d", len(cache.data))
+	cache.mu.RUnlock()
+}
