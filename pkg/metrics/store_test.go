@@ -99,3 +99,133 @@ func TestStoreSelectTierAndStats(t *testing.T) {
 		t.Fatalf("expected stats DB info to be populated: %+v", stats)
 	}
 }
+
+func TestStoreRollupTier(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-rollup.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	base := time.Now().Add(-2 * time.Minute).Truncate(time.Minute)
+	ts := base.Unix()
+
+	_, err = store.db.Exec(
+		`INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier) VALUES
+		('vm','vm-101','cpu',1.0,?, 'raw'),
+		('vm','vm-101','cpu',3.0,?, 'raw')`,
+		ts, base.Add(10*time.Second).Unix(),
+	)
+	if err != nil {
+		t.Fatalf("insert metrics returned error: %v", err)
+	}
+
+	store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+
+	var countRaw int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM metrics WHERE tier = 'raw'`).Scan(&countRaw); err != nil {
+		t.Fatalf("query raw count: %v", err)
+	}
+	if countRaw != 0 {
+		t.Fatalf("expected raw metrics to be rolled up, got %d", countRaw)
+	}
+
+	var value, minValue, maxValue float64
+	var bucketTs int64
+	if err := store.db.QueryRow(
+		`SELECT value, min_value, max_value, timestamp FROM metrics WHERE tier = 'minute'`,
+	).Scan(&value, &minValue, &maxValue, &bucketTs); err != nil {
+		t.Fatalf("query minute tier: %v", err)
+	}
+
+	expectedBucket := (ts / 60) * 60
+	if bucketTs != expectedBucket {
+		t.Fatalf("expected bucket %d, got %d", expectedBucket, bucketTs)
+	}
+	if value != 2.0 || minValue != 1.0 || maxValue != 3.0 {
+		t.Fatalf("unexpected rollup values: value=%v min=%v max=%v", value, minValue, maxValue)
+	}
+}
+
+func TestStoreRetentionPrunesOldData(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-retention.db")
+	cfg.RetentionRaw = time.Minute
+	cfg.RetentionMinute = time.Minute
+	cfg.RetentionHourly = time.Minute
+	cfg.RetentionDaily = time.Minute
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	oldTs := time.Now().Add(-2 * time.Hour).Unix()
+	newTs := time.Now().Unix()
+
+	_, err = store.db.Exec(
+		`INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier) VALUES
+		('vm','vm-101','cpu',1.0,?, 'raw'),
+		('vm','vm-101','cpu',2.0,?, 'minute'),
+		('vm','vm-101','cpu',3.0,?, 'hourly'),
+		('vm','vm-101','cpu',4.0,?, 'daily'),
+		('vm','vm-101','cpu',5.0,?, 'raw')`,
+		oldTs, oldTs, oldTs, oldTs, newTs,
+	)
+	if err != nil {
+		t.Fatalf("insert metrics returned error: %v", err)
+	}
+
+	store.runRetention()
+
+	var rawCount int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM metrics WHERE tier = 'raw'`).Scan(&rawCount); err != nil {
+		t.Fatalf("query raw count: %v", err)
+	}
+	if rawCount != 1 {
+		t.Fatalf("expected 1 raw metric after retention, got %d", rawCount)
+	}
+	var total int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM metrics`).Scan(&total); err != nil {
+		t.Fatalf("query total count: %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("expected only newest metric to remain, got %d", total)
+	}
+}
+
+func TestStoreWriteFlushesBuffer(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-buffer.db")
+	cfg.WriteBufferSize = 1
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	ts := time.Now().Add(-time.Second)
+	store.Write("vm", "vm-101", "cpu", 1.5, ts)
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		points, err := store.Query("vm", "vm-101", "cpu", ts.Add(-time.Second), ts.Add(time.Second))
+		if err == nil && len(points) == 1 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatal("expected buffered metric to flush to database")
+}

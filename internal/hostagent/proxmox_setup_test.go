@@ -1,6 +1,13 @@
 package hostagent
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -246,5 +253,601 @@ func TestGetHostURL(t *testing.T) {
 				t.Errorf("getHostURL(%q) = %q, want %q", tt.ptype, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestParseTokenValue(t *testing.T) {
+	setup := &ProxmoxSetup{
+		logger: zerolog.Nop(),
+	}
+
+	tests := []struct {
+		name     string
+		output   string
+		expected string
+	}{
+		{
+			name: "parses standard table output",
+			output: `
+┌──────────────┬──────────────────────────────────────┐
+│ key          │ value                                │
+╞══════════════╪══════════════════════════════════════╡
+│ full-tokenid │ pulse-monitor@pam!pulse-monitor      │
+├──────────────┼──────────────────────────────────────┤
+│ info         │ {"privsep":1}                        │
+├──────────────┼──────────────────────────────────────┤
+│ value        │ 7c5709fb-6aee-4c32-8b9f-5c2656912345 │
+└──────────────┴──────────────────────────────────────┘
+`,
+			expected: "7c5709fb-6aee-4c32-8b9f-5c2656912345",
+		},
+		{
+			name: "parses output with extra whitespace",
+			output: `
+│ value        │   7c5709fb-6aee-4c32-8b9f-5c2656912345   │
+`,
+			expected: "7c5709fb-6aee-4c32-8b9f-5c2656912345",
+		},
+		{
+			name:     "returns empty on missing value",
+			output:   `│ other │ something │`,
+			expected: "",
+		},
+		{
+			name:     "empty input",
+			output:   "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := setup.parseTokenValue(tt.output)
+			if result != tt.expected {
+				t.Errorf("parseTokenValue() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParsePBSTokenValue(t *testing.T) {
+	setup := &ProxmoxSetup{
+		logger: zerolog.Nop(),
+	}
+
+	tests := []struct {
+		name     string
+		output   string
+		expected string
+	}{
+		{
+			name:     "parses standard JSON output",
+			output:   `{"tokenid":"pulse-monitor@pbs!pulse-monitor","value":"pbs-api-token-value-12345"}`,
+			expected: "pbs-api-token-value-12345",
+		},
+		{
+			name:     "parses JSON with extra fields",
+			output:   `{"other":"stuff","value":"my-secret-token","more":"stuff"}`,
+			expected: "my-secret-token",
+		},
+		{
+			name:     "returns empty on invalid JSON",
+			output:   `not-json`,
+			expected: "",
+		},
+		{
+			name:     "returns empty when value missing",
+			output:   `{"tokenid":"foo"}`,
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := setup.parsePBSTokenValue(tt.output)
+			if result != tt.expected {
+				t.Errorf("parsePBSTokenValue() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSetupPVEToken(t *testing.T) {
+	// Backup and restore
+	origRunCommandOutput := runCommandOutput
+	origRunCommand := runCommand
+	defer func() {
+		runCommandOutput = origRunCommandOutput
+		runCommand = origRunCommand
+	}()
+
+	mockOutput := `
+┌──────────────┬──────────────────────────────────────┐
+│ key          │ value                                │
+╞══════════════╪══════════════════════════════════════╡
+│ full-tokenid │ pulse-monitor@pam!pulse-monitor      │
+├──────────────┼──────────────────────────────────────┤
+│ value        │ 7c5709fb-6aee-4c32-8b9f-5c2656912345 │
+└──────────────┴──────────────────────────────────────┘
+`
+	var capturedCmd string
+	var capturedArgs []string
+
+	// Mock runCommand to do nothing (success)
+	runCommand = func(ctx context.Context, name string, args ...string) error {
+		return nil
+	}
+
+	runCommandOutput = func(ctx context.Context, name string, args ...string) (string, error) {
+		capturedCmd = name
+		capturedArgs = args
+		return mockOutput, nil
+	}
+
+	setup := NewProxmoxSetup(zerolog.Nop(), nil, "", "", "pve", "", "", false)
+	id, value, err := setup.setupPVEToken(context.Background(), "test-token")
+	if err != nil {
+		t.Fatalf("setupPVEToken failed: %v", err)
+	}
+
+	if id != "pulse-monitor@pam!test-token" {
+		t.Errorf("expected token ID pulse-monitor@pam!test-token, got %s", id)
+	}
+	if value != "7c5709fb-6aee-4c32-8b9f-5c2656912345" {
+		t.Errorf("expected token value 7c5709fb-6aee-4c32-8b9f-5c2656912345, got %s", value)
+	}
+
+	if capturedCmd != "pveum" {
+		t.Errorf("expected command pveum, got %s", capturedCmd)
+	}
+	// Verify critical args
+	foundAdd := false
+	foundTokenName := false
+	for _, arg := range capturedArgs {
+		if arg == "add" {
+			foundAdd = true
+		}
+		if arg == "test-token" {
+			foundTokenName = true
+		}
+	}
+	if !foundAdd || !foundTokenName {
+		t.Errorf("missing critical args in %v", capturedArgs)
+	}
+}
+
+func TestSetupPBSToken(t *testing.T) {
+	// Backup and restore
+	origRunCommandOutput := runCommandOutput
+	origRunCommand := runCommand
+	defer func() {
+		runCommandOutput = origRunCommandOutput
+		runCommand = origRunCommand
+	}()
+
+	mockOutput := `{"tokenid":"pulse-monitor@pbs!test-token","value":"pbs-api-token-value-12345"}`
+
+	// Mock runCommand to do nothing
+	runCommand = func(ctx context.Context, name string, args ...string) error {
+		return nil
+	}
+
+	runCommandOutput = func(ctx context.Context, name string, args ...string) (string, error) {
+		return mockOutput, nil
+	}
+
+	setup := NewProxmoxSetup(zerolog.Nop(), nil, "", "", "pbs", "", "", false)
+	id, value, err := setup.setupPBSToken(context.Background(), "test-token")
+	if err != nil {
+		t.Fatalf("setupPBSToken failed: %v", err)
+	}
+
+	if id != "pulse-monitor@pbs!test-token" {
+		t.Errorf("expected token ID pulse-monitor@pbs!test-token, got %s", id)
+	}
+	if value != "pbs-api-token-value-12345" {
+		t.Errorf("expected token value pbs-api-token-value-12345, got %s", value)
+	}
+}
+
+func TestDetectProxmoxTypes(t *testing.T) {
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+
+	tests := []struct {
+		name      string
+		mockPaths map[string]bool // map[exe]exists
+		expected  []string
+	}{
+		{
+			name: "detects pve only",
+			mockPaths: map[string]bool{
+				"pvesh":                  true,
+				"proxmox-backup-manager": false,
+			},
+			expected: []string{"pve"},
+		},
+		{
+			name: "detects pbs only",
+			mockPaths: map[string]bool{
+				"pvesh":                  false,
+				"proxmox-backup-manager": true,
+			},
+			expected: []string{"pbs"},
+		},
+		{
+			name: "detects both",
+			mockPaths: map[string]bool{
+				"pvesh":                  true,
+				"proxmox-backup-manager": true,
+			},
+			expected: []string{"pve", "pbs"},
+		},
+		{
+			name: "detects none",
+			mockPaths: map[string]bool{
+				"pvesh":                  false,
+				"proxmox-backup-manager": false,
+			},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lookPath = func(file string) (string, error) {
+				if exists := tt.mockPaths[file]; exists {
+					return "/usr/bin/" + file, nil
+				}
+				return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+			}
+
+			setup := &ProxmoxSetup{}
+			result := setup.detectProxmoxTypes()
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			} else {
+				for i, v := range result {
+					if v != tt.expected[i] {
+						t.Errorf("expected %v, got %v", tt.expected, result)
+						break
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestRunForType(t *testing.T) {
+	// Setup temporary state dir
+	tmpDir := t.TempDir()
+
+	// Backup and restore state file paths
+	origStateFileDir := stateFileDir
+	origStateFilePath := stateFilePath
+	origStateFilePVE := stateFilePVE
+	origStateFilePBS := stateFilePBS
+
+	stateFileDir = tmpDir
+	stateFilePath = filepath.Join(tmpDir, "proxmox-registered")
+	stateFilePVE = filepath.Join(tmpDir, "proxmox-pve-registered")
+	stateFilePBS = filepath.Join(tmpDir, "proxmox-pbs-registered")
+
+	defer func() {
+		stateFileDir = origStateFileDir
+		stateFilePath = origStateFilePath
+		stateFilePVE = origStateFilePVE
+		stateFilePBS = origStateFilePBS
+	}()
+
+	// Backup and restore runCommand functions
+	origRunCommand := runCommand
+	origRunCommandOutput := runCommandOutput
+	defer func() {
+		runCommand = origRunCommand
+		runCommandOutput = origRunCommandOutput
+	}()
+
+	// Mock Proxmox commands
+	mockTokenOutput := `
+┌──────────────┬──────────────────────────────────────┐
+│ key          │ value                                │
+╞══════════════╪══════════════════════════════════════╡
+│ full-tokenid │ pulse-monitor@pam!test-token         │
+├──────────────┼──────────────────────────────────────┤
+│ value        │ 7c5709fb-6aee-4c32-8b9f-5c2656912345 │
+└──────────────┴──────────────────────────────────────┘
+`
+	runCommand = func(ctx context.Context, name string, args ...string) error {
+		return nil
+	}
+	runCommandOutput = func(ctx context.Context, name string, args ...string) (string, error) {
+		return mockTokenOutput, nil
+	}
+
+	// Mock HTTP Client to capture registration
+	var capturedReq *http.Request
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedReq = r
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+
+	setup := NewProxmoxSetup(zerolog.Nop(), server.Client(), server.URL, "api-token", "pve", "test-host", "", false)
+
+	// Test case 1: Not registered yet
+	result, err := setup.runForType(context.Background(), "pve")
+	if err != nil {
+		t.Fatalf("runForType failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if !result.Registered {
+		t.Error("expected Registered=true")
+	}
+	if !strings.HasPrefix(result.TokenID, "pulse-monitor@pam!pulse-") {
+		t.Errorf("expected token ID starting with pulse-monitor@pam!pulse-, got %s", result.TokenID)
+	}
+
+	// Verify HTTP registration call
+	if capturedReq == nil {
+		t.Error("expected HTTP registration request")
+	} else {
+		if capturedReq.URL.Path != "/api/auto-register" {
+			t.Errorf("expected path /api/auto-register, got %s", capturedReq.URL.Path)
+		}
+	}
+
+	// Verify state file created
+	if _, err := os.Stat(stateFilePVE); os.IsNotExist(err) {
+		t.Error("expected state file to be created")
+	}
+
+	// Test case 2: Already registered (should skip)
+	capturedReq = nil // Reset capture
+	result, err = setup.runForType(context.Background(), "pve")
+	if err != nil {
+		t.Fatalf("runForType (2nd call) failed: %v", err)
+	}
+
+	if result != nil {
+		t.Error("expected nil result (skipped), got something")
+	}
+	if capturedReq != nil {
+		t.Error("did not expect HTTP call on 2nd run")
+	}
+}
+
+func TestRunAll(t *testing.T) {
+	// Setup temporary state dir
+	tmpDir := t.TempDir()
+
+	// Backup and restore state variables
+	origStateFileDir := stateFileDir
+	origStateFilePath := stateFilePath
+	origStateFilePVE := stateFilePVE
+	origStateFilePBS := stateFilePBS
+
+	stateFileDir = tmpDir
+	stateFilePath = filepath.Join(tmpDir, "proxmox-registered")
+	stateFilePVE = filepath.Join(tmpDir, "proxmox-pve-registered")
+	stateFilePBS = filepath.Join(tmpDir, "proxmox-pbs-registered")
+
+	defer func() {
+		stateFileDir = origStateFileDir
+		stateFilePath = origStateFilePath
+		stateFilePVE = origStateFilePVE
+		stateFilePBS = origStateFilePBS
+	}()
+
+	// Backup and restore lookPath
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+
+	// Backup runCommand
+	origRunCommand := runCommand
+	origRunCommandOutput := runCommandOutput
+	defer func() {
+		runCommand = origRunCommand
+		runCommandOutput = origRunCommandOutput
+	}()
+
+	// Mock LookPath to find BOTH PVE and PBS
+	lookPath = func(file string) (string, error) {
+		if file == "pvesh" || file == "proxmox-backup-manager" {
+			return "/usr/bin/" + file, nil
+		}
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+
+	// Mock Command execution
+	runCommand = func(ctx context.Context, name string, args ...string) error {
+		return nil
+	}
+	runCommandOutput = func(ctx context.Context, name string, args ...string) (string, error) {
+		// Return valid tokens for both types
+		if name == "pveum" {
+			return `
+┌──────────────┬──────────────────────────────────────┐
+│ key          │ value                                │
+╞══════════════╪══════════════════════════════════════╡
+│ full-tokenid │ pulse-monitor@pam!pulse-pve-token    │
+├──────────────┼──────────────────────────────────────┤
+│ value        │ 7c5709fb-6aee-4c32-8b9f-5c2656912345 │
+└──────────────┴──────────────────────────────────────┘
+`, nil
+		}
+		if name == "proxmox-backup-manager" {
+			return `{"tokenid":"pulse-monitor@pbs!pulse-pbs-token","value":"pbs-value"}`, nil
+		}
+		return "", nil
+	}
+
+	// Mock HTTP Server
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+
+	setup := NewProxmoxSetup(zerolog.Nop(), server.Client(), server.URL, "api-token", "", "test-host", "", false)
+
+	// RunAll
+	results, err := setup.RunAll(context.Background())
+	if err != nil {
+		t.Fatalf("RunAll failed: %v", err)
+	}
+
+	// Should have 2 results
+	if len(results) != 2 {
+		t.Errorf("expected 2 results, got %d", len(results))
+	}
+
+	// Should have made 2 HTTP calls
+	if callCount != 2 {
+		t.Errorf("expected 2 HTTP calls, got %d", callCount)
+	}
+
+	// Check state files
+	if _, err := os.Stat(stateFilePVE); os.IsNotExist(err) {
+		t.Error("expected PVE state file")
+	}
+	if _, err := os.Stat(stateFilePBS); os.IsNotExist(err) {
+		t.Error("expected PBS state file")
+	}
+}
+
+func TestRun_Legacy(t *testing.T) {
+	// Setup temporary state dir
+	tmpDir := t.TempDir()
+
+	// Backup
+	origStateFilePath := stateFilePath
+	stateFilePath = filepath.Join(tmpDir, "proxmox-registered")
+	defer func() { stateFilePath = origStateFilePath }()
+
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+
+	origRunCommand := runCommand
+	origRunCommandOutput := runCommandOutput
+	defer func() {
+		runCommand = origRunCommand
+		runCommandOutput = origRunCommandOutput
+	}()
+
+	// Mock LookPath - find PVE
+	lookPath = func(file string) (string, error) {
+		if file == "pvesh" {
+			return "/usr/bin/pvesh", nil
+		}
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+
+	// Mock Token
+	runCommand = func(ctx context.Context, name string, args ...string) error { return nil }
+	runCommandOutput = func(ctx context.Context, name string, args ...string) (string, error) {
+		if name == "pveum" {
+			return `
+┌──────────────┬──────────────────────────────────────┐
+│ key          │ value                                │
+╞══════════════╪══════════════════════════════════════╡
+│ full-tokenid │ pulse-monitor@pam!pulse-pve-token    │
+├──────────────┼──────────────────────────────────────┤
+│ value        │ 7c5709fb-6aee-4c32-8b9f-5c2656912345 │
+└──────────────┴──────────────────────────────────────┘
+`, nil
+		}
+		return "", nil
+	}
+
+	// Mock HTTP
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+
+	// Test Run()
+	setup := NewProxmoxSetup(zerolog.Nop(), server.Client(), server.URL, "api-token", "", "test-host", "", false) // empty ptype -> auto-detect
+	result, err := setup.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if result == nil || !result.Registered {
+		t.Error("expected successful registration")
+	}
+
+	// Verify legacy state file
+	if _, err := os.Stat(stateFilePath); os.IsNotExist(err) {
+		t.Error("expected legacy state file")
+	}
+
+	// Run again - checks isAlreadyRegistered (idempotency)
+	result2, err := setup.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run 2 failed: %v", err)
+	}
+	if result2 != nil {
+		t.Error("expected nil result (skipped) on 2nd run")
+	}
+}
+
+func TestIsTypeRegistered_Legacy(t *testing.T) {
+	// Setup temporary state dir
+	tmpDir := t.TempDir()
+
+	// Backup
+	origStateFilePath := stateFilePath
+	origStateFilePVE := stateFilePVE // Ensure new files don't exist
+	stateFilePath = filepath.Join(tmpDir, "proxmox-registered")
+	stateFilePVE = filepath.Join(tmpDir, "proxmox-pve-registered")
+
+	defer func() {
+		stateFilePath = origStateFilePath
+		stateFilePVE = origStateFilePVE
+	}()
+
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+
+	// Create legacy state file
+	if err := os.WriteFile(stateFilePath, []byte("legacy"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	setup := &ProxmoxSetup{}
+
+	// Scenario 1: PVE installed. Requesting PVE check. Should be true.
+	lookPath = func(file string) (string, error) {
+		if file == "pvesh" {
+			return "/bin/pvesh", nil
+		}
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+	if !setup.isTypeRegistered("pve") {
+		t.Error("Legacy: PVE installed + legacy file should => registered")
+	}
+
+	// Scenario 2: PVE installed. Requesting PBS check. Should be false (PVE assumed primary).
+	if setup.isTypeRegistered("pbs") {
+		t.Error("Legacy: PVE installed + legacy file should => PBS NOT registered")
+	}
+
+	// Scenario 3: Only PBS installed. Requesting PBS check. Should be true.
+	lookPath = func(file string) (string, error) {
+		if file == "proxmox-backup-manager" {
+			return "/bin/proxmox-backup-manager", nil
+		}
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+	if !setup.isTypeRegistered("pbs") {
+		t.Error("Legacy: Only PBS installed + legacy file should => PBS registered")
 	}
 }

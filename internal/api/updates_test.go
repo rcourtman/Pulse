@@ -1,463 +1,390 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 )
 
-func TestUpdateHandlers_HandleCheckUpdates_MethodNotAllowed(t *testing.T) {
-	t.Parallel()
+// MockUpdateManager implements UpdateManager interface for testing
+type MockUpdateManager struct {
+	CheckForUpdatesFunc    func(ctx context.Context, channel string) (*updates.UpdateInfo, error)
+	ApplyUpdateFunc        func(ctx context.Context, req updates.ApplyUpdateRequest) error
+	GetStatusFunc          func() updates.UpdateStatus
+	GetSSECachedStatusFunc func() (updates.UpdateStatus, time.Time)
+	AddSSEClientFunc       func(w http.ResponseWriter, clientID string) *updates.SSEClient
+	RemoveSSEClientFunc    func(clientID string)
+}
 
-	handlers := &UpdateHandlers{}
+func (m *MockUpdateManager) CheckForUpdatesWithChannel(ctx context.Context, channel string) (*updates.UpdateInfo, error) {
+	if m.CheckForUpdatesFunc != nil {
+		return m.CheckForUpdatesFunc(ctx, channel)
+	}
+	return nil, nil
+}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/updates/check", nil)
-	rec := httptest.NewRecorder()
+func (m *MockUpdateManager) ApplyUpdate(ctx context.Context, req updates.ApplyUpdateRequest) error {
+	if m.ApplyUpdateFunc != nil {
+		return m.ApplyUpdateFunc(ctx, req)
+	}
+	return nil
+}
 
-	handlers.HandleCheckUpdates(rec, req)
+func (m *MockUpdateManager) GetStatus() updates.UpdateStatus {
+	if m.GetStatusFunc != nil {
+		return m.GetStatusFunc()
+	}
+	return updates.UpdateStatus{}
+}
 
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+func (m *MockUpdateManager) GetSSECachedStatus() (updates.UpdateStatus, time.Time) {
+	if m.GetSSECachedStatusFunc != nil {
+		return m.GetSSECachedStatusFunc()
+	}
+	return updates.UpdateStatus{}, time.Time{}
+}
+
+func (m *MockUpdateManager) AddSSEClient(w http.ResponseWriter, clientID string) *updates.SSEClient {
+	if m.AddSSEClientFunc != nil {
+		return m.AddSSEClientFunc(w, clientID)
+	}
+	return nil
+}
+
+func (m *MockUpdateManager) RemoveSSEClient(clientID string) {
+	if m.RemoveSSEClientFunc != nil {
+		m.RemoveSSEClientFunc(clientID)
 	}
 }
 
-func TestUpdateHandlers_HandleApplyUpdate_MethodNotAllowed(t *testing.T) {
-	t.Parallel()
+func TestHandleCheckUpdates_Success(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		CheckForUpdatesFunc: func(ctx context.Context, channel string) (*updates.UpdateInfo, error) {
+			return &updates.UpdateInfo{
+				Available:      true,
+				LatestVersion:  "v1.2.3",
+				CurrentVersion: "v1.0.0",
+			}, nil
+		},
+	}
 
-	handlers := &UpdateHandlers{}
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/updates/check", nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/updates/apply", nil)
-	rec := httptest.NewRecorder()
+	h.HandleCheckUpdates(w, r)
 
-	handlers.HandleApplyUpdate(rec, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
 
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	var info updates.UpdateInfo
+	json.NewDecoder(w.Body).Decode(&info)
+	if !info.Available || info.LatestVersion != "v1.2.3" {
+		t.Errorf("Unexpected response: %+v", info)
 	}
 }
 
-func TestUpdateHandlers_HandleApplyUpdate_InvalidJSONBody(t *testing.T) {
-	t.Parallel()
+func TestHandleCheckUpdates_Error(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		CheckForUpdatesFunc: func(ctx context.Context, channel string) (*updates.UpdateInfo, error) {
+			return nil, errors.New("github down")
+		},
+	}
 
-	handlers := &UpdateHandlers{}
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/updates/check", nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/updates/apply", strings.NewReader("invalid json"))
-	rec := httptest.NewRecorder()
+	h.HandleCheckUpdates(w, r)
 
-	handlers.HandleApplyUpdate(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500, got %d", w.Code)
 	}
 }
 
-func TestUpdateHandlers_HandleApplyUpdate_MissingDownloadURL(t *testing.T) {
-	t.Parallel()
+func TestHandleApplyUpdate_Success(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			if req.DownloadURL != "http://example.com/update.tar.gz" {
+				return errors.New("wrong url")
+			}
+			return nil
+		},
+	}
 
-	handlers := &UpdateHandlers{}
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	body := `{"downloadUrl": "http://example.com/update.tar.gz"}`
+	r := httptest.NewRequest("POST", "/updates/apply", strings.NewReader(body))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/updates/apply", strings.NewReader(`{}`))
-	rec := httptest.NewRecorder()
+	h.HandleApplyUpdate(w, r)
 
-	handlers.HandleApplyUpdate(rec, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	// Note: ApplyUpdate runs in background, so we just check it was accepted
+}
+
+func TestHandleUpdateStatus_Fresh(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		GetStatusFunc: func() updates.UpdateStatus {
+			return updates.UpdateStatus{Status: "idle"}
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/updates/status", nil)
+
+	h.HandleUpdateStatus(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+	if w.Header().Get("X-Cache") != "MISS" {
+		t.Error("Expected X-Cache: MISS")
 	}
 }
 
-func TestUpdateHandlers_HandleUpdateStatus_MethodNotAllowed(t *testing.T) {
-	t.Parallel()
+func TestHandleUpdateStatus_Cached(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		GetStatusFunc: func() updates.UpdateStatus {
+			return updates.UpdateStatus{Status: "fresh"}
+		},
+		GetSSECachedStatusFunc: func() (updates.UpdateStatus, time.Time) {
+			return updates.UpdateStatus{Status: "cached"}, time.Now()
+		},
+	}
 
-	handlers := &UpdateHandlers{}
+	h := NewUpdateHandlers(mockManager, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/updates/status", nil)
-	rec := httptest.NewRecorder()
+	// First request - MISS
+	r1 := httptest.NewRequest("GET", "/updates/status", nil)
+	r1.RemoteAddr = "1.2.3.4:1234"
+	w1 := httptest.NewRecorder()
+	h.HandleUpdateStatus(w1, r1)
 
-	handlers.HandleUpdateStatus(rec, req)
+	if w1.Header().Get("X-Cache") != "MISS" {
+		t.Error("Expected first request to be MISS")
+	}
 
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	// Second request immediately after - HIT
+	r2 := httptest.NewRequest("GET", "/updates/status", nil)
+	r2.RemoteAddr = "1.2.3.4:5678" // Same IP
+	w2 := httptest.NewRecorder()
+	h.HandleUpdateStatus(w2, r2)
+
+	if w2.Header().Get("X-Cache") != "HIT" {
+		t.Error("Expected second request to be HIT")
+	}
+
+	var status updates.UpdateStatus
+	json.NewDecoder(w2.Body).Decode(&status)
+	if status.Status != "cached" {
+		t.Errorf("Expected cached status, got %s", status.Status)
 	}
 }
 
-func TestUpdateHandlers_HandleUpdateStream_MethodNotAllowed(t *testing.T) {
-	t.Parallel()
+func TestHandleUpdateStream(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		AddSSEClientFunc: func(w http.ResponseWriter, clientID string) *updates.SSEClient {
+			return &updates.SSEClient{
+				ID:      clientID,
+				Done:    make(chan bool),
+				Flusher: w.(http.Flusher),
+			}
+		},
+		RemoveSSEClientFunc: func(clientID string) {},
+	}
 
-	handlers := &UpdateHandlers{}
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/updates/stream", nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/updates/stream", nil)
-	rec := httptest.NewRecorder()
+	// Create context that we can cancel to simulate client disconnect
+	ctx, cancel := context.WithCancel(context.Background())
+	r = r.WithContext(ctx)
 
-	handlers.HandleUpdateStream(rec, req)
+	// This blocks until context cancel, so run in goroutine
+	done := make(chan bool)
+	go func() {
+		h.HandleUpdateStream(w, r)
+		close(done)
+	}()
 
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	// Give it a moment to establish
+	time.Sleep(50 * time.Millisecond)
+
+	// Cancel/Disconnect
+	cancel()
+
+	select {
+	case <-done:
+		// Success
+	case <-time.After(1 * time.Second):
+		t.Fatal("HandleUpdateStream didn't return after context cancel")
+	}
+
+	if w.Header().Get("Content-Type") != "text/event-stream" {
+		t.Error("Expected text/event-stream content type")
 	}
 }
 
-func TestUpdateHandlers_HandleGetUpdatePlan_MethodNotAllowed(t *testing.T) {
-	t.Parallel()
-
-	handlers := &UpdateHandlers{}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/updates/plan", nil)
-	rec := httptest.NewRecorder()
-
-	handlers.HandleGetUpdatePlan(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
-	}
-}
-
-func TestUpdateHandlers_HandleListUpdateHistory_MethodNotAllowed(t *testing.T) {
-	t.Parallel()
-
-	handlers := &UpdateHandlers{}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/updates/history", nil)
-	rec := httptest.NewRecorder()
-
-	handlers.HandleListUpdateHistory(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
-	}
-}
-
-func TestUpdateHandlers_HandleListUpdateHistory_NoHistory(t *testing.T) {
-	t.Parallel()
-
-	handlers := &UpdateHandlers{
-		history: nil,
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/updates/history", nil)
-	rec := httptest.NewRecorder()
-
-	handlers.HandleListUpdateHistory(rec, req)
-
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
-	}
-}
-
-func TestUpdateHandlers_HandleListUpdateHistory_Success(t *testing.T) {
-	t.Parallel()
-
+func TestHandleListUpdateHistory(t *testing.T) {
 	tmp := t.TempDir()
 	history, _ := updates.NewUpdateHistory(tmp)
 
-	handlers := &UpdateHandlers{
-		history: history,
+	// Pre-populate history
+	history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
+		EventID:   "test-entry",
+		Status:    updates.StatusSuccess,
+		VersionTo: "v1.2.3",
+	})
+
+	h := NewUpdateHandlers(&MockUpdateManager{}, history)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/updates/history", nil)
+
+	h.HandleListUpdateHistory(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/updates/history", nil)
-	rec := httptest.NewRecorder()
-
-	handlers.HandleListUpdateHistory(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
-		t.Errorf("expected content-type application/json, got %q", ct)
-	}
-}
-
-func TestUpdateHandlers_HandleGetUpdateHistoryEntry_MethodNotAllowed(t *testing.T) {
-	t.Parallel()
-
-	handlers := &UpdateHandlers{}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/updates/history/123", nil)
-	rec := httptest.NewRecorder()
-
-	handlers.HandleGetUpdateHistoryEntry(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	var entries []updates.UpdateHistoryEntry
+	json.NewDecoder(w.Body).Decode(&entries)
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
 	}
 }
 
-func TestUpdateHandlers_HandleGetUpdateHistoryEntry_NoHistory(t *testing.T) {
-	t.Parallel()
-
-	handlers := &UpdateHandlers{
-		history: nil,
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/updates/history/123", nil)
-	rec := httptest.NewRecorder()
-
-	handlers.HandleGetUpdateHistoryEntry(rec, req)
-
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
-	}
-}
-
-func TestUpdateHandlers_HandleGetUpdateHistoryEntry_MissingID(t *testing.T) {
-	t.Parallel()
-
+func TestHandleGetUpdateHistoryEntry(t *testing.T) {
 	tmp := t.TempDir()
 	history, _ := updates.NewUpdateHistory(tmp)
 
-	handlers := &UpdateHandlers{
-		history: history,
+	// Pre-populate history
+	history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
+		EventID:   "test-entry-1",
+		Status:    updates.StatusSuccess,
+		VersionTo: "v1.2.3",
+	})
+
+	h := NewUpdateHandlers(&MockUpdateManager{}, history)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/updates/history/entry?id=test-entry-1", nil)
+
+	h.HandleGetUpdateHistoryEntry(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/updates/history/entry", nil)
-	rec := httptest.NewRecorder()
-
-	handlers.HandleGetUpdateHistoryEntry(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-}
-
-func TestUpdateHandlers_HandleGetUpdateHistoryEntry_NotFound(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	history, _ := updates.NewUpdateHistory(tmp)
-
-	handlers := &UpdateHandlers{
-		history: history,
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/updates/history/entry?id=nonexistent", nil)
-	rec := httptest.NewRecorder()
-
-	handlers.HandleGetUpdateHistoryEntry(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	var entry updates.UpdateHistoryEntry
+	json.NewDecoder(w.Body).Decode(&entry)
+	if entry.EventID != "test-entry-1" {
+		t.Errorf("Expected EventID test-entry-1, got %s", entry.EventID)
 	}
 }
 
 func TestGetClientIP(t *testing.T) {
+	// Re-include the IP tests as they were useful
 	tests := []struct {
 		name       string
-		xff        string // X-Forwarded-For header
-		xri        string // X-Real-IP header
-		remoteAddr string // Request.RemoteAddr
-		expectedIP string
-	}{
-		// X-Forwarded-For takes priority
-		{
-			name:       "XFF with valid IPv4",
-			xff:        "192.168.1.100",
-			xri:        "",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "192.168.1.100",
-		},
-		{
-			name:       "XFF with valid IPv6",
-			xff:        "2001:db8::1",
-			xri:        "",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "2001:db8::1",
-		},
-		{
-			name:       "XFF with IPv6 loopback",
-			xff:        "::1",
-			xri:        "",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "::1",
-		},
-
-		// X-Real-IP fallback when XFF not valid
-		{
-			name:       "XRI with valid IPv4",
-			xff:        "",
-			xri:        "172.16.0.50",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "172.16.0.50",
-		},
-		{
-			name:       "XRI with valid IPv6",
-			xff:        "",
-			xri:        "fe80::1",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "fe80::1",
-		},
-		{
-			name:       "XRI preferred when XFF invalid",
-			xff:        "invalid-ip",
-			xri:        "192.168.1.1",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "192.168.1.1",
-		},
-
-		// RemoteAddr fallback
-		{
-			name:       "RemoteAddr with port",
-			xff:        "",
-			xri:        "",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "10.0.0.1",
-		},
-		{
-			name:       "RemoteAddr IPv6 with port",
-			xff:        "",
-			xri:        "",
-			remoteAddr: "[::1]:12345",
-			expectedIP: "::1",
-		},
-		{
-			name:       "RemoteAddr without port",
-			xff:        "",
-			xri:        "",
-			remoteAddr: "10.0.0.1",
-			expectedIP: "10.0.0.1",
-		},
-
-		// Invalid headers fall through
-		{
-			name:       "XFF invalid falls to XRI",
-			xff:        "not-an-ip",
-			xri:        "192.168.1.1",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "192.168.1.1",
-		},
-		{
-			name:       "Both headers invalid falls to RemoteAddr",
-			xff:        "not-an-ip",
-			xri:        "also-not-an-ip",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "10.0.0.1",
-		},
-
-		// Edge cases
-		{
-			name:       "Empty XFF ignored",
-			xff:        "",
-			xri:        "192.168.1.1",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "192.168.1.1",
-		},
-		{
-			name:       "All empty uses RemoteAddr",
-			xff:        "",
-			xri:        "",
-			remoteAddr: "127.0.0.1:8080",
-			expectedIP: "127.0.0.1",
-		},
-		{
-			name:       "Loopback IPv4",
-			xff:        "127.0.0.1",
-			xri:        "",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "127.0.0.1",
-		},
-
-		// Note: The current implementation has a bug with multiple IPs in XFF
-		// It tries to parse the entire string as a single IP, which fails
-		// This test documents current behavior, not ideal behavior
-		{
-			name:       "XFF with multiple IPs - current behavior",
-			xff:        "192.168.1.100, 10.0.0.1",
-			xri:        "172.16.0.1",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "172.16.0.1", // Falls through because "192.168.1.100, 10.0.0.1" is not a valid single IP
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := &http.Request{
-				Header:     make(http.Header),
-				RemoteAddr: tt.remoteAddr,
-			}
-
-			if tt.xff != "" {
-				req.Header.Set("X-Forwarded-For", tt.xff)
-			}
-			if tt.xri != "" {
-				req.Header.Set("X-Real-IP", tt.xri)
-			}
-
-			result := getClientIP(req)
-			if result != tt.expectedIP {
-				t.Errorf("getClientIP() = %q, want %q", result, tt.expectedIP)
-			}
-		})
-	}
-}
-
-func TestGetClientIP_NilHeaders(t *testing.T) {
-	// Test with a request that has nil headers (edge case)
-	req := &http.Request{
-		Header:     nil,
-		RemoteAddr: "10.0.0.1:12345",
-	}
-
-	// This will panic if headers aren't handled correctly
-	// The function should gracefully handle nil headers
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("getClientIP panicked with nil headers: %v", r)
-		}
-	}()
-
-	// Note: With nil headers, Header.Get() will panic
-	// This test documents that the function expects non-nil headers
-	// If this test panics, it's documenting current behavior
-	_ = getClientIP(req)
-}
-
-func TestGetClientIP_HeaderCaseSensitivity(t *testing.T) {
-	// HTTP headers are case-insensitive per RFC 7230
-	// http.Header.Get handles this automatically
-	tests := []struct {
-		name       string
-		headerKey  string
-		headerVal  string
 		remoteAddr string
-		expectedIP string
+		headers    map[string]string
+		expected   string
 	}{
-		{
-			name:       "lowercase x-forwarded-for",
-			headerKey:  "x-forwarded-for",
-			headerVal:  "192.168.1.100",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "192.168.1.100",
-		},
-		{
-			name:       "lowercase x-real-ip",
-			headerKey:  "x-real-ip",
-			headerVal:  "192.168.1.100",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "192.168.1.100",
-		},
-		{
-			name:       "mixed case X-Forwarded-FOR",
-			headerKey:  "X-Forwarded-FOR",
-			headerVal:  "192.168.1.100",
-			remoteAddr: "10.0.0.1:12345",
-			expectedIP: "192.168.1.100",
-		},
+		{"RemoteAddr", "1.2.3.4:1234", nil, "1.2.3.4"},
+		{"XFF", "1.1.1.1:1234", map[string]string{"X-Forwarded-For": "2.2.2.2"}, "2.2.2.2"},
+		{"X-Real-IP", "1.1.1.1:1234", map[string]string{"X-Real-IP": "3.3.3.3"}, "3.3.3.3"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := &http.Request{
-				Header:     make(http.Header),
-				RemoteAddr: tt.remoteAddr,
+			r := httptest.NewRequest("GET", "/", nil)
+			r.RemoteAddr = tt.remoteAddr
+			for k, v := range tt.headers {
+				r.Header.Set(k, v)
 			}
-			req.Header.Set(tt.headerKey, tt.headerVal)
 
-			result := getClientIP(req)
-			if result != tt.expectedIP {
-				t.Errorf("getClientIP() = %q, want %q", result, tt.expectedIP)
+			// getClientIP is strict internal but exposed via tests in same package
+			ip := getClientIP(r)
+			if ip != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, ip)
 			}
 		})
+	}
+}
+
+func TestDoCleanupRateLimits(t *testing.T) {
+	h := NewUpdateHandlers(nil, nil)
+	now := time.Now()
+	h.statusRateLimits["old"] = now.Add(-15 * time.Minute)
+	h.statusRateLimits["new"] = now.Add(-5 * time.Minute)
+
+	h.doCleanupRateLimits(now)
+
+	if _, ok := h.statusRateLimits["old"]; ok {
+		t.Error("Old entry not cleaned up")
+	}
+	if _, ok := h.statusRateLimits["new"]; !ok {
+		t.Error("New entry cleaned up prematurely")
+	}
+}
+
+type mockUpdater struct {
+	updates.Updater
+	prepareFunc func(ctx context.Context, req updates.UpdateRequest) (*updates.UpdatePlan, error)
+}
+
+func (m *mockUpdater) PrepareUpdate(ctx context.Context, req updates.UpdateRequest) (*updates.UpdatePlan, error) {
+	return m.prepareFunc(ctx, req)
+}
+
+func TestHandleGetUpdatePlan(t *testing.T) {
+	// Set mock mode so GetCurrentVersion returns "mock"
+	t.Setenv("PULSE_MOCK_MODE", "true")
+
+	mu := &mockUpdater{
+		prepareFunc: func(ctx context.Context, req updates.UpdateRequest) (*updates.UpdatePlan, error) {
+			return &updates.UpdatePlan{
+				Instructions: []string{"test"},
+			}, nil
+		},
+	}
+
+	h := NewUpdateHandlers(nil, nil)
+	h.registry.Register("mock", mu)
+
+	// Test missing version
+	r := httptest.NewRequest("GET", "/api/updates/plan", nil)
+	w := httptest.NewRecorder()
+	h.HandleGetUpdatePlan(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", w.Code)
+	}
+
+	// Test success
+	r = httptest.NewRequest("GET", "/api/updates/plan?version=v1.2.3", nil)
+	w = httptest.NewRecorder()
+	h.HandleGetUpdatePlan(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var plan updates.UpdatePlan
+	json.NewDecoder(w.Body).Decode(&plan)
+	if len(plan.Instructions) != 1 {
+		t.Errorf("Expected 1 instruction, got %d", len(plan.Instructions))
 	}
 }

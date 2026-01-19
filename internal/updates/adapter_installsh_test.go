@@ -1,6 +1,7 @@
 package updates
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -410,14 +411,14 @@ func TestDockerUpdater(t *testing.T) {
 	})
 
 	t.Run("Execute returns error", func(t *testing.T) {
-		err := updater.Execute(nil, UpdateRequest{}, nil)
+		err := updater.Execute(context.Background(), UpdateRequest{}, nil)
 		if err == nil {
 			t.Error("Execute() should return error for docker deployments")
 		}
 	})
 
 	t.Run("Rollback returns error", func(t *testing.T) {
-		err := updater.Rollback(nil, "event-123")
+		err := updater.Rollback(context.Background(), "event-123")
 		if err == nil {
 			t.Error("Rollback() should return error for docker deployments")
 		}
@@ -440,14 +441,14 @@ func TestAURUpdater(t *testing.T) {
 	})
 
 	t.Run("Execute returns error", func(t *testing.T) {
-		err := updater.Execute(nil, UpdateRequest{}, nil)
+		err := updater.Execute(context.Background(), UpdateRequest{}, nil)
 		if err == nil {
 			t.Error("Execute() should return error for AUR deployments")
 		}
 	})
 
 	t.Run("Rollback returns error", func(t *testing.T) {
-		err := updater.Rollback(nil, "event-123")
+		err := updater.Rollback(context.Background(), "event-123")
 		if err == nil {
 			t.Error("Rollback() should return error for AUR deployments")
 		}

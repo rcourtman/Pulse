@@ -1,0 +1,149 @@
+package websocket
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gorilla/websocket"
+)
+
+func TestBroadcastStateEnqueuesRawData(t *testing.T) {
+	hub := NewHub(nil)
+	state := struct {
+		DockerHosts []string
+	}{DockerHosts: []string{"a", "b"}}
+
+	hub.BroadcastState(state)
+
+	select {
+	case msg := <-hub.broadcastSeq:
+		if msg.Type != "rawData" {
+			t.Fatalf("unexpected message type: %s", msg.Type)
+		}
+		if !reflect.DeepEqual(msg.Data, state) {
+			t.Fatalf("unexpected state payload: %+v", msg.Data)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected broadcastSeq message")
+	}
+}
+
+func TestBroadcastAlertResolvedAndCustom(t *testing.T) {
+	hub := NewHub(nil)
+
+	hub.BroadcastAlertResolved("alert-1")
+	select {
+	case data := <-hub.broadcast:
+		var msg Message
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("unmarshal message: %v", err)
+		}
+		if msg.Type != "alertResolved" {
+			t.Fatalf("unexpected type: %s", msg.Type)
+		}
+		payload := msg.Data.(map[string]interface{})
+		if payload["alertId"] != "alert-1" {
+			t.Fatalf("unexpected alertId: %v", payload["alertId"])
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected alertResolved broadcast")
+	}
+
+	hub.Broadcast(map[string]string{"status": "ok"})
+	select {
+	case data := <-hub.broadcast:
+		var msg Message
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("unmarshal message: %v", err)
+		}
+		if msg.Type != "custom" {
+			t.Fatalf("unexpected type: %s", msg.Type)
+		}
+		if msg.Timestamp == "" {
+			t.Fatal("expected timestamp on custom broadcast")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected custom broadcast")
+	}
+}
+
+func TestSendPingEnqueuesMessage(t *testing.T) {
+	hub := NewHub(nil)
+	hub.sendPing()
+
+	select {
+	case data := <-hub.broadcast:
+		var msg Message
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("unmarshal message: %v", err)
+		}
+		if msg.Type != "ping" {
+			t.Fatalf("unexpected type: %s", msg.Type)
+		}
+		payload := msg.Data.(map[string]interface{})
+		if _, ok := payload["timestamp"]; !ok {
+			t.Fatal("expected ping timestamp")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected ping broadcast")
+	}
+}
+
+func TestStopClosesChannel(t *testing.T) {
+	hub := NewHub(nil)
+	hub.Stop()
+
+	select {
+	case _, ok := <-hub.stopChan:
+		if ok {
+			t.Fatal("expected stopChan to be closed")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected stopChan closure")
+	}
+}
+
+func TestHandleWebSocketPingPong(t *testing.T) {
+	hub := NewHub(nil)
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+
+	server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial websocket: %v", err)
+	}
+	defer conn.Close()
+
+	if err := conn.WriteJSON(Message{Type: "ping"}); err != nil {
+		t.Fatalf("write ping: %v", err)
+	}
+
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+			t.Fatalf("set read deadline: %v", err)
+		}
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			continue
+		}
+		var msg Message
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("unmarshal message: %v", err)
+		}
+		if msg.Type == "pong" {
+			return
+		}
+	}
+
+	t.Fatal("expected pong response")
+}
