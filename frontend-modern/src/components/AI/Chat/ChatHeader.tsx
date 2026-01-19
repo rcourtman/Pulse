@@ -23,6 +23,23 @@ interface ChatHeaderProps {
 export const ChatHeader: Component<ChatHeaderProps> = (props) => {
   const [showModelSelector, setShowModelSelector] = createSignal(false);
   const [showSessionPicker, setShowSessionPicker] = createSignal(false);
+  const [showAllModels, setShowAllModels] = createSignal(false);
+
+  // Filter models based on notable status
+  const filteredModels = () => {
+    if (showAllModels()) {
+      return props.models;
+    }
+    // Show notable models, or all if none are notable
+    const notable = props.models.filter(m => m.notable);
+    return notable.length > 0 ? notable : props.models;
+  };
+
+  // Count hidden models
+  const hiddenModelCount = () => {
+    const notable = props.models.filter(m => m.notable);
+    return props.models.length - notable.length;
+  };
 
   return (
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20">
@@ -82,7 +99,7 @@ export const ChatHeader: Component<ChatHeaderProps> = (props) => {
                   <div class="font-medium text-gray-900 dark:text-gray-100">Default</div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">Use configured default model</div>
                 </button>
-                <For each={Array.from(groupModelsByProvider(props.models).entries())}>
+                <For each={Array.from(groupModelsByProvider(filteredModels()).entries())}>
                   {([provider, models]) => (
                     <>
                       <div class="px-3 py-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 sticky top-0">
@@ -94,8 +111,15 @@ export const ChatHeader: Component<ChatHeaderProps> = (props) => {
                             onClick={() => { props.onModelChange(model.id); setShowModelSelector(false); }}
                             class={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 ${props.selectedModel === model.id ? 'bg-purple-50 dark:bg-purple-900/30' : ''}`}
                           >
-                            <div class="font-medium text-gray-900 dark:text-gray-100">
-                              {model.name || model.id.split(':').pop()}
+                            <div class="flex items-center gap-1.5">
+                              <span class="font-medium text-gray-900 dark:text-gray-100">
+                                {model.name || model.id.split(':').pop()}
+                              </span>
+                              <Show when={model.notable}>
+                                <span class="px-1 py-0.5 text-[10px] font-medium bg-gradient-to-r from-purple-500 to-violet-500 text-white rounded">
+                                  NEW
+                                </span>
+                              </Show>
                             </div>
                           </button>
                         )}
@@ -103,6 +127,20 @@ export const ChatHeader: Component<ChatHeaderProps> = (props) => {
                     </>
                   )}
                 </For>
+                {/* Show/hide older models toggle */}
+                <Show when={hiddenModelCount() > 0}>
+                  <div class="border-t border-gray-200 dark:border-gray-700 mt-1 pt-1">
+                    <button
+                      onClick={() => setShowAllModels(!showAllModels())}
+                      class="w-full px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-1.5"
+                    >
+                      <svg class={`w-3 h-3 transition-transform ${showAllModels() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                      {showAllModels() ? 'Hide older models' : `Show ${hiddenModelCount()} older models`}
+                    </button>
+                  </div>
+                </Show>
               </div>
             </Show>
           </div>
@@ -112,11 +150,10 @@ export const ChatHeader: Component<ChatHeaderProps> = (props) => {
         <button
           onClick={props.onToggleAutonomous}
           disabled={props.isTogglingAutonomous}
-          class={`p-2 rounded-lg transition-all ${
-            props.autonomousMode
+          class={`p-2 rounded-lg transition-all ${props.autonomousMode
               ? 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 shadow-sm'
               : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-          } ${props.isTogglingAutonomous ? 'opacity-50 cursor-wait' : ''}`}
+            } ${props.isTogglingAutonomous ? 'opacity-50 cursor-wait' : ''}`}
           title={props.autonomousMode ? 'Autonomous Mode: ON (commands run without approval)' : 'Autonomous Mode: OFF (commands need approval)'}
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

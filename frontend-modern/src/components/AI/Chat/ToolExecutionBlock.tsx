@@ -79,7 +79,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
 
         {/* Command/input - truncated */}
         <code class="text-slate-700 dark:text-slate-300 truncate flex-1">
-          {props.tool.input.length > 60 ? props.tool.input.substring(0, 60) + '...' : props.tool.input}
+          {(props.tool.input || '').length > 60 ? (props.tool.input || '').substring(0, 60) + '...' : (props.tool.input || '{}')}
         </code>
 
         {/* Expand indicator if has more output */}

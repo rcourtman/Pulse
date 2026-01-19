@@ -77,6 +77,7 @@ export interface ModelInfo {
   id: string;
   name: string;
   description?: string;
+  notable?: boolean;
 }
 
 export interface ChatContextItem {

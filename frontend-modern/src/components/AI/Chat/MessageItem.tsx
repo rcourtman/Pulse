@@ -122,7 +122,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                     {/* Thinking block - collapsed by default */}
                     <Match when={evt.type === 'thinking' && evt.thinking}>
                       <ThinkingBlock
-                        content={evt.thinking!}
+                        content={evt.thinking || ''}
                         isStreaming={props.message.isStreaming}
                       />
                     </Match>
@@ -134,7 +134,12 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
                     {/* Completed tool execution block */}
                     <Match when={evt.type === 'tool' && evt.tool}>
-                      <ToolExecutionBlock tool={evt.tool!} />
+                      <ToolExecutionBlock tool={{
+                        name: evt.tool?.name || 'unknown',
+                        input: evt.tool?.input || '{}',
+                        output: evt.tool?.output || '',
+                        success: evt.tool?.success ?? true,
+                      }} />
                     </Match>
 
                     {/* Content/text block */}
@@ -150,7 +155,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                                prose-headings:text-slate-900 dark:prose-headings:text-slate-100
                                prose-strong:text-slate-900 dark:prose-strong:text-slate-100
                                prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5"
-                        innerHTML={renderMarkdown(evt.content!)}
+                        innerHTML={renderMarkdown(evt.content || '')}
                       />
                     </Match>
 

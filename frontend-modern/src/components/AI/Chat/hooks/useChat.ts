@@ -94,6 +94,7 @@ export function useChat(options: UseChatOptions = {}) {
       prev.map((msg) => {
         if (msg.id !== assistantId) return msg;
 
+        try {
         switch (event.type) {
           case 'content': {
             const content = event.data as string;
@@ -119,7 +120,7 @@ export function useChat(options: UseChatOptions = {}) {
           }
 
           case 'tool_start': {
-            const data = event.data as { name: string; input: string };
+            const data = (event.data || {}) as { name?: string; input?: string };
 
             // Skip tool_start for "question" - these are handled by the question event type
             if (data.name === 'question' || data.name === 'Question') {
@@ -127,7 +128,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             const toolId = generateId(); // Unique ID to track this tool
-            const pendingTool = { name: data.name, input: data.input };
+            const pendingTool = { name: data.name || 'unknown', input: data.input || '{}' };
 
             // Add to streamEvents in chronological position
             const updated = addStreamEvent(msg, {
@@ -148,8 +149,8 @@ export function useChat(options: UseChatOptions = {}) {
             const events = msg.streamEvents || [];
 
             // Normalize tool name for matching - strip MCP server prefix (pulse_) which may be doubled
-            const normalizeToolName = (name: string) => name.replace(/^(pulse_)+/, '');
-            const normalizedEndName = normalizeToolName(data.name);
+            const normalizeToolName = (name: string) => (name || '').replace(/^(pulse_)+/, '');
+            const normalizedEndName = normalizeToolName(data.name || '');
 
             // Find the matching pending tool (by normalized name)
             const matchingPendingIndex = pendingTools.findIndex(
@@ -160,28 +161,54 @@ export function useChat(options: UseChatOptions = {}) {
               : pendingTools;
 
             const newToolCall: ToolExecution = {
-              name: data.name,
-              input: data.input,
-              output: data.output,
-              success: data.success,
+              name: data.name || 'unknown',
+              input: data.input || '{}',
+              output: data.output || '',
+              success: data.success ?? true,
             };
 
-            // Find the pending_tool event in streamEvents and replace it with completed tool
-            // Search from the end to find the most recent matching pending tool
-            let updatedEvents = [...events];
-            for (let i = events.length - 1; i >= 0; i--) {
-              const evt = events[i];
-              if (evt.type === 'pending_tool' && normalizeToolName(evt.pendingTool?.name || '') === normalizedEndName) {
-                // Replace pending with completed
-                updatedEvents[i] = { type: 'tool', tool: newToolCall };
-                break;
+            // Check if there's an approval card for this tool
+            // If so, we need to remove both the pending_tool AND the approval,
+            // then add the completed tool at the end (since execution happened AFTER approval)
+            const hasApproval = events.some(
+              (evt) => evt.type === 'approval' && normalizeToolName(evt.approval?.toolName || '') === normalizedEndName
+            );
+
+            let updatedEvents: typeof events;
+            if (hasApproval) {
+              // Remove pending_tool and approval, add completed tool at end
+              updatedEvents = events.filter((evt) => {
+                if (evt.type === 'pending_tool' && normalizeToolName(evt.pendingTool?.name || '') === normalizedEndName) {
+                  return false;
+                }
+                if (evt.type === 'approval' && normalizeToolName(evt.approval?.toolName || '') === normalizedEndName) {
+                  return false;
+                }
+                return true;
+              });
+              updatedEvents.push({ type: 'tool', tool: newToolCall });
+            } else {
+              // No approval - just replace pending_tool in place
+              updatedEvents = [...events];
+              for (let i = events.length - 1; i >= 0; i--) {
+                const evt = events[i];
+                if (evt.type === 'pending_tool' && normalizeToolName(evt.pendingTool?.name || '') === normalizedEndName) {
+                  updatedEvents[i] = { type: 'tool', tool: newToolCall };
+                  break;
+                }
               }
             }
+
+            // Also remove from pendingApprovals if present
+            const updatedApprovals = (msg.pendingApprovals || []).filter(
+              (a) => normalizeToolName(a.toolName || '') !== normalizedEndName
+            );
 
             return {
               ...msg,
               streamEvents: updatedEvents,
               pendingTools: updatedPending,
+              pendingApprovals: updatedApprovals,
               toolCalls: [...(msg.toolCalls || []), newToolCall],
             };
           }
@@ -259,6 +286,10 @@ export function useChat(options: UseChatOptions = {}) {
 
           default:
             return msg;
+        }
+        } catch (err) {
+          logger.error('[useChat] Error processing event', { event, error: err });
+          return msg; // Return unchanged message on error
         }
       })
     );
@@ -465,25 +496,54 @@ export function useChat(options: UseChatOptions = {}) {
     try {
       // Send answer to OpenCode via API
       await OpenCodeAPI.answerQuestion(questionId, answers);
-      // Remove the question card after successful answer
+
+      // Remove the question card - it's been handled
       updateQuestion(messageId, questionId, { removed: true });
 
-      // After answering, OpenCode continues processing but the SSE stream has closed.
-      // We need to send a follow-up message to get the continuation.
-      const answerSummary = answers.map(a => a.value).join(', ');
-      logger.debug('[useChat] Question answered, sending continuation', { questionId, answerSummary });
+      // After answering, check if the stream is still active.
+      // If it closed (e.g. on question), we force a re-connection to receive continuation events.
+      if (!isLoading()) {
+        logger.debug('[useChat] Stream closed, re-initiating to catch continuation', {
+          questionId,
+          messageId,
+        });
 
-      // Wait for any previous stream to finish
-      if (isLoading()) {
-        logger.debug('[useChat] Waiting for stream to finish before sending answer');
-        const idle = await waitForIdleInternal(10000);
-        if (!idle) {
-          logger.warn('[useChat] Timeout waiting for stream, sending anyway');
+        const currentSessionId = sessionId();
+        if (currentSessionId) {
+          setIsLoading(true);
+          abortControllerRef = new AbortController();
+
+          // Set the message back to streaming state to show the AI is working
+          setMessages((prev) =>
+            prev.map((m) => (m.id === messageId ? { ...m, isStreaming: true } : m))
+          );
+
+          OpenCodeAPI.chat(
+            '', // Empty prompt - just resume listening for completion
+            currentSessionId,
+            model() || undefined,
+            (event) => {
+              processEvent(messageId, event);
+            },
+            abortControllerRef.signal
+          )
+            .catch((err) => {
+              if (err instanceof Error && err.name === 'AbortError') return;
+              logger.error('[useChat] Re-connection failed:', err);
+            })
+            .finally(() => {
+              setIsLoading(false);
+              abortControllerRef = null;
+            });
         }
       }
 
-      // Send the answer as a message to continue the conversation
-      await sendMessage(answerSummary || 'Continue');
+      logger.debug('[useChat] Question answered, waiting for AI to continue', {
+        questionId,
+      });
+
+      // Brief delay to allow backend processing to settle
+      await new Promise((resolve) => setTimeout(resolve, 500));
     } catch (error) {
       logger.error('[useChat] Failed to answer question:', error);
       notificationStore.error('Failed to answer question');
@@ -491,25 +551,6 @@ export function useChat(options: UseChatOptions = {}) {
     }
   };
 
-  // Internal helper to wait for idle state
-  const waitForIdleInternal = (timeoutMs: number): Promise<boolean> => {
-    return new Promise((resolve) => {
-      if (!isLoading()) {
-        resolve(true);
-        return;
-      }
-      const startTime = Date.now();
-      const checkInterval = setInterval(() => {
-        if (!isLoading()) {
-          clearInterval(checkInterval);
-          resolve(true);
-        } else if (Date.now() - startTime > timeoutMs) {
-          clearInterval(checkInterval);
-          resolve(false);
-        }
-      }, 100);
-    });
-  };
 
   // Wait for the chat to become idle (not loading)
   // Useful for sending follow-up messages after approvals

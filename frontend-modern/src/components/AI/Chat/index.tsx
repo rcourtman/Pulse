@@ -6,7 +6,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
-import { PROVIDER_DISPLAY_NAMES, getProviderFromModelId, groupModelsByProvider } from '../aiChatUtils';
+import { ModelSelector } from './ModelSelector';
 import type { PendingApproval, PendingQuestion, ModelInfo } from './types';
 
 const MODEL_LEGACY_STORAGE_KEY = 'pulse:ai_chat_model';
@@ -29,11 +29,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [input, setInput] = createSignal('');
   const [sessions, setSessions] = createSignal<ChatSession[]>([]);
   const [showSessions, setShowSessions] = createSignal(false);
-  const [showModelSelector, setShowModelSelector] = createSignal(false);
   const [models, setModels] = createSignal<ModelInfo[]>([]);
   const [modelsLoading, setModelsLoading] = createSignal(false);
   const [modelsError, setModelsError] = createSignal('');
-  const [modelQuery, setModelQuery] = createSignal('');
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
   const [showSessionActions, setShowSessionActions] = createSignal(false);
@@ -105,40 +103,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return match ? (match.name || match.id.split(':').pop() || match.id) : override;
   });
 
-  const selectedModelLabel = createMemo(() => {
-    const selected = chat.model().trim();
-    if (!selected) {
-      const fallback = defaultModelLabel();
-      return fallback ? `Default (${fallback})` : 'Default';
-    }
-    const match = models().find((model) => model.id === selected);
-    if (match) return match.name || match.id.split(':').pop() || match.id;
-    return selected;
-  });
-
-  const filteredModels = createMemo(() => {
-    const query = modelQuery().trim().toLowerCase();
-    if (!query) return models();
-    return models().filter((model) => {
-      const provider = getProviderFromModelId(model.id);
-      const providerName = PROVIDER_DISPLAY_NAMES[provider] || provider;
-      const modelName = model.name || '';
-      return (
-        model.id.toLowerCase().includes(query) ||
-        modelName.toLowerCase().includes(query) ||
-        (model.description || '').toLowerCase().includes(query) ||
-        provider.toLowerCase().includes(query) ||
-        providerName.toLowerCase().includes(query)
-      );
-    });
-  });
-
-  const customModelCandidate = createMemo(() => modelQuery().trim());
-  const showCustomModelOption = createMemo(() => {
-    const candidate = customModelCandidate();
-    if (!candidate) return false;
-    return !models().some((model) => model.id === candidate);
-  });
 
   const loadModels = async (notify = false) => {
     if (notify) {
@@ -184,8 +148,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const selectModel = (modelId: string) => {
     chat.setModel(modelId);
     updateStoredModel(chat.sessionId(), modelId);
-    setShowModelSelector(false);
-    setModelQuery('');
   };
 
   createEffect(() => {
@@ -197,8 +159,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
       }
       return;
     }
-    if (chat.model()) {
-      chat.setModel('');
+    // If there's no stored model for this session but we have a current selection,
+    // preserve it (and migrate it to this session)
+    const currentModel = chat.model();
+    if (currentModel && sessionId) {
+      updateStoredModel(sessionId, currentModel);
     }
   });
 
@@ -249,7 +214,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const target = e.target as HTMLElement;
       // Only close if click is outside dropdown containers
       if (!target.closest('[data-dropdown]')) {
-        setShowModelSelector(false);
         setShowSessions(false);
         setShowSessionActions(false);
       }
@@ -313,63 +277,26 @@ export const AIChat: Component<AIChatProps> = (props) => {
     chat.updateApproval(messageId, approval.toolId, { isExecuting: true });
 
     try {
-      const result = await OpenCodeAPI.approveCommand(approval.approvalId);
+      // Call the approve endpoint - this marks it as approved in the backend
+      // The agentic loop will detect this and execute the command
+      // Execution results will come via tool_end event in the stream
+      await OpenCodeAPI.approveCommand(approval.approvalId);
 
-      // Remove from pending approvals
+      // Remove from pending approvals - the tool_end event will show the result
       chat.updateApproval(messageId, approval.toolId, { removed: true });
 
-      // Add tool result if command was executed
-      if (result.approved) {
-        const typedResult = result as {
-          result?: { stdout?: string; stderr?: string; exit_code?: number };
-          error?: string;
-          message?: string;
-          executed?: boolean;
-        };
-        const execResult = typedResult.result;
+      logger.debug('[AIChat] Command approved, waiting for agentic loop to execute', {
+        approvalId: approval.approvalId,
+        toolName: approval.toolName,
+      });
 
-        let output: string;
-        let success: boolean;
+      // Note: We don't manually add tool results or send continuation messages here.
+      // The agentic loop will:
+      // 1. Detect the approval
+      // 2. Re-execute the tool with the approval_id
+      // 3. Send a tool_end event with the result
+      // 4. Continue the conversation automatically
 
-        if (execResult) {
-          output = `Exit code: ${execResult.exit_code}\n${execResult.stdout || ''}${execResult.stderr ? '\nStderr: ' + execResult.stderr : ''}`;
-          success = execResult.exit_code === 0;
-        } else if (typedResult.error) {
-          output = `Execution failed: ${typedResult.error}`;
-          success = false;
-        } else if (typedResult.message) {
-          output = typedResult.message;
-          success = false;
-        } else {
-          output = 'Command approved but no execution result available.';
-          success = false;
-        }
-
-        chat.addToolResult(messageId, {
-          name: approval.toolName,
-          input: approval.command,
-          output: output.trim(),
-          success,
-        });
-
-        // Continue the conversation - short message, output is already in the tool result
-        const continuationMessage = success
-          ? 'Command executed. Please analyze the result and continue.'
-          : 'Command completed with issues. Please analyze and advise.';
-
-        // Wait for any ongoing stream to complete before sending continuation
-        if (chat.isLoading()) {
-          logger.debug('[AIChat] Waiting for chat to become idle before continuation');
-          const isIdle = await chat.waitForIdle(30000);
-          if (!isIdle) {
-            logger.warn('[AIChat] Timeout waiting for chat to become idle');
-            notificationStore.warning('Chat is busy. Sending continuation anyway...');
-          }
-        }
-
-        logger.debug('[AIChat] Sending continuation message', { sessionId: chat.sessionId() });
-        await chat.sendMessage(continuationMessage);
-      }
     } catch (error) {
       logger.error('[AIChat] Approval failed:', error);
       notificationStore.error('Failed to approve command');
@@ -408,26 +335,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     chat.updateQuestion(messageId, questionId, { removed: true });
   };
 
-  const toggleModelSelector = () => {
-    const next = !showModelSelector();
-    setShowModelSelector(next);
-    if (next) {
-      setShowSessions(false);
-      setModelQuery('');
-      if (models().length === 0 && !modelsLoading()) {
-        loadModels();
-      }
-    }
-  };
-
-  const handleModelInputKeyDown = (e: KeyboardEvent) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const candidate = customModelCandidate();
-    if (candidate) {
-      selectModel(candidate);
-    }
-  };
 
   // Session action handlers
   const handleSummarize = async () => {
@@ -508,139 +415,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           <div class="flex items-center gap-1.5">
             {/* Model selector */}
-            <div class="relative" data-dropdown>
-              <button
-                onClick={toggleModelSelector}
-                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 transition-colors"
-                title="Select model for this chat"
-              >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                <span class="max-w-[120px] truncate font-medium">{selectedModelLabel()}</span>
-                <Show when={modelsLoading()}>
-                  <svg class="w-3 h-3 text-slate-400 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                </Show>
-                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              <Show when={showModelSelector()}>
-                <div class="absolute right-0 top-full mt-1 w-80 max-h-96 overflow-hidden bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50">
-                  <div class="flex items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
-                    <input
-                      type="text"
-                      value={modelQuery()}
-                      onInput={(e) => setModelQuery(e.currentTarget.value)}
-                      onKeyDown={handleModelInputKeyDown}
-                      placeholder="Search or enter model ID"
-                      class="flex-1 text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-400/50"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => loadModels(true)}
-                      disabled={modelsLoading()}
-                      class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
-                      title="Refresh models"
-                    >
-                      <svg class={`w-3.5 h-3.5 ${modelsLoading() ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v6h6M20 20v-6h-6M5.32 9A7.5 7.5 0 0119 12.5M18.68 15A7.5 7.5 0 015 11.5" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <Show when={modelsError()}>
-                    <div class="px-3 py-2 text-[11px] text-red-500 border-b border-slate-200 dark:border-slate-700">
-                      {modelsError()}
-                    </div>
-                  </Show>
-
-                  <div class="max-h-72 overflow-y-auto py-1">
-                    <button
-                      onClick={() => selectModel('')}
-                      class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${!chat.model() ? 'bg-purple-50 dark:bg-purple-900/30' : ''}`}
-                    >
-                      <div class="font-medium text-slate-900 dark:text-slate-100">Default</div>
-                      <div class="text-[11px] text-slate-500 dark:text-slate-400">
-                        {defaultModelLabel() ? `Use configured default model (${defaultModelLabel()})` : 'Use configured default model'}
-                      </div>
-                    </button>
-
-                    <Show when={chatOverrideModel()}>
-                      <button
-                        onClick={() => selectModel(chatOverrideModel())}
-                        class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${chat.model() === chatOverrideModel() ? 'bg-purple-50 dark:bg-purple-900/30' : ''}`}
-                      >
-                        <div class="font-medium text-slate-900 dark:text-slate-100">Chat override</div>
-                        <div class="text-[11px] text-slate-500 dark:text-slate-400">
-                          {chatOverrideLabel() || chatOverrideModel()}
-                        </div>
-                      </button>
-                    </Show>
-
-                    <Show when={showCustomModelOption()}>
-                      <button
-                        onClick={() => selectModel(customModelCandidate())}
-                        class="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
-                      >
-                        <div class="font-medium text-slate-900 dark:text-slate-100">
-                          Use "{customModelCandidate()}"
-                        </div>
-                        <div class="text-[11px] text-slate-500 dark:text-slate-400">Custom model ID</div>
-                      </button>
-                    </Show>
-
-                    <Show when={!modelsLoading() && filteredModels().length === 0}>
-                      <div class="px-3 py-4 text-center text-[11px] text-slate-500 dark:text-slate-400">
-                        No matching models.
-                      </div>
-                    </Show>
-
-                    <For each={Array.from(groupModelsByProvider(filteredModels()).entries())}>
-                      {([provider, providerModels]) => (
-                        <>
-                          <div class="px-3 py-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 sticky top-0">
-                            {PROVIDER_DISPLAY_NAMES[provider] || provider}
-                          </div>
-                          <For each={providerModels}>
-                            {(model) => (
-                              <button
-                                onClick={() => selectModel(model.id)}
-                                class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${chat.model() === model.id ? 'bg-purple-50 dark:bg-purple-900/30' : ''}`}
-                              >
-                                <div class="font-medium text-slate-900 dark:text-slate-100">
-                                  {model.name || model.id.split(':').pop() || model.id}
-                                </div>
-                                <Show when={model.description}>
-                                  <div class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">
-                                    {model.description}
-                                  </div>
-                                </Show>
-                                <Show when={model.name && model.name !== model.id}>
-                                  <div class="text-[10px] text-slate-400 dark:text-slate-500">
-                                    {model.id}
-                                  </div>
-                                </Show>
-                              </button>
-                            )}
-                          </For>
-                        </>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
-            </div>
+            <ModelSelector
+              models={models()}
+              selectedModel={chat.model()}
+              defaultModelLabel={defaultModelLabel()}
+              chatOverrideModel={chatOverrideModel()}
+              chatOverrideLabel={chatOverrideLabel()}
+              isLoading={modelsLoading()}
+              error={modelsError()}
+              onModelSelect={selectModel}
+              onRefresh={() => loadModels(true)}
+            />
 
             {/* Session picker */}
             <div class="relative" data-dropdown>
               <button
                 onClick={() => {
-                  setShowModelSelector(false);
                   setShowSessions(!showSessions());
                 }}
                 class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -709,7 +499,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     notificationStore.info('Send a message first to start a session');
                     return;
                   }
-                  setShowModelSelector(false);
                   setShowSessions(false);
                   setShowSessionActions(!showSessionActions());
                 }}

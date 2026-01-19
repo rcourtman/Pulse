@@ -7,6 +7,7 @@ export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
   deepseek: 'DeepSeek',
+  gemini: 'Google Gemini',
   ollama: 'Ollama',
 };
 
@@ -20,11 +21,14 @@ export function getProviderFromModelId(modelId: string): string {
   if (modelId.includes('claude') || modelId.includes('opus') || modelId.includes('sonnet') || modelId.includes('haiku')) {
     return 'anthropic';
   }
-  if (modelId.includes('gpt') || modelId.includes('o1') || modelId.includes('o3')) {
+  if (modelId.includes('gpt') || modelId.includes('o1') || modelId.includes('o3') || modelId.includes('o4')) {
     return 'openai';
   }
   if (modelId.includes('deepseek')) {
     return 'deepseek';
+  }
+  if (modelId.includes('gemini')) {
+    return 'gemini';
   }
   return 'ollama';
 }

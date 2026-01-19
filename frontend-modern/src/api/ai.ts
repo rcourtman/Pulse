@@ -56,8 +56,8 @@ export class AIAPI {
   }
 
   // Get available models from the AI provider
-  static async getModels(): Promise<{ models: { id: string; name: string; description?: string }[]; error?: string }> {
-    return apiFetchJSON(`${this.baseUrl}/ai/models`) as Promise<{ models: { id: string; name: string; description?: string }[]; error?: string }>;
+  static async getModels(): Promise<{ models: { id: string; name: string; description?: string; notable?: boolean }[]; error?: string }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/models`) as Promise<{ models: { id: string; name: string; description?: string; notable?: boolean }[]; error?: string }>;
   }
 
   // Get AI cost/usage summary
