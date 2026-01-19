@@ -9,26 +9,73 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/opencode"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
 
-// AIHandler handles all AI endpoints using OpenCode
+// AIPersistence interface for loading/saving AI config
+type AIPersistence interface {
+	LoadAIConfig() (*config.AIConfig, error)
+}
+
+// AIService interface for the AI chat service - enables mocking in tests
+type AIService interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+	Restart(ctx context.Context, newCfg *config.AIConfig) error
+	IsRunning() bool
+	Execute(ctx context.Context, req chat.ExecuteRequest) (map[string]interface{}, error)
+	ExecuteStream(ctx context.Context, req chat.ExecuteRequest, callback chat.StreamCallback) error
+	ListSessions(ctx context.Context) ([]chat.Session, error)
+	CreateSession(ctx context.Context) (*chat.Session, error)
+	DeleteSession(ctx context.Context, sessionID string) error
+	GetMessages(ctx context.Context, sessionID string) ([]chat.Message, error)
+	AbortSession(ctx context.Context, sessionID string) error
+	SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
+	GetSessionDiff(ctx context.Context, sessionID string) (map[string]interface{}, error)
+	ForkSession(ctx context.Context, sessionID string) (*chat.Session, error)
+	RevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
+	UnrevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
+	AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error
+	SetAlertProvider(provider chat.MCPAlertProvider)
+	SetFindingsProvider(provider chat.MCPFindingsProvider)
+	SetBaselineProvider(provider chat.MCPBaselineProvider)
+	SetPatternProvider(provider chat.MCPPatternProvider)
+	SetMetricsHistory(provider chat.MCPMetricsHistoryProvider)
+	SetAgentProfileManager(manager chat.AgentProfileManager)
+	SetStorageProvider(provider chat.MCPStorageProvider)
+	SetBackupProvider(provider chat.MCPBackupProvider)
+	SetDiskHealthProvider(provider chat.MCPDiskHealthProvider)
+	SetUpdatesProvider(provider chat.MCPUpdatesProvider)
+	SetFindingsManager(manager chat.FindingsManager)
+	SetMetadataUpdater(updater chat.MetadataUpdater)
+	UpdateControlSettings(cfg *config.AIConfig)
+	GetBaseURL() string
+}
+
+// AIHandler handles all AI endpoints using direct AI integration
 type AIHandler struct {
 	config      *config.Config
-	persistence *config.ConfigPersistence
-	service     *opencode.Service
+	persistence AIPersistence
+	service     AIService
 	agentServer *agentexec.Server
 }
 
+// newChatService is the factory function for creating the AI service.
+// Can be swapped in tests for mocking.
+var newChatService = func(cfg chat.Config) AIService {
+	return chat.NewService(cfg)
+}
+
 // NewAIHandler creates a new AI handler
-func NewAIHandler(cfg *config.Config, persistence *config.ConfigPersistence, agentServer *agentexec.Server) *AIHandler {
+func NewAIHandler(cfg *config.Config, persistence AIPersistence, agentServer *agentexec.Server) *AIHandler {
 	return &AIHandler{
 		config:      cfg,
 		persistence: persistence,
 		agentServer: agentServer,
+		// service will be initialized in Start()
 	}
 }
 
@@ -37,7 +84,7 @@ type AIStateProvider interface {
 	GetState() models.StateSnapshot
 }
 
-// Start initializes and starts the OpenCode service
+// Start initializes and starts the AI chat service
 func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) error {
 	log.Info().Msg("AIHandler.Start called")
 	aiCfg := h.loadAIConfig()
@@ -50,24 +97,26 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 		return nil
 	}
 
-	log.Info().Bool("enabled", aiCfg.Enabled).Str("model", aiCfg.Model).Msg("Starting OpenCode service")
-	h.service = opencode.NewService(opencode.Config{
+	// Determine data directory
+	dataDir := aiCfg.OpenCodeDataDir
+	if dataDir == "" {
+		dataDir = "/tmp/pulse-ai"
+	}
+
+	log.Info().Bool("enabled", aiCfg.Enabled).Str("model", aiCfg.Model).Msg("Starting AI chat service")
+	h.service = newChatService(chat.Config{
 		AIConfig:      aiCfg,
 		StateProvider: stateProvider,
 		AgentServer:   h.agentServer,
+		DataDir:       dataDir,
 	})
 
 	if err := h.service.Start(ctx); err != nil {
-		log.Error().Err(err).Msg("Failed to start OpenCode service")
+		log.Error().Err(err).Msg("Failed to start AI chat service")
 		return err
 	}
 
 	// Initialize approval store for command approval workflow
-	dataDir := aiCfg.OpenCodeDataDir
-	if dataDir == "" {
-		dataDir = "/tmp/pulse-opencode"
-	}
-
 	approvalStore, err := approval.NewStore(approval.StoreConfig{
 		DataDir:        dataDir,
 		DefaultTimeout: 5 * time.Minute,
@@ -81,11 +130,11 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 		log.Info().Str("data_dir", dataDir).Msg("Approval store initialized")
 	}
 
-	log.Info().Msg("Pulse AI started (powered by OpenCode)")
+	log.Info().Msg("Pulse AI started (direct integration)")
 	return nil
 }
 
-// Stop stops the OpenCode service
+// Stop stops the AI chat service
 func (h *AIHandler) Stop(ctx context.Context) error {
 	if h.service != nil {
 		return h.service.Stop(ctx)
@@ -93,7 +142,7 @@ func (h *AIHandler) Stop(ctx context.Context) error {
 	return nil
 }
 
-// Restart restarts the OpenCode service with updated configuration
+// Restart restarts the AI chat service with updated configuration
 // Call this when model or other settings change
 func (h *AIHandler) Restart(ctx context.Context) error {
 	if h.service == nil || !h.service.IsRunning() {
@@ -109,8 +158,8 @@ func (h *AIHandler) IsRunning() bool {
 	return h.service != nil && h.service.IsRunning()
 }
 
-// GetService returns the underlying OpenCode service for direct access
-func (h *AIHandler) GetService() *opencode.Service {
+// GetService returns the underlying AI chat service
+func (h *AIHandler) GetService() AIService {
 	return h.service
 }
 
@@ -174,6 +223,15 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	preview := req.Prompt
+	if len(preview) > 100 {
+		preview = preview[:100] + "..."
+	}
+	log.Info().
+		Str("sessionId", req.SessionID).
+		Str("prompt_preview", preview).
+		Msg("AIHandler: Received chat request")
+
 	// Set up SSE
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -223,7 +281,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	defer close(heartbeatDone)
 
 	// Write helper
-	writeEvent := func(event opencode.StreamEvent) {
+	writeEvent := func(event chat.StreamEvent) {
 		if clientDisconnected.Load() {
 			return
 		}
@@ -240,31 +298,27 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
-	// Stream from OpenCode
-	err := h.service.ExecuteStream(ctx, opencode.ExecuteRequest{
+	// Stream from AI chat service
+	err := h.service.ExecuteStream(ctx, chat.ExecuteRequest{
 		Prompt:    req.Prompt,
 		SessionID: req.SessionID,
 		Model:     req.Model,
-	}, func(event opencode.StreamEvent) {
+	}, func(event chat.StreamEvent) {
 		writeEvent(event)
 	})
 
 	if err != nil {
 		log.Error().Err(err).Msg("Chat stream error")
 		errData, _ := json.Marshal(err.Error())
-		writeEvent(opencode.StreamEvent{Type: "error", Data: errData})
+		writeEvent(chat.StreamEvent{Type: "error", Data: errData})
 	}
 
 	// Send done
-	writeEvent(opencode.StreamEvent{Type: "done", Data: nil})
+	writeEvent(chat.StreamEvent{Type: "done", Data: nil})
 }
 
 // HandleSessions handles GET /api/ai/sessions - list sessions
 func (h *AIHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -282,10 +336,6 @@ func (h *AIHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
 
 // HandleCreateSession handles POST /api/ai/sessions - create session
 func (h *AIHandler) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -303,10 +353,6 @@ func (h *AIHandler) HandleCreateSession(w http.ResponseWriter, r *http.Request) 
 
 // HandleDeleteSession handles DELETE /api/ai/sessions/{id}
 func (h *AIHandler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -322,10 +368,6 @@ func (h *AIHandler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, 
 
 // HandleMessages handles GET /api/ai/sessions/{id}/messages
 func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -343,10 +385,6 @@ func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessi
 
 // HandleAbort handles POST /api/ai/sessions/{id}/abort
 func (h *AIHandler) HandleAbort(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -362,13 +400,9 @@ func (h *AIHandler) HandleAbort(w http.ResponseWriter, r *http.Request, sessionI
 
 // HandleStatus handles GET /api/ai/status
 func (h *AIHandler) HandleStatus(w http.ResponseWriter, r *http.Request) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	status := map[string]interface{}{
 		"running": h.IsRunning(),
-		"engine":  "opencode",
+		"engine":  "direct",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -378,10 +412,6 @@ func (h *AIHandler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 // HandleSummarize handles POST /api/ai/sessions/{id}/summarize
 // Compresses context when nearing model limits
 func (h *AIHandler) HandleSummarize(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -400,10 +430,6 @@ func (h *AIHandler) HandleSummarize(w http.ResponseWriter, r *http.Request, sess
 // HandleDiff handles GET /api/ai/sessions/{id}/diff
 // Returns file changes made during the session
 func (h *AIHandler) HandleDiff(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -422,10 +448,6 @@ func (h *AIHandler) HandleDiff(w http.ResponseWriter, r *http.Request, sessionID
 // HandleFork handles POST /api/ai/sessions/{id}/fork
 // Creates a branch point in the conversation
 func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -444,10 +466,6 @@ func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID
 // HandleRevert handles POST /api/ai/sessions/{id}/revert
 // Reverts file changes from the session
 func (h *AIHandler) HandleRevert(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -466,10 +484,6 @@ func (h *AIHandler) HandleRevert(w http.ResponseWriter, r *http.Request, session
 // HandleUnrevert handles POST /api/ai/sessions/{id}/unrevert
 // Restores previously reverted changes
 func (h *AIHandler) HandleUnrevert(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -495,10 +509,6 @@ type AnswerQuestionRequest struct {
 
 // HandleAnswerQuestion handles POST /api/ai/question/{questionID}/answer
 func (h *AIHandler) HandleAnswerQuestion(w http.ResponseWriter, r *http.Request, questionID string) {
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
 	if !h.IsRunning() {
 		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
 		return
@@ -510,14 +520,19 @@ func (h *AIHandler) HandleAnswerQuestion(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	// Convert to opencode.QuestionAnswer
-	answers := make([]opencode.QuestionAnswer, len(req.Answers))
+	// Convert to chat.QuestionAnswer
+	answers := make([]chat.QuestionAnswer, len(req.Answers))
 	for i, a := range req.Answers {
-		answers[i] = opencode.QuestionAnswer{
+		answers[i] = chat.QuestionAnswer{
 			ID:    a.ID,
 			Value: a.Value,
 		}
 	}
+
+	log.Info().
+		Str("questionID", questionID).
+		Int("answers_count", len(answers)).
+		Msg("AIHandler: Received answer to question")
 
 	if err := h.service.AnswerQuestion(r.Context(), questionID, answers); err != nil {
 		log.Error().Err(err).Str("questionID", questionID).Msg("Failed to answer question")
@@ -529,36 +544,92 @@ func (h *AIHandler) HandleAnswerQuestion(w http.ResponseWriter, r *http.Request,
 }
 
 // SetAlertProvider sets the alert provider for MCP tools
-func (h *AIHandler) SetAlertProvider(provider opencode.MCPAlertProvider) {
+func (h *AIHandler) SetAlertProvider(provider chat.MCPAlertProvider) {
 	if h.service != nil {
 		h.service.SetAlertProvider(provider)
 	}
 }
 
 // SetFindingsProvider sets the findings provider for MCP tools
-func (h *AIHandler) SetFindingsProvider(provider opencode.MCPFindingsProvider) {
+func (h *AIHandler) SetFindingsProvider(provider chat.MCPFindingsProvider) {
 	if h.service != nil {
 		h.service.SetFindingsProvider(provider)
 	}
 }
 
 // SetBaselineProvider sets the baseline provider for MCP tools
-func (h *AIHandler) SetBaselineProvider(provider opencode.MCPBaselineProvider) {
+func (h *AIHandler) SetBaselineProvider(provider chat.MCPBaselineProvider) {
 	if h.service != nil {
 		h.service.SetBaselineProvider(provider)
 	}
 }
 
 // SetPatternProvider sets the pattern provider for MCP tools
-func (h *AIHandler) SetPatternProvider(provider opencode.MCPPatternProvider) {
+func (h *AIHandler) SetPatternProvider(provider chat.MCPPatternProvider) {
 	if h.service != nil {
 		h.service.SetPatternProvider(provider)
 	}
 }
 
 // SetMetricsHistory sets the metrics history provider for MCP tools
-func (h *AIHandler) SetMetricsHistory(provider opencode.MCPMetricsHistoryProvider) {
+func (h *AIHandler) SetMetricsHistory(provider chat.MCPMetricsHistoryProvider) {
 	if h.service != nil {
 		h.service.SetMetricsHistory(provider)
+	}
+}
+
+// SetAgentProfileManager sets the agent profile manager for MCP tools
+func (h *AIHandler) SetAgentProfileManager(manager chat.AgentProfileManager) {
+	if h.service != nil {
+		h.service.SetAgentProfileManager(manager)
+	}
+}
+
+// SetStorageProvider sets the storage provider for MCP tools
+func (h *AIHandler) SetStorageProvider(provider chat.MCPStorageProvider) {
+	if h.service != nil {
+		h.service.SetStorageProvider(provider)
+	}
+}
+
+// SetBackupProvider sets the backup provider for MCP tools
+func (h *AIHandler) SetBackupProvider(provider chat.MCPBackupProvider) {
+	if h.service != nil {
+		h.service.SetBackupProvider(provider)
+	}
+}
+
+// SetDiskHealthProvider sets the disk health provider for MCP tools
+func (h *AIHandler) SetDiskHealthProvider(provider chat.MCPDiskHealthProvider) {
+	if h.service != nil {
+		h.service.SetDiskHealthProvider(provider)
+	}
+}
+
+// SetUpdatesProvider sets the updates provider for MCP tools
+func (h *AIHandler) SetUpdatesProvider(provider chat.MCPUpdatesProvider) {
+	if h.service != nil {
+		h.service.SetUpdatesProvider(provider)
+	}
+}
+
+// SetFindingsManager sets the findings manager for MCP tools
+func (h *AIHandler) SetFindingsManager(manager chat.FindingsManager) {
+	if h.service != nil {
+		h.service.SetFindingsManager(manager)
+	}
+}
+
+// SetMetadataUpdater sets the metadata updater for MCP tools
+func (h *AIHandler) SetMetadataUpdater(updater chat.MetadataUpdater) {
+	if h.service != nil {
+		h.service.SetMetadataUpdater(updater)
+	}
+}
+
+// UpdateControlSettings updates control settings in the service
+func (h *AIHandler) UpdateControlSettings(cfg *config.AIConfig) {
+	if h.service != nil {
+		h.service.UpdateControlSettings(cfg)
 	}
 }

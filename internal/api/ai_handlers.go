@@ -859,6 +859,7 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Description string `json:"description,omitempty"`
+		Notable     bool   `json:"notable"`
 	}
 
 	type Response struct {
@@ -882,13 +883,20 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 
 	// Convert provider models to response format
 	responseModels := make([]ModelInfo, 0, len(models))
+	notableCount := 0
 	for _, m := range models {
+		if m.Notable {
+			notableCount++
+		}
 		responseModels = append(responseModels, ModelInfo{
 			ID:          m.ID,
 			Name:        m.Name,
 			Description: m.Description,
+			Notable:     m.Notable,
 		})
 	}
+
+	log.Debug().Int("total", len(responseModels)).Int("notable", notableCount).Msg("Returning AI models")
 
 	resp := Response{
 		Models: responseModels,
@@ -3841,73 +3849,16 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	LogAuditEvent("ai_command_approved", username, GetClientIP(r), r.URL.Path, true,
 		fmt.Sprintf("Approved command: %s", truncateForLog(req.Command, 100)))
 
-	// Execute the approved command
-	var execResult *agentexec.CommandResultPayload
-	var execErr error
-
-	if h.agentServer != nil && req.TargetName != "" {
-		// Debug: list connected agents
-		connectedAgents := h.agentServer.GetConnectedAgents()
-		agentHostnames := make([]string, len(connectedAgents))
-		for i, a := range connectedAgents {
-			agentHostnames[i] = a.Hostname
-		}
-		log.Debug().
-			Str("target_name", req.TargetName).
-			Strs("connected_agents", agentHostnames).
-			Int("agent_count", len(connectedAgents)).
-			Msg("Looking for agent to execute approved command")
-
-		// Find agent for the target host
-		agentID, found := h.agentServer.GetAgentForHost(req.TargetName)
-		if found {
-			ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
-			defer cancel()
-
-			execResult, execErr = h.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-				Command:    req.Command,
-				TargetType: req.TargetType,
-				TargetID:   req.TargetID,
-			})
-
-			if execErr == nil {
-				LogAuditEvent("ai_command_executed", username, GetClientIP(r), r.URL.Path, true,
-					fmt.Sprintf("Executed command: %s (exit: %d)", truncateForLog(req.Command, 100), execResult.ExitCode))
-			} else {
-				LogAuditEvent("ai_command_failed", username, GetClientIP(r), r.URL.Path, false,
-					fmt.Sprintf("Failed to execute command: %s - %v", truncateForLog(req.Command, 100), execErr))
-			}
-		} else {
-			// Agent not found - provide helpful error message
-			connectedAgents := h.agentServer.GetConnectedAgents()
-			hostnames := make([]string, len(connectedAgents))
-			for i, a := range connectedAgents {
-				hostnames[i] = a.Hostname
-			}
-			execErr = fmt.Errorf("no exec agent connected for host '%s'. Connected agents: %v. The host agent may need to be updated to support remote execution. See /api/ai/agents for details", req.TargetName, hostnames)
-		}
-	}
+	// Note: Command execution is handled by the agentic loop after it detects approval.
+	// The loop will re-execute the tool with the approval_id, and the tool will
+	// check the approval status and execute if approved.
+	// This avoids double execution (once here, once in agentic loop).
 
 	response := map[string]interface{}{
-		"approved": true,
-		"request":  req,
-	}
-
-	if execResult != nil {
-		response["executed"] = true
-		response["result"] = map[string]interface{}{
-			"stdout":    execResult.Stdout,
-			"stderr":    execResult.Stderr,
-			"exit_code": execResult.ExitCode,
-		}
-		response["message"] = "Command approved and executed."
-	} else if execErr != nil {
-		response["executed"] = false
-		response["error"] = execErr.Error()
-		response["message"] = "Command approved but execution failed."
-	} else {
-		response["executed"] = false
-		response["message"] = "Command approved. No agent available for execution."
+		"approved":    true,
+		"request":     req,
+		"approval_id": req.ID,
+		"message":     "Command approved. The AI will now execute it.",
 	}
 
 	w.Header().Set("Content-Type", "application/json")

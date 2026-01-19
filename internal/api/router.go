@@ -28,8 +28,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/mcp"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/opencode"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
@@ -200,8 +200,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 // setupRoutes configures all routes
 func (r *Router) setupRoutes() {
 	// Create handlers
-	r.alertHandlers = NewAlertHandlers(r.monitor, r.wsHub)
-	r.notificationHandlers = NewNotificationHandlers(r.monitor)
+	r.alertHandlers = NewAlertHandlers(NewAlertMonitorWrapper(r.monitor), r.wsHub)
+	r.notificationHandlers = NewNotificationHandlers(NewNotificationMonitorWrapper(r.monitor))
 	r.notificationQueueHandlers = NewNotificationQueueHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	dockerMetadataHandler := NewDockerMetadataHandler(r.config.DataPath)
@@ -1718,13 +1718,13 @@ func (r *Router) Handler() http.Handler {
 func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	r.monitor = m
 	if r.alertHandlers != nil {
-		r.alertHandlers.SetMonitor(m)
+		r.alertHandlers.SetMonitor(NewAlertMonitorWrapper(m))
 	}
 	if r.configHandlers != nil {
 		r.configHandlers.SetMonitor(m)
 	}
 	if r.notificationHandlers != nil {
-		r.notificationHandlers.SetMonitor(m)
+		r.notificationHandlers.SetMonitor(NewNotificationMonitorWrapper(m))
 	}
 	if r.dockerAgentHandlers != nil {
 		r.dockerAgentHandlers.SetMonitor(m)
@@ -1972,19 +1972,23 @@ func (r *Router) StartOpenCodeAI(ctx context.Context) {
 	// Wire up MCP tool providers so AI can access real data
 	r.wireOpenCodeProviders()
 
-	// Wire up OpenCode patrol if UseOpenCode is enabled
+	// Wire up AI patrol if AI is running
 	aiCfg := r.aiHandler.GetAIConfig()
-	if aiCfg != nil && aiCfg.UseOpenCode && r.aiHandler.IsRunning() {
+	if aiCfg != nil && r.aiHandler.IsRunning() {
 		service := r.aiHandler.GetService()
 		if service != nil {
-			// Create OpenCode patrol service
-			ocPatrol := opencode.NewPatrolService(service)
+			// Create patrol service - need concrete type for patrol
+			chatService, ok := service.(*chat.Service)
+			if !ok {
+				log.Warn().Msg("AI service is not a *chat.Service, patrol disabled")
+			}
+			aiPatrol := chat.NewPatrolService(chatService)
 
 			// Wire to existing patrol service
 			if r.aiSettingsHandler != nil {
 				if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
-					patrolSvc.SetOpenCodePatrol(ocPatrol, true)
-					log.Info().Msg("OpenCode patrol integration enabled")
+					patrolSvc.SetChatPatrol(aiPatrol, true)
+					log.Info().Msg("AI patrol integration enabled")
 				}
 			}
 		}
@@ -2005,7 +2009,7 @@ func (r *Router) wireOpenCodeProviders() {
 	// Wire alert provider
 	if r.monitor != nil {
 		if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
-			alertAdapter := mcp.NewAlertManagerMCPAdapter(alertManager)
+			alertAdapter := tools.NewAlertManagerMCPAdapter(alertManager)
 			if alertAdapter != nil {
 				service.SetAlertProvider(alertAdapter)
 				log.Debug().Msg("OpenCode: Alert provider wired")
@@ -2034,7 +2038,7 @@ func (r *Router) wireOpenCodeProviders() {
 
 	// Wire storage provider
 	if r.monitor != nil {
-		storageAdapter := mcp.NewStorageMCPAdapter(r.monitor)
+		storageAdapter := tools.NewStorageMCPAdapter(r.monitor)
 		if storageAdapter != nil {
 			service.SetStorageProvider(storageAdapter)
 			log.Debug().Msg("OpenCode: Storage provider wired")
@@ -2043,7 +2047,7 @@ func (r *Router) wireOpenCodeProviders() {
 
 	// Wire backup provider
 	if r.monitor != nil {
-		backupAdapter := mcp.NewBackupMCPAdapter(r.monitor)
+		backupAdapter := tools.NewBackupMCPAdapter(r.monitor)
 		if backupAdapter != nil {
 			service.SetBackupProvider(backupAdapter)
 			log.Debug().Msg("OpenCode: Backup provider wired")
@@ -2052,7 +2056,7 @@ func (r *Router) wireOpenCodeProviders() {
 
 	// Wire disk health provider
 	if r.monitor != nil {
-		diskHealthAdapter := mcp.NewDiskHealthMCPAdapter(r.monitor)
+		diskHealthAdapter := tools.NewDiskHealthMCPAdapter(r.monitor)
 		if diskHealthAdapter != nil {
 			service.SetDiskHealthProvider(diskHealthAdapter)
 			log.Debug().Msg("OpenCode: Disk health provider wired")
@@ -2061,7 +2065,7 @@ func (r *Router) wireOpenCodeProviders() {
 
 	// Wire updates provider for Docker container updates
 	if r.monitor != nil {
-		updatesAdapter := mcp.NewUpdatesMCPAdapter(r.monitor, &updatesConfigWrapper{cfg: r.config})
+		updatesAdapter := tools.NewUpdatesMCPAdapter(r.monitor, &updatesConfigWrapper{cfg: r.config})
 		if updatesAdapter != nil {
 			service.SetUpdatesProvider(updatesAdapter)
 			log.Debug().Msg("OpenCode: Updates provider wired")
@@ -2071,7 +2075,7 @@ func (r *Router) wireOpenCodeProviders() {
 	// Wire metrics history provider
 	if r.monitor != nil {
 		if metricsHistory := r.monitor.GetMetricsHistory(); metricsHistory != nil {
-			metricsAdapter := mcp.NewMetricsHistoryMCPAdapter(
+			metricsAdapter := tools.NewMetricsHistoryMCPAdapter(
 				r.monitor,
 				&metricsSourceWrapper{history: metricsHistory},
 			)
@@ -2086,7 +2090,7 @@ func (r *Router) wireOpenCodeProviders() {
 	if r.aiSettingsHandler != nil {
 		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
 			if baselineStore := patrolSvc.GetBaselineStore(); baselineStore != nil {
-				baselineAdapter := mcp.NewBaselineMCPAdapter(&baselineSourceWrapper{store: baselineStore})
+				baselineAdapter := tools.NewBaselineMCPAdapter(&baselineSourceWrapper{store: baselineStore})
 				if baselineAdapter != nil {
 					service.SetBaselineProvider(baselineAdapter)
 					log.Debug().Msg("OpenCode: Baseline provider wired")
@@ -2099,7 +2103,7 @@ func (r *Router) wireOpenCodeProviders() {
 	if r.aiSettingsHandler != nil {
 		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
 			if patternDetector := patrolSvc.GetPatternDetector(); patternDetector != nil {
-				patternAdapter := mcp.NewPatternMCPAdapter(
+				patternAdapter := tools.NewPatternMCPAdapter(
 					&patternSourceWrapper{detector: patternDetector},
 					r.monitor,
 				)
@@ -2114,7 +2118,7 @@ func (r *Router) wireOpenCodeProviders() {
 	// Wire findings manager
 	if r.aiSettingsHandler != nil {
 		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
-			findingsManagerAdapter := mcp.NewFindingsManagerMCPAdapter(patrolSvc)
+			findingsManagerAdapter := tools.NewFindingsManagerMCPAdapter(patrolSvc)
 			if findingsManagerAdapter != nil {
 				service.SetFindingsManager(findingsManagerAdapter)
 				log.Debug().Msg("OpenCode: Findings manager wired")
@@ -2124,7 +2128,7 @@ func (r *Router) wireOpenCodeProviders() {
 
 	// Wire metadata updater
 	if r.aiSettingsHandler != nil {
-		metadataAdapter := mcp.NewMetadataUpdaterMCPAdapter(r.aiSettingsHandler.GetAIService())
+		metadataAdapter := tools.NewMetadataUpdaterMCPAdapter(r.aiSettingsHandler.GetAIService())
 		if metadataAdapter != nil {
 			service.SetMetadataUpdater(metadataAdapter)
 			log.Debug().Msg("OpenCode: Metadata updater wired")
@@ -2134,34 +2138,34 @@ func (r *Router) wireOpenCodeProviders() {
 	log.Info().Msg("OpenCode MCP tool providers wired")
 }
 
-// metricsSourceWrapper wraps monitoring.MetricsHistory to implement mcp.MetricsSource
+// metricsSourceWrapper wraps monitoring.MetricsHistory to implement tools.MetricsSource
 type metricsSourceWrapper struct {
 	history *monitoring.MetricsHistory
 }
 
-func (w *metricsSourceWrapper) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []mcp.RawMetricPoint {
+func (w *metricsSourceWrapper) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []tools.RawMetricPoint {
 	points := w.history.GetGuestMetrics(guestID, metricType, duration)
 	return convertMetricPoints(points)
 }
 
-func (w *metricsSourceWrapper) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []mcp.RawMetricPoint {
+func (w *metricsSourceWrapper) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []tools.RawMetricPoint {
 	points := w.history.GetNodeMetrics(nodeID, metricType, duration)
 	return convertMetricPoints(points)
 }
 
-func (w *metricsSourceWrapper) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]mcp.RawMetricPoint {
+func (w *metricsSourceWrapper) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]tools.RawMetricPoint {
 	metricsMap := w.history.GetAllGuestMetrics(guestID, duration)
-	result := make(map[string][]mcp.RawMetricPoint, len(metricsMap))
+	result := make(map[string][]tools.RawMetricPoint, len(metricsMap))
 	for key, points := range metricsMap {
 		result[key] = convertMetricPoints(points)
 	}
 	return result
 }
 
-func convertMetricPoints(points []monitoring.MetricPoint) []mcp.RawMetricPoint {
-	result := make([]mcp.RawMetricPoint, len(points))
+func convertMetricPoints(points []monitoring.MetricPoint) []tools.RawMetricPoint {
+	result := make([]tools.RawMetricPoint, len(points))
 	for i, p := range points {
-		result[i] = mcp.RawMetricPoint{
+		result[i] = tools.RawMetricPoint{
 			Value:     p.Value,
 			Timestamp: p.Timestamp,
 		}
@@ -2169,7 +2173,7 @@ func convertMetricPoints(points []monitoring.MetricPoint) []mcp.RawMetricPoint {
 	return result
 }
 
-// baselineSourceWrapper wraps baseline.Store to implement mcp.BaselineSource
+// baselineSourceWrapper wraps baseline.Store to implement tools.BaselineSource
 type baselineSourceWrapper struct {
 	store *ai.BaselineStore
 }
@@ -2185,7 +2189,7 @@ func (w *baselineSourceWrapper) GetBaseline(resourceID, metric string) (mean, st
 	return baseline.Mean, baseline.StdDev, baseline.SampleCount, true
 }
 
-func (w *baselineSourceWrapper) GetAllBaselines() map[string]map[string]mcp.BaselineData {
+func (w *baselineSourceWrapper) GetAllBaselines() map[string]map[string]tools.BaselineData {
 	if w.store == nil {
 		return nil
 	}
@@ -2194,7 +2198,7 @@ func (w *baselineSourceWrapper) GetAllBaselines() map[string]map[string]mcp.Base
 		return nil
 	}
 
-	result := make(map[string]map[string]mcp.BaselineData)
+	result := make(map[string]map[string]tools.BaselineData)
 	for key, flat := range allFlat {
 		// key format is "resourceID:metric"
 		parts := strings.SplitN(key, ":", 2)
@@ -2204,9 +2208,9 @@ func (w *baselineSourceWrapper) GetAllBaselines() map[string]map[string]mcp.Base
 		resourceID, metric := parts[0], parts[1]
 
 		if result[resourceID] == nil {
-			result[resourceID] = make(map[string]mcp.BaselineData)
+			result[resourceID] = make(map[string]tools.BaselineData)
 		}
-		result[resourceID][metric] = mcp.BaselineData{
+		result[resourceID][metric] = tools.BaselineData{
 			Mean:        flat.Mean,
 			StdDev:      flat.StdDev,
 			SampleCount: flat.Samples,
@@ -2215,12 +2219,12 @@ func (w *baselineSourceWrapper) GetAllBaselines() map[string]map[string]mcp.Base
 	return result
 }
 
-// patternSourceWrapper wraps patterns.Detector to implement mcp.PatternSource
+// patternSourceWrapper wraps patterns.Detector to implement tools.PatternSource
 type patternSourceWrapper struct {
 	detector *ai.PatternDetector
 }
 
-func (w *patternSourceWrapper) GetPatterns() []mcp.PatternData {
+func (w *patternSourceWrapper) GetPatterns() []tools.PatternData {
 	if w.detector == nil {
 		return nil
 	}
@@ -2230,12 +2234,12 @@ func (w *patternSourceWrapper) GetPatterns() []mcp.PatternData {
 		return nil
 	}
 
-	result := make([]mcp.PatternData, 0, len(patterns))
+	result := make([]tools.PatternData, 0, len(patterns))
 	for _, p := range patterns {
 		if p == nil {
 			continue
 		}
-		result = append(result, mcp.PatternData{
+		result = append(result, tools.PatternData{
 			ResourceID:  p.ResourceID,
 			PatternType: string(p.EventType),
 			Description: fmt.Sprintf("%s pattern with %d occurrences", p.EventType, p.Occurrences),
@@ -2246,7 +2250,7 @@ func (w *patternSourceWrapper) GetPatterns() []mcp.PatternData {
 	return result
 }
 
-func (w *patternSourceWrapper) GetPredictions() []mcp.PredictionData {
+func (w *patternSourceWrapper) GetPredictions() []tools.PredictionData {
 	if w.detector == nil {
 		return nil
 	}
@@ -2256,9 +2260,9 @@ func (w *patternSourceWrapper) GetPredictions() []mcp.PredictionData {
 		return nil
 	}
 
-	result := make([]mcp.PredictionData, 0, len(predictions))
+	result := make([]tools.PredictionData, 0, len(predictions))
 	for _, p := range predictions {
-		result = append(result, mcp.PredictionData{
+		result = append(result, tools.PredictionData{
 			ResourceID:     p.ResourceID,
 			IssueType:      string(p.EventType),
 			PredictedTime:  p.PredictedAt,
@@ -2269,7 +2273,7 @@ func (w *patternSourceWrapper) GetPredictions() []mcp.PredictionData {
 	return result
 }
 
-// updatesConfigWrapper wraps config.Config to implement mcp.UpdatesConfig
+// updatesConfigWrapper wraps config.Config to implement tools.UpdatesConfig
 type updatesConfigWrapper struct {
 	cfg *config.Config
 }

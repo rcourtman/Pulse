@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/mcp"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -155,7 +155,7 @@ func (m *MCPAgentProfileManager) AssignProfile(_ context.Context, agentID, profi
 	return profile.Name, nil
 }
 
-func (m *MCPAgentProfileManager) GetAgentScope(_ context.Context, agentID string) (*mcp.AgentScope, error) {
+func (m *MCPAgentProfileManager) GetAgentScope(_ context.Context, agentID string) (*tools.AgentScope, error) {
 	if err := m.requireLicense(); err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (m *MCPAgentProfileManager) GetAgentScope(_ context.Context, agentID string
 
 	for _, profile := range profiles {
 		if profile.ID == assignment.ProfileID {
-			return &mcp.AgentScope{
+			return &tools.AgentScope{
 				AgentID:        agentID,
 				ProfileID:      profile.ID,
 				ProfileName:    profile.Name,
