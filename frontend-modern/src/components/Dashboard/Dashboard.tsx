@@ -960,18 +960,16 @@ export function Dashboard(props: DashboardProps) {
         <ProxmoxSectionNav current="overview" />
       </Show>
 
-      {/* Unified Node Selector - hidden in kiosk mode */}
-      <Show when={!kioskMode()}>
-        <UnifiedNodeSelector
-          currentTab="dashboard"
-          globalTemperatureMonitoringEnabled={ws.state.temperatureMonitoringEnabled}
-          onNodeSelect={handleNodeSelect}
-          nodes={props.nodes}
-          filteredVms={filteredGuests().filter((g) => g.type === 'qemu')}
-          filteredContainers={filteredGuests().filter((g) => g.type === 'lxc' || g.type === 'oci')}
-          searchTerm={search()}
-        />
-      </Show>
+      {/* Unified Node Selector - always visible (this is the main dashboard content) */}
+      <UnifiedNodeSelector
+        currentTab="dashboard"
+        globalTemperatureMonitoringEnabled={ws.state.temperatureMonitoringEnabled}
+        onNodeSelect={handleNodeSelect}
+        nodes={props.nodes}
+        filteredVms={filteredGuests().filter((g) => g.type === 'qemu')}
+        filteredContainers={filteredGuests().filter((g) => g.type === 'lxc' || g.type === 'oci')}
+        searchTerm={search()}
+      />
 
       {/* Dashboard Filter - hidden in kiosk mode */}
       <Show when={!kioskMode()}>
