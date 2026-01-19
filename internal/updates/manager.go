@@ -333,7 +333,7 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 	info := &UpdateInfo{
 		Available:      latestVer.IsNewerThan(currentVer),
 		CurrentVersion: currentInfo.Version,
-		LatestVersion:  release.TagName,
+		LatestVersion:  strings.TrimPrefix(release.TagName, "v"),
 		ReleaseNotes:   release.Body,
 		ReleaseDate:    release.PublishedAt,
 		DownloadURL:    downloadURL,

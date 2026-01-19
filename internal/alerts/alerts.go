@@ -4800,16 +4800,15 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 }
 
 // BuildGuestKey constructs a unique key for a guest from instance, node, and VMID.
+// Uses the canonical format: instance:node:vmid
+// This matches the format used by makeGuestID in the monitoring package.
 func BuildGuestKey(instance, node string, vmid int) string {
 	instance = strings.TrimSpace(instance)
 	node = strings.TrimSpace(node)
 	if instance == "" {
 		instance = node
 	}
-	if instance == node {
-		return fmt.Sprintf("%s-%d", node, vmid)
-	}
-	return fmt.Sprintf("%s-%s-%d", instance, node, vmid)
+	return fmt.Sprintf("%s:%s:%d", instance, node, vmid)
 }
 
 // CheckSnapshotsForInstance evaluates guest snapshots for age-based alerts.
