@@ -44,6 +44,8 @@ import MonitorIcon from 'lucide-solid/icons/monitor';
 import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import NetworkIcon from 'lucide-solid/icons/network';
+import Maximize2Icon from 'lucide-solid/icons/maximize-2';
+import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
 import { UpdateProgressModal } from './components/UpdateProgressModal';
@@ -53,7 +55,7 @@ import { AIStatusIndicator } from './components/AI/AIStatusIndicator';
 import { aiChatStore } from './stores/aiChat';
 import { useResourcesAsLegacy } from './hooks/useResources';
 import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
-import { initKioskMode } from './utils/url';
+import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode } from './utils/url';
 
 
 const Dashboard = lazy(() =>
@@ -1041,6 +1043,23 @@ function AppLayout(props: {
 
   const [seenPlatforms, setSeenPlatforms] = createSignal<Record<string, boolean>>(readSeenPlatforms());
 
+  // Reactive kiosk mode state
+  const [kioskMode, setKioskModeSignal] = createSignal(isKioskMode());
+
+  // Subscribe to kiosk mode changes from other sources (like URL params)
+  onMount(() => {
+    const unsubscribe = subscribeToKioskMode((enabled) => {
+      setKioskModeSignal(enabled);
+    });
+    onCleanup(unsubscribe);
+  });
+
+  const toggleKioskMode = () => {
+    const newValue = !kioskMode();
+    setKioskMode(newValue);
+    setKioskModeSignal(newValue);
+  };
+
   const persistSeenPlatforms = (map: Record<string, boolean>) => {
     if (typeof window === 'undefined') return;
     try {
@@ -1288,6 +1307,27 @@ function AppLayout(props: {
             <div class="flex items-center gap-2">
               {/* AI Patrol Status Indicator */}
               <AIStatusIndicator />
+              {/* Kiosk Mode Toggle */}
+              <button
+                type="button"
+                onClick={toggleKioskMode}
+                class={`group relative flex h-7 items-center justify-center gap-1 rounded-full px-2 text-xs transition-all duration-500 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${kioskMode()
+                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                title={kioskMode() ? 'Exit kiosk mode (show navigation)' : 'Enter kiosk mode (hide navigation)'}
+                aria-label={kioskMode() ? 'Exit kiosk mode' : 'Enter kiosk mode'}
+                aria-pressed={kioskMode()}
+              >
+                <Show when={kioskMode()} fallback={<Maximize2Icon class="h-3 w-3 flex-shrink-0" />}>
+                  <Minimize2Icon class="h-3 w-3 flex-shrink-0" />
+                </Show>
+                <span
+                  class="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 ease-in-out group-hover:ml-1 group-hover:max-w-[80px] group-hover:opacity-100 group-focus-visible:ml-1 group-focus-visible:max-w-[80px] group-focus-visible:opacity-100"
+                >
+                  {kioskMode() ? 'Exit' : 'Kiosk'}
+                </span>
+              </button>
               <Show when={props.proxyAuthInfo()?.username}>
                 <span class="text-xs px-2 py-1 text-gray-600 dark:text-gray-400">
                   {props.proxyAuthInfo()?.username}

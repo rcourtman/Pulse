@@ -1,6 +1,23 @@
 const FALLBACK_BASE_URL = 'http://localhost:7655';
 const KIOSK_MODE_KEY = 'pulse_kiosk_mode';
 
+// Reactive kiosk mode tracking - listeners are notified when kiosk mode changes
+type KioskListener = (enabled: boolean) => void;
+const kioskListeners = new Set<KioskListener>();
+
+function notifyKioskListeners(enabled: boolean): void {
+  kioskListeners.forEach(listener => listener(enabled));
+}
+
+/**
+ * Subscribe to kiosk mode changes.
+ * Returns an unsubscribe function.
+ */
+export function subscribeToKioskMode(listener: KioskListener): () => void {
+  kioskListeners.add(listener);
+  return () => kioskListeners.delete(listener);
+}
+
 /**
  * Check and persist kiosk mode from URL parameters.
  * When ?kiosk=1 or ?kiosk=true is in the URL, this stores the preference
@@ -46,6 +63,25 @@ export function isKioskMode(): boolean {
     return kioskParam === '1' || kioskParam === 'true';
   } catch {
     return false;
+  }
+}
+
+/**
+ * Set kiosk mode on or off.
+ * Updates sessionStorage and notifies reactive listeners.
+ */
+export function setKioskMode(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    if (enabled) {
+      window.sessionStorage.setItem(KIOSK_MODE_KEY, 'true');
+    } else {
+      window.sessionStorage.removeItem(KIOSK_MODE_KEY);
+    }
+    notifyKioskListeners(enabled);
+  } catch {
+    // Ignore storage errors
   }
 }
 
