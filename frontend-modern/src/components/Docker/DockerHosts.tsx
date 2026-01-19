@@ -21,7 +21,7 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { MonitoringAPI } from '@/api/monitoring';
 import { showSuccess, showError, showToast } from '@/utils/toast';
-import { isKioskMode } from '@/utils/url';
+import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 
 type DockerMetadataRecord = Record<string, DockerMetadata>;
 type DockerHostMetadataRecord = Record<string, DockerHostMetadata>;
@@ -98,7 +98,15 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
   const hasSwarmClustersDetected = createMemo(() => hasSwarmClusters(sortedHosts()));
 
   // Kiosk mode - hide filter panel for clean dashboard display
-  const kioskMode = createMemo(() => isKioskMode());
+  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
+
+  // Subscribe to kiosk mode changes from toggle button
+  onMount(() => {
+    const unsubscribe = subscribeToKioskMode((enabled) => {
+      setKioskMode(enabled);
+    });
+    return unsubscribe;
+  });
 
   const clampPercent = (value: number | undefined | null) => {
     if (value === undefined || value === null || Number.isNaN(value)) return 0;

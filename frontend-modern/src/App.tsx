@@ -1263,46 +1263,48 @@ function AppLayout(props: {
 
   return (
     <div class={`pulse-shell ${layoutStore.isFullWidth() ? 'pulse-shell--full-width' : ''}`}>
-      {/* Header */}
-      <div class="header mb-3 flex items-center justify-between gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0">
-        <div class="flex items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
-          <div class="flex items-center gap-2">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 256 256"
-              xmlns="http://www.w3.org/2000/svg"
-              class={`pulse-logo ${props.connected() && props.dataUpdated() ? 'animate-pulse-logo' : ''}`}
-            >
-              <title>Pulse Logo</title>
-              <circle
-                class="pulse-bg fill-blue-600 dark:fill-blue-500"
-                cx="128"
-                cy="128"
-                r="122"
-              />
-              <circle
-                class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]"
-                cx="128"
-                cy="128"
-                r="84"
-              />
-              <circle
-                class="pulse-center fill-white dark:fill-[#dbeafe]"
-                cx="128"
-                cy="128"
-                r="26"
-              />
-            </svg>
-            <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
-            <Show when={props.versionInfo()?.channel === 'rc'}>
-              <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
-                RC
-              </span>
-            </Show>
+      {/* Header - simplified in kiosk mode */}
+      <div class={`header mb-3 flex items-center gap-2 ${kioskMode() ? 'justify-end' : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'}`}>
+        <Show when={!kioskMode()}>
+          <div class="flex items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
+            <div class="flex items-center gap-2">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 256 256"
+                xmlns="http://www.w3.org/2000/svg"
+                class={`pulse-logo ${props.connected() && props.dataUpdated() ? 'animate-pulse-logo' : ''}`}
+              >
+                <title>Pulse Logo</title>
+                <circle
+                  class="pulse-bg fill-blue-600 dark:fill-blue-500"
+                  cx="128"
+                  cy="128"
+                  r="122"
+                />
+                <circle
+                  class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]"
+                  cx="128"
+                  cy="128"
+                  r="84"
+                />
+                <circle
+                  class="pulse-center fill-white dark:fill-[#dbeafe]"
+                  cx="128"
+                  cy="128"
+                  r="26"
+                />
+              </svg>
+              <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
+              <Show when={props.versionInfo()?.channel === 'rc'}>
+                <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
+                  RC
+                </span>
+              </Show>
+            </div>
           </div>
-        </div>
-        <div class="header-controls flex items-center gap-2 justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end">
+        </Show>
+        <div class={`header-controls flex items-center gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}>
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
               {/* AI Patrol Status Indicator */}
@@ -1312,8 +1314,8 @@ function AppLayout(props: {
                 type="button"
                 onClick={toggleKioskMode}
                 class={`group relative flex h-7 items-center justify-center gap-1 rounded-full px-2 text-xs transition-all duration-500 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${kioskMode()
-                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
                   }`}
                 title={kioskMode() ? 'Exit kiosk mode (show navigation)' : 'Enter kiosk mode (hide navigation)'}
                 aria-label={kioskMode() ? 'Exit kiosk mode' : 'Enter kiosk mode'}
@@ -1370,56 +1372,18 @@ function AppLayout(props: {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div
-        class="tabs mb-2 flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-gray-300 dark:border-gray-700 scrollbar-hide"
-        role="tablist"
-        aria-label="Primary navigation"
-      >
-        <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
-          <For each={platformTabs()}>
-            {(platform) => {
-              const isActive = () => getActiveTab() === platform.id;
-              const disabled = () => !platform.enabled;
-              const baseClasses =
-                'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
-
-              const className = () => {
-                if (isActive()) {
-                  return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
-                }
-                if (disabled()) {
-                  return `${baseClasses} cursor-not-allowed text-gray-400 dark:text-gray-600 opacity-70 bg-gray-100/40 dark:bg-gray-800/40`;
-                }
-                return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
-              };
-
-              const title = () =>
-                disabled()
-                  ? `${platform.label} is not configured yet. Click to open settings.`
-                  : platform.tooltip;
-
-              return (
-                <div
-                  class={className()}
-                  role="tab"
-                  aria-disabled={disabled()}
-                  onClick={() => handlePlatformClick(platform)}
-                  title={title()}
-                >
-                  {platform.icon}
-                  <span class="hidden xs:inline">{platform.label}</span>
-                  <span class="xs:hidden">{platform.label.charAt(0)}</span>
-                </div>
-              );
-            }}
-          </For>
-        </div>
-        <div class="flex items-end gap-1 ml-auto" role="group" aria-label="System">
-          <div class="flex items-end gap-1 pl-1 sm:pl-4">
-            <For each={utilityTabs()}>
-              {(tab) => {
-                const isActive = () => getActiveTab() === tab.id;
+      {/* Tabs - hidden in kiosk mode */}
+      <Show when={!kioskMode()}>
+        <div
+          class="tabs mb-2 flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-gray-300 dark:border-gray-700 scrollbar-hide"
+          role="tablist"
+          aria-label="Primary navigation"
+        >
+          <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
+            <For each={platformTabs()}>
+              {(platform) => {
+                const isActive = () => getActiveTab() === platform.id;
+                const disabled = () => !platform.enabled;
                 const baseClasses =
                   'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
@@ -1427,55 +1391,95 @@ function AppLayout(props: {
                   if (isActive()) {
                     return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
                   }
+                  if (disabled()) {
+                    return `${baseClasses} cursor-not-allowed text-gray-400 dark:text-gray-600 opacity-70 bg-gray-100/40 dark:bg-gray-800/40`;
+                  }
                   return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
                 };
+
+                const title = () =>
+                  disabled()
+                    ? `${platform.label} is not configured yet. Click to open settings.`
+                    : platform.tooltip;
 
                 return (
                   <div
                     class={className()}
                     role="tab"
-                    aria-disabled={false}
-                    onClick={() => handleUtilityClick(tab)}
-                    title={tab.tooltip}
+                    aria-disabled={disabled()}
+                    onClick={() => handlePlatformClick(platform)}
+                    title={title()}
                   >
-                    {tab.icon}
-                    <span class="flex items-center gap-1">
-                      <span class="hidden xs:inline">{tab.label}</span>
-                      <span class="xs:hidden">{tab.label.charAt(0)}</span>
-                      {tab.id === 'alerts' && (() => {
-                        const total = tab.count ?? 0;
-                        if (total <= 0) {
-                          return null;
-                        }
-                        return (
-                          <span class="inline-flex items-center gap-1">
-                            {tab.breakdown && tab.breakdown.critical > 0 && (
-                              <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
-                                {tab.breakdown.critical}
-                              </span>
-                            )}
-                            {tab.breakdown && tab.breakdown.warning > 0 && (
-                              <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500/80 rounded-full">
-                                {tab.breakdown.warning}
-                              </span>
-                            )}
-                          </span>
-                        );
-                      })()}
-                    </span>
-                    <Show when={tab.badge === 'update'}>
-                      <span class="ml-1 flex items-center">
-                        <span class="sr-only">Update available</span>
-                        <span aria-hidden="true" class="block h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
-                      </span>
-                    </Show>
+                    {platform.icon}
+                    <span class="hidden xs:inline">{platform.label}</span>
+                    <span class="xs:hidden">{platform.label.charAt(0)}</span>
                   </div>
                 );
               }}
             </For>
           </div>
+          <div class="flex items-end gap-1 ml-auto" role="group" aria-label="System">
+            <div class="flex items-end gap-1 pl-1 sm:pl-4">
+              <For each={utilityTabs()}>
+                {(tab) => {
+                  const isActive = () => getActiveTab() === tab.id;
+                  const baseClasses =
+                    'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
+
+                  const className = () => {
+                    if (isActive()) {
+                      return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
+                    }
+                    return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+                  };
+
+                  return (
+                    <div
+                      class={className()}
+                      role="tab"
+                      aria-disabled={false}
+                      onClick={() => handleUtilityClick(tab)}
+                      title={tab.tooltip}
+                    >
+                      {tab.icon}
+                      <span class="flex items-center gap-1">
+                        <span class="hidden xs:inline">{tab.label}</span>
+                        <span class="xs:hidden">{tab.label.charAt(0)}</span>
+                        {tab.id === 'alerts' && (() => {
+                          const total = tab.count ?? 0;
+                          if (total <= 0) {
+                            return null;
+                          }
+                          return (
+                            <span class="inline-flex items-center gap-1">
+                              {tab.breakdown && tab.breakdown.critical > 0 && (
+                                <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
+                                  {tab.breakdown.critical}
+                                </span>
+                              )}
+                              {tab.breakdown && tab.breakdown.warning > 0 && (
+                                <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500/80 rounded-full">
+                                  {tab.breakdown.warning}
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })()}
+                      </span>
+                      <Show when={tab.badge === 'update'}>
+                        <span class="ml-1 flex items-center">
+                          <span class="sr-only">Update available</span>
+                          <span aria-hidden="true" class="block h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                        </span>
+                      </Show>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
+          </div>
         </div>
-      </div>
+      </Show>
 
       {/* Main Content */}
       <main
@@ -1489,24 +1493,26 @@ function AppLayout(props: {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer class="text-center text-xs text-gray-500 dark:text-gray-400 py-4">
-        Pulse | Version:{' '}
-        <a
-          href="https://github.com/rcourtman/Pulse/releases"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          {props.versionInfo()?.version || 'loading...'}
-        </a>
-        {props.versionInfo()?.isDevelopment && ' (Development)'}
-        {props.versionInfo()?.isDocker && ' - Docker'}
-        <Show when={props.lastUpdateText()}>
-          <span class="mx-2">|</span>
-          <span>Last refresh: {props.lastUpdateText()}</span>
-        </Show>
-      </footer>
+      {/* Footer - hidden in kiosk mode */}
+      <Show when={!kioskMode()}>
+        <footer class="text-center text-xs text-gray-500 dark:text-gray-400 py-4">
+          Pulse | Version:{' '}
+          <a
+            href="https://github.com/rcourtman/Pulse/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {props.versionInfo()?.version || 'loading...'}
+          </a>
+          {props.versionInfo()?.isDevelopment && ' (Development)'}
+          {props.versionInfo()?.isDocker && ' - Docker'}
+          <Show when={props.lastUpdateText()}>
+            <span class="mx-2">|</span>
+            <span>Last refresh: {props.lastUpdateText()}</span>
+          </Show>
+        </footer>
+      </Show>
     </div>
   );
 }

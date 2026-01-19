@@ -25,7 +25,7 @@ import { HostMetadataAPI, type HostMetadata } from '@/api/hostMetadata';
 import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
-import { isKioskMode } from '@/utils/url';
+import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 
 // Column definition for hosts table
 export interface HostColumnDef {
@@ -652,7 +652,15 @@ export const HostsOverview: Component = () => {
   const isColVisible = (colId: string) => visibleColumnIds().includes(colId);
 
   // Kiosk mode - hide filter panel for clean dashboard display
-  const kioskMode = createMemo(() => isKioskMode());
+  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
+
+  // Subscribe to kiosk mode changes from toggle button
+  onMount(() => {
+    const unsubscribe = subscribeToKioskMode((enabled) => {
+      setKioskMode(enabled);
+    });
+    return unsubscribe;
+  });
 
   // Host metadata management (for custom URLs)
   const [hostMetadata, setHostMetadata] = createSignal<Record<string, HostMetadata>>({});

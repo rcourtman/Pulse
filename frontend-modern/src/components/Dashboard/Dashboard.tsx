@@ -24,7 +24,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { getBackupInfo } from '@/utils/format';
 import { aiChatStore } from '@/stores/aiChat';
-import { isKioskMode } from '@/utils/url';
+import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -213,8 +213,17 @@ export function Dashboard(props: DashboardProps) {
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
 
   // Kiosk mode - hide filter panel for clean dashboard display
-  // Usage: Add ?kiosk=1 to URL (persists across navigation via sessionStorage)
-  const kioskMode = createMemo(() => isKioskMode());
+  // Usage: Add ?kiosk=1 to URL or use the toggle button in the header
+  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
+
+  // Subscribe to kiosk mode changes from toggle button or URL params
+  onMount(() => {
+    const unsubscribe = subscribeToKioskMode((enabled) => {
+      setKioskMode(enabled);
+    });
+    // Cleanup on unmount would go here, but Dashboard is always mounted
+    return unsubscribe;
+  });
 
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
@@ -951,16 +960,18 @@ export function Dashboard(props: DashboardProps) {
         <ProxmoxSectionNav current="overview" />
       </Show>
 
-      {/* Unified Node Selector */}
-      <UnifiedNodeSelector
-        currentTab="dashboard"
-        globalTemperatureMonitoringEnabled={ws.state.temperatureMonitoringEnabled}
-        onNodeSelect={handleNodeSelect}
-        nodes={props.nodes}
-        filteredVms={filteredGuests().filter((g) => g.type === 'qemu')}
-        filteredContainers={filteredGuests().filter((g) => g.type === 'lxc' || g.type === 'oci')}
-        searchTerm={search()}
-      />
+      {/* Unified Node Selector - hidden in kiosk mode */}
+      <Show when={!kioskMode()}>
+        <UnifiedNodeSelector
+          currentTab="dashboard"
+          globalTemperatureMonitoringEnabled={ws.state.temperatureMonitoringEnabled}
+          onNodeSelect={handleNodeSelect}
+          nodes={props.nodes}
+          filteredVms={filteredGuests().filter((g) => g.type === 'qemu')}
+          filteredContainers={filteredGuests().filter((g) => g.type === 'lxc' || g.type === 'oci')}
+          searchTerm={search()}
+        />
+      </Show>
 
       {/* Dashboard Filter - hidden in kiosk mode */}
       <Show when={!kioskMode()}>
