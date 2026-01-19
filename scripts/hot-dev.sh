@@ -29,6 +29,8 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
+SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
+SCRIPT_MTIME=$(stat -c %Y "${SCRIPT_PATH}" 2>/dev/null || stat -f %m "${SCRIPT_PATH}")
 
 # --- Helper Functions ---
 
@@ -142,28 +144,7 @@ export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
 export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
 export ALLOWED_ORIGINS
 
-# Proxy Socket Detection
-HOST_PROXY_SOCKET="/mnt/pulse-proxy/pulse-sensor-proxy.sock"
-CONTAINER_PROXY_SOCKET="/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
-
-if [[ -z ${PULSE_SENSOR_PROXY_SOCKET:-} ]]; then
-    if [[ -S "${HOST_PROXY_SOCKET}" ]]; then
-        export PULSE_SENSOR_PROXY_SOCKET="${HOST_PROXY_SOCKET}"
-        log_info "Detected pulse-sensor-proxy socket at ${PULSE_SENSOR_PROXY_SOCKET}"
-    elif [[ -S "${CONTAINER_PROXY_SOCKET}" ]]; then
-        export PULSE_SENSOR_PROXY_SOCKET="${CONTAINER_PROXY_SOCKET}"
-        log_warn "Using container-local pulse-sensor-proxy socket at ${PULSE_SENSOR_PROXY_SOCKET}"
-        log_warn "Host proxy is missing; temperatures will not reach Pulse until it is reinstalled."
-    else
-        log_warn "No pulse-sensor-proxy socket detected. Temperatures will be unavailable."
-    fi
-else
-    if [[ ! -S "${PULSE_SENSOR_PROXY_SOCKET}" ]]; then
-        log_warn "Configured pulse-sensor-proxy socket not found at ${PULSE_SENSOR_PROXY_SOCKET}"
-    elif [[ "${PULSE_SENSOR_PROXY_SOCKET}" == "${CONTAINER_PROXY_SOCKET}" && ! -S "${HOST_PROXY_SOCKET}" ]]; then
-        log_warn "Using container-local proxy socket; reinstall host pulse-sensor-proxy for real telemetry."
-    fi
-fi
+# Note: pulse-sensor-proxy is deprecated. Temperature collection now uses host agents.
 
 EXTRA_CLEANUP_PORT=$((PULSE_DEV_API_PORT + 1))
 
@@ -217,13 +198,6 @@ pkill -x "pulse" 2>/dev/null || true
 sleep 1
 pkill -9 -x "pulse" 2>/dev/null || true
 
-# Kill any stale OpenCode sidecar processes
-# These accumulate when Pulse restarts without proper cleanup
-log_info "Cleaning up stale OpenCode processes..."
-pkill -f "opencode.*serve" 2>/dev/null || true
-sleep 1
-pkill -9 -f "opencode.*serve" 2>/dev/null || true
-
 kill_port "${FRONTEND_DEV_PORT}"
 kill_port "${PULSE_DEV_API_PORT}"
 kill_port "${EXTRA_CLEANUP_PORT}"
@@ -247,6 +221,16 @@ done
 set -o pipefail
 
 log_info "Ports are clean!"
+
+# Self-restart check
+check_script_change() {
+    local current_mtime
+    current_mtime=$(stat -c %Y "${SCRIPT_PATH}" 2>/dev/null || stat -f %m "${SCRIPT_PATH}")
+    if [[ "${current_mtime}" != "${SCRIPT_MTIME}" ]]; then
+        log_warn "hot-dev.sh script changed! Restarting..."
+        exec "$0" "$@"
+    fi
+}
 
 # --- Config Setup ---
 
@@ -299,13 +283,12 @@ fi
 FRONTEND_PORT=${PULSE_DEV_API_PORT}
 PORT=${PULSE_DEV_API_PORT}
 PULSE_DEV=true  # Enable development mode features (needed for admin bypass etc)
-PULSE_USE_OPENCODE=true  # Enable OpenCode AI backend for chat
 ALLOW_ADMIN_BYPASS=1  # Allow X-Admin-Bypass header in dev mode
 
 # Dev credentials: admin/admin (bcrypt hash of 'admin')
 PULSE_AUTH_USER="admin"
 PULSE_AUTH_PASS='$2a$12$j9/pl2RCHGVGvtv4wocrx.FGBczUw97ZAeO8im0.Ty.fXDGFOviWS'
-export FRONTEND_PORT PULSE_DEV_API_PORT PORT PULSE_DEV PULSE_USE_OPENCODE ALLOW_ADMIN_BYPASS PULSE_AUTH_USER PULSE_AUTH_PASS
+export FRONTEND_PORT PULSE_DEV_API_PORT PORT PULSE_DEV ALLOW_ADMIN_BYPASS PULSE_AUTH_USER PULSE_AUTH_PASS
 
 # Data Directory Setup
 if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
@@ -384,7 +367,17 @@ else
     fi
 fi
 
-./pulse &
+LOG_LEVEL=debug \
+FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
+PORT="${PULSE_DEV_API_PORT:-7655}" \
+PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
+PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
+ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
+PULSE_DEV="${PULSE_DEV:-true}" \
+PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
+PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
+./pulse >> /tmp/pulse-debug.log 2>&1 &
 BACKEND_PID=$!
 
 sleep 2
@@ -402,17 +395,17 @@ log_info "Starting backend health monitor..."
         sleep 10
         if ! pgrep -f "^\./pulse$" > /dev/null 2>&1; then
             log_warn "⚠️  Pulse died unexpectedly, restarting..."
-            FRONTEND_PORT=${PULSE_DEV_API_PORT} \
-            PORT=${PULSE_DEV_API_PORT} \
-            PULSE_DATA_DIR=${PULSE_DATA_DIR} \
-            PULSE_ENCRYPTION_KEY=${PULSE_ENCRYPTION_KEY} \
-            PULSE_USE_OPENCODE=${PULSE_USE_OPENCODE:-true} \
-            ALLOW_ADMIN_BYPASS=${ALLOW_ADMIN_BYPASS:-1} \
-            PULSE_DEV=${PULSE_DEV:-true} \
-            PULSE_AUTH_USER=${PULSE_AUTH_USER} \
-            PULSE_AUTH_PASS=${PULSE_AUTH_PASS} \
-            ALLOWED_ORIGINS=${ALLOWED_ORIGINS} \
-            ./pulse >> /opt/pulse/hotdev.log 2>&1 &
+            LOG_LEVEL=debug \
+            FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
+            PORT="${PULSE_DEV_API_PORT:-7655}" \
+            PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
+            PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
+            ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
+            PULSE_DEV="${PULSE_DEV:-true}" \
+            PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
+            PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
+            ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
+            ./pulse >> /tmp/pulse-debug.log 2>&1 &
             NEW_PID=$!
             sleep 2
             if kill -0 "$NEW_PID" 2>/dev/null; then
@@ -431,47 +424,63 @@ log_info "Starting backend file watcher..."
 (
     cd "${ROOT_DIR}"
     
+    restart_backend() {
+        log_info "Restarting backend..."
+        
+        OLD_PID=$(pgrep -f "^\./pulse$" || true)
+        if [[ -n "$OLD_PID" ]]; then
+            kill "$OLD_PID" 2>/dev/null || true
+            sleep 1
+            if kill -0 "$OLD_PID" 2>/dev/null; then
+                kill -9 "$OLD_PID" 2>/dev/null || true
+            fi
+        fi
+
+        LOG_LEVEL=debug \
+        FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
+        PORT="${PULSE_DEV_API_PORT:-7655}" \
+        PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
+        PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
+        ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
+        PULSE_DEV="${PULSE_DEV:-true}" \
+        PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
+        PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
+        ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
+        ./pulse >> /tmp/pulse-debug.log 2>&1 &
+        NEW_PID=$!
+        sleep 1
+
+        if kill -0 "$NEW_PID" 2>/dev/null; then
+            log_info "✓ Backend restarted (PID: $NEW_PID)"
+        else
+            log_error "✗ Backend failed to start! Check /opt/pulse/hotdev.log"
+        fi
+    }
+
     rebuild_backend() {
         local changed_file=$1
         echo ""
         log_info "🔄 Change detected: $(basename "$changed_file")"
         log_info "Rebuilding backend..."
 
-        if go build -o pulse ./cmd/pulse 2>&1 | grep -v "^#"; then
-            log_info "✓ Build successful, restarting backend..."
-
-            OLD_PID=$(pgrep -f "^\./pulse$" || true)
-            if [[ -n "$OLD_PID" ]]; then
-                kill "$OLD_PID" 2>/dev/null || true
-                sleep 1
-                if kill -0 "$OLD_PID" 2>/dev/null; then
-                    kill -9 "$OLD_PID" 2>/dev/null || true
-                fi
+        # Use the same build logic as the initial build
+        local build_success=0
+        PRO_MODULE_DIR="/opt/pulse-enterprise"
+        if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
+            log_info "Building Pro binary..."
+            if (cd "${PRO_MODULE_DIR}" && go build -buildvcs=false -o "${ROOT_DIR}/pulse" ./cmd/pulse-enterprise 2>&1 | grep -v "^#"); then
+                build_success=1
             fi
-
-            # Kill OpenCode sidecar - Pulse will spawn a fresh one
-            # This prevents stale sidecars with lost session context
-            pkill -f "opencode.*serve" 2>/dev/null || true
-
-            FRONTEND_PORT=${PULSE_DEV_API_PORT} \
-            PORT=${PULSE_DEV_API_PORT} \
-            PULSE_DATA_DIR=${PULSE_DATA_DIR} \
-            PULSE_ENCRYPTION_KEY=${PULSE_ENCRYPTION_KEY} \
-            PULSE_USE_OPENCODE=${PULSE_USE_OPENCODE:-true} \
-            ALLOW_ADMIN_BYPASS=${ALLOW_ADMIN_BYPASS:-1} \
-            PULSE_DEV=${PULSE_DEV:-true} \
-            PULSE_AUTH_USER=${PULSE_AUTH_USER} \
-            PULSE_AUTH_PASS=${PULSE_AUTH_PASS} \
-            ALLOWED_ORIGINS=${ALLOWED_ORIGINS} \
-            ./pulse >> /opt/pulse/hotdev.log 2>&1 &
-            NEW_PID=$!
-            sleep 1
-
-            if kill -0 "$NEW_PID" 2>/dev/null; then
-                log_info "✓ Backend restarted (PID: $NEW_PID)"
-            else
-                log_error "✗ Backend failed to start!"
+        fi
+        
+        if [[ $build_success -eq 0 ]]; then
+            if go build -o pulse ./cmd/pulse 2>&1 | grep -v "^#"; then
+                build_success=1
             fi
+        fi
+
+        if [[ $build_success -eq 1 ]]; then
+            restart_backend
         else
             log_error "✗ Build failed!"
         fi
@@ -480,12 +489,17 @@ log_info "Starting backend file watcher..."
 
     if command -v inotifywait >/dev/null 2>&1; then
         # Linux: inotifywait
-        inotifywait -r -e modify,create,delete,move \
+        # Watch source directories AND the pulse binary itself (so manual builds trigger restart)
+        inotifywait -r -m -e modify,create,delete,move,attrib \
             --exclude '(vendor/|node_modules/|\.git/|\.swp$|\.tmp$|~$)' \
             --format '%e %w%f' \
-            "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
+            "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" "${ROOT_DIR}/pulse" 2>/dev/null | \
         while read -r event changed_file; do
-            if [[ "$changed_file" == *.go ]] || [[ "$event" =~ CREATE|DELETE|MOVED ]]; then
+            check_script_change "$@"
+            if [[ "$changed_file" == "${ROOT_DIR}/pulse" ]]; then
+                log_info "🚀 Manual build detected (pulse binary changed), restarting..."
+                restart_backend
+            elif [[ "$changed_file" == *.go ]] || [[ "$event" =~ CREATE|DELETE|MOVED|ATTRIB ]]; then
                 rebuild_backend "$changed_file"
             fi
         done
@@ -535,11 +549,6 @@ cleanup() {
             kill -9 "${CURRENT_BACKEND_PID}" 2>/dev/null || true
         fi
     fi
-
-    # Kill OpenCode sidecar (spawned by Pulse)
-    pkill -f "opencode.*serve" 2>/dev/null || true
-    sleep 1
-    pkill -9 -f "opencode.*serve" 2>/dev/null || true
 
     # Kill Frontend (Vite)
     if [[ -n ${VITE_PID:-} ]] && kill -0 "${VITE_PID}" 2>/dev/null; then

@@ -16,10 +16,6 @@ if [[ "${1:-}" == "--kill" ]]; then
     echo "Stopping all dev processes..."
     pkill -9 -f "bin/pulse$" 2>/dev/null || true
     pkill -9 -f "^\./pulse$" 2>/dev/null || true
-    # Kill all OpenCode processes (pattern matches any opencode serve invocation)
-    pkill -f "opencode.*serve" 2>/dev/null || true
-    sleep 1
-    pkill -9 -f "opencode.*serve" 2>/dev/null || true
     pkill -f "node.*vite" 2>/dev/null || true
     sleep 2
     echo -e "${GREEN}✓${NC} All dev processes stopped"
@@ -66,32 +62,13 @@ else
     echo "   Fix: cd /opt/pulse/frontend-modern && npm run dev"
 fi
 
-# Check OpenCode sidecar
-echo -n "OpenCode sidecar: "
-# Count unique ports - each OpenCode instance runs as node + binary pair on same port
-OPENCODE_PORTS=$(ps aux | grep -o "opencode.*--port [0-9]*" | grep -v grep | grep -o "[0-9]*$" | sort -u)
-OPENCODE_COUNT=$(echo "$OPENCODE_PORTS" | grep -c . 2>/dev/null || echo 0)
-OPENCODE_PORT=$(echo "$OPENCODE_PORTS" | head -1)
-if [[ $OPENCODE_COUNT -eq 0 ]] || [[ -z "$OPENCODE_PORT" ]]; then
-    echo -e "${YELLOW}⚠ Not detected (starts with AI features)${NC}"
-elif [[ $OPENCODE_COUNT -gt 1 ]]; then
-    echo -e "${RED}✗ MULTIPLE INSTANCES ($OPENCODE_COUNT)! This causes context loss!${NC}"
-    echo "   Ports: $OPENCODE_PORTS"
-    echo -e "   ${YELLOW}Fix: ./scripts/dev-check.sh --kill${NC}"
-elif curl -s -o /dev/null http://127.0.0.1:$OPENCODE_PORT/config 2>/dev/null; then
-    echo -e "${GREEN}✓ Running on port $OPENCODE_PORT${NC}"
-
-    # Check MCP connection
-    echo -n "MCP tools connection: "
-    MCP_STATUS=$(curl -s http://127.0.0.1:$OPENCODE_PORT/mcp 2>/dev/null | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
-    if [[ "$MCP_STATUS" == "connected" ]]; then
-        echo -e "${GREEN}✓ Connected${NC}"
-    else
-        echo -e "${RED}✗ Not connected (tools won't work)${NC}"
-        echo -e "   ${YELLOW}Fix: Restart Pulse to regenerate MCP config${NC}"
-    fi
+# Check AI status
+echo -n "AI service: "
+AI_STATUS=$(curl -s -u admin:admin http://127.0.0.1:7655/api/ai/status 2>/dev/null | jq -r '.running // false')
+if [[ "$AI_STATUS" == "true" ]]; then
+    echo -e "${GREEN}✓ Running (direct integration)${NC}"
 else
-    echo -e "${YELLOW}⚠ Running but not responding${NC}"
+    echo -e "${YELLOW}⚠ Not running (enable in settings)${NC}"
 fi
 
 # Show recent errors
