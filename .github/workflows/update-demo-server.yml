@@ -118,8 +118,9 @@ jobs:
         if: steps.gate.outputs.skip != 'true' && steps.current.outputs.skip_current != 'true'
         run: |
           TAG="${{ steps.target.outputs.tag }}"
+          # Use set -o pipefail to ensure curl errors aren't masked by bash
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
-            "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version $TAG"
+            "set -o pipefail && curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version $TAG"
 
       - name: Verify update
         if: steps.gate.outputs.skip != 'true' && steps.current.outputs.skip_current != 'true'
@@ -132,6 +133,14 @@ jobs:
             "curl -s http://localhost:7655/api/version | jq -r .version")
 
           echo "Demo server is now running version: $VERSION"
+
+          # Verify version matches target
+          TAG="${{ steps.target.outputs.tag }}"
+          TAG_STRIPPED="${TAG#v}"
+          if [ "$VERSION" != "$TAG" ] && [ "$VERSION" != "$TAG_STRIPPED" ]; then
+            echo "::error::Version mismatch! Expected $TAG but got $VERSION"
+            exit 1
+          fi
 
           # Verify mock mode is active by authenticating and checking node count
           NODES=$(ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
