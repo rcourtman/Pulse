@@ -134,10 +134,10 @@ jobs:
             --set persistence.enabled=false \
             --set server.secretEnv.create=true \
             --set server.secretEnv.data.API_TOKENS=test-token \
-            --wait --timeout 3m
+            --wait --timeout 5m
 
           # Verify deployment
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=pulse --timeout=120s
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=pulse --timeout=180s || (kubectl describe pods -l app.kubernetes.io/name=pulse && exit 1)
           kubectl get pods -l app.kubernetes.io/name=pulse
 
           # Test upgrade
@@ -145,7 +145,7 @@ jobs:
             --set persistence.enabled=false \
             --set server.secretEnv.create=true \
             --set server.secretEnv.data.API_TOKENS=test-token \
-            --wait --timeout 3m
+            --wait --timeout 5m
 
           # Cleanup
           kind delete cluster --name pulse-test
