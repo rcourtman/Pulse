@@ -336,12 +336,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   return (
     <div
-      class={`flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 overflow-hidden ${isOpen() ? 'w-[480px]' : 'w-0 border-l-0'
+      class={`flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 overflow-hidden ${isOpen() ? 'w-full sm:w-[480px]' : 'w-0 border-l-0'
         }`}
     >
       <Show when={isOpen()}>
-        {/* Header */}
-        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+        {/* Header - wraps on mobile */}
+        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
           <div class="flex items-center gap-3">
             <div class="p-2 bg-gradient-to-br from-purple-500 to-violet-500 rounded-xl shadow-lg shadow-purple-500/20">
               <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

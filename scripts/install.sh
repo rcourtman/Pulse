@@ -527,8 +527,10 @@ if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
     fail "Missing required arguments: --url and --token"
 fi
 
-# Validate URL format (basic check)
-if [[ ! "$PULSE_URL" =~ ^https?:// ]]; then
+# Validate URL format (basic check) - case-insensitive for http:// or https://
+# Normalize to lowercase for the check
+url_lower=$(echo "$PULSE_URL" | tr '[:upper:]' '[:lower:]')
+if [[ ! "$url_lower" =~ ^https?:// ]]; then
     fail "Invalid URL format. Must start with http:// or https://"
 fi
 
@@ -994,8 +996,10 @@ EOF
     log_info "Added startup entry to ${GO_SCRIPT}..."
 
     # Start the agent now using the wrapper script (includes watchdog)
+    # Use shell backgrounding instead of nohup for broader compatibility (QNAP, etc.)
     log_info "Starting agent with watchdog..."
-    nohup bash "${WRAPPER_SCRIPT}" >> "/var/log/${AGENT_NAME}.log" 2>&1 &
+    bash "${WRAPPER_SCRIPT}" >> "/var/log/${AGENT_NAME}.log" 2>&1 &
+    disown 2>/dev/null || true  # Disown if available to prevent SIGHUP
 
     log_info "Installation complete!"
     log_info "The agent will start automatically on boot."
@@ -1474,7 +1478,8 @@ do_start() {
     fi
     echo "Starting $NAME..."
     # Start daemon in background, redirect output to log file
-    nohup $DAEMON $DAEMON_ARGS >> "$LOGFILE" 2>&1 &
+    # Use shell backgrounding instead of nohup for broader compatibility (QNAP, etc.)
+    $DAEMON $DAEMON_ARGS >> "$LOGFILE" 2>&1 &
     echo $! > "$PIDFILE"
     sleep 1
     if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
