@@ -2941,9 +2941,13 @@ func (m *Manager) CheckHost(host models.Host) {
 			// Check for degraded or failed arrays
 			stateLower := strings.ToLower(array.State)
 			isDegraded := strings.Contains(stateLower, "degraded") || array.FailedDevices > 0
-			isRebuilding := strings.Contains(stateLower, "recover") ||
+
+			// A "check" state indicates data scrubbing (e.g., DSM scheduled scrub), not a rebuild.
+			// Only treat as rebuilding if state indicates actual recovery, not routine maintenance.
+			isChecking := strings.Contains(stateLower, "check")
+			isRebuilding := !isChecking && (strings.Contains(stateLower, "recover") ||
 				strings.Contains(stateLower, "resync") ||
-				array.RebuildPercent > 0
+				(array.RebuildPercent > 0 && !strings.Contains(stateLower, "clean")))
 
 			alertID := fmt.Sprintf("host-%s-raid-%s", host.ID, sanitizeRAIDDevice(array.Device))
 
