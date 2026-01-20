@@ -134,6 +134,8 @@ jobs:
           cache: true
 
       - name: Run backend tests
+        env:
+          PULSE_DATA_DIR: /tmp/pulse-test-data
         run: make test
 
       - name: Cache Playwright browsers
