@@ -101,7 +101,6 @@ if [ -f "$NOTES_FILE" ]; then
     NOTES_FILE=""
   fi
 else
-else
   echo "No release notes file found at ${NOTES_FILE}"
   echo ""
   read -p "Generate release notes automatically? [Y/n] " -n 1 -r
