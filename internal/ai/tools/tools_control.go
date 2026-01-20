@@ -22,11 +22,15 @@ func (e *PulseToolExecutor) registerControlTools() {
 
 Returns: Command output (stdout/stderr) and exit code. Exit code 0 = success.
 
-Use when: User explicitly asks to run a command, or you need to investigate something inside a system.
+Use when: User explicitly asks to run a command, or monitoring data is insufficient for a targeted diagnosis.
+
+Prefer: Pulse monitoring tools (pulse_list_infrastructure, pulse_search_resources, pulse_get_topology, pulse_list_alerts, pulse_get_metrics) before running commands.
+
+Scope: Target a single host/agent. If multiple agents are connected and target_host is unclear, ask the user to choose.
 
 Do NOT use for: Checking if something is running (use pulse_get_topology), or starting/stopping VMs/containers (use pulse_control_guest or pulse_control_docker).
 
-Important: Commands run on the HOST, not inside VMs/containers. To run inside an LXC, use: pct exec <vmid> -- <command>`,
+Note: Commands run on the HOST, not inside VMs/containers. To run inside an LXC, use: pct exec <vmid> -- <command>`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -40,7 +44,7 @@ Important: Commands run on the HOST, not inside VMs/containers. To run inside an
 					},
 					"target_host": {
 						Type:        "string",
-						Description: "Hostname to run on (e.g. 'delly'). Required if multiple agents connected.",
+						Description: "Hostname to run on (e.g. 'delly'). Ask the user to choose if multiple agents are connected or if the target is unclear.",
 					},
 				},
 				Required: []string{"command"},
@@ -60,6 +64,8 @@ Important: Commands run on the HOST, not inside VMs/containers. To run inside an
 Returns: Success message with VM/container name, or error if failed.
 
 Use when: User asks to start, stop, restart, or shutdown a VM or LXC container.
+
+Prefer: Use pulse_get_topology or pulse_search_resources to confirm the guest and node before control actions.
 
 Do NOT use for: Docker containers (use pulse_control_docker), or checking status (use pulse_get_topology).
 
@@ -98,6 +104,8 @@ Note: These are LXC containers managed by Proxmox, NOT Docker containers. Uses '
 Returns: Success message with container name and host, or error if failed.
 
 Use when: User asks to start, stop, or restart a Docker container.
+
+Prefer: Use pulse_search_resources or pulse_list_infrastructure to confirm the container and host before control actions.
 
 Do NOT use for: Proxmox VMs/LXC containers (use pulse_control_guest), or checking status (use pulse_get_topology).
 
@@ -149,6 +157,13 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		decision = e.policy.Evaluate(command)
 		if decision == agentexec.PolicyBlock {
 			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
+		}
+	}
+
+	if targetHost == "" && e.agentServer != nil {
+		agents := e.agentServer.GetConnectedAgents()
+		if len(agents) > 1 {
+			return NewTextResult(formatTargetHostRequired(agents)), nil
 		}
 	}
 
@@ -428,6 +443,10 @@ func (e *PulseToolExecutor) findAgentForCommand(runOnHost bool, targetHost strin
 		}
 	}
 
+	if targetHost == "" && len(agents) > 1 {
+		return ""
+	}
+
 	return agents[0].AgentID
 }
 
@@ -652,6 +671,32 @@ func formatPolicyBlocked(command, reason string) string {
 	}
 	b, _ := json.Marshal(payload)
 	return "POLICY_BLOCKED: " + string(b)
+}
+
+func formatTargetHostRequired(agents []agentexec.ConnectedAgent) string {
+	hostnames := make([]string, 0, len(agents))
+	for _, agent := range agents {
+		name := strings.TrimSpace(agent.Hostname)
+		if name == "" {
+			name = strings.TrimSpace(agent.AgentID)
+		}
+		if name != "" {
+			hostnames = append(hostnames, name)
+		}
+	}
+	if len(hostnames) == 0 {
+		return "Multiple agents are connected. Please specify target_host."
+	}
+	maxItems := 6
+	list := hostnames
+	if len(hostnames) > maxItems {
+		list = hostnames[:maxItems]
+	}
+	message := fmt.Sprintf("Multiple agents are connected. Please specify target_host. Available: %s", strings.Join(list, ", ")
+	if len(hostnames) > maxItems {
+		message = fmt.Sprintf("%s (+%d more)", message, len(hostnames)-maxItems)
+	}
+	return message
 }
 
 func formatCommandSuggestion(command string, runOnHost bool, targetHost string) string {

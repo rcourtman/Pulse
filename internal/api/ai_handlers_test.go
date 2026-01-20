@@ -9,7 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
@@ -1080,4 +1083,109 @@ func TestAISettingsHandler_SetCorrelationDetector(t *testing.T) {
 
 	// Set nil correlation detector should not panic
 	handler.SetCorrelationDetector(nil)
+}
+func TestAISettingsHandler_Approvals(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Initialize approval store
+	approvalStore, _ := approval.NewStore(approval.StoreConfig{DataDir: tmp})
+	approval.SetStore(approvalStore)
+
+	appID := "app-123"
+	approvalStore.CreateApproval(&approval.ApprovalRequest{
+		ID:      appID,
+		Command: "ls -la",
+		Status:  approval.StatusPending,
+	})
+
+	t.Run("HandleGetApproval", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals/"+appID, nil)
+		rec := httptest.NewRecorder()
+		handler.HandleGetApproval(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var resp approval.ApprovalRequest
+		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, appID, resp.ID)
+	})
+
+	t.Run("HandleApproveCommand", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/"+appID+"/approve", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleApproveCommand(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		app, _ := approvalStore.GetApproval(appID)
+		assert.Equal(t, approval.StatusApproved, app.Status)
+	})
+
+	t.Run("HandleDenyCommand", func(t *testing.T) {
+		appID2 := "app-456"
+		approvalStore.CreateApproval(&approval.ApprovalRequest{
+			ID:      appID2,
+			Command: "rm -rf /",
+			Status:  approval.StatusPending,
+		})
+
+		body, _ := json.Marshal(map[string]string{"reason": "too dangerous"})
+		req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/"+appID2+"/deny", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleDenyCommand(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		app, _ := approvalStore.GetApproval(appID2)
+		assert.Equal(t, approval.StatusDenied, app.Status)
+		assert.Equal(t, "too dangerous", app.DenyReason)
+	})
+}
+func TestAISettingsHandler_ChatSessions(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	t.Run("HandleSaveAndGetSession", func(t *testing.T) {
+		sessionID := "sess-123"
+		body, _ := json.Marshal(map[string]interface{}{
+			"id":    sessionID,
+			"title": "Test Session",
+		})
+		req := httptest.NewRequest(http.MethodPut, "/api/ai/chat/sessions/"+sessionID, bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleSaveAIChatSession(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// GET session
+		req = httptest.NewRequest(http.MethodGet, "/api/ai/chat/sessions/"+sessionID, nil)
+		rec = httptest.NewRecorder()
+		handler.HandleGetAIChatSession(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("HandleListSessions", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/ai/chat/sessions", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleListAIChatSessions(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("HandleDeleteSession", func(t *testing.T) {
+		sessionID := "sess-delete"
+		body, _ := json.Marshal(map[string]interface{}{"id": sessionID})
+		handler.HandleSaveAIChatSession(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/api/ai/chat/sessions/"+sessionID, bytes.NewReader(body)))
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/ai/chat/sessions/"+sessionID, nil)
+		rec := httptest.NewRecorder()
+		handler.HandleDeleteAIChatSession(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+	})
 }

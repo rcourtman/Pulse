@@ -151,6 +151,8 @@ func (s *Service) Start(ctx context.Context) error {
 		return fmt.Errorf("AI config is nil")
 	}
 
+	s.applyChatContextSettings()
+
 	// Create session store
 	dataDir := s.cfg.OpenCodeDataDir
 	if dataDir == "" {
@@ -204,6 +206,8 @@ func (s *Service) Restart(ctx context.Context, newCfg *config.AIConfig) error {
 	if newCfg != nil {
 		s.cfg = newCfg
 	}
+
+	s.applyChatContextSettings()
 
 	// Update executor settings
 	if s.executor != nil && s.cfg != nil {
@@ -578,23 +582,29 @@ func (s *Service) createProvider() (providers.StreamingProvider, error) {
 	}
 }
 
+func (s *Service) applyChatContextSettings() {
+	StatelessContext = DefaultStatelessContext
+}
+
 // buildSystemPrompt builds the system prompt for the AI
 func (s *Service) buildSystemPrompt() string {
 	return `You are Pulse AI, an intelligent assistant for infrastructure monitoring and management.
 
 You have access to tools that let you:
-- Query infrastructure state (VMs, containers, nodes)
+- Query infrastructure state (VMs, containers, nodes) from Pulse monitoring
 - Get metrics and performance data
 - Check alerts and findings
-- Execute commands on hosts (with approval)
+- Execute commands on hosts via connected agents (with approval)
 - Manage Docker containers
 - Update resource metadata
 
+Prefer the most targeted tool and filters to keep context small (use pulse_search_resources or pulse_list_infrastructure before full topology).
+
 When users ask about their infrastructure:
-1. Use the appropriate query tools to get current state
-2. Provide clear, accurate answers based on the data
-3. Suggest actions when appropriate
-4. For control actions, explain what will happen before executing
+1. Use monitoring/query tools first (list/search/topology/alerts/metrics)
+2. Ask a clarifying question if the target host/resource or time range is unclear
+3. Only run commands when monitoring data is insufficient or the user explicitly asks; scope to a single host/agent
+4. Suggest actions when appropriate and explain control actions before executing
 
 Be concise but thorough. Focus on actionable information.
 Trust the data from your tools - it's updated in real-time.`

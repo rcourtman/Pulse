@@ -639,7 +639,7 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 		},
 	}
 	guestNames := map[string]string{
-		"inst-node-100": "app-server",
+		"inst:node:100": "app-server",
 	}
 
 	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
@@ -766,7 +766,7 @@ func TestCheckSnapshotsForInstanceTriggersOnSnapshotSize(t *testing.T) {
 		},
 	}
 	guestNames := map[string]string{
-		"inst-node-200": "db-server",
+		"inst:node:200": "db-server",
 	}
 
 	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
@@ -847,7 +847,7 @@ func TestCheckSnapshotsForInstanceIncludesAgeAndSizeReasons(t *testing.T) {
 		},
 	}
 	guestNames := map[string]string{
-		"inst-node-300": "app-server",
+		"inst:node:300": "app-server",
 	}
 
 	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)

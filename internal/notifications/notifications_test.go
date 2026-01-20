@@ -159,6 +159,7 @@ func TestSetGroupingWindowClampsNegativeValues(t *testing.T) {
 }
 
 func TestSendGroupedAppriseInvokesExecutor(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	nm := NewNotificationManager("")
 	nm.SetGroupingWindow(0)
 	nm.SetEmailConfig(EmailConfig{Enabled: false})
@@ -348,6 +349,7 @@ func TestSendGroupedAppriseHTTP(t *testing.T) {
 }
 
 func TestNotificationCooldownAllowsNewAlertInstance(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	nm := NewNotificationManager("")
 	nm.SetCooldown(1)          // 1 minute cooldown
 	nm.SetGroupingWindow(3600) // keep timer from firing immediately
@@ -402,6 +404,7 @@ func TestNotificationCooldownAllowsNewAlertInstance(t *testing.T) {
 }
 
 func TestCancelAlertRemovesPending(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	nm := NewNotificationManager("")
 	nm.SetGroupingWindow(120)
 
@@ -645,6 +648,7 @@ func TestRenderWebhookURL_SuccessCases(t *testing.T) {
 }
 
 func TestSendTestNotificationApprise(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	nm := NewNotificationManager("")
 	defer nm.Stop() // Clean up background queue to prevent lingering callbacks
 	nm.SetEmailConfig(EmailConfig{Enabled: false})
@@ -711,6 +715,7 @@ func TestSendTestNotificationApprise(t *testing.T) {
 }
 
 func TestSendTestAppriseWithConfig(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
@@ -3110,5 +3115,146 @@ func TestSendResolvedEmail_ZeroResolvedTime(t *testing.T) {
 	}
 	if err != nil && !strings.Contains(err.Error(), "failed to send email") {
 		t.Errorf("expected 'failed to send email' error, got: %v", err)
+	}
+}
+func TestSendResolvedAlert(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	nm := NewNotificationManager("https://pulse.local")
+	defer nm.Stop()
+
+	// Configure email
+	nm.SetEmailConfig(EmailConfig{
+		Enabled: true,
+		To:      []string{"test@example.com"},
+	})
+
+	// Use a mock captured channel for webhooks
+	webhookHits := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		webhookHits <- string(body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+	nm.AddWebhook(WebhookConfig{
+		ID:      "test-webhook",
+		Name:    "Test",
+		URL:     server.URL,
+		Enabled: true,
+	})
+
+	nm.SetNotifyOnResolve(true)
+
+	alert := &alerts.Alert{
+		ID:           "test-alert",
+		ResourceName: "vm-100",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		StartTime:    time.Now().Add(-10 * time.Minute),
+	}
+
+	resolved := &alerts.ResolvedAlert{
+		Alert:        alert,
+		ResolvedTime: time.Now(),
+	}
+
+	// This should send immediately (no grouping)
+	nm.SendResolvedAlert(resolved)
+
+	// Check webhook
+	select {
+	case payload := <-webhookHits:
+		if !strings.Contains(payload, "test-alert") {
+			t.Errorf("expected alert ID in payload, got %s", payload)
+		}
+		if !strings.Contains(payload, "resolved") {
+			t.Errorf("expected 'resolved' in payload, got %s", payload)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for resolved webhook")
+	}
+}
+
+func TestSendResolvedWebhook(t *testing.T) {
+	nm := NewNotificationManager("https://pulse.local")
+	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	webhook := WebhookConfig{
+		ID:      "w1",
+		URL:     server.URL,
+		Enabled: true,
+	}
+
+	alert := &alerts.Alert{
+		ID: "a1",
+	}
+
+	err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{alert}, time.Now())
+	if err != nil {
+		t.Fatalf("sendResolvedWebhook failed: %v", err)
+	}
+}
+
+func TestGetQueueStatsNotifications(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	stats, err := nm.GetQueueStats()
+	if err != nil {
+		t.Fatalf("GetQueueStats failed: %v", err)
+	}
+	if stats == nil {
+		t.Fatal("expected non-nil queue stats")
+	}
+}
+
+func TestSendTestWebhook(t *testing.T) {
+	nm := NewNotificationManager("https://pulse.local")
+	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	webhook := WebhookConfig{
+		Name:    "Test",
+		URL:     server.URL,
+		Enabled: true,
+	}
+
+	err := nm.SendTestWebhook(webhook)
+	if err != nil {
+		t.Fatalf("SendTestWebhook failed: %v", err)
+	}
+}
+
+func TestSendEmail(t *testing.T) {
+	nm := NewNotificationManager("")
+	// Void function, just ensure no panic
+	nm.sendEmail(&alerts.Alert{ID: "test"})
+}
+
+func TestSendHTMLEmail(t *testing.T) {
+	nm := NewNotificationManager("")
+	// Void function, just ensure no panic
+	nm.sendHTMLEmail("subject", "html", "text", EmailConfig{Enabled: false})
+}
+
+func TestSendTestNotificationWithConfig(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	// Test email config
+	err := nm.SendTestNotificationWithConfig("email", &EmailConfig{Enabled: false}, nil)
+	if err == nil {
+		t.Fatal("expected error for disabled email config")
 	}
 }

@@ -141,4 +141,13 @@ const (
 )
 
 // Max turns for the agentic loop to prevent infinite loops
-const MaxAgenticTurns = 20
+const (
+	MaxAgenticTurns         = 20
+	DefaultStatelessContext = false
+	MaxContextMessagesLimit = 40
+	MaxToolResultCharsLimit = 8000
+)
+
+var (
+	StatelessContext = DefaultStatelessContext
+)

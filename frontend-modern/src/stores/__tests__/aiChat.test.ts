@@ -64,16 +64,18 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.targetId).toBeUndefined();
   });
 
-  it('setTargetContext and openForTarget derive a sensible name', () => {
+  it('setTargetContext and openForTarget replace context (not accumulate)', () => {
     aiChatStore.setTargetContext('vm', 'vm-101', { guestName: 'my-guest' });
     expect(aiChatStore.contextItems).toHaveLength(1);
     expect(aiChatStore.contextItems[0].name).toBe('my-guest');
     expect(aiChatStore.context.targetId).toBe('vm-101');
 
+    // openForTarget should replace, not add to existing context
     aiChatStore.openForTarget('node', 'node-1', { name: 'delly' });
     expect(aiChatStore.isOpen).toBe(true);
-    expect(aiChatStore.contextItems).toHaveLength(2);
-    expect(aiChatStore.contextItems[1].name).toBe('delly');
+    expect(aiChatStore.contextItems).toHaveLength(1);
+    expect(aiChatStore.contextItems[0].name).toBe('delly');
+    expect(aiChatStore.context.targetId).toBe('node-1');
   });
 
   it('opens with a pre-filled prompt', () => {

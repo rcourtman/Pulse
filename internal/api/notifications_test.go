@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"testing"
 
@@ -287,6 +288,11 @@ func TestNotificationHandlers(t *testing.T) {
 
 	h := NewNotificationHandlers(mockMonitor)
 
+	t.Run("SetMonitor", func(t *testing.T) {
+		h.SetMonitor(mockMonitor)
+		// Should not panic and should replace the monitor
+	})
+
 	t.Run("GetEmailConfig", func(t *testing.T) {
 		cfg := notifications.EmailConfig{
 			Enabled:  true,
@@ -323,6 +329,26 @@ func TestNotificationHandlers(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 		mockManager.AssertExpectations(t)
 		mockPersistence.AssertExpectations(t)
+	})
+
+	t.Run("UpdateEmailConfig_InvalidJSON", func(t *testing.T) {
+		req := httptest.NewRequest("PUT", "/api/notifications/email", bytes.NewReader([]byte("{invalid}")))
+		w := httptest.NewRecorder()
+		h.UpdateEmailConfig(w, req)
+		assert.Equal(t, 400, w.Code)
+	})
+
+	t.Run("UpdateEmailConfig_SaveError", func(t *testing.T) {
+		cfg := notifications.EmailConfig{Enabled: true}
+		mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
+		mockManager.On("SetEmailConfig", mock.Anything).Return().Once()
+		mockPersistence.On("SaveEmailConfig", mock.Anything).Return(fmt.Errorf("save error")).Once()
+
+		body, _ := json.Marshal(cfg)
+		req := httptest.NewRequest("PUT", "/api/notifications/email", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		h.UpdateEmailConfig(w, req)
+		assert.Equal(t, 200, w.Code) // Matches implementation: logs error but returns success
 	})
 
 	t.Run("GetWebhooks", func(t *testing.T) {
@@ -365,6 +391,16 @@ func TestNotificationHandlers(t *testing.T) {
 		h.CreateWebhook(w, req)
 
 		assert.Equal(t, 200, w.Code)
+	})
+
+	t.Run("CreateWebhook_ValidationError", func(t *testing.T) {
+		webhook := notifications.WebhookConfig{URL: "invalid"}
+		mockManager.On("ValidateWebhookURL", "invalid").Return(fmt.Errorf("invalid url")).Once()
+		body, _ := json.Marshal(webhook)
+		req := httptest.NewRequest("POST", "/api/notifications/webhooks", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		h.CreateWebhook(w, req)
+		assert.Equal(t, 400, w.Code)
 	})
 
 	t.Run("GetNotificationHealth", func(t *testing.T) {
@@ -622,5 +658,22 @@ func TestNotificationHandlers(t *testing.T) {
 		h.UpdateWebhook(w, req)
 
 		assert.Equal(t, 200, w.Code)
+	})
+
+	t.Run("TestNotification_InvalidJSON", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader([]byte("{invalid}")))
+		w := httptest.NewRecorder()
+		h.TestNotification(w, req)
+		assert.Equal(t, 400, w.Code)
+	})
+
+	t.Run("TestNotification_WebhookNotFound", func(t *testing.T) {
+		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
+		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+		body, _ := json.Marshal(map[string]string{"method": "webhook", "webhookId": "nonexistent"})
+		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		h.TestNotification(w, req)
+		assert.Equal(t, 404, w.Code)
 	})
 }

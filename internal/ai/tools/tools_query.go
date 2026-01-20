@@ -18,7 +18,8 @@ func (e *PulseToolExecutor) registerQueryTools() {
 
 Returns: JSON with control_level, enabled features, connected agent count and details.
 
-Use when: You need to check if control features are enabled or verify agent connectivity before running commands.`,
+Use when: You need to check if control features are enabled or verify agent connectivity before running commands.
+Use this to confirm hostnames when choosing target_host.`,
 			InputSchema: InputSchema{
 				Type:       "object",
 				Properties: map[string]PropertySchema{},
@@ -51,23 +52,135 @@ Use when: You need to check if control features are enabled or verify agent conn
 
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_get_topology",
-			Description: `Get live infrastructure state - all Proxmox nodes with VMs/LXC containers, and Docker hosts with containers.
+			Name: "pulse_list_infrastructure",
+			Description: `Lightweight list of nodes, VMs, containers, and Docker hosts (summaries only).
 
-Returns: JSON with 'proxmox.nodes[]' (each with vms[], containers[], status, agent_connected), 'docker.hosts[]' (each with containers[], status), and 'summary' counts.
+Returns: JSON with nodes/vms/containers/docker_hosts arrays (summaries) and total counts.
 
-Use when: Checking if something is running, finding a VM/container by name, getting current infrastructure state.
-
-Example: User asks "is nginx running?" → call this, find nginx in the response, report its status field directly.
-
-This data is authoritative and updates every ~10 seconds. Trust it for status questions - no verification needed.`,
+Use when: You need a quick list or to find a resource without full topology. Prefer this over pulse_get_topology for large environments. Use filters to keep output small.
+This is monitoring data from Pulse agents; prefer it over running commands for inventory or status checks.`,
 			InputSchema: InputSchema{
-				Type:       "object",
-				Properties: map[string]PropertySchema{},
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"type": {
+						Type:        "string",
+						Description: "Optional filter: nodes, vms, containers, or docker",
+						Enum:        []string{"nodes", "vms", "containers", "docker"},
+					},
+					"status": {
+						Type:        "string",
+						Description: "Optional status filter (e.g. running, stopped, online)",
+					},
+					"limit": {
+						Type:        "integer",
+						Description: "Maximum number of results (default: 100)",
+					},
+					"offset": {
+						Type:        "integer",
+						Description: "Number of results to skip",
+					},
+				},
 			},
 		},
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
-			return exec.executeGetTopology(ctx)
+			return exec.executeListInfrastructure(ctx, args)
+		},
+	})
+
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
+			Name: "pulse_search_resources",
+			Description: `Search for resources by name or ID across nodes, VMs, containers, and Docker hosts/containers.
+
+Returns: JSON with compact matches (type, id, name, status, node/host).
+
+Use when: You need to locate a specific resource before calling pulse_get_resource or control tools. Use filters to keep output small.
+This is monitoring data from Pulse agents; use it to identify targets before running commands.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"query": {
+						Type:        "string",
+						Description: "Substring to match against names, IDs, or image (Docker)",
+					},
+					"type": {
+						Type:        "string",
+						Description: "Optional filter: node, vm, container, docker, or docker_host",
+						Enum:        []string{"node", "vm", "container", "docker", "docker_host"},
+					},
+					"status": {
+						Type:        "string",
+						Description: "Optional status/state filter",
+					},
+					"limit": {
+						Type:        "integer",
+						Description: "Maximum number of results (default: 20)",
+					},
+					"offset": {
+						Type:        "integer",
+						Description: "Number of results to skip",
+					},
+				},
+				Required: []string{"query"},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeSearchResources(ctx, args)
+		},
+	})
+
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
+			Name: "pulse_get_topology",
+			Description: `Get live infrastructure state - all Proxmox nodes with VMs/LXC containers, and Docker hosts with containers.
+
+Returns: JSON with proxmox.nodes[] (each with vms[], containers[], status, agent_connected), docker.hosts[] (each with containers[], status), and summary counts.
+
+Use when: You need a full inventory or relationship view of infrastructure.
+This is live monitoring data from Pulse agents; prefer it over running commands for status or inventory questions.
+
+For targeted lookups or simple status checks, prefer pulse_search_resources or pulse_list_infrastructure to keep output small.
+
+Options: Use include (proxmox/docker), summary_only, and max_* fields to reduce payload size.
+
+This data is authoritative and updates every ~10 seconds. Trust it for status questions - no verification needed.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"include": {
+						Type:        "string",
+						Description: "Optional: limit to proxmox or docker data (default: all)",
+						Enum:        []string{"all", "proxmox", "docker"},
+					},
+					"summary_only": {
+						Type:        "boolean",
+						Description: "If true, return only summary counts (no node/host lists)",
+					},
+					"max_nodes": {
+						Type:        "integer",
+						Description: "Max Proxmox nodes to include",
+					},
+					"max_vms_per_node": {
+						Type:        "integer",
+						Description: "Max VMs per node to include",
+					},
+					"max_containers_per_node": {
+						Type:        "integer",
+						Description: "Max containers per node to include",
+					},
+					"max_docker_hosts": {
+						Type:        "integer",
+						Description: "Max Docker hosts to include",
+					},
+					"max_docker_containers_per_host": {
+						Type:        "integer",
+						Description: "Max Docker containers per host to include",
+					},
+				},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeGetTopology(ctx, args)
 		},
 	})
 
@@ -107,9 +220,11 @@ This data is authoritative and updates every ~10 seconds. Trust it for status qu
 
 Returns: JSON with name, status, IPs, ports, labels, mounts, network config, CPU/memory stats.
 
-Use when: You need detailed info about ONE specific resource (IPs, ports, config) that topology doesn't provide.
+Use when: You need detailed info about ONE specific resource (IPs, ports, config) that topology does not provide.
 
-Note: For simple status checks, use pulse_get_topology instead - it's faster and shows all resources.`,
+If you do not know the ID or name, use pulse_search_resources or pulse_list_infrastructure first.
+
+Note: For simple status checks, use pulse_search_resources or pulse_list_infrastructure instead of full topology.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -217,6 +332,12 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	filterStatus, _ := args["status"].(string)
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
+	if limit <= 0 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	state := e.stateProvider.GetState()
 
@@ -237,16 +358,21 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 		},
 	}
 
+	totalMatches := 0
+
 	// Nodes
 	if filterType == "" || filterType == "nodes" {
-		for i, node := range state.Nodes {
-			if i < offset {
+		count := 0
+		for _, node := range state.Nodes {
+			if filterStatus != "" && filterStatus != "all" && node.Status != filterStatus {
+				continue
+			}
+			if count < offset {
+				count++
 				continue
 			}
 			if len(response.Nodes) >= limit {
-				break
-			}
-			if filterStatus != "" && filterStatus != "all" && node.Status != filterStatus {
+				count++
 				continue
 			}
 			response.Nodes = append(response.Nodes, NodeSummary{
@@ -255,19 +381,26 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				ID:             node.ID,
 				AgentConnected: connectedAgentHostnames[node.Name],
 			})
+			count++
+		}
+		if filterType == "nodes" {
+			totalMatches = count
 		}
 	}
 
 	// VMs
 	if filterType == "" || filterType == "vms" {
-		for i, vm := range state.VMs {
-			if i < offset {
+		count := 0
+		for _, vm := range state.VMs {
+			if filterStatus != "" && filterStatus != "all" && vm.Status != filterStatus {
+				continue
+			}
+			if count < offset {
+				count++
 				continue
 			}
 			if len(response.VMs) >= limit {
-				break
-			}
-			if filterStatus != "" && filterStatus != "all" && vm.Status != filterStatus {
+				count++
 				continue
 			}
 			response.VMs = append(response.VMs, VMSummary{
@@ -278,19 +411,26 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				CPU:    vm.CPU * 100,
 				Memory: vm.Memory.Usage * 100,
 			})
+			count++
+		}
+		if filterType == "vms" {
+			totalMatches = count
 		}
 	}
 
 	// Containers (LXC)
 	if filterType == "" || filterType == "containers" {
-		for i, ct := range state.Containers {
-			if i < offset {
+		count := 0
+		for _, ct := range state.Containers {
+			if filterStatus != "" && filterStatus != "all" && ct.Status != filterStatus {
+				continue
+			}
+			if count < offset {
+				count++
 				continue
 			}
 			if len(response.Containers) >= limit {
-				break
-			}
-			if filterStatus != "" && filterStatus != "all" && ct.Status != filterStatus {
+				count++
 				continue
 			}
 			response.Containers = append(response.Containers, ContainerSummary{
@@ -301,17 +441,24 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				CPU:    ct.CPU * 100,
 				Memory: ct.Memory.Usage * 100,
 			})
+			count++
+		}
+		if filterType == "containers" {
+			totalMatches = count
 		}
 	}
 
 	// Docker hosts
 	if filterType == "" || filterType == "docker" {
-		for i, host := range state.DockerHosts {
-			if i < offset {
+		count := 0
+		for _, host := range state.DockerHosts {
+			if count < offset {
+				count++
 				continue
 			}
 			if len(response.DockerHosts) >= limit {
-				break
+				count++
+				continue
 			}
 			dockerHost := DockerHostSummary{
 				ID:             host.ID,
@@ -332,17 +479,49 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 					Health: c.Health,
 				})
 			}
+			if filterStatus != "" && filterStatus != "all" && len(dockerHost.Containers) == 0 {
+				continue
+			}
 			response.DockerHosts = append(response.DockerHosts, dockerHost)
+			count++
+		}
+		if filterType == "docker" {
+			totalMatches = count
+		}
+	}
+
+	if filterType != "" && (offset > 0 || totalMatches > limit) {
+		response.Pagination = &PaginationInfo{
+			Total:  totalMatches,
+			Limit:  limit,
+			Offset: offset,
 		}
 	}
 
 	return NewJSONResult(response), nil
 }
 
-func (e *PulseToolExecutor) executeGetTopology(_ context.Context) (CallToolResult, error) {
+func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.stateProvider == nil {
 		return NewErrorResult(fmt.Errorf("state provider not available")), nil
 	}
+
+	include, _ := args["include"].(string)
+	if include == "" {
+		include = "all"
+	}
+	switch include {
+	case "all", "proxmox", "docker":
+	default:
+		return NewErrorResult(fmt.Errorf("invalid include: %s. Use all, proxmox, or docker", include)), nil
+	}
+
+	summaryOnly, _ := args["summary_only"].(bool)
+	maxNodes := intArg(args, "max_nodes", 0)
+	maxVMsPerNode := intArg(args, "max_vms_per_node", 0)
+	maxContainersPerNode := intArg(args, "max_containers_per_node", 0)
+	maxDockerHosts := intArg(args, "max_docker_hosts", 0)
+	maxDockerContainersPerHost := intArg(args, "max_docker_containers_per_host", 0)
 
 	state := e.stateProvider.GetState()
 
@@ -357,22 +536,8 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context) (CallToolResul
 	// Check if control is enabled
 	controlEnabled := e.controlLevel != ControlLevelReadOnly && e.controlLevel != ""
 
-	// Build Proxmox topology - group VMs and containers by node
-	nodeMap := make(map[string]*ProxmoxNodeTopology)
-
-	// Initialize nodes from state
-	for _, node := range state.Nodes {
-		hasAgent := connectedAgentHostnames[node.Name]
-		nodeMap[node.Name] = &ProxmoxNodeTopology{
-			Name:           node.Name,
-			ID:             node.ID,
-			Status:         node.Status,
-			AgentConnected: hasAgent,
-			CanExecute:     hasAgent && controlEnabled,
-			VMs:            []TopologyVM{},
-			Containers:     []TopologyLXC{},
-		}
-	}
+	includeProxmox := include == "all" || include == "proxmox"
+	includeDocker := include == "all" || include == "docker"
 
 	// Summary counters
 	summary := TopologySummary{
@@ -382,116 +547,161 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context) (CallToolResul
 		TotalDockerHosts:   len(state.DockerHosts),
 	}
 
-	// Add VMs to their nodes
-	for _, vm := range state.VMs {
-		nodeTopology, exists := nodeMap[vm.Node]
-		if !exists {
-			// Create node entry if it doesn't exist (shouldn't happen normally)
-			hasAgent := connectedAgentHostnames[vm.Node]
-			nodeTopology = &ProxmoxNodeTopology{
-				Name:           vm.Node,
-				Status:         "unknown",
+	for _, node := range state.Nodes {
+		if connectedAgentHostnames[node.Name] {
+			summary.NodesWithAgents++
+		}
+	}
+	for _, host := range state.DockerHosts {
+		if connectedAgentHostnames[host.Hostname] {
+			summary.DockerHostsWithAgents++
+		}
+	}
+
+	// Build Proxmox topology - group VMs and containers by node
+	nodeMap := make(map[string]*ProxmoxNodeTopology)
+	if includeProxmox && !summaryOnly {
+		for _, node := range state.Nodes {
+			if maxNodes > 0 && len(nodeMap) >= maxNodes {
+				break
+			}
+			hasAgent := connectedAgentHostnames[node.Name]
+			nodeMap[node.Name] = &ProxmoxNodeTopology{
+				Name:           node.Name,
+				ID:             node.ID,
+				Status:         node.Status,
 				AgentConnected: hasAgent,
 				CanExecute:     hasAgent && controlEnabled,
 				VMs:            []TopologyVM{},
 				Containers:     []TopologyLXC{},
 			}
-			nodeMap[vm.Node] = nodeTopology
 		}
+	}
 
-		nodeTopology.VMs = append(nodeTopology.VMs, TopologyVM{
-			VMID:   vm.VMID,
-			Name:   vm.Name,
-			Status: vm.Status,
-			CPU:    vm.CPU * 100,
-			Memory: vm.Memory.Usage * 100,
-			OS:     vm.OSName,
-			Tags:   vm.Tags,
-		})
-		nodeTopology.VMCount++
+	ensureNode := func(name, id, status string) *ProxmoxNodeTopology {
+		if !includeProxmox || summaryOnly {
+			return nil
+		}
+		if node, exists := nodeMap[name]; exists {
+			return node
+		}
+		if maxNodes > 0 && len(nodeMap) >= maxNodes {
+			return nil
+		}
+		hasAgent := connectedAgentHostnames[name]
+		nodeMap[name] = &ProxmoxNodeTopology{
+			Name:           name,
+			ID:             id,
+			Status:         status,
+			AgentConnected: hasAgent,
+			CanExecute:     hasAgent && controlEnabled,
+			VMs:            []TopologyVM{},
+			Containers:     []TopologyLXC{},
+		}
+		return nodeMap[name]
+	}
 
+	// Add VMs to their nodes
+	for _, vm := range state.VMs {
 		if vm.Status == "running" {
 			summary.RunningVMs++
+		}
+
+		nodeTopology := ensureNode(vm.Node, "", "unknown")
+		if nodeTopology == nil {
+			continue
+		}
+
+		nodeTopology.VMCount++
+		if maxVMsPerNode <= 0 || len(nodeTopology.VMs) < maxVMsPerNode {
+			nodeTopology.VMs = append(nodeTopology.VMs, TopologyVM{
+				VMID:   vm.VMID,
+				Name:   vm.Name,
+				Status: vm.Status,
+				CPU:    vm.CPU * 100,
+				Memory: vm.Memory.Usage * 100,
+				OS:     vm.OSName,
+				Tags:   vm.Tags,
+			})
 		}
 	}
 
 	// Add containers to their nodes
 	for _, ct := range state.Containers {
-		nodeTopology, exists := nodeMap[ct.Node]
-		if !exists {
-			hasAgent := connectedAgentHostnames[ct.Node]
-			nodeTopology = &ProxmoxNodeTopology{
-				Name:           ct.Node,
-				Status:         "unknown",
-				AgentConnected: hasAgent,
-				CanExecute:     hasAgent && controlEnabled,
-				VMs:            []TopologyVM{},
-				Containers:     []TopologyLXC{},
-			}
-			nodeMap[ct.Node] = nodeTopology
-		}
-
-		nodeTopology.Containers = append(nodeTopology.Containers, TopologyLXC{
-			VMID:      ct.VMID,
-			Name:      ct.Name,
-			Status:    ct.Status,
-			CPU:       ct.CPU * 100,
-			Memory:    ct.Memory.Usage * 100,
-			OS:        ct.OSName,
-			Tags:      ct.Tags,
-			HasDocker: ct.HasDocker,
-		})
-		nodeTopology.ContainerCount++
-
 		if ct.Status == "running" {
 			summary.RunningLXC++
+		}
+
+		nodeTopology := ensureNode(ct.Node, "", "unknown")
+		if nodeTopology == nil {
+			continue
+		}
+
+		nodeTopology.ContainerCount++
+		if maxContainersPerNode <= 0 || len(nodeTopology.Containers) < maxContainersPerNode {
+			nodeTopology.Containers = append(nodeTopology.Containers, TopologyLXC{
+				VMID:      ct.VMID,
+				Name:      ct.Name,
+				Status:    ct.Status,
+				CPU:       ct.CPU * 100,
+				Memory:    ct.Memory.Usage * 100,
+				OS:        ct.OSName,
+				Tags:      ct.Tags,
+				HasDocker: ct.HasDocker,
+			})
 		}
 	}
 
 	// Convert node map to slice
-	var proxmoxNodes []ProxmoxNodeTopology
-	for _, node := range nodeMap {
-		if node.AgentConnected {
-			summary.NodesWithAgents++
+	proxmoxNodes := []ProxmoxNodeTopology{}
+	if includeProxmox && !summaryOnly {
+		for _, node := range nodeMap {
+			proxmoxNodes = append(proxmoxNodes, *node)
 		}
-		proxmoxNodes = append(proxmoxNodes, *node)
 	}
 
 	// Build Docker topology
-	var dockerHosts []DockerHostTopology
+	dockerHosts := []DockerHostTopology{}
 	for _, host := range state.DockerHosts {
 		hasAgent := connectedAgentHostnames[host.Hostname]
 		runningCount := 0
 		var containers []DockerContainerSummary
 
 		for _, c := range host.Containers {
-			containers = append(containers, DockerContainerSummary{
-				ID:     c.ID,
-				Name:   c.Name,
-				State:  c.State,
-				Image:  c.Image,
-				Health: c.Health,
-			})
-			summary.TotalDockerContainers++
 			if c.State == "running" {
 				runningCount++
 				summary.RunningDocker++
 			}
+			summary.TotalDockerContainers++
+
+			if includeDocker && !summaryOnly {
+				if maxDockerContainersPerHost <= 0 || len(containers) < maxDockerContainersPerHost {
+					containers = append(containers, DockerContainerSummary{
+						ID:     c.ID,
+						Name:   c.Name,
+						State:  c.State,
+						Image:  c.Image,
+						Health: c.Health,
+					})
+				}
+			}
 		}
 
-		if hasAgent {
-			summary.DockerHostsWithAgents++
-		}
+		if includeDocker && !summaryOnly {
+			if maxDockerHosts > 0 && len(dockerHosts) >= maxDockerHosts {
+				continue
+			}
 
-		dockerHosts = append(dockerHosts, DockerHostTopology{
-			Hostname:       host.Hostname,
-			DisplayName:    host.DisplayName,
-			AgentConnected: hasAgent,
-			CanExecute:     hasAgent && controlEnabled,
-			Containers:     containers,
-			ContainerCount: len(containers),
-			RunningCount:   runningCount,
-		})
+			dockerHosts = append(dockerHosts, DockerHostTopology{
+				Hostname:       host.Hostname,
+				DisplayName:    host.DisplayName,
+				AgentConnected: hasAgent,
+				CanExecute:     hasAgent && controlEnabled,
+				Containers:     containers,
+				ContainerCount: len(host.Containers),
+				RunningCount:   runningCount,
+			})
+		}
 	}
 
 	response := TopologyResponse{
@@ -699,6 +909,189 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 	default:
 		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'vm', 'container', or 'docker'", resourceType)), nil
 	}
+}
+
+func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewTextResult("State provider not available."), nil
+	}
+
+	rawQuery, _ := args["query"].(string)
+	query := strings.TrimSpace(rawQuery)
+	if query == "" {
+		return NewErrorResult(fmt.Errorf("query is required")), nil
+	}
+
+	typeFilter, _ := args["type"].(string)
+	statusFilter, _ := args["status"].(string)
+	limit := intArg(args, "limit", 20)
+	offset := intArg(args, "offset", 0)
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	allowedTypes := map[string]bool{
+		"":            true,
+		"node":        true,
+		"vm":          true,
+		"container":   true,
+		"docker":      true,
+		"docker_host": true,
+	}
+	if !allowedTypes[typeFilter] {
+		return NewErrorResult(fmt.Errorf("invalid type: %s. Use node, vm, container, docker, or docker_host", typeFilter)), nil
+	}
+
+	matchesQuery := func(query string, candidates ...string) bool {
+		for _, candidate := range candidates {
+			if candidate == "" {
+				continue
+			}
+			if strings.Contains(strings.ToLower(candidate), query) {
+				return true
+			}
+		}
+		return false
+	}
+
+	queryLower := strings.ToLower(query)
+	state := e.stateProvider.GetState()
+
+	matches := make([]ResourceMatch, 0, limit)
+	total := 0
+
+	addMatch := func(match ResourceMatch) {
+		if total < offset {
+			total++
+			return
+		}
+		if len(matches) >= limit {
+			total++
+			return
+		}
+		matches = append(matches, match)
+		total++
+	}
+
+	if typeFilter == "" || typeFilter == "node" {
+		for _, node := range state.Nodes {
+			if statusFilter != "" && !strings.EqualFold(node.Status, statusFilter) {
+				continue
+			}
+			if !matchesQuery(queryLower, node.Name, node.ID) {
+				continue
+			}
+			addMatch(ResourceMatch{
+				Type:   "node",
+				ID:     node.ID,
+				Name:   node.Name,
+				Status: node.Status,
+			})
+		}
+	}
+
+	if typeFilter == "" || typeFilter == "vm" {
+		for _, vm := range state.VMs {
+			if statusFilter != "" && !strings.EqualFold(vm.Status, statusFilter) {
+				continue
+			}
+			if !matchesQuery(queryLower, vm.Name, vm.ID, fmt.Sprintf("%d", vm.VMID)) {
+				continue
+			}
+			addMatch(ResourceMatch{
+				Type:   "vm",
+				ID:     vm.ID,
+				Name:   vm.Name,
+				Status: vm.Status,
+				Node:   vm.Node,
+				VMID:   vm.VMID,
+			})
+		}
+	}
+
+	if typeFilter == "" || typeFilter == "container" {
+		for _, ct := range state.Containers {
+			if statusFilter != "" && !strings.EqualFold(ct.Status, statusFilter) {
+				continue
+			}
+			if !matchesQuery(queryLower, ct.Name, ct.ID, fmt.Sprintf("%d", ct.VMID)) {
+				continue
+			}
+			addMatch(ResourceMatch{
+				Type:   "container",
+				ID:     ct.ID,
+				Name:   ct.Name,
+				Status: ct.Status,
+				Node:   ct.Node,
+				VMID:   ct.VMID,
+			})
+		}
+	}
+
+	if typeFilter == "" || typeFilter == "docker_host" {
+		for _, host := range state.DockerHosts {
+			if statusFilter != "" && !strings.EqualFold(host.Status, statusFilter) {
+				continue
+			}
+			if !matchesQuery(queryLower, host.ID, host.Hostname, host.DisplayName, host.CustomDisplayName) {
+				continue
+			}
+			displayName := host.DisplayName
+			if host.CustomDisplayName != "" {
+				displayName = host.CustomDisplayName
+			}
+			if displayName == "" {
+				displayName = host.Hostname
+			}
+			addMatch(ResourceMatch{
+				Type:   "docker_host",
+				ID:     host.ID,
+				Name:   displayName,
+				Status: host.Status,
+				Host:   host.Hostname,
+			})
+		}
+	}
+
+	if typeFilter == "" || typeFilter == "docker" {
+		for _, host := range state.DockerHosts {
+			for _, c := range host.Containers {
+				if statusFilter != "" && !strings.EqualFold(c.State, statusFilter) {
+					continue
+				}
+				if !matchesQuery(queryLower, c.Name, c.ID, c.Image) {
+					continue
+				}
+				addMatch(ResourceMatch{
+					Type:   "docker",
+					ID:     c.ID,
+					Name:   c.Name,
+					Status: c.State,
+					Host:   host.Hostname,
+					Image:  c.Image,
+				})
+			}
+		}
+	}
+
+	response := ResourceSearchResponse{
+		Query:   query,
+		Matches: matches,
+		Total:   total,
+	}
+
+	if offset > 0 || total > limit {
+		response.Pagination = &PaginationInfo{
+			Total:  total,
+			Limit:  limit,
+			Offset: offset,
+		}
+	}
+
+	return NewJSONResult(response), nil
 }
 
 // Helper to get int args with default

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -25,6 +26,18 @@ func (e *PulseToolExecutor) registerPatrolTools() {
 						Type:        "string",
 						Description: "Optional: specific resource ID. If omitted, returns summary for all resources.",
 					},
+					"resource_type": {
+						Type:        "string",
+						Description: "Optional: filter by resource type (vm, container, node)",
+					},
+					"limit": {
+						Type:        "integer",
+						Description: "Max results when returning summary (default 100)",
+					},
+					"offset": {
+						Type:        "integer",
+						Description: "Skip N results when returning summary",
+					},
 				},
 				Required: []string{"period"},
 			},
@@ -44,6 +57,18 @@ func (e *PulseToolExecutor) registerPatrolTools() {
 					"resource_id": {
 						Type:        "string",
 						Description: "Optional: specific resource ID. If omitted, returns all baselines.",
+					},
+					"resource_type": {
+						Type:        "string",
+						Description: "Optional: filter by resource type (vm, container, node)",
+					},
+					"limit": {
+						Type:        "integer",
+						Description: "Max results when returning baselines (default 100)",
+					},
+					"offset": {
+						Type:        "integer",
+						Description: "Skip N results when returning baselines",
 					},
 				},
 			},
@@ -120,8 +145,16 @@ Do NOT use for: Checking if something is running (use pulse_get_topology), or th
 					},
 					"severity": {
 						Type:        "string",
-						Description: "Filter: 'critical', 'warning', or 'info'. Omit for all.",
+						Description: "Filter: critical, warning, or info. Omit for all.",
 						Enum:        []string{"critical", "warning", "info"},
+					},
+					"resource_type": {
+						Type:        "string",
+						Description: "Optional: filter by resource type (vm, container, node, docker)",
+					},
+					"resource_id": {
+						Type:        "string",
+						Description: "Optional: filter by resource ID",
 					},
 					"limit": {
 						Type:        "integer",
@@ -229,6 +262,22 @@ Use when: User asks about alerts that cleared, what issues resolved themselves, 
 func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	period, _ := args["period"].(string)
 	resourceID, _ := args["resource_id"].(string)
+	resourceType, _ := args["resource_type"].(string)
+	limit := intArg(args, "limit", 100)
+	offset := intArg(args, "offset", 0)
+	if limit <= 0 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	if resourceType != "" {
+		validTypes := map[string]bool{"vm": true, "container": true, "node": true}
+		if !validTypes[resourceType] {
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, container, or node", resourceType)), nil
+		}
+	}
 
 	if e.metricsHistory == nil {
 		return NewTextResult("Metrics history not available. The system may still be collecting data."), nil
@@ -256,12 +305,49 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 			return NewErrorResult(err), nil
 		}
 		response.Points = metrics
-	} else {
-		summary, err := e.metricsHistory.GetAllMetricsSummary(duration)
-		if err != nil {
-			return NewErrorResult(err), nil
+		return NewJSONResult(response), nil
+	}
+
+	summary, err := e.metricsHistory.GetAllMetricsSummary(duration)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	keys := make([]string, 0, len(summary))
+	for id, metric := range summary {
+		if resourceType != "" && strings.ToLower(metric.ResourceType) != resourceType {
+			continue
 		}
-		response.Summary = summary
+		keys = append(keys, id)
+	}
+	sort.Strings(keys)
+
+	filtered := make(map[string]ResourceMetricsSummary)
+	total := 0
+	for _, id := range keys {
+		if total < offset {
+			total++
+			continue
+		}
+		if len(filtered) >= limit {
+			total++
+			continue
+		}
+		filtered[id] = summary[id]
+		total++
+	}
+
+	if filtered == nil {
+		filtered = map[string]ResourceMetricsSummary{}
+	}
+
+	response.Summary = filtered
+	if offset > 0 || total > limit {
+		response.Pagination = &PaginationInfo{
+			Total:  total,
+			Limit:  limit,
+			Offset: offset,
+		}
 	}
 
 	return NewJSONResult(response), nil
@@ -269,6 +355,22 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 
 func (e *PulseToolExecutor) executeGetBaselines(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	resourceID, _ := args["resource_id"].(string)
+	resourceType, _ := args["resource_type"].(string)
+	limit := intArg(args, "limit", 100)
+	offset := intArg(args, "offset", 0)
+	if limit <= 0 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	if resourceType != "" {
+		validTypes := map[string]bool{"vm": true, "container": true, "node": true}
+		if !validTypes[resourceType] {
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, container, or node", resourceType)), nil
+		}
+	}
 
 	if e.baselineProvider == nil {
 		return NewTextResult("Baseline data not available. The system needs time to learn normal behavior patterns."), nil
@@ -292,8 +394,65 @@ func (e *PulseToolExecutor) executeGetBaselines(_ context.Context, args map[stri
 				response.Baselines[resourceID]["memory"] = memBaseline
 			}
 		}
-	} else {
-		response.Baselines = e.baselineProvider.GetAllBaselines()
+		return NewJSONResult(response), nil
+	}
+
+	baselines := e.baselineProvider.GetAllBaselines()
+	keys := make([]string, 0, len(baselines))
+	var typeIndex map[string]string
+	if resourceType != "" {
+		if e.stateProvider == nil {
+			return NewErrorResult(fmt.Errorf("state provider not available")), nil
+		}
+		state := e.stateProvider.GetState()
+		typeIndex = make(map[string]string)
+		for _, vm := range state.VMs {
+			typeIndex[fmt.Sprintf("%d", vm.VMID)] = "vm"
+		}
+		for _, ct := range state.Containers {
+			typeIndex[fmt.Sprintf("%d", ct.VMID)] = "container"
+		}
+		for _, node := range state.Nodes {
+			typeIndex[node.ID] = "node"
+		}
+	}
+
+	for id := range baselines {
+		if resourceType != "" {
+			if t, ok := typeIndex[id]; !ok || t != resourceType {
+				continue
+			}
+		}
+		keys = append(keys, id)
+	}
+	sort.Strings(keys)
+
+	filtered := make(map[string]map[string]*MetricBaseline)
+	total := 0
+	for _, id := range keys {
+		if total < offset {
+			total++
+			continue
+		}
+		if len(filtered) >= limit {
+			total++
+			continue
+		}
+		filtered[id] = baselines[id]
+		total++
+	}
+
+	if filtered == nil {
+		filtered = map[string]map[string]*MetricBaseline{}
+	}
+
+	response.Baselines = filtered
+	if offset > 0 || total > limit {
+		response.Pagination = &PaginationInfo{
+			Total:  total,
+			Limit:  limit,
+			Offset: offset,
+		}
 	}
 
 	return NewJSONResult(response), nil
@@ -368,8 +527,24 @@ func (e *PulseToolExecutor) executeListAlerts(_ context.Context, args map[string
 func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	includeDismissed, _ := args["include_dismissed"].(bool)
 	severityFilter, _ := args["severity"].(string)
+	resourceType, _ := args["resource_type"].(string)
+	resourceID, _ := args["resource_id"].(string)
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
+	if limit <= 0 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceType != "" {
+		validTypes := map[string]bool{"vm": true, "container": true, "node": true, "docker": true}
+		if !validTypes[resourceType] {
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, container, node, or docker", resourceType)), nil
+		}
+	}
 
 	if e.findingsProvider == nil {
 		return NewTextResult("Patrol findings not available. AI Patrol may not be running."), nil
@@ -381,35 +556,68 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		allDismissed = e.findingsProvider.GetDismissedFindings()
 	}
 
+	normalizeType := func(value string) string {
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		switch normalized {
+		case "docker container", "docker-container", "docker_container":
+			return "docker"
+		case "lxc", "lxc container", "lxc-container", "lxc_container":
+			return "container"
+		default:
+			return normalized
+		}
+	}
+
+	matches := func(f Finding) bool {
+		if severityFilter != "" && f.Severity != severityFilter {
+			return false
+		}
+		if resourceID != "" && f.ResourceID != resourceID {
+			return false
+		}
+		if resourceType != "" && normalizeType(f.ResourceType) != resourceType {
+			return false
+		}
+		return true
+	}
+
 	// Filter active
 	var active []Finding
-	for i, f := range allActive {
-		if i < offset {
+	totalActive := 0
+	for _, f := range allActive {
+		if !matches(f) {
+			continue
+		}
+		if totalActive < offset {
+			totalActive++
 			continue
 		}
 		if len(active) >= limit {
-			break
-		}
-		if severityFilter != "" && f.Severity != severityFilter {
+			totalActive++
 			continue
 		}
 		active = append(active, f)
+		totalActive++
 	}
 
 	// Filter dismissed
 	var dismissed []Finding
+	totalDismissed := 0
 	if includeDismissed {
-		for i, f := range allDismissed {
-			if i < offset {
+		for _, f := range allDismissed {
+			if !matches(f) {
+				continue
+			}
+			if totalDismissed < offset {
+				totalDismissed++
 				continue
 			}
 			if len(dismissed) >= limit {
-				break
-			}
-			if severityFilter != "" && f.Severity != severityFilter {
+				totalDismissed++
 				continue
 			}
 			dismissed = append(dismissed, f)
+			totalDismissed++
 		}
 	}
 
@@ -424,14 +632,15 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		Active:    active,
 		Dismissed: dismissed,
 		Counts: FindingCounts{
-			Active:    len(allActive),
-			Dismissed: len(allDismissed),
+			Active:    totalActive,
+			Dismissed: totalDismissed,
 		},
 	}
 
-	if offset > 0 || len(allActive) > limit || len(allDismissed) > limit {
+	total := totalActive + totalDismissed
+	if offset > 0 || total > limit {
 		response.Pagination = &PaginationInfo{
-			Total:  len(allActive) + len(allDismissed),
+			Total:  total,
 			Limit:  limit,
 			Offset: offset,
 		}

@@ -65,7 +65,8 @@ func (a *AgenticLoop) Execute(ctx context.Context, sessionID string, messages []
 	}()
 
 	// Convert our messages to provider format
-	providerMessages := convertToProviderMessages(messages)
+	messagesForModel := pruneMessagesForModel(messages)
+	providerMessages := convertToProviderMessages(messagesForModel)
 
 	var resultMessages []Message
 	turn := 0
@@ -109,16 +110,16 @@ func (a *AgenticLoop) Execute(ctx context.Context, sessionID string, messages []
 			case "content":
 				if data, ok := event.Data.(providers.ContentEvent); ok {
 					contentBuilder.WriteString(data.Text)
-					// Forward to callback - send plain string as frontend expects
-					jsonData, _ := json.Marshal(data.Text)
+					// Forward to callback - send ContentData struct
+					jsonData, _ := json.Marshal(ContentData{Text: data.Text})
 					callback(StreamEvent{Type: "content", Data: jsonData})
 				}
 
 			case "thinking":
 				if data, ok := event.Data.(providers.ThinkingEvent); ok {
 					thinkingBuilder.WriteString(data.Text)
-					// Forward to callback - send plain string as frontend expects
-					jsonData, _ := json.Marshal(data.Text)
+					// Forward to callback - send ThinkingData struct
+					jsonData, _ := json.Marshal(ThinkingData{Text: data.Text})
 					callback(StreamEvent{Type: "thinking", Data: jsonData})
 				}
 
@@ -295,6 +296,8 @@ func (a *AgenticLoop) Execute(ctx context.Context, sessionID string, messages []
 				}
 			}
 
+			modelResultText := truncateToolResultForModel(resultText)
+
 			// Send tool_end event
 			// Convert input to JSON string for frontend display
 			inputStr := ""
@@ -330,7 +333,7 @@ func (a *AgenticLoop) Execute(ctx context.Context, sessionID string, messages []
 				Role: "user",
 				ToolResult: &providers.ToolResult{
 					ToolUseID: tc.ID,
-					Content:   resultText,
+					Content:   modelResultText,
 					IsError:   isError,
 				},
 			})
@@ -390,6 +393,43 @@ func waitForApprovalDecision(ctx context.Context, store *approval.Store, approva
 	}
 }
 
+func pruneMessagesForModel(messages []Message) []Message {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	if StatelessContext {
+		for i := len(messages) - 1; i >= 0; i-- {
+			msg := messages[i]
+			if msg.Role == "user" && msg.ToolResult == nil && msg.Content != "" {
+				return []Message{msg}
+			}
+		}
+		return []Message{messages[len(messages)-1]}
+	}
+
+	if MaxContextMessagesLimit <= 0 || len(messages) <= MaxContextMessagesLimit {
+		return messages
+	}
+
+	start := len(messages) - MaxContextMessagesLimit
+	pruned := messages[start:]
+	for len(pruned) > 0 && pruned[0].ToolResult != nil {
+		pruned = pruned[1:]
+	}
+
+	return pruned
+}
+
+func truncateToolResultForModel(text string) string {
+	if MaxToolResultCharsLimit <= 0 || len(text) <= MaxToolResultCharsLimit {
+		return text
+	}
+
+	truncated := text[:MaxToolResultCharsLimit]
+	return fmt.Sprintf("%s\n...[truncated %d chars]...", truncated, len(text)-MaxToolResultCharsLimit)
+}
+
 // convertToProviderMessages converts our messages to provider format
 func convertToProviderMessages(messages []Message) []providers.Message {
 	result := make([]providers.Message, 0, len(messages))
@@ -414,7 +454,7 @@ func convertToProviderMessages(messages []Message) []providers.Message {
 		if m.ToolResult != nil {
 			pm.ToolResult = &providers.ToolResult{
 				ToolUseID: m.ToolResult.ToolUseID,
-				Content:   m.ToolResult.Content,
+				Content:   truncateToolResultForModel(m.ToolResult.Content),
 				IsError:   m.ToolResult.IsError,
 			}
 		}

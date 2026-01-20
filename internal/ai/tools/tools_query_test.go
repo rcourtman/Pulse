@@ -121,7 +121,7 @@ func TestExecuteListInfrastructureAndTopology(t *testing.T) {
 	// Topology includes derived node for VM reference if missing
 	state.Nodes = nil
 	executor.stateProvider = &mockStateProvider{state: state}
-	topologyResult, err := executor.executeGetTopology(context.Background())
+	topologyResult, err := executor.executeGetTopology(context.Background(), map[string]interface{}{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -131,6 +131,109 @@ func TestExecuteListInfrastructureAndTopology(t *testing.T) {
 	}
 	if topology.Summary.TotalVMs != 1 || len(topology.Proxmox.Nodes) == 0 {
 		t.Fatalf("unexpected topology: %+v", topology)
+	}
+}
+
+func TestExecuteGetTopologySummaryOnly(t *testing.T) {
+	state := models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node1", Name: "node1", Status: "online"}},
+		VMs: []models.VM{
+			{Name: "vm1", VMID: 100, Status: "running", Node: "node1"},
+		},
+		Containers: []models.Container{
+			{Name: "ct1", VMID: 200, Status: "stopped", Node: "node1"},
+		},
+		DockerHosts: []models.DockerHost{
+			{
+				Hostname: "host1",
+				Containers: []models.DockerContainer{
+					{ID: "c1", Name: "nginx", State: "running", Image: "nginx"},
+				},
+			},
+		},
+	}
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+	})
+
+	result, err := executor.executeGetTopology(context.Background(), map[string]interface{}{
+		"summary_only": true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var topology TopologyResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &topology); err != nil {
+		t.Fatalf("decode topology: %v", err)
+	}
+	if len(topology.Proxmox.Nodes) != 0 {
+		t.Fatalf("expected no proxmox nodes, got: %+v", topology.Proxmox.Nodes)
+	}
+	if len(topology.Docker.Hosts) != 0 {
+		t.Fatalf("expected no docker hosts, got: %+v", topology.Docker.Hosts)
+	}
+	if topology.Summary.TotalVMs != 1 || topology.Summary.TotalDockerHosts != 1 || topology.Summary.TotalDockerContainers != 1 {
+		t.Fatalf("unexpected summary: %+v", topology.Summary)
+	}
+	if topology.Summary.RunningVMs != 1 || topology.Summary.RunningDocker != 1 {
+		t.Fatalf("unexpected running summary: %+v", topology.Summary)
+	}
+}
+
+func TestExecuteSearchResources(t *testing.T) {
+	state := models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node1", Name: "node1", Status: "online"}},
+		VMs: []models.VM{
+			{ID: "vm1", VMID: 100, Name: "web-vm", Status: "running", Node: "node1"},
+		},
+		Containers: []models.Container{
+			{ID: "ct1", VMID: 200, Name: "db-ct", Status: "stopped", Node: "node1"},
+		},
+		DockerHosts: []models.DockerHost{
+			{
+				ID:          "host1",
+				Hostname:    "dock1",
+				DisplayName: "Dock 1",
+				Status:      "online",
+				Containers: []models.DockerContainer{
+					{ID: "c1", Name: "nginx", State: "running", Image: "nginx:latest"},
+				},
+			},
+		},
+	}
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+	})
+
+	result, err := executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "nginx",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var response ResourceSearchResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Matches) != 1 || response.Matches[0].Type != "docker" || response.Matches[0].Name != "nginx" {
+		t.Fatalf("unexpected search response: %+v", response)
+	}
+
+	result, err = executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "web",
+		"type":  "vm",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	response = ResourceSearchResponse{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Matches) != 1 || response.Matches[0].Type != "vm" || response.Matches[0].Name != "web-vm" {
+		t.Fatalf("unexpected search response: %+v", response)
 	}
 }
 

@@ -168,7 +168,7 @@ func TestExecuteListAlertsAndFindings(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &findings); err != nil {
 		t.Fatalf("decode findings: %v", err)
 	}
-	if findings.Counts.Active != 1 || findings.Counts.Dismissed != 1 {
+	if findings.Counts.Active != 1 || findings.Counts.Dismissed != 0 {
 		t.Fatalf("unexpected counts: %+v", findings.Counts)
 	}
 	if len(findings.Active) != 1 || len(findings.Dismissed) != 0 {

@@ -2890,13 +2890,18 @@ func (m *Manager) CheckHost(host models.Host) {
 	if thresholds.Disk == nil || thresholds.Disk.Trigger <= 0 {
 		// Only clear alerts for disks that don't have their own overrides
 		m.mu.RLock()
+		var disksToClear []string
 		for _, disk := range host.Disks {
 			diskResourceID, _ := hostDiskResourceID(host, disk)
 			if _, hasDiskOverride := m.config.Overrides[diskResourceID]; !hasDiskOverride {
-				m.clearAlert(fmt.Sprintf("host-%s-disk-%s", host.ID, sanitizeHostComponent(disk.Mountpoint)))
+				disksToClear = append(disksToClear, fmt.Sprintf("host-%s-disk-%s", host.ID, sanitizeHostComponent(disk.Mountpoint)))
 			}
 		}
 		m.mu.RUnlock()
+
+		for _, alertID := range disksToClear {
+			m.clearAlert(alertID)
+		}
 	}
 
 	m.cleanupHostDiskAlerts(host, seenDisks)

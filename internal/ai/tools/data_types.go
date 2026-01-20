@@ -137,6 +137,26 @@ type InfrastructureResponse struct {
 	Pagination  *PaginationInfo     `json:"pagination,omitempty"`
 }
 
+// ResourceSearchResponse is returned by pulse_search_resources
+type ResourceSearchResponse struct {
+	Query      string          `json:"query"`
+	Matches    []ResourceMatch `json:"matches"`
+	Total      int             `json:"total"`
+	Pagination *PaginationInfo `json:"pagination,omitempty"`
+}
+
+// ResourceMatch is a compact match result for pulse_search_resources
+type ResourceMatch struct {
+	Type   string `json:"type"` // "node", "vm", "container", "docker", "docker_host"
+	ID     string `json:"id,omitempty"`
+	Name   string `json:"name"`
+	Status string `json:"status,omitempty"`
+	Node   string `json:"node,omitempty"`
+	Host   string `json:"host,omitempty"`
+	VMID   int    `json:"vmid,omitempty"`
+	Image  string `json:"image,omitempty"`
+}
+
 // NodeSummary is a summarized node for list responses
 type NodeSummary struct {
 	Name           string `json:"name"`
@@ -381,12 +401,14 @@ type MetricsResponse struct {
 	Period     string                            `json:"period"`
 	Points     []MetricPoint                     `json:"points,omitempty"`
 	Summary    map[string]ResourceMetricsSummary `json:"summary,omitempty"`
+	Pagination *PaginationInfo                   `json:"pagination,omitempty"`
 }
 
 // BaselinesResponse is returned by pulse_get_baselines
 type BaselinesResponse struct {
 	ResourceID string                                `json:"resource_id,omitempty"`
 	Baselines  map[string]map[string]*MetricBaseline `json:"baselines"` // resourceID -> metric -> baseline
+	Pagination *PaginationInfo                       `json:"pagination,omitempty"`
 }
 
 // PatternsResponse is returned by pulse_get_patterns
