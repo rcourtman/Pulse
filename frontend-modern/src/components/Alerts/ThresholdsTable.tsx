@@ -1913,11 +1913,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       }
     });
 
+    // Find existing override to check for backup/snapshot fields
+    const existingOverrideCheck = props.overrides().find((o) => o.id === resourceId);
+
     const hasStateOnlyOverride = Boolean(
       resource.disabled ||
       resource.disableConnectivity ||
       resource.poweredOffSeverity !== undefined ||
-      noteForOverride !== undefined,
+      noteForOverride !== undefined ||
+      existingOverrideCheck?.backup ||
+      existingOverrideCheck?.snapshot,
     );
 
     // If no threshold overrides or state flags remain, remove the override entirely
@@ -1950,6 +1955,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       disableConnectivity: resource.disableConnectivity,
       poweredOffSeverity: resource.poweredOffSeverity,
       note: noteForOverride,
+      backup: existingOverrideCheck?.backup,
+      snapshot: existingOverrideCheck?.snapshot,
       thresholds: overrideThresholds,
     };
 
