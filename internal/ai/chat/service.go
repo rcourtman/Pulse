@@ -68,6 +68,7 @@ type Service struct {
 	executor      *tools.PulseToolExecutor
 	sessions      *SessionStore
 	agenticLoop   *AgenticLoop
+	provider      providers.StreamingProvider
 	started       bool
 }
 
@@ -174,6 +175,7 @@ func (s *Service) Start(ctx context.Context) error {
 	// Create agentic loop
 	systemPrompt := s.buildSystemPrompt()
 	s.agenticLoop = NewAgenticLoop(provider, s.executor, systemPrompt)
+	s.provider = provider
 
 	s.started = true
 	log.Info().
@@ -190,6 +192,7 @@ func (s *Service) Stop(ctx context.Context) error {
 	defer s.mu.Unlock()
 
 	s.started = false
+	s.provider = nil
 	log.Info().Msg("Pulse AI (direct) stopped")
 	return nil
 }
@@ -224,6 +227,7 @@ func (s *Service) Restart(ctx context.Context, newCfg *config.AIConfig) error {
 	// Update agentic loop
 	systemPrompt := s.buildSystemPrompt()
 	s.agenticLoop = NewAgenticLoop(provider, s.executor, systemPrompt)
+	s.provider = provider
 
 	log.Info().
 		Str("model", s.cfg.GetChatModel()).
@@ -274,7 +278,8 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	}
 
 	// Run agentic loop
-	resultMessages, err := agenticLoop.Execute(ctx, session.ID, messages, callback)
+	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt)
+	resultMessages, err := agenticLoop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
 	if err != nil {
 		// Still save any messages we got
 		for _, msg := range resultMessages {
@@ -608,6 +613,100 @@ When users ask about their infrastructure:
 
 Be concise but thorough. Focus on actionable information.
 Trust the data from your tools - it's updated in real-time.`
+}
+
+type runCommandDecision struct {
+	Allow  bool   `json:"allow_run_command"`
+	Reason string `json:"reason,omitempty"`
+}
+
+const runCommandClassifierPrompt = `You are a routing classifier for Pulse AI chat.
+Decide whether the user is explicitly asking to execute a command or log into a machine.
+If the user is asking for status, explanations, or what a command does, return false.
+Return only JSON: {"allow_run_command": true|false, "reason": "short"}.`
+
+func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string) []providers.Tool {
+	mcpTools := s.executor.ListTools()
+	providerTools := ConvertMCPToolsToProvider(mcpTools)
+
+	allow, err := s.classifyRunCommand(ctx, prompt)
+	if err != nil {
+		log.Warn().Err(err).Msg("Run command routing failed")
+		return filterOutRunCommand(providerTools)
+	}
+	if allow {
+		return providerTools
+	}
+	return filterOutRunCommand(providerTools)
+}
+
+func (s *Service) classifyRunCommand(ctx context.Context, prompt string) (bool, error) {
+	if s.provider == nil {
+		return false, fmt.Errorf("provider not available")
+	}
+
+	req := providers.ChatRequest{
+		Messages:    []providers.Message{{Role: "user", Content: prompt}},
+		System:      runCommandClassifierPrompt,
+		MaxTokens:   80,
+		Temperature: 0,
+	}
+	resp, err := s.provider.Chat(ctx, req)
+	if err != nil {
+		return false, err
+	}
+	decision, err := parseRunCommandDecision(resp.Content)
+	if err != nil {
+		return false, err
+	}
+	return decision.Allow, nil
+}
+
+func parseRunCommandDecision(text string) (runCommandDecision, error) {
+	var decision runCommandDecision
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return decision, fmt.Errorf("empty response")
+	}
+
+	if strings.EqualFold(trimmed, "true") {
+		decision.Allow = true
+		return decision, nil
+	}
+	if strings.EqualFold(trimmed, "false") {
+		decision.Allow = false
+		return decision, nil
+	}
+
+	if err := json.Unmarshal([]byte(trimmed), &decision); err == nil {
+		if strings.Contains(trimmed, "allow_run_command") {
+			return decision, nil
+		}
+	}
+
+	start := strings.Index(trimmed, "{")
+	end := strings.LastIndex(trimmed, "}")
+	if start >= 0 && end > start {
+		candidate := trimmed[start : end+1]
+		if err := json.Unmarshal([]byte(candidate), &decision); err == nil {
+			if strings.Contains(candidate, "allow_run_command") {
+				return decision, nil
+			}
+		}
+	}
+
+	return decision, fmt.Errorf("unable to parse decision")
+}
+
+func filterOutRunCommand(tools []providers.Tool) []providers.Tool {
+	filtered := make([]providers.Tool, 0, len(tools))
+	for _, tool := range tools {
+		if tool.Name == "pulse_run_command" {
+			continue
+		}
+		filtered = append(filtered, tool)
+	}
+	return filtered
 }
 
 // Execute provides non-streaming execution (for compatibility)

@@ -493,25 +493,64 @@ func (e *PulseToolExecutor) resolveDockerContainer(containerName, hostName strin
 	}
 
 	state := e.stateProvider.GetState()
+	type dockerMatch struct {
+		host *models.DockerHost
+		idx  int
+	}
+	matches := []dockerMatch{}
 
-	for _, host := range state.DockerHosts {
+	for i := range state.DockerHosts {
+		host := &state.DockerHosts[i]
 		if hostName != "" && host.Hostname != hostName && host.DisplayName != hostName {
 			continue
 		}
 
-		for i, container := range host.Containers {
+		for ci := range host.Containers {
+			container := host.Containers[ci]
 			if container.Name == containerName ||
 				container.ID == containerName ||
 				strings.HasPrefix(container.ID, containerName) {
-				return &host.Containers[i], &host, nil
+				matches = append(matches, dockerMatch{host: host, idx: ci})
 			}
 		}
 	}
 
 	if hostName != "" {
-		return nil, nil, fmt.Errorf("container '%s' not found on host '%s'", containerName, hostName)
+		if len(matches) == 0 {
+			return nil, nil, fmt.Errorf("container '%s' not found on host '%s'", containerName, hostName)
+		}
+		match := matches[0]
+		return &match.host.Containers[match.idx], match.host, nil
 	}
-	return nil, nil, fmt.Errorf("container '%s' not found on any Docker host", containerName)
+
+	if len(matches) == 0 {
+		return nil, nil, fmt.Errorf("container '%s' not found on any Docker host", containerName)
+	}
+	if len(matches) > 1 {
+		hostNames := make([]string, 0, len(matches))
+		seen := make(map[string]bool)
+		for _, match := range matches {
+			name := strings.TrimSpace(match.host.DisplayName)
+			if name == "" {
+				name = strings.TrimSpace(match.host.Hostname)
+			}
+			if name == "" {
+				name = strings.TrimSpace(match.host.ID)
+			}
+			if name == "" || seen[name] {
+				continue
+			}
+			hostNames = append(hostNames, name)
+			seen[name] = true
+		}
+		if len(hostNames) == 0 {
+			return nil, nil, fmt.Errorf("container '%s' exists on multiple Docker hosts; specify host", containerName)
+		}
+		return nil, nil, fmt.Errorf("container '%s' exists on multiple Docker hosts: %s. Specify host.", containerName, strings.Join(hostNames, ", "))
+	}
+
+	match := matches[0]
+	return &match.host.Containers[match.idx], match.host, nil
 }
 
 func (e *PulseToolExecutor) findAgentForNode(nodeName string) string {
@@ -692,7 +731,7 @@ func formatTargetHostRequired(agents []agentexec.ConnectedAgent) string {
 	if len(hostnames) > maxItems {
 		list = hostnames[:maxItems]
 	}
-	message := fmt.Sprintf("Multiple agents are connected. Please specify target_host. Available: %s", strings.Join(list, ", ")
+	message := fmt.Sprintf("Multiple agents are connected. Please specify target_host. Available: %s", strings.Join(list, ", "))
 	if len(hostnames) > maxItems {
 		message = fmt.Sprintf("%s (+%d more)", message, len(hostnames)-maxItems)
 	}

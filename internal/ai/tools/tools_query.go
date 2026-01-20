@@ -9,6 +9,15 @@ import (
 	"time"
 )
 
+const (
+	defaultMaxTopologyNodes                   = 5
+	defaultMaxTopologyVMsPerNode              = 5
+	defaultMaxTopologyContainersPerNode       = 5
+	defaultMaxTopologyDockerHosts             = 3
+	defaultMaxTopologyDockerContainersPerHost = 5
+	defaultMaxListDockerContainersPerHost     = 10
+)
+
 // registerQueryTools registers infrastructure query tools
 func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.Register(RegisteredTool{
@@ -58,7 +67,8 @@ Use this to confirm hostnames when choosing target_host.`,
 Returns: JSON with nodes/vms/containers/docker_hosts arrays (summaries) and total counts.
 
 Use when: You need a quick list or to find a resource without full topology. Prefer this over pulse_get_topology for large environments. Use filters to keep output small.
-This is monitoring data from Pulse agents; prefer it over running commands for inventory or status checks.`,
+This is monitoring data from Pulse agents; prefer it over running commands for inventory or status checks.
+Default: Docker container lists are capped (use max_docker_containers_per_host to expand).`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -70,6 +80,10 @@ This is monitoring data from Pulse agents; prefer it over running commands for i
 					"status": {
 						Type:        "string",
 						Description: "Optional status filter (e.g. running, stopped, online)",
+					},
+					"max_docker_containers_per_host": {
+						Type:        "integer",
+						Description: "Max Docker containers per host to include (default: 10)",
 					},
 					"limit": {
 						Type:        "integer",
@@ -142,6 +156,7 @@ This is live monitoring data from Pulse agents; prefer it over running commands 
 For targeted lookups or simple status checks, prefer pulse_search_resources or pulse_list_infrastructure to keep output small.
 
 Options: Use include (proxmox/docker), summary_only, and max_* fields to reduce payload size.
+Defaults (when max_* omitted): max_nodes=5, max_vms_per_node=5, max_containers_per_node=5, max_docker_hosts=3, max_docker_containers_per_host=5.
 
 This data is authoritative and updates every ~10 seconds. Trust it for status questions - no verification needed.`,
 			InputSchema: InputSchema{
@@ -332,6 +347,10 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	filterStatus, _ := args["status"].(string)
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
+	maxDockerContainersPerHost := intArg(args, "max_docker_containers_per_host", 0)
+	if _, ok := args["max_docker_containers_per_host"]; !ok {
+		maxDockerContainersPerHost = defaultMaxListDockerContainersPerHost
+	}
 	if limit <= 0 {
 		limit = 100
 	}
@@ -471,6 +490,9 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				if filterStatus != "" && filterStatus != "all" && c.State != filterStatus {
 					continue
 				}
+				if maxDockerContainersPerHost > 0 && len(dockerHost.Containers) >= maxDockerContainersPerHost {
+					continue
+				}
 				dockerHost.Containers = append(dockerHost.Containers, DockerContainerSummary{
 					ID:     c.ID,
 					Name:   c.Name,
@@ -516,12 +538,38 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 		return NewErrorResult(fmt.Errorf("invalid include: %s. Use all, proxmox, or docker", include)), nil
 	}
 
-	summaryOnly, _ := args["summary_only"].(bool)
+	summaryOnly, summaryProvided := args["summary_only"].(bool)
 	maxNodes := intArg(args, "max_nodes", 0)
 	maxVMsPerNode := intArg(args, "max_vms_per_node", 0)
 	maxContainersPerNode := intArg(args, "max_containers_per_node", 0)
 	maxDockerHosts := intArg(args, "max_docker_hosts", 0)
 	maxDockerContainersPerHost := intArg(args, "max_docker_containers_per_host", 0)
+	_, maxNodesProvided := args["max_nodes"]
+	_, maxVMsProvided := args["max_vms_per_node"]
+	_, maxContainersProvided := args["max_containers_per_node"]
+	_, maxDockerHostsProvided := args["max_docker_hosts"]
+	_, maxDockerContainersProvided := args["max_docker_containers_per_host"]
+
+	if !summaryProvided {
+		summaryOnly = false
+	}
+	if !summaryOnly {
+		if !maxNodesProvided {
+			maxNodes = defaultMaxTopologyNodes
+		}
+		if !maxVMsProvided {
+			maxVMsPerNode = defaultMaxTopologyVMsPerNode
+		}
+		if !maxContainersProvided {
+			maxContainersPerNode = defaultMaxTopologyContainersPerNode
+		}
+		if !maxDockerHostsProvided {
+			maxDockerHosts = defaultMaxTopologyDockerHosts
+		}
+		if !maxDockerContainersProvided {
+			maxDockerContainersPerHost = defaultMaxTopologyDockerContainersPerHost
+		}
+	}
 
 	state := e.stateProvider.GetState()
 

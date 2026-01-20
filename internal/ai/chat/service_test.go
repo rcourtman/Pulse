@@ -345,3 +345,49 @@ func TestService_ExtendedMethods(t *testing.T) {
 	err = service.AbortSession(ctx, "s1")
 	assert.Error(t, err) // Service not started
 }
+func TestParseRunCommandDecision(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		want    bool
+		wantErr bool
+	}{
+		{
+			name:    "Allow true",
+			payload: `{"allow_run_command": true, "reason": "explicit"}`,
+			want:    true,
+		},
+		{
+			name:    "Allow false",
+			payload: `{"allow_run_command": false}`,
+			want:    false,
+		},
+		{
+			name:    "Bare true",
+			payload: "true",
+			want:    true,
+		},
+		{
+			name:    "Wrapped JSON",
+			payload: "Decision: {\"allow_run_command\": true}",
+			want:    true,
+		},
+		{
+			name:    "Invalid payload",
+			payload: "n/a",
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseRunCommandDecision(tc.payload)
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got.Allow)
+		})
+	}
+}

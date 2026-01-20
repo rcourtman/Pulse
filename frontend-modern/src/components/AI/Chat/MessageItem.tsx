@@ -80,6 +80,22 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     return grouped;
   });
 
+  const contextTools = createMemo(() => {
+    const events = props.message.streamEvents || [];
+    const names = new Set<string>();
+
+    for (const evt of events) {
+      if (evt.type === 'tool' && evt.tool?.name) {
+        names.add(evt.tool.name);
+      }
+    }
+
+    return Array.from(names);
+  });
+
+  const formatToolName = (name: string) =>
+    name.replace(/^pulse_/, '').replace(/_/g, ' ');
+
   // Check if currently streaming content (no tools pending, still streaming)
   const isStreamingText = () =>
     props.message.isStreaming &&
@@ -205,6 +221,12 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
             {/* Streaming text indicator */}
             <Show when={isStreamingText()}>
               <span class="inline-block w-2 h-4 ml-0.5 bg-purple-500 dark:bg-purple-400 animate-pulse rounded-sm" />
+            </Show>
+
+            <Show when={!props.message.isStreaming && contextTools().length > 0}>
+              <div class="mt-3 text-[10px] text-slate-400 dark:text-slate-500">
+                Context used: {contextTools().map((name) => formatToolName(name)).join(', ')}
+              </div>
             </Show>
 
             {/* Token count footer */}

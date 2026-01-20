@@ -54,6 +54,15 @@ func (a *AgenticLoop) UpdateTools() {
 
 // Execute runs the agentic loop with streaming
 func (a *AgenticLoop) Execute(ctx context.Context, sessionID string, messages []Message, callback StreamCallback) ([]Message, error) {
+	return a.executeWithTools(ctx, sessionID, messages, a.tools, callback)
+}
+
+// ExecuteWithTools runs the agentic loop with a filtered tool set
+func (a *AgenticLoop) ExecuteWithTools(ctx context.Context, sessionID string, messages []Message, tools []providers.Tool, callback StreamCallback) ([]Message, error) {
+	return a.executeWithTools(ctx, sessionID, messages, tools, callback)
+}
+
+func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, messages []Message, tools []providers.Tool, callback StreamCallback) ([]Message, error) {
 	// Track this session for potential abort
 	a.mu.Lock()
 	a.aborted[sessionID] = false
@@ -67,6 +76,10 @@ func (a *AgenticLoop) Execute(ctx context.Context, sessionID string, messages []
 	// Convert our messages to provider format
 	messagesForModel := pruneMessagesForModel(messages)
 	providerMessages := convertToProviderMessages(messagesForModel)
+
+	if tools == nil {
+		tools = a.tools
+	}
 
 	var resultMessages []Message
 	turn := 0
@@ -90,14 +103,14 @@ func (a *AgenticLoop) Execute(ctx context.Context, sessionID string, messages []
 		log.Debug().
 			Int("turn", turn).
 			Int("messages", len(providerMessages)).
-			Int("tools", len(a.tools)).
+			Int("tools", len(tools)).
 			Msg("Agentic loop turn")
 
 		// Build the request
 		req := providers.ChatRequest{
 			Messages: providerMessages,
 			System:   a.systemPrompt,
-			Tools:    a.tools,
+			Tools:    tools,
 		}
 
 		// Collect streaming response
