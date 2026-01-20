@@ -80,6 +80,12 @@ MODELS_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'internal/models/*.go' ':!*_test
 
 echo "Collected diffs from key areas"
 
+# Auto-load API keys from local secrets if not already set
+if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -f "/home/pulse/.secrets/anthropic/api_key" ]; then
+    ANTHROPIC_API_KEY=$(cat /home/pulse/.secrets/anthropic/api_key)
+    export ANTHROPIC_API_KEY
+fi
+
 # Check for LLM API keys
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     LLM_PROVIDER="anthropic"
