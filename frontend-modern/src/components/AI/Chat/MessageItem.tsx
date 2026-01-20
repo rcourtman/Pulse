@@ -171,6 +171,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                                prose-headings:text-slate-900 dark:prose-headings:text-slate-100
                                prose-strong:text-slate-900 dark:prose-strong:text-slate-100
                                prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5"
+                        // eslint-disable-next-line solid/no-innerhtml
                         innerHTML={renderMarkdown(evt.content || '')}
                       />
                     </Match>
@@ -214,6 +215,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                        prose-headings:text-slate-900 dark:prose-headings:text-slate-100
                        prose-strong:text-slate-900 dark:prose-strong:text-slate-100
                        prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5"
+                // eslint-disable-next-line solid/no-innerhtml
                 innerHTML={renderMarkdown(props.message.content)}
               />
             </Show>

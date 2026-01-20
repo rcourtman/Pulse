@@ -259,7 +259,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       if (chat.sessionId() === sessionId) {
         chat.clearMessages();
       }
-    } catch (error) {
+    } catch (_error) {
       notificationStore.error('Failed to delete session');
     }
   };
