@@ -85,7 +85,6 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 
 Legacy env var: `PULSE_KUBE_INCLUDE_ALL_POD_FILES` is still accepted for backward compatibility.
 
-
 ## Auto-Detection
 
 Auto-detection behavior:
@@ -177,7 +176,6 @@ The agent can report S.M.A.R.T. disk temperatures when running in Agent mode. Th
 - If `smartctl` is not available, S.M.A.R.T. monitoring is silently skipped
 - **Disk exclusions** (`--disk-exclude` / `PULSE_DISK_EXCLUDE`) also apply to S.M.A.R.T. monitoring.
   Use patterns like `sda`, `/dev/sdb`, `nvme*`, or `*cache*` to exclude specific block devices.
-
 
 ## Auto-Update
 

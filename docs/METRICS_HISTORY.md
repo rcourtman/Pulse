@@ -58,8 +58,8 @@ These endpoints require authentication with the `monitoring:read` scope.
 
 `GET /api/metrics-store/history` supports:
 
-- `resourceType` (required): `node`, `guest`, `storage`, `docker`, `dockerHost`
-- `resourceId` (required): resource identifier
+- `resourceType` (required): `node`, `vm`, `container`, `storage`, `dockerHost`, `dockerContainer`
+- `resourceId` (required): resource identifier (for VMs/containers use `instance:node:vmid`)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit to return all metrics for the resource.
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `7d`, `30d`, `90d` (default `24h`)
 
@@ -67,7 +67,7 @@ Example:
 
 ```bash
 curl -H "X-API-Token: $TOKEN" \
-  "http://localhost:7655/api/metrics-store/history?resourceType=guest&resourceId=vm-100&range=7d&metric=cpu"
+  "http://localhost:7655/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:100&range=7d&metric=cpu"
 ```
 
 ## Troubleshooting

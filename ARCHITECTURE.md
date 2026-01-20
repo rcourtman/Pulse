@@ -75,9 +75,7 @@ The frontend is a modern Single Page Application (SPA) built with **SolidJS** an
 *   **Vite**: For fast development and optimized builds.
 
 ### State Management
-*   **Stores (`frontend-modern/src/stores`)**:
-    *   `websocket.ts`: The central nervous system. It maintains the WS connection, handles reconnection logic, and updates reactive signals when new data arrives.
-    *   `metricsHistory.ts`: Buffers incoming metrics to drive historical charts (Sparklines) without needing a time-series database backend.
+*   **Stores (`frontend-modern/src/stores`)**: `websocket.ts` manages the WS connection and reactive updates; `metricsHistory.ts` buffers metrics for sparklines.
 
 ### Component Design
 *   **Atomic Design**: Small, reusable components (`MetricBar`, `StatusBadge`) compose into larger views (`NodeSummaryTable`).

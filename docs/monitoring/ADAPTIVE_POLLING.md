@@ -3,12 +3,12 @@
 Pulse uses an adaptive scheduler to optimize polling based on instance health and activity.
 
 ## 🧠 Architecture
-*   **Scheduler**: Calculates intervals based on health/staleness.
-*   **Priority Queue**: Min-heap keyed by `NextRun`.
-*   **Circuit Breaker**: Prevents hot loops on failing instances using success/failure counters.
-*   **Backoff**: Exponential retry delays (5s min to 5m max).
-*   **Worker Pool**: One worker per configured instance (PVE/PBS/PMG), capped at 10.
-*   **Global Concurrency Cap**: At most 2 polling cycles run at once to avoid resource spikes.
+- **Scheduler**: Calculates intervals based on health/staleness.
+- **Priority Queue**: Min-heap keyed by `NextRun`.
+- **Circuit Breaker**: Prevents hot loops on failing instances using success/failure counters.
+- **Backoff**: Exponential retry delays (5s min to 5m max).
+- **Worker Pool**: One worker per configured instance (PVE/PBS/PMG), capped at 10.
+- **Global Concurrency Cap**: At most 2 polling cycles run at once to avoid resource spikes.
 
 ## 🔬 Implementation Details (Developer Info)
 
@@ -43,6 +43,7 @@ Adaptive polling is **disabled by default**.
 There is currently no dedicated UI for adaptive polling in v5.
 
 ### Environment Variables
+
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `ADAPTIVE_POLLING_ENABLED` | `false` | Enable/disable. |
@@ -66,6 +67,7 @@ Exposed at `:9091/metrics`.
 | `pulse_scheduler_queue_due_soon` | Gauge | Tasks due in the next 12 seconds. |
 
 ## ⚡ Circuit Breaker
+
 | State | Trigger | Recovery |
 | :--- | :--- | :--- |
 | **Closed** | Normal operation. | — |
@@ -78,7 +80,7 @@ Exposed at `:9091/metrics`.
 `GET /api/monitoring/scheduler/health` (Auth required)
 
 Returns:
-*   Queue depth & breakdown.
-*   Dead-letter tasks.
-*   Circuit breaker states.
-*   Per-instance staleness.
+- Queue depth & breakdown.
+- Dead-letter tasks.
+- Circuit breaker states.
+- Per-instance staleness.

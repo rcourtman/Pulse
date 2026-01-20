@@ -43,6 +43,14 @@ cd ..
 npm run mock:on             # Optional: enable mock data
 ```
 
+Backend-only hot reload (requires `air`):
+
+```bash
+air -c .air.toml
+```
+
+Set `HOT_DEV_USE_PRO=true` to build the Pro variant when available.
+
 Mock mode is supported for development, but the internal developer notes are not shipped in this repository.
 
 ---

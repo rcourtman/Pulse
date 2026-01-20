@@ -143,6 +143,7 @@ Pulse can self-update to the latest stable version.
 **Enable via UI**: Settings → System → Updates
 
 ### Manual Update
+
 | Platform | Command |
 |----------|---------|
 | **Docker** | `docker pull rcourtman/pulse:latest && docker restart pulse` |

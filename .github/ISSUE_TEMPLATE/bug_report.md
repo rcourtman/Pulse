@@ -20,8 +20,8 @@ Steps to reproduce the behavior:
 What you expected to happen.
 
 **Environment:**
- - Pulse Version: [e.g. v4.15.0]
- - Installation Type: [e.g. ProxmoxVE LXC, Docker, Manual]
+- Pulse Version: [e.g. v4.15.0]
+- Installation Type: [e.g. ProxmoxVE LXC, Docker, Manual]
 
 **Additional context**
 Add any other context, screenshots, or logs here.

@@ -17,9 +17,7 @@ Monitor actual disk usage inside your VMs using the QEMU Guest Agent.
 ## ⚙️ Requirements
 
 *   **QEMU Guest Agent**: Must be installed and running inside the VM.
-*   **Proxmox Permissions**:
-    *   **Proxmox 8**: `VM.Monitor`
-    *   **Proxmox 9+**: `VM.GuestAgent.Audit`
+*   **Proxmox Permissions**: `VM.Monitor` (Proxmox 8) or `VM.GuestAgent.Audit` (Proxmox 9+).
 
 ## 🔧 Troubleshooting
 

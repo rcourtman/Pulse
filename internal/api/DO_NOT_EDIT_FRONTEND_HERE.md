@@ -2,7 +2,7 @@
 
 This `frontend-modern` directory is **AUTO-GENERATED** during builds.
 
-## The REAL frontend location is:
+## The REAL frontend location is
 ### `/opt/pulse/frontend-modern`
 
 ## Why does this exist?
@@ -14,7 +14,7 @@ This `frontend-modern` directory is **AUTO-GENERATED** during builds.
 - **YOUR CHANGES WILL BE LOST** on the next build
 - The Makefile deletes and recreates this directory
 
-## How to edit frontend code:
+## How to edit frontend code
 1. Edit files in `/opt/pulse/frontend-modern/src/`
 2. The dev server (port 7655) will hot-reload
 3. When building for production, the Makefile copies it here

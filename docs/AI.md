@@ -1,6 +1,6 @@
 # Pulse AI
 
-Pulse Pro unlocks **AI Patrol** for continuous, automated health checks. Learn more at https://pulserelay.pro or see the technical overview in [PULSE_PRO.md](PULSE_PRO.md).
+Pulse Pro unlocks **AI Patrol** for continuous, automated health checks. Learn more at <https://pulserelay.pro> or see the technical overview in [PULSE_PRO.md](PULSE_PRO.md).
 
 ## What Patrol Actually Does (Technical)
 

@@ -1,0 +1,10 @@
+{
+  "config": ".markdownlint.json",
+  "globs": [
+    "**/*.md"
+  ],
+  "ignores": [
+    "**/node_modules/**",
+    ".agent/workflows/hot-dev.md"
+  ]
+}

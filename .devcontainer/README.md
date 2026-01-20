@@ -51,9 +51,9 @@ pd  # Alias for ./scripts/hot-dev.sh
 Or use VS Code task: `Cmd+Shift+P` → "Tasks: Run Task" → "Start Pulse Dev Server"
 
 **Access the app:**
-- Frontend: http://localhost:7655
-- Backend API: http://localhost:7656
-- Metrics: http://localhost:9091
+- Frontend: <http://localhost:7655>
+- Backend API: <http://localhost:7656>
+- Metrics: <http://localhost:9091>
 
 ## Development Workflows
 
@@ -66,7 +66,7 @@ Or use VS Code task: `Cmd+Shift+P` → "Tasks: Run Task" → "Start Pulse Dev Se
 **Backend (3-5 seconds):**
 - Edit any `.go` file
 - Save → Terminal shows:
-  ```
+  ```text
   🔄 Change detected: yourfile.go
   Rebuilding backend...
   ✓ Build successful, restarting backend...
@@ -241,7 +241,7 @@ Custom overrides: Create `.env.devcontainer` (gitignored)
 
 ## Architecture
 
-```
+```text
 MacBook (VS Code)
     ↓ Remote-SSH
 dev-containers VM (Proxmox)

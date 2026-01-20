@@ -85,20 +85,9 @@ Returns a real-time snapshot of the adaptive scheduler, including queue state, c
 ### Instances (`instances`)
 The authoritative source for per-instance health.
 
-*   **`pollStatus`**:
-    *   `lastSuccess`: Timestamp of last successful poll.
-    *   `lastError`: Details of the last error (message, category).
-    *   `consecutiveFailures`: Current failure streak.
-*   **`breaker`**:
-    *   `state`: `closed` (healthy), `open` (failing), `half_open` (recovering).
-    *   `retryAt`: Next retry time if open/half-open.
-    *   `since`: When the current breaker state started.
-    *   `lastTransition`: Timestamp of the last state transition.
-*   **`deadLetter`**:
-    *   `present`: `true` if the instance is in the DLQ (stopped polling).
-    *   `reason`: Why it was moved to DLQ (e.g., `permanent_failure`).
-    *   `retryCount`: DLQ retry attempts.
-    *   `nextRetry`: Next scheduled retry (if any).
+*   **`pollStatus`**: `lastSuccess` timestamp, `lastError` details, `consecutiveFailures` count.
+*   **`breaker`**: `state` (`closed`/`open`/`half_open`), `retryAt` next retry, `since` state start, `lastTransition` timestamp.
+*   **`deadLetter`**: `present` flag, `reason` (e.g., `permanent_failure`), `retryCount`, `nextRetry` if scheduled.
 
 ### Top-Level Queue and DLQ
 *   **`queue`**: Snapshot of the active task queue (depth + per-type counts).

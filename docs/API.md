@@ -8,18 +8,18 @@ Pulse provides a comprehensive REST API for automation and integration.
 
 Most API requests require authentication via one of the following methods:
 
-**1. API Token (Recommended)**
+### API Token (Recommended)
 Pass the token in the `X-API-Token` header.
 ```bash
 curl -H "X-API-Token: your-token" http://localhost:7655/api/health
 ```
 
-**2. Bearer Token**
+### Bearer Token
 ```bash
 curl -H "Authorization: Bearer your-token" http://localhost:7655/api/health
 ```
 
-**3. Session Cookie**
+### Session Cookie
 Standard browser session cookie (used by the UI).
 
 Public endpoints include:
@@ -54,6 +54,18 @@ Returns the complete state of your infrastructure (Nodes, VMs, Containers, Stora
 ### Version Info
 `GET /api/version`
 Returns version, build time, and update status.
+Example response:
+```json
+{
+  "version": "5.0.16",
+  "buildTime": "2026-01-19T22:20:18Z",
+  "channel": "stable",
+  "deploymentType": "systemd",
+  "updateAvailable": true,
+  "latestVersion": "5.0.17"
+}
+```
+Version fields are returned as plain semantic versions (no leading `v`).
 
 ---
 
@@ -312,7 +324,7 @@ Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
 - `POST /api/updates/apply`
 - `GET /api/updates/status`
 - `GET /api/updates/stream`
-- `GET /api/updates/plan?version=vX.Y.Z` (optional `channel`)
+- `GET /api/updates/plan?version=X.Y.Z` (optional `channel`, accepts `v` prefix)
 - `GET /api/updates/history`
 - `GET /api/updates/history/entry?id=<event_id>`
 

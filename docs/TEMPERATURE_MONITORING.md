@@ -13,7 +13,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <api-token> --enable-proxmox
 ```
 
-If you use the agent method, the rest of this document (sensor proxy) is optional. See `docs/security/TEMPERATURE_MONITORING.md` for the security model overview.
+If you use the agent method, the rest of this document (sensor proxy) is optional.
 
 ## Migration: pulse-sensor-proxy → pulse-agent
 
@@ -79,14 +79,14 @@ If running Pulse in Docker, you must install the proxy on the host and share the
     ```bash
     curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
       sudo bash -s -- --standalone --pulse-server http://<pulse-ip>:7655
-    ```
+    ```text
 
 2.  **Update `docker-compose.yml`**:
     Add the socket volume to your Pulse service:
     ```yaml
     volumes:
       - /mnt/pulse-proxy:/run/pulse-sensor-proxy:ro
-    ```
+    ```text
     > **Note**: The standalone installer creates the socket at `/mnt/pulse-proxy` on the host. Map it to `/run/pulse-sensor-proxy` inside the container.
 
 3.  **Restart Pulse**: `docker compose up -d`
@@ -103,7 +103,7 @@ If you have Pulse running on **Server A** and want to monitor temperatures on **
     Replace `<PULSE_CONTAINER_ID>` with the LXC container ID where Pulse runs on Server A (e.g., `100`).
 
 2.  The installer will detect that the container doesn't exist locally and install in **host monitoring only** mode:
-    ```
+    ```text
     [WARN] Container 100 does not exist on this node
     [WARN] Will install sensor-proxy for host temperature monitoring only
     ```
@@ -137,15 +137,15 @@ journalctl -u pulse-sensor-proxy -f
 1.  **Pulse Sensor Proxy**: A lightweight service runs on the Proxmox host.
 2.  **Secure Access**: It reads sensors (via `lm-sensors`) and exposes them securely.
 3.  **Transport**:
-    *   **Local**: Uses a Unix socket (`/run/pulse-sensor-proxy`) for zero-latency, secure access.
-    *   **Remote**: Uses mutual TLS over HTTPS (port 8443).
+    - **Local**: Uses a Unix socket (`/run/pulse-sensor-proxy`) for zero-latency, secure access.
+    - **Remote**: Uses mutual TLS over HTTPS (port 8443).
 4.  **No SSH Keys**: Pulse containers no longer need SSH keys to read temperatures.
 
 ---
 
 ## 🔧 Advanced Configuration
 
-#### Manual Configuration (No Script)
+### Manual Configuration (No Script)
 
 If you can't run the installer script, create the configuration manually:
 
@@ -375,8 +375,7 @@ ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock
 journalctl -u pulse-sensor-proxy -f
 ```
 
-Forward these logs off-host for retention by following
-[operations/SENSOR_PROXY_LOGS.md](operations/SENSOR_PROXY_LOGS.md).
+Forward these logs off-host for retention by following standard rsyslog/syslog practices.
 
 In the Pulse container, check the logs at startup:
 ```bash
@@ -730,7 +729,6 @@ pulse-sensor-proxy config set-allowed-nodes --replace --merge 192.168.0.1
 - Installer uses CLI (no more shell/Python divergence)
 
 **See also:**
-- [Sensor Proxy Config Management Guide](operations/SENSOR_PROXY_CONFIG.md) - Complete runbook
 - [Sensor Proxy CLI Reference](../cmd/pulse-sensor-proxy/README.md) - Full command documentation
 
 ## Control-Plane Sync & Migration
@@ -786,7 +784,7 @@ If temperature monitoring isn't working:
    ssh root@cluster-node "sensors -j"
    ```
 
-3. **Check GitHub Issues:** https://github.com/rcourtman/Pulse/issues
+3. **Check GitHub Issues:** <https://github.com/rcourtman/Pulse/issues>
 4. **Include in bug report:**
    - Pulse version
    - Deployment type (LXC/Docker/native)

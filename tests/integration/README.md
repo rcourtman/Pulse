@@ -4,7 +4,7 @@ End-to-end Playwright tests that validate critical user flows against a running 
 
 ## Architecture
 
-```
+```text
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
 │  Playwright     │────▶│  Pulse Server    │────▶│  Mock GitHub API    │
 │  (Browser UI)   │     │  (Test Instance) │     │  (Controlled        │

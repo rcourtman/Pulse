@@ -19,7 +19,7 @@ Authenticate users via your existing reverse proxy (Authentik, Authelia, Cloudfl
 | `PROXY_AUTH_SECRET` | **Required**. Shared secret to verify requests. | - |
 | `PROXY_AUTH_USER_HEADER` | **Required**. Header containing the username. | - |
 | `PROXY_AUTH_ROLE_HEADER` | Header containing user groups/roles. | - |
-| `PROXY_AUTH_ROLE_SEPARATOR` | Separator for multiple roles in the header. | `|` |
+| `PROXY_AUTH_ROLE_SEPARATOR` | Separator for multiple roles in the header. | `\|` |
 | `PROXY_AUTH_ADMIN_ROLE` | Role name that grants admin access. | `admin` |
 | `PROXY_AUTH_LOGOUT_URL` | URL to redirect to after logout. | - |
 

@@ -1,6 +1,7 @@
+# Pulse
+
 <div align="center">
   <img src="docs/images/pulse-logo.svg" alt="Pulse Logo" width="120" />
-  <h1>Pulse</h1>
   <p><strong>Real-time monitoring for Proxmox, Docker, and Kubernetes infrastructure.</strong></p>
 
   [![GitHub Stars](https://img.shields.io/github/stars/rcourtman/Pulse?style=flat&logo=github)](https://github.com/rcourtman/Pulse)

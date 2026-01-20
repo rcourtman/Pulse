@@ -54,7 +54,7 @@ allowed_nodes:
 
 # Require cluster membership validation
 strict_node_validation: true
-```
+```text
 
 **Default Behavior:** If `allowed_nodes` is empty and proxy runs on Proxmox host, automatically validates against cluster membership (secure by default).
 
@@ -241,7 +241,7 @@ allowed_peers:
 #### Enhanced Metrics
 
 New Prometheus metrics for security monitoring:
-```
+```text
 pulse_proxy_node_validation_failures_total{reason}
 pulse_proxy_read_timeouts_total
 pulse_proxy_write_timeouts_total
@@ -378,7 +378,7 @@ go build ./cmd/pulse-sensor-proxy
 ### References
 
 - **Temperature Monitoring Overview:** `docs/security/TEMPERATURE_MONITORING.md`
-- **Sensor Proxy Hardening:** `docs/security/SENSOR_PROXY_HARDENING.md`
+- **Sensor Proxy Hardening:** Standardized security controls for legacy deployments.
 
 ---
 
@@ -396,4 +396,4 @@ All fixes implemented and tested 2025-11-07.
 
 ---
 
-**For questions or security concerns, file issues at:** https://github.com/rcourtman/Pulse/issues
+**For questions or security concerns, file issues at:** <https://github.com/rcourtman/Pulse/issues>

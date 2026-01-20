@@ -11,6 +11,7 @@ This listener is separate from the main UI/API port (`7655`). In Docker and Kube
 **Helm note:** the current chart exposes only port `7655`, so Prometheus scraping requires an additional Service that targets `9091` (and a matching ServiceMonitor).
 
 ## 🌐 HTTP Ingress
+
 | Metric | Type | Description |
 | :--- | :--- | :--- |
 | `pulse_http_request_duration_seconds` | Histogram | Latency buckets by `method`, `route`, `status`. |
@@ -18,6 +19,7 @@ This listener is separate from the main UI/API port (`7655`). In Docker and Kube
 | `pulse_http_request_errors_total` | Counter | Error totals by `method`, `route`, `status_class` (`client_error`, `server_error`, `none`). |
 
 ## 🔄 Polling & Nodes
+
 | Metric | Type | Description |
 | :--- | :--- | :--- |
 | `pulse_monitor_poll_duration_seconds` | Histogram | Per-instance poll latency. |
@@ -34,6 +36,7 @@ This listener is separate from the main UI/API port (`7655`). In Docker and Kube
 | `pulse_monitor_node_poll_staleness_seconds` | Gauge | Seconds since last node success (`-1` if never succeeded). |
 
 ## 🧠 Scheduler Health
+
 | Metric | Type | Description |
 | :--- | :--- | :--- |
 | `pulse_scheduler_queue_due_soon` | Gauge | Tasks due within the next 12 seconds. |
@@ -45,6 +48,7 @@ This listener is separate from the main UI/API port (`7655`). In Docker and Kube
 | `pulse_scheduler_breaker_retry_seconds` | Gauge | Seconds until next retry allowed. |
 
 ## ⚡ Diagnostics Cache
+
 | Metric | Type | Description |
 | :--- | :--- | :--- |
 | `pulse_diagnostics_cache_hits_total` | Counter | Cache hits. |
@@ -52,6 +56,7 @@ This listener is separate from the main UI/API port (`7655`). In Docker and Kube
 | `pulse_diagnostics_refresh_duration_seconds` | Histogram | Refresh latency. |
 
 ## 🚨 Alert Lifecycle
+
 | Metric | Type | Description |
 | :--- | :--- | :--- |
 | `pulse_alerts_active` | Gauge | Active alerts by `level` and `type`. |
@@ -63,6 +68,6 @@ This listener is separate from the main UI/API port (`7655`). In Docker and Kube
 | `pulse_alert_duration_seconds` | Histogram | Time from alert fire to resolve (by `type`). |
 
 ## 🚨 Alerting Examples
-*   **High Error Rate**: `rate(pulse_http_request_errors_total[5m]) > 0.05`
-*   **Stale Node**: `pulse_monitor_node_poll_staleness_seconds > 300`
-*   **Breaker Open**: `pulse_scheduler_breaker_state == 2` 
+- **High Error Rate**: `rate(pulse_http_request_errors_total[5m]) > 0.05`
+- **Stale Node**: `pulse_monitor_node_poll_staleness_seconds > 300`
+- **Breaker Open**: `pulse_scheduler_breaker_state == 2`

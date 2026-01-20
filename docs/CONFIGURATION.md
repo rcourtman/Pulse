@@ -3,7 +3,7 @@
 Pulse uses a split-configuration model to ensure security and flexibility.
 
 | File | Purpose | Security Level |
-|------|---------|----------------|
+| ------ | --------- | ---------------- |
 | `.env` | Authentication & Secrets | 🔒 **Critical** (Read-only by owner) |
 | `.encryption.key` | Encryption key for `.enc` files | 🔒 **Critical** |
 | `system.json` | General Settings | 📝 Standard |
@@ -35,6 +35,8 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `ai_patterns.json` | AI pattern detection data | 📝 Standard |
 | `ai_remediations.json` | AI remediation suggestions | 📝 Standard |
 | `ai_incidents.json` | AI incident tracking | 📝 Standard |
+
+Guest metadata entries are keyed by the canonical guest ID format `instance:node:vmid` (for example, `pve1:node1:100`). Legacy dash-separated keys are migrated automatically.
 
 All files are located in `/etc/pulse/` (Systemd) or `/data/` (Docker/Kubernetes) by default.
 
@@ -85,7 +87,7 @@ See [OIDC Documentation](OIDC.md) and [Proxy Auth](PROXY_AUTH.md) for details.
 Environment overrides (lock the corresponding UI fields):
 
 | Variable | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | `OIDC_ENABLED` | Enable OIDC (`true`/`false`) |
 | `OIDC_ISSUER_URL` | Issuer URL from your IdP |
 | `OIDC_CLIENT_ID` | Client ID |
@@ -101,6 +103,7 @@ Environment overrides (lock the corresponding UI fields):
 | `OIDC_ALLOWED_EMAILS` | Allowed emails (space or comma-separated) |
 | `OIDC_GROUP_ROLE_MAPPINGS` | Group-to-role mappings (Pro). Format: `group1=role1,group2=role2` |
 | `OIDC_CA_BUNDLE` | Custom CA bundle path |
+
 </details>
 
 > **Note**: `API_TOKEN` / `API_TOKENS` are legacy and will be migrated into `api_tokens.json` on startup.
@@ -138,7 +141,7 @@ Controls runtime behavior like ports, logging, and polling intervals. Most of th
 Environment variables take precedence over `system.json`.
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `FRONTEND_PORT` | Public listening port | `7655` |
 | `PORT` | Legacy alias for `FRONTEND_PORT` | *(unset)* |
 | `BACKEND_HOST` | Bind host for the HTTP server and metrics listener (advanced) | *(unset)* |
@@ -149,7 +152,7 @@ Environment variables take precedence over `system.json`.
 #### Log Levels
 
 | Level | Description |
-|-------|-------------|
+| ------- | ------------- |
 | `error` | Only errors and critical issues |
 | `warn` | Errors + warnings (recommended for minimal logging) |
 | `info` | Standard operational messages (startup, connections, alerts) |
@@ -158,7 +161,7 @@ Environment variables take precedence over `system.json`.
 > **Tip**: If your syslog is being flooded with Pulse messages, set `LOG_LEVEL=warn` to significantly reduce log volume while still capturing important events.
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `PULSE_PUBLIC_URL` | URL for UI links, notifications, and OIDC. For reverse proxies, keep this as the public URL and use `PULSE_AGENT_CONNECT_URL` for agent installs if you need a direct/internal address. | Auto-detected |
 | `PULSE_AGENT_CONNECT_URL` | Dedicated direct URL for agents (overrides `PULSE_PUBLIC_URL` for agent install commands). Alias: `PULSE_AGENT_URL`. | *(unset)* |
 | `PULSE_AGENT_CONFIG_SIGNING_KEY` | Base64 Ed25519 private key used to sign remote agent config payloads. | *(unset)* |
@@ -195,7 +198,7 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 ### Monitoring Overrides
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `PVE_POLLING_INTERVAL` | PVE metrics polling frequency | `10s` |
 | `PBS_POLLING_INTERVAL` | PBS metrics polling frequency | `60s` |
 | `PMG_POLLING_INTERVAL` | PMG metrics polling frequency | `60s` |
@@ -222,7 +225,7 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 ### Logging Overrides
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `LOG_FILE` | Log file path (empty = stdout) | *(unset)* |
 | `LOG_MAX_SIZE` | Log file max size (MB) | `100` |
 | `LOG_MAX_AGE` | Log file retention (days) | `30` |
@@ -233,7 +236,7 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 These are stored in `system.json` and managed via the UI.
 
 | Key | Description | Default |
-|-----|-------------|---------|
+| ----- | ------------- | --------- |
 | `updateChannel` | Update channel (`stable` or `rc`) | `stable` |
 | `autoUpdateEnabled` | Allow one-click updates | `false` |
 | `autoUpdateCheckInterval` | Stored UI preference (server currently checks hourly) | `24` |
@@ -244,7 +247,7 @@ These are stored in `system.json` and managed via the UI.
 You can auto-import an encrypted backup on first startup. This is useful for automated provisioning and test environments.
 
 | Variable | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | `PULSE_INIT_CONFIG_DATA` | Base64 or raw contents of an export bundle (auto-imports on first start) |
 | `PULSE_INIT_CONFIG_FILE` | Path to an export bundle on disk (auto-imports on first start) |
 | `PULSE_INIT_CONFIG_PASSPHRASE` | Passphrase for the export bundle (required) |
@@ -256,7 +259,7 @@ You can auto-import an encrypted backup on first startup. This is useful for aut
 These are primarily for development or test harnesses and should not be used in production.
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `PULSE_UPDATE_SERVER` | Override update server base URL (testing only) | *(unset)* |
 | `PULSE_UPDATE_STAGE_DELAY_MS` | Adds artificial delays between update stages (testing only) | *(unset)* |
 | `PULSE_ALLOW_DOCKER_UPDATES` | Expose update UI/actions in Docker (debug only) | `false` |
@@ -339,7 +342,7 @@ API tokens provide scoped, revocable access to Pulse. Manage tokens in **Setting
 ### Token Scopes
 
 | Scope | Description |
-|-------|-------------|
+| ------- | ------------- |
 | `*` (Full access) | All permissions (legacy, not recommended) |
 | `monitoring:read` | View dashboards, metrics, alerts |
 | `monitoring:write` | Acknowledge/silence alerts |
@@ -356,7 +359,7 @@ API tokens provide scoped, revocable access to Pulse. Manage tokens in **Setting
 The UI offers quick presets for common use cases:
 
 | Preset | Scopes | Use Case |
-|--------|--------|----------|
+| -------- | -------- | ---------- |
 | **Kiosk / Dashboard** | `monitoring:read` | Read-only dashboard displays |
 | **Host agent** | `host-agent:report` | Host agent authentication |
 | **Container report** | `docker:report` | Container agent (read-only) |
@@ -372,7 +375,7 @@ For unattended displays (wall monitors, dashboards), use a kiosk token to avoid 
 2. Click **New token** and select the **Kiosk / Dashboard** preset
 3. Copy the generated token
 4. Access Pulse via URL with token:
-   ```
+   ```text
    https://your-pulse-url/?token=YOUR_TOKEN_HERE
    ```
 

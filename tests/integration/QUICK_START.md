@@ -13,7 +13,7 @@ This guide will help you get the update integration tests running quickly.
 ```bash
 cd tests/integration
 ./scripts/setup.sh
-```
+```text
 
 This will:
 - Install npm dependencies
@@ -85,11 +85,11 @@ npm run docker:rebuild
 
 While the test environment is running:
 
-- **Pulse UI**: http://localhost:7655
-- **Mock GitHub API**: http://localhost:8080
+- **Pulse UI**: <http://localhost:7655>
+- **Mock GitHub API**: <http://localhost:8080>
 - **Health checks**:
-  - http://localhost:7655/api/health
-  - http://localhost:8080/health
+  - <http://localhost:7655/api/health>
+  - <http://localhost:8080/health>
 
 ## Viewing Test Results
 
@@ -175,7 +175,7 @@ See `.github/workflows/test-updates.yml` for CI configuration.
 
 ## Architecture
 
-```
+```text
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
 │  Playwright     │────▶│  Pulse Server    │────▶│  Mock GitHub API    │
 │  (Browser UI)   │     │  (Test Instance) │     │  (Controlled        │
@@ -216,4 +216,4 @@ test('my new test', async ({ page }) => {
 - Check the [main README](./README.md) for detailed information
 - Review existing test files for examples
 - Check Docker logs for service issues
-- Review Playwright documentation: https://playwright.dev
+- Review Playwright documentation: <https://playwright.dev>

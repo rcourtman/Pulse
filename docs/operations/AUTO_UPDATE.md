@@ -4,6 +4,7 @@ Manage Pulse auto-updates on host-mode installations.
 > **Note**: Docker/Kubernetes users should manage updates via their orchestrator.
 
 ## ⚙️ Components
+
 | File | Purpose |
 | :--- | :--- |
 | `pulse-update.timer` | Daily check (02:00 + jitter). |

@@ -70,7 +70,7 @@ docker exec pulse rm -rf /home/pulse/.ssh/id_ed25519*
 
 #### Security Boundary
 
-```
+```text
 ┌─────────────────────────────────────┐
 │  Proxmox Host                       │
 │  ┌───────────────────────────────┐  │
@@ -112,9 +112,9 @@ Verify temperature collection is agent-based:
   journalctl -u pulse-agent -n 200 --no-pager
   ```
 
-**Documentation:** https://github.com/rcourtman/Pulse/blob/main/SECURITY.md#critical-security-notice-for-container-deployments
-**Issues:** https://github.com/rcourtman/pulse/issues
-**Private disclosures:** security@pulseapp.io
+**Documentation:** <https://github.com/rcourtman/Pulse/blob/main/SECURITY.md#critical-security-notice-for-container-deployments>
+**Issues:** <https://github.com/rcourtman/pulse/issues>
+**Private disclosures:** <security@pulseapp.io>
 
 ---
 
@@ -239,7 +239,7 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 **Note:** for production, prefer Docker secrets or systemd environment files
 for sensitive data.
 
-## Security Features
+## Security Features Summary
 
 ### Core Protection
 - **Encryption**: credentials encrypted at rest (AES-256-GCM)

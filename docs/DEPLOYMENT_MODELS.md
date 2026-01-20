@@ -65,7 +65,6 @@ Pull a new image and restart:
 docker pull rcourtman/pulse:latest
 docker compose up -d
 ```
-
 ### Kubernetes (Helm)
 
 Upgrade the chart:
@@ -74,4 +73,3 @@ Upgrade the chart:
 helm repo update
 helm upgrade pulse pulse/pulse -n pulse
 ```
-

@@ -32,9 +32,9 @@ The agent runs `sensors -j` locally and reports temperatures directly to Pulse.
 `pulse-sensor-proxy` is deprecated in v5 and is not recommended for new deployments. This section is retained for existing installations during the migration window.
 
 ### 🛡️ Security Model
-*   **Isolation**: SSH keys live on the host, not in the container.
-*   **Least Privilege**: Proxy runs as `pulse-sensor-proxy` (no shell).
-*   **Verification**: Container identity verified via `SO_PEERCRED`.
+- **Isolation**: SSH keys live on the host, not in the container.
+- **Least Privilege**: Proxy runs as `pulse-sensor-proxy` (no shell).
+- **Verification**: Container identity verified via `SO_PEERCRED`.
 
 ### 🏗️ Components
 1.  **Pulse Backend**: Connects to Unix socket `/mnt/pulse-proxy/pulse-sensor-proxy.sock`.
@@ -43,14 +43,14 @@ The agent runs `sensors -j` locally and reports temperatures directly to Pulse.
 
 ### 🔒 Key Restrictions
 SSH keys deployed to nodes are locked down:
-```
+```text
 command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty
 ```
 
 ### 🚦 Rate Limiting
-*   **Per Peer**: ~12 req/min.
-*   **Concurrency**: Max 2 parallel requests per peer.
-*   **Global**: Max 8 concurrent requests.
+- **Per Peer**: ~12 req/min.
+- **Concurrency**: Max 2 parallel requests per peer.
+- **Global**: Max 8 concurrent requests.
 
 ### 📝 Auditing
 All requests logged to system journal:
@@ -61,6 +61,5 @@ Logs include: `uid`, `pid`, `method`, `node`, `correlation_id`.
 
 ### Related Docs
 
-- Sensor proxy hardening: `docs/security/SENSOR_PROXY_HARDENING.md`
-- Network segmentation: `docs/security/SENSOR_PROXY_NETWORK.md`
-- AppArmor/Seccomp: `docs/security/SENSOR_PROXY_APPARMOR.md`
+- Unified Agent Security: [`docs/AGENT_SECURITY.md`](../AGENT_SECURITY.md)
+- Repository Security Policy: [`/SECURITY.md`](../../SECURITY.md)

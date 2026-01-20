@@ -68,9 +68,6 @@ Pulse Pro unlocks **LLM-backed AI Patrol** — automated background monitoring t
 
 ---
 
-<div align="center">
-  <p>Found a bug or have a suggestion?</p>
-  <a href="https://github.com/rcourtman/Pulse/issues">
-    <img src="https://img.shields.io/badge/GitHub-Issues-green" alt="GitHub Issues" />
-  </a>
-</div>
+Found a bug or have a suggestion?
+
+[![GitHub Issues](https://img.shields.io/badge/GitHub-Issues-green)](https://github.com/rcourtman/Pulse/issues)

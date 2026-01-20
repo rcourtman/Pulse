@@ -4,9 +4,9 @@ This guide explains how to deploy the Pulse Server (Hub) and Pulse Agents on Kub
 
 ## Prerequisites
 
-*   A Kubernetes cluster (v1.19+)
-*   `helm` (v3+) installed locally
-*   `kubectl` configured to talk to your cluster
+- A Kubernetes cluster (v1.19+)
+- `helm` (v3+) installed locally
+- `kubectl` configured to talk to your cluster
 
 ## 1. Deploying the Pulse Server
 
@@ -42,7 +42,7 @@ helm template pulse pulse/pulse \
   --namespace pulse \
   --set persistence.enabled=true \
   > pulse-server.yaml
-```
+```text
 
 You can then apply this file:
 
@@ -126,11 +126,11 @@ Use a token scoped for the agent:
 
 #### Important DaemonSet Configuration
 
-**PULSE_AGENT_ID (Required for DaemonSets)**
+##### PULSE_AGENT_ID (Required for DaemonSets)
 
 When running as a DaemonSet, all pods share the same API token but need a unified identity. Without `PULSE_AGENT_ID`, each pod auto-generates a unique ID (e.g., `mac-xxxxx`), causing token conflicts:
 
-```
+```text
 API token is already in use by agent "mac-aa5496fed726". Each Kubernetes agent must use a unique API token.
 ```
 
@@ -141,7 +141,7 @@ Set `PULSE_AGENT_ID` to a shared cluster name so all pods report as one logical 
   value: "my-k8s-cluster"
 ```
 
-**Resource Visibility Flags**
+##### Resource Visibility Flags
 
 By default, Pulse only shows resources with problems (unhealthy pods, failing deployments). To see all resources:
 
@@ -241,8 +241,8 @@ roleRef:
 Talos Linux is immutable, so you cannot install the agent via the shell script. Use the DaemonSet approach above.
 
 ### Agent Configuration for Talos
-*   **Storage**: Talos mounts the ephemeral OS on `/`. Persistent data is usually in `/var`. The Pulse agent generally doesn't store state, but if it did, ensure it maps to a persistent path.
-*   **Network**: The agent will report the Pod IP by default. To report the Node IP, set `PULSE_REPORT_IP` using the Downward API:
+- **Storage**: Talos mounts the ephemeral OS on `/`. Persistent data is usually in `/var`. The Pulse agent generally doesn't store state, but if it did, ensure it maps to a persistent path.
+- **Network**: The agent will report the Pod IP by default. To report the Node IP, set `PULSE_REPORT_IP` using the Downward API:
 
     Add this to the DaemonSet `env` section:
     ```yaml
@@ -254,6 +254,6 @@ Talos Linux is immutable, so you cannot install the agent via the shell script. 
 
 ## 4. Troubleshooting
 
-*   **Agent not showing in UI**: Check logs for the DaemonSet pods, for example: `kubectl logs -l app=pulse-agent -n pulse`.
-*   **"Permission Denied" on metrics**: Ensure `securityContext.privileged: true` is set or proper capabilities are added.
-*   **Connection Refused**: Ensure `PULSE_URL` is correct and reachable from the agent pods.
+- **Agent not showing in UI**: Check logs for the DaemonSet pods, for example: `kubectl logs -l app=pulse-agent -n pulse`.
+- **"Permission Denied" on metrics**: Ensure `securityContext.privileged: true` is set or proper capabilities are added.
+- **Connection Refused**: Ensure `PULSE_URL` is correct and reachable from the agent pods.
