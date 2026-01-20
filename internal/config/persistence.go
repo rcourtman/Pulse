@@ -976,6 +976,7 @@ type SystemSettings struct {
 	DiscoverySubnet              string          `json:"discoverySubnet,omitempty"`
 	DiscoveryConfig              DiscoveryConfig `json:"discoveryConfig"`
 	Theme                        string          `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
+	FullWidthMode                bool            `json:"fullWidthMode"`                 // Full-width layout mode preference
 	AllowEmbedding               bool            `json:"allowEmbedding"`                // Allow iframe embedding
 	AllowedEmbedOrigins          string          `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
 	TemperatureMonitoringEnabled bool            `json:"temperatureMonitoringEnabled"`

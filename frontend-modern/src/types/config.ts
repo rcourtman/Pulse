@@ -42,6 +42,7 @@ export interface SystemConfig {
   backendPort?: number; // Backend API port (default: 7655)
   frontendPort?: number; // Frontend UI port (default: 7655)
   theme?: string; // Theme preference: 'light' | 'dark' | undefined (system default)
+  fullWidthMode?: boolean; // Full-width layout mode preference
   discoveryEnabled?: boolean; // Enable/disable network discovery
   discoverySubnet?: string; // Subnet to scan for discovery (default: 'auto')
   allowEmbedding?: boolean; // Allow iframe embedding

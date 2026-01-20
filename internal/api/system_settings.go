@@ -645,6 +645,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		settings.DisableDockerUpdateActions = updates.DisableDockerUpdateActions
 		h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
 	}
+	if _, ok := rawRequest["fullWidthMode"]; ok {
+		settings.FullWidthMode = updates.FullWidthMode
+	}
 
 	// Update the config
 	if _, ok := rawRequest["pvePollingInterval"]; ok && settings.PVEPollingInterval > 0 {

@@ -589,6 +589,8 @@ function App() {
               }
             }
             setHasLoadedServerTheme(true);
+            // Also load full-width mode from server
+            layoutStore.loadFromServer();
           } catch (error) {
             logger.error('Failed to load theme from server', error);
             // Ensure settings are marked as loaded so UI doesn't stay in loading state
@@ -639,6 +641,8 @@ function App() {
               }
             }
             setHasLoadedServerTheme(true);
+            // Also load full-width mode from server
+            layoutStore.loadFromServer();
           } catch (error) {
             logger.error('Failed to load theme from server', error);
             // Ensure settings are marked as loaded so UI doesn't stay in loading state
@@ -700,6 +704,8 @@ function App() {
               }
             }
             setHasLoadedServerTheme(true);
+            // Also load full-width mode from server
+            layoutStore.loadFromServer();
           } catch (error) {
             logger.error('Failed to load theme from server', error);
           }
