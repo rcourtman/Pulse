@@ -3122,10 +3122,9 @@ func TestSendResolvedAlert(t *testing.T) {
 	nm := NewNotificationManager("https://pulse.local")
 	defer nm.Stop()
 
-	// Configure email
+	// Disable email to avoid retry delays blocking webhook processing
 	nm.SetEmailConfig(EmailConfig{
-		Enabled: true,
-		To:      []string{"test@example.com"},
+		Enabled: false,
 	})
 
 	// Use a mock captured channel for webhooks
