@@ -172,6 +172,7 @@ interface HostSensorSummaryForCell {
 function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null | undefined }) {
   const [showTooltip, setShowTooltip] = createSignal(false);
   const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+  const [tooltipDirection, setTooltipDirection] = createSignal<'above' | 'below'>('above');
   const alertsActivation = useAlertsActivation();
   const threshold = createMemo(() => alertsActivation.getTemperatureThreshold());
   let closeTimeout: number | undefined;
@@ -239,7 +240,22 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
   const handleMouseEnter = (e: MouseEvent) => {
     if (closeTimeout) window.clearTimeout(closeTimeout);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    const x = rect.left + rect.width / 2;
+    const y = rect.top;
+
+    // Estimate tooltip height (~400px max) and check if it fits above
+    const estimatedTooltipHeight = 400;
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    // Position below if not enough space above, but also check if below has more space
+    if (spaceAbove < estimatedTooltipHeight && spaceBelow > spaceAbove) {
+      setTooltipDirection('below');
+      setTooltipPos({ x, y: rect.bottom });
+    } else {
+      setTooltipDirection('above');
+      setTooltipPos({ x, y });
+    }
     setShowTooltip(true);
   };
 
@@ -322,8 +338,12 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
             class="fixed z-[9999]"
             style={{
               left: `${tooltipPos().x}px`,
-              top: `${tooltipPos().y - 8}px`,
-              transform: 'translate(-50%, -100%)',
+              top: tooltipDirection() === 'above'
+                ? `${tooltipPos().y - 8}px`
+                : `${tooltipPos().y + 8}px`,
+              transform: tooltipDirection() === 'above'
+                ? 'translate(-50%, -100%)'
+                : 'translate(-50%, 0)',
             }}
             onMouseEnter={handleTooltipEnter}
             onMouseLeave={handleTooltipLeave}
