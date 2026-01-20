@@ -53,6 +53,8 @@ jobs:
           cache: true
 
       - name: Go unit tests
+        env:
+          PULSE_DATA_DIR: /tmp/pulse-test-data
         run: go test ./...
 
       - name: Build Pulse backend
