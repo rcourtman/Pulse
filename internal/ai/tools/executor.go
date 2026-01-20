@@ -284,7 +284,59 @@ func (e *PulseToolExecutor) SetUpdatesProvider(provider UpdatesProvider) {
 
 // ListTools returns the list of available tools
 func (e *PulseToolExecutor) ListTools() []Tool {
-	return e.registry.ListTools(e.controlLevel)
+	tools := e.registry.ListTools(e.controlLevel)
+	if len(tools) == 0 {
+		return tools
+	}
+
+	available := make([]Tool, 0, len(tools))
+	for _, tool := range tools {
+		if e.isToolAvailable(tool.Name) {
+			available = append(available, tool)
+		}
+	}
+	return available
+}
+
+func (e *PulseToolExecutor) isToolAvailable(name string) bool {
+	switch name {
+	case "pulse_get_capabilities", "pulse_get_url_content", "pulse_get_agent_scope":
+		return true
+	case "pulse_run_command":
+		return e.agentServer != nil
+	case "pulse_control_guest", "pulse_control_docker":
+		return e.agentServer != nil && e.stateProvider != nil
+	case "pulse_set_agent_scope":
+		return e.agentProfileManager != nil
+	case "pulse_set_resource_url":
+		return e.metadataUpdater != nil
+	case "pulse_get_metrics":
+		return e.metricsHistory != nil
+	case "pulse_get_baselines":
+		return e.baselineProvider != nil
+	case "pulse_get_patterns":
+		return e.patternProvider != nil
+	case "pulse_list_alerts":
+		return e.alertProvider != nil
+	case "pulse_list_findings":
+		return e.findingsProvider != nil
+	case "pulse_resolve_finding", "pulse_dismiss_finding":
+		return e.findingsManager != nil
+	case "pulse_list_backups":
+		return e.backupProvider != nil
+	case "pulse_list_storage":
+		return e.storageProvider != nil
+	case "pulse_get_disk_health":
+		return e.diskHealthProvider != nil || e.storageProvider != nil
+	case "pulse_get_host_raid_status", "pulse_get_host_ceph_details":
+		return e.diskHealthProvider != nil
+	case "pulse_list_docker_updates", "pulse_check_docker_updates":
+		return e.updatesProvider != nil
+	case "pulse_update_docker_container":
+		return e.updatesProvider != nil && e.stateProvider != nil
+	default:
+		return e.stateProvider != nil
+	}
 }
 
 // ExecuteTool executes a tool and returns the result

@@ -127,6 +127,7 @@ func TestListToolsReadOnlyMode(t *testing.T) {
 func TestListToolsControlledMode(t *testing.T) {
 	cfg := ExecutorConfig{
 		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
 		ControlLevel:  ControlLevelControlled,
 	}
 
@@ -262,6 +263,7 @@ func TestExecuteRunCommandSuggestMode(t *testing.T) {
 func TestExecuteRunCommandControlled(t *testing.T) {
 	cfg := ExecutorConfig{
 		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
 		ControlLevel:  ControlLevelControlled,
 	}
 
@@ -421,6 +423,7 @@ func TestControlGuestProtectedGuest(t *testing.T) {
 func TestSetControlLevelRuntime(t *testing.T) {
 	cfg := ExecutorConfig{
 		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
 		ControlLevel:  ControlLevelReadOnly,
 	}
 
