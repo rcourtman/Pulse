@@ -836,26 +836,6 @@ export function Dashboard(props: DashboardProps) {
   const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => {
     logger.debug('handleNodeSelect called', { nodeId, nodeType });
 
-    // If AI sidebar is open, add node to AI context instead of filtering
-    if (aiChatStore.isOpen && nodeId && nodeType === 'pve') {
-      const node = props.nodes.find((n) => n.id === nodeId);
-      if (node) {
-        // Toggle: remove if already in context, add if not
-        if (aiChatStore.hasContextItem(nodeId)) {
-          aiChatStore.removeContextItem(nodeId);
-        } else {
-          aiChatStore.addContextItem('node', nodeId, node.name, {
-            nodeName: node.name,
-            name: node.name,
-            type: 'Proxmox Node',
-            status: node.status,
-            instance: node.instance,
-          });
-        }
-      }
-      return;
-    }
-
     // Track selected node for filtering (independent of search)
     if (nodeType === 'pve' || nodeType === null) {
       setSelectedNode(nodeId);
@@ -915,43 +895,7 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
-  // Handle row click - add guest to AI context (works even when sidebar is closed)
-  const handleGuestRowClick = (guest: VM | Container) => {
-    // Only enable if AI is configured
-    if (!aiChatStore.enabled) return;
 
-    // Use canonical format: instance:node:vmid
-    const guestId = guest.id || `${guest.instance}:${guest.node}:${guest.vmid}`;
-    const guestType = guest.type === 'qemu' ? 'vm' : 'container';
-    const isOCI = guest.type === 'oci' || ('isOci' in guest && guest.isOci === true);
-
-    // Toggle: remove if already in context, add if not
-    if (aiChatStore.hasContextItem(guestId)) {
-      aiChatStore.removeContextItem(guestId);
-      // If no items left in context and sidebar is open, keep it open for now
-    } else {
-      // Build context with OCI-specific info when applicable
-      const contextData: Record<string, unknown> = {
-        guestName: guest.name,
-        name: guest.name,
-        type: guest.type === 'qemu' ? 'Virtual Machine' : (isOCI ? 'OCI Container' : 'LXC Container'),
-        vmid: guest.vmid,
-        node: guest.node,
-        status: guest.status,
-      };
-
-      // Add OCI image info if available
-      if (isOCI && 'osTemplate' in guest && guest.osTemplate) {
-        contextData.ociImage = guest.osTemplate;
-      }
-
-      aiChatStore.addContextItem(guestType, guestId, guest.name, contextData);
-      // Auto-open the sidebar when first item is selected
-      if (!aiChatStore.isOpen) {
-        aiChatStore.open();
-      }
-    }
-  };
 
   return (
     <div class="space-y-3">
@@ -1118,7 +1062,7 @@ export function Dashboard(props: DashboardProps) {
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": isMobile() ? "800px" : "900px" }}>
+              <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "800px" : "900px" }}>
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                     <For each={visibleColumns()}>
@@ -1135,10 +1079,8 @@ export function Dashboard(props: DashboardProps) {
                                   ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
                             style={{
                               ...((['cpu', 'memory', 'disk'].includes(col.id))
-                                ? (isMobile()
-                                  ? { "min-width": "60px" }
-                                  : { "width": "140px", "min-width": "140px", "max-width": "140px" })
-                                : (col.width && (!isMobile() || col.id !== 'name') ? { "min-width": col.width } : {})),
+                                ? { "width": isMobile() ? "60px" : "140px" }
+                                : (col.width && (!isMobile() || col.id !== 'name') ? { "width": col.width } : {})),
                               "vertical-align": 'middle'
                             }}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
@@ -1177,7 +1119,7 @@ export function Dashboard(props: DashboardProps) {
                             <NodeGroupHeader node={node!} renderAs="tr" colspan={totalColumns()} />
                           </Show>
                           <For each={guests} fallback={<></>}>
-                            {(guest, index) => {
+                            {(guest) => {
                               // Use canonical format: instance:node:vmid
                               const guestId = guest.id || `${guest.instance}:${guest.node}:${guest.vmid}`;
                               // Create a getter function for metadata to ensure reactivity
@@ -1188,12 +1130,6 @@ export function Dashboard(props: DashboardProps) {
                               // PERFORMANCE: Use pre-computed parent node map instead of resolveParentNode
                               const parentNode = node ?? guestParentNodeMap().get(guestId);
                               const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
-
-                              // Get adjacent guest IDs for merged AI context borders
-                              const prevGuest = guests[index() - 1];
-                              const nextGuest = guests[index() + 1];
-                              const prevGuestId = prevGuest ? (prevGuest.id || `${prevGuest.instance}:${prevGuest.node}:${prevGuest.vmid}`) : null;
-                              const nextGuestId = nextGuest ? (nextGuest.id || `${nextGuest.instance}:${nextGuest.node}:${nextGuest.vmid}`) : null;
 
                               return (
                                 <ComponentErrorBoundary name="GuestRow">
@@ -1207,9 +1143,6 @@ export function Dashboard(props: DashboardProps) {
                                     onCustomUrlUpdate={handleCustomUrlUpdate}
                                     isGroupedView={groupingMode() === 'grouped'}
                                     visibleColumnIds={visibleColumnIds()}
-                                    aboveGuestId={prevGuestId}
-                                    belowGuestId={nextGuestId}
-                                    onRowClick={aiChatStore.enabled ? handleGuestRowClick : undefined}
                                   />
                                 </ComponentErrorBoundary>
                               );

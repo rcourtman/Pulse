@@ -8,6 +8,7 @@ import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
+import { OpenCodeAPI, type ChatSession, type FileChange } from '@/api/opencode';
 import { hasFeature, loadLicenseStatus } from '@/stores/license';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 
@@ -87,6 +88,17 @@ export const AISettings: Component = () => {
   const [availableModels, setAvailableModels] = createSignal<{ id: string; name: string; description?: string }[]>([]);
   const [modelsLoading, setModelsLoading] = createSignal(false);
 
+  const [chatSessions, setChatSessions] = createSignal<ChatSession[]>([]);
+  const [chatSessionsLoading, setChatSessionsLoading] = createSignal(false);
+  const [chatSessionsError, setChatSessionsError] = createSignal('');
+  const [selectedSessionId, setSelectedSessionId] = createSignal('');
+  const [sessionActionLoading, setSessionActionLoading] = createSignal<string | null>(null);
+
+  const [showDiffModal, setShowDiffModal] = createSignal(false);
+  const [diffFiles, setDiffFiles] = createSignal<FileChange[]>([]);
+  const [diffSummary, setDiffSummary] = createSignal('');
+  const [diffSessionLabel, setDiffSessionLabel] = createSignal('');
+
   // Accordion state for provider configuration sections
   const [expandedProviders, setExpandedProviders] = createSignal<Set<AIProvider>>(new Set(['anthropic']));
 
@@ -111,6 +123,8 @@ export const AISettings: Component = () => {
   // UI state for collapsible sections - START COLLAPSED for compact view
   const [showAdvancedModels, setShowAdvancedModels] = createSignal(false);
   const [showPatrolSettings, setShowPatrolSettings] = createSignal(false);
+
+  const [showChatMaintenance, setShowChatMaintenance] = createSignal(false);
 
   const [form, setForm] = createStore({
     enabled: false,
@@ -228,6 +242,140 @@ export const AISettings: Component = () => {
       logger.debug('[AISettings] Failed to load models from API:', e);
     } finally {
       setModelsLoading(false);
+    }
+  };
+
+  const loadChatSessions = async () => {
+    setChatSessionsLoading(true);
+    setChatSessionsError('');
+    try {
+      const sessions = await OpenCodeAPI.listSessions();
+      setChatSessions(sessions);
+      const current = selectedSessionId();
+      if (!current || !sessions.some((session) => session.id === current)) {
+        setSelectedSessionId(sessions[0]?.id || '');
+      }
+    } catch (error) {
+      logger.error('[AISettings] Failed to load chat sessions:', error);
+      setChatSessions([]);
+      const message = error instanceof Error ? error.message : 'Failed to load chat sessions.';
+      setChatSessionsError(message);
+    } finally {
+      setChatSessionsLoading(false);
+    }
+  };
+
+  const selectedChatSession = createMemo(() => {
+    const id = selectedSessionId();
+    if (!id) return null;
+    return chatSessions().find((session) => session.id === id) || null;
+  });
+
+  const formatSessionLabel = (session: ChatSession) => {
+    const updatedAt = new Date(session.updated_at);
+    const dateLabel = updatedAt.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const timeLabel = updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${session.title || 'Untitled'} - ${session.message_count} msgs - ${dateLabel} ${timeLabel}`;
+  };
+
+  const formatDiffStatus = (status: FileChange['status']) => {
+    switch (status) {
+      case 'added':
+        return 'Added';
+      case 'modified':
+        return 'Modified';
+      case 'deleted':
+        return 'Deleted';
+      default:
+        return 'Changed';
+    }
+  };
+
+  const diffStatusClasses = (status: FileChange['status']) => {
+    switch (status) {
+      case 'added':
+        return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200';
+      case 'modified':
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200';
+      case 'deleted':
+        return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200';
+      default:
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-900/40 dark:text-gray-200';
+    }
+  };
+
+  const formatDiffStats = (change: FileChange) => `+${change.added} -${change.removed}`;
+
+  const handleSessionSummarize = async () => {
+    const sessionId = selectedSessionId();
+    if (!sessionId) {
+      notificationStore.info('Select a chat session first.');
+      return;
+    }
+
+    setSessionActionLoading('summarize');
+    try {
+      await OpenCodeAPI.summarizeSession(sessionId);
+      notificationStore.success('Session summarized.');
+    } catch (error) {
+      logger.error('[AISettings] Failed to summarize session:', error);
+      const message = error instanceof Error ? error.message : 'Failed to summarize session.';
+      notificationStore.error(message);
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
+
+  const handleSessionDiff = async () => {
+    const sessionId = selectedSessionId();
+    if (!sessionId) {
+      notificationStore.info('Select a chat session first.');
+      return;
+    }
+
+    setSessionActionLoading('diff');
+    try {
+      const diff = await OpenCodeAPI.getSessionDiff(sessionId);
+      const files = diff.files || [];
+      if (files.length === 0) {
+        setDiffFiles([]);
+        setDiffSummary('');
+        setShowDiffModal(false);
+        notificationStore.info('No file changes in this session.');
+        return;
+      }
+      setDiffFiles(files);
+      setDiffSummary(diff.summary || '');
+      const session = selectedChatSession();
+      setDiffSessionLabel(session ? (session.title || 'Untitled session') : 'Selected session');
+      setShowDiffModal(true);
+    } catch (error) {
+      logger.error('[AISettings] Failed to get session diff:', error);
+      const message = error instanceof Error ? error.message : 'Failed to get session diff.';
+      notificationStore.error(message);
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
+
+  const handleSessionRevert = async () => {
+    const sessionId = selectedSessionId();
+    if (!sessionId) {
+      notificationStore.info('Select a chat session first.');
+      return;
+    }
+    if (!confirm('Revert all changes from this session? This cannot be undone.')) return;
+
+    setSessionActionLoading('revert');
+    try {
+      await OpenCodeAPI.revertSession(sessionId);
+      notificationStore.success('Session changes reverted.');
+    } catch (error) {
+      logger.error('[AISettings] Failed to revert session:', error);
+      const message = error instanceof Error ? error.message : 'Failed to revert session.';
+      notificationStore.error(message);
+    } finally {
+      setSessionActionLoading(null);
     }
   };
 
@@ -1497,6 +1645,118 @@ export const AISettings: Component = () => {
                 </Show>
               </div>
 
+              {/* Chat session maintenance */}
+              <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  class="w-full px-3 py-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors text-left"
+                  onClick={() => {
+                    const next = !showChatMaintenance();
+                    setShowChatMaintenance(next);
+                    if (next) {
+                      loadChatSessions();
+                    }
+                  }}
+                >
+                  <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Chat Session Maintenance</span>
+                  </div>
+                  <svg class={`w-4 h-4 text-gray-500 transition-transform ${showChatMaintenance() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <Show when={showChatMaintenance()}>
+                  <div class="px-3 py-3 bg-white dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      Use this panel to summarize, inspect, or revert a specific chat session. It does not change your default AI settings.
+                    </p>
+                    <div class="flex items-center justify-between">
+                      <label class="text-xs font-medium text-gray-600 dark:text-gray-400">Session</label>
+                      <button
+                        type="button"
+                        onClick={loadChatSessions}
+                        disabled={chatSessionsLoading()}
+                        class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
+                      >
+                        {chatSessionsLoading() ? 'Refreshing...' : 'Refresh'}
+                      </button>
+                    </div>
+
+                    <Show when={chatSessionsLoading()}>
+                      <div class="text-xs text-gray-500 dark:text-gray-400">Loading chat sessions...</div>
+                    </Show>
+                    <Show when={!chatSessionsLoading()}>
+                      <Show when={chatSessionsError()}>
+                        <div class="text-xs text-red-500">{chatSessionsError()}</div>
+                      </Show>
+                      <Show when={!chatSessionsError()}>
+                        <Show
+                          when={chatSessions().length > 0}
+                          fallback={
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                              No chat sessions yet. Start a chat to create one.
+                            </div>
+                          }
+                        >
+                          <select
+                            value={selectedSessionId()}
+                            onChange={(e) => setSelectedSessionId(e.currentTarget.value)}
+                            class="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                            disabled={saving()}
+                          >
+                            <For each={chatSessions()}>
+                              {(session) => (
+                                <option value={session.id}>
+                                  {formatSessionLabel(session)}
+                                </option>
+                              )}
+                            </For>
+                          </select>
+                          <Show when={selectedChatSession()}>
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                              Last updated {new Date(selectedChatSession()!.updated_at).toLocaleString()}
+                            </p>
+                          </Show>
+                        </Show>
+                      </Show>
+                    </Show>
+
+                    <div class="flex flex-wrap gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleSessionSummarize}
+                        disabled={!selectedSessionId() || sessionActionLoading() !== null}
+                        class="px-3 py-1.5 text-xs font-medium rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                      >
+                        {sessionActionLoading() === 'summarize' ? 'Summarizing...' : 'Summarize context'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSessionDiff}
+                        disabled={!selectedSessionId() || sessionActionLoading() !== null}
+                        class="px-3 py-1.5 text-xs font-medium rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                      >
+                        {sessionActionLoading() === 'diff' ? 'Loading...' : 'View file changes'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSessionRevert}
+                        disabled={!selectedSessionId() || sessionActionLoading() !== null}
+                        class="px-3 py-1.5 text-xs font-medium rounded border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
+                      >
+                        {sessionActionLoading() === 'revert' ? 'Reverting...' : 'Revert changes'}
+                      </button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400">
+                      These actions apply to the selected chat session only.
+                    </p>
+                  </div>
+                </Show>
+              </div>
+
             </div>
 
             {/* Status indicator */}
@@ -1559,6 +1819,60 @@ export const AISettings: Component = () => {
           </Show>
         </form>
       </Card>
+
+      {/* Session Diff Modal */}
+      <Show when={showDiffModal()}>
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => setShowDiffModal(false)}
+        >
+          <div
+            class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div class="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Session File Changes</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {diffSessionLabel() || 'Selected session'}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                onClick={() => setShowDiffModal(false)}
+              >
+                Close
+              </button>
+            </div>
+            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <Show when={diffSummary()}>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3">
+                  <p class="text-xs font-semibold text-gray-700 dark:text-gray-200">Summary</p>
+                  <p class="text-xs text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-wrap">{diffSummary()}</p>
+                </div>
+              </Show>
+              <div class="space-y-2">
+                <For each={diffFiles()}>
+                  {(file) => (
+                    <div class="flex items-center justify-between gap-3 rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span
+                          class={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${diffStatusClasses(file.status)}`}
+                        >
+                          {formatDiffStatus(file.status)}
+                        </span>
+                        <span class="text-gray-700 dark:text-gray-200 truncate">{file.path}</span>
+                      </div>
+                      <span class="text-gray-500 dark:text-gray-400 flex-shrink-0">{formatDiffStats(file)}</span>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       {/* First-time Setup Modal */}
       <Show when={showSetupModal()}>

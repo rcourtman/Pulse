@@ -271,9 +271,11 @@ export const aiChatStore = {
       logger.error('Failed to save session ID:', e);
     }
 
-    // Clear messages
+    // Clear messages and context
     setMessages([]);
     setSessionTitle('');
+    setContextItems([]);
+    setAIChatContext({});
     saveMessagesToStorage([]);
     localStorage.removeItem(HISTORY_STORAGE_KEY);
 
@@ -370,18 +372,21 @@ export const aiChatStore = {
     this.newConversation();
   },
 
-  // Convenience method to update context for a specific target (host, VM, container, etc.)
-  // This is called when user selects/views a specific resource
+  // Convenience method to set context for a specific target (host, VM, container, etc.)
+  // This replaces any existing context with the new target
   setTargetContext(targetType: string, targetId: string, additionalContext?: Record<string, unknown>) {
-    // Use addContextItem instead of replacing
+    // Clear existing context first since context UI is removed
+    setContextItems([]);
     const name = (additionalContext?.guestName as string) ||
       (additionalContext?.name as string) ||
       targetId;
     this.addContextItem(targetType, targetId, name, additionalContext || {});
   },
 
-  // Open for a specific target - opens the panel and adds to context
+  // Open for a specific target - opens the panel with context for this target only
   openForTarget(targetType: string, targetId: string, additionalContext?: Record<string, unknown>) {
+    // Clear existing context first since context UI is removed
+    setContextItems([]);
     const name = (additionalContext?.guestName as string) ||
       (additionalContext?.name as string) ||
       targetId;

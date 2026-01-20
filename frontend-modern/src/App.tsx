@@ -899,7 +899,6 @@ function App() {
                       title={aiChatStore.context.context?.name ? `AI Assistant - ${aiChatStore.context.context.name}` : 'AI Assistant (⌘K)'}
                       aria-label="Expand AI Assistant"
                     >
-                      {/* Double chevron left - expand */}
                       <svg
                         class="h-4 w-4 flex-shrink-0"
                         fill="none"
@@ -913,12 +912,6 @@ function App() {
                           d="M11 19l-7-7 7-7M18 19l-7-7 7-7"
                         />
                       </svg>
-                      {/* Context indicator - shows count when items are in context */}
-                      <Show when={aiChatStore.contextItems.length > 0}>
-                        <span class="min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-green-500 text-white rounded-full">
-                          {aiChatStore.contextItems.length}
-                        </span>
-                      </Show>
                     </button>
                   </Show>
                   <TooltipRoot />

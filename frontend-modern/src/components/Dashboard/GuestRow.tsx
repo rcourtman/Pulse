@@ -19,7 +19,7 @@ import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
-import { aiChatStore } from '@/stores/aiChat';
+
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useAnomalyForMetric } from '@/hooks/useAnomalies';
 
@@ -449,7 +449,7 @@ export const GUEST_COLUMNS: GuestColumnDef[] = [
   { id: 'node', label: 'Node', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'node' },
 
   // Supplementary - visible on lg+ (Now essential), user toggleable
-  { id: 'backup', label: 'Backup', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, priority: 'essential', width: '50px', toggleable: true },
+  { id: 'backup', label: 'Backup', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, priority: 'essential', width: '90px', toggleable: true },
   { id: 'tags', label: 'Tags', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>, priority: 'essential', width: '60px', toggleable: true },
 
   // Detailed - visible on xl+ (Now essential), user toggleable
@@ -484,12 +484,6 @@ interface GuestRowProps {
   isGroupedView?: boolean;
   /** IDs of columns that should be visible */
   visibleColumnIds?: string[];
-  /** Guest ID of the row above (for checking AI context adjacency) */
-  aboveGuestId?: string | null;
-  /** Guest ID of the row below (for checking AI context adjacency) */
-  belowGuestId?: string | null;
-  /** Called when user clicks the row (for AI context selection) */
-  onRowClick?: (guest: Guest) => void;
 }
 
 export function GuestRow(props: GuestRowProps) {
@@ -730,17 +724,7 @@ export function GuestRow(props: GuestRowProps) {
     return '#9ca3af';
   });
 
-  // Check AI context state reactively from the store
-  // Show selection even when sidebar is closed - makes selection persistent
-  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(guestId()));
-  const isAboveInAIContext = createMemo(() => {
-    if (!props.aboveGuestId) return false;
-    return aiChatStore.hasContextItem(props.aboveGuestId);
-  });
-  const isBelowInAIContext = createMemo(() => {
-    if (!props.belowGuestId) return false;
-    return aiChatStore.hasContextItem(props.belowGuestId);
-  });
+
 
   const rowClass = createMemo(() => {
     const base = 'transition-all duration-200 relative';
@@ -754,23 +738,14 @@ export function GuestRow(props: GuestRowProps) {
       ? ''
       : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
-    // Make row clickable if AI is enabled (for context selection)
-    const clickable = aiChatStore.enabled ? 'cursor-pointer' : '';
-    // AI context highlight with merged borders for adjacent rows
-    let aiContext = '';
-    if (isInAIContext()) {
-      aiContext = 'ai-context-row';
-      if (isAboveInAIContext()) aiContext += ' ai-context-no-top';
-      if (isBelowInAIContext()) aiContext += ' ai-context-no-bottom';
-    }
-    return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming} ${clickable} ${aiContext}`;
+    return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming}`;
   });
 
   const rowStyle = createMemo(() => {
     const styles: Record<string, string> = {};
 
-    // Alert styling (only if not in AI context - AI context uses CSS class)
-    if (!isInAIContext() && showAlertHighlight()) {
+    // Alert styling
+    if (showAlertHighlight()) {
       const color = alertAccentColor();
       if (color) {
         styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;
@@ -780,17 +755,7 @@ export function GuestRow(props: GuestRowProps) {
     return styles;
   });
 
-  const handleRowClick = (e: MouseEvent) => {
-    // Don't trigger if clicking on interactive elements
-    const target = e.target as HTMLElement;
-    if (target.closest('[data-prevent-toggle]') ||
-      target.closest('a') ||
-      target.closest('button') ||
-      target.closest('input')) {
-      return;
-    }
-    props.onRowClick?.(props.guest);
-  };
+
 
 
 
@@ -799,7 +764,6 @@ export function GuestRow(props: GuestRowProps) {
       <tr
         class={rowClass()}
         style={rowStyle()}
-        onClick={handleRowClick}
         data-guest-id={guestId()}
       >
         {/* Name - always visible */}
@@ -858,14 +822,7 @@ export function GuestRow(props: GuestRowProps) {
                 <Show when={!isColVisible('backup')}>
                   <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
                 </Show>
-                {/* AI context indicator - shows when row is selected for AI */}
-                <Show when={isInAIContext()}>
-                  <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                    </svg>
-                  </span>
-                </Show>
+
               </div>
             </div>
 

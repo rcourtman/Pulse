@@ -80,15 +80,6 @@ export interface ModelInfo {
   notable?: boolean;
 }
 
-export interface ChatContextItem {
-  id: string;
-  type: string;
-  name: string;
-  status: string;
-  node?: string;
-  data: Record<string, unknown>;
-}
-
 // Stream event types from backend
 export type StreamEventKind =
   | 'content'

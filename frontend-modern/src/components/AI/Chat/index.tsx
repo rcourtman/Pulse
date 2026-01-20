@@ -34,8 +34,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [modelsError, setModelsError] = createSignal('');
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
-  const [showSessionActions, setShowSessionActions] = createSignal(false);
-  const [sessionActionLoading, setSessionActionLoading] = createSignal<string | null>(null);
 
   const loadModelSelections = (): Record<string, string> => {
     try {
@@ -215,7 +213,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
       // Only close if click is outside dropdown containers
       if (!target.closest('[data-dropdown]')) {
         setShowSessions(false);
-        setShowSessionActions(false);
       }
     };
     document.addEventListener('click', handleClickOutside);
@@ -224,13 +221,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   // Handle submit
   const handleSubmit = () => {
+    if (chat.isLoading()) return;
     const prompt = input().trim();
     if (!prompt) return;
     chat.sendMessage(prompt);
     setInput('');
   };
 
-  // Handle key down - allow sending even while loading (will abort and send)
+  // Handle key down - submit when not loading
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -336,61 +334,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
 
-  // Session action handlers
-  const handleSummarize = async () => {
-    const sessionId = chat.sessionId();
-    if (!sessionId) return;
-
-    setSessionActionLoading('summarize');
-    setShowSessionActions(false);
-    try {
-      await OpenCodeAPI.summarizeSession(sessionId);
-      notificationStore.success('Session summarized to save context');
-    } catch (error) {
-      notificationStore.error('Failed to summarize session');
-    } finally {
-      setSessionActionLoading(null);
-    }
-  };
-
-  const handleGetDiff = async () => {
-    const sessionId = chat.sessionId();
-    if (!sessionId) return;
-
-    setSessionActionLoading('diff');
-    setShowSessionActions(false);
-    try {
-      const diff = await OpenCodeAPI.getSessionDiff(sessionId);
-      const files = diff.files || [];
-      if (files.length === 0) {
-        notificationStore.info('No file changes in this session');
-      } else {
-        notificationStore.success(`${files.length} file(s) changed in this session`);
-        // Could open a modal here to show detailed diff
-      }
-    } catch (error) {
-      notificationStore.error('Failed to get session diff');
-    } finally {
-      setSessionActionLoading(null);
-    }
-  };
-
-  const handleRevert = async () => {
-    const sessionId = chat.sessionId();
-    if (!sessionId) return;
-
-    setSessionActionLoading('revert');
-    setShowSessionActions(false);
-    try {
-      await OpenCodeAPI.revertSession(sessionId);
-      notificationStore.success('Session changes reverted');
-    } catch (error) {
-      notificationStore.error('Failed to revert session');
-    } finally {
-      setSessionActionLoading(null);
-    }
-  };
-
   return (
     <div
       class={`flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 overflow-hidden ${isOpen() ? 'w-[480px]' : 'w-0 border-l-0'
@@ -414,6 +357,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
           </div>
 
           <div class="flex items-center gap-1.5">
+            {/* New chat */}
+            <button
+              onClick={handleNewConversation}
+              class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 transition-colors"
+              title="New chat"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              <span class="font-medium">New</span>
+            </button>
+
             {/* Model selector */}
             <ModelSelector
               models={models()}
@@ -431,7 +386,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
             <div class="relative" data-dropdown>
               <button
                 onClick={() => {
-                  setShowSessions(!showSessions());
+                  const next = !showSessions();
+                  setShowSessions(next);
                 }}
                 class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 title="Chat sessions"
@@ -487,66 +443,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       </For>
                     </Show>
                   </div>
-                </div>
-              </Show>
-            </div>
-
-            {/* Session Actions Menu */}
-            <div class="relative" data-dropdown>
-              <button
-                onClick={() => {
-                  if (!chat.sessionId()) {
-                    notificationStore.info('Send a message first to start a session');
-                    return;
-                  }
-                  setShowSessions(false);
-                  setShowSessionActions(!showSessionActions());
-                }}
-                disabled={sessionActionLoading() !== null}
-                class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Session actions (summarize, diff, revert)"
-              >
-                <Show when={sessionActionLoading()} fallback={
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                  </svg>
-                }>
-                  <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                </Show>
-              </button>
-
-              <Show when={showSessionActions()}>
-                <div class="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden">
-                  <button
-                    onClick={handleSummarize}
-                    class="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
-                  >
-                    <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
-                    </svg>
-                    Summarize context
-                  </button>
-                  <button
-                    onClick={handleGetDiff}
-                    class="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
-                  >
-                    <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    View file changes
-                  </button>
-                  <button
-                    onClick={handleRevert}
-                    class="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border-t border-slate-200 dark:border-slate-700"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                    </svg>
-                    Revert changes
-                  </button>
                 </div>
               </Show>
             </div>
@@ -638,34 +534,38 @@ export const AIChat: Component<AIChatProps> = (props) => {
               class="flex-1 px-4 py-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
             />
             <div class="flex gap-1.5 self-end">
-              {/* Send button - always visible, sends new message (aborts current if streaming) */}
-              <button
-                type="submit"
-                disabled={!input().trim()}
-                class="px-4 py-3 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30"
-                title={chat.isLoading() ? "Send (will interrupt current response)" : "Send"}
+              <Show
+                when={!chat.isLoading()}
+                fallback={
+                  <button
+                    type="button"
+                    onClick={chat.stop}
+                    class="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors shadow-lg shadow-red-500/20"
+                    title="Stop"
+                  >
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <rect x="6" y="6" width="12" height="12" rx="1" />
+                    </svg>
+                  </button>
+                }
               >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
-              {/* Stop button - only visible while streaming */}
-              <Show when={chat.isLoading()}>
                 <button
-                  type="button"
-                  onClick={chat.stop}
-                  class="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors shadow-lg shadow-red-500/20"
-                  title="Stop"
+                  type="submit"
+                  disabled={!input().trim()}
+                  class="px-4 py-3 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30"
+                  title="Send"
                 >
-                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <rect x="6" y="6" width="12" height="12" rx="1" />
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                   </svg>
                 </button>
               </Show>
             </div>
           </form>
           <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-2 text-center">
-            Press Enter to send · Shift+Enter for new line
+            {chat.isLoading()
+              ? 'Generating... click Stop to interrupt'
+              : 'Press Enter to send · Shift+Enter for new line'}
           </p>
         </div>
       </Show>

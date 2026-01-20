@@ -10,8 +10,6 @@ import type { DockerHostMetadata } from '@/api/dockerHostMetadata';
 import { resolveHostRuntime } from './runtimeDisplay';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
-import { aiChatStore } from '@/stores/aiChat';
-import { AIAPI } from '@/api/ai';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
@@ -132,16 +130,16 @@ interface DockerColumnDef extends ColumnConfig {
 // - supplementary: Visible on large screens and up (lg: 1024px+)
 // - detailed: Visible on extra large screens and up (xl: 1280px+)
 export const DOCKER_COLUMNS: DockerColumnDef[] = [
-  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource' },
-  { id: 'type', label: 'Type', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'type' },
-  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: '80px', maxWidth: '200px', sortKey: 'image' },
-  { id: 'status', label: 'Status', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'status' },
+  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource', width: '15%' },
+  { id: 'type', label: 'Type', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'type', width: '70px' },
+  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: '80px', maxWidth: '200px', sortKey: 'image', width: '15%' },
+  { id: 'status', label: 'Status', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'status', width: '90px' },
   // Metric columns - need fixed width to match progress bar max-width (140px + padding)
   // Note: Disk column removed - Docker API rarely provides this data
-  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '55px', maxWidth: '156px', sortKey: 'cpu' },
-  { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '75px', maxWidth: '156px', sortKey: 'memory' },
-  { id: 'tasks', label: 'Tasks', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'tasks' },
-  { id: 'updated', label: 'Uptime', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'updated' },
+  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '55px', maxWidth: '156px', sortKey: 'cpu', width: '140px' },
+  { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '75px', maxWidth: '156px', sortKey: 'memory', width: '140px' },
+  { id: 'tasks', label: 'Tasks', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'tasks', width: '80px' },
+  { id: 'updated', label: 'Uptime', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'updated', width: '80px' },
 ];
 
 // Global state for currently expanded drawer (only one drawer open at a time)
@@ -154,6 +152,85 @@ const [dockerEditingValuesVersion, setDockerEditingValuesVersion] = createSignal
 const [dockerPopoverPosition, setDockerPopoverPosition] = createSignal<{ top: number; left: number } | null>(null);
 
 const toLower = (value?: string | null) => value?.toLowerCase() ?? '';
+const MUTABLE_IMAGE_TAGS = new Set([
+  'latest',
+  'stable',
+  'main',
+  'master',
+  'edge',
+  'dev',
+  'nightly',
+  'canary',
+]);
+
+type ImageVersionInfo = {
+  value: string;
+  source: 'label' | 'tag';
+  mutable: boolean;
+  title: string;
+};
+
+const getVersionLabelFromLabels = (labels?: Record<string, string>) => {
+  if (!labels) return null;
+  if (labels['org.opencontainers.image.version']) {
+    return { value: labels['org.opencontainers.image.version'], key: 'org.opencontainers.image.version' };
+  }
+  if (labels['org.label-schema.version']) {
+    return { value: labels['org.label-schema.version'], key: 'org.label-schema.version' };
+  }
+  return null;
+};
+
+const getImageTag = (image?: string): string | undefined => {
+  if (!image) return undefined;
+  const withoutDigest = image.split('@')[0];
+  const lastSlash = withoutDigest.lastIndexOf('/');
+  const lastColon = withoutDigest.lastIndexOf(':');
+  if (lastColon > lastSlash) return withoutDigest.slice(lastColon + 1);
+  return undefined;
+};
+
+const getImageVersionInfo = (image?: string, labels?: Record<string, string>): ImageVersionInfo | null => {
+  const labelInfo = getVersionLabelFromLabels(labels);
+  if (labelInfo && labelInfo.value) {
+    return {
+      value: labelInfo.value,
+      source: 'label',
+      mutable: false,
+      title: `Version from image label (${labelInfo.key})`,
+    };
+  }
+
+  const tag = getImageTag(image);
+  if (!tag) return null;
+
+  const isMutable = MUTABLE_IMAGE_TAGS.has(tag.toLowerCase());
+  return {
+    value: tag,
+    source: 'tag',
+    mutable: isMutable,
+    title: isMutable ? 'Tag is mutable; version unverified' : 'Version from image tag (unverified)',
+  };
+};
+
+const getVersionBadgeClass = (info: ImageVersionInfo) => {
+  if (info.source === 'label') {
+    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200';
+  }
+  if (info.mutable) {
+    return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200';
+  }
+  return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200';
+};
+
+
+const MAX_VERSION_LABEL = 12;
+
+const getShortVersionLabel = (value: string) => {
+  if (value.length <= MAX_VERSION_LABEL) return value;
+  return `${value.slice(0, MAX_VERSION_LABEL - 3)}...`;
+};
+
 
 const ensureMs = (value?: number | string | null): number | null => {
   if (!value) return null;
@@ -802,13 +879,12 @@ const DockerContainerRow: Component<{
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
   showHostContext?: boolean;
   resourceIndentClass?: string;
-  aiEnabled?: boolean;
-  initialNotes?: string[];
   batchUpdateState?: Record<string, 'updating' | 'queued' | 'error'>;
 }> = (props) => {
   const { host, container } = props.row;
   const runtimeInfo = resolveHostRuntime(host);
   const runtimeVersion = () => host.runtimeVersion || host.dockerVersion || null;
+  const imageVersion = createMemo(() => getImageVersionInfo(container.image, container.labels));
   const hostStatus = createMemo(() => getDockerHostStatusIndicator(host));
   const hostDisplayName = () => getHostDisplayName(host);
   const rowId = buildRowId(host, props.row);
@@ -830,82 +906,6 @@ const DockerContainerRow: Component<{
     const key = `${host.id}:${container.id}`;
     return props.batchUpdateState[key];
   });
-
-  // Annotations and AI state - use props passed from parent to avoid per-row API calls
-  const aiEnabled = () => props.aiEnabled ?? false;
-  // Check if this container is in AI context
-  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(resourceId()));
-  // Initialize annotations from props (pre-fetched metadata) instead of per-row API call
-  const [annotations, setAnnotations] = createSignal<string[]>(props.initialNotes ?? []);
-  const [newAnnotation, setNewAnnotation] = createSignal('');
-  const [saving, setSaving] = createSignal(false);
-
-  // Update annotations if props change (e.g., parent re-fetches metadata)
-  createEffect(() => {
-    const notes = props.initialNotes;
-    if (notes && Array.isArray(notes)) {
-      setAnnotations(notes);
-    }
-  });
-
-  const saveAnnotations = async (newAnnotations: string[]) => {
-    setSaving(true);
-    try {
-      await DockerMetadataAPI.updateMetadata(resourceId(), { notes: newAnnotations });
-      logger.debug('[DockerContainer] Annotations saved');
-    } catch (err) {
-      logger.error('[DockerContainer] Failed to save annotations:', err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addAnnotation = () => {
-    const text = newAnnotation().trim();
-    if (!text) return;
-    const updated = [...annotations(), text];
-    setAnnotations(updated);
-    setNewAnnotation('');
-    saveAnnotations(updated);
-  };
-
-  const removeAnnotation = (index: number) => {
-    const updated = annotations().filter((_, i) => i !== index);
-    setAnnotations(updated);
-    saveAnnotations(updated);
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      addAnnotation();
-    }
-  };
-
-  const buildContainerContext = () => {
-    const ctx: Record<string, unknown> = {
-      name: container.name,
-      type: 'Docker Container',
-      host: host.hostname,
-      status: container.status || container.state,
-      image: container.image,
-    };
-    if (container.cpuPercent !== undefined) ctx.cpu_usage = formatPercent(container.cpuPercent);
-    if (container.memoryUsageBytes !== undefined) ctx.memory_used = formatBytes(container.memoryUsageBytes);
-    if (container.memoryLimitBytes !== undefined) ctx.memory_limit = formatBytes(container.memoryLimitBytes);
-    if (container.memoryPercent !== undefined) ctx.memory_usage = formatPercent(container.memoryPercent);
-    if (container.uptimeSeconds) ctx.uptime = formatUptime(container.uptimeSeconds);
-    if (container.ports?.length) ctx.ports = container.ports.map(p => p.publicPort ? `${p.publicPort}:${p.privatePort}/${p.protocol}` : `${p.privatePort}/${p.protocol}`);
-    if (annotations().length > 0) ctx.user_notes = annotations().join('; ');
-    return ctx;
-  };
-
-  const handleAskAI = () => {
-    aiChatStore.openForTarget('container', resourceId(), {
-      containerName: container.name,
-      ...buildContainerContext(),
-    });
-  };
 
   const writableLayerBytes = createMemo(() => container.writableLayerBytes ?? 0);
   const rootFilesystemBytes = createMemo(() => container.rootFilesystemBytes ?? 0);
@@ -1007,24 +1007,7 @@ const DockerContainerRow: Component<{
     const target = event.target as HTMLElement;
     if (target.closest('a, button, input, [data-prevent-toggle]')) return;
 
-    // If AI is enabled, toggle AI context instead of expanding drawer
-    if (aiChatStore.enabled) {
-      if (aiChatStore.hasContextItem(resourceId())) {
-        aiChatStore.removeContextItem(resourceId());
-      } else {
-        aiChatStore.addContextItem('docker', resourceId(), container.name, {
-          containerName: container.name,
-          ...buildContainerContext(),
-        });
-        // Auto-open the sidebar when first item is selected
-        if (!aiChatStore.isOpen) {
-          aiChatStore.open();
-        }
-      }
-      return;
-    }
-
-    // Standard drawer toggle when AI is not enabled
+    // Standard drawer toggle
     if (!hasDrawerContent()) return;
     setCurrentlyExpandedRowId(prev => prev === rowId ? null : rowId);
   };
@@ -1279,14 +1262,7 @@ const DockerContainerRow: Component<{
                       <span class="truncate">{hostDisplayName()}</span>
                     </span>
                   </Show>
-                  {/* AI context indicator - shows when container is selected for AI */}
-                  <Show when={isInAIContext()}>
-                    <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                      </svg>
-                    </span>
-                  </Show>
+
                 </div>
               </div>
             </div>
@@ -1313,6 +1289,23 @@ const DockerContainerRow: Component<{
               >
                 {container.image || '—'}
               </span>
+              <Show when={imageVersion()}>
+                {(version) => {
+                  const display = getShortVersionLabel(version().value);
+                  const title = `${version().title}: ${version().value}`;
+                  return (
+                    <span
+                      class={`flex-shrink-0 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${getVersionBadgeClass(version())}`}
+                      title={title}
+                    >
+                      {display}
+                      <Show when={version().mutable}>
+                        <span class="text-[9px] leading-none">!</span>
+                      </Show>
+                    </span>
+                  );
+                }}
+              </Show>
               <UpdateButton
                 updateStatus={container.updateStatus}
                 hostId={host.id}
@@ -1409,7 +1402,7 @@ const DockerContainerRow: Component<{
   return (
     <>
       <tr
-        class={`transition-all duration-200 ${aiChatStore.enabled || hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''} ${isInAIContext() ? 'ai-context-row' : ''}`}
+        class={`transition-all duration-200 ${hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
@@ -1815,71 +1808,10 @@ const DockerContainerRow: Component<{
                   </div>
                 </Show>
 
-                {/* Annotations & Ask AI row */}
-                <Show when={aiEnabled()}>
-                  <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 w-full space-y-2">
-                    <div class="flex items-center gap-1.5">
-                      <span class="text-[10px] font-medium text-gray-500 dark:text-gray-400">AI Context</span>
-                      <Show when={saving()}>
-                        <span class="text-[9px] text-gray-400">saving...</span>
-                      </Show>
-                    </div>
 
-                    {/* Existing annotations */}
-                    <Show when={annotations().length > 0}>
-                      <div class="flex flex-wrap gap-1.5">
-                        <For each={annotations()}>
-                          {(annotation, index) => (
-                            <span class="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-md bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200">
-                              <span class="max-w-[300px] truncate">{annotation}</span>
-                              <button
-                                type="button"
-                                onClick={() => removeAnnotation(index())}
-                                class="ml-0.5 p-0.5 rounded hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
-                                title="Remove"
-                              >
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
 
-                    {/* Add new annotation */}
-                    <div class="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={newAnnotation()}
-                        onInput={(e) => setNewAnnotation(e.currentTarget.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Add context for AI (press Enter)..."
-                        class="flex-1 px-2 py-1.5 text-[11px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={addAnnotation}
-                        disabled={!newAnnotation().trim()}
-                        class="px-2 py-1.5 text-[11px] rounded border border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Add
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAskAI}
-                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[11px] font-medium shadow-sm hover:from-purple-600 hover:to-pink-600 transition-all"
-                        title={`Ask AI about ${container.name}`}
-                      >
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611l-2.576.43a18.003 18.003 0 01-5.118 0l-2.576-.43c-1.717-.293-2.299-2.379-1.067-3.611L5 14.5" />
-                        </svg>
-                        Ask AI
-                      </button>
-                    </div>
-                  </div>
-                </Show>
+
+
               </div>
             </div>
           </td>
@@ -1898,6 +1830,7 @@ const DockerServiceRow: Component<{
   resourceIndentClass?: string;
 }> = (props) => {
   const { host, service, tasks } = props.row;
+  const imageVersion = createMemo(() => getImageVersionInfo(service.image, service.labels));
   const rowId = buildRowId(host, props.row);
   const resourceId = () => `${host.id}:service:${service.id || service.name}`;
   const isEditingUrl = createMemo(() => currentlyEditingDockerResourceId() === resourceId());
@@ -1916,22 +1849,7 @@ const DockerServiceRow: Component<{
 
   const hasTasks = () => tasks.length > 0;
 
-  // Check if this service is in AI context
-  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(resourceId()));
 
-  // Build context for AI
-  const buildServiceContext = () => {
-    const ctx: Record<string, unknown> = {
-      name: service.name,
-      type: 'Docker Swarm Service',
-      host: host.hostname,
-      image: service.image,
-      mode: service.mode,
-      replicas: `${service.runningTasks ?? 0}/${service.desiredTasks ?? 0}`,
-    };
-    if (service.stack) ctx.stack = service.stack;
-    return ctx;
-  };
 
   // Update custom URL when prop changes, but only if we're not currently editing
   createEffect(() => {
@@ -1961,24 +1879,7 @@ const DockerServiceRow: Component<{
     const target = event.target as HTMLElement;
     if (target.closest('a, button, input, [data-prevent-toggle]')) return;
 
-    // If AI is enabled, toggle AI context instead of expanding drawer
-    if (aiChatStore.enabled) {
-      if (aiChatStore.hasContextItem(resourceId())) {
-        aiChatStore.removeContextItem(resourceId());
-      } else {
-        aiChatStore.addContextItem('docker', resourceId(), service.name, {
-          serviceName: service.name,
-          ...buildServiceContext(),
-        });
-        // Auto-open the sidebar when first item is selected
-        if (!aiChatStore.isOpen) {
-          aiChatStore.open();
-        }
-      }
-      return;
-    }
-
-    // Standard drawer toggle when AI is not enabled
+    // Standard drawer toggle
     if (!hasTasks()) return;
     setCurrentlyExpandedRowId(prev => prev === rowId ? null : rowId);
   };
@@ -2204,14 +2105,7 @@ const DockerServiceRow: Component<{
                       <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
                     </span>
                   </Show>
-                  {/* AI context indicator - shows when service is selected for AI */}
-                  <Show when={isInAIContext()}>
-                    <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                      </svg>
-                    </span>
-                  </Show>
+
                 </div>
               </div>
             </div>
@@ -2227,11 +2121,32 @@ const DockerServiceRow: Component<{
         );
       case 'image':
         return (
-          <div
-            class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate max-w-[200px]"
-            title={service.image || undefined}
-          >
-            {service.image || '—'}
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 overflow-hidden">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span
+                class="truncate"
+                title={service.image || undefined}
+              >
+                {service.image || '—'}
+              </span>
+              <Show when={imageVersion()}>
+                {(version) => {
+                  const display = getShortVersionLabel(version().value);
+                  const title = `${version().title}: ${version().value}`;
+                  return (
+                    <span
+                      class={`flex-shrink-0 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${getVersionBadgeClass(version())}`}
+                      title={title}
+                    >
+                      {display}
+                      <Show when={version().mutable}>
+                        <span class="text-[9px] leading-none">!</span>
+                      </Show>
+                    </span>
+                  );
+                }}
+              </Show>
+            </div>
           </div>
         );
       case 'status':
@@ -2275,7 +2190,7 @@ const DockerServiceRow: Component<{
   return (
     <>
       <tr
-        class={`transition-all duration-200 ${aiChatStore.enabled || hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''} ${isInAIContext() ? 'ai-context-row' : ''}`}
+        class={`transition-all duration-200 ${hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
@@ -2452,16 +2367,6 @@ const areTasksEqual = (a: DockerTask[], b: DockerTask[]) => {
 const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
   // Use the breakpoint hook for responsive behavior
   const { isMobile } = useBreakpoint();
-
-  // AI enabled state - fetched once at the parent level to avoid per-row API calls
-  const [aiEnabled, setAiEnabled] = createSignal(false);
-
-  // Fetch AI settings once when component mounts
-  createEffect(() => {
-    AIAPI.getSettings()
-      .then((settings) => setAiEnabled(settings.enabled && settings.configured))
-      .catch((err) => logger.debug('[DockerUnifiedTable] AI settings check failed:', err));
-  });
 
   // Caches for stable object references to prevent re-animations
   const rowCache = new Map<string, DockerRow>();
@@ -2805,8 +2710,6 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         onCustomUrlUpdate={props.onCustomUrlUpdate}
         showHostContext={!grouped}
         resourceIndentClass={grouped ? GROUPED_RESOURCE_INDENT : UNGROUPED_RESOURCE_INDENT}
-        aiEnabled={aiEnabled()}
-        initialNotes={metadata?.notes}
         batchUpdateState={props.batchUpdateState}
       />
 
@@ -2843,7 +2746,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
       >
         <Card padding="none" tone="glass" class="overflow-hidden">
           <div class="overflow-x-auto">
-            <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "800px" }}>
+            <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
               <thead>
                 <tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20">
                   <For each={DOCKER_COLUMNS}>
@@ -2854,7 +2757,11 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                       return (
                         <th
                           class={`${isResource ? 'pl-4 sm:pl-5 lg:pl-6 pr-2' : 'px-2'} py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 text-left font-medium whitespace-nowrap`}
-                          style={{ "min-width": (col.id === 'cpu' || col.id === 'memory' || col.id === 'disk') ? (isMobile() ? '60px' : '140px') : undefined, "width": (col.id === 'cpu' || col.id === 'memory' || col.id === 'disk') && !isMobile() ? '140px' : undefined, "max-width": (col.id === 'cpu' || col.id === 'memory' || col.id === 'disk') && !isMobile() ? '140px' : undefined }}
+                          style={{
+                            width: (col.id === 'cpu' || col.id === 'memory')
+                              ? (isMobile() ? '60px' : col.width)
+                              : col.width
+                          }}
                           onClick={() => colSortKey && handleSort(colSortKey)}
                           onKeyDown={(e) => e.key === 'Enter' && colSortKey && handleSort(colSortKey)}
                           tabIndex={0}

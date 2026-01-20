@@ -29,6 +29,9 @@ export interface ColumnConfig {
   /** Maximum width for the column (CSS value) */
   maxWidth?: string;
 
+  /** Fixed width for the column (CSS value) - used with table-layout: fixed */
+  width?: string;
+
   /** Flex grow factor for grid layout (default: 1) */
   flex?: number;
 

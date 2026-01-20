@@ -1,5 +1,4 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
-import { StackedContainerBar } from './StackedContainerBar';
 import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { renderDockerStatusBadge } from './DockerStatusBadge';
@@ -207,11 +206,12 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
     <>
       <Card padding="none" tone="glass" class={`mb-4 ${urlEdit.isEditing() ? 'overflow-visible' : 'overflow-hidden'}`}>
         <ScrollableTable persistKey="docker-host-summary" minWidth={isMobile() ? '100%' : '800px'}>
-          <table class="w-full border-collapse whitespace-nowrap">
+          <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed" }}>
             <thead>
               <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                 <th
                   class="pl-3 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 whitespace-nowrap"
+                  style={{ width: "20%" }}
                   onClick={() => handleSort('name')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
                   tabIndex={0}
@@ -220,50 +220,57 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 >
                   Host {renderSortIndicator('name')}
                 </th>
-                <th class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">
+                <th
+                  class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap"
+                  style={{ width: "70px" }}
+                >
                   Status
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                  style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}
+                  style={{ width: "140px" }}
                   onClick={() => handleSort('cpu')}
                 >
                   CPU {renderSortIndicator('cpu')}
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                  style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}
+                  style={{ width: "140px" }}
                   onClick={() => handleSort('memory')}
                 >
                   Memory {renderSortIndicator('memory')}
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                  style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}
+                  style={{ width: "140px" }}
                   onClick={() => handleSort('disk')}
                 >
                   Disk {renderSortIndicator('disk')}
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  style={{ width: "100px" }}
                   onClick={() => handleSort('running')}
                 >
                   Containers {renderSortIndicator('running')}
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  style={{ width: "80px" }}
                   onClick={() => handleSort('uptime')}
                 >
                   Uptime {renderSortIndicator('uptime')}
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  style={{ width: "80px" }}
                   onClick={() => handleSort('lastSeen')}
                 >
                   Last Update {renderSortIndicator('lastSeen')}
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  style={{ width: "70px" }}
                   onClick={() => handleSort('agent')}
                 >
                   Agent {renderSortIndicator('agent')}
@@ -422,12 +429,9 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                             when={summary.totalCount > 0}
                             fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}
                           >
-                            <StackedContainerBar
-                              running={summary.runningCount}
-                              stopped={summary.stoppedCount}
-                              error={summary.errorCount}
-                              total={summary.totalCount}
-                            />
+                            <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                              {summary.totalCount}
+                            </span>
                           </Show>
                         </div>
                       </td>

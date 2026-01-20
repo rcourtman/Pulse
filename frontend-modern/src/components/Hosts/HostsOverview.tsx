@@ -17,8 +17,6 @@ import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint, type ColumnPriority } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
-import { aiChatStore } from '@/stores/aiChat';
-
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourcesAsLegacy } from '@/hooks/useResources';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -1088,8 +1086,6 @@ const HostRow: Component<HostRowProps> = (props) => {
   // NOTE: Do NOT destructure props.host - it breaks SolidJS reactivity!
   // Always access props.host directly to ensure updates flow through.
 
-  // Check if this host is in AI context
-  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(props.host.id));
 
   // URL editing using shared hook
   const urlEdit = createUrlEditState();
@@ -1130,39 +1126,7 @@ const HostRow: Component<HostRowProps> = (props) => {
     }
   };
 
-  // Build context for AI - includes routing fields
-  const buildHostContext = (): Record<string, unknown> => ({
-    hostName: props.host.displayName || props.host.hostname,
-    hostname: props.host.hostname,
-    node: props.host.hostname,           // Used by AI for command routing
-    target_host: props.host.hostname,    // Explicit routing hint
-    platform: props.host.platform,
-    osName: props.host.osName,
-    osVersion: props.host.osVersion,
-    cpuUsage: props.host.cpuUsage ? `${props.host.cpuUsage.toFixed(1)}%` : undefined,
-    memoryUsage: props.host.memory?.usage ? `${props.host.memory.usage.toFixed(1)}%` : undefined,
-    uptime: props.host.uptimeSeconds ? formatUptime(props.host.uptimeSeconds) : undefined,
-  });
 
-  // Handle row click - toggle AI context selection
-  const handleRowClick = (event: MouseEvent) => {
-    const target = event.target as HTMLElement;
-    if (target.closest('a, button, [data-prevent-toggle], [data-url-editor]')) {
-      return;
-    }
-
-    // If AI is enabled, toggle AI context
-    if (aiChatStore.enabled) {
-      if (aiChatStore.hasContextItem(props.host.id)) {
-        aiChatStore.removeContextItem(props.host.id);
-      } else {
-        aiChatStore.addContextItem('host', props.host.id, props.host.displayName || props.host.hostname, buildHostContext());
-        if (!aiChatStore.isOpen) {
-          aiChatStore.open();
-        }
-      }
-    }
-  };
 
   // Reactive getters to ensure values update when WebSocket data changes
   const hostStatus = createMemo(() => getHostStatusIndicator(props.host));
@@ -1173,15 +1137,13 @@ const HostRow: Component<HostRowProps> = (props) => {
   const rowClass = () => {
     const base = 'transition-all duration-200';
     const hover = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
-    const clickable = aiChatStore.enabled ? 'cursor-pointer' : '';
-    const aiContext = isInAIContext() ? 'ai-context-row' : '';
     const offline = !isOnline() ? 'opacity-60' : '';
-    return `${base} ${hover} ${clickable} ${aiContext} ${offline}`;
+    return `${base} ${hover} ${offline}`;
   };
 
   return (
     <>
-      <tr class={rowClass()} onClick={handleRowClick}>
+      <tr class={rowClass()}>
         {/* Host Name - always visible */}
         <td class="pl-4 pr-2 py-1 align-middle overflow-hidden">
           <div class="flex items-center gap-2 min-w-0">
@@ -1246,14 +1208,6 @@ const HostRow: Component<HostRowProps> = (props) => {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                 </svg>
               </button>
-              {/* AI context indicator */}
-              <Show when={isInAIContext()}>
-                <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                  </svg>
-                </span>
-              </Show>
 
             </div>
           </div>
