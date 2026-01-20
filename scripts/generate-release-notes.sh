@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Generate release notes using LLM analysis of git commits
+# Generate release notes using LLM analysis of actual code diffs (not commit messages)
 # Usage: ./scripts/generate-release-notes.sh <version> [previous-tag]
 
 set -euo pipefail
@@ -18,139 +18,171 @@ fi
 if [ -z "$PREVIOUS_TAG" ]; then
     PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     if [ -z "$PREVIOUS_TAG" ]; then
-        echo "No previous tag found, using all commits"
-        PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+        echo "No previous tag found, cannot generate diff-based release notes"
+        exit 1
     fi
 fi
 
 echo "Generating release notes for v${VERSION}..."
-echo "Analyzing commits since ${PREVIOUS_TAG}..."
+echo "Comparing code changes from ${PREVIOUS_TAG} to HEAD..."
 
-# Get commit log
-COMMIT_LOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%h %s" --no-merges)
+# Get diff stats (excluding non-user-facing files)
+DIFF_STAT=$(git diff ${PREVIOUS_TAG}..HEAD --stat \
+    -- ':!*.md' ':!*.test.go' ':!*_test.go' ':!*_test.tsx' ':!*_test.ts' \
+    ':!.github/*' ':!tests/*' ':!docs/*' ':!*.txt' ':!*.json' ':!go.sum' \
+    ':!frontend-modern/src/**/__tests__/*' \
+    | tail -20)
 
-if [ -z "$COMMIT_LOG" ]; then
-    echo "No commits found since ${PREVIOUS_TAG}"
-    exit 1
-fi
+# Get list of changed user-facing files
+CHANGED_FILES=$(git diff ${PREVIOUS_TAG}..HEAD --name-only \
+    -- ':!*.md' ':!*.test.go' ':!*_test.go' ':!*_test.tsx' ':!*_test.ts' \
+    ':!.github/*' ':!tests/*' ':!docs/*' ':!*.txt' ':!go.sum' \
+    ':!frontend-modern/src/**/__tests__/*' \
+    | head -100)
 
-# Count commits
-COMMIT_COUNT=$(echo "$COMMIT_LOG" | wc -l)
-echo "Found ${COMMIT_COUNT} commits"
+# Get specific diffs for key user-facing areas (truncated for API limits)
 
-# Generate release notes using LLM API
-# Supports both OpenAI and Anthropic Claude
-# Set either OPENAI_API_KEY or ANTHROPIC_API_KEY
+# API routes/handlers - new endpoints
+API_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'internal/api/*.go' ':!*_test.go' \
+    | grep -E '^\+.*func.*Handle|^\+.*router\.(GET|POST|PUT|DELETE|PATCH)|^\+.*\.Path\(' \
+    | head -30 || echo "")
 
+# Frontend pages and components - new features
+FRONTEND_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'frontend-modern/src/components/*.tsx' 'frontend-modern/src/pages/*.tsx' \
+    ':!*_test.tsx' ':!*__tests__*' \
+    | grep -E '^\+.*export|^\+.*function.*\(|^\+.*const.*=' \
+    | head -40 || echo "")
+
+# Config options - new settings users can configure
+CONFIG_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'internal/config/*.go' ':!*_test.go' \
+    | grep -E '^\+.*`json:|^\+.*`yaml:' \
+    | head -20 || echo "")
+
+# Notifications/alerts - webhook changes, alert features
+ALERT_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'internal/notifications/*.go' 'internal/alerts/*.go' ':!*_test.go' \
+    | grep -E '^\+' \
+    | head -30 || echo "")
+
+# Agent changes - host/docker agent features
+AGENT_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'cmd/pulse-agent/*.go' 'internal/agent/*.go' ':!*_test.go' \
+    | grep -E '^\+' \
+    | head -20 || echo "")
+
+# Install script changes
+INSTALL_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'scripts/install.sh' 'install.sh' \
+    | grep -E '^\+' \
+    | head -20 || echo "")
+
+# Models/types - new data structures
+MODELS_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'internal/models/*.go' ':!*_test.go' \
+    | grep -E '^\+.*type.*struct|^\+.*`json:' \
+    | head -20 || echo "")
+
+echo "Collected diffs from key areas"
+
+# Check for LLM API keys
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     LLM_PROVIDER="anthropic"
 elif [ -n "${OPENAI_API_KEY:-}" ]; then
     LLM_PROVIDER="openai"
 else
-    echo "No LLM API keys detected – falling back to deterministic release notes."
-    LLM_PROVIDER="fallback"
+    echo "No LLM API keys detected – cannot generate diff-based notes."
+    echo "Set ANTHROPIC_API_KEY or OPENAI_API_KEY"
+    exit 1
 fi
 
 echo "Using LLM provider: ${LLM_PROVIDER}"
 
-# Prepare prompt for LLM
+# Build the prompt with actual code changes
 read -r -d '' PROMPT <<EOF || true
 You are generating release notes for Pulse v${VERSION}.
+Pulse is a monitoring dashboard for Proxmox VE, PBS, and Docker containers.
 
-Pulse is a monitoring system for Proxmox VE and PBS with Docker container monitoring capabilities.
+IMPORTANT: You are analyzing ACTUAL CODE DIFFS, not commit messages. This means you see what is truly different between v${PREVIOUS_TAG} and v${VERSION}. Focus only on user-visible changes.
 
-Analyze the following ${COMMIT_COUNT} git commits and generate professional release notes:
+Here are the files that changed (excluding tests/docs):
+${CHANGED_FILES}
 
-${COMMIT_LOG}
+Summary of changes:
+${DIFF_STAT}
 
-Generate release notes following this EXACT template format:
+NEW API ENDPOINTS/HANDLERS (lines starting with + are additions):
+${API_DIFF:-No significant API changes detected}
 
-## What's Changed
+NEW FRONTEND FEATURES:
+${FRONTEND_DIFF:-No significant frontend changes detected}
+
+NEW CONFIG OPTIONS:
+${CONFIG_DIFF:-No significant config changes detected}
+
+ALERT/NOTIFICATION CHANGES:
+${ALERT_DIFF:-No significant alert changes detected}
+
+AGENT CHANGES:
+${AGENT_DIFF:-No significant agent changes detected}
+
+INSTALL SCRIPT CHANGES:
+${INSTALL_DIFF:-No significant install changes detected}
+
+NEW DATA MODELS:
+${MODELS_DIFF:-No significant model changes detected}
+
+Generate release notes following this format:
+
+## v${VERSION}
 
 ### New Features
-[List new features as bullet points, each starting with "**Feature name**:" followed by description. Do NOT include commit hashes or references.]
+[List genuinely new user-facing features. Be specific about what users can now do.]
 
-### Bug Fixes
-[List bug fixes as bullet points, each starting with "**Component/area**:" followed by description. Include issue references like (#123) ONLY if the commit message explicitly mentions an issue number. Do NOT include commit hashes.]
+### Bug Fixes  
+[List fixes for issues users would have encountered. Only include if evidence of fix exists in the diff.]
 
 ### Improvements
-[List improvements/enhancements as bullet points, each starting with "**Component/area**:" followed by description. Do NOT include commit hashes or references.]
+[List enhancements to existing features.]
 
-### Breaking Changes
-[List any breaking changes, or write "None" if there are none]
+---
 
 ## Installation
 
-**Quick Install (systemd / LXC / Proxmox VE):**
+**Quick Install (LXC / Proxmox VE):**
 \`\`\`bash
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 \`\`\`
 
 **Docker:**
 \`\`\`bash
-docker pull rcourtman/pulse:v${VERSION}
-docker stop pulse && docker rm pulse
-docker run -d --name pulse \\
-  --restart unless-stopped \\
-  -p 7655:7655 \\
-  -v /opt/pulse/data:/data \\
-  rcourtman/pulse:v${VERSION}
-\`\`\`
-
-**Manual Binary (amd64 example):**
-\`\`\`bash
-curl -LO https://github.com/rcourtman/Pulse/releases/download/v${VERSION}/pulse-v${VERSION}-linux-amd64.tar.gz
-sudo systemctl stop pulse
-sudo tar -xzf pulse-v${VERSION}-linux-amd64.tar.gz -C /usr/local/bin pulse
-sudo systemctl start pulse
+docker pull rcourtman/pulse:${VERSION}
 \`\`\`
 
 **Helm:**
 \`\`\`bash
-helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \\
-  --version ${VERSION} \\
-  --namespace pulse \\
-  --create-namespace
+helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart --version ${VERSION}
 \`\`\`
 
-## Downloads
-- Universal tarball (auto-detects architecture): \`pulse-v${VERSION}.tar.gz\`
-- Architecture-specific: \`amd64\`, \`arm64\`, \`armv7\`, \`armv6\`, \`386\`
-- Host agent packages: macOS (amd64/arm64), Windows (amd64/arm64/386), Linux (amd64/arm64/armv7/armv6/386)
-- Sensor proxy: Linux (amd64/arm64/armv7/armv6/386)
-- Helm chart: \`pulse-${VERSION}.tgz\`
-- SHA256 checksums: \`checksums.txt\`
+See the [Installation Guide](https://github.com/rcourtman/Pulse#installation) for details.
 
-## Notes
-[Add 2-4 bullet points highlighting the most important changes, configuration notes, or upgrade considerations. Keep this section concise and actionable.]
-
-Guidelines:
-- Match the exact format and style of the template above
-- Use bold for feature/component names followed by colon
-- Do NOT include commit hashes - they clutter the release notes
-- Only include issue references like (#123) if explicitly mentioned in commit messages
-- Focus ONLY on user-visible changes - exclude all development/infrastructure changes
-- EXCLUDE: CI/CD changes, release workflow improvements, build process changes, development tooling, testing infrastructure
-- EXCLUDE: Anything about "release notes generation", "automated release", "validation scripts", "GitHub workflows"
-- INCLUDE ONLY: Features users interact with, bug fixes users experience, performance improvements users notice
-- Use clear, non-technical language
-- Group related changes together logically
-- If there are no breaking changes, write "None" in that section
-- Keep the Notes section practical and actionable for end users
+GUIDELINES:
+- Write plain, factual release notes. No marketing language or excitement.
+- Only mention features that exist in the FINAL code state
+- Do not mention internal refactors, test changes, or CI/CD improvements
+- Do not mention AI features prominently - these are optional features
+- Keep it concise and boring - users want facts, not hype
+- If a section has no items, omit the section entirely
+- No emojis
 EOF
 
-# Helper to call Anthropic (returns notes via stdout)
+# Helper to call Anthropic
 generate_with_anthropic() {
-    local response response_type content
+    local response content
     response=$(curl -s https://api.anthropic.com/v1/messages \
       -H "Content-Type: application/json" \
       -H "x-api-key: ${ANTHROPIC_API_KEY}" \
       -H "anthropic-version: 2023-06-01" \
       -d @- <<JSON
 {
-  "model": "claude-haiku-4-5-20251001",
+  "model": "claude-sonnet-4-20250514",
   "max_tokens": 2000,
-  "system": "You are a technical writer creating release notes. Be concise, clear, and focus on user-visible changes. Use proper markdown formatting.",
+  "system": "You are a technical writer creating factual, understated release notes. Be concise and avoid marketing language.",
   "messages": [
     {
       "role": "user",
@@ -164,6 +196,7 @@ JSON
         return 1
     }
 
+    local response_type
     response_type=$(echo "$response" | jq -r '.type // empty')
     if [ "$response_type" = "error" ]; then
         local message
@@ -181,7 +214,7 @@ JSON
     printf '%s' "$content"
 }
 
-# Helper to call OpenAI (returns notes via stdout)
+# Helper to call OpenAI
 generate_with_openai() {
     local response content error_msg
     response=$(curl -s https://api.openai.com/v1/chat/completions \
@@ -189,18 +222,18 @@ generate_with_openai() {
       -H "Authorization: Bearer ${OPENAI_API_KEY}" \
       -d @- <<JSON
 {
-  "model": "gpt-4o-mini",
+  "model": "gpt-4o",
   "messages": [
     {
       "role": "system",
-      "content": "You are a technical writer creating release notes. Be concise, clear, and focus on user-visible changes. Use proper markdown formatting."
+      "content": "You are a technical writer creating factual, understated release notes. Be concise and avoid marketing language."
     },
     {
       "role": "user",
       "content": $(echo "$PROMPT" | jq -Rs .)
     }
   ],
-  "temperature": 0.7,
+  "temperature": 0.3,
   "max_tokens": 2000
 }
 JSON
@@ -224,167 +257,26 @@ JSON
     printf '%s' "$content"
 }
 
-# Pretty-print a section of notes (expects array name)
-print_section() {
-    local ref="$1"
-    declare -n arr_ref="$ref"
-    if [ ${#arr_ref[@]} -eq 0 ]; then
-        echo "None"
-        return
-    fi
-
-    local item
-    for item in "${arr_ref[@]}"; do
-        echo "- ${item}"
-    done
-}
-
-# Deterministic fallback when no LLM providers are available
-generate_fallback_release_notes() {
-    local raw_subjects=()
-    mapfile -t raw_subjects < <(echo "$COMMIT_LOG" | sed 's/^[0-9a-f]\+ //')
-
-    local subjects=()
-    local subject lower
-    for subject in "${raw_subjects[@]}"; do
-        lower=$(echo "$subject" | tr '[:upper:]' '[:lower:]')
-        if [[ "$lower" =~ (release[[:space:]-]?notes|release[[:space:]-]?workflow|workflow|github|ci|lint|docs|documentation|helm|auto-update|mock|dry[[:space:]-]?run|test|integration|build|validation|telemetry|release[[:space:]-]?assets|fallback|prepare) ]]; then
-            continue
-        fi
-        subjects+=("$subject")
-    done
-
-    if [ ${#subjects[@]} -eq 0 ]; then
-        subjects=("${raw_subjects[@]}")
-    fi
-
-    local features=()
-    local bugs=()
-    local improvements=()
-    local breakings=()
-
-    local subject lower
-    for subject in "${subjects[@]}"; do
-        [ -z "$subject" ] && continue
-        lower=$(echo "$subject" | tr '[:upper:]' '[:lower:]')
-        if [[ "$lower" =~ (feat|feature|add|introduc|support|new) ]]; then
-            features+=("$subject")
-        elif [[ "$lower" =~ (fix|bug|issue|patch|regress|correct) ]]; then
-            bugs+=("$subject")
-        elif [[ "$lower" =~ (breaking|deprecat|remove|drop|incompatib) ]]; then
-            breakings+=("$subject")
-        else
-            improvements+=("$subject")
-        fi
-    done
-
-    if [ ${#improvements[@]} -eq 0 ] && [ ${#features[@]} -eq 0 ] && [ ${#bugs[@]} -eq 0 ]; then
-        improvements=("${subjects[@]}")
-    fi
-
-    local notes=()
-    for subject in "${subjects[@]}"; do
-        notes+=("$subject")
-        [ ${#notes[@]} -ge 3 ] && break
-    done
-    if [ ${#notes[@]} -eq 0 ]; then
-        notes+=("Routine maintenance and dependency updates.")
-    fi
-
-    {
-        echo "## What's Changed"
-        echo ""
-        echo "### New Features"
-        print_section features
-        echo ""
-        echo "### Bug Fixes"
-        print_section bugs
-        echo ""
-        echo "### Improvements"
-        print_section improvements
-        echo ""
-        echo "### Breaking Changes"
-        print_section breakings
-        echo ""
-        echo "## Installation"
-        echo ""
-        echo "**Quick Install (systemd / LXC / Proxmox VE):**"
-        cat <<'EOQI'
-```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
-```
-EOQI
-        echo ""
-        echo "**Docker:**"
-        cat <<'EOQDock'
-```bash
-docker pull rcourtman/pulse:v${VERSION}
-docker stop pulse && docker rm pulse
-docker run -d --name pulse \
-  --restart unless-stopped \
-  -p 7655:7655 \
-  -v /opt/pulse/data:/data \
-  rcourtman/pulse:v${VERSION}
-```
-EOQDock
-        echo ""
-        echo "**Manual Binary (amd64 example):**"
-        cat <<'EOQMan'
-```bash
-curl -LO https://github.com/rcourtman/Pulse/releases/download/v${VERSION}/pulse-v${VERSION}-linux-amd64.tar.gz
-sudo systemctl stop pulse
-sudo tar -xzf pulse-v${VERSION}-linux-amd64.tar.gz -C /usr/local/bin pulse
-sudo systemctl start pulse
-```
-EOQMan
-        echo ""
-        echo "**Helm:**"
-        cat <<'EOQHelm'
-```bash
-helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
-  --version ${VERSION} \
-  --namespace pulse \
-  --create-namespace
-```
-EOQHelm
-        echo ""
-        echo "## Downloads"
-        echo "- Universal tarball (auto-detects architecture): \`pulse-v${VERSION}.tar.gz\`"
-        echo "- Architecture-specific: \`amd64\`, \`arm64\`, \`armv7\`, \`armv6\`, \`386\`"
-        echo "- Host agent packages: macOS, Windows, Linux"
-        echo "- Sensor proxy binaries: Linux (amd64/arm64/armv7/armv6/386)"
-        echo "- Helm chart: \`pulse-${VERSION}.tgz\`"
-        echo "- SHA256 checksums: \`checksums.txt\`"
-        echo ""
-        echo "## Notes"
-        local item
-        for item in "${notes[@]}"; do
-            echo "- ${item}"
-        done
-    }
-}
-
-# Call LLM API based on provider with graceful fallback
+# Call LLM API based on provider
 RELEASE_NOTES=""
 if [ "$LLM_PROVIDER" = "anthropic" ]; then
     if ! RELEASE_NOTES=$(generate_with_anthropic); then
         if [ -n "${OPENAI_API_KEY:-}" ]; then
             echo "Anthropic generation failed, falling back to OpenAI..." >&2
-            if ! RELEASE_NOTES=$(generate_with_openai); then
-                echo "OpenAI fallback failed; generating heuristic release notes." >&2
-                RELEASE_NOTES=$(generate_fallback_release_notes)
-            fi
-            LLM_PROVIDER="openai"
+            RELEASE_NOTES=$(generate_with_openai) || {
+                echo "Both LLM providers failed" >&2
+                exit 1
+            }
         else
-            echo "Anthropic generation failed and no OpenAI fallback is available; generating heuristic release notes." >&2
-            RELEASE_NOTES=$(generate_fallback_release_notes)
+            echo "Anthropic generation failed and no OpenAI fallback" >&2
+            exit 1
         fi
     fi
 else
-    if ! RELEASE_NOTES=$(generate_with_openai); then
-        echo "OpenAI generation failed; generating heuristic release notes." >&2
-        RELEASE_NOTES=$(generate_fallback_release_notes)
-    fi
+    RELEASE_NOTES=$(generate_with_openai) || {
+        echo "OpenAI generation failed" >&2
+        exit 1
+    }
 fi
 
 if [ -z "$RELEASE_NOTES" ] || [ "$RELEASE_NOTES" = "null" ]; then
