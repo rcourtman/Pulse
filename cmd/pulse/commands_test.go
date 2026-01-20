@@ -866,6 +866,11 @@ func TestRunServer_WebSocket(t *testing.T) {
 			t.Logf("WS Read Error: %v", err)
 		}
 	}
+
+	// Explicitly cancel and wait for server shutdown before test cleanup
+	// to avoid race condition where server writes files during temp dir removal
+	cancel()
+	time.Sleep(200 * time.Millisecond)
 }
 
 func TestRunServer_AllowedOrigins(t *testing.T) {
