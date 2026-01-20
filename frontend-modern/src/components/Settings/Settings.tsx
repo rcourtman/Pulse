@@ -2545,7 +2545,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 >
                   <For each={flatTabs}>
                     {(tab) => {
-                      const isActive = activeTab() === tab.id;
+                      const isActive = () => activeTab() === tab.id;
                       const disabled = tab.disabled;
                       return (
                         <button
@@ -2553,7 +2553,7 @@ const Settings: Component<SettingsProps> = (props) => {
                           disabled={disabled}
                           class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${disabled
                             ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600 border-transparent'
-                            : isActive
+                            : isActive()
                               ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
                               : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
                             }`}

@@ -42,8 +42,8 @@ export const SettingsSectionNav: Component<SettingsSectionNavProps> = (props) =>
     <div class={`flex flex-wrap items-center gap-2 sm:gap-4 ${props.class ?? ''}`} aria-label="Settings sections">
       <For each={allSections}>
         {(section) => {
-          const isActive = section.id === props.current;
-          const classes = isActive
+          const isActive = () => section.id === props.current;
+          const classes = () => isActive()
             ? `${baseClasses} text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400`
             : `${baseClasses} hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50`;
 
@@ -52,9 +52,9 @@ export const SettingsSectionNav: Component<SettingsSectionNavProps> = (props) =>
           return (
             <button
               type="button"
-              class={classes}
+              class={classes()}
               onClick={() => props.onSelect(section.id)}
-              aria-pressed={isActive}
+              aria-pressed={isActive()}
             >
               <Icon size={14} stroke-width={2} class="sm:w-4 sm:h-4" />
               <span class="whitespace-nowrap">{section.label}</span>
