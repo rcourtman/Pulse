@@ -9,7 +9,7 @@ interface ThinkingBlockProps {
 /**
  * ThinkingBlock - Displays AI's reasoning/thinking in a collapsed-by-default block.
  * 
- * Inspired by OpenCode's terminal TUI which shows thinking as a subtle,
+ * Inspired by Pulse AI's terminal TUI which shows thinking as a subtle,
  * collapsible section that doesn't distract from the main response.
  */
 export const ThinkingBlock: Component<ThinkingBlockProps> = (props) => {

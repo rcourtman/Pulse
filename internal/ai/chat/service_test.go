@@ -60,12 +60,12 @@ func TestService_StartStop(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := Config{
 		AIConfig: &config.AIConfig{
-			Enabled:         true,
-			OpenAIAPIKey:    "sk-test",
-			ChatModel:       "openai:gpt-4",
-			OpenCodeDataDir: tmpDir,
+			Enabled:      true,
+			OpenAIAPIKey: "sk-test",
+			ChatModel:    "openai:gpt-4",
 		},
 		StateProvider: &mockStateProvider{},
+		DataDir:       tmpDir,
 	}
 
 	service := NewService(cfg)
@@ -92,12 +92,12 @@ func TestService_Restart(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := Config{
 		AIConfig: &config.AIConfig{
-			Enabled:         true,
-			OpenAIAPIKey:    "sk-test",
-			ChatModel:       "openai:gpt-4",
-			OpenCodeDataDir: tmpDir,
+			Enabled:      true,
+			OpenAIAPIKey: "sk-test",
+			ChatModel:    "openai:gpt-4",
 		},
 		StateProvider: &mockStateProvider{},
+		DataDir:       tmpDir,
 	}
 
 	service := NewService(cfg)
@@ -108,7 +108,6 @@ func TestService_Restart(t *testing.T) {
 		Enabled:         true,
 		AnthropicAPIKey: "chk-test",
 		ChatModel:       "anthropic:claude-3",
-		OpenCodeDataDir: tmpDir,
 	}
 
 	err := service.Restart(ctx, newCfg)
@@ -224,12 +223,12 @@ func TestService_SessionWrappers(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := Config{
 		AIConfig: &config.AIConfig{
-			Enabled:         true,
-			OpenAIAPIKey:    "test-key",
-			ChatModel:       "openai:gpt-4",
-			OpenCodeDataDir: tmpDir,
+			Enabled:      true,
+			OpenAIAPIKey: "test-key",
+			ChatModel:    "openai:gpt-4",
 		},
 		StateProvider: &mockStateProvider{},
+		DataDir:       tmpDir,
 	}
 
 	service := NewService(cfg)

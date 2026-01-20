@@ -63,6 +63,7 @@ type Service struct {
 	mu sync.RWMutex
 
 	cfg           *config.AIConfig
+	dataDir       string
 	stateProvider StateProvider
 	agentServer   AgentServer
 	executor      *tools.PulseToolExecutor
@@ -104,6 +105,7 @@ func NewService(cfg Config) *Service {
 
 	return &Service{
 		cfg:           cfg.AIConfig,
+		dataDir:       cfg.DataDir,
 		stateProvider: cfg.StateProvider,
 		agentServer:   cfg.AgentServer,
 		executor:      executor,
@@ -155,9 +157,10 @@ func (s *Service) Start(ctx context.Context) error {
 	s.applyChatContextSettings()
 
 	// Create session store
-	dataDir := s.cfg.OpenCodeDataDir
+	dataDir := s.dataDir
 	if dataDir == "" {
 		dataDir = "/tmp/pulse-ai"
+		s.dataDir = dataDir
 	}
 
 	store, err := NewSessionStore(dataDir)

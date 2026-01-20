@@ -1,6 +1,6 @@
 import { Component, Show, createSignal, onMount, onCleanup, For, createMemo, createEffect } from 'solid-js';
 import { AIAPI } from '@/api/ai';
-import { OpenCodeAPI, type ChatSession } from '@/api/opencode';
+import { AIChatAPI, type ChatSession } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
@@ -192,12 +192,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
   // Load sessions on mount
   onMount(async () => {
     try {
-      const status = await OpenCodeAPI.getStatus();
+      const status = await AIChatAPI.getStatus();
       if (!status.running) {
         notificationStore.warning('AI is not running');
         return;
       }
-      const sessionList = await OpenCodeAPI.listSessions();
+      const sessionList = await AIChatAPI.listSessions();
       setSessions(sessionList);
       await loadSettings();
       await loadModels();
@@ -253,7 +253,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     e.stopPropagation();
     if (!confirm('Delete this conversation?')) return;
     try {
-      await OpenCodeAPI.deleteSession(sessionId);
+      await AIChatAPI.deleteSession(sessionId);
       setSessions(prev => prev.filter(s => s.id !== sessionId));
       updateStoredModel(sessionId, '');
       if (chat.sessionId() === sessionId) {
@@ -278,7 +278,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       // Call the approve endpoint - this marks it as approved in the backend
       // The agentic loop will detect this and execute the command
       // Execution results will come via tool_end event in the stream
-      await OpenCodeAPI.approveCommand(approval.approvalId);
+      await AIChatAPI.approveCommand(approval.approvalId);
 
       // Remove from pending approvals - the tool_end event will show the result
       chat.updateApproval(messageId, approval.toolId, { removed: true });
@@ -314,7 +314,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
 
     try {
-      await OpenCodeAPI.denyCommand(approval.approvalId, 'User skipped');
+      await AIChatAPI.denyCommand(approval.approvalId, 'User skipped');
       chat.updateApproval(messageId, toolId, { removed: true });
     } catch (error) {
       logger.error('[AIChat] Skip/deny failed:', error);
@@ -351,7 +351,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             <div>
               <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">AI Assistant</h2>
               <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                Powered by OpenCode
+                Powered by Pulse
               </p>
             </div>
           </div>

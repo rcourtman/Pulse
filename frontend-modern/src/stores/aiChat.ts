@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import { logger } from '@/utils/logger';
-// NOTE: AIAPI import removed - session management is handled by OpenCode's embedded UI
+// NOTE: AIAPI import removed - session management is handled by Pulse AI's embedded UI
 import type { AIChatSessionSummary } from '@/types/ai';
 
 interface AIChatContext {
@@ -111,9 +111,9 @@ const SAVE_DEBOUNCE_MS = 2000; // Save 2 seconds after last change
 let aiInputRef: HTMLTextAreaElement | null = null;
 
 // Sync current session to server (debounced)
-// NOTE: Session sync is disabled - OpenCode handles session management internally
+// NOTE: Session sync is disabled - Pulse AI handles session management internally
 const syncToServer = async () => {
-  // Disabled: OpenCode manages sessions through its embedded UI
+  // Disabled: Pulse AI manages sessions through its embedded UI
   return;
 };
 
@@ -126,9 +126,9 @@ const debouncedSync = () => {
 };
 
 // Load session from server
-// NOTE: Session sync is disabled - OpenCode handles session management internally
+// NOTE: Session sync is disabled - Pulse AI handles session management internally
 const loadSessionFromServer = async (_sessionId: string): Promise<boolean> => {
-  // Disabled: OpenCode manages sessions through its embedded UI
+  // Disabled: Pulse AI manages sessions through its embedded UI
   return false;
 };
 
@@ -229,9 +229,9 @@ export const aiChatStore = {
   },
 
   // Refresh session list from server
-  // NOTE: Session sync is disabled - OpenCode handles session management internally
+  // NOTE: Session sync is disabled - Pulse AI handles session management internally
   async refreshSessions() {
-    // Disabled: OpenCode manages sessions through its embedded UI
+    // Disabled: Pulse AI manages sessions through its embedded UI
     return;
   },
 
@@ -284,9 +284,9 @@ export const aiChatStore = {
   },
 
   // Delete a session
-  // NOTE: Session management is handled by OpenCode's embedded UI
+  // NOTE: Session management is handled by Pulse AI's embedded UI
   async deleteSession(_sessionId: string) {
-    // Disabled: OpenCode manages sessions through its embedded UI
+    // Disabled: Pulse AI manages sessions through its embedded UI
     return;
   },
 

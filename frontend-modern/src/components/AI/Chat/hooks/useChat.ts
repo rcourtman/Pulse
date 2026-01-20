@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from 'solid-js';
-import { OpenCodeAPI, type StreamEvent } from '@/api/opencode';
+import { AIChatAPI, type StreamEvent } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import type {
@@ -295,7 +295,7 @@ export function useChat(options: UseChatOptions = {}) {
     );
   };
 
-  // Send a message - allows sending mid-stream (aborts current response like OpenCode TUI)
+  // Send a message - allows sending mid-stream (aborts current response like Pulse AI TUI)
   const sendMessage = async (prompt: string) => {
     if (!prompt.trim()) return;
 
@@ -319,7 +319,7 @@ export function useChat(options: UseChatOptions = {}) {
     let currentSessionId = sessionId();
     if (!currentSessionId) {
       try {
-        const session = await OpenCodeAPI.createSession();
+        const session = await AIChatAPI.createSession();
         currentSessionId = session.id;
         setSessionId(currentSessionId);
         logger.debug('[useChat] Created new session', { sessionId: currentSessionId });
@@ -357,7 +357,7 @@ export function useChat(options: UseChatOptions = {}) {
     setMessages((prev) => [...prev, streamingMessage]);
 
     try {
-      await OpenCodeAPI.chat(
+      await AIChatAPI.chat(
         prompt,
         currentSessionId,
         model() || undefined,
@@ -397,7 +397,7 @@ export function useChat(options: UseChatOptions = {}) {
   // Load session messages
   const loadSession = async (id: string) => {
     try {
-      const msgs = await OpenCodeAPI.getMessages(id);
+      const msgs = await AIChatAPI.getMessages(id);
       setMessages(msgs.map(m => ({
         id: m.id,
         role: m.role,
@@ -415,7 +415,7 @@ export function useChat(options: UseChatOptions = {}) {
   // Create new session
   const newSession = async () => {
     try {
-      const session = await OpenCodeAPI.createSession();
+      const session = await AIChatAPI.createSession();
       setSessionId(session.id);
       setMessages([]);
       return session;
@@ -494,8 +494,8 @@ export function useChat(options: UseChatOptions = {}) {
     updateQuestion(messageId, questionId, { isAnswering: true });
 
     try {
-      // Send answer to OpenCode via API
-      await OpenCodeAPI.answerQuestion(questionId, answers);
+      // Send answer to Pulse AI via API
+      await AIChatAPI.answerQuestion(questionId, answers);
 
       // Remove the question card - it's been handled
       updateQuestion(messageId, questionId, { removed: true });
@@ -518,7 +518,7 @@ export function useChat(options: UseChatOptions = {}) {
             prev.map((m) => (m.id === messageId ? { ...m, isStreaming: true } : m))
           );
 
-          OpenCodeAPI.chat(
+          AIChatAPI.chat(
             '', // Empty prompt - just resume listening for completion
             currentSessionId,
             model() || undefined,

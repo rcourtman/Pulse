@@ -8,7 +8,7 @@ import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
-import { OpenCodeAPI, type ChatSession, type FileChange } from '@/api/opencode';
+import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
 import { hasFeature, loadLicenseStatus } from '@/stores/license';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 
@@ -249,7 +249,7 @@ export const AISettings: Component = () => {
     setChatSessionsLoading(true);
     setChatSessionsError('');
     try {
-      const sessions = await OpenCodeAPI.listSessions();
+      const sessions = await AIChatAPI.listSessions();
       setChatSessions(sessions);
       const current = selectedSessionId();
       if (!current || !sessions.some((session) => session.id === current)) {
@@ -315,7 +315,7 @@ export const AISettings: Component = () => {
 
     setSessionActionLoading('summarize');
     try {
-      await OpenCodeAPI.summarizeSession(sessionId);
+      await AIChatAPI.summarizeSession(sessionId);
       notificationStore.success('Session summarized.');
     } catch (error) {
       logger.error('[AISettings] Failed to summarize session:', error);
@@ -335,7 +335,7 @@ export const AISettings: Component = () => {
 
     setSessionActionLoading('diff');
     try {
-      const diff = await OpenCodeAPI.getSessionDiff(sessionId);
+      const diff = await AIChatAPI.getSessionDiff(sessionId);
       const files = diff.files || [];
       if (files.length === 0) {
         setDiffFiles([]);
@@ -368,7 +368,7 @@ export const AISettings: Component = () => {
 
     setSessionActionLoading('revert');
     try {
-      await OpenCodeAPI.revertSession(sessionId);
+      await AIChatAPI.revertSession(sessionId);
       notificationStore.success('Session changes reverted.');
     } catch (error) {
       logger.error('[AISettings] Failed to revert session:', error);

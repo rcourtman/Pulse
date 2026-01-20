@@ -62,12 +62,6 @@ type AIConfig struct {
 	// Budget is expressed as an estimated USD amount over a 30-day window (pro-rated in UI for other ranges).
 	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
 
-	// OpenCode integration - use OpenCode as the AI backend instead of direct provider calls
-	// When enabled, chat and patrol use OpenCode for better tool calling and multi-model support
-	UseOpenCode     bool   `json:"use_opencode,omitempty"`      // Enable OpenCode backend
-	OpenCodeDataDir string `json:"opencode_data_dir,omitempty"` // Data directory for OpenCode (default: /tmp/pulse-opencode)
-	OpenCodePort    int    `json:"opencode_port,omitempty"`     // Port for OpenCode server (0 = auto-assign)
-
 	// AI Infrastructure Control settings
 	// These control whether AI can take actions on infrastructure (start/stop VMs, containers, etc.)
 	ControlLevel    string   `json:"control_level,omitempty"`    // "read_only", "suggest", "controlled", "autonomous"

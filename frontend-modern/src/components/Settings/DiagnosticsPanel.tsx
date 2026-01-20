@@ -112,7 +112,7 @@ interface AlertsDiagnostic {
     notes?: string[];
 }
 
-interface OpenCodeDiagnostic {
+interface AIChatDiagnostic {
     enabled: boolean;
     running: boolean;
     healthy: boolean;
@@ -135,7 +135,7 @@ interface DiagnosticsData {
     apiTokens?: APITokenDiagnostic | null;
     dockerAgents?: DockerAgentDiagnostic | null;
     alerts?: AlertsDiagnostic | null;
-    openCode?: OpenCodeDiagnostic | null;
+    aiChat?: AIChatDiagnostic | null;
     discovery?: DiscoveryDiagnostic | null;
     errors: string[];
 }
@@ -665,8 +665,8 @@ export const DiagnosticsPanel: Component = () => {
                         </Card>
                     </Show>
 
-                    {/* OpenCode AI Status */}
-                    <Show when={diagnosticsData()?.openCode}>
+                    {/* AI Chat Status */}
+                    <Show when={diagnosticsData()?.aiChat}>
                         <Card padding="md">
                             <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
                                 <div class="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
@@ -674,35 +674,35 @@ export const DiagnosticsPanel: Component = () => {
                                 </div>
                                 <div>
                                     <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">AI Assistant</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">OpenCode Sidecar</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Pulse AI Service</p>
                                 </div>
                                 <div class="ml-auto">
                                     <StatusBadge
-                                        status={diagnosticsData()?.openCode?.running ? 'online' : (diagnosticsData()?.openCode?.enabled ? 'offline' : 'unknown')}
-                                        label={diagnosticsData()?.openCode?.running ? 'Running' : (diagnosticsData()?.openCode?.enabled ? 'Stopped' : 'Disabled')}
+                                        status={diagnosticsData()?.aiChat?.running ? 'online' : (diagnosticsData()?.aiChat?.enabled ? 'offline' : 'unknown')}
+                                        label={diagnosticsData()?.aiChat?.running ? 'Running' : (diagnosticsData()?.aiChat?.enabled ? 'Stopped' : 'Disabled')}
                                     />
                                 </div>
                             </div>
                             <div class="space-y-2 text-xs">
-                                <MetricRow label="Model" value={diagnosticsData()?.openCode?.model} />
-                                <MetricRow label="Port" value={diagnosticsData()?.openCode?.port} mono />
-                                <MetricRow label="Status" value={diagnosticsData()?.openCode?.healthy ? 'Healthy' : 'Unhealthy'} />
+                                <MetricRow label="Model" value={diagnosticsData()?.aiChat?.model} />
+                                <MetricRow label="Port" value={diagnosticsData()?.aiChat?.port} mono />
+                                <MetricRow label="Status" value={diagnosticsData()?.aiChat?.healthy ? 'Healthy' : 'Unhealthy'} />
                             </div>
                             <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs">
                                 <span class="text-gray-500 dark:text-gray-400">MCP Connection</span>
                                 <div class="flex items-center gap-1.5">
-                                    {diagnosticsData()?.openCode?.mcpConnected ?
+                                    {diagnosticsData()?.aiChat?.mcpConnected ?
                                         <CheckCircle class="w-3.5 h-3.5 text-green-500" /> :
                                         <XCircle class="w-3.5 h-3.5 text-red-500" />
                                     }
-                                    <span class={diagnosticsData()?.openCode?.mcpConnected ? 'text-green-700 dark:text-green-300' : 'text-gray-500'}>
-                                        {diagnosticsData()?.openCode?.mcpConnected ? 'Connected' : 'Disconnected'}
+                                    <span class={diagnosticsData()?.aiChat?.mcpConnected ? 'text-green-700 dark:text-green-300' : 'text-gray-500'}>
+                                        {diagnosticsData()?.aiChat?.mcpConnected ? 'Connected' : 'Disconnected'}
                                     </span>
                                 </div>
                             </div>
-                            <Show when={(diagnosticsData()?.openCode?.notes?.length || 0) > 0}>
+                            <Show when={(diagnosticsData()?.aiChat?.notes?.length || 0) > 0}>
                                 <ul class="mt-3 bg-amber-50 dark:bg-amber-900/10 p-2 rounded text-xs text-amber-700 dark:text-amber-400 list-disc pl-4">
-                                    <For each={diagnosticsData()?.openCode?.notes || []}>
+                                    <For each={diagnosticsData()?.aiChat?.notes || []}>
                                         {(note) => <li>{note}</li>}
                                     </For>
                                 </ul>

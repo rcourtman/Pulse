@@ -1,7 +1,7 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 
-// OpenCode API - Simplified AI interface
+// AI Chat API - Simplified AI interface
 
 export interface ChatSession {
   id: string;
@@ -37,7 +37,7 @@ export interface AIStatus {
   engine: string;
 }
 
-// OpenCode Agent (build, code, etc.) with specific permissions and model
+// AI Agent (build, code, etc.) with specific permissions and model
 export interface Agent {
   name: string;
   description?: string;
@@ -65,7 +65,7 @@ export interface SessionDiff {
   summary?: string;
 }
 
-export class OpenCodeAPI {
+export class AIChatAPI {
   private static baseUrl = '/api/ai';
 
   // Get AI status
@@ -119,7 +119,7 @@ export class OpenCodeAPI {
     }) as Promise<{ denied: boolean; message: string }>;
   }
 
-  // Answer a pending question from OpenCode
+  // Answer a pending question from the AI chat
   static async answerQuestion(questionId: string, answers: Array<{ id: string; value: string }>): Promise<void> {
     await apiFetch(`${this.baseUrl}/question/${questionId}/answer`, {
       method: 'POST',
@@ -128,7 +128,7 @@ export class OpenCodeAPI {
   }
 
   // ============================================
-  // OpenCode Extended Features
+  // AI Chat Extended Features
   // ============================================
 
   // List available agents (build, code, etc.)
@@ -177,7 +177,7 @@ export class OpenCodeAPI {
     onEvent: (event: StreamEvent) => void,
     signal?: AbortSignal
   ): Promise<void> {
-    logger.debug('[OpenCode] Starting chat stream', { prompt: prompt.substring(0, 50) });
+    logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
 
     const response = await apiFetch(`${this.baseUrl}/chat`, {
       method: 'POST',
@@ -211,7 +211,7 @@ export class OpenCodeAPI {
     try {
       for (; ;) {
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
-          logger.warn('[OpenCode] Stream timeout');
+          logger.warn('[AI Chat] Stream timeout');
           break;
         }
 
@@ -250,14 +250,14 @@ export class OpenCodeAPI {
               if (!jsonStr.trim()) continue;
 
               const event = JSON.parse(jsonStr) as StreamEvent;
-              logger.debug('[OpenCode] Event', { type: event.type });
+              logger.debug('[AI Chat] Event', { type: event.type });
               onEvent(event);
 
               if (event.type === 'done' || event.type === 'error') {
                 return;
               }
             } catch (e) {
-              logger.error('[OpenCode] Failed to parse event', { error: e, line });
+              logger.error('[AI Chat] Failed to parse event', { error: e, line });
             }
           }
         }
@@ -272,7 +272,7 @@ export class OpenCodeAPI {
             onEvent(event);
           }
         } catch {
-          logger.warn('[OpenCode] Could not parse remaining buffer');
+          logger.warn('[AI Chat] Could not parse remaining buffer');
         }
       }
 

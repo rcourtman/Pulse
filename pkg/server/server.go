@@ -195,8 +195,8 @@ func Run(ctx context.Context, version string) error {
 	// Start AI patrol service for background infrastructure monitoring
 	router.StartPatrol(ctx)
 
-	// Start OpenCode AI service (when UseOpenCode is enabled in config)
-	router.StartOpenCodeAI(ctx)
+	// Start AI chat service
+	router.StartAIChat(ctx)
 
 	// Wire alert-triggered AI analysis
 	router.WireAlertTriggeredAI()
@@ -304,8 +304,8 @@ shutdown:
 		log.Error().Err(err).Msg("Server shutdown error")
 	}
 
-	// Stop OpenCode AI service (kills sidecar process group)
-	router.StopOpenCodeAI(shutdownCtx)
+	// Stop AI chat service (kills sidecar process group)
+	router.StopAIChat(shutdownCtx)
 
 	cancel()
 	reloadableMonitor.Stop()

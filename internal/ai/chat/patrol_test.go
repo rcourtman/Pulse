@@ -145,12 +145,12 @@ func TestPatrolService_RunPatrol(t *testing.T) {
 	// Create Service manually
 	cfg := Config{
 		AIConfig: &config.AIConfig{
-			Enabled:         true,
-			OpenAIAPIKey:    "sk-test",
-			ChatModel:       "openai:gpt-4",
-			OpenCodeDataDir: t.TempDir(),
+			Enabled:      true,
+			OpenAIAPIKey: "sk-test",
+			ChatModel:    "openai:gpt-4",
 		},
 		StateProvider: &mockStateProvider{},
+		DataDir:       t.TempDir(),
 	}
 
 	// Use NewService to initialize internal structures (like executor)

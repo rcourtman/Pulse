@@ -35,7 +35,7 @@ type AISettingsHandler struct {
 	persistence             *config.ConfigPersistence
 	aiService               *ai.Service
 	agentServer             *agentexec.Server
-	onModelChange           func() // Called when model or other OpenCode-affecting settings change
+	onModelChange           func() // Called when model or other AI chat-affecting settings change
 	onControlSettingsChange func() // Called when control level or protected guests change
 }
 
@@ -164,13 +164,13 @@ func (h *AISettingsHandler) SetLicenseChecker(checker ai.LicenseChecker) {
 }
 
 // SetOnModelChange sets a callback to be invoked when model settings change
-// Used by Router to trigger OpenCode sidecar restart
+// Used by Router to trigger AI chat service restart
 func (h *AISettingsHandler) SetOnModelChange(callback func()) {
 	h.onModelChange = callback
 }
 
 // SetOnControlSettingsChange sets a callback to be invoked when control settings change
-// Used by Router to update MCP tool visibility without restarting OpenCode
+// Used by Router to update MCP tool visibility without restarting AI chat
 func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
 	h.onControlSettingsChange = callback
 }
@@ -663,14 +663,14 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		analyzer.SetEnabled(settings.AlertTriggeredAnalysis)
 	}
 
-	// Trigger OpenCode sidecar restart if model changed
-	// This ensures the new model is picked up by the sidecar
+	// Trigger AI chat service restart if model changed
+	// This ensures the new model is picked up by the service
 	if h.onModelChange != nil && (req.Model != nil || req.ChatModel != nil) {
 		h.onModelChange()
 	}
 
 	// Update MCP control settings if control level or protected guests changed
-	// This updates tool visibility without restarting OpenCode
+	// This updates tool visibility without restarting AI chat
 	// Note: req.AutonomousMode also maps to control_level for backwards compatibility
 	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil || req.AutonomousMode != nil) {
 		h.onControlSettingsChange()

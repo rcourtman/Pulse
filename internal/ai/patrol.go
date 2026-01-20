@@ -234,8 +234,8 @@ type PatrolRunRecord struct {
 // MaxPatrolRunHistory is the maximum number of patrol runs to keep in history
 const MaxPatrolRunHistory = 100
 
-// OpenCodePatrolRunner interface allows delegating patrol to OpenCode
-type OpenCodePatrolRunner interface {
+// ChatPatrolRunner interface allows delegating patrol to the AI chat service
+type ChatPatrolRunner interface {
 	RunPatrol(ctx context.Context) error
 	IsRunning() bool
 }
@@ -261,9 +261,9 @@ type PatrolService struct {
 	// Unified intelligence facade - aggregates all subsystems for unified view
 	intelligence *Intelligence
 
-	// OpenCode integration - when set and UseOpenCode is true, delegate patrol to OpenCode
-	opencodePatrol OpenCodePatrolRunner
-	useOpenCode    bool // Whether to use OpenCode for patrol
+	// AI chat integration - when set and enabled, delegate patrol to the AI chat service
+	chatPatrol    ChatPatrolRunner
+	useChatPatrol bool // Whether to use AI chat for patrol
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds    PatrolThresholds
@@ -325,27 +325,14 @@ func (p *PatrolService) GetIncidentStore() *memory.IncidentStore {
 	return p.incidentStore
 }
 
-// SetOpenCodePatrol sets the OpenCode patrol runner for delegation
-// When set and useOpenCode is true, patrol will be handled by OpenCode
-func (p *PatrolService) SetOpenCodePatrol(runner OpenCodePatrolRunner, enabled bool) {
+// SetChatPatrol sets the chat-based patrol runner for delegation.
+// When enabled, patrol will be handled by the AI chat service.
+func (p *PatrolService) SetChatPatrol(runner ChatPatrolRunner, enabled bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.opencodePatrol = runner
-	p.useOpenCode = enabled
-	log.Info().Bool("enabled", enabled).Msg("OpenCode patrol integration configured")
-}
-
-// SetChatPatrol sets the chat-based patrol runner for delegation
-// This is functionally equivalent to SetOpenCodePatrol
-func (p *PatrolService) SetChatPatrol(runner OpenCodePatrolRunner, enabled bool) {
-	p.SetOpenCodePatrol(runner, enabled)
-}
-
-// UseOpenCode returns whether OpenCode is configured for patrol
-func (p *PatrolService) UseOpenCode() bool {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.useOpenCode && p.opencodePatrol != nil
+	p.chatPatrol = runner
+	p.useChatPatrol = enabled
+	log.Info().Bool("enabled", enabled).Msg("AI chat patrol integration configured")
 }
 
 // SetConfig updates the patrol configuration
@@ -820,19 +807,19 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 func (p *PatrolService) runPatrol(ctx context.Context) {
 	p.mu.RLock()
 	cfg := p.config
-	opencodePatrol := p.opencodePatrol
-	useOpenCode := p.useOpenCode
+	chatPatrol := p.chatPatrol
+	useChatPatrol := p.useChatPatrol
 	p.mu.RUnlock()
 
 	if !cfg.Enabled {
 		return
 	}
 
-	// Delegate to OpenCode patrol if configured
-	if useOpenCode && opencodePatrol != nil {
-		log.Info().Msg("AI Patrol: Delegating to OpenCode patrol")
-		if err := opencodePatrol.RunPatrol(ctx); err != nil {
-			log.Error().Err(err).Msg("AI Patrol: OpenCode patrol failed")
+	// Delegate to AI chat patrol if configured
+	if useChatPatrol && chatPatrol != nil {
+		log.Info().Msg("AI Patrol: Delegating to AI chat patrol")
+		if err := chatPatrol.RunPatrol(ctx); err != nil {
+			log.Error().Err(err).Msg("AI Patrol: AI chat patrol failed")
 		}
 		return
 	}

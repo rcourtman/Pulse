@@ -1680,12 +1680,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 		settings.PatrolIntervalMinutes = 15
 	}
 
-	// Environment variable override for UseOpenCode
-	if os.Getenv("PULSE_USE_OPENCODE") == "true" || os.Getenv("PULSE_USE_OPENCODE") == "1" {
-		settings.UseOpenCode = true
-	}
-
-	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Bool("patrol_enabled", settings.PatrolEnabled).Bool("alert_triggered_analysis", settings.AlertTriggeredAnalysis).Bool("use_opencode", settings.UseOpenCode).Msg("AI configuration loaded")
+	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Bool("patrol_enabled", settings.PatrolEnabled).Bool("alert_triggered_analysis", settings.AlertTriggeredAnalysis).Msg("AI configuration loaded")
 	return settings, nil
 }
 

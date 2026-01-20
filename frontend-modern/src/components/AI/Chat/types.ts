@@ -22,7 +22,7 @@ export interface PendingApproval {
   approvalId?: string; // ID of the approval record for API calls
 }
 
-// Question from OpenCode
+// Question from Pulse AI
 export interface QuestionOption {
   label: string;
   value: string;

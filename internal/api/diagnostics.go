@@ -43,7 +43,7 @@ type DiagnosticsInfo struct {
 	APITokens        *APITokenDiagnostic         `json:"apiTokens,omitempty"`
 	DockerAgents     *DockerAgentDiagnostic      `json:"dockerAgents,omitempty"`
 	Alerts           *AlertsDiagnostic           `json:"alerts,omitempty"`
-	OpenCode         *OpenCodeDiagnostic         `json:"openCode,omitempty"`
+	AIChat           *AIChatDiagnostic           `json:"aiChat,omitempty"`
 	Errors           []string                    `json:"errors"`
 	// NodeSnapshots captures the raw memory payload and derived usage Pulse last observed per node.
 	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots,omitempty"`
@@ -356,8 +356,8 @@ type AlertsDiagnostic struct {
 	Notes                    []string `json:"notes,omitempty"`
 }
 
-// OpenCodeDiagnostic reports on the OpenCode AI sidecar status.
-type OpenCodeDiagnostic struct {
+// AIChatDiagnostic reports on the AI chat service status.
+type AIChatDiagnostic struct {
 	Enabled      bool     `json:"enabled"`
 	Running      bool     `json:"running"`
 	Healthy      bool     `json:"healthy"`
@@ -569,7 +569,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 
 	diag.DockerAgents = buildDockerAgentDiagnostic(r.monitor, diag.Version)
 	diag.Alerts = buildAlertsDiagnostic(r.monitor)
-	diag.OpenCode = buildOpenCodeDiagnostic(r.config, r.aiHandler)
+	diag.AIChat = buildAIChatDiagnostic(r.config, r.aiHandler)
 
 	diag.Discovery = buildDiscoveryDiagnostic(r.config, r.monitor)
 
@@ -1876,12 +1876,12 @@ func interfaceToStringSlice(value interface{}) []string {
 	}
 }
 
-func buildOpenCodeDiagnostic(cfg *config.Config, aiHandler *AIHandler) *OpenCodeDiagnostic {
+func buildAIChatDiagnostic(cfg *config.Config, aiHandler *AIHandler) *AIChatDiagnostic {
 	if cfg == nil {
 		return nil
 	}
 
-	diag := &OpenCodeDiagnostic{
+	diag := &AIChatDiagnostic{
 		Enabled: false,
 		Notes:   []string{},
 	}
@@ -1891,13 +1891,8 @@ func buildOpenCodeDiagnostic(cfg *config.Config, aiHandler *AIHandler) *OpenCode
 	if aiHandler != nil {
 		aiCfg := aiHandler.GetAIConfig()
 		if aiCfg != nil {
-			diag.Enabled = aiCfg.UseOpenCode
+			diag.Enabled = aiCfg.Enabled
 			diag.Model = aiCfg.GetChatModel()
-
-			// Pulse legacy config check
-			if !diag.Enabled && aiCfg.Enabled {
-				diag.Notes = append(diag.Notes, "AI is enabled but UseOpenCode is false - using legacy implementation")
-			}
 		}
 
 		svc := aiHandler.GetService()
@@ -1921,10 +1916,10 @@ func buildOpenCodeDiagnostic(cfg *config.Config, aiHandler *AIHandler) *OpenCode
 			diag.MCPConnected = diag.Running // Assume connected if running for now
 
 			if !diag.Running && diag.Enabled {
-				diag.Notes = append(diag.Notes, "OpenCode service is enabled but not running")
+				diag.Notes = append(diag.Notes, "AI chat service is enabled but not running")
 			}
 		} else if diag.Enabled {
-			diag.Notes = append(diag.Notes, "OpenCode service is nil")
+			diag.Notes = append(diag.Notes, "AI chat service is nil")
 		}
 	} else {
 		diag.Notes = append(diag.Notes, "AI Handler not initialized")

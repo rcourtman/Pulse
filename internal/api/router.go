@@ -59,7 +59,7 @@ type Router struct {
 	temperatureProxyHandlers  *TemperatureProxyHandlers
 	systemSettingsHandler     *SystemSettingsHandler
 	aiSettingsHandler         *AISettingsHandler
-	aiHandler                 *AIHandler // OpenCode-based AI handler
+	aiHandler                 *AIHandler // AI chat handler
 	resourceHandlers          *ResourceHandlers
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
@@ -1246,13 +1246,13 @@ func (r *Router) setupRoutes() {
 	)
 	r.aiSettingsHandler.SetMetadataProvider(metadataProvider)
 
-	// OpenCode-based AI handler (when UseOpenCode is enabled)
+	// AI chat handler
 	r.aiHandler = NewAIHandler(r.config, r.persistence, r.agentExecServer)
 	// Wire license checker for Pro feature gating (AI Patrol, Alert Analysis, Auto-Fix)
 	r.aiSettingsHandler.SetLicenseChecker(r.licenseHandlers.Service())
-	// Wire model change callback to restart OpenCode sidecar when model is changed
+	// Wire model change callback to restart AI chat service when model is changed
 	r.aiSettingsHandler.SetOnModelChange(func() {
-		r.RestartOpenCodeAI(context.Background())
+		r.RestartAIChat(context.Background())
 	})
 	// Wire control settings change callback to update MCP tool visibility
 	r.aiSettingsHandler.SetOnControlSettingsChange(func() {
@@ -1396,7 +1396,7 @@ func (r *Router) setupRoutes() {
 		}
 	}))
 
-	// OpenCode AI endpoints - new AI backend powered by OpenCode
+	// AI chat endpoints
 	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, r.aiHandler.HandleStatus))
 	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, r.aiHandler.HandleChat))
 	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
@@ -1409,13 +1409,13 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
-	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeOpenCodeSessions))
+	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeAISessions))
 
 	// AI approval endpoints - for command approval workflow
 	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, r.aiSettingsHandler.HandleListApprovals))
 	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, r.routeApprovals))
 
-	// AI question endpoints - for answering OpenCode questions
+	// AI question endpoints
 	r.mux.HandleFunc("/api/ai/question/", RequireAuth(r.config, r.routeQuestions))
 
 	// Agent WebSocket for AI command execution
@@ -1456,8 +1456,8 @@ func (r *Router) setupRoutes() {
 
 }
 
-// routeOpenCodeSessions routes session-specific OpenCode AI requests
-func (r *Router) routeOpenCodeSessions(w http.ResponseWriter, req *http.Request) {
+// routeAISessions routes session-specific AI chat requests
+func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
 	// Extract session ID from path: /api/ai/sessions/{id}[/messages|/abort|/summarize|/diff|/fork|/revert|/unrevert]
 	path := strings.TrimPrefix(req.URL.Path, "/api/ai/sessions/")
 	parts := strings.SplitN(path, "/", 2)
@@ -1953,24 +1953,24 @@ func (r *Router) StopPatrol() {
 	}
 }
 
-// StartOpenCodeAI starts the OpenCode-based AI service
-// This is the new AI backend that uses OpenCode for better tool calling and multi-model support
-func (r *Router) StartOpenCodeAI(ctx context.Context) {
+// StartAIChat starts the AI chat service
+// This is the new AI backend that supports tool calling and multi-model support
+func (r *Router) StartAIChat(ctx context.Context) {
 	if r.aiHandler == nil {
 		return
 	}
 	if r.monitor == nil {
-		log.Warn().Msg("Cannot start OpenCode AI: monitor not available")
+		log.Warn().Msg("Cannot start AI chat: monitor not available")
 		return
 	}
 
 	if err := r.aiHandler.Start(ctx, r.monitor); err != nil {
-		log.Error().Err(err).Msg("Failed to start OpenCode AI service")
+		log.Error().Err(err).Msg("Failed to start AI chat service")
 		return
 	}
 
 	// Wire up MCP tool providers so AI can access real data
-	r.wireOpenCodeProviders()
+	r.wireAIChatProviders()
 
 	// Wire up AI patrol if AI is running
 	aiCfg := r.aiHandler.GetAIConfig()
@@ -1995,8 +1995,8 @@ func (r *Router) StartOpenCodeAI(ctx context.Context) {
 	}
 }
 
-// wireOpenCodeProviders wires up all MCP tool providers for OpenCode
-func (r *Router) wireOpenCodeProviders() {
+// wireAIChatProviders wires up all MCP tool providers for AI chat
+func (r *Router) wireAIChatProviders() {
 	if r.aiHandler == nil || !r.aiHandler.IsRunning() {
 		return
 	}
@@ -2012,7 +2012,7 @@ func (r *Router) wireOpenCodeProviders() {
 			alertAdapter := tools.NewAlertManagerMCPAdapter(alertManager)
 			if alertAdapter != nil {
 				service.SetAlertProvider(alertAdapter)
-				log.Debug().Msg("OpenCode: Alert provider wired")
+				log.Debug().Msg("AI chat: Alert provider wired")
 			}
 		}
 	}
@@ -2024,7 +2024,7 @@ func (r *Router) wireOpenCodeProviders() {
 				findingsAdapter := ai.NewFindingsMCPAdapter(findingsStore)
 				if findingsAdapter != nil {
 					service.SetFindingsProvider(findingsAdapter)
-					log.Debug().Msg("OpenCode: Findings provider wired")
+					log.Debug().Msg("AI chat: Findings provider wired")
 				}
 			}
 		}
@@ -2033,7 +2033,7 @@ func (r *Router) wireOpenCodeProviders() {
 	if r.persistence != nil {
 		manager := NewMCPAgentProfileManager(r.persistence, r.licenseHandlers.Service())
 		service.SetAgentProfileManager(manager)
-		log.Debug().Msg("OpenCode: Agent profile manager wired")
+		log.Debug().Msg("AI chat: Agent profile manager wired")
 	}
 
 	// Wire storage provider
@@ -2041,7 +2041,7 @@ func (r *Router) wireOpenCodeProviders() {
 		storageAdapter := tools.NewStorageMCPAdapter(r.monitor)
 		if storageAdapter != nil {
 			service.SetStorageProvider(storageAdapter)
-			log.Debug().Msg("OpenCode: Storage provider wired")
+			log.Debug().Msg("AI chat: Storage provider wired")
 		}
 	}
 
@@ -2050,7 +2050,7 @@ func (r *Router) wireOpenCodeProviders() {
 		backupAdapter := tools.NewBackupMCPAdapter(r.monitor)
 		if backupAdapter != nil {
 			service.SetBackupProvider(backupAdapter)
-			log.Debug().Msg("OpenCode: Backup provider wired")
+			log.Debug().Msg("AI chat: Backup provider wired")
 		}
 	}
 
@@ -2059,7 +2059,7 @@ func (r *Router) wireOpenCodeProviders() {
 		diskHealthAdapter := tools.NewDiskHealthMCPAdapter(r.monitor)
 		if diskHealthAdapter != nil {
 			service.SetDiskHealthProvider(diskHealthAdapter)
-			log.Debug().Msg("OpenCode: Disk health provider wired")
+			log.Debug().Msg("AI chat: Disk health provider wired")
 		}
 	}
 
@@ -2068,7 +2068,7 @@ func (r *Router) wireOpenCodeProviders() {
 		updatesAdapter := tools.NewUpdatesMCPAdapter(r.monitor, &updatesConfigWrapper{cfg: r.config})
 		if updatesAdapter != nil {
 			service.SetUpdatesProvider(updatesAdapter)
-			log.Debug().Msg("OpenCode: Updates provider wired")
+			log.Debug().Msg("AI chat: Updates provider wired")
 		}
 	}
 
@@ -2081,7 +2081,7 @@ func (r *Router) wireOpenCodeProviders() {
 			)
 			if metricsAdapter != nil {
 				service.SetMetricsHistory(metricsAdapter)
-				log.Debug().Msg("OpenCode: Metrics history provider wired")
+				log.Debug().Msg("AI chat: Metrics history provider wired")
 			}
 		}
 	}
@@ -2093,7 +2093,7 @@ func (r *Router) wireOpenCodeProviders() {
 				baselineAdapter := tools.NewBaselineMCPAdapter(&baselineSourceWrapper{store: baselineStore})
 				if baselineAdapter != nil {
 					service.SetBaselineProvider(baselineAdapter)
-					log.Debug().Msg("OpenCode: Baseline provider wired")
+					log.Debug().Msg("AI chat: Baseline provider wired")
 				}
 			}
 		}
@@ -2109,7 +2109,7 @@ func (r *Router) wireOpenCodeProviders() {
 				)
 				if patternAdapter != nil {
 					service.SetPatternProvider(patternAdapter)
-					log.Debug().Msg("OpenCode: Pattern provider wired")
+					log.Debug().Msg("AI chat: Pattern provider wired")
 				}
 			}
 		}
@@ -2121,7 +2121,7 @@ func (r *Router) wireOpenCodeProviders() {
 			findingsManagerAdapter := tools.NewFindingsManagerMCPAdapter(patrolSvc)
 			if findingsManagerAdapter != nil {
 				service.SetFindingsManager(findingsManagerAdapter)
-				log.Debug().Msg("OpenCode: Findings manager wired")
+				log.Debug().Msg("AI chat: Findings manager wired")
 			}
 		}
 	}
@@ -2131,11 +2131,11 @@ func (r *Router) wireOpenCodeProviders() {
 		metadataAdapter := tools.NewMetadataUpdaterMCPAdapter(r.aiSettingsHandler.GetAIService())
 		if metadataAdapter != nil {
 			service.SetMetadataUpdater(metadataAdapter)
-			log.Debug().Msg("OpenCode: Metadata updater wired")
+			log.Debug().Msg("AI chat: Metadata updater wired")
 		}
 	}
 
-	log.Info().Msg("OpenCode MCP tool providers wired")
+	log.Info().Msg("AI chat MCP tool providers wired")
 }
 
 // metricsSourceWrapper wraps monitoring.MetricsHistory to implement tools.MetricsSource
@@ -2285,23 +2285,23 @@ func (w *updatesConfigWrapper) IsDockerUpdateActionsEnabled() bool {
 	return !w.cfg.DisableDockerUpdateActions
 }
 
-// StopOpenCodeAI stops the OpenCode-based AI service
-func (r *Router) StopOpenCodeAI(ctx context.Context) {
+// StopAIChat stops the AI chat service
+func (r *Router) StopAIChat(ctx context.Context) {
 	if r.aiHandler != nil {
 		if err := r.aiHandler.Stop(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to stop OpenCode AI service")
+			log.Error().Err(err).Msg("Failed to stop AI chat service")
 		}
 	}
 }
 
-// RestartOpenCodeAI restarts the OpenCode service with updated configuration
-// Call this when AI settings change that affect the sidecar (e.g., model selection)
-func (r *Router) RestartOpenCodeAI(ctx context.Context) {
+// RestartAIChat restarts the AI chat service with updated configuration
+// Call this when AI settings change that affect the service (e.g., model selection)
+func (r *Router) RestartAIChat(ctx context.Context) {
 	if r.aiHandler != nil {
 		if err := r.aiHandler.Restart(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to restart OpenCode AI service")
+			log.Error().Err(err).Msg("Failed to restart AI chat service")
 		} else {
-			log.Info().Msg("OpenCode AI service restarted with new configuration")
+			log.Info().Msg("AI chat service restarted with new configuration")
 		}
 	}
 }

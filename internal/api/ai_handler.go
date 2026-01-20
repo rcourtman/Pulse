@@ -98,10 +98,7 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 	}
 
 	// Determine data directory
-	dataDir := aiCfg.OpenCodeDataDir
-	if dataDir == "" {
-		dataDir = "/tmp/pulse-ai"
-	}
+	dataDir := "/tmp/pulse-ai"
 
 	log.Info().Bool("enabled", aiCfg.Enabled).Str("model", aiCfg.Model).Msg("Starting AI chat service")
 	h.service = newChatService(chat.Config{
