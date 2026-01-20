@@ -78,6 +78,51 @@ MODELS_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'internal/models/*.go' ':!*_test
     | grep -E '^\+.*type.*struct|^\+.*`json:' \
     | head -20 || echo "")
 
+# Bug fixes: Find commits referencing issues and verify fix is still in final code
+echo "Checking for verified bug fixes..."
+VERIFIED_BUG_FIXES=""
+
+# Get commits that reference issues (pattern: #1234 or Related to #1234)
+ISSUE_COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --oneline --grep='#[0-9]' 2>/dev/null || echo "")
+
+if [ -n "$ISSUE_COMMITS" ]; then
+    while IFS= read -r commit_line; do
+        [ -z "$commit_line" ] && continue
+        
+        # Extract commit hash and message
+        COMMIT_HASH=$(echo "$commit_line" | awk '{print $1}')
+        COMMIT_MSG=$(echo "$commit_line" | cut -d' ' -f2-)
+        
+        # Get the files this commit touched
+        COMMIT_FILES=$(git diff-tree --no-commit-id --name-only -r "$COMMIT_HASH" 2>/dev/null | head -5)
+        
+        # Check if any of those files have changes in the final diff
+        CHANGE_STILL_EXISTS=false
+        for file in $COMMIT_FILES; do
+            if git diff ${PREVIOUS_TAG}..HEAD --name-only | grep -q "^${file}$"; then
+                # File is still modified in final diff - verify the commit's changes exist
+                COMMIT_ADDITIONS=$(git show "$COMMIT_HASH" --pretty="" --unified=0 -- "$file" 2>/dev/null | grep '^+[^+]' | head -3 || echo "")
+                if [ -n "$COMMIT_ADDITIONS" ]; then
+                    # Check if at least one added line still exists in final diff
+                    FIRST_ADDITION=$(echo "$COMMIT_ADDITIONS" | head -1 | sed 's/^+//' | head -c 40)
+                    if [ -n "$FIRST_ADDITION" ] && git diff ${PREVIOUS_TAG}..HEAD -- "$file" | grep -qF "$FIRST_ADDITION"; then
+                        CHANGE_STILL_EXISTS=true
+                        break
+                    fi
+                fi
+            fi
+        done
+        
+        if [ "$CHANGE_STILL_EXISTS" = true ]; then
+            VERIFIED_BUG_FIXES="${VERIFIED_BUG_FIXES}${commit_line}
+"
+        fi
+    done <<< "$ISSUE_COMMITS"
+fi
+
+# Clean up the bug fixes list
+VERIFIED_BUG_FIXES=$(echo "$VERIFIED_BUG_FIXES" | sed '/^$/d' | head -15)
+
 echo "Collected diffs from key areas"
 
 # Auto-load API keys from local secrets if not already set
@@ -133,6 +178,9 @@ ${INSTALL_DIFF:-No significant install changes detected}
 NEW DATA MODELS:
 ${MODELS_DIFF:-No significant model changes detected}
 
+VERIFIED BUG FIXES (commits referencing issues, verified still in final code):
+${VERIFIED_BUG_FIXES:-No verified bug fix commits found}
+
 Generate release notes following this format:
 
 ## v${VERSION}
@@ -141,7 +189,7 @@ Generate release notes following this format:
 [List genuinely new user-facing features. Be specific about what users can now do.]
 
 ### Bug Fixes  
-[List fixes for issues users would have encountered. Only include if evidence of fix exists in the diff.]
+[List fixes for issues users would have encountered. Use the VERIFIED BUG FIXES section above - these reference actual GitHub issues. Include the issue number in format (#1234).]
 
 ### Improvements
 [List enhancements to existing features.]
