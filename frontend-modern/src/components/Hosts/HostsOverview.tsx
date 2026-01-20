@@ -18,6 +18,7 @@ import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint, type ColumnPriority } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { aiChatStore } from '@/stores/aiChat';
+
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourcesAsLegacy } from '@/hooks/useResources';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -41,11 +42,11 @@ export interface HostColumnDef {
 // Host table column definitions - all essential for horizontal scroll like Docker
 export const HOST_COLUMNS: HostColumnDef[] = [
   // Core columns - all essential (visible on all screens with horizontal scroll)
-  { id: 'name', label: 'Host', priority: 'essential', width: '100px', sortKey: 'name' },
-  { id: 'platform', label: 'Platform', priority: 'essential', width: '70px', sortKey: 'platform' },
+  { id: 'name', label: 'Host', priority: 'essential', width: '210px', sortKey: 'name' },
+  { id: 'platform', label: 'Platform', priority: 'essential', width: '110px', sortKey: 'platform' },
   { id: 'cpu', label: 'CPU', priority: 'essential', width: '60px', sortKey: 'cpu' },
   { id: 'memory', label: 'Memory', priority: 'essential', width: '60px', sortKey: 'memory' },
-  { id: 'disk', label: 'Disk', priority: 'essential', width: '60px', sortKey: 'disk' },
+  { id: 'disk', label: 'Disk', priority: 'essential', width: '220px', sortKey: 'disk' },
 
   // Additional columns - essential but toggleable by user
   { id: 'temp', label: 'Temp', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, priority: 'essential', width: '50px', toggleable: true },
@@ -961,30 +962,30 @@ export const HostsOverview: Component = () => {
                 <Card padding="none" tone="glass" class="overflow-hidden">
                   <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
                     <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
-                    <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "800px" }}>
+                    <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
                       <thead>
                         <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                           {/* Essential columns */}
-                          <th class={`${thClass} text-left pl-4`} onClick={() => handleSort('name')}>
+                          <th class={`${thClass} text-left pl-4`} style={{ "width": isMobile() ? "140px" : "210px" }} onClick={() => handleSort('name')}>
                             Host {renderSortIndicator('name')}
                           </th>
                           <Show when={isColVisible('platform')}>
-                            <th class={thClass} onClick={() => handleSort('platform')}>
+                            <th class={thClass} style={{ "width": isMobile() ? "100px" : "120px" }} onClick={() => handleSort('platform')}>
                               Platform {renderSortIndicator('platform')}
                             </th>
                           </Show>
                           <Show when={isColVisible('cpu')}>
-                            <th class={thClass} style={{ "min-width": isMobile() ? "60px" : "140px" }} onClick={() => handleSort('cpu')}>
+                            <th class={thClass} style={{ "width": isMobile() ? "60px" : "140px" }} onClick={() => handleSort('cpu')}>
                               CPU {renderSortIndicator('cpu')}
                             </th>
                           </Show>
                           <Show when={isColVisible('memory')}>
-                            <th class={thClass} style={{ "min-width": isMobile() ? "60px" : "140px" }} onClick={() => handleSort('memory')}>
+                            <th class={thClass} style={{ "width": isMobile() ? "60px" : "140px" }} onClick={() => handleSort('memory')}>
                               Memory {renderSortIndicator('memory')}
                             </th>
                           </Show>
                           <Show when={isColVisible('disk')}>
-                            <th class={thClass} style={{ "min-width": isMobile() ? "60px" : "140px" }} onClick={() => handleSort('disk')}>
+                            <th class={thClass} style={{ "width": isMobile() ? "90px" : "220px" }} onClick={() => handleSort('disk')}>
                               Disk {renderSortIndicator('disk')}
                             </th>
                           </Show>
@@ -1182,7 +1183,7 @@ const HostRow: Component<HostRowProps> = (props) => {
     <>
       <tr class={rowClass()} onClick={handleRowClick}>
         {/* Host Name - always visible */}
-        <td class="pl-4 pr-2 py-1 align-middle">
+        <td class="pl-4 pr-2 py-1 align-middle overflow-hidden">
           <div class="flex items-center gap-2 min-w-0">
             <StatusDot
               variant={hostStatus().variant}
@@ -1190,18 +1191,21 @@ const HostRow: Component<HostRowProps> = (props) => {
               ariaLabel={hostStatus().label}
               size="xs"
             />
-            <div class="min-w-0 flex items-center gap-1.5 group/name">
-              <div>
-                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+            <div class="min-w-0 flex items-center gap-1.5 group/name flex-1">
+              <div class="min-w-0 flex-1">
+                <p
+                  class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate"
+                  title={props.host.displayName || props.host.hostname || props.host.id}
+                >
                   {props.host.displayName || props.host.hostname || props.host.id}
                 </p>
                 <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate" title={props.host.hostname}>
                     {props.host.hostname}
                   </p>
                 </Show>
                 <Show when={props.host.lastSeen}>
-                  <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                  <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
                     Updated {formatRelativeTime(props.host.lastSeen!)}
                   </p>
                 </Show>
@@ -1250,17 +1254,18 @@ const HostRow: Component<HostRowProps> = (props) => {
                   </svg>
                 </span>
               </Show>
+
             </div>
           </div>
         </td>
 
         {/* Platform */}
         <Show when={props.isColVisible('platform')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="text-xs text-gray-700 dark:text-gray-300">
-              <p class="font-medium capitalize whitespace-nowrap">{props.host.platform || '—'}</p>
+          <td class="px-2 py-1 align-middle overflow-hidden">
+            <div class="text-xs text-gray-700 dark:text-gray-300 min-w-0">
+              <p class="font-medium capitalize truncate" title={props.host.platform || '—'}>{props.host.platform || '—'}</p>
               <Show when={props.host.osName}>
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate" title={`${props.host.osName} ${props.host.osVersion}`.trim()}>
                   {props.host.osName} {props.host.osVersion}
                 </p>
               </Show>
@@ -1270,7 +1275,7 @@ const HostRow: Component<HostRowProps> = (props) => {
 
         {/* CPU */}
         <Show when={props.isColVisible('cpu')}>
-          <td class="px-2 py-1 align-middle" style={{ "min-width": props.isMobile() ? "60px" : "140px", "width": props.isMobile() ? undefined : "140px", "max-width": props.isMobile() ? undefined : "140px" }}>
+          <td class="px-2 py-1 align-middle">
             <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
               <EnhancedCPUBar
                 usage={cpuPercent()}
@@ -1283,7 +1288,7 @@ const HostRow: Component<HostRowProps> = (props) => {
 
         {/* Memory */}
         <Show when={props.isColVisible('memory')}>
-          <td class="px-2 py-1 align-middle" style={{ "min-width": props.isMobile() ? "60px" : "140px", "width": props.isMobile() ? undefined : "140px", "max-width": props.isMobile() ? undefined : "140px" }}>
+          <td class="px-2 py-1 align-middle">
             <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
               <StackedMemoryBar
                 used={props.host.memory?.used || 0}
@@ -1298,10 +1303,11 @@ const HostRow: Component<HostRowProps> = (props) => {
 
         {/* Disk */}
         <Show when={props.isColVisible('disk')}>
-          <td class="px-2 py-1 align-middle" style={{ "min-width": props.isMobile() ? "60px" : "140px", "width": props.isMobile() ? undefined : "140px", "max-width": props.isMobile() ? undefined : "140px" }}>
+          <td class="px-2 py-1 align-middle">
             <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
               <StackedDiskBar
                 disks={props.host.disks}
+                mode="mini"
                 aggregateDisk={{
                   total: diskStats().total,
                   used: diskStats().used,
