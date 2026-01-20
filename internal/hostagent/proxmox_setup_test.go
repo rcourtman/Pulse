@@ -727,10 +727,20 @@ func TestRun_Legacy(t *testing.T) {
 	// Setup temporary state dir
 	tmpDir := t.TempDir()
 
-	// Backup
+	// Backup and restore all state-related variables
+	origStateFileDir := stateFileDir
 	origStateFilePath := stateFilePath
+	origStateFilePVE := stateFilePVE
+
+	stateFileDir = tmpDir
 	stateFilePath = filepath.Join(tmpDir, "proxmox-registered")
-	defer func() { stateFilePath = origStateFilePath }()
+	stateFilePVE = filepath.Join(tmpDir, "proxmox-pve-registered")
+
+	defer func() {
+		stateFileDir = origStateFileDir
+		stateFilePath = origStateFilePath
+		stateFilePVE = origStateFilePVE
+	}()
 
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
