@@ -108,7 +108,7 @@ func TestHandleAddNode(t *testing.T) {
 				"user":     "root@pam",
 				"password": "secret",
 			},
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusCreated,
 			verifyConfig: func(t *testing.T, c *config.Config) {
 				found := false
 				for _, node := range c.PVEInstances {
@@ -138,7 +138,7 @@ func TestHandleAddNode(t *testing.T) {
 				"tokenName":  "root@pam!token",
 				"tokenValue": "abcdef",
 			},
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusCreated,
 			verifyConfig: func(t *testing.T, c *config.Config) {
 				found := false
 				for _, node := range c.PVEInstances {

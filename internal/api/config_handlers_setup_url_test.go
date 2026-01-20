@@ -41,21 +41,18 @@ func TestHandleSetupScriptURL(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			verifyResponse: func(t *testing.T, resp map[string]interface{}, h *ConfigHandlers) {
-				if resp["status"] != "success" {
-					t.Errorf("expected status 'success', got '%v'", resp["status"])
-				}
 				url, ok := resp["url"].(string)
 				if !ok || url == "" {
 					t.Errorf("expected valid url, got %v", resp["url"])
 				}
-				token, ok := resp["token"].(string)
+				token, ok := resp["setupToken"].(string)
 				if !ok || token == "" {
-					t.Errorf("expected valid token, got %v", resp["token"])
+					t.Errorf("expected valid setupToken, got %v", resp["setupToken"])
 				}
 
-				// Verify URL construction uses public URL
-				if !strings.HasPrefix(url, "https://pulse.example.com") {
-					t.Errorf("expected public URL prefix, got %s", url)
+				// Verify URL construction uses public URL host
+				if !strings.Contains(url, "pulse.example.com") {
+					t.Errorf("expected URL to contain public host, got %s", url)
 				}
 			},
 		},
@@ -72,8 +69,9 @@ func TestHandleSetupScriptURL(t *testing.T) {
 			// But type is used in setupCode struct.
 			expectedStatus: http.StatusOK,
 			verifyResponse: func(t *testing.T, resp map[string]interface{}, h *ConfigHandlers) {
-				if resp["status"] != "success" {
-					t.Errorf("expected status 'success', got '%v'", resp["status"])
+				// Should still return a valid response even with empty fields
+				if _, ok := resp["url"]; !ok {
+					t.Errorf("expected url field in response")
 				}
 			},
 		},

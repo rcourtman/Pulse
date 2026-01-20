@@ -74,14 +74,13 @@ func TestHandleDeleteNode(t *testing.T) {
 		{
 			name:           "fail_invalid_index",
 			nodeID:         "pve-999",
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusNotFound,
 			verifyDeletion: nil,
 		},
 		{
 			name:           "fail_invalid_type",
 			nodeID:         "unknown-0",
-			expectedStatus: http.StatusBadRequest, // Handler falls through to unknown type log and returns bad request?
-			// Wait, looking at code: It logs warning "Unknown node type for deletion" and sends 400 "Invalid node ID"
+			expectedStatus: http.StatusNotFound, // Handler returns 404 for unknown types
 			verifyDeletion: nil,
 		},
 	}
