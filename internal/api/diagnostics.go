@@ -8,13 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/user"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,7 +20,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
-	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -32,19 +29,18 @@ import (
 
 // DiagnosticsInfo contains comprehensive diagnostic information
 type DiagnosticsInfo struct {
-	Version          string                      `json:"version"`
-	Runtime          string                      `json:"runtime"`
-	Uptime           float64                     `json:"uptime"`
-	Nodes            []NodeDiagnostic            `json:"nodes"`
-	PBS              []PBSDiagnostic             `json:"pbs"`
-	System           SystemDiagnostic            `json:"system"`
-	Discovery        *DiscoveryDiagnostic        `json:"discovery,omitempty"`
-	TemperatureProxy *TemperatureProxyDiagnostic `json:"temperatureProxy,omitempty"`
-	APITokens        *APITokenDiagnostic         `json:"apiTokens,omitempty"`
-	DockerAgents     *DockerAgentDiagnostic      `json:"dockerAgents,omitempty"`
-	Alerts           *AlertsDiagnostic           `json:"alerts,omitempty"`
-	AIChat           *AIChatDiagnostic           `json:"aiChat,omitempty"`
-	Errors           []string                    `json:"errors"`
+	Version      string                 `json:"version"`
+	Runtime      string                 `json:"runtime"`
+	Uptime       float64                `json:"uptime"`
+	Nodes        []NodeDiagnostic       `json:"nodes"`
+	PBS          []PBSDiagnostic        `json:"pbs"`
+	System       SystemDiagnostic       `json:"system"`
+	Discovery    *DiscoveryDiagnostic   `json:"discovery,omitempty"`
+	APITokens    *APITokenDiagnostic    `json:"apiTokens,omitempty"`
+	DockerAgents *DockerAgentDiagnostic `json:"dockerAgents,omitempty"`
+	Alerts       *AlertsDiagnostic      `json:"alerts,omitempty"`
+	AIChat       *AIChatDiagnostic      `json:"aiChat,omitempty"`
+	Errors       []string               `json:"errors"`
 	// NodeSnapshots captures the raw memory payload and derived usage Pulse last observed per node.
 	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots,omitempty"`
 	// GuestSnapshots captures recent per-guest memory breakdowns (VM/LXC) with the raw Proxmox fields.
@@ -233,59 +229,6 @@ type SystemDiagnostic struct {
 	MemoryMB     uint64 `json:"memoryMB"`
 }
 
-// TemperatureProxyDiagnostic summarizes proxy detection state
-type TemperatureProxyDiagnostic struct {
-	SocketFound          bool                                `json:"socketFound"`
-	SocketPath           string                              `json:"socketPath,omitempty"`
-	SocketPermissions    string                              `json:"socketPermissions,omitempty"`
-	SocketOwner          string                              `json:"socketOwner,omitempty"`
-	SocketGroup          string                              `json:"socketGroup,omitempty"`
-	ProxyReachable       bool                                `json:"proxyReachable"`
-	ProxyVersion         string                              `json:"proxyVersion,omitempty"`
-	ProxyPublicKeySHA256 string                              `json:"proxyPublicKeySha256,omitempty"`
-	ProxySSHDirectory    string                              `json:"proxySshDirectory,omitempty"`
-	LegacySSHKeyCount    int                                 `json:"legacySshKeyCount,omitempty"`
-	ProxyCapabilities    []string                            `json:"proxyCapabilities,omitempty"`
-	Notes                []string                            `json:"notes,omitempty"`
-	HTTPProxies          []TemperatureProxyHTTPStatus        `json:"httpProxies,omitempty"`
-	ControlPlaneEnabled  bool                                `json:"controlPlaneEnabled"`
-	ControlPlaneStates   []TemperatureProxyControlPlaneState `json:"controlPlaneStates,omitempty"`
-	SocketHostCooldowns  []TemperatureProxySocketHost        `json:"socketHostCooldowns,omitempty"`
-	HostProxySummary     *HostProxySummary                   `json:"hostProxySummary,omitempty"`
-}
-
-type TemperatureProxyControlPlaneState struct {
-	Instance               string `json:"instance"`
-	LastSync               string `json:"lastSync,omitempty"`
-	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds,omitempty"`
-	SecondsBehind          int    `json:"secondsBehind,omitempty"`
-	Status                 string `json:"status,omitempty"`
-}
-
-type TemperatureProxyHTTPStatus struct {
-	Node      string `json:"node"`
-	URL       string `json:"url"`
-	Reachable bool   `json:"reachable"`
-	Error     string `json:"error,omitempty"`
-}
-
-type TemperatureProxySocketHost struct {
-	Node             string `json:"node,omitempty"`
-	Host             string `json:"host,omitempty"`
-	CooldownUntil    string `json:"cooldownUntil,omitempty"`
-	SecondsRemaining int    `json:"secondsRemaining,omitempty"`
-	LastError        string `json:"lastError,omitempty"`
-}
-
-type HostProxySummary struct {
-	Requested              bool   `json:"requested"`
-	Installed              bool   `json:"installed"`
-	HostSocketPresent      bool   `json:"hostSocketPresent"`
-	ContainerSocketPresent *bool  `json:"containerSocketPresent,omitempty"`
-	LastUpdated            string `json:"lastUpdated,omitempty"`
-	CTID                   string `json:"ctid,omitempty"`
-}
-
 // APITokenDiagnostic reports on the state of the multi-token authentication system.
 type APITokenDiagnostic struct {
 	Enabled                bool              `json:"enabled"`
@@ -446,22 +389,6 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		MemoryMB:     memStats.Alloc / 1024 / 1024,
 	}
 
-	var (
-		proxySync       map[string]proxySyncState
-		socketHostState []monitoring.ProxyHostDiagnostics
-	)
-	if r.temperatureProxyHandlers != nil {
-		proxySync = r.temperatureProxyHandlers.SnapshotSyncStatus()
-	}
-	if r.monitor != nil {
-		socketHostState = r.monitor.SocketProxyHostDiagnostics()
-	}
-
-	if r.config != nil && !r.config.EnableSensorProxy {
-		diag.TemperatureProxy = nil
-	} else {
-		diag.TemperatureProxy = buildTemperatureProxyDiagnostic(r.config, proxySync, socketHostState)
-	}
 	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
 
 	// Test each configured node
@@ -718,311 +645,13 @@ func buildDiscoveryDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *
 	return discovery
 }
 
-func buildTemperatureProxyDiagnostic(cfg *config.Config, syncStates map[string]proxySyncState, hostStates []monitoring.ProxyHostDiagnostics) *TemperatureProxyDiagnostic {
-	diag := &TemperatureProxyDiagnostic{}
-
-	appendNote := func(note string) {
-		if note == "" || contains(diag.Notes, note) {
-			return
-		}
-		diag.Notes = append(diag.Notes, note)
-	}
-
-	socketPaths := []string{
-		"/mnt/pulse-proxy/pulse-sensor-proxy.sock",
-		"/run/pulse-sensor-proxy/pulse-sensor-proxy.sock",
-	}
-
-	for _, path := range socketPaths {
-		info, err := os.Stat(path)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			appendNote(fmt.Sprintf("Unable to inspect proxy socket at %s: %v", path, err))
-			continue
-		}
-
-		if info.Mode()&os.ModeSocket == 0 {
-			continue
-		}
-
-		diag.SocketFound = true
-		diag.SocketPath = path
-		diag.SocketPermissions = fmt.Sprintf("%#o", info.Mode().Perm())
-
-		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-			diag.SocketOwner = resolveUserName(stat.Uid)
-			diag.SocketGroup = resolveGroupName(stat.Gid)
-		}
-		break
-	}
-
-	if !diag.SocketFound {
-		appendNote("No proxy socket detected inside the container. Remove the affected node in Pulse, then re-add it using the installer script from Settings → Nodes to regenerate the mount (or rerun the host installer script if you prefer).")
-		if cfg != nil && cfg.TemperatureMonitoringEnabled {
-			appendNote("Global temperature monitoring is enabled but the host proxy socket is missing; reinstall the proxy or disable temperatures until it is restored.")
-		}
-	} else if diag.SocketPath == "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock" {
-		// Only warn about /run mount in LXC containers where /mnt/pulse-proxy is preferred
-		// Docker deployments correctly use /run/pulse-sensor-proxy per docker-compose.yml
-		isDocker := os.Getenv("PULSE_DOCKER") == "true"
-		if !isDocker {
-			// In LXC, /run mount indicates legacy hand-crafted mount instead of managed mount
-			appendNote("Proxy socket is exposed via /run. Remove and re-add this node with the Settings → Nodes installer script so the managed /mnt/pulse-proxy mount is applied (advanced: rerun the host installer script).")
-		}
-	}
-
-	client := tempproxy.NewClient()
-	if client != nil && client.IsAvailable() {
-		diag.ProxyReachable = true
-		if status, err := client.GetStatus(); err != nil {
-			appendNote(fmt.Sprintf("Failed to query pulse-sensor-proxy status: %v", err))
-		} else {
-			if version, ok := status["version"].(string); ok {
-				diag.ProxyVersion = strings.TrimSpace(version)
-			}
-			if sshDir, ok := status["ssh_dir"].(string); ok {
-				diag.ProxySSHDirectory = sshDir
-			}
-			if pubKey, ok := status["public_key"].(string); ok {
-				if fingerprint, err := fingerprintPublicKey(pubKey); err == nil {
-					diag.ProxyPublicKeySHA256 = fingerprint
-				} else {
-					appendNote(fmt.Sprintf("Unable to fingerprint proxy public key: %v", err))
-				}
-			}
-			if rawCaps, ok := status["capabilities"]; ok {
-				if caps := interfaceToStringSlice(rawCaps); len(caps) > 0 {
-					diag.ProxyCapabilities = caps
-					if !containsFold(caps, "admin") {
-						appendNote("Proxy socket is running in read-only mode, so 'Check proxy nodes' must be run from the Proxmox host or via an HTTP-mode proxy.")
-					}
-				}
-			}
-		}
-	} else {
-		if diag.SocketFound {
-			appendNote("Proxy socket is present but the daemon did not respond. Verify pulse-sensor-proxy.service is running on the host.")
-		} else {
-			appendNote("pulse-sensor-proxy was not detected. Run the host installer script to harden temperature monitoring.")
-		}
-	}
-
-	if cfg != nil {
-		dataDir := strings.TrimSpace(cfg.DataPath)
-		if dataDir == "" {
-			dataDir = "/etc/pulse"
-		}
-		if count, err := countLegacySSHKeys(filepath.Join(dataDir, ".ssh")); err != nil {
-			appendNote(fmt.Sprintf("Unable to inspect legacy SSH directory: %v", err))
-		} else if count > 0 {
-			diag.LegacySSHKeyCount = count
-			appendNote(fmt.Sprintf("Found %d SSH key(s) inside the Pulse data directory. Remove them after migrating to the secure proxy.", count))
-		}
-
-		for _, inst := range cfg.PVEInstances {
-			url := strings.TrimSpace(inst.TemperatureProxyURL)
-			if url == "" {
-				continue
-			}
-
-			status := TemperatureProxyHTTPStatus{
-				Node: strings.TrimSpace(inst.Name),
-				URL:  url,
-			}
-
-			token := strings.TrimSpace(inst.TemperatureProxyToken)
-			if token == "" {
-				status.Error = "missing authentication token"
-			} else {
-				client := tempproxy.NewHTTPClient(url, token)
-				if err := client.HealthCheck(); err != nil {
-					status.Error = err.Error()
-				} else {
-					status.Reachable = true
-				}
-			}
-			diag.HTTPProxies = append(diag.HTTPProxies, status)
-		}
-
-		controlStates := make([]TemperatureProxyControlPlaneState, 0)
-		now := time.Now()
-
-		lookupState := func(name string) (proxySyncState, bool) {
-			if len(syncStates) == 0 {
-				return proxySyncState{}, false
-			}
-			key := strings.ToLower(strings.TrimSpace(name))
-			if state, ok := syncStates[key]; ok {
-				return state, true
-			}
-			for _, state := range syncStates {
-				if strings.EqualFold(state.Instance, name) {
-					return state, true
-				}
-			}
-			return proxySyncState{}, false
-		}
-
-		for _, inst := range cfg.PVEInstances {
-			if strings.TrimSpace(inst.TemperatureProxyControlToken) == "" {
-				continue
-			}
-
-			state := TemperatureProxyControlPlaneState{
-				Instance:               strings.TrimSpace(inst.Name),
-				Status:                 "pending",
-				RefreshIntervalSeconds: defaultProxyAllowlistRefreshSeconds,
-			}
-			diag.ControlPlaneEnabled = true
-
-			if syncState, ok := lookupState(inst.Name); ok {
-				if syncState.RefreshInterval > 0 {
-					state.RefreshIntervalSeconds = syncState.RefreshInterval
-				}
-				if !syncState.LastPull.IsZero() {
-					state.LastSync = syncState.LastPull.UTC().Format(time.RFC3339)
-					behind := int(now.Sub(syncState.LastPull).Seconds())
-					if behind < 0 {
-						behind = 0
-					}
-					state.SecondsBehind = behind
-
-					switch {
-					case behind <= state.RefreshIntervalSeconds+15:
-						state.Status = "healthy"
-					case behind <= state.RefreshIntervalSeconds*4:
-						state.Status = "stale"
-						appendNote(fmt.Sprintf("Proxy '%s' has not refreshed its authorized nodes for %d seconds (target %d). Verify pulse-sensor-proxy is running.", state.Instance, behind, state.RefreshIntervalSeconds))
-					default:
-						state.Status = "offline"
-						appendNote(fmt.Sprintf("Proxy '%s' missed the control plane for %d seconds. Check connectivity and restart pulse-sensor-proxy.", state.Instance, behind))
-					}
-				} else {
-					appendNote(fmt.Sprintf("Proxy '%s' registered for control plane sync but has not completed its first pull yet.", state.Instance))
-				}
-			} else {
-				appendNote(fmt.Sprintf("Proxy '%s' has control-plane sync enabled but has not contacted Pulse. Confirm the installer wrote the control token and the host has connectivity.", state.Instance))
-			}
-
-			controlStates = append(controlStates, state)
-		}
-
-		if len(controlStates) > 0 {
-			diag.ControlPlaneStates = controlStates
-		}
-	}
-
-	if len(hostStates) > 0 && cfg != nil {
-		now := time.Now()
-		cooldowns := make([]TemperatureProxySocketHost, 0, len(hostStates))
-		for _, state := range hostStates {
-			if state.Host == "" || state.CooldownUntil.IsZero() {
-				continue
-			}
-			if now.After(state.CooldownUntil) {
-				continue
-			}
-			entry := TemperatureProxySocketHost{
-				Host:             state.Host,
-				CooldownUntil:    state.CooldownUntil.UTC().Format(time.RFC3339),
-				SecondsRemaining: int(time.Until(state.CooldownUntil).Seconds()),
-				LastError:        state.LastError,
-			}
-			if entry.SecondsRemaining < 0 {
-				entry.SecondsRemaining = 0
-			}
-			if name := matchInstanceNameByHost(cfg, state.Host); name != "" {
-				entry.Node = name
-			}
-			cooldowns = append(cooldowns, entry)
-		}
-		if len(cooldowns) > 0 {
-			diag.SocketHostCooldowns = cooldowns
-		}
-	}
-
-	if summary, err := loadHostProxySummary(); err == nil {
-		diag.HostProxySummary = summary
-	}
-
-	return diag
-}
-
-func loadHostProxySummary() (*HostProxySummary, error) {
-	const summaryPath = "/etc/pulse/install_summary.json"
-	data, err := os.ReadFile(summaryPath)
-	if err != nil {
-		return nil, err
-	}
-	var raw struct {
-		GeneratedAt string `json:"generatedAt"`
-		CTID        string `json:"ctid"`
-		Proxy       struct {
-			Requested              bool  `json:"requested"`
-			Installed              bool  `json:"installed"`
-			HostSocketPresent      bool  `json:"hostSocketPresent"`
-			ContainerSocketPresent *bool `json:"containerSocketPresent"`
-		} `json:"proxy"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-	summary := &HostProxySummary{
-		Requested:         raw.Proxy.Requested,
-		Installed:         raw.Proxy.Installed,
-		HostSocketPresent: raw.Proxy.HostSocketPresent,
-		LastUpdated:       strings.TrimSpace(raw.GeneratedAt),
-		CTID:              strings.TrimSpace(raw.CTID),
-	}
-	if raw.Proxy.ContainerSocketPresent != nil {
-		value := *raw.Proxy.ContainerSocketPresent
-		summary.ContainerSocketPresent = &value
-	}
-	return summary, nil
-}
-
-func matchInstanceNameByHost(cfg *config.Config, host string) string {
-	if cfg == nil {
-		return ""
-	}
-	needle := normalizeHostForComparison(host)
-	if needle == "" {
-		return ""
-	}
-	for _, inst := range cfg.PVEInstances {
-		candidate := normalizeHostForComparison(inst.Host)
-		if candidate != "" && strings.EqualFold(candidate, needle) {
-			return strings.TrimSpace(inst.Name)
-		}
-	}
-	return ""
-}
-
-func normalizeHostForComparison(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return ""
-	}
-	trimmed = strings.TrimPrefix(trimmed, "https://")
-	trimmed = strings.TrimPrefix(trimmed, "http://")
-	if idx := strings.IndexByte(trimmed, '/'); idx != -1 {
-		trimmed = trimmed[:idx]
-	}
-	if idx := strings.IndexByte(trimmed, ':'); idx != -1 {
-		trimmed = trimmed[:idx]
-	}
-	return strings.ToLower(strings.TrimSpace(trimmed))
-}
-
 func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *APITokenDiagnostic {
 	if cfg == nil {
 		return nil
 	}
 
 	diag := &APITokenDiagnostic{
-		Enabled:    cfg.APITokenEnabled,
+		Enabled:    len(cfg.APITokens) > 0,
 		TokenCount: len(cfg.APITokens),
 	}
 
@@ -1053,9 +682,7 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 	diag.RecommendTokenSetup = len(cfg.APITokens) == 0
 	diag.RecommendTokenRotation = envTokens || legacyToken
 
-	if !cfg.APITokenEnabled && len(cfg.APITokens) > 0 {
-		appendNote("API token authentication is currently disabled. Enable it under Settings → Security so agents can use dedicated tokens.")
-	} else if diag.RecommendTokenSetup {
+	if diag.RecommendTokenSetup {
 		appendNote("No API tokens are configured. Open Settings → Security to generate dedicated tokens for each automation or agent.")
 	}
 

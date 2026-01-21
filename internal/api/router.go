@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -36,7 +35,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
-	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -56,7 +54,6 @@ type Router struct {
 	dockerAgentHandlers       *DockerAgentHandlers
 	kubernetesAgentHandlers   *KubernetesAgentHandlers
 	hostAgentHandlers         *HostAgentHandlers
-	temperatureProxyHandlers  *TemperatureProxyHandlers
 	systemSettingsHandler     *SystemSettingsHandler
 	aiSettingsHandler         *AISettingsHandler
 	aiHandler                 *AIHandler // AI chat handler
@@ -211,7 +208,6 @@ func (r *Router) setupRoutes() {
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.monitor, r.wsHub)
-	r.temperatureProxyHandlers = NewTemperatureProxyHandlers(r.config, r.persistence, r.reloadFunc)
 	r.resourceHandlers = NewResourceHandlers()
 	r.configProfileHandler = NewConfigProfileHandler(r.persistence)
 	r.licenseHandlers = NewLicenseHandlers(r.config.DataPath)
@@ -253,11 +249,6 @@ func (r *Router) setupRoutes() {
 		}
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}))
-	r.mux.HandleFunc("/api/temperature-proxy/register", r.requireSensorProxyEnabled(r.temperatureProxyHandlers.HandleRegister))
-	r.mux.HandleFunc("/api/temperature-proxy/authorized-nodes", r.requireSensorProxyEnabled(r.temperatureProxyHandlers.HandleAuthorizedNodes))
-	r.mux.HandleFunc("/api/temperature-proxy/unregister", r.requireSensorProxyEnabled(RequireAdmin(r.config, r.temperatureProxyHandlers.HandleUnregister)))
-	r.mux.HandleFunc("/api/temperature-proxy/install-command", r.requireSensorProxyEnabled(RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleTemperatureProxyInstallCommand))))
-	r.mux.HandleFunc("/api/temperature-proxy/host-status", r.requireSensorProxyEnabled(RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleHostProxyStatus))))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/agents/docker/containers/update", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleContainerUpdate)))
@@ -269,12 +260,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
 	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsHistory)))
 	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
-	r.mux.HandleFunc("/api/diagnostics/temperature-proxy/register-nodes", r.requireSensorProxyEnabled(RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsRegisterProxyNodes))))
 	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
-	r.mux.HandleFunc("/api/install/pulse-sensor-proxy", r.requireSensorProxyEnabled(r.handleDownloadPulseSensorProxy))
-	r.mux.HandleFunc("/api/install/install-sensor-proxy.sh", r.requireSensorProxyEnabled(r.handleDownloadInstallerScript))
-	r.mux.HandleFunc("/api/install/migrate-sensor-proxy-control-plane.sh", r.requireSensorProxyEnabled(r.handleDownloadMigrationScript))
-	r.mux.HandleFunc("/api/install/migrate-temperature-proxy.sh", r.requireSensorProxyEnabled(r.handleDownloadTemperatureProxyMigrationScript))
 	r.mux.HandleFunc("/api/install/install-docker.sh", r.handleDownloadDockerInstallerScript)
 	r.mux.HandleFunc("/api/install/install.sh", r.handleDownloadUnifiedInstallScript)
 	r.mux.HandleFunc("/api/install/install.ps1", r.handleDownloadUnifiedInstallScriptPS)
@@ -1200,7 +1186,6 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/system/settings/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.systemSettingsHandler.HandleUpdateSystemSettings)))
 	r.mux.HandleFunc("/api/system/ssh-config", r.handleSSHConfig)
 	r.mux.HandleFunc("/api/system/verify-temperature-ssh", r.handleVerifyTemperatureSSH)
-	r.mux.HandleFunc("/api/system/proxy-public-key", r.requireSensorProxyEnabled(r.handleProxyPublicKey))
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
 	// Agent execution server for AI tool use
@@ -1633,49 +1618,6 @@ func (r *Router) handleSSHConfig(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(`{"error":"Authentication required"}`))
 }
 
-// handleProxyPublicKey returns the temperature proxy's public SSH key (public endpoint)
-func (r *Router) handleProxyPublicKey(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Try to get the proxy's public key
-	proxyClient := tempproxy.NewClient()
-	if !proxyClient.IsAvailable() {
-		// Proxy not available - return empty response
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(""))
-		return
-	}
-
-	// Get proxy status which includes the public key
-	status, err := proxyClient.GetStatus()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to get proxy status")
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte(""))
-		return
-	}
-
-	// Extract public key
-	publicKey, ok := status["public_key"].(string)
-	if !ok || publicKey == "" {
-		log.Warn().Msg("Public key not found in proxy status")
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(""))
-		return
-	}
-
-	// Return the public key as plain text
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(publicKey))
-}
-
 func extractSetupToken(req *http.Request) string {
 	if token := strings.TrimSpace(req.Header.Get("X-Setup-Token")); token != "" {
 		return token
@@ -1797,9 +1739,6 @@ func (r *Router) SetConfig(cfg *config.Config) {
 	}
 	if r.systemSettingsHandler != nil {
 		r.systemSettingsHandler.SetConfig(r.config)
-	}
-	if r.temperatureProxyHandlers != nil {
-		r.temperatureProxyHandlers.SetConfig(r.config)
 	}
 }
 
@@ -2595,29 +2534,22 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/login", // Add login endpoint as public
 				"/api/oidc/login",
 				config.DefaultOIDCCallbackPath,
-				"/install-docker-agent.sh",                           // Docker agent bootstrap script must be public
-				"/install-container-agent.sh",                        // Container agent bootstrap script must be public
-				"/download/pulse-docker-agent",                       // Agent binary download should not require auth
-				"/install-host-agent.sh",                             // Host agent bootstrap script must be public
-				"/install-host-agent.ps1",                            // Host agent PowerShell script must be public
-				"/uninstall-host-agent.sh",                           // Host agent uninstall script must be public
-				"/uninstall-host-agent.ps1",                          // Host agent uninstall script must be public
-				"/download/pulse-host-agent",                         // Host agent binary download should not require auth
-				"/install.sh",                                        // Unified agent installer
-				"/install.ps1",                                       // Unified agent Windows installer
-				"/download/pulse-agent",                              // Unified agent binary
-				"/api/agent/version",                                 // Agent update checks need to work before auth
-				"/api/agent/ws",                                      // Agent WebSocket has its own auth via registration
-				"/api/server/info",                                   // Server info for installer script
-				"/api/install/install-sensor-proxy.sh",               // Temperature proxy installer fallback
-				"/api/install/pulse-sensor-proxy",                    // Temperature proxy binary fallback
-				"/api/install/migrate-sensor-proxy-control-plane.sh", // Proxy migration helper
-				"/api/install/migrate-temperature-proxy.sh",          // SSH-to-proxy migration helper
-				"/api/install/install-docker.sh",                     // Docker turnkey installer
-				"/api/system/proxy-public-key",                       // Temperature proxy public key for setup script
-				"/api/temperature-proxy/register",                    // Temperature proxy registration (called by installer)
-				"/api/temperature-proxy/authorized-nodes",            // Proxy control-plane sync
-				"/api/ai/oauth/callback",                             // OAuth callback from Anthropic for Claude subscription auth
+				"/install-docker-agent.sh",       // Docker agent bootstrap script must be public
+				"/install-container-agent.sh",    // Container agent bootstrap script must be public
+				"/download/pulse-docker-agent",   // Agent binary download should not require auth
+				"/install-host-agent.sh",         // Host agent bootstrap script must be public
+				"/install-host-agent.ps1",        // Host agent PowerShell script must be public
+				"/uninstall-host-agent.sh",       // Host agent uninstall script must be public
+				"/uninstall-host-agent.ps1",      // Host agent uninstall script must be public
+				"/download/pulse-host-agent",     // Host agent binary download should not require auth
+				"/install.sh",                    // Unified agent installer
+				"/install.ps1",                   // Unified agent Windows installer
+				"/download/pulse-agent",          // Unified agent binary
+				"/api/agent/version",             // Agent update checks need to work before auth
+				"/api/agent/ws",                  // Agent WebSocket has its own auth via registration
+				"/api/server/info",               // Server info for installer script
+				"/api/install/install-docker.sh", // Docker turnkey installer
+				"/api/ai/oauth/callback",         // OAuth callback from Anthropic for Claude subscription auth
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
@@ -5330,45 +5262,6 @@ func (r *Router) serveChecksum(w http.ResponseWriter, filePath string) {
 	fmt.Fprintf(w, "%s\n", checksum)
 }
 
-func (r *Router) handleDiagnosticsRegisterProxyNodes(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
-		return
-	}
-
-	client := tempproxy.NewClient()
-	if client == nil || !client.IsAvailable() {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "proxy_unavailable", "pulse-sensor-proxy socket not detected inside the container", nil)
-		return
-	}
-
-	nodes, err := client.RegisterNodes()
-	if err != nil {
-		var proxyErr *tempproxy.ProxyError
-		if errors.As(err, &proxyErr) {
-			status := http.StatusBadGateway
-			code := "proxy_error"
-			if proxyErr.Type == tempproxy.ErrorTypeAuth {
-				status = http.StatusForbidden
-				code = "proxy_permission_denied"
-			}
-			writeErrorResponse(w, status, code, proxyErr.Error(), nil)
-			return
-		}
-
-		log.Error().Err(err).Msg("Failed to request proxy node registration status")
-		writeErrorResponse(w, http.StatusBadGateway, "proxy_error", err.Error(), nil)
-		return
-	}
-
-	if err := utils.WriteJSONResponse(w, map[string]any{
-		"success": true,
-		"nodes":   nodes,
-	}); err != nil {
-		log.Error().Err(err).Msg("Failed to encode proxy register nodes response")
-	}
-}
-
 func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
@@ -5452,165 +5345,6 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	}
 }
 
-func (r *Router) handleDownloadPulseSensorProxy(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
-		return
-	}
-
-	// Get requested architecture from query param
-	arch := strings.TrimSpace(req.URL.Query().Get("arch"))
-	if arch == "" {
-		arch = "linux-amd64" // Default to amd64
-	}
-
-	var binaryPath string
-	var filename string
-
-	// Map architecture to binary filename
-	switch arch {
-	case "linux-amd64", "amd64":
-		filename = "pulse-sensor-proxy-linux-amd64"
-	case "linux-arm64", "arm64":
-		filename = "pulse-sensor-proxy-linux-arm64"
-	case "linux-armv7", "armv7", "armhf":
-		filename = "pulse-sensor-proxy-linux-armv7"
-	case "linux-armv6", "armv6":
-		filename = "pulse-sensor-proxy-linux-armv6"
-	case "linux-386", "386", "i386", "i686":
-		filename = "pulse-sensor-proxy-linux-386"
-	default:
-		writeErrorResponse(w, http.StatusBadRequest, "unsupported_arch", fmt.Sprintf("Unsupported architecture: %s", arch), nil)
-		return
-	}
-
-	// Try pre-built architecture-specific binary first (in container)
-	binaryPath = filepath.Join(pulseBinDir(), filename)
-	content, err := os.ReadFile(binaryPath)
-	if err != nil {
-		// Try generic pulse-sensor-proxy binary (built for host arch)
-		genericPath := filepath.Join(pulseBinDir(), "pulse-sensor-proxy")
-		content, err = os.ReadFile(genericPath)
-		if err == nil {
-			log.Info().
-				Str("arch", arch).
-				Str("path", genericPath).
-				Int("size", len(content)).
-				Msg("Serving generic pulse-sensor-proxy binary (built for host arch)")
-			binaryPath = genericPath
-		}
-	}
-
-	if err != nil {
-		// Fallback: Try to build on-the-fly for dev environments
-		log.Info().
-			Str("arch", arch).
-			Str("tried_path", binaryPath).
-			Msg("Pre-built binary not found, attempting to build on-the-fly (dev mode)")
-
-		if !strings.HasPrefix(arch, "linux-amd64") && runtime.GOARCH != strings.TrimPrefix(arch, "linux-") {
-			writeErrorResponse(w, http.StatusBadRequest, "cross_compile_unsupported", "Cross-compilation not supported in dev mode", nil)
-			return
-		}
-
-		tmpFile, err := os.CreateTemp("", "pulse-sensor-proxy-*.bin")
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to create temp file for on-the-fly build")
-			writeErrorResponse(w, http.StatusInternalServerError, "tempfile_error", "Binary not available and build failed", nil)
-			return
-		}
-		tmpFileName := tmpFile.Name()
-		tmpFile.Close()
-		defer os.Remove(tmpFileName)
-
-		// Determine target architecture
-		targetArch := "amd64"
-		if strings.Contains(arch, "arm64") {
-			targetArch = "arm64"
-		} else if strings.Contains(arch, "arm") {
-			targetArch = "arm"
-		} else if strings.Contains(arch, "386") {
-			targetArch = "386"
-		}
-
-		ldflags := "-X main.Version=4.32.0-dev"
-		cmd := exec.Command("go", "build", "-ldflags", ldflags, "-o", tmpFileName, "./cmd/pulse-sensor-proxy")
-		cmd.Dir = r.projectRoot
-		cmd.Env = append(os.Environ(),
-			"CGO_ENABLED=0",
-			"GOOS=linux",
-			fmt.Sprintf("GOARCH=%s", targetArch),
-		)
-
-		buildOutput, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Error().Err(err).Bytes("output", buildOutput).Msg("Failed to build pulse-sensor-proxy binary on-the-fly")
-			writeErrorResponse(w, http.StatusInternalServerError, "build_failed", "Binary not available and on-the-fly build failed", nil)
-			return
-		}
-
-		// Read the built binary
-		content, err = os.ReadFile(tmpFileName)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to read built binary")
-			writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read built binary", nil)
-			return
-		}
-
-		log.Info().
-			Str("arch", arch).
-			Int("size", len(content)).
-			Msg("Successfully built pulse-sensor-proxy binary on-the-fly")
-	} else {
-		log.Info().
-			Str("path", binaryPath).
-			Str("arch", arch).
-			Int("size", len(content)).
-			Msg("Serving pre-built pulse-sensor-proxy binary")
-	}
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
-
-	if _, err := w.Write(content); err != nil {
-		log.Error().Err(err).Msg("Failed to write proxy binary to client")
-	}
-}
-
-func (r *Router) handleDownloadInstallerScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
-		return
-	}
-
-	log.Warn().
-		Str("path", req.URL.Path).
-		Str("remote", req.RemoteAddr).
-		Msg("Deprecated pulse-sensor-proxy installer requested - use pulse-agent --enable-proxmox instead")
-	w.Header().Set("Warning", `299 - "pulse-sensor-proxy is deprecated in v5; use pulse-agent --enable-proxmox"`)
-
-	// Try pre-built location first (in container)
-	scriptPath := "/opt/pulse/scripts/install-sensor-proxy.sh"
-	content, err := os.ReadFile(scriptPath)
-	if err != nil {
-		// Fallback to project root (dev environment)
-		scriptPath = filepath.Join(r.projectRoot, "scripts", "install-sensor-proxy.sh")
-		content, err = os.ReadFile(scriptPath)
-		if err != nil {
-			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read installer script")
-			writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read installer script", nil)
-			return
-		}
-	}
-
-	w.Header().Set("Content-Type", "text/x-shellscript")
-	w.Header().Set("Content-Disposition", "attachment; filename=install-sensor-proxy.sh")
-	if _, err := w.Write(content); err != nil {
-		log.Error().Err(err).Msg("Failed to write installer script to client")
-	}
-}
-
 func (r *Router) handleDownloadDockerInstallerScript(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
@@ -5635,141 +5369,6 @@ func (r *Router) handleDownloadDockerInstallerScript(w http.ResponseWriter, req 
 	w.Header().Set("Content-Disposition", "attachment; filename=install-docker.sh")
 	if _, err := w.Write(content); err != nil {
 		log.Error().Err(err).Msg("Failed to write Docker installer script to client")
-	}
-}
-
-func (r *Router) handleDownloadMigrationScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
-		return
-	}
-
-	scriptPath := "/opt/pulse/scripts/migrate-sensor-proxy-control-plane.sh"
-	content, err := os.ReadFile(scriptPath)
-	if err != nil {
-		scriptPath = filepath.Join(r.projectRoot, "scripts", "migrate-sensor-proxy-control-plane.sh")
-		content, err = os.ReadFile(scriptPath)
-		if err != nil {
-			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read migration script")
-			writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read migration script", nil)
-			return
-		}
-	}
-
-	w.Header().Set("Content-Type", "text/x-shellscript")
-	w.Header().Set("Content-Disposition", "attachment; filename=migrate-sensor-proxy-control-plane.sh")
-	if _, err := w.Write(content); err != nil {
-		log.Error().Err(err).Msg("Failed to write migration script to client")
-	}
-}
-
-func (r *Router) handleDownloadTemperatureProxyMigrationScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
-		return
-	}
-
-	scriptPath := "/opt/pulse/scripts/migrate-temperature-proxy.sh"
-	content, err := os.ReadFile(scriptPath)
-	if err != nil {
-		scriptPath = filepath.Join(r.projectRoot, "scripts", "migrate-temperature-proxy.sh")
-		content, err = os.ReadFile(scriptPath)
-		if err != nil {
-			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read temperature migration script")
-			writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read temperature migration script", nil)
-			return
-		}
-	}
-
-	w.Header().Set("Content-Type", "text/x-shellscript")
-	w.Header().Set("Content-Disposition", "attachment; filename=migrate-temperature-proxy.sh")
-	if _, err := w.Write(content); err != nil {
-		log.Error().Err(err).Msg("Failed to write temperature migration script to client")
-	}
-}
-
-func (r *Router) handleTemperatureProxyInstallCommand(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
-		return
-	}
-
-	log.Warn().
-		Str("path", req.URL.Path).
-		Str("remote", req.RemoteAddr).
-		Msg("Deprecated sensor-proxy install command requested - use pulse-agent --enable-proxmox instead")
-	w.Header().Set("Warning", `299 - "pulse-sensor-proxy is deprecated in v5; use pulse-agent --enable-proxmox"`)
-
-	baseURL := strings.TrimSpace(r.resolvePublicURL(req))
-	if baseURL == "" {
-		http.Error(w, "Pulse public URL is not configured", http.StatusBadRequest)
-		return
-	}
-	baseURL = strings.TrimRight(baseURL, "/")
-
-	node := strings.TrimSpace(req.URL.Query().Get("node"))
-
-	// Use --ctid approach which works for both local and remote Proxmox hosts.
-	// The installer detects when the container doesn't exist locally and
-	// installs in "host monitoring only" mode. This is more reliable than
-	// --standalone --http-mode which is meant for Docker deployments.
-	ctid := "<PULSE_CTID>"
-	if summary, err := loadHostProxySummary(); err == nil && summary != nil && summary.CTID != "" {
-		ctid = summary.CTID
-	}
-
-	command := fmt.Sprintf(
-		"curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | sudo bash -s -- --ctid %s --pulse-server %s",
-		ctid, baseURL,
-	)
-
-	response := map[string]string{
-		"command":  command,
-		"pulseURL": baseURL,
-	}
-	if node != "" {
-		response["node"] = node
-	}
-
-	if err := utils.WriteJSONResponse(w, response); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize proxy install command response")
-	}
-}
-
-func (r *Router) handleHostProxyStatus(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
-		return
-	}
-
-	hostSocket := fileExists("/run/pulse-sensor-proxy/pulse-sensor-proxy.sock")
-	containerSocket := fileExists("/mnt/pulse-proxy/pulse-sensor-proxy.sock")
-
-	resp := map[string]interface{}{
-		"hostSocketPresent":      hostSocket,
-		"containerSocketPresent": containerSocket,
-		"lastChecked":            time.Now().UTC().Format(time.RFC3339),
-	}
-
-	if summary, err := loadHostProxySummary(); err == nil && summary != nil {
-		resp["summary"] = summary
-	}
-
-	baseURL := strings.TrimRight(r.resolvePublicURL(req), "/")
-	if baseURL == "" {
-		baseURL = "http://localhost:7655"
-	}
-
-	ctid := "<ctid>"
-	if summary, ok := resp["summary"].(*HostProxySummary); ok && summary != nil && summary.CTID != "" {
-		ctid = summary.CTID
-	}
-
-	resp["reinstallCommand"] = fmt.Sprintf("curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | sudo bash -s -- --ctid %s --pulse-server %s", ctid, baseURL)
-	resp["installerURL"] = fmt.Sprintf("%s/api/install/install-sensor-proxy.sh", baseURL)
-
-	if err := utils.WriteJSONResponse(w, resp); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize host proxy status response")
 	}
 }
 
