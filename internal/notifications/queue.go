@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
+	_ "modernc.org/sqlite"
 )
 
 // NotificationQueueStatus represents the status of a queued notification
@@ -72,7 +72,7 @@ func NewNotificationQueue(dataDir string) (*NotificationQueue, error) {
 
 	dbPath := filepath.Join(dataDir, "notification_queue.db")
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open notification queue database: %w", err)
 	}
