@@ -46,7 +46,7 @@ var configInfoCmd = &cobra.Command{
 		fmt.Println("  - email.enc      : Encrypted email settings")
 		fmt.Println("  - system.json    : System settings (polling interval, etc)")
 		fmt.Println("  - alerts.json    : Alert rules and thresholds")
-		fmt.Println("  - webhooks.json  : Webhook configurations")
+		fmt.Println("  - webhooks.enc   : Webhook configurations")
 		fmt.Println()
 		fmt.Println("To configure Pulse, use the Settings tab in the web UI.")
 		return nil

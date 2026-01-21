@@ -11,54 +11,22 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
-	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	proxyFailureThreshold = 3
-	proxyRetryInterval    = 5 * time.Minute
-)
-
-type temperatureProxy interface {
-	IsAvailable() bool
-	GetTemperature(nodeHost string) (string, error)
-}
-
 // TemperatureCollector handles SSH-based temperature collection from Proxmox nodes
 type TemperatureCollector struct {
-	sshUser            string           // SSH user (typically "root" or "pulse-monitor")
-	sshKeyPath         string           // Path to SSH private key
-	sshPort            int              // SSH port (default 22)
-	proxyClient        temperatureProxy // Optional: unix socket client for proxy
-	useProxy           bool             // Whether to use proxy for temperature collection
-	hostKeys           knownhosts.Manager
-	proxyMu            sync.Mutex
-	proxyFailures      int
-	proxyCooldownUntil time.Time
-	proxyHostStates    map[string]*proxyHostState
-	missingKeyWarned   atomic.Bool
-}
-
-type proxyHostState struct {
-	failures      int
-	cooldownUntil time.Time
-	lastError     string
-}
-
-// ProxyHostDiagnostics describes the proxy transport state for a host.
-type ProxyHostDiagnostics struct {
-	Host          string
-	Failures      int
-	CooldownUntil time.Time
-	LastError     string
+	sshUser          string // SSH user (typically "root" or "pulse-monitor")
+	sshKeyPath       string // Path to SSH private key
+	sshPort          int    // SSH port (default 22)
+	hostKeys         knownhosts.Manager
+	missingKeyWarned atomic.Bool
 }
 
 // NewTemperatureCollectorWithPort creates a new temperature collector with custom SSH port
@@ -68,10 +36,9 @@ func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *T
 	}
 
 	tc := &TemperatureCollector{
-		sshUser:         sshUser,
-		sshKeyPath:      sshKeyPath,
-		sshPort:         sshPort,
-		proxyHostStates: make(map[string]*proxyHostState),
+		sshUser:    sshUser,
+		sshKeyPath: sshKeyPath,
+		sshPort:    sshPort,
 	}
 
 	homeDir := os.Getenv("HOME")
@@ -85,143 +52,75 @@ func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *T
 		tc.hostKeys = manager
 	}
 
-	// Always keep a proxy client so we can detect the socket later even if it
-	// isn't present during startup. Without this, containerized deployments that
-	// mount the socket after Pulse starts never re-enable the hardened proxy.
-	proxyClient := tempproxy.NewClient()
-	tc.proxyClient = proxyClient
-	if proxyClient.IsAvailable() {
-		log.Info().Msg("Temperature proxy detected - using secure host-side bridge")
-		tc.useProxy = true
-	} else {
-		log.Debug().Msg("Temperature proxy not available yet - falling back to SSH until socket appears")
-		tc.useProxy = false
-	}
-
 	return tc
 }
 
 // CollectTemperature collects temperature data from a node via SSH
 func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost, nodeName string) (*models.Temperature, error) {
-	return tc.CollectTemperatureWithProxy(ctx, nodeHost, nodeName, "", "")
-}
-
-// CollectTemperatureWithProxy collects temperature data with optional HTTP proxy configuration
-func (tc *TemperatureCollector) CollectTemperatureWithProxy(ctx context.Context, nodeHost, nodeName, proxyURL, proxyToken string) (*models.Temperature, error) {
 	// Extract hostname/IP from the host URL (might be https://hostname:8006)
 	host := extractHostname(nodeHost)
 
-	var output string
-	var err error
+	// SECURITY: Block SSH fallback when running in containers (unless dev mode)
+	// Container compromise = SSH key compromise = root access to infrastructure
+	devModeAllowSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
+	isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
 
-	// Try HTTP proxy first if configured for this instance
-	if proxyURL != "" && proxyToken != "" {
-		httpClient := tempproxy.NewHTTPClient(proxyURL, proxyToken)
-		if httpClient.IsAvailable() {
-			// Use nodeName for HTTP proxy (sensor-proxy needs short hostname, not IP)
-			output, err = httpClient.GetTemperature(nodeName)
-			if err != nil {
-				log.Debug().
-					Str("node", nodeName).
-					Str("host", host).
-					Str("proxy_url", proxyURL).
-					Err(err).
-					Msg("Failed to collect temperature data via HTTP proxy")
-				// Don't fall back to socket/SSH for HTTP proxy failures
-				// If HTTP proxy is configured, it's the intended method
-				return &models.Temperature{Available: false}, nil
-			}
-			// HTTP proxy succeeded
-			goto parseOutput
-		}
+	if isContainer && devModeAllowSSH {
+		// Log when dev override is active so operators understand the security posture
+		log.Info().
+			Str("node", nodeName).
+			Msg("Temperature collection using direct SSH (dev mode override active - not for production)")
 	}
 
-	// Use Unix socket proxy if available (local deployment)
-	if tc.isProxyEnabled() {
-		if tc.shouldSkipProxyHost(host) {
-			log.Debug().
-				Str("node", nodeName).
-				Str("host", host).
-				Msg("Skipping temperature proxy request while host is in cooldown")
-			return &models.Temperature{Available: false}, nil
-		}
-
-		output, err = tc.proxyClient.GetTemperature(host)
-		if err != nil {
-			tc.handleProxyFailure(host, err)
-			log.Debug().
-				Str("node", nodeName).
-				Str("host", host).
-				Err(err).
-				Msg("Failed to collect temperature data via proxy")
-			return &models.Temperature{Available: false}, nil
-		}
-		tc.handleProxySuccess()
-		tc.handleProxyHostSuccess(host)
-	} else {
-		// SECURITY: Block SSH fallback when running in containers (unless dev mode)
-		// Container compromise = SSH key compromise = root access to infrastructure
-		devModeAllowSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
-		isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
-
-		if isContainer && devModeAllowSSH {
-			// Log when dev override is active so operators understand the security posture
-			log.Info().
-				Str("node", nodeName).
-				Msg("Temperature collection using direct SSH (dev mode override active - not for production)")
-		}
-
-		if isContainer && !devModeAllowSSH {
-			// Warn but allow if key is present (legacy behavior restoration)
-			// We don't return here, allowing the code to fall through to the SSH key check
-			log.Warn().
-				Str("node", nodeName).
-				Msg("Temperature collection using direct SSH from container. This is insecure. Recommend using pulse-sensor-proxy.")
-		}
-
-		if strings.TrimSpace(tc.sshKeyPath) == "" {
-			tc.logMissingSSHKey(nil)
-			return &models.Temperature{Available: false}, nil
-		}
-
-		if _, keyErr := os.Stat(tc.sshKeyPath); keyErr != nil {
-			tc.logMissingSSHKey(keyErr)
-			return &models.Temperature{Available: false}, nil
-		}
-
-		// Direct SSH (legacy method for non-containerized deployments)
-		// Try sensors first, fall back to Raspberry Pi method if that fails
-		// sensors exits non-zero when optional subfeatures fail; "|| true" keeps the JSON for parsing (#600)
-		output, err = tc.runSSHCommand(ctx, host, "sensors -j 2>/dev/null || true")
-		if err != nil || strings.TrimSpace(output) == "" {
-			if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
-				return &models.Temperature{Available: false}, nil
-			}
-
-			// Try Raspberry Pi temperature method
-			output, err = tc.runSSHCommand(ctx, host, "cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null")
-			if err == nil && strings.TrimSpace(output) != "" {
-				// Parse RPi temperature format
-				temp, parseErr := tc.parseRPiTemperature(output)
-				if parseErr == nil {
-					return temp, nil
-				}
-			}
-
-			if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
-				return &models.Temperature{Available: false}, nil
-			}
-
-			log.Debug().
-				Str("node", nodeName).
-				Str("host", host).
-				Err(err).
-				Msg("Failed to collect temperature data via SSH (tried both lm-sensors and RPi methods)")
-			return &models.Temperature{Available: false}, nil
-		}
+	if isContainer && !devModeAllowSSH {
+		// Warn but allow if key is present (legacy behavior restoration)
+		// We don't return here, allowing the code to fall through to the SSH key check
+		log.Warn().
+			Str("node", nodeName).
+			Msg("Temperature collection using direct SSH from container. This is insecure for production deployments.")
 	}
 
-parseOutput:
+	if strings.TrimSpace(tc.sshKeyPath) == "" {
+		tc.logMissingSSHKey(nil)
+		return &models.Temperature{Available: false}, nil
+	}
+
+	if _, keyErr := os.Stat(tc.sshKeyPath); keyErr != nil {
+		tc.logMissingSSHKey(keyErr)
+		return &models.Temperature{Available: false}, nil
+	}
+
+	// Direct SSH (legacy method for non-containerized deployments)
+	// Try sensors first, fall back to Raspberry Pi method if that fails
+	// sensors exits non-zero when optional subfeatures fail; "|| true" keeps the JSON for parsing (#600)
+	output, err := tc.runSSHCommand(ctx, host, "sensors -j 2>/dev/null || true")
+	if err != nil || strings.TrimSpace(output) == "" {
+		if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
+			return &models.Temperature{Available: false}, nil
+		}
+
+		// Try Raspberry Pi temperature method
+		output, err = tc.runSSHCommand(ctx, host, "cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null")
+		if err == nil && strings.TrimSpace(output) != "" {
+			// Parse RPi temperature format
+			temp, parseErr := tc.parseRPiTemperature(output)
+			if parseErr == nil {
+				return temp, nil
+			}
+		}
+
+		if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
+			return &models.Temperature{Available: false}, nil
+		}
+
+		log.Debug().
+			Str("node", nodeName).
+			Str("host", host).
+			Err(err).
+			Msg("Failed to collect temperature data via SSH (tried both lm-sensors and RPi methods)")
+		return &models.Temperature{Available: false}, nil
+	}
+
 	// Parse sensors JSON output
 	temp, err := tc.parseSensorsJSON(output)
 	if err != nil {
@@ -241,7 +140,6 @@ parseOutput:
 	return temp, nil
 }
 
-// runSSHCommand executes a command on a remote node via SSH
 func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command string) (string, error) {
 	if strings.TrimSpace(tc.sshKeyPath) != "" {
 		if _, err := os.Stat(tc.sshKeyPath); err != nil {
@@ -877,192 +775,4 @@ func (tc *TemperatureCollector) ensureHostKey(ctx context.Context, host string) 
 		ctx = context.Background()
 	}
 	return tc.hostKeys.EnsureWithPort(ctx, host, tc.sshPort)
-}
-
-func (tc *TemperatureCollector) isProxyEnabled() bool {
-	if tc.proxyClient == nil {
-		return false
-	}
-
-	tc.proxyMu.Lock()
-	restored := false
-	if !tc.useProxy {
-		now := time.Now()
-		if now.After(tc.proxyCooldownUntil) {
-			if tc.proxyClient.IsAvailable() {
-				tc.useProxy = true
-				tc.proxyFailures = 0
-				tc.proxyCooldownUntil = time.Time{}
-				restored = true
-			} else {
-				tc.proxyCooldownUntil = now.Add(proxyRetryInterval)
-			}
-		}
-	}
-	useProxy := tc.useProxy
-	tc.proxyMu.Unlock()
-
-	if restored {
-		log.Info().Msg("Temperature proxy connection restored; resuming proxy collection")
-	}
-
-	return useProxy
-}
-
-func (tc *TemperatureCollector) shouldSkipProxyHost(host string) bool {
-	host = strings.TrimSpace(host)
-	if host == "" {
-		return false
-	}
-
-	tc.proxyMu.Lock()
-	defer tc.proxyMu.Unlock()
-	state, ok := tc.proxyHostStates[host]
-	if !ok || state == nil {
-		return false
-	}
-
-	now := time.Now()
-	if state.cooldownUntil.IsZero() || now.After(state.cooldownUntil) {
-		// Cooldown expired; reset state so we can retry this host.
-		state.cooldownUntil = time.Time{}
-		state.failures = 0
-		if state.cooldownUntil.IsZero() && state.failures == 0 {
-			delete(tc.proxyHostStates, host)
-		}
-		return false
-	}
-
-	return true
-}
-
-// SocketProxyAvailable reports whether the unix socket proxy can currently be used.
-func (tc *TemperatureCollector) SocketProxyAvailable() bool {
-	return tc != nil && tc.isProxyEnabled()
-}
-
-// SocketProxyDetected reports whether the proxy socket exists (regardless of cooldown status).
-func (tc *TemperatureCollector) SocketProxyDetected() bool {
-	if tc == nil || tc.proxyClient == nil {
-		return false
-	}
-	return tc.proxyClient.IsAvailable()
-}
-
-func (tc *TemperatureCollector) handleProxySuccess() {
-	if tc.proxyClient == nil {
-		return
-	}
-	tc.proxyMu.Lock()
-	tc.proxyFailures = 0
-	tc.proxyMu.Unlock()
-}
-
-func (tc *TemperatureCollector) handleProxyHostSuccess(host string) {
-	host = strings.TrimSpace(host)
-	if host == "" {
-		return
-	}
-	tc.proxyMu.Lock()
-	delete(tc.proxyHostStates, host)
-	tc.proxyMu.Unlock()
-}
-
-func (tc *TemperatureCollector) handleProxyFailure(host string, err error) {
-	if tc.proxyClient == nil {
-		return
-	}
-
-	if tc.shouldDisableProxy(err) {
-		tc.proxyMu.Lock()
-		tc.proxyFailures++
-		disable := tc.proxyFailures >= proxyFailureThreshold && tc.useProxy
-		if disable {
-			tc.useProxy = false
-			tc.proxyCooldownUntil = time.Now().Add(proxyRetryInterval)
-			tc.proxyFailures = 0
-		}
-		tc.proxyMu.Unlock()
-
-		if disable {
-			log.Warn().
-				Err(err).
-				Dur("cooldown", proxyRetryInterval).
-				Msg("Temperature proxy disabled after repeated failures; will retry later")
-		}
-		return
-	}
-
-	tc.handleProxyHostFailure(host, err)
-}
-
-func (tc *TemperatureCollector) handleProxyHostFailure(host string, err error) {
-	host = strings.TrimSpace(host)
-	if host == "" {
-		return
-	}
-
-	tc.proxyMu.Lock()
-	state, ok := tc.proxyHostStates[host]
-	if !ok || state == nil {
-		state = &proxyHostState{}
-		tc.proxyHostStates[host] = state
-	}
-	state.failures++
-	state.lastError = strings.TrimSpace(err.Error())
-	trip := state.failures >= proxyFailureThreshold
-	if trip {
-		state.failures = 0
-		state.cooldownUntil = time.Now().Add(proxyRetryInterval)
-	}
-	tc.proxyMu.Unlock()
-
-	if trip {
-		log.Warn().
-			Err(err).
-			Str("host", host).
-			Dur("cooldown", proxyRetryInterval).
-			Msg("Temperature proxy host in cooldown after repeated failures")
-	}
-}
-
-func (tc *TemperatureCollector) shouldDisableProxy(err error) bool {
-	var proxyErr *tempproxy.ProxyError
-	if errors.As(err, &proxyErr) {
-		switch proxyErr.Type {
-		case tempproxy.ErrorTypeTransport, tempproxy.ErrorTypeTimeout:
-			return true
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-// ProxyHostDiagnostics returns a snapshot of per-host proxy error state.
-func (tc *TemperatureCollector) ProxyHostDiagnostics() []ProxyHostDiagnostics {
-	if tc == nil {
-		return nil
-	}
-
-	tc.proxyMu.Lock()
-	defer tc.proxyMu.Unlock()
-
-	if len(tc.proxyHostStates) == 0 {
-		return nil
-	}
-
-	result := make([]ProxyHostDiagnostics, 0, len(tc.proxyHostStates))
-	for host, state := range tc.proxyHostStates {
-		if state == nil {
-			continue
-		}
-		result = append(result, ProxyHostDiagnostics{
-			Host:          host,
-			Failures:      state.failures,
-			CooldownUntil: state.cooldownUntil,
-			LastError:     state.lastError,
-		})
-	}
-	return result
 }

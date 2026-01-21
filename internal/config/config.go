@@ -108,7 +108,6 @@ type Config struct {
 	BackupPollingInterval           time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
 	EnableBackupPolling             bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
 	TemperatureMonitoringEnabled    bool          `json:"temperatureMonitoringEnabled"`
-	EnableSensorProxy               bool          `envconfig:"PULSE_ENABLE_SENSOR_PROXY" default:"false" json:"-"` // Legacy pulse-sensor-proxy support (deprecated, opt-in)
 	WebhookBatchDelay               time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
 	AdaptivePollingEnabled          bool          `envconfig:"ADAPTIVE_POLLING_ENABLED" default:"false"`
 	AdaptivePollingBaseInterval     time.Duration `envconfig:"ADAPTIVE_POLLING_BASE_INTERVAL" default:"10s"`
@@ -437,12 +436,6 @@ type PVEInstance struct {
 	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
 	SSHPort                      int   // SSH port for temperature monitoring (0 = use global default)
 
-	// Temperature proxy configuration (for external PVE hosts)
-	TemperatureProxyURL   string // Optional HTTPS URL to pulse-sensor-proxy (e.g., https://pve1.lan:8443)
-	TemperatureProxyToken string // Bearer token for proxy authentication
-	// Control-plane token for socket-mode proxies (Pulse -> proxy sync)
-	TemperatureProxyControlToken string
-
 	// Cluster support
 	IsCluster        bool              // True if this is a cluster
 	ClusterName      string            // Cluster name if applicable
@@ -468,8 +461,6 @@ type ClusterEndpoint struct {
 	LastPulseCheck *time.Time // Last time Pulse checked connectivity
 	PulseError     string     // Last error Pulse encountered connecting to this endpoint
 
-	// Per-node temperature proxy tokens (for clusters with sensor-proxy on each node)
-	TemperatureProxyControlToken string // Control-plane token for this specific node
 }
 
 // EffectiveIP returns the IP to use for this endpoint, preferring IPOverride if set
@@ -610,7 +601,6 @@ func Load() (*Config, error) {
 		DiscoverySubnet:                 "auto",
 		TemperatureMonitoringEnabled:    true,
 		MaxPollTimeout:                  3 * time.Minute, // Default max poll timeout for large clusters
-		EnableSensorProxy:               false,
 		EnvOverrides:                    make(map[string]bool),
 		AgentConnectURL:                 "",
 		OIDC:                            NewOIDCConfig(),
@@ -864,22 +854,6 @@ func Load() (*Config, error) {
 			log.Warn().
 				Str("value", enabledStr).
 				Msg("Invalid ENABLE_TEMPERATURE_MONITORING value, ignoring")
-		}
-	}
-
-	if enabledStr := utils.GetenvTrim("PULSE_ENABLE_SENSOR_PROXY"); enabledStr != "" {
-		if enabled, err := strconv.ParseBool(enabledStr); err == nil {
-			cfg.EnableSensorProxy = enabled
-			cfg.EnvOverrides["PULSE_ENABLE_SENSOR_PROXY"] = true
-			if enabled {
-				log.Warn().Msg("Legacy pulse-sensor-proxy support enabled via PULSE_ENABLE_SENSOR_PROXY (deprecated, unsupported)")
-			} else {
-				log.Info().Msg("Legacy pulse-sensor-proxy support disabled via PULSE_ENABLE_SENSOR_PROXY")
-			}
-		} else {
-			log.Warn().
-				Str("value", enabledStr).
-				Msg("Invalid PULSE_ENABLE_SENSOR_PROXY value, ignoring")
 		}
 	}
 
@@ -1331,9 +1305,7 @@ func Load() (*Config, error) {
 		log.Info().Str("url", agentConnectURL).Msg("Using dedicated agent connect URL from environment")
 	}
 
-	// REMOVED: Update channel, auto-update, connection timeout, and allowed origins env vars
-	// These settings now ONLY come from system.json to prevent confusion
-	// Only keeping essential deployment/infrastructure env vars
+	// Update settings are system.json-only; legacy env vars remain ignored.
 
 	// Normalize PVE user fields for password authentication
 	for i := range cfg.PVEInstances {

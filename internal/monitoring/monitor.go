@@ -31,7 +31,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
-	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
@@ -3316,41 +3315,6 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 	}
 
 	return statuses
-}
-
-// HasSocketTemperatureProxy reports whether the local unix socket proxy is available.
-func (m *Monitor) HasSocketTemperatureProxy() bool {
-	// Always check the real socket path first so we reflect the actual runtime state
-	// even if the temperature collector hasn't latched onto the proxy yet.
-	if tempproxy.NewClient().IsAvailable() {
-		return true
-	}
-
-	if m == nil {
-		return false
-	}
-
-	m.mu.RLock()
-	collector := m.tempCollector
-	m.mu.RUnlock()
-
-	if collector == nil {
-		return false
-	}
-	return collector.SocketProxyDetected()
-}
-
-// SocketProxyHostDiagnostics exposes per-host proxy cooldown state for diagnostics.
-func (m *Monitor) SocketProxyHostDiagnostics() []ProxyHostDiagnostics {
-	m.mu.RLock()
-	collector := m.tempCollector
-	m.mu.RUnlock()
-
-	if collector == nil {
-		return nil
-	}
-
-	return collector.ProxyHostDiagnostics()
 }
 
 // checkContainerizedTempMonitoring logs a security warning if Pulse is running
