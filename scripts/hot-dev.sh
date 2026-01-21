@@ -144,8 +144,6 @@ export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
 export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
 export ALLOWED_ORIGINS
 
-# Note: pulse-sensor-proxy is deprecated. Temperature collection now uses host agents.
-
 EXTRA_CLEANUP_PORT=$((PULSE_DEV_API_PORT + 1))
 
 # --- Startup Checks ---

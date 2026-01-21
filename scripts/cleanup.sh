@@ -29,7 +29,6 @@ TARGETS=(
   "pulse"
   "pulse.log"
   "pulse-docker-agent"
-  "pulse-sensor-proxy"
   "pulse-server"
   "pulse-test"
   "pulse-host-agent"

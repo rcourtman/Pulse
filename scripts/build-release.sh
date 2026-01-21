@@ -90,7 +90,7 @@ for target in "${host_agent_order[@]}"; do
         ./cmd/pulse-agent
 done
 
-# Build for different architectures (server + docker agent + sensor proxy)
+# Build for different architectures (server + agents)
 declare -A builds=(
     ["linux-amd64"]="GOOS=linux GOARCH=amd64"
     ["linux-arm64"]="GOOS=linux GOARCH=arm64"
@@ -114,15 +114,6 @@ for build_name in "${build_order[@]}"; do
         -trimpath \
         -o "$BUILD_DIR/pulse-$build_name" \
         ./cmd/pulse
-
-
-
-    # Build temperature proxy binary
-    env $build_env go build \
-        -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit}" \
-        -trimpath \
-        -o "$BUILD_DIR/pulse-sensor-proxy-$build_name" \
-        ./cmd/pulse-sensor-proxy
 done
 
 # Create platform-specific tarballs that include all host agent binaries for download endpoints
@@ -139,7 +130,6 @@ for build_name in "${build_order[@]}"; do
     cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
 
     cp "$BUILD_DIR/pulse-host-agent-$build_name" "$staging_dir/bin/pulse-host-agent"
-    cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$staging_dir/bin/pulse-sensor-proxy"
 
     # Copy host agent binaries for every supported platform/architecture
     for target in "${host_agent_order[@]}"; do
@@ -171,7 +161,6 @@ for build_name in "${build_order[@]}"; do
     cp "scripts/install-host-agent.ps1" "$staging_dir/scripts/install-host-agent.ps1"
     cp "scripts/uninstall-host-agent.sh" "$staging_dir/scripts/uninstall-host-agent.sh"
     cp "scripts/uninstall-host-agent.ps1" "$staging_dir/scripts/uninstall-host-agent.ps1"
-    cp "scripts/install-sensor-proxy.sh" "$staging_dir/scripts/install-sensor-proxy.sh"
     cp "scripts/install-docker.sh" "$staging_dir/scripts/install-docker.sh"
     cp "scripts/install.sh" "$staging_dir/scripts/install.sh"
     [ -f "scripts/install.ps1" ] && cp "scripts/install.ps1" "$staging_dir/scripts/install.ps1"
@@ -201,7 +190,6 @@ for build_name in "${build_order[@]}"; do
 
     cp "$BUILD_DIR/pulse-host-agent-$build_name" "$universal_dir/bin/pulse-host-agent-${build_name}"
     cp "$BUILD_DIR/pulse-agent-$build_name" "$universal_dir/bin/pulse-agent-${build_name}"
-    cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$universal_dir/bin/pulse-sensor-proxy-${build_name}"
 done
 
 cp "scripts/install-docker-agent.sh" "$universal_dir/scripts/install-docker-agent.sh"
@@ -209,7 +197,6 @@ cp "scripts/install-container-agent.sh" "$universal_dir/scripts/install-containe
 cp "scripts/install-host-agent.ps1" "$universal_dir/scripts/install-host-agent.ps1"
 cp "scripts/uninstall-host-agent.sh" "$universal_dir/scripts/uninstall-host-agent.sh"
 cp "scripts/uninstall-host-agent.ps1" "$universal_dir/scripts/uninstall-host-agent.ps1"
-cp "scripts/install-sensor-proxy.sh" "$universal_dir/scripts/install-sensor-proxy.sh"
 cp "scripts/install-docker.sh" "$universal_dir/scripts/install-docker.sh"
 cp "scripts/install.sh" "$universal_dir/scripts/install.sh"
 [ -f "scripts/install.ps1" ] && cp "scripts/install.ps1" "$universal_dir/scripts/install.ps1"
@@ -241,28 +228,6 @@ EOF
 chmod +x "$universal_dir/bin/pulse"
 
 
-cat > "$universal_dir/bin/pulse-sensor-proxy" << 'EOF'
-#!/bin/sh
-# Auto-detect architecture and run appropriate pulse-sensor-proxy binary
-
-ARCH=$(uname -m)
-case "$ARCH" in
-    x86_64|amd64)
-        exec "$(dirname "$0")/pulse-sensor-proxy-linux-amd64" "$@"
-        ;;
-    aarch64|arm64)
-        exec "$(dirname "$0")/pulse-sensor-proxy-linux-arm64" "$@"
-        ;;
-    armv7l|armhf)
-        exec "$(dirname "$0")/pulse-sensor-proxy-linux-armv7" "$@"
-        ;;
-    *)
-        echo "Unsupported architecture: $ARCH" >&2
-        exit 1
-        ;;
-esac
-EOF
-chmod +x "$universal_dir/bin/pulse-sensor-proxy"
 
 cat > "$universal_dir/bin/pulse-host-agent" << 'EOF'
 #!/bin/sh
@@ -413,7 +378,6 @@ fi
 # instead of pulling from main branch (which may have newer, incompatible changes)
 echo "Copying install scripts to release directory..."
 cp install.sh "$RELEASE_DIR/"
-cp scripts/install-sensor-proxy.sh "$RELEASE_DIR/"
 cp scripts/install-docker.sh "$RELEASE_DIR/"
 cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
 
@@ -421,7 +385,6 @@ cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
 cd "$RELEASE_DIR"
 shopt -s nullglob extglob
 # Match all tarballs, zip files, exe files, and install scripts
-checksum_files=( *.tar.gz *.zip *.exe install.sh install-sensor-proxy.sh install-docker.sh pulse-auto-update.sh )
 if compgen -G "pulse-*.tgz" > /dev/null; then
     checksum_files+=( pulse-*.tgz )
 fi
