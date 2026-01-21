@@ -223,13 +223,6 @@ func TestGetRateLimiterForEndpoint(t *testing.T) {
 			wantLimiterNm:  "PublicEndpoints",
 		},
 		{
-			name:           "temperature proxy authorized nodes",
-			path:           "/api/temperature-proxy/authorized-nodes",
-			method:         http.MethodGet,
-			wantLimiterPtr: &globalRateLimitConfig.PublicEndpoints,
-			wantLimiterNm:  "PublicEndpoints",
-		},
-		{
 			name:           "metrics endpoint",
 			path:           "/metrics",
 			method:         http.MethodGet,

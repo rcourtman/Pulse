@@ -36,7 +36,6 @@ type SystemSettingsHandler struct {
 		EnableTemperatureMonitoring()
 		DisableTemperatureMonitoring()
 		GetNotificationManager() *notifications.NotificationManager
-		HasSocketTemperatureProxy() bool
 	}
 }
 
@@ -48,7 +47,6 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 	EnableTemperatureMonitoring()
 	DisableTemperatureMonitoring()
 	GetNotificationManager() *notifications.NotificationManager
-	HasSocketTemperatureProxy() bool
 }, reloadSystemSettingsFunc func(), reloadMonitorFunc func() error) *SystemSettingsHandler {
 	return &SystemSettingsHandler{
 		config:                   cfg,
@@ -68,7 +66,6 @@ func (h *SystemSettingsHandler) SetMonitor(m interface {
 	EnableTemperatureMonitoring()
 	DisableTemperatureMonitoring()
 	GetNotificationManager() *notifications.NotificationManager
-	HasSocketTemperatureProxy() bool
 }) {
 	h.monitor = m
 }
@@ -610,34 +607,6 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		settings.BackupPollingEnabled = updates.BackupPollingEnabled
 	}
 	if _, ok := rawRequest["temperatureMonitoringEnabled"]; ok {
-		if updates.TemperatureMonitoringEnabled {
-			socketAvailable := false
-			if h.monitor != nil {
-				socketAvailable = h.monitor.HasSocketTemperatureProxy()
-			}
-			if !socketAvailable {
-				missing := make([]string, 0)
-				if h.config != nil {
-					for _, inst := range h.config.PVEInstances {
-						if strings.TrimSpace(inst.TemperatureProxyURL) == "" || strings.TrimSpace(inst.TemperatureProxyToken) == "" {
-							name := strings.TrimSpace(inst.Name)
-							if name == "" {
-								name = strings.TrimSpace(inst.Host)
-							}
-							if name == "" {
-								name = "unnamed node"
-							}
-							missing = append(missing, name)
-						}
-					}
-				}
-				if len(missing) > 0 {
-					message := fmt.Sprintf("Cannot enable temperature monitoring: proxy socket is not available and the following nodes do not have HTTPS proxies configured: %s", strings.Join(missing, ", "))
-					http.Error(w, message, http.StatusBadRequest)
-					return
-				}
-			}
-		}
 		settings.TemperatureMonitoringEnabled = updates.TemperatureMonitoringEnabled
 		tempToggleRequested = true
 	}

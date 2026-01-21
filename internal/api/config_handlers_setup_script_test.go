@@ -76,21 +76,6 @@ func TestPVESetupScriptArgumentAlignment(t *testing.T) {
 		desc     string
 	}{
 		{
-			name:     "repair_installer_url",
-			contains: `INSTALLER_URL="$PULSE_URL/api/install/install-sensor-proxy.sh"`,
-			desc:     "Repair block INSTALLER_URL should use $PULSE_URL bash variable",
-		},
-		{
-			name:     "repair_ctid_pulse_server",
-			contains: `--pulse-server $PULSE_URL`,
-			desc:     "Repair --ctid --pulse-server should use $PULSE_URL bash variable",
-		},
-		{
-			name:     "runtime_auth_token_ssh_config",
-			contains: `-H "Authorization: Bearer $AUTH_TOKEN"`,
-			desc:     "SSH config Authorization header should use runtime $AUTH_TOKEN variable",
-		},
-		{
 			name:     "token_id_uses_tokenname",
 			contains: `Token ID: $PULSE_TOKEN_ID`,
 			desc:     "Token ID should use $PULSE_TOKEN_ID bash variable",

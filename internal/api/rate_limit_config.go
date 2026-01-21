@@ -108,7 +108,6 @@ func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
 		strings.Contains(path, "/api/version") ||
 		strings.Contains(path, "/api/security/status") ||
 		strings.Contains(path, "/api/security/validate-bootstrap-token") ||
-		strings.Contains(path, "/api/temperature-proxy/authorized-nodes") ||
 		strings.Contains(path, "/metrics") {
 		return globalRateLimitConfig.PublicEndpoints
 	}

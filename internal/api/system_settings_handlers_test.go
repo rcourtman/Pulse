@@ -20,7 +20,6 @@ import (
 
 // MockMonitor implementation
 type mockMonitor struct {
-	hasSocketProxy bool
 }
 
 func (m *mockMonitor) GetDiscoveryService() *discovery.Service { return nil }
@@ -30,7 +29,6 @@ func (m *mockMonitor) StopDiscoveryService()                                    
 func (m *mockMonitor) EnableTemperatureMonitoring()                               {}
 func (m *mockMonitor) DisableTemperatureMonitoring()                              {}
 func (m *mockMonitor) GetNotificationManager() *notifications.NotificationManager { return nil }
-func (m *mockMonitor) HasSocketTemperatureProxy() bool                            { return m.hasSocketProxy }
 
 func TestHandleGetSystemSettings(t *testing.T) {
 	tempDir := t.TempDir()
