@@ -25,6 +25,8 @@ Standard browser session cookie (used by the UI).
 Public endpoints include:
 - `GET /api/health`
 - `GET /api/version`
+- `GET /api/agent/version` (agent update checks)
+- `GET /api/setup-script` (requires a setup token)
 
 ## 🔏 Scopes and Admin Access
 
@@ -33,6 +35,7 @@ Some endpoints require admin privileges and/or scopes. Common scopes include:
 - `settings:read`
 - `settings:write`
 - `host-agent:config:read`
+- `host-agent:manage`
 
 Endpoints that require admin access are noted below.
 
@@ -44,12 +47,27 @@ Endpoints that require admin access are noted below.
 `GET /api/health`
 Check if Pulse is running.
 ```json
-{ "status": "healthy", "uptime": 3600 }
+{
+  "status": "healthy",
+  "timestamp": 1700000000,
+  "uptime": 3600,
+  "devModeSSH": false
+}
 ```
 
 ### System State
 `GET /api/state`
 Returns the complete state of your infrastructure (Nodes, VMs, Containers, Storage, Alerts). This is the main endpoint used by the dashboard.
+
+### Unified Resources
+`GET /api/resources`
+Returns a unified, flattened resource list. Requires `monitoring:read`.
+
+`GET /api/resources/stats`
+Summary counts and health rollups.
+
+`GET /api/resources/{id}`
+Fetch a single resource by ID.
 
 ### Version Info
 `GET /api/version`
@@ -107,6 +125,34 @@ Request body:
   "passphrase": "use-a-strong-passphrase"
 }
 ```
+
+---
+
+## 🧭 Setup & Discovery
+
+### Setup Script (Public)
+`GET /api/setup-script`
+Returns the Proxmox/PBS setup script. Requires a temporary setup token (`auth_token`) in the query.
+
+### Setup Script URL
+`POST /api/setup-script-url` (auth)
+Generates a one-time setup token and URL for `/api/setup-script`.
+
+### Auto-Register (Public)
+`POST /api/auto-register`
+Auto-registers a node using the temporary setup token.
+
+### Agent Install Command
+`POST /api/agent-install-command` (auth)
+Generates an API token and install command for agent-based Proxmox setup.
+
+### Discovery
+`GET /api/discover` (auth)
+Runs network discovery.
+
+### Test Notification
+`POST /api/test-notification` (auth)
+Broadcasts a WebSocket test event.
 
 ---
 
@@ -328,6 +374,17 @@ Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
 - `GET /api/updates/history`
 - `GET /api/updates/history/entry?id=<event_id>`
 
+### Infrastructure Updates
+- `GET /api/infra-updates` (requires `monitoring:read`)
+- `GET /api/infra-updates/summary` (requires `monitoring:read`)
+- `POST /api/infra-updates/check` (requires `monitoring:write`)
+- `GET /api/infra-updates/host/{hostId}` (requires `monitoring:read`)
+- `GET /api/infra-updates/{resourceId}` (requires `monitoring:read`)
+
+### Diagnostics
+- `GET /api/diagnostics` (auth)
+- `POST /api/diagnostics/docker/prepare-token` (admin, `settings:write`)
+
 ---
 
 ## 🔑 OIDC / SSO
@@ -483,6 +540,12 @@ Returns stats for the persistent metrics store (SQLite-backed).
 `GET /api/metrics-store/history`
 Returns historical metric series for a resource and time range.
 
+Query params:
+- `resourceType` (required): `node`, `vm`, `container`, `storage`, `dockerHost`, `dockerContainer`
+- `resourceId` (required)
+- `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit for all metrics
+- `range` (optional): `1h`, `6h`, `12h`, `24h`, `7d`, `30d`, `90d` (default `24h`)
+
 ---
 
 ## 🤖 Agent Endpoints
@@ -499,6 +562,10 @@ The response includes `X-Checksum-Sha256` for verification.
 The unified agent combines host, Docker, and Kubernetes monitoring. Use `--enable-docker` or `--enable-kubernetes` to enable additional metrics.
 
 See [UNIFIED_AGENT.md](UNIFIED_AGENT.md) for installation instructions.
+
+### Agent Version
+`GET /api/agent/version`
+Returns the current server version for agent update checks.
 
 ### Unified Agent Installer Script
 `GET /install.sh`
@@ -559,18 +626,5 @@ Updates server-side config for an agent (e.g., `commandsEnabled`).
 `DELETE /api/admin/profiles/assignments/{agent_id}` (admin, Pro)
 
 ---
-
-## 🌡️ Temperature Proxy (Legacy)
-
-These endpoints are only available when legacy `pulse-sensor-proxy` support is enabled.
-
-- `POST /api/temperature-proxy/register` (proxy registration)
-- `GET /api/temperature-proxy/authorized-nodes` (proxy sync)
-- `DELETE /api/temperature-proxy/unregister` (admin)
-- `GET /api/temperature-proxy/install-command` (admin, `settings:write`)
-- `GET /api/temperature-proxy/host-status` (admin, `settings:read`)
-
-Legacy migration helper:
-- `GET /api/install/migrate-temperature-proxy.sh`
 
 > **Note**: This is a summary of the most common endpoints. For a complete list, inspect the network traffic of the Pulse dashboard or check the source code in `internal/api/router.go`.

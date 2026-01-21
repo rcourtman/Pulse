@@ -31,6 +31,12 @@ Pulse uses a split config model:
 - **Legacy token suppressions**: `env_token_suppressions.json`
 - **AI config**: `ai.enc` (encrypted)
 - **AI patrol data**: `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`
+- **AI baseline data**: `baselines.json`
+- **AI correlation data**: `ai_correlations.json`
+- **AI pattern data**: `ai_patterns.json`
+- **AI remediation data**: `ai_remediations.json`
+- **AI incident tracking**: `ai_incidents.json`
+- **Audit log database**: `audit.db` (Pulse Pro, SQLite)
 - **Pulse Pro license**: `license.enc` (encrypted)
 - **Host metadata**: `host_metadata.json`
 - **Docker metadata**: `docker_metadata.json`

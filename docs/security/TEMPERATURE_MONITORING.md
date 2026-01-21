@@ -1,65 +1,35 @@
-# 🌡️ Temperature Monitoring
+# Temperature Monitoring Security
 
-This page describes the recommended v5 approach for temperature monitoring and the security tradeoffs between approaches.
-
-For the full sensor-proxy setup guide (socket mounts, HTTP mode, troubleshooting), see:
-`docs/TEMPERATURE_MONITORING.md`.
-
-> **Deprecation notice (v5):** `pulse-sensor-proxy` is deprecated and not recommended for new deployments. Use `pulse-agent --enable-proxmox` for temperature monitoring. The sensor-proxy section below is retained for existing installations during the migration window. In v5, legacy sensor-proxy endpoints are disabled by default unless `PULSE_ENABLE_SENSOR_PROXY=true` is set on the Pulse server.
+Pulse supports two temperature collection paths: the unified agent (recommended) and SSH-based collection from the Pulse server. This page summarizes the security tradeoffs.
 
 ## Recommended: Pulse Agent
 
-The simplest and most feature-rich method is installing the Pulse agent on your Proxmox nodes:
+The unified agent (`pulse-agent --enable-proxmox`) runs locally on each Proxmox host and reports temperature metrics directly to Pulse. No SSH keys are stored on the server, and access is scoped to the agent token.
 
-```bash
-curl -fsSL http://your-pulse-server:7655/install.sh | bash -s -- \
-  --url http://your-pulse-server:7655 \
-  --token YOUR_TOKEN \
-  --enable-proxmox
-```
+Benefits:
+- Local sensor access only
+- No inbound SSH requirement
+- Standard agent auth and transport
 
-**Benefits:**
-- ✅ One-command setup
-- ✅ Temperature monitoring built-in
-- ✅ No SSH keys or proxy configuration required
+See [docs/TEMPERATURE_MONITORING.md](../TEMPERATURE_MONITORING.md) for setup.
 
-The agent runs `sensors -j` locally and reports temperatures directly to Pulse.
+## SSH-Based Collection
 
----
+SSH-based temperature monitoring uses a restricted key entry that only allows `sensors -j` to run. This limits the blast radius if a key leaks.
 
-## Deprecated: Sensor Proxy (Host Service)
+Recommended restrictions:
 
-`pulse-sensor-proxy` is deprecated in v5 and is not recommended for new deployments. This section is retained for existing installations during the migration window.
-
-### 🛡️ Security Model
-- **Isolation**: SSH keys live on the host, not in the container.
-- **Least Privilege**: Proxy runs as `pulse-sensor-proxy` (no shell).
-- **Verification**: Container identity verified via `SO_PEERCRED`.
-
-### 🏗️ Components
-1.  **Pulse Backend**: Connects to Unix socket `/mnt/pulse-proxy/pulse-sensor-proxy.sock`.
-2.  **Sensor Proxy**: Validates request, executes SSH to node.
-3.  **Target Node**: Accepts SSH key restricted to `sensors -j`.
-
-### 🔒 Key Restrictions
-SSH keys deployed to nodes are locked down:
 ```text
-command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty
+command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <public-key> # pulse-sensors
 ```
 
-### 🚦 Rate Limiting
-- **Per Peer**: ~12 req/min.
-- **Concurrency**: Max 2 parallel requests per peer.
-- **Global**: Max 8 concurrent requests.
+Additional notes:
+- Use a dedicated key for temperature collection only.
+- Avoid running Pulse in a container for SSH-based collection. If you must for dev/test, set `PULSE_DEV_ALLOW_CONTAINER_SSH=true` and keep access tightly scoped.
 
-### 📝 Auditing
-All requests logged to system journal:
-```bash
-journalctl -u pulse-sensor-proxy
-```
-Logs include: `uid`, `pid`, `method`, `node`, `correlation_id`.
+See [docs/TEMPERATURE_MONITORING.md](../TEMPERATURE_MONITORING.md) for the full setup flow.
 
-### Related Docs
+## Related Docs
 
-- Unified Agent Security: [`docs/AGENT_SECURITY.md`](../AGENT_SECURITY.md)
-- Repository Security Policy: [`/SECURITY.md`](../../SECURITY.md)
+- Unified Agent Security: [docs/AGENT_SECURITY.md](../AGENT_SECURITY.md)
+- Repository Security Policy: [SECURITY.md](../../SECURITY.md)

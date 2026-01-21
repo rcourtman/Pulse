@@ -2,7 +2,7 @@
 
 The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces the separate `pulse-host-agent` and `pulse-docker-agent` for simpler deployment and management.
 
-> Note: In v5, temperature monitoring should be done via `pulse-agent --enable-proxmox`. `pulse-sensor-proxy` is deprecated and retained only for existing installs during the migration window.
+> Note: For temperature monitoring, use `pulse-agent --enable-proxmox` (recommended) or SSH-based collection. The legacy sensor proxy has been removed. See `docs/TEMPERATURE_MONITORING.md`.
 
 ## Quick Start
 
@@ -77,13 +77,12 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
 | `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
 | `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
+| `--disable-ceph` | `PULSE_DISABLE_CEPH` | Disable local Ceph status polling | `false` |
 | `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV) | *(none)* |
 | `--log-level` | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
 | `--health-addr` | `PULSE_HEALTH_ADDR` | Health/metrics server address | `:9191` |
 
 **Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → `/var/lib/pulse-agent/token`.
-
-Legacy env var: `PULSE_KUBE_INCLUDE_ALL_POD_FILES` is still accepted for backward compatibility.
 
 ## Auto-Detection
 
@@ -117,7 +116,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ### Disable Docker (even if detected)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-docker
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker=false
 ```
 
 ### Host + Kubernetes Monitoring

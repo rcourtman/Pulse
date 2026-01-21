@@ -55,13 +55,12 @@ Yes! If Pulse detects Ceph storage, it automatically queries cluster health, OSD
 Yes. Go to **Alerts → Thresholds** and set any value to `-1` to disable it. You can do this globally or per-resource (VM/Node).
 
 ### How do I monitor temperature?
-Install the unified agent on your Proxmox hosts with Proxmox integration enabled:
+Recommended: install the unified agent on your Proxmox hosts with Proxmox integration enabled:
 
 1. Install `lm-sensors` on the host (`apt install lm-sensors && sensors-detect`)
 2. Install `pulse-agent` with `--enable-proxmox`
 
-`pulse-sensor-proxy` is deprecated in v5 and is not recommended for new deployments.
-See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
+If you do not run the agent, Pulse can collect temperatures over SSH. See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
 
 ---
 

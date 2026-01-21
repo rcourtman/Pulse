@@ -49,7 +49,7 @@ In **Settings → System → Updates**:
 | Setting | Description |
 |---------|-------------|
 | **Update Channel** | Stable (recommended) or Release Candidate |
-| **Auto-Check** | Stored UI preference (server currently checks for updates hourly regardless) |
+| **Auto-Check** | Background update check interval (hours); `0` disables |
 
 ### Stored Settings (system.json)
 
@@ -64,7 +64,7 @@ Auto-update preferences are stored in `system.json` and edited via the UI.
 }
 ```
 
-**Note:** `autoUpdateTime` is stored for UI reference. The systemd timer still runs on its own schedule (02:00 + jitter). In-app update checks are driven by `autoUpdateCheckInterval`.
+**Note:** `autoUpdateTime` is stored for UI reference. The systemd timer still runs on its own schedule (02:00 + jitter). Background update checks follow `autoUpdateCheckInterval`.
 
 ## Manual Update Methods
 

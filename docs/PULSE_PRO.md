@@ -8,9 +8,10 @@ Pulse Pro unlocks advanced AI automation features on top of the free Pulse platf
 - Persistent audit trail with SQLite storage and HMAC signing.
 - Queryable via `/api/audit` and verified per event in the Security → Audit Log UI.
 - Supports filtering, verification badges, and signature checks for tamper detection.
-- Configure with `PULSE_AUDIT_SIGNING_KEY`, `PULSE_AUDIT_RETENTION_DAYS`, and `PULSE_AUDIT_CLEANUP_INTERVAL_HOURS`.
+- Signing uses an auto-generated HMAC key stored (encrypted) at `.audit-signing.key` in the Pulse data directory.
+- Retention defaults to 90 days (not currently configurable via environment variables).
 - API reference: `docs/API.md`.
-- If no signing key is set, events are stored without signatures and verification will fail.
+- If signing is disabled (for example, encryption is unavailable), events are stored without signatures and verification will fail.
 
 ### Audit Webhooks
 - real-time delivery of audit events to external endpoints (SIEM, ELK, etc.).

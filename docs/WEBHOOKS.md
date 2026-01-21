@@ -33,6 +33,9 @@ For generic webhooks, use Go templates to format the JSON payload.
 - `{{.Message}}`, `{{.Value}}`, `{{.Threshold}}`, `{{.Duration}}`, `{{.Timestamp}}`
 - `{{.Instance}}` (Pulse public URL if configured)
 - `{{.CustomFields.<name>}}` (user-defined fields in the UI)
+- `{{.Metadata}}` (alert metadata map)
+- `{{.AlertCount}}`, `{{.Alerts}}` (grouped alerts)
+- `{{.Mention}}` (platform-specific mention, if configured)
 
 **Convenience fields:**
 - `{{.ValueFormatted}}`, `{{.ThresholdFormatted}}`
@@ -68,4 +71,4 @@ Pulse Pro supports dedicated audit webhooks for security event compliance. Unlik
 2. Add your endpoint URL (e.g., `https://siem.corp.local/ingest/pulse`).
 
 ### Security
-Audit webhooks are dispatched asynchronously. The payload includes a `signature` field which can be verified using your `PULSE_AUDIT_SIGNING_KEY` to ensure the event has not been tampered with in transit.
+Audit webhooks are dispatched asynchronously. The payload includes a `signature` field which can be verified using the per-instance HMAC key stored (encrypted) at `.audit-signing.key` in the Pulse data directory. There is no `PULSE_AUDIT_SIGNING_KEY` override.

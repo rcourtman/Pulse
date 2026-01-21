@@ -34,7 +34,7 @@ The `circuitBreaker` (`internal/monitoring/circuit_breaker.go`) follows a standa
    - **Transient** errors (retryable) are retried up to 5 times before moving to the Dead Letter Queue.
    - **Permanent** errors move directly to the Dead Letter Queue.
 
-**Note:** When `AdaptivePollingMaxInterval` is set to 15 seconds or less, the retry backoff is shortened (750ms initial, 6s max) to keep fast feedback loops during tight polling windows.
+**Note:** When `AdaptivePollingMaxInterval` is set to 15 seconds or less, the retry backoff is shortened (750ms initial, 4s max) to keep fast feedback loops during tight polling windows.
 
 ## ⚙️ Configuration
 Adaptive polling is **disabled by default**.

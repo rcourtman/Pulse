@@ -50,11 +50,10 @@ Preferred option (no SSH keys, no proxy wiring):
        sudo bash -s -- --url http://pulse.example.com:7655 --token <api-token> --enable-proxmox
      ```
 
-Deprecated option (existing installs only):
+Legacy sensor proxy (removed):
 
-- `pulse-sensor-proxy` is deprecated in Pulse v5 and is not recommended for new deployments. In v5, legacy sensor-proxy endpoints are disabled by default unless `PULSE_ENABLE_SENSOR_PROXY=true` is set on the Pulse server.
-- Existing installs continue to work during the migration window, but plan to move to `pulse-agent --enable-proxmox`.
-- Canonical temperature docs: `docs/TEMPERATURE_MONITORING.md`
+- `pulse-sensor-proxy` is no longer supported. Migrate to `pulse-agent --enable-proxmox` or SSH-based collection.
+- Cleanup steps are in `docs/TEMPERATURE_MONITORING.md`.
 
 #### Removing Old SSH Keys
 
@@ -297,7 +296,7 @@ for sensitive data.
   - Rollback actions are logged with timestamps and metadata
   - Scheduler health escalations recorded in audit trail
   - Runtime logging configuration changes tracked
-  - Security status uses `PULSE_AUDIT_LOG=true` (or legacy `AUDIT_LOG_ENABLED=true`) to mark audit logging as active in the UI
+  - Security status reflects whether persistent audit logging is active (Pulse Pro)
 
 ### What's Encrypted in Exports
 - Node credentials (passwords, API tokens)

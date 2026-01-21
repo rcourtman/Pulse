@@ -57,7 +57,7 @@ Pulse Pro unlocks **LLM-backed AI Patrol** — automated background monitoring t
 - **[Centralized Agent Management (Pro)](CENTRALIZED_MANAGEMENT.md)** – Agent profiles and remote config.
 - **[Proxmox Backup Server](PBS.md)** – PBS integration, direct API vs PVE passthrough, token setup.
 - **[VM Disk Monitoring](VM_DISK_MONITORING.md)** – Enabling QEMU Guest Agent for disk stats.
-- **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Agent-based temperature monitoring (`pulse-agent --enable-proxmox`). Sensor proxy is deprecated in v5.
+- **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Agent-based temperature monitoring (`pulse-agent --enable-proxmox`). Sensor proxy has been removed.
 - **[Webhooks](WEBHOOKS.md)** – Custom notification payloads.
 
 ## 💻 Development

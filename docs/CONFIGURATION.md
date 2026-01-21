@@ -42,7 +42,6 @@ All files are located in `/etc/pulse/` (Systemd) or `/data/` (Docker/Kubernetes)
 
 Path overrides:
 - `PULSE_DATA_DIR` sets the base directory for `system.json`, encrypted files, and the bootstrap token.
-- `PULSE_AUTH_CONFIG_DIR` sets the directory for `.env` (auth-only) if you need auth on a separate volume.
 
 ---
 
@@ -101,10 +100,16 @@ Environment overrides (lock the corresponding UI fields):
 | `OIDC_ALLOWED_GROUPS` | Allowed groups (space or comma-separated) |
 | `OIDC_ALLOWED_DOMAINS` | Allowed email domains (space or comma-separated) |
 | `OIDC_ALLOWED_EMAILS` | Allowed emails (space or comma-separated) |
-| `OIDC_GROUP_ROLE_MAPPINGS` | Group-to-role mappings (Pro). Format: `group1=role1,group2=role2` |
+| `OIDC_GROUP_ROLE_MAPPINGS` | Comma-separated group=role mappings (Pulse Pro) |
 | `OIDC_CA_BUNDLE` | Custom CA bundle path |
 
 </details>
+
+Legacy token flag (backwards compatibility):
+
+| Variable | Description |
+| ---------- | ------------- |
+| `API_TOKEN_ENABLED` | Legacy toggle for API token auth (defaults to enabled when tokens exist) |
 
 > **Note**: `API_TOKEN` / `API_TOKENS` are legacy and will be migrated into `api_tokens.json` on startup.
 > Manage API tokens in the UI for long-term support.
@@ -113,7 +118,7 @@ Environment overrides (lock the corresponding UI fields):
 
 ## 🖥️ System Settings (`system.json`)
 
-Controls runtime behavior like ports, logging, and polling intervals. Most of these can be changed in **Settings → System**.
+Controls runtime behavior like logging, polling intervals, and UI preferences. Legacy port fields in `system.json` are ignored; use `FRONTEND_PORT` instead.
 
 <details>
 <summary><strong>Example system.json</strong></summary>
@@ -122,7 +127,7 @@ Controls runtime behavior like ports, logging, and polling intervals. Most of th
 {
   "pvePollingInterval": 10,       // Seconds
   "backendPort": 3000,            // Legacy (unused)
-  "frontendPort": 7655,           // Public port
+  "frontendPort": 7655,           // Legacy (ignored; use FRONTEND_PORT)
   "logLevel": "info",             // debug, info, warn, error
   "autoUpdateEnabled": false,     // Enable auto-update checks
   "adaptivePollingEnabled": false, // Smart polling for large clusters
@@ -144,10 +149,12 @@ Environment variables take precedence over `system.json`.
 | ---------- | ------------- | --------- |
 | `FRONTEND_PORT` | Public listening port | `7655` |
 | `PORT` | Legacy alias for `FRONTEND_PORT` | *(unset)* |
-| `BACKEND_HOST` | Bind host for the HTTP server and metrics listener (advanced) | *(unset)* |
-| `BACKEND_PORT` | Legacy internal API port (unused) | `3000` |
 | `LOG_LEVEL` | Log verbosity (see below) | `info` |
 | `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |
+| `LOG_FILE` | Log file path (enables file logging) | *(unset)* |
+| `LOG_MAX_SIZE` | Log rotation size (MB) | `100` |
+| `LOG_MAX_AGE` | Keep rotated logs for N days (`0` disables cleanup) | `30` |
+| `LOG_COMPRESS` | Gzip rotated logs | `true` |
 
 #### Log Levels
 
@@ -179,12 +186,11 @@ Environment variables take precedence over `system.json`.
 | `DISCOVERY_SCAN_GATEWAYS` | Include gateway IPs in discovery (`true`/`false`) | `true` |
 | `DISCOVERY_DIAL_TIMEOUT_MS` | TCP dial timeout (ms) | `1000` |
 | `DISCOVERY_HTTP_TIMEOUT_MS` | HTTP probe timeout (ms) | `2000` |
-| `PULSE_ENABLE_SENSOR_PROXY` | Enable legacy `pulse-sensor-proxy` endpoints (deprecated, unsupported) | `false` |
 | `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide username/password form | `false` |
 | `DEMO_MODE` | Enable read-only demo mode | `false` |
 | `PULSE_TRUSTED_PROXY_CIDRS` | Comma-separated IPs/CIDRs trusted to supply `X-Forwarded-For`/`X-Real-IP` | *(unset)* |
 | `PULSE_TRUSTED_NETWORKS` | Comma-separated CIDRs treated as trusted local networks (does not bypass auth) | *(unset)* |
-| `PULSE_SENSOR_PROXY_SOCKET` | Legacy sensor-proxy socket override (deprecated) | *(unset)* |
+| `ALLOW_UNPROTECTED_EXPORT` | Allow unauthenticated config export on public networks when no auth is configured (use with caution) | `false` |
 
 ### Iframe Embedding (system.json)
 
@@ -202,13 +208,12 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `PVE_POLLING_INTERVAL` | PVE metrics polling frequency | `10s` |
 | `PBS_POLLING_INTERVAL` | PBS metrics polling frequency | `60s` |
 | `PMG_POLLING_INTERVAL` | PMG metrics polling frequency | `60s` |
-| `CONCURRENT_POLLING` | Enable concurrent polling for multi-node clusters | `true` |
 | `CONNECTION_TIMEOUT` | API connection timeout | `60s` |
 | `BACKUP_POLLING_CYCLES` | Poll cycles between backup checks | `10` |
 | `ENABLE_BACKUP_POLLING` | Enable backup job monitoring | `true` |
 | `BACKUP_POLLING_INTERVAL` | Backup polling frequency | `0` (Auto) |
 | `ENABLE_TEMPERATURE_MONITORING` | Enable temperature monitoring (where supported) | `true` |
-| `SSH_PORT` | SSH port for legacy SSH-based temperature collection | `22` |
+| `SSH_PORT` | SSH port for temperature collection over SSH | `22` |
 | `ADAPTIVE_POLLING_ENABLED` | Enable smart polling for large clusters | `false` |
 | `ADAPTIVE_POLLING_BASE_INTERVAL` | Base interval for adaptive polling | `10s` |
 | `ADAPTIVE_POLLING_MIN_INTERVAL` | Minimum adaptive polling interval | `5s` |
@@ -219,17 +224,7 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `GUEST_METADATA_MAX_CONCURRENT` | Max concurrent guest metadata fetches | `4` |
 | `DNS_CACHE_TIMEOUT` | Cache TTL for DNS lookups | `5m` |
 | `MAX_POLL_TIMEOUT` | Maximum time per polling cycle | `3m` |
-| `WEBHOOK_BATCH_DELAY` | Delay before sending batched webhooks | `10s` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
-
-### Logging Overrides
-
-| Variable | Description | Default |
-| ---------- | ------------- | --------- |
-| `LOG_FILE` | Log file path (empty = stdout) | *(unset)* |
-| `LOG_MAX_SIZE` | Log file max size (MB) | `100` |
-| `LOG_MAX_AGE` | Log file retention (days) | `30` |
-| `LOG_COMPRESS` | Compress rotated logs | `true` |
 
 ### Update Settings (system.json)
 
@@ -239,8 +234,11 @@ These are stored in `system.json` and managed via the UI.
 | ----- | ------------- | --------- |
 | `updateChannel` | Update channel (`stable` or `rc`) | `stable` |
 | `autoUpdateEnabled` | Allow one-click updates | `false` |
-| `autoUpdateCheckInterval` | Stored UI preference (server currently checks hourly) | `24` |
+| `autoUpdateCheckInterval` | Background update check interval in hours (`0` disables) | `24` |
 | `autoUpdateTime` | Stored UI preference (systemd timer has its own schedule) | `03:00` |
+
+
+> **Note**: Update settings are stored in `system.json`. Legacy `.env` entries (`UPDATE_CHANNEL`, `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CHECK_INTERVAL`, `AUTO_UPDATE_TIME`) are kept in sync for backwards compatibility but are not read at runtime.
 
 ### Auto-Import (Bootstrap)
 
@@ -263,6 +261,7 @@ These are primarily for development or test harnesses and should not be used in 
 | `PULSE_UPDATE_SERVER` | Override update server base URL (testing only) | *(unset)* |
 | `PULSE_UPDATE_STAGE_DELAY_MS` | Adds artificial delays between update stages (testing only) | *(unset)* |
 | `PULSE_ALLOW_DOCKER_UPDATES` | Expose update UI/actions in Docker (debug only) | `false` |
+| `PULSE_DEV_ALLOW_CONTAINER_SSH` | Allow SSH-based temperature collection from containers (dev/test only) | `false` |
 | `PULSE_AI_ALLOW_LOOPBACK` | Allow AI tool HTTP fetches to loopback addresses | `false` |
 | `PULSE_LICENSE_PUBLIC_KEY` | Override embedded license public key (base64, dev only) | *(unset)* |
 | `PULSE_LICENSE_DEV_MODE` | Skip license verification (development only) | `false` |
@@ -351,6 +350,8 @@ API tokens provide scoped, revocable access to Pulse. Manage tokens in **Setting
 | `kubernetes:report` | Kubernetes agent telemetry submission |
 | `kubernetes:manage` | Kubernetes cluster management |
 | `host-agent:report` | Host agent metrics submission |
+| `host-agent:config:read` | Read host-agent config payloads |
+| `host-agent:manage` | Manage host agents (unlink/delete/config) |
 | `settings:read` | Read configuration |
 | `settings:write` | Modify configuration |
 

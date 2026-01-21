@@ -58,15 +58,15 @@ If you reset auth (for example by deleting `.env`), Pulse may require a bootstra
 
 ### Temperature monitoring in containers
 
-If Pulse runs in a container and you are relying on SSH-based temperature collection, v5 blocks that in hardened configurations.
+If Pulse runs in a container and you are relying on SSH-based temperature collection, move to the agent or run Pulse on the host. SSH-based collection from containers is intended for dev/test only (use `PULSE_DEV_ALLOW_CONTAINER_SSH=true` if you must).
 
 Preferred option:
 
 - Install the unified agent (`pulse-agent`) on Proxmox hosts with `--enable-proxmox`
 
-Deprecated option (existing installs only):
+Alternative option:
 
-- `pulse-sensor-proxy` continues to work for now, but it is deprecated in v5 and not recommended for new installs. Plan to migrate to the unified agent.
+- Run Pulse outside a container and use SSH-based temperature collection (restricted `sensors -j` keys)
 
 ### Backups not showing after upgrade (v4 → v5)
 
