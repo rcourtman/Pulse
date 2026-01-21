@@ -545,6 +545,17 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               +Agent
                             </span>
                           </Show>
+                          <Show when={isPVEItem && online && node!.pendingUpdates !== undefined && node!.pendingUpdates > 0}>
+                            <span
+                              class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${(node!.pendingUpdates ?? 0) >= 10
+                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                }`}
+                              title={`${node!.pendingUpdates} pending apt update${node!.pendingUpdates !== 1 ? 's' : ''}`}
+                            >
+                              {node!.pendingUpdates} updates
+                            </span>
+                          </Show>
                           <Show when={isPBSItem}>
                             <span class="text-[9px] px-1 py-0 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
                               PBS

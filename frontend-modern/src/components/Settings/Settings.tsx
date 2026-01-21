@@ -45,8 +45,7 @@ import { ReportingPanel } from './ReportingPanel';
 import {
   PveNodesTable,
   PbsNodesTable,
-  PmgNodesTable,
-  type TemperatureTransportInfo,
+  PmgNodesTable
 } from './ConfiguredNodeTables';
 import { SettingsSectionNav } from './SettingsSectionNav';
 import { SettingsAPI } from '@/api/settings';
@@ -140,58 +139,6 @@ interface SystemDiagnostic {
   memoryMB: number;
 }
 
-interface TemperatureProxyHTTPStatus {
-  node: string;
-  url?: string;
-  reachable: boolean;
-  error?: string;
-}
-
-interface TemperatureProxyControlPlaneState {
-  instance: string;
-  lastSync?: string;
-  refreshIntervalSeconds?: number;
-  secondsBehind?: number;
-  status?: string;
-}
-
-interface TemperatureProxySocketHost {
-  node?: string;
-  host?: string;
-  cooldownUntil?: string;
-  secondsRemaining?: number;
-  lastError?: string;
-}
-
-type TemperatureSocketCooldownInfo = {
-  secondsRemaining?: number;
-  until?: string;
-  lastError?: string;
-};
-
-// HostProxySummary removed - pulse-sensor-proxy is deprecated in v5
-
-interface TemperatureProxyDiagnostic {
-  legacySSHDetected: boolean;
-  recommendProxyUpgrade: boolean;
-  socketFound: boolean;
-  socketPath?: string;
-  socketPermissions?: string;
-  socketOwner?: string;
-  socketGroup?: string;
-  proxyReachable?: boolean;
-  proxyVersion?: string;
-  proxyPublicKeySha256?: string;
-  proxySshDirectory?: string;
-  legacySshKeyCount?: number;
-  proxyCapabilities?: string[];
-  notes?: string[];
-  httpProxies?: TemperatureProxyHTTPStatus[];
-  controlPlaneEnabled?: boolean;
-  controlPlaneStates?: TemperatureProxyControlPlaneState[];
-  socketHostCooldowns?: TemperatureProxySocketHost[];
-}
-
 interface APITokenSummary {
   id: string;
   name: string;
@@ -278,7 +225,6 @@ interface DiagnosticsData {
   nodes: DiagnosticsNode[];
   pbs: DiagnosticsPBS[];
   system: SystemDiagnostic;
-  temperatureProxy?: TemperatureProxyDiagnostic | null;
   apiTokens?: APITokenDiagnostic | null;
   dockerAgents?: DockerAgentDiagnostic | null;
   alerts?: AlertsDiagnostic | null;
@@ -659,7 +605,6 @@ const Settings: Component<SettingsProps> = (props) => {
   const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
   const [temperatureMonitoringEnabled, setTemperatureMonitoringEnabled] = createSignal(true);
   const [savingTemperatureSetting, setSavingTemperatureSetting] = createSignal(false);
-  // hostProxyStatus removed - pulse-sensor-proxy is deprecated in v5
   const [hideLocalLogin, setHideLocalLogin] = createSignal(false);
   const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
 
@@ -876,7 +821,7 @@ const Settings: Component<SettingsProps> = (props) => {
   };
 
   // Diagnostics
-  const [diagnosticsData, setDiagnosticsData] = createSignal<DiagnosticsData | null>(null);
+  const [_diagnosticsData, setDiagnosticsData] = createSignal<DiagnosticsData | null>(null);
   const [_runningDiagnostics, setRunningDiagnostics] = createSignal(false);
 
   // Security
@@ -926,112 +871,12 @@ const Settings: Component<SettingsProps> = (props) => {
   };
 
 
-  const normalizeHostKey = (value?: string | null) => {
-    if (!value) {
-      return '';
-    }
-    let result = value.trim().toLowerCase();
-    if (!result) {
-      return '';
-    }
-    result = result.replace(/^https?:\/\//, '');
-    const slashIndex = result.indexOf('/');
-    if (slashIndex !== -1) {
-      result = result.slice(0, slashIndex);
-    }
-    const colonIndex = result.indexOf(':');
-    if (colonIndex !== -1) {
-      result = result.slice(0, colonIndex);
-    }
-    return result;
-  };
-
-  const emitTemperatureProxyWarnings = (diag: DiagnosticsData | null) => {
-    if (!diag?.temperatureProxy) {
-      return;
-    }
-    if (diag.temperatureProxy.httpProxies) {
-      const failing = (diag.temperatureProxy.httpProxies as TemperatureProxyHTTPStatus[]).filter(
-        (proxy) => proxy && proxy.node && !proxy.reachable,
-      );
-      if (failing.length > 0) {
-        const nodes = failing.map((proxy) => proxy.node || 'Unknown').join(', ');
-        notificationStore.warning(`Pulse cannot reach HTTPS temperature proxy on: ${nodes}`);
-      }
-    }
-    if (diag.temperatureProxy.controlPlaneStates) {
-      const stale = (diag.temperatureProxy.controlPlaneStates as TemperatureProxyControlPlaneState[]).filter(
-        (state) => state && (state.status === 'stale' || state.status === 'offline'),
-      );
-      if (stale.length > 0) {
-        const names = stale.map((state) => state.instance || 'Proxy').join(', ');
-        notificationStore.warning(`Temperature proxy control plane is behind on: ${names}`);
-      }
-    }
-    if (diag.temperatureProxy.socketHostCooldowns) {
-      const cooling = (diag.temperatureProxy.socketHostCooldowns as TemperatureProxySocketHost[]).filter(
-        (entry) => entry && (entry.node || entry.host),
-      );
-      if (cooling.length > 0) {
-        const hosts = cooling.map((entry) => entry.node || entry.host || 'proxy').join(', ');
-        notificationStore.warning(`Temperature proxy is cooling down the following hosts: ${hosts}`);
-      }
-    }
-  };
-
-  const temperatureTransportInfo = createMemo<TemperatureTransportInfo | null>(() => {
-    const diag = diagnosticsData();
-    if (!diag?.temperatureProxy) {
-      return null;
-    }
-    const httpMap: TemperatureTransportInfo['httpMap'] = {};
-    const proxies = diag.temperatureProxy.httpProxies || [];
-    proxies.forEach((proxy) => {
-      if (!proxy || !proxy.node) {
-        return;
-      }
-      const key = proxy.node.trim().toLowerCase();
-      if (!key) {
-        return;
-      }
-      httpMap[key] = {
-        reachable: Boolean(proxy.reachable),
-        error: proxy.error || undefined,
-        url: proxy.url || undefined,
-      };
-    });
-    const socketStatus: TemperatureTransportInfo['socketStatus'] =
-      diag.temperatureProxy.socketFound && diag.temperatureProxy.proxyReachable
-        ? 'healthy'
-        : diag.temperatureProxy.socketFound
-          ? 'error'
-          : 'missing';
-    const cooldowns: Record<string, TemperatureSocketCooldownInfo> = {};
-    const socketHosts = diag.temperatureProxy.socketHostCooldowns || [];
-    (socketHosts as TemperatureProxySocketHost[]).forEach((entry) => {
-      const key = normalizeHostKey(entry.node) || normalizeHostKey(entry.host);
-      if (!key) {
-        return;
-      }
-      cooldowns[key] = {
-        secondsRemaining: entry.secondsRemaining,
-        until: entry.cooldownUntil,
-        lastError: entry.lastError || undefined,
-      };
-    });
-    return { httpMap, socketStatus, socketCooldowns: cooldowns };
-  });
-
-
-
   const runDiagnostics = async () => {
     setRunningDiagnostics(true);
     try {
       const response = await apiFetch('/api/diagnostics');
       const diag = await response.json();
       setDiagnosticsData(diag);
-      emitTemperatureProxyWarnings(diag);
-      // hostProxyStatus removed - pulse-sensor-proxy is deprecated in v5
     } catch (err) {
       logger.error('Failed to fetch diagnostics', err);
       notificationStore.error('Failed to run diagnostics');
@@ -1039,8 +884,6 @@ const Settings: Component<SettingsProps> = (props) => {
       setRunningDiagnostics(false);
     }
   };
-
-  // refreshHostProxyStatus removed - pulse-sensor-proxy is deprecated in v5
 
   createEffect(() => {
     if (typeof window === 'undefined') {
@@ -2730,7 +2573,6 @@ const Settings: Component<SettingsProps> = (props) => {
                               stateNodes={state.nodes ?? []}
                               stateHosts={state.hosts ?? []}
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
-                              temperatureTransports={temperatureTransportInfo()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {
                                 setEditingNode(node);

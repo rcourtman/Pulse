@@ -85,6 +85,7 @@ type PVEClientInterface interface {
 	GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error)
 	GetZFSPoolsWithDetails(ctx context.Context, node string) ([]proxmox.ZFSPoolInfo, error)
 	GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error)
+	GetNodePendingUpdates(ctx context.Context, node string) ([]proxmox.AptPackage, error)
 	GetCephStatus(ctx context.Context) (*proxmox.CephStatus, error)
 	GetCephDF(ctx context.Context) (*proxmox.CephDF, error)
 }
@@ -770,8 +771,9 @@ type Monitor struct {
 	instanceInfoCache        map[string]*instanceInfo
 	pollStatusMap            map[string]*pollStatus
 	dlqInsightMap            map[string]*dlqInsight
-	nodeLastOnline           map[string]time.Time   // Track last time each node was seen online (for grace period)
-	resourceStore            ResourceStoreInterface // Optional unified resource store for polling optimization
+	nodeLastOnline           map[string]time.Time           // Track last time each node was seen online (for grace period)
+	nodePendingUpdatesCache  map[string]pendingUpdatesCache // Cache pending updates per node (checked every 30 min)
+	resourceStore            ResourceStoreInterface         // Optional unified resource store for polling optimization
 	mockMetricsCancel        context.CancelFunc
 	mockMetricsWg            sync.WaitGroup
 	dockerChecker            DockerChecker // Optional Docker checker for LXC containers
@@ -786,6 +788,15 @@ type rrdMemCacheEntry struct {
 	total     uint64
 	fetchedAt time.Time
 }
+
+// pendingUpdatesCache caches apt pending updates count per node
+type pendingUpdatesCache struct {
+	count     int
+	checkedAt time.Time
+}
+
+// TTL for pending updates cache (30 minutes - balance between freshness and API load)
+const pendingUpdatesCacheTTL = 30 * time.Minute
 
 // agentProfileCacheEntry caches agent profiles and assignments to avoid disk I/O on every agent report.
 // TTL is 60 seconds to balance freshness with performance.
@@ -3388,13 +3399,6 @@ func New(cfg *config.Config) (*Monitor, error) {
 	// Security warning if running in container with SSH temperature monitoring
 	checkContainerizedTempMonitoring()
 
-	if cfg.TemperatureMonitoringEnabled {
-		isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
-		if isContainer && tempCollector != nil && !tempCollector.SocketProxyAvailable() {
-			log.Warn().Msg("Temperature monitoring is enabled but the container does not have access to pulse-sensor-proxy. Install the proxy on the host or disable temperatures until it is available.")
-		}
-	}
-
 	stalenessTracker := NewStalenessTracker(getPollMetrics())
 	stalenessTracker.SetBounds(cfg.AdaptivePollingBaseInterval, cfg.AdaptivePollingMaxInterval)
 	taskQueue := NewTaskQueue()
@@ -3546,6 +3550,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		pollStatusMap:              make(map[string]*pollStatus),
 		dlqInsightMap:              make(map[string]*dlqInsight),
 		nodeLastOnline:             make(map[string]time.Time),
+		nodePendingUpdatesCache:    make(map[string]pendingUpdatesCache),
 	}
 
 	m.breakerBaseRetry = 5 * time.Second

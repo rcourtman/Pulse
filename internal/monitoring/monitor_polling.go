@@ -2205,7 +2205,7 @@ func (m *Monitor) pollPVENode(
 		}
 
 		// If no host agent temp or we need additional data (SMART), try SSH/proxy collection
-		var proxyTemp *models.Temperature
+		var sshTemp *models.Temperature
 		var err error
 		if m.tempCollector != nil {
 			// Temperature collection is best-effort - use a short timeout to avoid blocking node polling
@@ -2248,15 +2248,11 @@ func (m *Monitor) pollPVENode(
 				sshHost = node.Node
 			}
 
-			// Skip SSH/proxy collection if we already have host agent data and no proxy is configured
-			// (proxy might provide additional SMART data that host agent doesn't have)
-			skipProxyCollection := hostAgentTemp != nil &&
-				strings.TrimSpace(instanceCfg.TemperatureProxyURL) == "" &&
-				!m.HasSocketTemperatureProxy()
+			// Skip SSH collection if we already have host agent data.
+			skipSSHCollection := hostAgentTemp != nil
 
-			if !skipProxyCollection {
-				// Use HTTP proxy if configured for this instance, otherwise fall back to socket/SSH
-				proxyTemp, err = m.tempCollector.CollectTemperatureWithProxy(tempCtx, sshHost, node.Node, instanceCfg.TemperatureProxyURL, instanceCfg.TemperatureProxyToken)
+			if !skipSSHCollection {
+				sshTemp, err = m.tempCollector.CollectTemperature(tempCtx, sshHost, node.Node)
 				if err != nil && hostAgentTemp == nil {
 					log.Debug().
 						Str("node", node.Node).
@@ -2267,25 +2263,25 @@ func (m *Monitor) pollPVENode(
 				}
 			}
 
-			// Debug: log proxy temp details before merge
-			if proxyTemp != nil {
+			// Debug: log SSH temp details before merge
+			if sshTemp != nil {
 				log.Debug().
 					Str("node", node.Node).
-					Bool("proxyTempAvailable", proxyTemp.Available).
-					Bool("proxyHasSMART", proxyTemp.HasSMART).
-					Int("proxySMARTCount", len(proxyTemp.SMART)).
-					Bool("proxyHasNVMe", proxyTemp.HasNVMe).
-					Int("proxyNVMeCount", len(proxyTemp.NVMe)).
-					Msg("Proxy temperature data before merge")
+					Bool("sshTempAvailable", sshTemp.Available).
+					Bool("sshHasSMART", sshTemp.HasSMART).
+					Int("sshSMARTCount", len(sshTemp.SMART)).
+					Bool("sshHasNVMe", sshTemp.HasNVMe).
+					Int("sshNVMeCount", len(sshTemp.NVMe)).
+					Msg("SSH temperature data before merge")
 			} else {
 				log.Debug().
 					Str("node", node.Node).
-					Msg("Proxy temperature data is nil")
+					Msg("SSH temperature data is nil")
 			}
 		}
 
-		// Merge host agent and proxy temperatures
-		temp := mergeTemperatureData(hostAgentTemp, proxyTemp)
+		// Merge host agent and SSH temperatures
+		temp := mergeTemperatureData(hostAgentTemp, sshTemp)
 
 		if temp != nil && temp.Available {
 			// Get the current CPU temperature (prefer package, fall back to max)
@@ -2333,11 +2329,11 @@ func (m *Monitor) pollPVENode(
 			modelNode.Temperature = temp
 
 			// Determine source for logging
-			tempSource := "proxy/ssh"
-			if hostAgentTemp != nil && proxyTemp == nil {
+			tempSource := "ssh"
+			if hostAgentTemp != nil && sshTemp == nil {
 				tempSource = "host-agent"
-			} else if hostAgentTemp != nil && proxyTemp != nil {
-				tempSource = "host-agent+proxy"
+			} else if hostAgentTemp != nil && sshTemp != nil {
+				tempSource = "host-agent+ssh"
 			}
 
 			log.Debug().
@@ -2378,6 +2374,54 @@ func (m *Monitor) pollPVENode(
 					Bool("isCluster", modelNode.IsClusterMember).
 					Msg("No temperature data available (collection failed, no previous data to preserve)")
 			}
+		}
+	}
+
+	// Poll pending apt updates (less frequently - every 30 minutes)
+	// Only for online nodes to avoid wasting API calls on offline nodes
+	if effectiveStatus == "online" {
+		now := time.Now()
+		m.mu.RLock()
+		cached, hasCached := m.nodePendingUpdatesCache[nodeID]
+		m.mu.RUnlock()
+
+		if !hasCached || now.Sub(cached.checkedAt) >= pendingUpdatesCacheTTL {
+			// Time to check for updates
+			pendingPkgs, err := client.GetNodePendingUpdates(ctx, node.Node)
+			if err != nil {
+				// API call failed - preserve cached value if available, don't spam logs
+				log.Debug().
+					Err(err).
+					Str("node", node.Node).
+					Str("instance", instanceName).
+					Msg("Could not check pending apt updates (may require Sys.Audit permission)")
+				if hasCached {
+					modelNode.PendingUpdates = cached.count
+					modelNode.PendingUpdatesCheckedAt = cached.checkedAt
+				}
+			} else {
+				updateCount := len(pendingPkgs)
+				modelNode.PendingUpdates = updateCount
+				modelNode.PendingUpdatesCheckedAt = now
+
+				// Cache the result
+				m.mu.Lock()
+				m.nodePendingUpdatesCache[nodeID] = pendingUpdatesCache{
+					count:     updateCount,
+					checkedAt: now,
+				}
+				m.mu.Unlock()
+
+				log.Debug().
+					Str("node", node.Node).
+					Str("instance", instanceName).
+					Int("pendingUpdates", updateCount).
+					Msg("Checked pending apt updates")
+			}
+		} else {
+			// Use cached value
+			modelNode.PendingUpdates = cached.count
+			modelNode.PendingUpdatesCheckedAt = cached.checkedAt
 		}
 	}
 

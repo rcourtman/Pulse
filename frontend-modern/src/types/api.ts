@@ -148,6 +148,8 @@ export interface Node {
   cpuInfo: CPUInfo;
   temperature?: Temperature; // CPU/NVMe temperatures
   temperatureMonitoringEnabled?: boolean | null; // Per-node temperature monitoring override
+  pendingUpdates?: number; // Number of pending apt updates
+  pendingUpdatesCheckedAt?: string; // When updates were last checked
   lastSeen: string;
   connectionHealth: string;
   isClusterMember?: boolean; // True if part of a cluster

@@ -132,6 +132,10 @@ func (s *stubPVEClient) GetCephDF(ctx context.Context) (*proxmox.CephDF, error) 
 	return nil, nil
 }
 
+func (s *stubPVEClient) GetNodePendingUpdates(ctx context.Context, node string) ([]proxmox.AptPackage, error) {
+	return nil, nil
+}
+
 func floatPtr(v float64) *float64 { return &v }
 
 func TestPollPVEInstanceUsesRRDMemUsedFallback(t *testing.T) {

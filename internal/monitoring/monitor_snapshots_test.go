@@ -96,6 +96,9 @@ func (f fakeSnapshotClient) GetCephStatus(ctx context.Context) (*proxmox.CephSta
 	return nil, nil
 }
 func (f fakeSnapshotClient) GetCephDF(ctx context.Context) (*proxmox.CephDF, error) { return nil, nil }
+func (f fakeSnapshotClient) GetNodePendingUpdates(ctx context.Context, node string) ([]proxmox.AptPackage, error) {
+	return nil, nil
+}
 
 func TestCollectSnapshotSizes(t *testing.T) {
 	m := &Monitor{}

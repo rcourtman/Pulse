@@ -132,6 +132,10 @@ func (f *fakeStorageClient) GetCephDF(ctx context.Context) (*proxmox.CephDF, err
 	return nil, nil
 }
 
+func (f *fakeStorageClient) GetNodePendingUpdates(ctx context.Context, node string) ([]proxmox.AptPackage, error) {
+	return nil, nil
+}
+
 func TestPollStorageWithNodesOptimizedRecordsMetricsAndAlerts(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 

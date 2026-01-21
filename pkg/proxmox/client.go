@@ -2003,3 +2003,34 @@ func (c *Client) GetDisks(ctx context.Context, node string) ([]Disk, error) {
 
 	return result.Data, nil
 }
+
+// AptPackage represents a pending package update from apt
+type AptPackage struct {
+	Package     string `json:"Package"`     // Package name
+	Title       string `json:"Title"`       // Human-readable title
+	Description string `json:"Description"` // Package description
+	OldVersion  string `json:"OldVersion"`  // Currently installed version
+	NewVersion  string `json:"Version"`     // Available version
+	Priority    string `json:"Priority"`    // Update priority (e.g., "important", "optional")
+	Section     string `json:"Section"`     // Package section
+	Origin      string `json:"Origin"`      // Repository origin
+}
+
+// GetNodePendingUpdates returns the list of pending apt updates for a node
+// Requires Sys.Audit permission on /nodes/{node}
+func (c *Client) GetNodePendingUpdates(ctx context.Context, node string) ([]AptPackage, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/apt/update", node))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []AptPackage `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}

@@ -89,6 +89,10 @@ type Node struct {
 	IsClusterMember              bool         `json:"isClusterMember"` // True if part of a cluster
 	ClusterName                  string       `json:"clusterName"`     // Name of cluster (empty if standalone)
 
+	// Package updates - polled less frequently (every 30 mins)
+	PendingUpdates          int       `json:"pendingUpdates"`                    // Number of pending apt updates
+	PendingUpdatesCheckedAt time.Time `json:"pendingUpdatesCheckedAt,omitempty"` // When updates were last checked
+
 	// Linking: When a host agent is running on this PVE node, link them together
 	LinkedHostAgentID string `json:"linkedHostAgentId,omitempty"` // ID of the host agent running on this node
 }
@@ -1061,7 +1065,7 @@ type Temperature struct {
 	MaxRecorded  time.Time  `json:"maxRecorded,omitempty"`  // When maximum temperature was recorded
 	Cores        []CoreTemp `json:"cores,omitempty"`        // Individual core temperatures
 	GPU          []GPUTemp  `json:"gpu,omitempty"`          // GPU temperatures
-	NVMe         []NVMeTemp `json:"nvme,omitempty"`         // NVMe drive temperatures (legacy, from sensor proxy)
+	NVMe         []NVMeTemp `json:"nvme,omitempty"`         // NVMe drive temperatures
 	SMART        []DiskTemp `json:"smart,omitempty"`        // Physical disk temperatures from SMART data
 	Available    bool       `json:"available"`              // Whether any temperature data is available
 	HasCPU       bool       `json:"hasCPU"`                 // Whether CPU temperature data is available

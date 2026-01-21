@@ -1360,6 +1360,32 @@ func (cc *ClusterClient) GetDisks(ctx context.Context, node string) ([]Disk, err
 	return result, err
 }
 
+// GetNodePendingUpdates returns pending apt updates for a node with failover support
+func (cc *ClusterClient) GetNodePendingUpdates(ctx context.Context, node string) ([]AptPackage, error) {
+	var result []AptPackage
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		pkgs, err := client.GetNodePendingUpdates(ctx, node)
+		if err != nil {
+			return err
+		}
+		result = pkgs
+		return nil
+	})
+
+	// Don't return error for transient connectivity issues or permission issues
+	if err != nil && (strings.Contains(err.Error(), "no healthy nodes available") ||
+		strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "permission")) {
+		log.Debug().
+			Str("cluster", cc.name).
+			Str("node", node).
+			Err(err).
+			Msg("Could not get pending updates - returning empty list")
+		return []AptPackage{}, nil
+	}
+
+	return result, err
+}
+
 // GetClusterStatus returns the cluster status including all nodes with failover support.
 func (cc *ClusterClient) GetClusterStatus(ctx context.Context) ([]ClusterStatus, error) {
 	var result []ClusterStatus
