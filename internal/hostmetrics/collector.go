@@ -80,7 +80,7 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 	}
 
 	snapshot.Disks = collectDisks(collectCtx, diskExclude)
-	snapshot.DiskIO = collectDiskIO(collectCtx)
+	snapshot.DiskIO = collectDiskIO(collectCtx, diskExclude)
 	snapshot.Network = collectNetwork(collectCtx)
 
 	return snapshot, nil
@@ -129,8 +129,9 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 		}
 		seen[part.Mountpoint] = struct{}{}
 
-		// Check user-defined exclusions first (issue #896)
-		if fsfilters.MatchesUserExclude(part.Mountpoint, diskExclude) {
+		// Check user-defined exclusions first (issue #896, #1142)
+		// Check both device path and mountpoint to support patterns like "/dev/sda" or "/mnt/backup"
+		if fsfilters.MatchesDiskExclude(part.Device, part.Mountpoint, diskExclude) {
 			continue
 		}
 
@@ -271,7 +272,8 @@ func isLoopback(flags []string) bool {
 
 // collectDiskIO gathers I/O statistics for physical block devices.
 // Only reports whole disks (nvme0n1, sda), not partitions (nvme0n1p1, sda1).
-func collectDiskIO(ctx context.Context) []agentshost.DiskIO {
+// Respects user-defined disk exclusions to avoid reporting excluded devices.
+func collectDiskIO(ctx context.Context, diskExclude []string) []agentshost.DiskIO {
 	counters, err := diskIOCounters(ctx)
 	if err != nil {
 		return nil
@@ -289,6 +291,10 @@ func collectDiskIO(ctx context.Context) []agentshost.DiskIO {
 		}
 		// Skip device-mapper and md devices (report at physical level)
 		if strings.HasPrefix(name, "dm-") {
+			continue
+		}
+		// Skip user-excluded devices (issue #1142)
+		if fsfilters.MatchesDeviceExclude(name, diskExclude) {
 			continue
 		}
 

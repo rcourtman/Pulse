@@ -193,6 +193,74 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 //   - Prefix patterns (ending with *): "/mnt/ext*" matches "/mnt/external", "/mnt/ext-drive"
 //   - Contains patterns (surrounded by *): "*pbs*" matches any path containing "pbs"
 func MatchesUserExclude(mountpoint string, excludePatterns []string) bool {
+	return matchesPattern(mountpoint, excludePatterns)
+}
+
+// MatchesDiskExclude checks if a disk (device or mountpoint) matches any exclusion pattern.
+// This checks both the device path (e.g., /dev/sda) and the mountpoint (e.g., /mnt/backup)
+// to allow users to exclude disks by either identifier.
+func MatchesDiskExclude(device, mountpoint string, excludePatterns []string) bool {
+	if len(excludePatterns) == 0 {
+		return false
+	}
+
+	// Check against mountpoint
+	if mountpoint != "" && matchesPattern(mountpoint, excludePatterns) {
+		return true
+	}
+
+	// Check against device path
+	if device != "" && matchesPattern(device, excludePatterns) {
+		return true
+	}
+
+	// Check against device name (without /dev/ prefix)
+	if device != "" {
+		deviceName := device
+		if strings.HasPrefix(device, "/dev/") {
+			deviceName = device[5:]
+		}
+		if matchesPattern(deviceName, excludePatterns) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// MatchesDeviceExclude checks if a device name/path matches exclusion patterns.
+// For disk I/O collection where we only have device names (not mountpoints).
+func MatchesDeviceExclude(device string, excludePatterns []string) bool {
+	if len(excludePatterns) == 0 {
+		return false
+	}
+
+	// Check against full device path
+	if matchesPattern(device, excludePatterns) {
+		return true
+	}
+
+	// Check with /dev/ prefix if not present
+	if !strings.HasPrefix(device, "/dev/") {
+		if matchesPattern("/dev/"+device, excludePatterns) {
+			return true
+		}
+	}
+
+	// Check device name without /dev/ prefix
+	deviceName := device
+	if strings.HasPrefix(device, "/dev/") {
+		deviceName = device[5:]
+	}
+	if matchesPattern(deviceName, excludePatterns) {
+		return true
+	}
+
+	return false
+}
+
+// matchesPattern checks if a value matches any of the exclusion patterns.
+func matchesPattern(value string, excludePatterns []string) bool {
 	if len(excludePatterns) == 0 {
 		return false
 	}
@@ -206,7 +274,7 @@ func MatchesUserExclude(mountpoint string, excludePatterns []string) bool {
 		// Contains pattern: *substring*
 		if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") && len(pattern) > 2 {
 			substring := pattern[1 : len(pattern)-1]
-			if strings.Contains(mountpoint, substring) {
+			if strings.Contains(value, substring) {
 				return true
 			}
 			continue
@@ -215,14 +283,14 @@ func MatchesUserExclude(mountpoint string, excludePatterns []string) bool {
 		// Prefix pattern: /path/prefix*
 		if strings.HasSuffix(pattern, "*") {
 			prefix := pattern[:len(pattern)-1]
-			if strings.HasPrefix(mountpoint, prefix) {
+			if strings.HasPrefix(value, prefix) {
 				return true
 			}
 			continue
 		}
 
 		// Exact match
-		if mountpoint == pattern {
+		if value == pattern {
 			return true
 		}
 	}
