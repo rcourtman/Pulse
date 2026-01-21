@@ -34,6 +34,10 @@
     "marked": "^17.0.1",
     "solid-js": "^1.8.0"
   },
+  "overrides": {
+    "seroval": "^1.4.1",
+    "seroval-plugins": "^1.4.1"
+  },
   "devDependencies": {
     "@solidjs/testing-library": "^0.8.5",
     "@tailwindcss/typography": "^0.5.19",
