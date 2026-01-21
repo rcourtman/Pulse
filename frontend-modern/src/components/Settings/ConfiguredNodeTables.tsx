@@ -89,33 +89,6 @@ const resolvePveStatusMeta = (
   }
 };
 
-// Helper to find matching host agent for a node
-// First tries to match via linkedHostAgentId from stateNodes, then falls back to hostname matching
-const findMatchingHostAgent = (
-  nodeName: string,
-  hosts: Host[] | undefined,
-  stateNodes?: Node[],
-): Host | undefined => {
-  if (!hosts || hosts.length === 0) return undefined;
-
-  // First try: find via linked host agent ID (proper backend linking)
-  if (stateNodes && stateNodes.length > 0) {
-    const nodeNameLower = nodeName.toLowerCase().trim();
-    const stateNode = stateNodes.find(
-      (n) => n.name.toLowerCase().trim() === nodeNameLower || n.instance.toLowerCase().trim() === nodeNameLower,
-    );
-    if (stateNode?.linkedHostAgentId) {
-      const linkedHost = hosts.find((h) => h.id === stateNode.linkedHostAgentId);
-      if (linkedHost) {
-        return linkedHost;
-      }
-    }
-  }
-
-  // Fallback: hostname matching
-  const nodeNameLower = nodeName.toLowerCase().trim();
-  return hosts.find((h) => h.hostname.toLowerCase().trim() === nodeNameLower);
-};
 
 export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
   return (
@@ -150,7 +123,6 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
               const clusterName = createMemo(() =>
                 'clusterName' in node && node.clusterName ? node.clusterName : 'Unknown',
               );
-              const hostAgent = createMemo(() => findMatchingHostAgent(node.name, props.stateHosts, props.stateNodes));
               return (
                 <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
                   <td class="align-top py-3 pl-4 pr-3">

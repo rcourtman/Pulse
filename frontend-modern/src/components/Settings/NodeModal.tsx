@@ -1,4 +1,4 @@
-import { Component, Show, For, createSignal, createEffect, createMemo } from 'solid-js';
+import { Component, Show, For, createSignal, createEffect } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { NodeConfig } from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
@@ -2003,7 +2003,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               onChange={(event) => {
                                 props.onToggleTemperatureMonitoring?.(event.currentTarget.checked);
                               }}
-                              disabled={temperatureToggleDisabled()}
+                              disabled={props.savingTemperatureSetting || props.temperatureMonitoringLocked}
                               ariaLabel={
                                 temperatureMonitoringEnabledValue()
                                   ? 'Disable temperature monitoring'
