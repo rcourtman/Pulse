@@ -433,21 +433,6 @@ func TestMonitor_EnrichContainerMetadata_Extra(t *testing.T) {
 	}
 }
 
-func TestMonitor_TemperatureDiagnostics_Extra(t *testing.T) {
-	m := &Monitor{}
-	// Should return false/nil when tempCollector is nil
-	if m.HasSocketTemperatureProxy() {
-		t.Error("Expected HasSocketTemperatureProxy to be false when collector is nil")
-	}
-	if diag := m.SocketProxyHostDiagnostics(); diag != nil {
-		t.Error("Expected SocketProxyHostDiagnostics to be nil when collector is nil")
-	}
-
-	m.tempCollector = NewTemperatureCollectorWithPort("root", "", 22)
-	m.HasSocketTemperatureProxy()
-	m.SocketProxyHostDiagnostics()
-}
-
 func TestMonitor_TokenBindings_Extra(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),

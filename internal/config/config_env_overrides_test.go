@@ -16,7 +16,6 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 		"BACKUP_POLLING_INTERVAL",
 		"PVE_POLLING_INTERVAL",
 		"ENABLE_TEMPERATURE_MONITORING",
-		"PULSE_ENABLE_SENSOR_PROXY",
 		"PULSE_AUTH_HIDE_LOCAL_LOGIN",
 		"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS",
 		"ENABLE_BACKUP_POLLING",
@@ -39,7 +38,6 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 	t.Setenv("BACKUP_POLLING_INTERVAL", "30s")
 	t.Setenv("PVE_POLLING_INTERVAL", "15s")
 	t.Setenv("ENABLE_TEMPERATURE_MONITORING", "false")
-	t.Setenv("PULSE_ENABLE_SENSOR_PROXY", "true")
 	t.Setenv("PULSE_AUTH_HIDE_LOCAL_LOGIN", "true")
 	t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "true")
 	t.Setenv("ENABLE_BACKUP_POLLING", "false")
@@ -57,7 +55,6 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 	assert.Equal(t, 30*time.Second, cfg.BackupPollingInterval)
 	assert.Equal(t, 15*time.Second, cfg.PVEPollingInterval)
 	assert.False(t, cfg.TemperatureMonitoringEnabled)
-	assert.True(t, cfg.EnableSensorProxy)
 	assert.True(t, cfg.HideLocalLogin)
 	assert.True(t, cfg.DisableDockerUpdateActions)
 	assert.False(t, cfg.EnableBackupPolling)
@@ -126,4 +123,18 @@ func TestLoad_EnvOverrides_AdaptivePolling_Alternative(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.False(t, cfg.AdaptivePollingEnabled)
+}
+
+func TestLoad_EnvOverrides_PBSAndPMG(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	t.Setenv("PBS_POLLING_INTERVAL", "45s")
+	t.Setenv("PMG_POLLING_INTERVAL", "120")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, 45*time.Second, cfg.PBSPollingInterval)
+	assert.Equal(t, 120*time.Second, cfg.PMGPollingInterval)
 }

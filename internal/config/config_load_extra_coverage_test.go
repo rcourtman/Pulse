@@ -65,7 +65,6 @@ func TestLoad_EnvOverrides_Seconds(t *testing.T) {
 
 func TestLoad_EnvOverrides_More(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-	t.Setenv("PULSE_ENABLE_SENSOR_PROXY", "true")
 	t.Setenv("PULSE_AUTH_HIDE_LOCAL_LOGIN", "true")
 	t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "true")
 	t.Setenv("ENABLE_BACKUP_POLLING", "0")
@@ -79,7 +78,6 @@ func TestLoad_EnvOverrides_More(t *testing.T) {
 	cfg, err := Load()
 	assert.NoError(t, err)
 
-	assert.True(t, cfg.EnableSensorProxy)
 	assert.True(t, cfg.HideLocalLogin)
 	assert.True(t, cfg.DisableDockerUpdateActions)
 	assert.False(t, cfg.EnableBackupPolling)
