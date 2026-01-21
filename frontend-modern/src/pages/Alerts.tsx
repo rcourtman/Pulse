@@ -491,6 +491,7 @@ export function Alerts() {
   const alertsActivation = useAlertsActivation();
   const [isSwitchingActivation, setIsSwitchingActivation] = createSignal(false);
   const isAlertsActive = createMemo(() => alertsActivation.activationState() === 'active');
+  const areAlertsDisabled = createMemo(() => !isAlertsActive());
 
   const handleActivateAlerts = async () => {
     if (alertsActivation.isLoading() || isSwitchingActivation()) {
@@ -2005,9 +2006,13 @@ export function Alerts() {
                             <button
                               type="button"
                               aria-current={activeTab() === item.id ? 'page' : undefined}
-                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${activeTab() === item.id
-                                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                              aria-disabled={areAlertsDisabled()}
+                              disabled={areAlertsDisabled()}
+                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${areAlertsDisabled()
+                                ? 'cursor-not-allowed text-gray-400 dark:text-gray-500 bg-gray-100/60 dark:bg-gray-800/60'
+                                : activeTab() === item.id
+                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
+                                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
                                 }`}
                               onClick={() => handleTabChange(item.id)}
                               title={sidebarCollapsed() ? item.label : undefined}
@@ -2039,9 +2044,13 @@ export function Alerts() {
                       {(tab) => (
                         <button
                           type="button"
-                          class={`px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all whitespace-nowrap ${activeTab() === tab.id
-                            ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                          aria-disabled={areAlertsDisabled()}
+                          disabled={areAlertsDisabled()}
+                          class={`px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all whitespace-nowrap ${areAlertsDisabled()
+                            ? 'cursor-not-allowed text-gray-400 dark:text-gray-500 bg-gray-200/60 dark:bg-gray-800/60'
+                            : activeTab() === tab.id
+                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                             }`}
                           onClick={() => handleTabChange(tab.id)}
                         >
@@ -2065,6 +2074,7 @@ export function Alerts() {
                   dismissQuickTip={dismissQuickTip}
                   showAcknowledged={showAcknowledged}
                   setShowAcknowledged={setShowAcknowledged}
+                  alertsDisabled={areAlertsDisabled}
                 />
               </Show>
 
@@ -2217,6 +2227,7 @@ function OverviewTab(props: {
   dismissQuickTip: () => void;
   showAcknowledged: () => boolean;
   setShowAcknowledged: (value: boolean) => void;
+  alertsDisabled: () => boolean;
 }) {
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
@@ -2720,8 +2731,10 @@ function OverviewTab(props: {
               class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${overviewSubTab() === 'active-alerts'
                 ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-b-0 border-gray-200 dark:border-gray-700'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
+                } ${props.alertsDisabled() ? 'pointer-events-none opacity-60 cursor-not-allowed' : ''}`}
               onClick={() => setOverviewSubTab('active-alerts')}
+              aria-disabled={props.alertsDisabled()}
+              disabled={props.alertsDisabled()}
             >
               Active Alerts
               <Show when={alertStats().active > 0}>
@@ -2734,8 +2747,10 @@ function OverviewTab(props: {
               class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${overviewSubTab() === 'ai-insights'
                 ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-b-0 border-gray-200 dark:border-gray-700'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
+                } ${props.alertsDisabled() ? 'pointer-events-none opacity-60 cursor-not-allowed' : ''}`}
               onClick={() => setOverviewSubTab('ai-insights')}
+              aria-disabled={props.alertsDisabled()}
+              disabled={props.alertsDisabled()}
             >
               AI Insights
               <Show when={aiFindings().length > 0}>
@@ -2817,8 +2832,13 @@ function OverviewTab(props: {
                       {patrolLicenseNote() || 'AI Patrol insights require Pulse Pro.'}
                     </p>
                     <a
-                      class="inline-flex items-center gap-1.5 mt-2.5 text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors group/link"
-                      href={patrolUpgradeURL()}
+                      class={`inline-flex items-center gap-1.5 mt-2.5 text-xs font-bold text-amber-600 dark:text-amber-400 transition-colors group/link ${props.alertsDisabled()
+                        ? 'pointer-events-none opacity-50 text-gray-400 dark:text-gray-500'
+                        : 'hover:text-amber-700 dark:hover:text-amber-300'
+                        }`}
+                      href={props.alertsDisabled() ? undefined : patrolUpgradeURL()}
+                      aria-disabled={props.alertsDisabled()}
+                      tabIndex={props.alertsDisabled() ? -1 : undefined}
                       target="_blank"
                       rel="noreferrer"
                     >
@@ -2865,8 +2885,13 @@ function OverviewTab(props: {
                           </div>
                           <div class="absolute inset-0 flex items-center justify-center">
                             <a
-                              class="text-[11px] font-medium text-amber-700 dark:text-amber-200 underline decoration-dotted"
-                              href={patrolUpgradeURL()}
+                              class={`text-[11px] font-medium text-amber-700 dark:text-amber-200 underline decoration-dotted ${props.alertsDisabled()
+                                ? 'pointer-events-none opacity-50 text-gray-400 dark:text-gray-500'
+                                : ''
+                                }`}
+                              href={props.alertsDisabled() ? undefined : patrolUpgradeURL()}
+                              aria-disabled={props.alertsDisabled()}
+                              tabIndex={props.alertsDisabled() ? -1 : undefined}
                               target="_blank"
                               rel="noreferrer"
                             >
@@ -3869,8 +3894,13 @@ function OverviewTab(props: {
                   Upgrade to unlock one-click AI analysis for active alerts.
                 </p>
                 <a
-                  class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
-                  href={aiAlertsUpgradeURL()}
+                  class={`inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 ${props.alertsDisabled()
+                    ? 'pointer-events-none opacity-50 text-gray-400 dark:text-gray-500'
+                    : 'hover:underline'
+                    }`}
+                  href={props.alertsDisabled() ? undefined : aiAlertsUpgradeURL()}
+                  aria-disabled={props.alertsDisabled()}
+                  tabIndex={props.alertsDisabled() ? -1 : undefined}
                   target="_blank"
                   rel="noreferrer"
                 >
