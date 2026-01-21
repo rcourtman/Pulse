@@ -194,7 +194,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     try {
       const status = await AIChatAPI.getStatus();
       if (!status.running) {
-        notificationStore.warning('AI is not running');
+        // AI not running - silently return, don't show warning on every page load
+        // Users who intentionally disabled AI don't need a notification about it
         return;
       }
       const sessionList = await AIChatAPI.listSessions();

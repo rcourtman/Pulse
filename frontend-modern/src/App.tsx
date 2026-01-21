@@ -708,6 +708,8 @@ function App() {
             layoutStore.loadFromServer();
           } catch (error) {
             logger.error('Failed to load theme from server', error);
+            // Ensure settings are marked as loaded so UI doesn't stay in loading state
+            markSystemSettingsLoadedWithDefaults();
           }
         } else {
           // We have a local preference, just mark that we've checked the server

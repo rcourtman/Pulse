@@ -200,12 +200,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     if (isPVE(item)) {
       const node = item;
       if (!node.disk) return undefined;
-      return `${formatBytes(node.disk.used, 0)}/${formatBytes(node.disk.total, 0)}`;
+      return `${formatBytes(node.disk.used)}/${formatBytes(node.disk.total)}`;
     }
     const pbs = item;
     if (!pbs.datastores || pbs.datastores.length === 0) return undefined;
     const totals = getPbsTotals(pbs);
-    return `${formatBytes(totals.used, 0)}/${formatBytes(totals.total, 0)}`;
+    return `${formatBytes(totals.used)}/${formatBytes(totals.total)}`;
   };
 
   const getTemperatureValue = (item: TableItem) => {
@@ -548,8 +548,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           <Show when={isPVEItem && online && node!.pendingUpdates !== undefined && node!.pendingUpdates > 0}>
                             <span
                               class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${(node!.pendingUpdates ?? 0) >= 10
-                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                                 }`}
                               title={`${node!.pendingUpdates} pending apt update${node!.pendingUpdates !== 1 ? 's' : ''}`}
                             >
@@ -609,7 +609,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             value={memoryPercentValue}
                             type="memory"
                             resourceId={metricsKey}
-                            sublabel={pbs!.memoryTotal ? `${formatBytes(pbs!.memoryUsed, 0)}/${formatBytes(pbs!.memoryTotal, 0)}` : undefined}
+                            sublabel={pbs!.memoryTotal ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}` : undefined}
                             isRunning={online}
                             showMobile={false}
                           />
