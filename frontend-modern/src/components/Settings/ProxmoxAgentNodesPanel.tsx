@@ -6,7 +6,6 @@ import {
   PveNodesTable,
   PbsNodesTable,
   PmgNodesTable,
-  type TemperatureTransportInfo,
 } from './ConfiguredNodeTables';
 import { notificationStore } from '@/stores/notifications';
 import Server from 'lucide-solid/icons/server';
@@ -49,7 +48,6 @@ interface ProxmoxAgentNodesPanelProps {
 
   // Temperature monitoring
   temperatureMonitoringEnabled: Accessor<boolean>;
-  temperatureTransports?: Accessor<TemperatureTransportInfo | null>;
 
   // Discovery settings
   discoveryEnabled: Accessor<boolean>;
@@ -202,7 +200,6 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
           stateNodes={props.stateNodes ?? []}
           stateHosts={props.stateHosts ?? []}
           globalTemperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
-          temperatureTransports={props.temperatureTransports?.() ?? null}
           onTestConnection={props.testNodeConnection}
           onEdit={(node) => {
             props.setEditingNode(node as NodeConfigWithStatus);

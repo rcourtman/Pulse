@@ -35,11 +35,6 @@ interface NodeModalProps {
   onToggleTemperatureMonitoring?: (enabled: boolean) => Promise<void> | void;
 }
 
-type TemperatureTransportDetail = {
-  tone: 'info' | 'success' | 'warning' | 'danger';
-  message: string;
-  disable?: boolean;
-};
 
 const deriveNameFromHost = (host: string): string => {
   let value = host.trim();
@@ -100,63 +95,6 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const showTemperatureMonitoringSection = () =>
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
-  const temperatureTransportDetail = createMemo<TemperatureTransportDetail | null>(() => {
-    const transport = props.editingNode?.temperatureTransport;
-    if (!transport) {
-      return null;
-    }
-
-    switch (transport.toLowerCase()) {
-      case 'socket-proxy':
-        return {
-          tone: 'success',
-          message: 'Temperatures flow through the socket proxy mounted at /run/pulse-sensor-proxy.',
-        };
-      case 'https-proxy':
-        return {
-          tone: 'success',
-          message: 'Temperatures are collected via the HTTPS proxy registered for this node.',
-        };
-      case 'ssh-blocked':
-        return {
-          tone: 'danger',
-          disable: true,
-          message:
-            'Pulse is running in a container. Install the Pulse agent on this node for temperature monitoring (Settings → Agents).',
-        };
-      case 'ssh':
-        return {
-          tone: 'info',
-          message: 'Pulse will SSH directly into this node for temperature collection.',
-        };
-      default:
-        return null;
-    }
-  });
-  const temperatureToggleDisabled = () =>
-    props.temperatureMonitoringLocked ||
-    props.savingTemperatureSetting ||
-    Boolean(temperatureTransportDetail()?.disable);
-  const temperatureTransportMessageClass = () => {
-    const tone = temperatureTransportDetail()?.tone ?? 'info';
-    switch (tone) {
-      case 'success':
-        return 'text-green-600 dark:text-green-300';
-      case 'warning':
-        return 'text-amber-600 dark:text-amber-300';
-      case 'danger':
-        return 'text-red-600 dark:text-red-300';
-      default:
-        return 'text-gray-600 dark:text-gray-400';
-    }
-  };
-  const temperatureToggleTitle = () => {
-    const detail = temperatureTransportDetail();
-    if (detail?.disable) {
-      return detail.message;
-    }
-    return undefined;
-  };
   const quickSetupExpiryLabel = () => {
     const expiry = quickSetupExpiry();
     if (!expiry) {
@@ -2066,7 +2004,6 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 props.onToggleTemperatureMonitoring?.(event.currentTarget.checked);
                               }}
                               disabled={temperatureToggleDisabled()}
-                              title={temperatureToggleTitle()}
                               ariaLabel={
                                 temperatureMonitoringEnabledValue()
                                   ? 'Disable temperature monitoring'
@@ -2074,11 +2011,6 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               }
                             />
                           </div>
-                          <Show when={temperatureTransportDetail()}>
-                            <p class={`mt-2 text-xs ${temperatureTransportMessageClass()}`}>
-                              {temperatureTransportDetail()?.message}
-                            </p>
-                          </Show>
                           <Show when={!temperatureMonitoringEnabledValue()}>
                             <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
                               Pulse will skip SSH temperature polling for this node. Existing dashboard readings will stop refreshing.

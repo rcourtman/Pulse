@@ -18,8 +18,6 @@ export interface AuthConfig {
   PULSE_AUTH_PASS: string; // Bcrypt hashed password
   API_TOKEN: string; // Legacy API authentication token (hashed)
   API_TOKENS?: string; // Optional comma-separated list of hashed tokens
-  ENABLE_AUDIT_LOG?: boolean; // @deprecated - use PULSE_AUDIT_LOG
-  PULSE_AUDIT_LOG?: boolean; // Enable audit logging
 }
 
 /**
@@ -70,8 +68,6 @@ export interface NodeInstance {
  */
 export interface PVENodeConfig extends NodeInstance {
   realm?: string; // Authentication realm (pam, pve, etc.)
-  temperatureProxyURL?: string; // Optional HTTPS URL to pulse-sensor-proxy
-  temperatureProxyToken?: string; // Bearer token for proxy authentication
 }
 
 /**

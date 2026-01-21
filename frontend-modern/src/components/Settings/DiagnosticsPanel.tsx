@@ -63,19 +63,6 @@ interface DiscoveryDiagnostic {
     lastResultErrors?: number;
 }
 
-interface TemperatureProxyDiagnostic {
-    legacySSHDetected: boolean;
-    recommendProxyUpgrade: boolean;
-    socketFound: boolean;
-    socketPath?: string;
-    socketPermissions?: string;
-    socketOwner?: string;
-    socketGroup?: string;
-    proxyReachable?: boolean;
-    proxyVersion?: string;
-    notes?: string[];
-}
-
 interface APITokenDiagnostic {
     enabled: boolean;
     tokenCount: number;
@@ -131,7 +118,6 @@ interface DiagnosticsData {
     nodes: DiagnosticsNode[];
     pbs: DiagnosticsPBS[];
     system: SystemDiagnostic;
-    temperatureProxy?: TemperatureProxyDiagnostic | null;
     apiTokens?: APITokenDiagnostic | null;
     dockerAgents?: DockerAgentDiagnostic | null;
     alerts?: AlertsDiagnostic | null;
@@ -299,8 +285,6 @@ export const DiagnosticsPanel: Component = () => {
         // Check for errors
         if (data.errors?.length > 0) issues.push('errors');
 
-        // Check temperature proxy
-        if (data.temperatureProxy?.legacySSHDetected) issues.push('temperature');
 
         // Check alerts config
         if (data.alerts?.legacyThresholdsDetected || data.alerts?.missingCooldown) issues.push('alerts');
@@ -514,52 +498,6 @@ export const DiagnosticsPanel: Component = () => {
 
                 {/* Detailed Status Cards */}
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Temperature Proxy */}
-                    <Show when={diagnosticsData()?.temperatureProxy}>
-                        <Card padding="md">
-                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                <div class="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30">
-                                    <Activity class="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Temperature Proxy</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Hardware temperature monitoring</p>
-                                </div>
-                                <div class="ml-auto">
-                                    <StatusBadge
-                                        status={diagnosticsData()?.temperatureProxy?.socketFound ? 'online' : 'warning'}
-                                        label={diagnosticsData()?.temperatureProxy?.socketFound ? 'Connected' : 'Not Found'}
-                                    />
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-3 text-xs">
-                                <div class="flex items-center gap-2">
-                                    {diagnosticsData()?.temperatureProxy?.socketFound ?
-                                        <CheckCircle class="w-4 h-4 text-green-500" /> :
-                                        <XCircle class="w-4 h-4 text-red-500" />
-                                    }
-                                    <span>Proxy Socket</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    {diagnosticsData()?.temperatureProxy?.proxyReachable ?
-                                        <CheckCircle class="w-4 h-4 text-green-500" /> :
-                                        <AlertTriangle class="w-4 h-4 text-amber-500" />
-                                    }
-                                    <span>Daemon</span>
-                                </div>
-                            </div>
-                            <Show when={diagnosticsData()?.temperatureProxy?.proxyVersion}>
-                                <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 text-xs text-gray-500 dark:text-gray-400">
-                                    Version: {diagnosticsData()?.temperatureProxy?.proxyVersion}
-                                </div>
-                            </Show>
-                            <Show when={diagnosticsData()?.temperatureProxy?.legacySSHDetected}>
-                                <div class="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-700 dark:text-amber-300">
-                                    ⚠️ Legacy SSH temperature collection detected - consider upgrading
-                                </div>
-                            </Show>
-                        </Card>
-                    </Show>
 
                     {/* API Tokens */}
                     <Show when={diagnosticsData()?.apiTokens}>
