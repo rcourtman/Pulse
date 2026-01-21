@@ -490,8 +490,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
                   >
                     {/* Name */}
-                    <td class={`pr-2 py-1 align-middle ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
-                      <div class="flex items-center gap-1.5">
+                    <td class={`pr-2 py-1 align-middle overflow-hidden ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
+                      <div class="flex items-center gap-1.5 min-w-0">
                         <StatusDot
                           variant={statusIndicator().variant}
                           title={statusIndicator().label}
@@ -516,7 +516,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             ({(node as Node).name})
                           </span>
                         </Show>
-                        <div class="hidden xl:flex items-center gap-1.5 ml-1">
+                        <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
                           <Show when={isPVEItem}>
                             <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
                               PVE
