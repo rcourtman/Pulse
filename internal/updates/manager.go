@@ -1336,7 +1336,6 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 				"install-host-agent.ps1",
 				"uninstall-host-agent.sh",
 				"uninstall-host-agent.ps1",
-				"install-sensor-proxy.sh",
 				"install-docker.sh",
 				"install.sh",
 				"install.ps1",
@@ -1384,8 +1383,7 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 					// Copy agent binaries
 					if strings.HasPrefix(name, "pulse-agent-") ||
 						strings.HasPrefix(name, "pulse-docker-agent") ||
-						strings.HasPrefix(name, "pulse-host-agent") ||
-						name == "pulse-sensor-proxy" {
+						strings.HasPrefix(name, "pulse-host-agent") {
 						srcPath := filepath.Join(binDir, name)
 						destPath := filepath.Join(destBinDir, name)
 						cmd = exec.Command("cp", "-a", srcPath, destPath)

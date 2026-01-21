@@ -14,10 +14,7 @@ services:
       - "${PULSE_PORT:-7655}:7655"
     volumes:
       - pulse-data:/data
-      # Temperature monitoring:
-      # - Recommended (v5): install pulse-agent on each Proxmox host with --enable-proxmox.
-      # - Deprecated: pulse-sensor-proxy (host-side proxy). If you already use it, mount the socket read-only.
-      # - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:ro
+      # Temperature monitoring: install pulse-agent on each Proxmox host with --enable-proxmox, or use SSH (see docs/TEMPERATURE_MONITORING.md).
     environment:
       - TZ=${TZ:-UTC}
     healthcheck:

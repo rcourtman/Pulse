@@ -25,19 +25,12 @@ ENABLE_AUTO_UPDATES=false
 FORCE_VERSION=""
 FORCE_CHANNEL=""
 SOURCE_BRANCH="main"
-PROXY_MODE=""  # Can be: yes, no, auto, or empty (will prompt)
-PROXY_USER_CHOICE=""
-PROXY_PREPARE_MOUNT=false
 CURRENT_INSTALL_CTID=""
 CONTAINER_CREATED_FOR_CLEANUP=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
-INSTALL_SUMMARY_FILE="/etc/pulse/install_summary.json"
-HOST_PROXY_REQUESTED=false
-HOST_PROXY_INSTALLED=false
 
 # Installer version - the major version this script is bundled with
-# In v5+, pulse-sensor-proxy is deprecated (unified agent handles temperature)
 INSTALLER_MAJOR_VERSION=5
 
 AUTO_NODE_REGISTERED=false
@@ -321,261 +314,6 @@ print_warn() {
     echo -e "${YELLOW}[WARN] $1${NC}"
 }
 
-sensor_proxy_artifacts_present() {
-    local -a paths=(
-        "/etc/pulse-sensor-proxy"
-        "/var/lib/pulse-sensor-proxy"
-        "/run/pulse-sensor-proxy"
-        "/usr/local/bin/pulse-sensor-proxy"
-        "/usr/local/bin/pulse-sensor-wrapper.sh"
-        "/usr/local/bin/pulse-sensor-cleanup.sh"
-        "/usr/local/bin/pulse-sensor-proxy-selfheal.sh"
-        "/usr/local/share/pulse/install-sensor-proxy.sh"
-        "/etc/systemd/system/pulse-sensor-proxy.service"
-        "/etc/systemd/system/pulse-sensor-cleanup.service"
-        "/etc/systemd/system/pulse-sensor-cleanup.path"
-        "/etc/systemd/system/pulse-sensor-proxy-selfheal.service"
-        "/etc/systemd/system/pulse-sensor-proxy-selfheal.timer"
-        "/var/log/pulse/sensor-proxy"
-    )
-
-    local path
-    for path in "${paths[@]}"; do
-        if [[ -e "$path" ]]; then
-            return 0
-        fi
-    done
-
-    return 1
-}
-
-find_sensor_proxy_installer() {
-    local -a candidates=(
-        "/opt/pulse/scripts/install-sensor-proxy.sh"
-        "/usr/local/share/pulse/install-sensor-proxy.sh"
-    )
-
-    local candidate
-    for candidate in "${candidates[@]}"; do
-        if [[ -f "$candidate" ]]; then
-            echo "$candidate"
-            return 0
-        fi
-    done
-
-    return 1
-}
-
-manual_sensor_proxy_cleanup() {
-    print_info "Falling back to manual pulse-sensor-proxy cleanup..."
-
-    if command -v systemctl >/dev/null 2>&1; then
-        local -a units=(
-            "pulse-sensor-proxy.service"
-            "pulse-sensor-cleanup.service"
-            "pulse-sensor-cleanup.path"
-            "pulse-sensor-proxy-selfheal.service"
-            "pulse-sensor-proxy-selfheal.timer"
-        )
-        local unit
-        for unit in "${units[@]}"; do
-            systemctl stop "$unit" 2>/dev/null || true
-            systemctl disable "$unit" 2>/dev/null || true
-        done
-        systemctl daemon-reload 2>/dev/null || true
-    fi
-
-    local -a files=(
-        "/usr/local/bin/pulse-sensor-proxy"
-        "/usr/local/bin/pulse-sensor-wrapper.sh"
-        "/usr/local/bin/pulse-sensor-cleanup.sh"
-        "/usr/local/bin/pulse-sensor-proxy-selfheal.sh"
-        "/usr/local/share/pulse/install-sensor-proxy.sh"
-        "/var/lib/pulse-sensor-proxy/cleanup-request.json"
-    )
-    local path
-    for path in "${files[@]}"; do
-        rm -f "$path" 2>/dev/null || true
-    done
-
-    local -a dirs=(
-        "/var/lib/pulse-sensor-proxy"
-        "/etc/pulse-sensor-proxy"
-        "/run/pulse-sensor-proxy"
-        "/var/log/pulse/sensor-proxy"
-    )
-    local dir
-    for dir in "${dirs[@]}"; do
-        rm -rf "$dir" 2>/dev/null || true
-    done
-
-    rmdir --ignore-fail-on-non-empty /usr/local/share/pulse 2>/dev/null || true
-
-    if [[ -f /root/.ssh/authorized_keys ]]; then
-        sed -i -e '/# pulse-managed-key$/d' -e '/# pulse-proxy-key$/d' /root/.ssh/authorized_keys 2>/dev/null || true
-    fi
-
-    if id -u pulse-sensor-proxy >/dev/null 2>&1; then
-        userdel --remove pulse-sensor-proxy 2>/dev/null || userdel pulse-sensor-proxy 2>/dev/null || true
-    fi
-    if getent group pulse-sensor-proxy >/dev/null 2>&1; then
-        groupdel pulse-sensor-proxy 2>/dev/null || true
-    fi
-
-    print_info "Manual pulse-sensor-proxy cleanup complete"
-}
-
-cleanup_sensor_proxy() {
-    if ! sensor_proxy_artifacts_present; then
-        return
-    fi
-
-    print_info "Detected pulse-sensor-proxy artifacts; attempting uninstall..."
-    local installer_path=""
-    if installer_path=$(find_sensor_proxy_installer 2>/dev/null); then
-        if bash "$installer_path" --uninstall --purge --quiet; then
-            print_success "pulse-sensor-proxy removed"
-            return
-        fi
-        print_warn "pulse-sensor-proxy installer reported errors; falling back to manual cleanup"
-    else
-        print_warn "install-sensor-proxy.sh not found; attempting manual cleanup"
-    fi
-
-    manual_sensor_proxy_cleanup
-}
-
-configure_proxy_socket_mount() {
-    local ctid="$1"
-    local host_source="/run/pulse-sensor-proxy"
-    local target_rel="mnt/pulse-proxy"
-    local desired_entry="lxc.mount.entry: ${host_source} ${target_rel} none bind,create=dir 0 0"
-    local lxc_config="/etc/pve/lxc/${ctid}.conf"
-
-    mkdir -p "$host_source"
-
-    if [[ ! -f "$lxc_config" ]]; then
-        print_error "Container config not found at $lxc_config; cannot configure pulse-sensor-proxy mount"
-        return 1
-    fi
-
-    local updated=false
-
-    # /etc/pve is a FUSE filesystem (pmxcfs) - direct sed/echo don't work reliably
-    # Must use temp file and copy back to trigger cluster sync
-    # Also, config file contains snapshots sections - only modify main section (before first [)
-    local temp_config=$(mktemp)
-    cp "$lxc_config" "$temp_config"
-
-    # Extract line number where snapshots start (first line starting with [)
-    local snapshot_start=$(grep -n '^\[' "$temp_config" | head -1 | cut -d: -f1)
-
-    if grep -Eq '^mp[0-9]+:.*pulse-sensor-proxy|^mp[0-9]+:.*mnt/pulse-proxy' "$temp_config" 2>/dev/null; then
-        print_info "Removing mp entries for pulse-sensor-proxy to keep snapshots and migrations working"
-        if [ -n "$snapshot_start" ]; then
-            sed -i "1,$((snapshot_start-1)) { /^mp[0-9]\+:.*pulse-sensor-proxy/d; /^mp[0-9]\+:.*mnt\/pulse-proxy/d }" "$temp_config"
-        else
-            sed -i '/^mp[0-9]\+:.*pulse-sensor-proxy/d; /^mp[0-9]\+:.*mnt\/pulse-proxy/d' "$temp_config"
-        fi
-        updated=true
-    fi
-
-    if grep -q "^lxc.mount.entry: .*/pulse-sensor-proxy" "$temp_config" 2>/dev/null; then
-        if ! grep -qxF "$desired_entry" "$temp_config"; then
-            if [ -n "$snapshot_start" ]; then
-                sed -i "1,$((snapshot_start-1)) { s#^lxc.mount.entry: .*pulse-sensor-proxy.*#${desired_entry}# }" "$temp_config"
-            else
-                sed -i "s#^lxc.mount.entry: .*pulse-sensor-proxy.*#${desired_entry}#" "$temp_config"
-            fi
-            updated=true
-        fi
-    else
-        # Insert before snapshot section if it exists, otherwise append
-        if [ -n "$snapshot_start" ]; then
-            sed -i "${snapshot_start}i ${desired_entry}" "$temp_config"
-        else
-            echo "$desired_entry" >> "$temp_config"
-        fi
-        updated=true
-    fi
-
-    # Copy back to trigger pmxcfs sync
-    if [[ "$updated" == true ]]; then
-        cp "$temp_config" "$lxc_config"
-    fi
-    rm -f "$temp_config"
-
-    if ! pct config "$ctid" | grep -qxF "$desired_entry"; then
-        print_error "Failed to persist pulse-sensor-proxy mount entry in $lxc_config"
-        return 1
-    fi
-
-    if [[ "$updated" == true ]]; then
-        print_info "Configured migration-safe socket mount via lxc.mount.entry"
-    else
-        print_info "pulse-sensor-proxy mount already configured for migrations"
-    fi
-}
-
-# Prompt user about proxy installation
-# Returns 0 if user wants proxy, 1 if not
-prompt_proxy_installation() {
-    local docker_detected="$1"
-    local default_choice="${2:-n}"
-
-    # Normalize default to lowercase single character
-    default_choice=$(echo "$default_choice" | tr '[:upper:]' '[:lower:]')
-    case "$default_choice" in
-        y|yes) default_choice="y" ;;
-        *) default_choice="n" ;;
-    esac
-
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Temperature Monitoring Setup"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "Pulse can install a secure proxy service on the host to enable"
-    echo "temperature monitoring from within the container."
-    echo ""
-    echo "This will:"
-    echo "  • Install pulse-sensor-proxy service on the Proxmox host"
-    echo "  • Configure container with temperature monitoring bind mount"
-    echo "  • Distribute SSH keys to cluster nodes"
-    echo "  • Enable temperature monitoring from first boot"
-    echo ""
-
-    if [[ "$docker_detected" == "true" ]]; then
-        echo "${YELLOW}Docker detected - proxy is recommended for temperature monitoring${NC}"
-        echo ""
-    fi
-
-    local prompt_text
-    if [[ "$default_choice" == "y" ]]; then
-        prompt_text="Enable temperature monitoring? [Y/n]: "
-    else
-        prompt_text="Enable temperature monitoring? [y/N]: "
-    fi
-
-    local response=""
-    safe_read_with_default "$prompt_text" response "$default_choice"
-
-    # Normalize to lowercase
-    response=$(echo "$response" | tr '[:upper:]' '[:lower:]')
-
-    if [[ "$response" =~ ^(y|yes)$ ]]; then
-        echo ""
-        print_info "Temperature proxy will be installed"
-        return 0
-    else
-        echo ""
-        print_info "Skipping proxy installation"
-        print_info "Temperature monitoring from container will be unavailable"
-        print_info "To enable later, run: curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid <CTID>"
-        return 1
-    fi
-}
-
 ensure_debian_template() {
     if [[ -n "$DEBIAN_TEMPLATE" ]]; then
         return
@@ -823,19 +561,6 @@ create_lxc_container() {
             fi
         fi
 
-        if [[ -z "$PROXY_MODE" ]]; then
-            # Skip prompting for v5+ since unified agent handles temperature monitoring
-            if [[ "${INSTALLER_MAJOR_VERSION:-0}" -ge 5 ]]; then
-                PROXY_USER_CHOICE="no"  # Unified agent handles temperature, no legacy proxy needed
-            else
-                echo
-                if prompt_proxy_installation "false" "n"; then
-                    PROXY_USER_CHOICE="yes"
-                else
-                    PROXY_USER_CHOICE="no"
-                fi
-            fi
-        fi
         
         echo
         # Try to get cluster-wide IDs, fall back to local
@@ -960,19 +685,6 @@ create_lxc_container() {
             fi
         fi
 
-        if [[ -z "$PROXY_MODE" ]]; then
-            # Skip prompting for v5+ since unified agent handles temperature monitoring
-            if [[ "${INSTALLER_MAJOR_VERSION:-0}" -ge 5 ]]; then
-                PROXY_USER_CHOICE="no"  # Unified agent handles temperature, no legacy proxy needed
-            else
-                echo
-                if prompt_proxy_installation "false" "y"; then
-                    PROXY_USER_CHOICE="yes"
-                else
-                    PROXY_USER_CHOICE="no"
-                fi
-            fi
-        fi
 
         # Optional VLAN configuration - defaults to empty (no VLAN) for regular users
         echo
@@ -1445,17 +1157,6 @@ create_lxc_container() {
         CREATE_ARGS+=("--nameserver" "$nameserver")
     fi
 
-    if [[ "$PROXY_MODE" == "yes" || "$PROXY_MODE" == "auto" ]]; then
-        PROXY_PREPARE_MOUNT=true
-    elif [[ -z "$PROXY_MODE" ]] && [[ "$PROXY_USER_CHOICE" == "yes" ]]; then
-        PROXY_PREPARE_MOUNT=true
-    else
-        PROXY_PREPARE_MOUNT=false
-    fi
-
-    if [[ "$PROXY_PREPARE_MOUNT" == "true" ]]; then
-        mkdir -p /run/pulse-sensor-proxy
-    fi
 
     # Execute container creation (suppress verbose output)
     if ! "${CREATE_ARGS[@]}" >/dev/null 2>&1; then
@@ -1475,12 +1176,6 @@ create_lxc_container() {
         exit 1
     }
 
-    if [[ "$PROXY_PREPARE_MOUNT" == "true" ]]; then
-        if ! configure_proxy_socket_mount "$CTID"; then
-            cleanup_on_error
-        fi
-    fi
-    
     # Start container
     print_info "Starting container..."
     if ! pct start $CTID >/dev/null 2>&1; then
@@ -1663,263 +1358,10 @@ create_lxc_container() {
 
     local PULSE_BASE_URL="http://${IP}:${frontend_port}"
 
-    # Automatically register the Proxmox host with Pulse so temperature proxy sync succeeds
+    # Automatically register the Proxmox host with Pulse to speed setup
     auto_register_pve_node "$CTID" "$IP" "$frontend_port"
 
-    if [[ "$IN_CONTAINER" != "true" ]] && [[ "$PROXY_PREPARE_MOUNT" == "true" ]]; then
-        print_info "Configuring pulse-sensor-proxy socket inside container..."
-        if ! pct exec $CTID -- bash -c 'set -e
-ENV_FILE="/etc/pulse/.env"
-SOCKET_LINE="PULSE_SENSOR_PROXY_SOCKET=/mnt/pulse-proxy/pulse-sensor-proxy.sock"
-mkdir -p /etc/pulse
-if [[ -f "$ENV_FILE" ]] && grep -q "^PULSE_SENSOR_PROXY_SOCKET=" "$ENV_FILE" 2>/dev/null; then
-  sed -i "s|^PULSE_SENSOR_PROXY_SOCKET=.*|$SOCKET_LINE|" "$ENV_FILE"
-else
-  echo "$SOCKET_LINE" >> "$ENV_FILE"
-fi'; then
-            print_error "Failed to configure pulse-sensor-proxy socket inside container"
-            cleanup_on_error
-        fi
-
-        if ! pct exec $CTID -- systemctl restart $SERVICE_NAME >/dev/null 2>&1; then
-            print_warn "Unable to restart $SERVICE_NAME inside container; please restart manually"
-        fi
-    fi
-
     wait_for_pulse_ready "$PULSE_BASE_URL" 120 1
-
-    # Determine if we should install temperature proxy
-    # NOTE: pulse-sensor-proxy is deprecated in v5+; the unified agent handles temperature monitoring
-    local install_proxy=false
-    local docker_in_container=false
-
-    # Skip sensor proxy for v5+ installations (unified agent handles it)
-    if [[ "${INSTALLER_MAJOR_VERSION:-0}" -ge 5 ]]; then
-        print_info "Pulse v5+ detected - temperature monitoring handled by unified agent (skipping legacy sensor proxy)"
-        install_proxy=false
-    else
-        # Check if Docker is installed in the container
-        if pct exec $CTID -- command -v docker >/dev/null 2>&1; then
-            docker_in_container=true
-        fi
-
-        # Decide based on PROXY_MODE
-        case "$PROXY_MODE" in
-            yes)
-                install_proxy=true
-                HOST_PROXY_REQUESTED=true
-                ;;
-            no)
-                install_proxy=false
-                ;;
-            auto)
-                # Auto-detect: install if Docker is present
-                if [[ "$docker_in_container" == "true" ]]; then
-                    install_proxy=true
-                    HOST_PROXY_REQUESTED=true
-                fi
-                ;;
-            *)
-                # Empty/unset - reuse earlier user choice (defaults handled already)
-                if [[ "$PROXY_USER_CHOICE" == "yes" ]]; then
-                    install_proxy=true
-                    HOST_PROXY_REQUESTED=true
-                fi
-                ;;
-        esac
-
-        if [[ "$PROXY_MODE" == "auto" ]] && [[ "$install_proxy" != "true" ]]; then
-            print_info "Docker not detected inside container; skipping temperature proxy installation (auto mode)."
-        fi
-    fi
-
-    # Install temperature proxy on host for secure monitoring (if enabled, and only for pre-v5)
-    if [[ "$install_proxy" == "true" ]]; then
-        echo
-        print_info "Installing temperature monitoring proxy on host..."
-        local proxy_script="/tmp/install-sensor-proxy-$$.sh"
-        local installer_source="${PULSE_SENSOR_PROXY_INSTALLER:-}"
-        local installer_ready=false
-
-        if [[ -n "$installer_source" ]]; then
-            if install -m 0755 "$installer_source" "$proxy_script"; then
-                print_info "Using local temperature proxy installer at ${installer_source}"
-                installer_ready=true
-            else
-                print_warn "Failed to copy installer from ${installer_source}; falling back to download"
-            fi
-        fi
-
-        if [[ "$installer_ready" != true ]]; then
-            if command -v timeout >/dev/null 2>&1; then
-                if timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 \
-                    "https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh" \
-                    > "$proxy_script" 2>/dev/null; then
-                    installer_ready=true
-                else
-                    print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-                    print_info "Run manually later: curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
-                fi
-            else
-                if curl -fsSL --connect-timeout 5 --max-time 15 \
-                    "https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh" \
-                    > "$proxy_script" 2>/dev/null; then
-                    installer_ready=true
-                else
-                    print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-                    print_info "Run manually later: curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
-                fi
-            fi
-        fi
-
-        # Run proxy installer if downloaded
-        if [[ "$installer_ready" == true ]]; then
-            chmod +x "$proxy_script"
-
-            # Stop existing pulse-sensor-proxy service if running to allow binary update
-            if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
-                print_info "Stopping existing pulse-sensor-proxy service to update binary..."
-                systemctl stop pulse-sensor-proxy 2>/dev/null || true
-                sleep 1
-            fi
-
-            # If building from source, copy the binary from the LXC instead of downloading
-            local proxy_install_args=(--ctid "$CTID" --skip-restart --pulse-server "http://${IP}:${frontend_port}")
-            local local_proxy_binary=""
-            if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
-                local_proxy_binary="/tmp/pulse-sensor-proxy-$CTID"
-                print_info "Copying locally-built pulse-sensor-proxy binary from container..."
-                if pct pull $CTID /opt/pulse/bin/pulse-sensor-proxy "$local_proxy_binary" 2>/dev/null; then
-                    proxy_install_args=(--ctid "$CTID" --local-binary "$local_proxy_binary" --skip-restart --pulse-server "http://${IP}:${frontend_port}")
-                    print_info "Using locally-built binary from container"
-                else
-                    print_warn "Failed to copy binary from container, will try fallback download"
-                    export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
-                fi
-            else
-                # For release installs, set fallback URL to download from Pulse server inside the LXC
-                export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
-            fi
-
-            if bash "$proxy_script" "${proxy_install_args[@]}" 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
-                print_info "Temperature proxy installation script completed"
-
-                # Check if health checks should be skipped
-                if [[ "${PULSE_SKIP_HEALTH_CHECKS:-}" == "1" ]]; then
-                    print_warn "⚠ Health checks skipped (PULSE_SKIP_HEALTH_CHECKS=1)"
-                    print_warn "  Temperature monitoring may not work correctly"
-                    print_warn "  Verify manually: systemctl status pulse-sensor-proxy"
-                    echo
-                else
-                    # Verify proxy is actually working (with graceful fallbacks)
-                    echo
-                    print_info "Verifying temperature proxy health..."
-                    local proxy_health_ok=true
-                    local health_warnings=()
-
-                # Check 1: Service is running (with timeout)
-                if command -v systemctl >/dev/null 2>&1; then
-                    if timeout 5 systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
-                        print_info "✓ Service running"
-                    else
-                        print_error "✗ Service not running"
-                        proxy_health_ok=false
-                    fi
-                else
-                    print_warn "⚠ systemctl not available - skipping service check"
-                    health_warnings+=("systemctl not available")
-                fi
-
-                # Check 2: Socket exists
-                if [[ ! -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock ]]; then
-                    print_error "✗ Socket not found at /run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
-                    proxy_health_ok=false
-                else
-                    print_info "✓ Socket exists"
-                fi
-
-                # Check 3: Socket is accessible from container (with timeout and fallback)
-                if command -v pct >/dev/null 2>&1; then
-                    # Use timeout to prevent hanging if container is stopped/frozen
-                    if timeout 10 pct exec $CTID -- test -S /mnt/pulse-proxy/pulse-sensor-proxy.sock 2>/dev/null; then
-                        print_info "✓ Socket accessible from container"
-                    else
-                        # Don't fail immediately - container might be stopped or not fully booted
-                        print_warn "⚠ Could not verify socket accessibility from container"
-                        print_warn "  This may be normal if container is stopped or not fully started"
-                        print_warn "  Socket will be checked when container starts"
-                        health_warnings+=("container socket check failed (may be transient)")
-                    fi
-                else
-                    print_warn "⚠ pct command not available - skipping container socket check"
-                    health_warnings+=("pct not available")
-                fi
-
-                # Only fail if critical checks failed (service or socket on host)
-                if [[ "$proxy_health_ok" != "true" ]]; then
-                    echo
-                    print_error "Temperature proxy health check failed"
-                    print_error "See diagnostics above and logs: /tmp/proxy-install-${CTID}.log"
-                    print_error ""
-
-                    # Provide actionable diagnostics if tools are available
-                    if command -v systemctl >/dev/null 2>&1; then
-                        print_error "Check: systemctl status pulse-sensor-proxy"
-                    fi
-                    if command -v journalctl >/dev/null 2>&1; then
-                        print_error "Check: journalctl -u pulse-sensor-proxy -n 50"
-                    else
-                        print_error "Check: cat /var/log/syslog | grep pulse-sensor-proxy"
-                    fi
-                    print_error ""
-                    print_error "To bypass health checks (not recommended): Set PULSE_SKIP_HEALTH_CHECKS=1"
-                    echo
-                    exit 1
-                fi
-
-                # Show warnings summary if any
-                if [[ ${#health_warnings[@]} -gt 0 ]]; then
-                    echo
-                    print_warn "Health check completed with warnings:"
-                    for warning in "${health_warnings[@]}"; do
-                        print_warn "  - $warning"
-                    done
-                    print_info "Proxy installed but some checks could not be verified"
-                    print_info "Temperature monitoring may still work correctly"
-                    echo
-                fi
-
-                    print_success "Temperature proxy is healthy and ready"
-                    HOST_PROXY_INSTALLED=true
-                fi  # End of health checks
-
-                # Clean up temporary binary if it was copied
-                [[ -f "$local_proxy_binary" ]] && rm -f "$local_proxy_binary"
-            else
-                # Proxy installation failed - this is a fatal error since user opted in
-                rm -f "$proxy_script"
-                echo
-                print_error "Temperature proxy installation failed"
-                echo
-                echo "Temperature monitoring was enabled but the proxy setup failed."
-                echo "Check logs: /tmp/proxy-install-${CTID}.log"
-                echo
-                echo "To fix, you can either:"
-                echo "  1. Fix the issue and run the proxy installer manually:"
-                echo "     curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
-                echo
-                echo "  2. Re-run the Pulse installer and skip temperature monitoring when prompted"
-                echo
-                write_install_summary
-                exit 1
-            fi
-            rm -f "$proxy_script"
-        fi
-    fi
-
-    refresh_container_proxy_installer "$CTID"
-
-    write_install_summary
 
     # Clean final output
     echo
@@ -1946,22 +1388,6 @@ fi'; then
     trap - INT TERM
     
     exit 0
-}
-
-refresh_container_proxy_installer() {
-    local target_ctid="$1"
-    if [[ "$IN_CONTAINER" == true ]]; then
-        return
-    fi
-    if [[ -z "$target_ctid" ]]; then
-        return
-    fi
-
-    local installer_url="https://github.com/${GITHUB_REPO}/releases/latest/download/install-sensor-proxy.sh"
-    print_info "Refreshing sensor proxy installer inside container ${target_ctid}..."
-    if ! pct exec "$target_ctid" -- bash -c "set -euo pipefail; mkdir -p /usr/local/share/pulse; tmp=\$(mktemp); curl -fsSL --connect-timeout 10 --max-time 45 '${installer_url}' -o \$tmp && install -m 0755 \$tmp /usr/local/share/pulse/install-sensor-proxy.sh && rm -f \$tmp"; then
-        print_warn "Unable to refresh container installer; continuing with bundled version"
-    fi
 }
 
 auto_register_pve_node() {
@@ -2885,7 +2311,6 @@ deploy_agent_scripts() {
         "install-host-agent.ps1"
         "uninstall-host-agent.sh"
         "uninstall-host-agent.ps1"
-        "install-sensor-proxy.sh"
         "install-docker.sh"
         "install.sh"
         "install.ps1"
@@ -3115,19 +2540,10 @@ build_from_source() {
     ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
     rm -f pulse-docker-agent
 
-    if ! go build -o pulse-sensor-proxy ./cmd/pulse-sensor-proxy >/dev/null 2>&1; then
-        print_error "Failed to build temperature proxy binary"
-        cd "$original_dir" >/dev/null 2>&1 || true
-        rm -rf "$temp_build"
-        return 1
-    fi
-    cp -f pulse-sensor-proxy "$INSTALL_DIR/bin/pulse-sensor-proxy"
-    chmod +x "$INSTALL_DIR/bin/pulse-sensor-proxy"
-    rm -f pulse-sensor-proxy
 
     build_agent_binaries_from_source "$agent_version"
 
-    for script_name in install-docker-agent.sh install-docker.sh install-sensor-proxy.sh; do
+    for script_name in install-docker-agent.sh install-docker.sh; do
         if [[ -f "scripts/$script_name" ]]; then
             cp "scripts/$script_name" "$INSTALL_DIR/scripts/$script_name"
             chmod 755 "$INSTALL_DIR/scripts/$script_name"
@@ -3477,43 +2893,6 @@ create_marker_file() {
     touch ~/.pulse 2>/dev/null || true
 }
 
-write_install_summary() {
-    local summary_dir="/etc/pulse"
-    mkdir -p "$summary_dir"
-
-    local host_socket="false"
-    if [[ -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock ]]; then
-        host_socket="true"
-    fi
-
-    local container_socket="null"
-    if [[ -n "${CTID:-}" ]] && command -v pct >/dev/null 2>&1; then
-        if pct exec "$CTID" -- test -S /mnt/pulse-proxy/pulse-sensor-proxy.sock >/dev/null 2>&1; then
-            container_socket="true"
-        else
-            container_socket="false"
-        fi
-    fi
-
-    local timestamp=""
-    if command -v date >/dev/null 2>&1; then
-        timestamp=$(date -Is 2>/dev/null || date)
-    fi
-
-    cat > "$INSTALL_SUMMARY_FILE" <<EOF
-{
-  "generatedAt": "$timestamp",
-  "ctid": "${CTID:-}",
-  "proxy": {
-    "requested": ${HOST_PROXY_REQUESTED},
-    "installed": ${HOST_PROXY_INSTALLED},
-    "hostSocketPresent": $host_socket,
-    "containerSocketPresent": $container_socket
-  }
-}
-EOF
-}
-
 print_completion() {
     local IP=$(hostname -I | awk '{print $1}')
     
@@ -3542,41 +2921,6 @@ print_completion() {
     echo "  Reset:      curl -sSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --reset"
     echo "  Uninstall:  curl -sSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --uninstall"
 
-    # Skip temperature proxy status display for v5+ (unified agent handles it)
-    if [[ "${INSTALLER_MAJOR_VERSION:-0}" -lt 5 ]]; then
-        local proxy_status="Not installed"
-        local pending_file="/etc/pulse-sensor-proxy/pending-control-plane.env"
-        local control_token_file="/etc/pulse-sensor-proxy/.pulse-control-token"
-
-        if [[ "$HOST_PROXY_INSTALLED" == true ]]; then
-            if [[ -f "$control_token_file" ]]; then
-                proxy_status="Installed (control-plane sync active)"
-            elif [[ -f "$pending_file" ]]; then
-                proxy_status="Installed (waiting for Pulse to register host)"
-            else
-                proxy_status="Installed (local allow list)"
-            fi
-        elif [[ "$HOST_PROXY_REQUESTED" == true ]]; then
-            proxy_status="Install requested (pending)"
-        fi
-        echo
-        echo -e "${YELLOW}Temperature proxy:${NC} ${proxy_status}"
-
-        if [[ "$HOST_PROXY_INSTALLED" == true && -f "$pending_file" ]]; then
-            echo "  Add this host in Pulse (Settings → Nodes) and the proxy will auto-register."
-        fi
-
-        if [[ "$IN_CONTAINER" == "true" ]]; then
-            local proxy_ctid="${DETECTED_CTID:-<your-container-id>}"
-            echo
-            echo -e "${YELLOW}Temperature monitoring:${NC}"
-            echo "  Run on the Proxmox host to enable secure temperature collection:"
-            echo "    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \\"
-            echo "      bash -s -- --ctid ${proxy_ctid} --pulse-server ${PULSE_URL}"
-            echo "  See docs/TEMPERATURE_MONITORING.md for details."
-        fi
-    fi
-    
     # Show auto-update status if timer exists
     if systemctl list-unit-files --no-legend | grep -q "^pulse-update.timer"; then
         echo
@@ -4103,8 +3447,6 @@ uninstall_pulse() {
     echo -e "\033[0;33mUninstalling Pulse...\033[0m"
     echo
 
-    cleanup_sensor_proxy
-    
     # Detect service name
     local SERVICE_NAME=$(detect_service_name)
     
@@ -4219,14 +3561,6 @@ while [[ $# -gt 0 ]]; do
             ENABLE_AUTO_UPDATES=true
             shift
             ;;
-        --proxy)
-            PROXY_MODE="$2"
-            if [[ ! "$PROXY_MODE" =~ ^(yes|no|auto)$ ]]; then
-                print_error "Invalid --proxy value: $PROXY_MODE (must be yes, no, or auto)"
-                exit 1
-            fi
-            shift 2
-            ;;
         --source|--from-source|--branch)
             BUILD_FROM_SOURCE=true
             # Optional: specify branch
@@ -4247,11 +3581,6 @@ while [[ $# -gt 0 ]]; do
             echo "  --version VERSION  Install specific version (e.g., v4.4.0-rc.1)"
             echo "  --source [BRANCH]  Build and install from source (default: main)"
             echo "  --enable-auto-updates  Enable automatic stable updates (via systemd timer)"
-            echo "  --proxy MODE       Control temperature proxy installation (yes/no/auto)"
-            echo "                     [DEPRECATED in v5+: unified agent handles temperature]"
-            echo "                     yes: Install without prompting"
-            echo "                     no: Skip proxy installation"
-            echo "                     auto: Auto-detect (install if Docker present)"
             echo ""
             echo "Management options:"
             echo "  --reset            Reset Pulse to fresh configuration"

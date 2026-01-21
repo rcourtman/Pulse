@@ -160,33 +160,6 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       -trimpath \
       -o pulse-agent-windows-386.exe ./cmd/pulse-agent
 
-# Build pulse-sensor-proxy for all Linux architectures (for download endpoint)
-RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
-    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
-    VERSION="${VERSION:-v$(cat VERSION | tr -d '\n')}" && \
-    BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S') && \
-    GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
-      -trimpath \
-      -o pulse-sensor-proxy-linux-amd64 ./cmd/pulse-sensor-proxy && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
-      -trimpath \
-      -o pulse-sensor-proxy-linux-arm64 ./cmd/pulse-sensor-proxy && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
-      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
-      -trimpath \
-      -o pulse-sensor-proxy-linux-armv7 ./cmd/pulse-sensor-proxy && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build \
-      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
-      -trimpath \
-      -o pulse-sensor-proxy-linux-armv6 ./cmd/pulse-sensor-proxy && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=386 go build \
-      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
-      -trimpath \
-      -o pulse-sensor-proxy-linux-386 ./cmd/pulse-sensor-proxy && \
-    cp pulse-sensor-proxy-linux-amd64 pulse-sensor-proxy
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
 FROM alpine:3.20 AS agent_runtime
@@ -257,7 +230,6 @@ COPY scripts/install-container-agent.sh /opt/pulse/scripts/install-container-age
 COPY scripts/install-host-agent.ps1 /opt/pulse/scripts/install-host-agent.ps1
 COPY scripts/uninstall-host-agent.sh /opt/pulse/scripts/uninstall-host-agent.sh
 COPY scripts/uninstall-host-agent.ps1 /opt/pulse/scripts/uninstall-host-agent.ps1
-COPY scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-sensor-proxy.sh
 COPY scripts/install-docker.sh /opt/pulse/scripts/install-docker.sh
 COPY scripts/install.sh /opt/pulse/scripts/install.sh
 COPY scripts/install.ps1 /opt/pulse/scripts/install.ps1
@@ -274,8 +246,6 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     else \
         ln -s pulse-linux-amd64 /opt/pulse/bin/pulse; \
     fi
-
-# Docker agent binaries (all architectures)
 
 
 # Host agent binaries (all platforms and architectures)
@@ -309,14 +279,6 @@ COPY --from=backend-builder /app/pulse-agent-windows-386.exe /opt/pulse/bin/
 RUN ln -s pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64 && \
     ln -s pulse-agent-windows-arm64.exe /opt/pulse/bin/pulse-agent-windows-arm64 && \
     ln -s pulse-agent-windows-386.exe /opt/pulse/bin/pulse-agent-windows-386
-
-# Sensor proxy binaries (all Linux architectures)
-COPY --from=backend-builder /app/pulse-sensor-proxy-linux-amd64 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-sensor-proxy-linux-arm64 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-sensor-proxy-linux-armv7 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-sensor-proxy-linux-armv6 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-sensor-proxy-linux-386 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-sensor-proxy /opt/pulse/bin/pulse-sensor-proxy
 
 # Create config directory
 RUN mkdir -p /etc/pulse /data
