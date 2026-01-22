@@ -1516,13 +1516,14 @@ func buildAIChatDiagnostic(cfg *config.Config, aiHandler *AIHandler) *AIChatDiag
 	// Calculate enabled state based on AI config
 	// NOTE: aiHandler might be nil during early startup
 	if aiHandler != nil {
-		aiCfg := aiHandler.GetAIConfig()
+		ctx := context.Background()
+		aiCfg := aiHandler.GetAIConfig(ctx)
 		if aiCfg != nil {
 			diag.Enabled = aiCfg.Enabled
 			diag.Model = aiCfg.GetChatModel()
 		}
 
-		svc := aiHandler.GetService()
+		svc := aiHandler.GetService(ctx)
 		if svc != nil {
 			diag.Running = svc.IsRunning()
 			diag.Healthy = svc.IsRunning() // Consolidate for now

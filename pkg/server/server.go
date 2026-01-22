@@ -132,7 +132,8 @@ func Run(ctx context.Context, version string) error {
 	go wsHub.Run()
 
 	// Initialize reloadable monitoring system
-	reloadableMonitor, err := monitoring.NewReloadableMonitor(cfg, wsHub)
+	mtPersistence := config.NewMultiTenantPersistence(cfg.DataPath)
+	reloadableMonitor, err := monitoring.NewReloadableMonitor(cfg, mtPersistence, wsHub)
 	if err != nil {
 		return fmt.Errorf("failed to initialize monitoring system: %w", err)
 	}
@@ -181,13 +182,14 @@ func Run(ctx context.Context, version string) error {
 		}
 		if router != nil {
 			router.SetMonitor(reloadableMonitor.GetMonitor())
+			router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
 			if cfg := reloadableMonitor.GetConfig(); cfg != nil {
 				router.SetConfig(cfg)
 			}
 		}
 		return nil
 	}
-	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc, version)
+	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), reloadableMonitor.GetMultiTenantMonitor(), wsHub, reloadFunc, version)
 
 	// Inject resource store into monitor for WebSocket broadcasts
 	router.SetMonitor(reloadableMonitor.GetMonitor())
@@ -221,6 +223,7 @@ func Run(ctx context.Context, version string) error {
 				log.Error().Err(err).Msg("Failed to reload monitor after mock.env change")
 			} else if router != nil {
 				router.SetMonitor(reloadableMonitor.GetMonitor())
+				router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
 				if cfg := reloadableMonitor.GetConfig(); cfg != nil {
 					router.SetConfig(cfg)
 				}

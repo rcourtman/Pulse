@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -17,9 +18,10 @@ import (
 
 // DockerAgentHandlers manages ingest from the external Docker agent.
 type DockerAgentHandlers struct {
-	monitor *monitoring.Monitor
-	wsHub   *websocket.Hub
-	config  *config.Config
+	mtMonitor     *monitoring.MultiTenantMonitor
+	legacyMonitor *monitoring.Monitor
+	wsHub         *websocket.Hub
+	config        *config.Config
 }
 
 type dockerCommandAckRequest struct {
@@ -56,13 +58,40 @@ func normalizeCommandStatus(status string) (string, error) {
 }
 
 // NewDockerAgentHandlers constructs a new Docker agent handler group.
-func NewDockerAgentHandlers(m *monitoring.Monitor, hub *websocket.Hub, cfg *config.Config) *DockerAgentHandlers {
-	return &DockerAgentHandlers{monitor: m, wsHub: hub, config: cfg}
+func NewDockerAgentHandlers(mtm *monitoring.MultiTenantMonitor, m *monitoring.Monitor, hub *websocket.Hub, cfg *config.Config) *DockerAgentHandlers {
+	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	if m == nil && mtm != nil {
+		if mon, err := mtm.GetMonitor("default"); err == nil {
+			m = mon
+		}
+	}
+	return &DockerAgentHandlers{mtMonitor: mtm, legacyMonitor: m, wsHub: hub, config: cfg}
 }
 
 // SetMonitor updates the monitor reference for docker agent handlers.
 func (h *DockerAgentHandlers) SetMonitor(m *monitoring.Monitor) {
-	h.monitor = m
+	h.legacyMonitor = m
+}
+
+// SetMultiTenantMonitor updates the multi-tenant monitor reference
+func (h *DockerAgentHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
+	h.mtMonitor = mtm
+	if mtm != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			h.legacyMonitor = m
+		}
+	}
+}
+
+// getMonitor helper
+func (h *DockerAgentHandlers) getMonitor(ctx context.Context) *monitoring.Monitor {
+	orgID := GetOrgID(ctx)
+	if h.mtMonitor != nil {
+		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+			return m
+		}
+	}
+	return h.legacyMonitor
 }
 
 // HandleReport accepts heartbeat payloads from the Docker agent.
@@ -89,7 +118,7 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 
 	tokenRecord := getAPITokenRecordFromRequest(r)
 
-	host, err := h.monitor.ApplyDockerReport(report, tokenRecord)
+	host, err := h.getMonitor(r.Context()).ApplyDockerReport(report, tokenRecord)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
@@ -101,7 +130,7 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 		Msg("Docker agent report processed")
 
 	// Broadcast the updated state for near-real-time UI updates
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	response := map[string]any{
 		"success":    true,
@@ -110,7 +139,7 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 		"lastSeen":   host.LastSeen,
 	}
 
-	if payload, cmd := h.monitor.FetchDockerCommandForHost(host.ID); cmd != nil {
+	if payload, cmd := h.getMonitor(r.Context()).FetchDockerCommandForHost(host.ID); cmd != nil {
 		commandResponse := map[string]any{
 			"id":   cmd.ID,
 			"type": cmd.Type,
@@ -202,25 +231,25 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	commandStatus, hostID, shouldRemove, err := h.monitor.AcknowledgeDockerHostCommand(commandID, req.HostID, status, req.Message)
+	commandStatus, hostID, shouldRemove, err := h.getMonitor(r.Context()).AcknowledgeDockerHostCommand(commandID, req.HostID, status, req.Message)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "docker_command_ack_failed", err.Error(), nil)
 		return
 	}
 
 	if shouldRemove {
-		if _, removeErr := h.monitor.RemoveDockerHost(hostID); removeErr != nil {
+		if _, removeErr := h.getMonitor(r.Context()).RemoveDockerHost(hostID); removeErr != nil {
 			log.Error().Err(removeErr).Str("dockerHostID", hostID).Str("commandID", commandID).Msg("Failed to remove docker host after command completion")
 		} else {
 			// Clear the removal block since the agent has confirmed it stopped successfully.
 			// This allows immediate re-enrollment without waiting for the 24-hour TTL.
-			if reenrollErr := h.monitor.AllowDockerHostReenroll(hostID); reenrollErr != nil {
+			if reenrollErr := h.getMonitor(r.Context()).AllowDockerHostReenroll(hostID); reenrollErr != nil {
 				log.Warn().Err(reenrollErr).Str("dockerHostID", hostID).Msg("Failed to clear removal block after successful stop")
 			}
 		}
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
@@ -252,20 +281,20 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 	forceParam := strings.ToLower(r.URL.Query().Get("force"))
 	force := forceParam == "true" || strings.ToLower(r.URL.Query().Get("mode")) == "force"
 
-	priorHost, hostExists := h.monitor.GetDockerHost(hostID)
+	priorHost, hostExists := h.getMonitor(r.Context()).GetDockerHost(hostID)
 
 	if shouldHide {
 		if !hostExists {
 			writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", "Docker host not found", nil)
 			return
 		}
-		host, err := h.monitor.HideDockerHost(hostID)
+		host, err := h.getMonitor(r.Context()).HideDockerHost(hostID)
 		if err != nil {
 			writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
 			return
 		}
 
-		go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+		go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 		if err := utils.WriteJSONResponse(w, map[string]any{
 			"success": true,
@@ -294,13 +323,13 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 	}
 
 	if !force && strings.EqualFold(priorHost.Status, "online") {
-		command, err := h.monitor.QueueDockerHostStop(hostID)
+		command, err := h.getMonitor(r.Context()).QueueDockerHostStop(hostID)
 		if err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "docker_command_failed", err.Error(), nil)
 			return
 		}
 
-		go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+		go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 		if err := utils.WriteJSONResponse(w, map[string]any{
 			"success": true,
@@ -313,13 +342,13 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	host, err := h.monitor.RemoveDockerHost(hostID)
+	host, err := h.getMonitor(r.Context()).RemoveDockerHost(hostID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
@@ -345,13 +374,13 @@ func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http
 		return
 	}
 
-	if err := h.monitor.AllowDockerHostReenroll(hostID); err != nil {
+	if err := h.getMonitor(r.Context()).AllowDockerHostReenroll(hostID); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "docker_host_reenroll_failed", err.Error(), nil)
 		return
 	}
 
 	// Broadcast updated state to ensure the frontend reflects the change
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
@@ -376,13 +405,13 @@ func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	host, err := h.monitor.UnhideDockerHost(hostID)
+	host, err := h.getMonitor(r.Context()).UnhideDockerHost(hostID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
@@ -408,13 +437,13 @@ func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, 
 		return
 	}
 
-	host, err := h.monitor.MarkDockerHostPendingUninstall(hostID)
+	host, err := h.getMonitor(r.Context()).MarkDockerHostPendingUninstall(hostID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
@@ -454,13 +483,13 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 
 	customName := strings.TrimSpace(req.DisplayName)
 
-	host, err := h.monitor.SetDockerHostCustomDisplayName(hostID, customName)
+	host, err := h.getMonitor(r.Context()).SetDockerHostCustomDisplayName(hostID, customName)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
@@ -510,13 +539,13 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 	}
 
 	// Queue the update command
-	commandStatus, err := h.monitor.QueueDockerContainerUpdateCommand(req.HostID, req.ContainerID, req.ContainerName)
+	commandStatus, err := h.getMonitor(r.Context()).QueueDockerContainerUpdateCommand(req.HostID, req.ContainerID, req.ContainerName)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "update_command_failed", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
@@ -550,13 +579,13 @@ func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.
 	}
 
 	// Queue the check updates command
-	commandStatus, err := h.monitor.QueueDockerCheckUpdatesCommand(hostID)
+	commandStatus, err := h.getMonitor(r.Context()).QueueDockerCheckUpdatesCommand(hostID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "check_updates_command_failed", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,

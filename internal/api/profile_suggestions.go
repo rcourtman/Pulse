@@ -49,7 +49,7 @@ func (h *ProfileSuggestionHandler) HandleSuggestProfile(w http.ResponseWriter, r
 	}
 
 	// Check if AI is running
-	if h.aiHandler == nil || !h.aiHandler.IsRunning() {
+	if h.aiHandler == nil || !h.aiHandler.IsRunning(r.Context()) {
 		http.Error(w, "AI service is not available", http.StatusServiceUnavailable)
 		return
 	}
@@ -115,7 +115,7 @@ Only include settings that are relevant to the user's request. Do not include se
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
-	response, err := h.aiHandler.GetService().Execute(ctx, chat.ExecuteRequest{
+	response, err := h.aiHandler.GetService(ctx).Execute(ctx, chat.ExecuteRequest{
 		Prompt: fullPrompt,
 	})
 	if err != nil {

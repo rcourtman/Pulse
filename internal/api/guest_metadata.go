@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -12,24 +13,42 @@ import (
 
 // GuestMetadataHandler handles guest metadata operations
 type GuestMetadataHandler struct {
-	store *config.GuestMetadataStore
+	mtPersistence *config.MultiTenantPersistence
 }
 
 // NewGuestMetadataHandler creates a new guest metadata handler
-func NewGuestMetadataHandler(dataPath string) *GuestMetadataHandler {
+func NewGuestMetadataHandler(mtPersistence *config.MultiTenantPersistence) *GuestMetadataHandler {
 	return &GuestMetadataHandler{
-		store: config.NewGuestMetadataStore(dataPath, nil),
+		mtPersistence: mtPersistence,
 	}
+}
+
+func (h *GuestMetadataHandler) getStore(ctx context.Context) *config.GuestMetadataStore {
+	// Default to "default" org if none specified (though middleware should always set it)
+	orgID := "default"
+	if ctx != nil {
+		if id := GetOrgID(ctx); id != "" {
+			orgID = id
+		}
+	}
+	p, _ := h.mtPersistence.GetPersistence(orgID)
+	return p.GetGuestMetadataStore()
 }
 
 // Reload reloads the guest metadata from disk
 func (h *GuestMetadataHandler) Reload() error {
-	return h.store.Load()
+	// For multi-tenant, we might need to reload all loaded stores?
+	// Or we just rely on lazy loading.
+	// Since stores are cached in ConfigPersistence, we currently don't have an easy way to iterate all.
+	// But stores load on init. Reload() method on store might be needed if modified on disk externally.
+	// For now, this is a no-op or TODO for multi-tenant deep reload.
+	// Actually, we can get "default" store and reload it for legacy compat.
+	return h.getStore(context.Background()).Load()
 }
 
-// Store returns the underlying metadata store
+// Store returns the underlying metadata store for the default tenant (Legacy support)
 func (h *GuestMetadataHandler) Store() *config.GuestMetadataStore {
-	return h.store
+	return h.getStore(context.Background())
 }
 
 // HandleGetMetadata retrieves metadata for a specific guest or all guests
@@ -45,7 +64,8 @@ func (h *GuestMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.
 	if path == "/api/guests/metadata" || path == "/api/guests/metadata/" {
 		// Get all metadata
 		w.Header().Set("Content-Type", "application/json")
-		allMeta := h.store.GetAll()
+		store := h.getStore(r.Context())
+		allMeta := store.GetAll()
 		if allMeta == nil {
 			// Return empty object instead of null
 			json.NewEncoder(w).Encode(make(map[string]*config.GuestMetadata))
@@ -62,7 +82,8 @@ func (h *GuestMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.
 
 	if guestID != "" {
 		// Get specific guest metadata
-		meta := h.store.Get(guestID)
+		store := h.getStore(r.Context())
+		meta := store.Get(guestID)
 		if meta == nil {
 			// Return empty metadata instead of 404
 			json.NewEncoder(w).Encode(&config.GuestMetadata{ID: guestID})
@@ -125,7 +146,8 @@ func (h *GuestMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *ht
 		}
 	}
 
-	if err := h.store.Set(guestID, &meta); err != nil {
+	store := h.getStore(r.Context())
+	if err := store.Set(guestID, &meta); err != nil {
 		log.Error().Err(err).Str("guestID", guestID).Msg("Failed to save guest metadata")
 		// Provide more specific error message
 		errMsg := "Failed to save metadata"
@@ -157,7 +179,8 @@ func (h *GuestMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err := h.store.Delete(guestID); err != nil {
+	store := h.getStore(r.Context())
+	if err := store.Delete(guestID); err != nil {
 		log.Error().Err(err).Str("guestID", guestID).Msg("Failed to delete guest metadata")
 		http.Error(w, "Failed to delete metadata", http.StatusInternalServerError)
 		return

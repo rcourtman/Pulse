@@ -16,11 +16,22 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
+
+// SystemSettingsMonitor defines the monitor interface needed by system settings
+type SystemSettingsMonitor interface {
+	GetDiscoveryService() *discovery.Service
+	StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
+	StopDiscoveryService()
+	EnableTemperatureMonitoring()
+	DisableTemperatureMonitoring()
+	GetNotificationManager() *notifications.NotificationManager
+}
 
 // SystemSettingsHandler handles system settings
 type SystemSettingsHandler struct {
@@ -29,45 +40,63 @@ type SystemSettingsHandler struct {
 	wsHub                    *websocket.Hub
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
 	reloadMonitorFunc        func() error
-	monitor                  interface {
-		GetDiscoveryService() *discovery.Service
-		StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
-		StopDiscoveryService()
-		EnableTemperatureMonitoring()
-		DisableTemperatureMonitoring()
-		GetNotificationManager() *notifications.NotificationManager
+	mtMonitor                interface {
+		GetMonitor(string) (*monitoring.Monitor, error)
 	}
+	legacyMonitor SystemSettingsMonitor
 }
 
 // NewSystemSettingsHandler creates a new system settings handler
-func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, wsHub *websocket.Hub, monitor interface {
-	GetDiscoveryService() *discovery.Service
-	StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
-	StopDiscoveryService()
-	EnableTemperatureMonitoring()
-	DisableTemperatureMonitoring()
-	GetNotificationManager() *notifications.NotificationManager
-}, reloadSystemSettingsFunc func(), reloadMonitorFunc func() error) *SystemSettingsHandler {
+func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, wsHub *websocket.Hub, mtm *monitoring.MultiTenantMonitor, monitor SystemSettingsMonitor, reloadSystemSettingsFunc func(), reloadMonitorFunc func() error) *SystemSettingsHandler {
+	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	if monitor == nil && mtm != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			monitor = m
+		}
+	}
 	return &SystemSettingsHandler{
 		config:                   cfg,
 		persistence:              persistence,
 		wsHub:                    wsHub,
-		monitor:                  monitor,
+		mtMonitor:                mtm,
+		legacyMonitor:            monitor,
 		reloadSystemSettingsFunc: reloadSystemSettingsFunc,
 		reloadMonitorFunc:        reloadMonitorFunc,
 	}
 }
 
 // SetMonitor updates the monitor reference used by the handler at runtime.
-func (h *SystemSettingsHandler) SetMonitor(m interface {
-	GetDiscoveryService() *discovery.Service
-	StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
-	StopDiscoveryService()
-	EnableTemperatureMonitoring()
-	DisableTemperatureMonitoring()
-	GetNotificationManager() *notifications.NotificationManager
-}) {
-	h.monitor = m
+func (h *SystemSettingsHandler) SetMonitor(m SystemSettingsMonitor) {
+	h.legacyMonitor = m
+}
+
+// SetMultiTenantMonitor updates the multi-tenant monitor reference
+func (h *SystemSettingsHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
+	h.mtMonitor = mtm
+	if mtm != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			h.legacyMonitor = m
+		}
+	}
+}
+
+func (h *SystemSettingsHandler) getMonitor(ctx context.Context) SystemSettingsMonitor {
+	// Note: SystemSettingsMonitor interface methods (GetDiscoveryService etc.)
+	// must be implemented by *monitoring.Monitor directly.
+	// Since decoupling *monitoring.Monitor from specific interfaces involves casting or wrappers,
+	// we assume here that *monitoring.Monitor satisfies SystemSettingsMonitor.
+
+	if h.mtMonitor != nil {
+		// Use GetOrgID helper from current package or context
+		// Assuming we can access GetOrgID from api package context helpers
+		orgID := GetOrgID(ctx)
+		if mtm, ok := h.mtMonitor.(*monitoring.MultiTenantMonitor); ok {
+			if m, err := mtm.GetMonitor(orgID); err == nil && m != nil {
+				return m
+			}
+		}
+	}
+	return h.legacyMonitor
 }
 
 // SetConfig updates the configuration reference used by the handler.
@@ -680,44 +709,44 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 
 	// Start or stop discovery service based on setting change
-	if h.monitor != nil {
+	if h.getMonitor(r.Context()) != nil {
 		if settings.DiscoveryEnabled && !prevDiscoveryEnabled {
 			// Discovery was just enabled, start the service
 			subnet := h.config.DiscoverySubnet
 			if subnet == "" {
 				subnet = "auto"
 			}
-			h.monitor.StartDiscoveryService(context.Background(), h.wsHub, subnet)
+			h.getMonitor(r.Context()).StartDiscoveryService(context.Background(), h.wsHub, subnet)
 			log.Info().Msg("Discovery service started via settings update")
 		} else if !settings.DiscoveryEnabled && prevDiscoveryEnabled {
 			// Discovery was just disabled, stop the service
-			h.monitor.StopDiscoveryService()
+			h.getMonitor(r.Context()).StopDiscoveryService()
 			log.Info().Msg("Discovery service stopped via settings update")
 		} else if settings.DiscoveryEnabled && settings.DiscoverySubnet != "" {
 			// Subnet changed while discovery is enabled, update it
-			if svc := h.monitor.GetDiscoveryService(); svc != nil {
+			if svc := h.getMonitor(r.Context()).GetDiscoveryService(); svc != nil {
 				svc.SetSubnet(settings.DiscoverySubnet)
 			}
 		}
 		if discoveryConfigUpdated && settings.DiscoveryEnabled {
-			if svc := h.monitor.GetDiscoveryService(); svc != nil {
+			if svc := h.getMonitor(r.Context()).GetDiscoveryService(); svc != nil {
 				log.Info().Msg("Discovery configuration changed; triggering refresh")
 				svc.ForceRefresh()
 			}
 		}
 	}
 
-	if tempToggleRequested && h.monitor != nil {
+	if tempToggleRequested && h.getMonitor(r.Context()) != nil {
 		if settings.TemperatureMonitoringEnabled && !prevTempEnabled {
-			h.monitor.EnableTemperatureMonitoring()
+			h.getMonitor(r.Context()).EnableTemperatureMonitoring()
 		} else if !settings.TemperatureMonitoringEnabled && prevTempEnabled {
-			h.monitor.DisableTemperatureMonitoring()
+			h.getMonitor(r.Context()).DisableTemperatureMonitoring()
 		}
 	}
 
 	// Update webhook allowed private CIDRs if changed
-	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok && h.monitor != nil {
-		if nm := h.monitor.GetNotificationManager(); nm != nil {
+	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok && h.getMonitor(r.Context()) != nil {
+		if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
 			if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
 				log.Error().Err(err).Msg("Failed to update webhook allowed private CIDRs")
 				http.Error(w, fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), http.StatusBadRequest)
@@ -729,8 +758,8 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	// Update public URL for notifications if changed
 	if _, ok := rawRequest["publicURL"]; ok {
 		h.config.PublicURL = settings.PublicURL
-		if h.monitor != nil {
-			if nm := h.monitor.GetNotificationManager(); nm != nil {
+		if h.getMonitor(r.Context()) != nil {
+			if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
 				nm.SetPublicURL(settings.PublicURL)
 				log.Info().Str("publicURL", settings.PublicURL).Msg("Updated notification public URL from settings")
 			}

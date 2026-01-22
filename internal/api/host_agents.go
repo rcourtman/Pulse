@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
@@ -30,18 +31,46 @@ var configSigningState struct {
 
 // HostAgentHandlers manages ingest from the pulse-host-agent.
 type HostAgentHandlers struct {
-	monitor *monitoring.Monitor
-	wsHub   *websocket.Hub
+	mtMonitor     *monitoring.MultiTenantMonitor
+	legacyMonitor *monitoring.Monitor
+	wsHub         *websocket.Hub
 }
 
 // NewHostAgentHandlers constructs a new handler set for host agents.
-func NewHostAgentHandlers(m *monitoring.Monitor, hub *websocket.Hub) *HostAgentHandlers {
-	return &HostAgentHandlers{monitor: m, wsHub: hub}
+func NewHostAgentHandlers(mtm *monitoring.MultiTenantMonitor, m *monitoring.Monitor, hub *websocket.Hub) *HostAgentHandlers {
+	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	if m == nil && mtm != nil {
+		if mon, err := mtm.GetMonitor("default"); err == nil {
+			m = mon
+		}
+	}
+	return &HostAgentHandlers{mtMonitor: mtm, legacyMonitor: m, wsHub: hub}
 }
 
 // SetMonitor updates the monitor reference for host agent handlers.
 func (h *HostAgentHandlers) SetMonitor(m *monitoring.Monitor) {
-	h.monitor = m
+	h.legacyMonitor = m
+}
+
+// SetMultiTenantMonitor updates the multi-tenant monitor reference
+func (h *HostAgentHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
+	h.mtMonitor = mtm
+	if mtm != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			h.legacyMonitor = m
+		}
+	}
+}
+
+// getMonitor helper
+func (h *HostAgentHandlers) getMonitor(ctx context.Context) *monitoring.Monitor {
+	orgID := GetOrgID(ctx)
+	if h.mtMonitor != nil {
+		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+			return m
+		}
+	}
+	return h.legacyMonitor
 }
 
 // HandleReport ingests host agent reports.
@@ -67,7 +96,7 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 
 	tokenRecord := getAPITokenRecordFromRequest(r)
 
-	host, err := h.monitor.ApplyHostReport(report, tokenRecord)
+	host, err := h.getMonitor(r.Context()).ApplyHostReport(report, tokenRecord)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
@@ -79,10 +108,10 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 		Str("platform", host.Platform).
 		Msg("Host agent report processed")
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	// Include any server-side config overrides in the response
-	serverConfig := h.monitor.GetHostAgentConfig(host.ID)
+	serverConfig := h.getMonitor(r.Context()).GetHostAgentConfig(host.ID)
 
 	resp := map[string]any{
 		"success":   true,
@@ -120,7 +149,7 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	state := h.monitor.GetState()
+	state := h.getMonitor(r.Context()).GetState()
 
 	var (
 		host  models.Host
@@ -218,13 +247,13 @@ func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Remove the host from state
-	host, err := h.monitor.RemoveHostAgent(hostID)
+	host, err := h.getMonitor(r.Context()).RemoveHostAgent(hostID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "host_not_found", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
@@ -268,8 +297,8 @@ func (h *HostAgentHandlers) canReadConfig(record *config.APITokenRecord) bool {
 		record.HasScope(config.ScopeSettingsWrite)
 }
 
-func (h *HostAgentHandlers) resolveConfigHost(hostID string, record *config.APITokenRecord) (models.Host, bool) {
-	state := h.monitor.GetState()
+func (h *HostAgentHandlers) resolveConfigHost(ctx context.Context, hostID string, record *config.APITokenRecord) (models.Host, bool) {
+	state := h.getMonitor(ctx).GetState()
 
 	if record == nil || record.HasScope(config.ScopeHostManage) || record.HasScope(config.ScopeSettingsWrite) {
 		for _, candidate := range state.Hosts {
@@ -363,7 +392,7 @@ func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	host, ok := h.resolveConfigHost(hostID, record)
+	host, ok := h.resolveConfigHost(r.Context(), hostID, record)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Host has not registered with Pulse yet", nil)
 		LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
@@ -373,7 +402,7 @@ func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Reque
 
 	hostID = host.ID
 
-	config := h.monitor.GetHostAgentConfig(hostID)
+	config := h.getMonitor(r.Context()).GetHostAgentConfig(hostID)
 	signedConfig, err := h.signHostConfig(hostID, config)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign host config payload")
@@ -417,7 +446,7 @@ func (h *HostAgentHandlers) ensureHostTokenMatch(w http.ResponseWriter, r *http.
 		return true
 	}
 
-	state := h.monitor.GetState()
+	state := h.getMonitor(r.Context()).GetState()
 	for _, host := range state.Hosts {
 		if host.ID != hostID {
 			continue
@@ -446,12 +475,12 @@ func (h *HostAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := h.monitor.UpdateHostAgentConfig(hostID, req.CommandsEnabled); err != nil {
+	if err := h.getMonitor(r.Context()).UpdateHostAgentConfig(hostID, req.CommandsEnabled); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	log.Info().
 		Str("hostId", hostID).
@@ -499,13 +528,13 @@ func (h *HostAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Reque
 	log.Info().Str("hostId", hostID).Msg("Received unregistration request from agent uninstaller")
 
 	// Remove the host from state
-	_, err := h.monitor.RemoveHostAgent(hostID)
+	_, err := h.getMonitor(r.Context()).RemoveHostAgent(hostID)
 	if err != nil {
 		// If host not found, we still return success because the goal is reached
 		log.Warn().Err(err).Str("hostId", hostID).Msg("Host not found during unregistration request")
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
@@ -548,12 +577,12 @@ func (h *HostAgentHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.monitor.LinkHostAgent(hostID, nodeID); err != nil {
+	if err := h.getMonitor(r.Context()).LinkHostAgent(hostID, nodeID); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "link_failed", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
@@ -590,12 +619,12 @@ func (h *HostAgentHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.monitor.UnlinkHostAgent(hostID); err != nil {
+	if err := h.getMonitor(r.Context()).UnlinkHostAgent(hostID); err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "unlink_failed", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,

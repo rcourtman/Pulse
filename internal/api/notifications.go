@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -51,24 +53,52 @@ type NotificationMonitor interface {
 
 // NotificationHandlers handles notification-related HTTP endpoints
 type NotificationHandlers struct {
-	monitor NotificationMonitor
+	mtMonitor     *monitoring.MultiTenantMonitor
+	legacyMonitor NotificationMonitor
 }
 
 // NewNotificationHandlers creates new notification handlers
-func NewNotificationHandlers(monitor NotificationMonitor) *NotificationHandlers {
+func NewNotificationHandlers(mtm *monitoring.MultiTenantMonitor, monitor NotificationMonitor) *NotificationHandlers {
+	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	if monitor == nil && mtm != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			monitor = NewNotificationMonitorWrapper(m)
+		}
+	}
 	return &NotificationHandlers{
-		monitor: monitor,
+		mtMonitor:     mtm,
+		legacyMonitor: monitor,
 	}
 }
 
 // SetMonitor updates the monitor reference for notification handlers.
 func (h *NotificationHandlers) SetMonitor(m NotificationMonitor) {
-	h.monitor = m
+	h.legacyMonitor = m
+}
+
+// SetMultiTenantMonitor updates the multi-tenant monitor reference
+func (h *NotificationHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
+	h.mtMonitor = mtm
+	if mtm != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			h.legacyMonitor = NewNotificationMonitorWrapper(m)
+		}
+	}
+}
+
+func (h *NotificationHandlers) getMonitor(ctx context.Context) NotificationMonitor {
+	orgID := GetOrgID(ctx)
+	if h.mtMonitor != nil {
+		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+			return NewNotificationMonitorWrapper(m)
+		}
+	}
+	return h.legacyMonitor
 }
 
 // GetEmailConfig returns the current email configuration
 func (h *NotificationHandlers) GetEmailConfig(w http.ResponseWriter, r *http.Request) {
-	config := h.monitor.GetNotificationManager().GetEmailConfig()
+	config := h.getMonitor(r.Context()).GetNotificationManager().GetEmailConfig()
 
 	// For security, don't return the password
 	config.Password = ""
@@ -102,7 +132,7 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 
 	// If password is empty, preserve the existing password
 	if config.Password == "" {
-		existingConfig := h.monitor.GetNotificationManager().GetEmailConfig()
+		existingConfig := h.getMonitor(r.Context()).GetNotificationManager().GetEmailConfig()
 		config.Password = existingConfig.Password
 	}
 
@@ -114,10 +144,10 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		Bool("hasPassword", config.Password != "").
 		Msg("Parsed email config")
 
-	h.monitor.GetNotificationManager().SetEmailConfig(config)
+	h.getMonitor(r.Context()).GetNotificationManager().SetEmailConfig(config)
 
 	// Save to persistent storage
-	if err := h.monitor.GetConfigPersistence().SaveEmailConfig(config); err != nil {
+	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveEmailConfig(config); err != nil {
 		// Log error but don't fail the request
 		log.Error().Err(err).Msg("Failed to save email configuration")
 	}
@@ -128,7 +158,7 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 
 // GetAppriseConfig returns the current Apprise configuration.
 func (h *NotificationHandlers) GetAppriseConfig(w http.ResponseWriter, r *http.Request) {
-	config := h.monitor.GetNotificationManager().GetAppriseConfig()
+	config := h.getMonitor(r.Context()).GetNotificationManager().GetAppriseConfig()
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(config); err != nil {
@@ -166,13 +196,13 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 		Int("timeoutSeconds", config.TimeoutSeconds).
 		Msg("Parsed Apprise configuration update")
 
-	h.monitor.GetNotificationManager().SetAppriseConfig(config)
+	h.getMonitor(r.Context()).GetNotificationManager().SetAppriseConfig(config)
 
-	if err := h.monitor.GetConfigPersistence().SaveAppriseConfig(config); err != nil {
+	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveAppriseConfig(config); err != nil {
 		log.Error().Err(err).Msg("Failed to save Apprise configuration")
 	}
 
-	normalized := h.monitor.GetNotificationManager().GetAppriseConfig()
+	normalized := h.getMonitor(r.Context()).GetNotificationManager().GetAppriseConfig()
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(normalized); err != nil {
@@ -182,7 +212,7 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 
 // GetWebhooks returns all webhook configurations with secrets masked
 func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Request) {
-	webhooks := h.monitor.GetNotificationManager().GetWebhooks()
+	webhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
 
 	// Mask sensitive fields in headers and customFields
 	maskedWebhooks := make([]map[string]interface{}, len(webhooks))
@@ -245,7 +275,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Validate webhook URL
-	if err := h.monitor.GetNotificationManager().ValidateWebhookURL(webhook.URL); err != nil {
+	if err := h.getMonitor(r.Context()).GetNotificationManager().ValidateWebhookURL(webhook.URL); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid webhook URL: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -255,11 +285,11 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 		webhook.ID = utils.GenerateID("webhook")
 	}
 
-	h.monitor.GetNotificationManager().AddWebhook(webhook)
+	h.getMonitor(r.Context()).GetNotificationManager().AddWebhook(webhook)
 
 	// Save webhooks to persistent storage with all fields
-	webhooks := h.monitor.GetNotificationManager().GetWebhooks()
-	if err := h.monitor.GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
+	webhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
+	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
 		log.Error().Err(err).Msg("Failed to save webhooks")
 	}
 
@@ -306,7 +336,7 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 
 	// Preserve original headers/customFields if the incoming values are redacted
 	// This happens when the frontend sends back masked values from GetWebhooks
-	existingWebhooks := h.monitor.GetNotificationManager().GetWebhooks()
+	existingWebhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
 	for _, existing := range existingWebhooks {
 		if existing.ID == webhookID {
 			// Preserve headers if incoming contains redacted values
@@ -340,20 +370,20 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Validate webhook URL
-	if err := h.monitor.GetNotificationManager().ValidateWebhookURL(webhook.URL); err != nil {
+	if err := h.getMonitor(r.Context()).GetNotificationManager().ValidateWebhookURL(webhook.URL); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid webhook URL: %v", err), http.StatusBadRequest)
 		return
 	}
 
 	webhook.ID = webhookID
-	if err := h.monitor.GetNotificationManager().UpdateWebhook(webhookID, webhook); err != nil {
+	if err := h.getMonitor(r.Context()).GetNotificationManager().UpdateWebhook(webhookID, webhook); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
 	// Save webhooks to persistent storage
-	webhooks := h.monitor.GetNotificationManager().GetWebhooks()
-	if err := h.monitor.GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
+	webhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
+	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
 		log.Error().Err(err).Msg("Failed to save webhooks")
 	}
 
@@ -382,14 +412,14 @@ func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.monitor.GetNotificationManager().DeleteWebhook(webhookID); err != nil {
+	if err := h.getMonitor(r.Context()).GetNotificationManager().DeleteWebhook(webhookID); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
 	// Save webhooks to persistent storage
-	webhooks := h.monitor.GetNotificationManager().GetWebhooks()
-	if err := h.monitor.GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
+	webhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
+	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
 		log.Error().Err(err).Msg("Failed to save webhooks")
 	}
 
@@ -429,7 +459,7 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 	}
 
 	// Get actual node info from monitor state
-	state := h.monitor.GetState()
+	state := h.getMonitor(r.Context()).GetState()
 	var nodeInfo *notifications.TestNodeInfo
 
 	// Use first available node and instance
@@ -450,7 +480,7 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 			Msg("Testing specific webhook")
 
 		// Get the webhook by ID and test it
-		webhooks := h.monitor.GetNotificationManager().GetWebhooks()
+		webhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
 		var foundWebhook *notifications.WebhookConfig
 		for _, wh := range webhooks {
 			if wh.ID == req.WebhookID {
@@ -465,7 +495,7 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		}
 
 		// Send test webhook
-		if err := h.monitor.GetNotificationManager().SendTestWebhook(*foundWebhook); err != nil {
+		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestWebhook(*foundWebhook); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -478,7 +508,7 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 
 		// If password is empty, use the saved password
 		if emailConfig.Password == "" {
-			savedConfig := h.monitor.GetNotificationManager().GetEmailConfig()
+			savedConfig := h.getMonitor(r.Context()).GetNotificationManager().GetEmailConfig()
 			emailConfig.Password = savedConfig.Password
 		}
 
@@ -491,7 +521,7 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 			Bool("hasPassword", emailConfig.Password != "").
 			Msg("Testing email with provided config")
 
-		if err := h.monitor.GetNotificationManager().SendTestNotificationWithConfig(req.Method, &emailConfig, nodeInfo); err != nil {
+		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestNotificationWithConfig(req.Method, &emailConfig, nodeInfo); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -502,13 +532,13 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 			return
 		}
 
-		if err := h.monitor.GetNotificationManager().SendTestAppriseWithConfig(appriseConfig); err != nil {
+		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestAppriseWithConfig(appriseConfig); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	} else {
 		// Use saved config
-		if err := h.monitor.GetNotificationManager().SendTestNotification(req.Method); err != nil {
+		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestNotification(req.Method); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -528,7 +558,7 @@ func (h *NotificationHandlers) GetWebhookTemplates(w http.ResponseWriter, r *htt
 
 // GetWebhookHistory returns recent webhook delivery history with URLs redacted
 func (h *NotificationHandlers) GetWebhookHistory(w http.ResponseWriter, r *http.Request) {
-	history := h.monitor.GetNotificationManager().GetWebhookHistory()
+	history := h.getMonitor(r.Context()).GetNotificationManager().GetWebhookHistory()
 
 	// Redact secrets from URLs in history
 	for i := range history {
@@ -705,7 +735,7 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Test the webhook
-	status, response, err := h.monitor.GetNotificationManager().TestEnhancedWebhook(webhook)
+	status, response, err := h.getMonitor(r.Context()).GetNotificationManager().TestEnhancedWebhook(webhook)
 
 	result := map[string]interface{}{
 		"status":   status,
@@ -732,7 +762,7 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *http.Request) {
 	// Get queue stats
 	queueStats := make(map[string]interface{})
-	stats, err := h.monitor.GetNotificationManager().GetQueueStats()
+	stats, err := h.getMonitor(r.Context()).GetNotificationManager().GetQueueStats()
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to get queue stats for health check")
 		queueStats["error"] = err.Error()
@@ -749,7 +779,7 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 	}
 
 	// Get config status
-	nm := h.monitor.GetNotificationManager()
+	nm := h.getMonitor(r.Context()).GetNotificationManager()
 	emailCfg := nm.GetEmailConfig()
 	webhooks := nm.GetWebhooks()
 
@@ -764,7 +794,7 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 			"enabled": countEnabledWebhooks(webhooks),
 		},
 		"encryption": map[string]interface{}{
-			"enabled": h.monitor.GetConfigPersistence().IsEncryptionEnabled(),
+			"enabled": h.getMonitor(r.Context()).GetConfigPersistence().IsEncryptionEnabled(),
 		},
 		"overall_healthy": queueStats["healthy"] == true,
 	}

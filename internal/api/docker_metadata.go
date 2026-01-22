@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -12,19 +13,30 @@ import (
 
 // DockerMetadataHandler handles Docker resource metadata operations
 type DockerMetadataHandler struct {
-	store *config.DockerMetadataStore
+	mtPersistence *config.MultiTenantPersistence
 }
 
 // NewDockerMetadataHandler creates a new Docker metadata handler
-func NewDockerMetadataHandler(dataPath string) *DockerMetadataHandler {
+func NewDockerMetadataHandler(mtPersistence *config.MultiTenantPersistence) *DockerMetadataHandler {
 	return &DockerMetadataHandler{
-		store: config.NewDockerMetadataStore(dataPath, nil),
+		mtPersistence: mtPersistence,
 	}
 }
 
-// Store returns the underlying metadata store
+func (h *DockerMetadataHandler) getStore(ctx context.Context) *config.DockerMetadataStore {
+	orgID := "default"
+	if ctx != nil {
+		if id := GetOrgID(ctx); id != "" {
+			orgID = id
+		}
+	}
+	p, _ := h.mtPersistence.GetPersistence(orgID)
+	return p.GetDockerMetadataStore()
+}
+
+// Store returns the underlying metadata store for default tenant
 func (h *DockerMetadataHandler) Store() *config.DockerMetadataStore {
-	return h.store
+	return h.getStore(context.Background())
 }
 
 // HandleGetMetadata retrieves metadata for a specific Docker resource or all resources
@@ -40,7 +52,8 @@ func (h *DockerMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http
 	if path == "/api/docker/metadata" || path == "/api/docker/metadata/" {
 		// Get all metadata
 		w.Header().Set("Content-Type", "application/json")
-		allMeta := h.store.GetAll()
+		store := h.getStore(r.Context())
+		allMeta := store.GetAll()
 		if allMeta == nil {
 			// Return empty object instead of null
 			json.NewEncoder(w).Encode(make(map[string]*config.DockerMetadata))
@@ -57,7 +70,8 @@ func (h *DockerMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http
 
 	if resourceID != "" {
 		// Get specific Docker resource metadata
-		meta := h.store.Get(resourceID)
+		store := h.getStore(r.Context())
+		meta := store.Get(resourceID)
 		if meta == nil {
 			// Return empty metadata instead of 404
 			json.NewEncoder(w).Encode(&config.DockerMetadata{ID: resourceID})
@@ -120,7 +134,8 @@ func (h *DockerMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *h
 		}
 	}
 
-	if err := h.store.Set(resourceID, &meta); err != nil {
+	store := h.getStore(r.Context())
+	if err := store.Set(resourceID, &meta); err != nil {
 		log.Error().Err(err).Str("resourceID", resourceID).Msg("Failed to save Docker metadata")
 		// Provide more specific error message
 		errMsg := "Failed to save metadata"
@@ -152,7 +167,8 @@ func (h *DockerMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err := h.store.Delete(resourceID); err != nil {
+	store := h.getStore(r.Context())
+	if err := store.Delete(resourceID); err != nil {
 		log.Error().Err(err).Str("resourceID", resourceID).Msg("Failed to delete Docker metadata")
 		http.Error(w, "Failed to delete metadata", http.StatusInternalServerError)
 		return
@@ -176,7 +192,8 @@ func (h *DockerMetadataHandler) HandleGetHostMetadata(w http.ResponseWriter, r *
 	if path == "/api/docker/hosts/metadata" || path == "/api/docker/hosts/metadata/" {
 		// Get all host metadata
 		w.Header().Set("Content-Type", "application/json")
-		allMeta := h.store.GetAllHostMetadata()
+		store := h.getStore(r.Context())
+		allMeta := store.GetAllHostMetadata()
 		if allMeta == nil {
 			// Return empty object instead of null
 			json.NewEncoder(w).Encode(make(map[string]*config.DockerHostMetadata))
@@ -193,7 +210,8 @@ func (h *DockerMetadataHandler) HandleGetHostMetadata(w http.ResponseWriter, r *
 
 	if hostID != "" {
 		// Get specific Docker host metadata
-		meta := h.store.GetHostMetadata(hostID)
+		store := h.getStore(r.Context())
+		meta := store.GetHostMetadata(hostID)
 		if meta == nil {
 			// Return empty metadata instead of 404
 			json.NewEncoder(w).Encode(&config.DockerHostMetadata{})
@@ -257,7 +275,8 @@ func (h *DockerMetadataHandler) HandleUpdateHostMetadata(w http.ResponseWriter, 
 	}
 
 	// Get existing metadata to merge with new data
-	existing := h.store.GetHostMetadata(hostID)
+	store := h.getStore(r.Context())
+	existing := store.GetHostMetadata(hostID)
 	if existing != nil {
 		// Merge: only update fields that are provided
 		if meta.CustomDisplayName != "" || existing.CustomDisplayName != "" {
@@ -271,7 +290,7 @@ func (h *DockerMetadataHandler) HandleUpdateHostMetadata(w http.ResponseWriter, 
 		}
 	}
 
-	if err := h.store.SetHostMetadata(hostID, &meta); err != nil {
+	if err := store.SetHostMetadata(hostID, &meta); err != nil {
 		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to save Docker host metadata")
 		// Provide more specific error message
 		errMsg := "Failed to save metadata"
@@ -300,10 +319,9 @@ func (h *DockerMetadataHandler) HandleDeleteHostMetadata(w http.ResponseWriter, 
 	hostID := strings.TrimPrefix(r.URL.Path, "/api/docker/hosts/metadata/")
 	if hostID == "" || hostID == "metadata" {
 		http.Error(w, "Host ID required", http.StatusBadRequest)
-		return
 	}
-
-	if err := h.store.SetHostMetadata(hostID, nil); err != nil {
+	store := h.getStore(r.Context())
+	if err := store.SetHostMetadata(hostID, nil); err != nil {
 		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to delete Docker host metadata")
 		http.Error(w, "Failed to delete metadata", http.StatusInternalServerError)
 		return

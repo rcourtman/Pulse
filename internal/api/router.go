@@ -46,7 +46,8 @@ import (
 type Router struct {
 	mux                       *http.ServeMux
 	config                    *config.Config
-	monitor                   *monitoring.Monitor
+	monitor                   *monitoring.Monitor            // Legacy/Default support
+	mtMonitor                 *monitoring.MultiTenantMonitor // Multi-tenant manager
 	alertHandlers             *AlertHandlers
 	configHandlers            *ConfigHandlers
 	notificationHandlers      *NotificationHandlers
@@ -69,6 +70,7 @@ type Router struct {
 	exportLimiter             *RateLimiter
 	downloadLimiter           *RateLimiter
 	persistence               *config.ConfigPersistence
+	multiTenant               *config.MultiTenantPersistence
 	oidcMu                    sync.Mutex
 	oidcService               *OIDCService
 	samlManager               *SAMLServiceManager
@@ -117,7 +119,7 @@ func isDirectLoopbackRequest(req *http.Request) bool {
 }
 
 // NewRouter creates a new router instance
-func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket.Hub, reloadFunc func() error, serverVersion string) *Router {
+func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monitoring.MultiTenantMonitor, wsHub *websocket.Hub, reloadFunc func() error, serverVersion string) *Router {
 	// Initialize persistent session and CSRF stores
 	InitSessionStore(cfg.DataPath)
 	InitCSRFStore(cfg.DataPath)
@@ -139,6 +141,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		mux:             http.NewServeMux(),
 		config:          cfg,
 		monitor:         monitor,
+		mtMonitor:       mtMonitor,
 		wsHub:           wsHub,
 		reloadFunc:      reloadFunc,
 		updateManager:   updateManager,
@@ -146,6 +149,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		exportLimiter:   NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
 		downloadLimiter: NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
 		persistence:     config.NewConfigPersistence(cfg.DataPath),
+		multiTenant:     config.NewMultiTenantPersistence(cfg.DataPath),
 		authorizer:      auth.GetAuthorizer(),
 		serverVersion:   strings.TrimSpace(serverVersion),
 		projectRoot:     projectRoot,
@@ -189,6 +193,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	handler := SecurityHeadersWithConfig(r, allowEmbedding, allowedOrigins)
 	handler = ErrorHandler(handler)
 	handler = DemoModeMiddleware(cfg, handler)
+	handler = NewTenantMiddleware(r.multiTenant).Middleware(handler)
 	handler = UniversalRateLimitMiddleware(handler)
 	r.wrapped = handler
 	return r
@@ -197,17 +202,20 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 // setupRoutes configures all routes
 func (r *Router) setupRoutes() {
 	// Create handlers
-	r.alertHandlers = NewAlertHandlers(NewAlertMonitorWrapper(r.monitor), r.wsHub)
-	r.notificationHandlers = NewNotificationHandlers(NewNotificationMonitorWrapper(r.monitor))
+	r.alertHandlers = NewAlertHandlers(r.mtMonitor, NewAlertMonitorWrapper(r.monitor), r.wsHub)
+	r.notificationHandlers = NewNotificationHandlers(r.mtMonitor, NewNotificationMonitorWrapper(r.monitor))
 	r.notificationQueueHandlers = NewNotificationQueueHandlers(r.monitor)
-	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
-	dockerMetadataHandler := NewDockerMetadataHandler(r.config.DataPath)
-	hostMetadataHandler := NewHostMetadataHandler(r.config.DataPath)
-	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
+	guestMetadataHandler := NewGuestMetadataHandler(r.multiTenant)
+	dockerMetadataHandler := NewDockerMetadataHandler(r.multiTenant)
+	hostMetadataHandler := NewHostMetadataHandler(r.multiTenant)
+	r.configHandlers = NewConfigHandlers(r.multiTenant, r.mtMonitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
+	if r.monitor != nil {
+		r.configHandlers.SetMonitor(r.monitor)
+	}
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
-	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub, r.config)
-	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.monitor, r.wsHub)
-	r.hostAgentHandlers = NewHostAgentHandlers(r.monitor, r.wsHub)
+	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
+	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
+	r.hostAgentHandlers = NewHostAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.resourceHandlers = NewResourceHandlers()
 	r.configProfileHandler = NewConfigProfileHandler(r.persistence)
 	r.licenseHandlers = NewLicenseHandlers(r.config.DataPath)
@@ -413,9 +421,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetNodes))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetNodes))(w, req)
 		case http.MethodPost:
-			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleAddNode))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleAddNode))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -425,7 +433,7 @@ func (r *Router) setupRoutes() {
 	// Test node configuration endpoint (for new nodes)
 	r.mux.HandleFunc("/api/config/nodes/test-config", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNodeConfig))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNodeConfig))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -434,7 +442,7 @@ func (r *Router) setupRoutes() {
 	// Test connection endpoint
 	r.mux.HandleFunc("/api/config/nodes/test-connection", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestConnection))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestConnection))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -442,15 +450,15 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/nodes/", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodPut:
-			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateNode))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateNode))(w, req)
 		case http.MethodDelete:
-			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleDeleteNode))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleDeleteNode))(w, req)
 		case http.MethodPost:
 			// Handle test endpoint and refresh-cluster endpoint
 			if strings.HasSuffix(req.URL.Path, "/test") {
-				RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNode))(w, req)
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNode))(w, req)
 			} else if strings.HasSuffix(req.URL.Path, "/refresh-cluster") {
-				RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleRefreshClusterNodes))(w, req)
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleRefreshClusterNodes))(w, req)
 			} else {
 				http.Error(w, "Not found", http.StatusNotFound)
 			}
@@ -469,7 +477,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/system", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetSystemSettings))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetSystemSettings))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -479,9 +487,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/system/mock-mode", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetMockMode))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetMockMode))(w, req)
 		case http.MethodPost, http.MethodPut:
-			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateMockMode))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateMockMode))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -1181,7 +1189,7 @@ func (r *Router) setupRoutes() {
 	}))
 
 	// System settings and API token management
-	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor, r.reloadSystemSettings, r.reloadFunc)
+	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.mtMonitor, r.monitor, r.reloadSystemSettings, r.reloadFunc)
 	r.mux.HandleFunc("/api/system/settings", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.systemSettingsHandler.HandleGetSystemSettings)))
 	r.mux.HandleFunc("/api/system/settings/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.systemSettingsHandler.HandleUpdateSystemSettings)))
 	r.mux.HandleFunc("/api/system/ssh-config", r.handleSSHConfig)
@@ -1206,7 +1214,7 @@ func (r *Router) setupRoutes() {
 	})
 
 	// AI settings endpoints
-	r.aiSettingsHandler = NewAISettingsHandler(r.config, r.persistence, r.agentExecServer)
+	r.aiSettingsHandler = NewAISettingsHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
 	// Inject state provider so AI has access to full infrastructure context (VMs, containers, IPs)
 	if r.monitor != nil {
 		r.aiSettingsHandler.SetStateProvider(r.monitor)
@@ -1232,7 +1240,7 @@ func (r *Router) setupRoutes() {
 	r.aiSettingsHandler.SetMetadataProvider(metadataProvider)
 
 	// AI chat handler
-	r.aiHandler = NewAIHandler(r.config, r.persistence, r.agentExecServer)
+	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
 	// Wire license checker for Pro feature gating (AI Patrol, Alert Analysis, Auto-Fix)
 	r.aiSettingsHandler.SetLicenseChecker(r.licenseHandlers.Service())
 	// Wire model change callback to restart AI chat service when model is changed
@@ -1242,8 +1250,9 @@ func (r *Router) setupRoutes() {
 	// Wire control settings change callback to update MCP tool visibility
 	r.aiSettingsHandler.SetOnControlSettingsChange(func() {
 		if r.aiHandler != nil {
-			if svc := r.aiHandler.GetService(); svc != nil {
-				cfg := r.aiHandler.GetAIConfig()
+			ctx := context.Background()
+			if svc := r.aiHandler.GetService(ctx); svc != nil {
+				cfg := r.aiHandler.GetAIConfig(ctx)
 				if cfg != nil {
 					svc.UpdateControlSettings(cfg)
 					log.Info().Str("control_level", cfg.GetControlLevel()).Msg("Updated AI control settings")
@@ -1777,7 +1786,7 @@ func (r *Router) StartPatrol(ctx context.Context) {
 
 				// Only initialize baseline learning if AI is enabled
 				// This prevents anomaly data from being collected and displayed when AI is disabled
-				if r.aiSettingsHandler.IsAIEnabled() {
+				if r.aiSettingsHandler.IsAIEnabled(context.Background()) {
 					// Initialize baseline store for anomaly detection
 					// Uses config dir for persistence
 					baselineCfg := ai.DefaultBaselineConfig()
@@ -1819,7 +1828,7 @@ func (r *Router) StartPatrol(ctx context.Context) {
 
 		// Only initialize pattern and correlation detectors if AI is enabled
 		// This prevents these subsystems from collecting data and displaying findings when AI is disabled
-		if r.aiSettingsHandler.IsAIEnabled() {
+		if r.aiSettingsHandler.IsAIEnabled(context.Background()) {
 			// Initialize pattern detector for failure prediction
 			patternDetector := ai.NewPatternDetector(ai.PatternDetectorConfig{
 				MaxEvents:       5000,
@@ -1912,9 +1921,9 @@ func (r *Router) StartAIChat(ctx context.Context) {
 	r.wireAIChatProviders()
 
 	// Wire up AI patrol if AI is running
-	aiCfg := r.aiHandler.GetAIConfig()
-	if aiCfg != nil && r.aiHandler.IsRunning() {
-		service := r.aiHandler.GetService()
+	aiCfg := r.aiHandler.GetAIConfig(context.Background())
+	if aiCfg != nil && r.aiHandler.IsRunning(context.Background()) {
+		service := r.aiHandler.GetService(context.Background())
 		if service != nil {
 			// Create patrol service - need concrete type for patrol
 			chatService, ok := service.(*chat.Service)
@@ -1925,7 +1934,7 @@ func (r *Router) StartAIChat(ctx context.Context) {
 
 			// Wire to existing patrol service
 			if r.aiSettingsHandler != nil {
-				if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
+				if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
 					patrolSvc.SetChatPatrol(aiPatrol, true)
 					log.Info().Msg("AI patrol integration enabled")
 				}
@@ -1936,11 +1945,11 @@ func (r *Router) StartAIChat(ctx context.Context) {
 
 // wireAIChatProviders wires up all MCP tool providers for AI chat
 func (r *Router) wireAIChatProviders() {
-	if r.aiHandler == nil || !r.aiHandler.IsRunning() {
+	if r.aiHandler == nil || !r.aiHandler.IsRunning(context.Background()) {
 		return
 	}
 
-	service := r.aiHandler.GetService()
+	service := r.aiHandler.GetService(context.Background())
 	if service == nil {
 		return
 	}
@@ -1958,7 +1967,7 @@ func (r *Router) wireAIChatProviders() {
 
 	// Wire findings provider from patrol service
 	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
 			if findingsStore := patrolSvc.GetFindings(); findingsStore != nil {
 				findingsAdapter := ai.NewFindingsMCPAdapter(findingsStore)
 				if findingsAdapter != nil {
@@ -2027,7 +2036,7 @@ func (r *Router) wireAIChatProviders() {
 
 	// Wire baseline provider
 	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
 			if baselineStore := patrolSvc.GetBaselineStore(); baselineStore != nil {
 				baselineAdapter := tools.NewBaselineMCPAdapter(&baselineSourceWrapper{store: baselineStore})
 				if baselineAdapter != nil {
@@ -2040,7 +2049,7 @@ func (r *Router) wireAIChatProviders() {
 
 	// Wire pattern provider
 	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
 			if patternDetector := patrolSvc.GetPatternDetector(); patternDetector != nil {
 				patternAdapter := tools.NewPatternMCPAdapter(
 					&patternSourceWrapper{detector: patternDetector},
@@ -2056,7 +2065,7 @@ func (r *Router) wireAIChatProviders() {
 
 	// Wire findings manager
 	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService().GetPatrolService(); patrolSvc != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
 			findingsManagerAdapter := tools.NewFindingsManagerMCPAdapter(patrolSvc)
 			if findingsManagerAdapter != nil {
 				service.SetFindingsManager(findingsManagerAdapter)
@@ -2067,7 +2076,7 @@ func (r *Router) wireAIChatProviders() {
 
 	// Wire metadata updater
 	if r.aiSettingsHandler != nil {
-		metadataAdapter := tools.NewMetadataUpdaterMCPAdapter(r.aiSettingsHandler.GetAIService())
+		metadataAdapter := tools.NewMetadataUpdaterMCPAdapter(r.aiSettingsHandler.GetAIService(context.Background()))
 		if metadataAdapter != nil {
 			service.SetMetadataUpdater(metadataAdapter)
 			log.Debug().Msg("AI chat: Metadata updater wired")
@@ -2360,7 +2369,7 @@ func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitor
 // This enables AI to analyze specific resources when alerts fire, providing token-efficient real-time insights
 func (r *Router) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyzer {
 	if r.aiSettingsHandler != nil {
-		return r.aiSettingsHandler.GetAlertTriggeredAnalyzer()
+		return r.aiSettingsHandler.GetAlertTriggeredAnalyzer(context.Background())
 	}
 	return nil
 }
@@ -3839,6 +3848,8 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		duration = time.Hour
 	case "4h":
 		duration = 4 * time.Hour
+	case "8h":
+		duration = 8 * time.Hour
 	case "12h":
 		duration = 12 * time.Hour
 	case "24h":

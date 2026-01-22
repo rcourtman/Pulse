@@ -44,6 +44,12 @@ type ConfigPersistence struct {
 	aiChatSessionsFile       string
 	crypto                   *crypto.CryptoManager
 	fs                       FileSystem
+
+	// Lazy loaded metadata stores
+	guestMetadataStore  *GuestMetadataStore
+	dockerMetadataStore *DockerMetadataStore
+	hostMetadataStore   *HostMetadataStore
+	metadataMu          sync.Mutex
 }
 
 // FileSystem interface for mocking file operations
@@ -135,6 +141,11 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 
 // DataDir returns the configuration directory path
 func (c *ConfigPersistence) DataDir() string {
+	return c.configDir
+}
+
+// GetConfigDir returns the configuration directory path (alias for DataDir to match interface expectations)
+func (c *ConfigPersistence) GetConfigDir() string {
 	return c.configDir
 }
 

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -50,21 +52,49 @@ type AlertMonitor interface {
 
 // AlertHandlers handles alert-related HTTP endpoints
 type AlertHandlers struct {
-	monitor AlertMonitor
-	wsHub   *websocket.Hub
+	mtMonitor     *monitoring.MultiTenantMonitor
+	legacyMonitor AlertMonitor
+	wsHub         *websocket.Hub
 }
 
 // NewAlertHandlers creates new alert handlers
-func NewAlertHandlers(monitor AlertMonitor, wsHub *websocket.Hub) *AlertHandlers {
+func NewAlertHandlers(mtm *monitoring.MultiTenantMonitor, monitor AlertMonitor, wsHub *websocket.Hub) *AlertHandlers {
+	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	if monitor == nil && mtm != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			monitor = NewAlertMonitorWrapper(m)
+		}
+	}
 	return &AlertHandlers{
-		monitor: monitor,
-		wsHub:   wsHub,
+		mtMonitor:     mtm,
+		legacyMonitor: monitor,
+		wsHub:         wsHub,
+	}
+}
+
+// SetMultiTenantMonitor updates the multi-tenant monitor reference
+func (h *AlertHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
+	h.mtMonitor = mtm
+	if mtm != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			h.legacyMonitor = NewAlertMonitorWrapper(m)
+		}
 	}
 }
 
 // SetMonitor updates the monitor reference for alert handlers.
 func (h *AlertHandlers) SetMonitor(m AlertMonitor) {
-	h.monitor = m
+	h.legacyMonitor = m
+}
+
+func (h *AlertHandlers) getMonitor(ctx context.Context) AlertMonitor {
+	orgID := GetOrgID(ctx)
+	if h.mtMonitor != nil {
+		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+			return NewAlertMonitorWrapper(m)
+		}
+	}
+	return h.legacyMonitor
 }
 
 // validateAlertID validates an alert ID for security.
@@ -100,7 +130,7 @@ func validateAlertID(alertID string) bool {
 
 // GetAlertConfig returns the current alert configuration
 func (h *AlertHandlers) GetAlertConfig(w http.ResponseWriter, r *http.Request) {
-	config := h.monitor.GetAlertManager().GetConfig()
+	config := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
 
 	if err := utils.WriteJSONResponse(w, config); err != nil {
 		log.Error().Err(err).Msg("Failed to write alert config response")
@@ -129,25 +159,25 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 			Msg("Migrated deprecated GroupingWindow to Grouping.Window")
 	}
 
-	h.monitor.GetAlertManager().UpdateConfig(config)
-	updatedConfig := h.monitor.GetAlertManager().GetConfig()
+	h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(config)
+	updatedConfig := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
 
 	// Update notification manager with schedule settings
-	h.monitor.GetNotificationManager().SetCooldown(updatedConfig.Schedule.Cooldown)
+	h.getMonitor(r.Context()).GetNotificationManager().SetCooldown(updatedConfig.Schedule.Cooldown)
 
 	groupWindow = updatedConfig.Schedule.Grouping.Window
 	if groupWindow == 0 && updatedConfig.Schedule.GroupingWindow != 0 {
 		groupWindow = updatedConfig.Schedule.GroupingWindow
 	}
-	h.monitor.GetNotificationManager().SetGroupingWindow(groupWindow)
-	h.monitor.GetNotificationManager().SetGroupingOptions(
+	h.getMonitor(r.Context()).GetNotificationManager().SetGroupingWindow(groupWindow)
+	h.getMonitor(r.Context()).GetNotificationManager().SetGroupingOptions(
 		updatedConfig.Schedule.Grouping.ByNode,
 		updatedConfig.Schedule.Grouping.ByGuest,
 	)
-	h.monitor.GetNotificationManager().SetNotifyOnResolve(updatedConfig.Schedule.NotifyOnResolve)
+	h.getMonitor(r.Context()).GetNotificationManager().SetNotifyOnResolve(updatedConfig.Schedule.NotifyOnResolve)
 
 	// Save to persistent storage
-	if err := h.monitor.GetConfigPersistence().SaveAlertConfig(updatedConfig); err != nil {
+	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveAlertConfig(updatedConfig); err != nil {
 		// Log error but don't fail the request
 		log.Error().Err(err).Msg("Failed to save alert configuration")
 	}
@@ -163,7 +193,7 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 // ActivateAlerts activates alert notifications
 func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
 	// Get current config
-	config := h.monitor.GetAlertManager().GetConfig()
+	config := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
 
 	// Check if already active
 	if config.ActivationState == alerts.ActivationActive {
@@ -184,22 +214,22 @@ func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
 	config.ActivationTime = &now
 
 	// Update config
-	h.monitor.GetAlertManager().UpdateConfig(config)
+	h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(config)
 
 	// Save to persistent storage
-	if err := h.monitor.GetConfigPersistence().SaveAlertConfig(config); err != nil {
+	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveAlertConfig(config); err != nil {
 		log.Error().Err(err).Msg("Failed to save alert configuration after activation")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
 	}
 
 	// Notify about existing critical alerts after activation
-	activeAlerts := h.monitor.GetAlertManager().GetActiveAlerts()
+	activeAlerts := h.getMonitor(r.Context()).GetAlertManager().GetActiveAlerts()
 	criticalCount := 0
 	for _, alert := range activeAlerts {
 		if alert.Level == alerts.AlertLevelCritical && !alert.Acknowledged {
 			// Re-dispatch critical alerts to trigger notifications
-			h.monitor.GetAlertManager().NotifyExistingAlert(alert.ID)
+			h.getMonitor(r.Context()).GetAlertManager().NotifyExistingAlert(alert.ID)
 			criticalCount++
 		}
 	}
@@ -224,7 +254,7 @@ func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
 
 // GetActiveAlerts returns all active alerts
 func (h *AlertHandlers) GetActiveAlerts(w http.ResponseWriter, r *http.Request) {
-	alerts := h.monitor.GetAlertManager().GetActiveAlerts()
+	alerts := h.getMonitor(r.Context()).GetAlertManager().GetActiveAlerts()
 
 	if err := utils.WriteJSONResponse(w, alerts); err != nil {
 		log.Error().Err(err).Msg("Failed to write active alerts response")
@@ -370,12 +400,12 @@ func (h *AlertHandlers) GetAlertHistory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if h.monitor == nil {
+	if h.getMonitor(r.Context()) == nil {
 		http.Error(w, "monitor is not initialized", http.StatusServiceUnavailable)
 		return
 	}
 
-	manager := h.monitor.GetAlertManager()
+	manager := h.getMonitor(r.Context()).GetAlertManager()
 	var history []alerts.Alert
 	if startTime != nil {
 		history = manager.GetAlertHistorySince(*startTime, fetchLimit)
@@ -403,7 +433,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 		return
 	}
 
-	store := h.monitor.GetIncidentStore()
+	store := h.getMonitor(r.Context()).GetIncidentStore()
 	if store == nil {
 		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
 		return
@@ -472,7 +502,7 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	store := h.monitor.GetIncidentStore()
+	store := h.getMonitor(r.Context()).GetIncidentStore()
 	if store == nil {
 		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
 		return
@@ -522,7 +552,7 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 
 // ClearAlertHistory clears all alert history
 func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request) {
-	if err := h.monitor.GetAlertManager().ClearAlertHistory(); err != nil {
+	if err := h.getMonitor(r.Context()).GetAlertManager().ClearAlertHistory(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -570,7 +600,7 @@ func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Reques
 		Str("path", r.URL.Path).
 		Msg("Attempting to unacknowledge alert")
 
-	if err := h.monitor.GetAlertManager().UnacknowledgeAlert(alertID); err != nil {
+	if err := h.getMonitor(r.Context()).GetAlertManager().UnacknowledgeAlert(alertID); err != nil {
 		log.Error().
 			Err(err).
 			Str("alertID", alertID).
@@ -579,7 +609,7 @@ func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	h.monitor.SyncAlertState()
+	h.getMonitor(r.Context()).SyncAlertState()
 
 	log.Info().
 		Str("alertID", alertID).
@@ -594,7 +624,7 @@ func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Reques
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil {
 		go func() {
-			state := h.monitor.GetState()
+			state := h.getMonitor(r.Context()).GetState()
 			h.wsHub.BroadcastState(state.ToFrontend())
 			log.Debug().Msg("Broadcasted state after alert unacknowledgment")
 		}()
@@ -648,7 +678,7 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 		Str("alertID", alertID).
 		Msg("About to call AcknowledgeAlert on manager")
 
-	if err := h.monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
+	if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 		log.Error().
 			Err(err).
 			Str("alertID", alertID).
@@ -657,7 +687,7 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	h.monitor.SyncAlertState()
+	h.getMonitor(r.Context()).SyncAlertState()
 
 	log.Info().
 		Str("alertID", alertID).
@@ -673,7 +703,7 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil {
 		go func() {
-			state := h.monitor.GetState()
+			state := h.getMonitor(r.Context()).GetState()
 			h.wsHub.BroadcastState(state.ToFrontend())
 			log.Debug().Msg("Broadcasted state after alert acknowledgment")
 		}()
@@ -711,13 +741,13 @@ func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Re
 
 	user := "admin"
 
-	if err := h.monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
+	if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to acknowledge alert")
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	h.monitor.SyncAlertState()
+	h.getMonitor(r.Context()).SyncAlertState()
 
 	log.Info().Str("alertID", alertID).Str("user", user).Msg("Alert acknowledged successfully")
 
@@ -727,7 +757,7 @@ func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Re
 
 	if h.wsHub != nil {
 		go func() {
-			state := h.monitor.GetState()
+			state := h.getMonitor(r.Context()).GetState()
 			h.wsHub.BroadcastState(state.ToFrontend())
 		}()
 	}
@@ -755,13 +785,13 @@ func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := h.monitor.GetAlertManager().UnacknowledgeAlert(alertID); err != nil {
+	if err := h.getMonitor(r.Context()).GetAlertManager().UnacknowledgeAlert(alertID); err != nil {
 		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to unacknowledge alert")
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	h.monitor.SyncAlertState()
+	h.getMonitor(r.Context()).SyncAlertState()
 
 	log.Info().Str("alertID", alertID).Msg("Alert unacknowledged successfully")
 
@@ -771,7 +801,7 @@ func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.
 
 	if h.wsHub != nil {
 		go func() {
-			state := h.monitor.GetState()
+			state := h.getMonitor(r.Context()).GetState()
 			h.wsHub.BroadcastState(state.ToFrontend())
 		}()
 	}
@@ -799,12 +829,12 @@ func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !h.monitor.GetAlertManager().ClearAlert(alertID) {
+	if !h.getMonitor(r.Context()).GetAlertManager().ClearAlert(alertID) {
 		http.Error(w, "Alert not found", http.StatusNotFound)
 		return
 	}
 
-	h.monitor.SyncAlertState()
+	h.getMonitor(r.Context()).SyncAlertState()
 
 	log.Info().Str("alertID", alertID).Msg("Alert cleared successfully")
 
@@ -814,7 +844,7 @@ func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request)
 
 	if h.wsHub != nil {
 		go func() {
-			state := h.monitor.GetState()
+			state := h.getMonitor(r.Context()).GetState()
 			h.wsHub.BroadcastState(state.ToFrontend())
 		}()
 	}
@@ -854,11 +884,11 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.monitor.GetAlertManager().ClearAlert(alertID) {
+	if !h.getMonitor(r.Context()).GetAlertManager().ClearAlert(alertID) {
 		http.Error(w, "Alert not found", http.StatusNotFound)
 		return
 	}
-	h.monitor.SyncAlertState()
+	h.getMonitor(r.Context()).SyncAlertState()
 
 	// Send response immediately
 	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
@@ -869,7 +899,7 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil {
 		go func() {
-			state := h.monitor.GetState()
+			state := h.getMonitor(r.Context()).GetState()
 			h.wsHub.BroadcastState(state.ToFrontend())
 			log.Debug().Msg("Broadcasted state after alert clear")
 		}()
@@ -910,7 +940,7 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 			"alertId": alertID,
 			"success": true,
 		}
-		if err := h.monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
+		if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 			result["success"] = false
 			result["error"] = err.Error()
 		} else {
@@ -920,7 +950,7 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 	}
 
 	if anySuccess {
-		h.monitor.SyncAlertState()
+		h.getMonitor(r.Context()).SyncAlertState()
 	}
 
 	// Send response immediately
@@ -934,7 +964,7 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil && anySuccess {
 		go func() {
-			state := h.monitor.GetState()
+			state := h.getMonitor(r.Context()).GetState()
 			h.wsHub.BroadcastState(state.ToFrontend())
 			log.Debug().Msg("Broadcasted state after bulk alert acknowledgment")
 		}()
@@ -969,7 +999,7 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 			"alertId": alertID,
 			"success": true,
 		}
-		if h.monitor.GetAlertManager().ClearAlert(alertID) {
+		if h.getMonitor(r.Context()).GetAlertManager().ClearAlert(alertID) {
 			anySuccess = true
 		} else {
 			result["success"] = false
@@ -979,7 +1009,7 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if anySuccess {
-		h.monitor.SyncAlertState()
+		h.getMonitor(r.Context()).SyncAlertState()
 	}
 
 	// Send response immediately
@@ -993,7 +1023,7 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil && anySuccess {
 		go func() {
-			state := h.monitor.GetState()
+			state := h.getMonitor(r.Context()).GetState()
 			h.wsHub.BroadcastState(state.ToFrontend())
 			log.Debug().Msg("Broadcasted state after bulk alert clear")
 		}()

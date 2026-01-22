@@ -20,8 +20,8 @@ func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// AI must be enabled to return intelligence data
-	if !h.aiService.IsEnabled() {
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil || !aiService.IsEnabled() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"patterns": []interface{}{},
 			"message":  "AI is not enabled",
@@ -31,7 +31,7 @@ func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	patrol := h.aiService.GetPatrolService()
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"patterns": []interface{}{},
@@ -75,7 +75,7 @@ func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Req
 		})
 	}
 
-	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
 	if locked {
 		w.Header().Set("X-License-Required", "true")
 		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
@@ -103,8 +103,9 @@ func (h *AISettingsHandler) HandleGetPredictions(w http.ResponseWriter, r *http.
 		return
 	}
 
+	aiService := h.GetAIService(r.Context())
 	// AI must be enabled to return intelligence data
-	if !h.aiService.IsEnabled() {
+	if aiService == nil || !aiService.IsEnabled() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"predictions": []interface{}{},
 			"message":     "AI is not enabled",
@@ -114,7 +115,7 @@ func (h *AISettingsHandler) HandleGetPredictions(w http.ResponseWriter, r *http.
 		return
 	}
 
-	patrol := h.aiService.GetPatrolService()
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"predictions": []interface{}{},
@@ -160,7 +161,7 @@ func (h *AISettingsHandler) HandleGetPredictions(w http.ResponseWriter, r *http.
 		})
 	}
 
-	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
 	if locked {
 		w.Header().Set("X-License-Required", "true")
 		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
@@ -188,8 +189,9 @@ func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http
 		return
 	}
 
+	aiService := h.GetAIService(r.Context())
 	// AI must be enabled to return intelligence data
-	if !h.aiService.IsEnabled() {
+	if aiService == nil || !aiService.IsEnabled() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"correlations": []interface{}{},
 			"message":      "AI is not enabled",
@@ -199,7 +201,7 @@ func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http
 		return
 	}
 
-	patrol := h.aiService.GetPatrolService()
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"correlations": []interface{}{},
@@ -249,7 +251,7 @@ func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http
 		})
 	}
 
-	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
 	if locked {
 		w.Header().Set("X-License-Required", "true")
 		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
@@ -277,8 +279,9 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 		return
 	}
 
+	aiService := h.GetAIService(r.Context())
 	// AI must be enabled to return intelligence data
-	if !h.aiService.IsEnabled() {
+	if aiService == nil || !aiService.IsEnabled() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"changes": []interface{}{},
 			"message": "AI is not enabled",
@@ -288,7 +291,7 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 		return
 	}
 
-	patrol := h.aiService.GetPatrolService()
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"changes": []interface{}{},
@@ -337,7 +340,7 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 		})
 	}
 
-	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
 	if locked {
 		w.Header().Set("X-License-Required", "true")
 		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
@@ -366,8 +369,9 @@ func (h *AISettingsHandler) HandleGetBaselines(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	aiService := h.GetAIService(r.Context())
 	// AI must be enabled to return intelligence data
-	if !h.aiService.IsEnabled() {
+	if aiService == nil || !aiService.IsEnabled() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"baselines": []interface{}{},
 			"message":   "AI is not enabled",
@@ -377,7 +381,7 @@ func (h *AISettingsHandler) HandleGetBaselines(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	patrol := h.aiService.GetPatrolService()
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"baselines": []interface{}{},
@@ -422,7 +426,7 @@ func (h *AISettingsHandler) HandleGetBaselines(w http.ResponseWriter, r *http.Re
 		})
 	}
 
-	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
 	if locked {
 		w.Header().Set("X-License-Required", "true")
 		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
@@ -450,15 +454,16 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 		return
 	}
 
+	aiService := h.GetAIService(r.Context())
 	// Check for Pulse Pro license (soft-lock)
-	locked := !h.aiService.HasLicenseFeature(license.FeatureAIAutoFix)
+	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIAutoFix)
 	if locked {
 		w.Header().Set("X-License-Required", "true")
 		w.Header().Set("X-License-Feature", license.FeatureAIAutoFix)
 	}
 
 	// AI must be enabled to return intelligence data
-	if !h.aiService.IsEnabled() {
+	if aiService == nil || !aiService.IsEnabled() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"remediations":     []interface{}{},
 			"message":          "AI is not enabled",
@@ -470,7 +475,7 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 		return
 	}
 
-	patrol := h.aiService.GetPatrolService()
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"remediations":     []interface{}{},
@@ -612,8 +617,9 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	aiService := h.GetAIService(r.Context())
 	// AI must be enabled to return intelligence data
-	if !h.aiService.IsEnabled() {
+	if aiService == nil || !aiService.IsEnabled() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"anomalies": []interface{}{},
 			"message":   "AI is not enabled",
@@ -623,7 +629,7 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	patrol := h.aiService.GetPatrolService()
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"anomalies": []interface{}{},
@@ -646,7 +652,7 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 	}
 
 	// Get current metrics from state provider
-	stateProvider := h.aiService.GetStateProvider()
+	stateProvider := aiService.GetStateProvider()
 	if stateProvider == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"anomalies": []interface{}{},
@@ -853,8 +859,9 @@ func (h *AISettingsHandler) HandleGetLearningStatus(w http.ResponseWriter, r *ht
 		return
 	}
 
+	aiService := h.GetAIService(r.Context())
 	// AI must be enabled to return learning status
-	if !h.aiService.IsEnabled() {
+	if aiService == nil || !aiService.IsEnabled() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"resources_baselined": 0,
 			"total_metrics":       0,
@@ -866,7 +873,7 @@ func (h *AISettingsHandler) HandleGetLearningStatus(w http.ResponseWriter, r *ht
 		return
 	}
 
-	patrol := h.aiService.GetPatrolService()
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"resources_baselined": 0,
@@ -918,7 +925,7 @@ func (h *AISettingsHandler) HandleGetLearningStatus(w http.ResponseWriter, r *ht
 		message = "Baselines established and anomaly detection is active"
 	}
 
-	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
 	if locked {
 		w.Header().Set("X-License-Required", "true")
 		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)

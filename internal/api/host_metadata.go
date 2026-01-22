@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -12,19 +13,30 @@ import (
 
 // HostMetadataHandler handles host metadata operations
 type HostMetadataHandler struct {
-	store *config.HostMetadataStore
+	mtPersistence *config.MultiTenantPersistence
 }
 
 // NewHostMetadataHandler creates a new host metadata handler
-func NewHostMetadataHandler(dataPath string) *HostMetadataHandler {
+func NewHostMetadataHandler(mtPersistence *config.MultiTenantPersistence) *HostMetadataHandler {
 	return &HostMetadataHandler{
-		store: config.NewHostMetadataStore(dataPath, nil),
+		mtPersistence: mtPersistence,
 	}
 }
 
-// Store returns the underlying metadata store
+func (h *HostMetadataHandler) getStore(ctx context.Context) *config.HostMetadataStore {
+	orgID := "default"
+	if ctx != nil {
+		if id := GetOrgID(ctx); id != "" {
+			orgID = id
+		}
+	}
+	p, _ := h.mtPersistence.GetPersistence(orgID)
+	return p.GetHostMetadataStore()
+}
+
+// Store returns the underlying metadata store for default tenant
 func (h *HostMetadataHandler) Store() *config.HostMetadataStore {
-	return h.store
+	return h.getStore(context.Background())
 }
 
 // HandleGetMetadata retrieves metadata for a specific host or all hosts
@@ -40,7 +52,8 @@ func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.R
 	if path == "/api/hosts/metadata" || path == "/api/hosts/metadata/" {
 		// Get all metadata
 		w.Header().Set("Content-Type", "application/json")
-		allMeta := h.store.GetAll()
+		store := h.getStore(r.Context())
+		allMeta := store.GetAll()
 		if allMeta == nil {
 			// Return empty object instead of null
 			json.NewEncoder(w).Encode(make(map[string]*config.HostMetadata))
@@ -57,7 +70,8 @@ func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.R
 
 	if hostID != "" {
 		// Get specific host metadata
-		meta := h.store.Get(hostID)
+		store := h.getStore(r.Context())
+		meta := store.Get(hostID)
 		if meta == nil {
 			// Return empty metadata instead of 404
 			json.NewEncoder(w).Encode(&config.HostMetadata{ID: hostID})
@@ -119,8 +133,8 @@ func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *htt
 			return
 		}
 	}
-
-	if err := h.store.Set(hostID, &meta); err != nil {
+	store := h.getStore(r.Context())
+	if err := store.Set(hostID, &meta); err != nil {
 		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to save host metadata")
 		// Provide more specific error message
 		errMsg := "Failed to save metadata"
@@ -151,8 +165,8 @@ func (h *HostMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *htt
 		http.Error(w, "Host ID required", http.StatusBadRequest)
 		return
 	}
-
-	if err := h.store.Delete(hostID); err != nil {
+	store := h.getStore(r.Context())
+	if err := store.Delete(hostID); err != nil {
 		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to delete host metadata")
 		http.Error(w, "Failed to delete metadata", http.StatusInternalServerError)
 		return

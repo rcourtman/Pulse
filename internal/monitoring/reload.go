@@ -12,28 +12,28 @@ import (
 
 // ReloadableMonitor wraps a Monitor with reload capability
 type ReloadableMonitor struct {
-	mu         sync.RWMutex
-	monitor    *Monitor
-	config     *config.Config
-	wsHub      *websocket.Hub
-	ctx        context.Context
-	cancel     context.CancelFunc
-	parentCtx  context.Context
-	reloadChan chan chan error
+	mu          sync.RWMutex
+	mtMonitor   *MultiTenantMonitor
+	persistence *config.MultiTenantPersistence
+	config      *config.Config
+	wsHub       *websocket.Hub
+	ctx         context.Context
+	cancel      context.CancelFunc
+	parentCtx   context.Context
+	reloadChan  chan chan error
 }
 
 // NewReloadableMonitor creates a new reloadable monitor
-func NewReloadableMonitor(cfg *config.Config, wsHub *websocket.Hub) (*ReloadableMonitor, error) {
-	monitor, err := New(cfg)
-	if err != nil {
-		return nil, err
-	}
+func NewReloadableMonitor(cfg *config.Config, persistence *config.MultiTenantPersistence, wsHub *websocket.Hub) (*ReloadableMonitor, error) {
+	mtMonitor := NewMultiTenantMonitor(cfg, persistence, wsHub)
+	// No error check needed for NewMultiTenantMonitor as it doesn't return error
 
 	rm := &ReloadableMonitor{
-		monitor:    monitor,
-		config:     cfg,
-		wsHub:      wsHub,
-		reloadChan: make(chan chan error, 1),
+		mtMonitor:   mtMonitor,
+		config:      cfg,
+		persistence: persistence,
+		wsHub:       wsHub,
+		reloadChan:  make(chan chan error, 1),
 	}
 
 	return rm, nil
@@ -46,8 +46,10 @@ func (rm *ReloadableMonitor) Start(ctx context.Context) {
 	rm.ctx, rm.cancel = context.WithCancel(ctx)
 	rm.mu.Unlock()
 
-	// Start the monitor
-	go rm.monitor.Start(rm.ctx, rm.wsHub)
+	// Start the multi-tenant monitor manager
+	// Note: It doesn't start individual monitors until requested via GetMonitor()
+	// But we might want to start "default" monitor if it exists?
+	// For now, lazy loading handles it.
 
 	// Watch for reload signals
 	go rm.watchReload(ctx)
@@ -101,31 +103,37 @@ func (rm *ReloadableMonitor) doReload() error {
 	// Wait a moment for cleanup
 	time.Sleep(1 * time.Second)
 
-	// Create new monitor
-	newMonitor, err := New(cfg)
-	if err != nil {
-		// Restart old monitor if new one fails
-		rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
-		go rm.monitor.Start(rm.ctx, rm.wsHub)
-		return err
-	}
+	// Create new multi-tenant monitor
+	// Note: We lose existing instances state here, which is expected on full reload.
+	newMTMonitor := NewMultiTenantMonitor(cfg, rm.persistence, rm.wsHub)
 
 	// Replace monitor
-	rm.monitor = newMonitor
+	rm.mtMonitor = newMTMonitor
 	rm.config = cfg
 
-	// Start new monitor
+	// Start new monitor context (individual monitors are lazy loaded/started)
 	rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
-	go rm.monitor.Start(rm.ctx, rm.wsHub)
 
 	return nil
 }
 
-// GetMonitor returns the current monitor instance
+// GetMultiTenantMonitor returns the current multi-tenant monitor instance
+func (rm *ReloadableMonitor) GetMultiTenantMonitor() *MultiTenantMonitor {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	return rm.mtMonitor
+}
+
+// GetMonitor returns the default monitor instance (compatibility shim)
+// It ensures the "default" tenant is initialized.
 func (rm *ReloadableMonitor) GetMonitor() *Monitor {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
-	return rm.monitor
+	if rm.mtMonitor == nil {
+		return nil
+	}
+	m, _ := rm.mtMonitor.GetMonitor("default")
+	return m
 }
 
 // GetConfig returns the current configuration used by the monitor.
@@ -140,7 +148,13 @@ func (rm *ReloadableMonitor) GetConfig() *config.Config {
 
 // GetState returns the current state
 func (rm *ReloadableMonitor) GetState() interface{} {
-	return rm.GetMonitor().GetState()
+	// For backward compatibility / frontend simplicity, return default org state
+	// TODO: Make WebSocket state getter tenant-aware
+	monitor, err := rm.GetMultiTenantMonitor().GetMonitor("default")
+	if err != nil {
+		return nil
+	}
+	return monitor.GetState()
 }
 
 // Stop stops the monitor
@@ -152,7 +166,7 @@ func (rm *ReloadableMonitor) Stop() {
 		rm.cancel()
 	}
 
-	if rm.monitor != nil {
-		rm.monitor.Stop()
+	if rm.mtMonitor != nil {
+		rm.mtMonitor.Stop()
 	}
 }

@@ -84,13 +84,18 @@ type SetupCode struct {
 	Used      bool
 	NodeType  string // "pve" or "pbs"
 	Host      string // The host URL for validation
+	OrgID     string // Organization ID creating this code
 }
 
 // ConfigHandlers handles configuration-related API endpoints
 type ConfigHandlers struct {
-	config                   *config.Config
-	persistence              *config.ConfigPersistence
-	monitor                  *monitoring.Monitor
+	mtPersistence *config.MultiTenantPersistence
+	mtMonitor     *monitoring.MultiTenantMonitor
+	// Legacy fields - to be removed or used as fallback
+	legacyConfig      *config.Config
+	legacyPersistence *config.ConfigPersistence
+	legacyMonitor     *monitoring.Monitor
+
 	reloadFunc               func() error
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
 	wsHub                    *websocket.Hub
@@ -105,11 +110,33 @@ type ConfigHandlers struct {
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
-func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error, wsHub *websocket.Hub, guestMetadataHandler *GuestMetadataHandler, reloadSystemSettingsFunc func()) *ConfigHandlers {
+func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.MultiTenantMonitor, reloadFunc func() error, wsHub *websocket.Hub, guestMetadataHandler *GuestMetadataHandler, reloadSystemSettingsFunc func()) *ConfigHandlers {
+	// Initialize with default (legacy) values if available, for backward compat during migration
+	// Ideally we fetch them from mtp/mtm for "default" org.
+	var defaultConfig *config.Config
+	var defaultMonitor *monitoring.Monitor
+	var defaultPersistence *config.ConfigPersistence
+
+	if mtm != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			defaultMonitor = m
+			if m != nil {
+				defaultConfig = m.GetConfig()
+			}
+		}
+	}
+	if mtp != nil {
+		if p, err := mtp.GetPersistence("default"); err == nil {
+			defaultPersistence = p
+		}
+	}
+
 	h := &ConfigHandlers{
-		config:                   cfg,
-		persistence:              config.NewConfigPersistence(cfg.DataPath),
-		monitor:                  monitor,
+		mtPersistence:            mtp,
+		mtMonitor:                mtm,
+		legacyConfig:             defaultConfig,
+		legacyMonitor:            defaultMonitor,
+		legacyPersistence:        defaultPersistence,
 		reloadFunc:               reloadFunc,
 		reloadSystemSettingsFunc: reloadSystemSettingsFunc,
 		wsHub:                    wsHub,
@@ -126,9 +153,23 @@ func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFu
 	return h
 }
 
-// SetMonitor updates the monitor reference used by the config handlers.
+// SetMultiTenantMonitor updates the monitor reference used by the config handlers.
+func (h *ConfigHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
+	h.mtMonitor = mtm
+	if mtm != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			h.legacyMonitor = m
+			h.legacyConfig = m.GetConfig()
+		}
+	}
+}
+
+// SetMonitor updates the monitor reference used by the config handlers (legacy support).
 func (h *ConfigHandlers) SetMonitor(m *monitoring.Monitor) {
-	h.monitor = m
+	h.legacyMonitor = m
+	if m != nil {
+		h.legacyConfig = m.GetConfig()
+	}
 }
 
 // SetConfig updates the configuration reference used by the handlers.
@@ -136,7 +177,49 @@ func (h *ConfigHandlers) SetConfig(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
-	h.config = cfg
+	h.legacyConfig = cfg
+}
+
+// getContextState helper to retrieve tenant-specific state
+func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *config.ConfigPersistence, *monitoring.Monitor) {
+	orgID := "default"
+	if ctx != nil {
+		if id := GetOrgID(ctx); id != "" {
+			orgID = id
+		}
+	}
+
+	// Try to get from multi-tenant managers first
+	if h.mtMonitor != nil {
+		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+			cfg := m.GetConfig()
+			var p *config.ConfigPersistence
+			if h.mtPersistence != nil {
+				p, _ = h.mtPersistence.GetPersistence(orgID)
+			}
+			return cfg, p, m
+		} else if err != nil {
+			log.Warn().Str("orgID", orgID).Err(err).Msg("Falling back to legacy config - failed to get tenant monitor")
+		}
+	}
+
+	// Fallback to legacy (should mostly happen for "default" or initialization)
+	return h.legacyConfig, h.legacyPersistence, h.legacyMonitor
+}
+
+func (h *ConfigHandlers) getConfig(ctx context.Context) *config.Config {
+	c, _, _ := h.getContextState(ctx)
+	return c
+}
+
+func (h *ConfigHandlers) getPersistence(ctx context.Context) *config.ConfigPersistence {
+	_, p, _ := h.getContextState(ctx)
+	return p
+}
+
+func (h *ConfigHandlers) getMonitor(ctx context.Context) *monitoring.Monitor {
+	_, _, m := h.getContextState(ctx)
+	return m
 }
 
 // cleanupExpiredCodes removes expired or used setup codes periodically
@@ -226,16 +309,16 @@ func (h *ConfigHandlers) isRecentlyAutoRegistered(nodeType, nodeName string) boo
 	return true
 }
 
-func (h *ConfigHandlers) findInstanceNameByHost(nodeType, host string) string {
+func (h *ConfigHandlers) findInstanceNameByHost(ctx context.Context, nodeType, host string) string {
 	switch nodeType {
 	case "pve":
-		for _, node := range h.config.PVEInstances {
+		for _, node := range h.getConfig(ctx).PVEInstances {
 			if node.Host == host {
 				return node.Name
 			}
 		}
 	case "pbs":
-		for _, node := range h.config.PBSInstances {
+		for _, node := range h.getConfig(ctx).PBSInstances {
 			if node.Host == host {
 				return node.Name
 			}
@@ -290,7 +373,7 @@ func shouldSkipClusterAutoDetection(host, name string) bool {
 		strings.Contains(lowerName, "concurrent-")
 }
 
-func (h *ConfigHandlers) maybeRefreshClusterInfo(instance *config.PVEInstance) {
+func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance *config.PVEInstance) {
 	if instance == nil {
 		return
 	}
@@ -348,8 +431,8 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(instance *config.PVEInstance) {
 		Int("endpoints", len(clusterEndpoints)).
 		Msg("Updated cluster metadata after validation retry")
 
-	if h.persistence != nil {
-		if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+	if h.getPersistence(ctx) != nil {
+		if err := h.getPersistence(ctx).SaveNodesConfig(h.getConfig(ctx).PVEInstances, h.getConfig(ctx).PBSInstances, h.getConfig(ctx).PMGInstances); err != nil {
 			log.Warn().
 				Err(err).
 				Str("instance", instance.Name).
@@ -951,14 +1034,14 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 }
 
 // GetAllNodesForAPI returns all configured nodes for API responses
-func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
+func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 	nodes := []NodeResponse{}
 
 	// Add PVE nodes
-	for i := range h.config.PVEInstances {
+	for i := range h.getConfig(ctx).PVEInstances {
 		// Refresh cluster metadata if we previously failed to detect endpoints
-		h.maybeRefreshClusterInfo(&h.config.PVEInstances[i])
-		pve := h.config.PVEInstances[i]
+		h.maybeRefreshClusterInfo(ctx, &h.getConfig(ctx).PVEInstances[i])
+		pve := h.getConfig(ctx).PVEInstances[i]
 		node := NodeResponse{
 			ID:                           generateNodeID("pve", i),
 			Type:                         "pve",
@@ -978,7 +1061,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			MonitorPhysicalDisks:         pve.MonitorPhysicalDisks,
 			PhysicalDiskPollingMinutes:   pve.PhysicalDiskPollingMinutes,
 			TemperatureMonitoringEnabled: pve.TemperatureMonitoringEnabled,
-			Status:                       h.getNodeStatus("pve", pve.Name),
+			Status:                       h.getNodeStatus(ctx, "pve", pve.Name),
 			IsCluster:                    pve.IsCluster,
 			ClusterName:                  pve.ClusterName,
 			ClusterEndpoints:             pve.ClusterEndpoints,
@@ -988,7 +1071,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 	}
 
 	// Add PBS nodes
-	for i, pbs := range h.config.PBSInstances {
+	for i, pbs := range h.getConfig(ctx).PBSInstances {
 		node := NodeResponse{
 			ID:                           generateNodeID("pbs", i),
 			Type:                         "pbs",
@@ -1008,14 +1091,14 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			MonitorPruneJobs:             pbs.MonitorPruneJobs,
 			MonitorGarbageJobs:           pbs.MonitorGarbageJobs,
 			ExcludeDatastores:            pbs.ExcludeDatastores,
-			Status:                       h.getNodeStatus("pbs", pbs.Name),
+			Status:                       h.getNodeStatus(ctx, "pbs", pbs.Name),
 			Source:                       pbs.Source,
 		}
 		nodes = append(nodes, node)
 	}
 
 	// Add PMG nodes
-	for i, pmgInst := range h.config.PMGInstances {
+	for i, pmgInst := range h.getConfig(ctx).PMGInstances {
 		monitorMailStats := pmgInst.MonitorMailStats
 		if !pmgInst.MonitorMailStats && !pmgInst.MonitorQueues && !pmgInst.MonitorQuarantine && !pmgInst.MonitorDomainStats {
 			monitorMailStats = true
@@ -1038,7 +1121,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			MonitorQueues:                pmgInst.MonitorQueues,
 			MonitorQuarantine:            pmgInst.MonitorQuarantine,
 			MonitorDomainStats:           pmgInst.MonitorDomainStats,
-			Status:                       h.getNodeStatus("pmg", pmgInst.Name),
+			Status:                       h.getNodeStatus(ctx, "pmg", pmgInst.Name),
 		}
 		nodes = append(nodes, node)
 	}
@@ -1054,7 +1137,7 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 		mockNodes := []NodeResponse{}
 
 		// Get mock state to extract node information
-		state := h.monitor.GetState()
+		state := h.getMonitor(r.Context()).GetState()
 
 		// Get all cluster nodes and standalone nodes
 		var clusterNodes []models.Node
@@ -1177,7 +1260,7 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	nodes := h.GetAllNodesForAPI()
+	nodes := h.GetAllNodesForAPI(r.Context())
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(nodes)
@@ -1349,7 +1432,7 @@ func resolveHostnameToIP(hostURL string) string {
 // disambiguateNodeName ensures a node name is unique by appending the host IP if needed.
 // This handles cases where multiple Proxmox hosts have the same hostname (e.g., "px1" on different networks).
 // Returns the original name if unique, or "name (ip)" if duplicates exist.
-func (h *ConfigHandlers) disambiguateNodeName(name, host, nodeType string) string {
+func (h *ConfigHandlers) disambiguateNodeName(ctx context.Context, name, host, nodeType string) string {
 	if name == "" {
 		return name
 	}
@@ -1357,14 +1440,14 @@ func (h *ConfigHandlers) disambiguateNodeName(name, host, nodeType string) strin
 	// Check if any existing node has the same name
 	hasDuplicate := false
 	if nodeType == "pve" {
-		for _, node := range h.config.PVEInstances {
+		for _, node := range h.getConfig(ctx).PVEInstances {
 			if strings.EqualFold(node.Name, name) && node.Host != host {
 				hasDuplicate = true
 				break
 			}
 		}
 	} else if nodeType == "pbs" {
-		for _, node := range h.config.PBSInstances {
+		for _, node := range h.getConfig(ctx).PBSInstances {
 			if strings.EqualFold(node.Name, name) && node.Host != host {
 				hasDuplicate = true
 				break
@@ -1489,21 +1572,21 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 	// We disambiguate names later, but Host URLs must be unique.
 	switch req.Type {
 	case "pve":
-		for _, node := range h.config.PVEInstances {
+		for _, node := range h.getConfig(r.Context()).PVEInstances {
 			if node.Host == normalizedHost {
 				http.Error(w, "A node with this host URL already exists", http.StatusConflict)
 				return
 			}
 		}
 	case "pbs":
-		for _, node := range h.config.PBSInstances {
+		for _, node := range h.getConfig(r.Context()).PBSInstances {
 			if node.Host == normalizedHost {
 				http.Error(w, "A node with this host URL already exists", http.StatusConflict)
 				return
 			}
 		}
 	case "pmg":
-		for _, node := range h.config.PMGInstances {
+		for _, node := range h.getConfig(r.Context()).PMGInstances {
 			if node.Host == normalizedHost {
 				http.Error(w, "A node with this host URL already exists", http.StatusConflict)
 				return
@@ -1545,8 +1628,8 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		// the node as an endpoint to the existing cluster instead of creating a new instance.
 		// This prevents duplicate VMs/containers when users install agents on multiple cluster nodes.
 		if isCluster && clusterName != "" {
-			for i := range h.config.PVEInstances {
-				existingInstance := &h.config.PVEInstances[i]
+			for i := range h.getConfig(r.Context()).PVEInstances {
+				existingInstance := &h.getConfig(r.Context()).PVEInstances[i]
 				if existingInstance.IsCluster && existingInstance.ClusterName == clusterName {
 					// Found existing cluster with same name - merge endpoints!
 					log.Info().
@@ -1571,8 +1654,8 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 					}
 
 					// Save the updated configuration
-					if h.persistence != nil {
-						if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+					if h.getPersistence(r.Context()) != nil {
+						if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 							log.Warn().Err(err).Msg("Failed to persist cluster endpoint merge")
 						}
 					}
@@ -1629,7 +1712,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Disambiguate name if duplicate hostnames exist (Issue #891)
-		displayName := h.disambiguateNodeName(req.Name, host, "pve")
+		displayName := h.disambiguateNodeName(r.Context(), req.Name, host, "pve")
 
 		pve := config.PVEInstance{
 			Name:                         displayName,
@@ -1656,7 +1739,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			pve.PhysicalDiskPollingMinutes = *req.PhysicalDiskPollingMinutes
 		}
 
-		h.config.PVEInstances = append(h.config.PVEInstances, pve)
+		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pve)
 
 		if isCluster {
 			log.Info().
@@ -1764,7 +1847,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Disambiguate name if duplicate hostnames exist (Issue #891)
-		pbsDisplayName := h.disambiguateNodeName(req.Name, host, "pbs")
+		pbsDisplayName := h.disambiguateNodeName(r.Context(), req.Name, host, "pbs")
 
 		pbs := config.PBSInstance{
 			Name:                         pbsDisplayName,
@@ -1784,7 +1867,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			MonitorGarbageJobs:           monitorGarbageJobs,
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
-		h.config.PBSInstances = append(h.config.PBSInstances, pbs)
+		h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbs)
 	} else if req.Type == "pmg" {
 		host := normalizedHost
 
@@ -1840,7 +1923,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		// Disambiguate name if duplicate hostnames exist (Issue #891)
 		// Note: PMG uses similar logic to PBS - we check against PMG instances
 		pmgDisplayName := req.Name
-		for _, node := range h.config.PMGInstances {
+		for _, node := range h.getConfig(r.Context()).PMGInstances {
 			if strings.EqualFold(node.Name, req.Name) && node.Host != host {
 				parsed, err := url.Parse(host)
 				if err == nil && parsed.Host != "" {
@@ -1866,11 +1949,11 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			MonitorDomainStats:           monitorDomainStats,
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
-		h.config.PMGInstances = append(h.config.PMGInstances, pmgInstance)
+		h.getConfig(r.Context()).PMGInstances = append(h.getConfig(r.Context()).PMGInstances, pmgInstance)
 	}
 
 	// Save configuration to disk using our persistence instance
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -2232,8 +2315,8 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Update the node
-	if nodeType == "pve" && index < len(h.config.PVEInstances) {
-		pve := &h.config.PVEInstances[index]
+	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
+		pve := &h.getConfig(r.Context()).PVEInstances[index]
 
 		// Only update name if provided
 		if req.Name != "" {
@@ -2310,8 +2393,8 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		if req.TemperatureMonitoringEnabled != nil {
 			pve.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
 		}
-	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
-		pbs := &h.config.PBSInstances[index]
+	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
+		pbs := &h.getConfig(r.Context()).PBSInstances[index]
 		pbs.Name = req.Name
 
 		host, err := normalizeNodeHost(req.Host, nodeType)
@@ -2395,8 +2478,8 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		if req.ExcludeDatastores != nil {
 			pbs.ExcludeDatastores = req.ExcludeDatastores
 		}
-	} else if nodeType == "pmg" && index < len(h.config.PMGInstances) {
-		pmgInst := &h.config.PMGInstances[index]
+	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
+		pmgInst := &h.getConfig(r.Context()).PMGInstances[index]
 		pmgInst.Name = req.Name
 
 		if req.Host != "" {
@@ -2476,7 +2559,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Save configuration to disk using our persistence instance
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -2486,15 +2569,15 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 	// This fixes issue #440 where PBS alert thresholds were being reset
 	// Alert overrides are stored separately from node configuration
 	// and must be explicitly preserved during node updates
-	if h.monitor != nil {
+	if h.getMonitor(r.Context()) != nil {
 		// Load current alert configuration to preserve overrides
-		alertConfig, err := h.persistence.LoadAlertConfig()
+		alertConfig, err := h.getPersistence(r.Context()).LoadAlertConfig()
 		if err == nil && alertConfig != nil {
 			// For PBS nodes, we need to handle ID mapping
 			// PBS monitoring uses "pbs-<name>" but config uses "pbs-<index>"
 			// We need to preserve overrides by the monitoring ID
-			if nodeType == "pbs" && index < len(h.config.PBSInstances) {
-				pbsName := h.config.PBSInstances[index].Name
+			if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
+				pbsName := h.getConfig(r.Context()).PBSInstances[index].Name
 				monitoringID := "pbs-" + pbsName
 
 				// Check if there are overrides for this PBS node
@@ -2510,7 +2593,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 			}
 
 			// Apply the alert configuration to preserve all overrides
-			h.monitor.GetAlertManager().UpdateConfig(*alertConfig)
+			h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(*alertConfig)
 			log.Debug().
 				Str("nodeID", nodeID).
 				Str("nodeType", nodeType).
@@ -2528,16 +2611,16 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Trigger discovery refresh after adding node
-	if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
+	if h.getMonitor(r.Context()) != nil && h.getMonitor(r.Context()).GetDiscoveryService() != nil {
 		log.Info().Msg("Triggering discovery refresh after adding node")
-		h.monitor.GetDiscoveryService().ForceRefresh()
+		h.getMonitor(r.Context()).GetDiscoveryService().ForceRefresh()
 
 		// Broadcast discovery update via WebSocket
 		if h.wsHub != nil {
 			// Wait a moment for discovery to complete
 			go func() {
 				time.Sleep(2 * time.Second)
-				result, _ := h.monitor.GetDiscoveryService().GetCachedResult()
+				result, _ := h.getMonitor(r.Context()).GetDiscoveryService().GetCachedResult()
 				if result != nil {
 					h.wsHub.BroadcastMessage(websocket.Message{
 						Type: "discovery_update",
@@ -2592,41 +2675,41 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 		Str("nodeID", nodeID).
 		Str("nodeType", nodeType).
 		Int("index", index).
-		Int("pveCount", len(h.config.PVEInstances)).
-		Int("pbsCount", len(h.config.PBSInstances)).
-		Int("pmgCount", len(h.config.PMGInstances)).
+		Int("pveCount", len(h.getConfig(r.Context()).PVEInstances)).
+		Int("pbsCount", len(h.getConfig(r.Context()).PBSInstances)).
+		Int("pmgCount", len(h.getConfig(r.Context()).PMGInstances)).
 		Msg("Attempting to delete node")
 
 	var deletedNodeHost string
 
 	// Delete the node
-	if nodeType == "pve" && index < len(h.config.PVEInstances) {
-		deletedNodeHost = h.config.PVEInstances[index].Host
+	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
+		deletedNodeHost = h.getConfig(r.Context()).PVEInstances[index].Host
 		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PVE node")
-		h.config.PVEInstances = append(h.config.PVEInstances[:index], h.config.PVEInstances[index+1:]...)
-	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
-		deletedNodeHost = h.config.PBSInstances[index].Host
+		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances[:index], h.getConfig(r.Context()).PVEInstances[index+1:]...)
+	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
+		deletedNodeHost = h.getConfig(r.Context()).PBSInstances[index].Host
 		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PBS node")
-		h.config.PBSInstances = append(h.config.PBSInstances[:index], h.config.PBSInstances[index+1:]...)
-	} else if nodeType == "pmg" && index < len(h.config.PMGInstances) {
-		deletedNodeHost = h.config.PMGInstances[index].Host
+		h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances[:index], h.getConfig(r.Context()).PBSInstances[index+1:]...)
+	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
+		deletedNodeHost = h.getConfig(r.Context()).PMGInstances[index].Host
 		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PMG node")
-		h.config.PMGInstances = append(h.config.PMGInstances[:index], h.config.PMGInstances[index+1:]...)
+		h.getConfig(r.Context()).PMGInstances = append(h.getConfig(r.Context()).PMGInstances[:index], h.getConfig(r.Context()).PMGInstances[index+1:]...)
 	} else {
 		log.Warn().
 			Str("nodeID", nodeID).
 			Str("nodeType", nodeType).
 			Int("index", index).
-			Int("pveCount", len(h.config.PVEInstances)).
-			Int("pbsCount", len(h.config.PBSInstances)).
-			Int("pmgCount", len(h.config.PMGInstances)).
+			Int("pveCount", len(h.getConfig(r.Context()).PVEInstances)).
+			Int("pbsCount", len(h.getConfig(r.Context()).PBSInstances)).
+			Int("pmgCount", len(h.getConfig(r.Context()).PMGInstances)).
 			Msg("Node not found for deletion")
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return
 	}
 
 	// Save configuration to disk using our persistence instance
-	if err := h.persistence.SaveNodesConfigAllowEmpty(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+	if err := h.getPersistence(r.Context()).SaveNodesConfigAllowEmpty(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -2666,8 +2749,8 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 			time.Sleep(500 * time.Millisecond)
 
 			// Trigger full discovery refresh
-			if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
-				h.monitor.GetDiscoveryService().ForceRefresh()
+			if h.getMonitor(r.Context()) != nil && h.getMonitor(r.Context()).GetDiscoveryService() != nil {
+				h.getMonitor(r.Context()).GetDiscoveryService().ForceRefresh()
 				log.Info().Msg("Triggered background discovery refresh after node deletion")
 			}
 		}()
@@ -2719,12 +2802,12 @@ func (h *ConfigHandlers) HandleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if index >= len(h.config.PVEInstances) {
+	if index >= len(h.getConfig(r.Context()).PVEInstances) {
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return
 	}
 
-	pve := &h.config.PVEInstances[index]
+	pve := &h.getConfig(r.Context()).PVEInstances[index]
 
 	// Create client config for cluster detection
 	clientConfig := config.CreateProxmoxConfig(pve)
@@ -2753,7 +2836,7 @@ func (h *ConfigHandlers) HandleRefreshClusterNodes(w http.ResponseWriter, r *htt
 	pve.ClusterEndpoints = clusterEndpoints
 
 	// Save configuration
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration after cluster refresh")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -2977,8 +3060,8 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 	// Find the node to test
 	var testResult map[string]interface{}
 
-	if nodeType == "pve" && index < len(h.config.PVEInstances) {
-		pve := h.config.PVEInstances[index]
+	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
+		pve := h.getConfig(r.Context()).PVEInstances[index]
 
 		// Create a temporary client to test connection
 		authUser := pve.User
@@ -3020,8 +3103,8 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 				}
 			}
 		}
-	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
-		pbsInstance := h.config.PBSInstances[index]
+	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
+		pbsInstance := h.getConfig(r.Context()).PBSInstances[index]
 
 		// Create a temporary client to test connection
 		clientConfig := pbs.ClientConfig{
@@ -3059,8 +3142,8 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 				}
 			}
 		}
-	} else if nodeType == "pmg" && index < len(h.config.PMGInstances) {
-		pmgInstance := h.config.PMGInstances[index]
+	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
+		pmgInstance := h.getConfig(r.Context()).PMGInstances[index]
 
 		clientConfig := config.CreatePMGConfig(&pmgInstance)
 		if pmgInstance.Password != "" && pmgInstance.TokenName == "" && pmgInstance.TokenValue == "" {
@@ -3132,8 +3215,8 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 }
 
 // getNodeStatus returns the connection status for a node
-func (h *ConfigHandlers) getNodeStatus(nodeType, nodeName string) string {
-	if h.monitor == nil {
+func (h *ConfigHandlers) getNodeStatus(ctx context.Context, nodeType, nodeName string) string {
+	if h.getMonitor(ctx) == nil {
 		if h.isRecentlyAutoRegistered(nodeType, nodeName) {
 			return "connected"
 		}
@@ -3141,7 +3224,7 @@ func (h *ConfigHandlers) getNodeStatus(nodeType, nodeName string) string {
 	}
 
 	// Get connection statuses from monitor
-	connectionStatus := h.monitor.GetConnectionStatuses()
+	connectionStatus := h.getMonitor(ctx).GetConnectionStatuses()
 
 	key := fmt.Sprintf("%s-%s", nodeType, nodeName)
 	if connected, ok := connectionStatus[key]; ok {
@@ -3165,7 +3248,7 @@ func (h *ConfigHandlers) getNodeStatus(nodeType, nodeName string) string {
 // HandleGetSystemSettings returns current system settings
 func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
 	// Load settings from persistence to get all fields including theme
-	persistedSettings, err := h.persistence.LoadSystemSettings()
+	persistedSettings, err := h.getPersistence(r.Context()).LoadSystemSettings()
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to load persisted system settings")
 		persistedSettings = config.DefaultSystemSettings()
@@ -3176,22 +3259,22 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 
 	// Get current values from running config
 	settings := *persistedSettings
-	settings.PVEPollingInterval = int(h.config.PVEPollingInterval.Seconds())
-	settings.PBSPollingInterval = int(h.config.PBSPollingInterval.Seconds())
-	settings.BackupPollingInterval = int(h.config.BackupPollingInterval.Seconds())
-	settings.BackendPort = h.config.BackendPort
-	settings.FrontendPort = h.config.FrontendPort
-	settings.AllowedOrigins = h.config.AllowedOrigins
-	settings.ConnectionTimeout = int(h.config.ConnectionTimeout.Seconds())
-	settings.UpdateChannel = h.config.UpdateChannel
-	settings.AutoUpdateEnabled = h.config.AutoUpdateEnabled
-	settings.AutoUpdateCheckInterval = int(h.config.AutoUpdateCheckInterval.Hours())
-	settings.AutoUpdateTime = h.config.AutoUpdateTime
-	settings.LogLevel = h.config.LogLevel
-	settings.DiscoveryEnabled = h.config.DiscoveryEnabled
-	settings.DiscoverySubnet = h.config.DiscoverySubnet
-	settings.DiscoveryConfig = config.CloneDiscoveryConfig(h.config.Discovery)
-	backupEnabled := h.config.EnableBackupPolling
+	settings.PVEPollingInterval = int(h.getConfig(r.Context()).PVEPollingInterval.Seconds())
+	settings.PBSPollingInterval = int(h.getConfig(r.Context()).PBSPollingInterval.Seconds())
+	settings.BackupPollingInterval = int(h.getConfig(r.Context()).BackupPollingInterval.Seconds())
+	settings.BackendPort = h.getConfig(r.Context()).BackendPort
+	settings.FrontendPort = h.getConfig(r.Context()).FrontendPort
+	settings.AllowedOrigins = h.getConfig(r.Context()).AllowedOrigins
+	settings.ConnectionTimeout = int(h.getConfig(r.Context()).ConnectionTimeout.Seconds())
+	settings.UpdateChannel = h.getConfig(r.Context()).UpdateChannel
+	settings.AutoUpdateEnabled = h.getConfig(r.Context()).AutoUpdateEnabled
+	settings.AutoUpdateCheckInterval = int(h.getConfig(r.Context()).AutoUpdateCheckInterval.Hours())
+	settings.AutoUpdateTime = h.getConfig(r.Context()).AutoUpdateTime
+	settings.LogLevel = h.getConfig(r.Context()).LogLevel
+	settings.DiscoveryEnabled = h.getConfig(r.Context()).DiscoveryEnabled
+	settings.DiscoverySubnet = h.getConfig(r.Context()).DiscoverySubnet
+	settings.DiscoveryConfig = config.CloneDiscoveryConfig(h.getConfig(r.Context()).Discovery)
+	backupEnabled := h.getConfig(r.Context()).EnableBackupPolling
 	settings.BackupPollingEnabled = &backupEnabled
 
 	// Create response structure that includes environment overrides
@@ -3245,7 +3328,7 @@ func (h *ConfigHandlers) HandleVerifyTemperatureSSH(w http.ResponseWriter, r *ht
 		homeDir = "/home/pulse"
 	}
 	sshKeyPath := filepath.Join(homeDir, ".ssh/id_ed25519_sensors")
-	tempCollector := monitoring.NewTemperatureCollectorWithPort("root", sshKeyPath, h.config.SSHPort)
+	tempCollector := monitoring.NewTemperatureCollectorWithPort("root", sshKeyPath, h.getConfig(r.Context()).SSHPort)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -3333,7 +3416,7 @@ func (h *ConfigHandlers) HandleExportConfig(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Export configuration
-	exportedData, err := h.persistence.ExportConfig(req.Passphrase)
+	exportedData, err := h.getPersistence(r.Context()).ExportConfig(req.Passphrase)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to export configuration")
 		http.Error(w, "Failed to export configuration", http.StatusInternalServerError)
@@ -3374,7 +3457,7 @@ func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Import configuration
-	if err := h.persistence.ImportConfig(req.Data, req.Passphrase); err != nil {
+	if err := h.getPersistence(r.Context()).ImportConfig(req.Data, req.Passphrase); err != nil {
 		log.Error().Err(err).Msg("Failed to import configuration")
 		http.Error(w, "Failed to import configuration: "+err.Error(), http.StatusBadRequest)
 		return
@@ -3389,7 +3472,7 @@ func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Update the config reference
-	*h.config = *newConfig
+	*h.getConfig(r.Context()) = *newConfig
 
 	// Reload monitor with new configuration
 	if h.reloadFunc != nil {
@@ -3402,19 +3485,19 @@ func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Reque
 
 	// Also reload alert and notification configs explicitly
 	// (the monitor reload only reloads nodes unless it's a full reload)
-	if h.monitor != nil {
+	if h.getMonitor(r.Context()) != nil {
 		// Reload alert configuration
-		if alertConfig, err := h.persistence.LoadAlertConfig(); err == nil {
-			h.monitor.GetAlertManager().UpdateConfig(*alertConfig)
+		if alertConfig, err := h.getPersistence(r.Context()).LoadAlertConfig(); err == nil {
+			h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(*alertConfig)
 			log.Info().Msg("Reloaded alert configuration after import")
 		} else {
 			log.Warn().Err(err).Msg("Failed to reload alert configuration after import")
 		}
 
 		// Reload webhook configuration
-		if webhooks, err := h.persistence.LoadWebhooks(); err == nil {
+		if webhooks, err := h.getPersistence(r.Context()).LoadWebhooks(); err == nil {
 			// Clear existing webhooks and add new ones
-			notificationMgr := h.monitor.GetNotificationManager()
+			notificationMgr := h.getMonitor(r.Context()).GetNotificationManager()
 			// Get current webhooks to clear them
 			for _, webhook := range notificationMgr.GetWebhooks() {
 				if err := notificationMgr.DeleteWebhook(webhook.ID); err != nil {
@@ -3431,8 +3514,8 @@ func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Reque
 		}
 
 		// Reload email configuration
-		if emailConfig, err := h.persistence.LoadEmailConfig(); err == nil {
-			h.monitor.GetNotificationManager().SetEmailConfig(*emailConfig)
+		if emailConfig, err := h.getPersistence(r.Context()).LoadEmailConfig(); err == nil {
+			h.getMonitor(r.Context()).GetNotificationManager().SetEmailConfig(*emailConfig)
 			log.Info().Msg("Reloaded email configuration after import")
 		} else {
 			log.Warn().Err(err).Msg("Failed to reload email configuration after import")
@@ -3463,7 +3546,7 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 	switch r.Method {
 	case http.MethodGet:
 		// Return cached results from background discovery service
-		if discoveryService := h.monitor.GetDiscoveryService(); discoveryService != nil {
+		if discoveryService := h.getMonitor(r.Context()).GetDiscoveryService(); discoveryService != nil {
 			result, updated := discoveryService.GetCachedResult()
 
 			var updatedUnix int64
@@ -3513,7 +3596,7 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 		}
 
 		if req.UseCache {
-			if discoveryService := h.monitor.GetDiscoveryService(); discoveryService != nil {
+			if discoveryService := h.getMonitor(r.Context()).GetDiscoveryService(); discoveryService != nil {
 				result, updated := discoveryService.GetCachedResult()
 
 				var updatedUnix int64
@@ -3545,7 +3628,7 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 
 		log.Info().Str("subnet", subnet).Msg("Starting manual discovery scan")
 
-		scanner, buildErr := discoveryinternal.BuildScanner(h.config.Discovery)
+		scanner, buildErr := discoveryinternal.BuildScanner(h.getConfig(r.Context()).Discovery)
 		if buildErr != nil {
 			log.Warn().Err(buildErr).Msg("Falling back to default scanner for manual discovery")
 			scanner = pkgdiscovery.NewScanner()
@@ -3659,7 +3742,7 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	log.Info().
 		Str("type", serverType).
 		Str("host", serverHost).
-		Bool("has_auth", h.config.AuthUser != "" || h.config.AuthPass != "" || h.config.HasAPITokens()).
+		Bool("has_auth", h.getConfig(r.Context()).AuthUser != "" || h.getConfig(r.Context()).AuthPass != "" || h.getConfig(r.Context()).HasAPITokens()).
 		Msg("HandleSetupScript called")
 
 	// The setup script is now public - authentication happens via setup code
@@ -4697,6 +4780,7 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		Used:      false,
 		NodeType:  req.Type,
 		Host:      req.Host,
+		OrgID:     GetOrgID(r.Context()),
 	}
 	h.codeMutex.Unlock()
 
@@ -4710,9 +4794,9 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 	host := r.Host
 
 	if parsedHost, parsedPort, err := net.SplitHostPort(host); err == nil {
-		if (parsedHost == "127.0.0.1" || parsedHost == "localhost") && parsedPort == strconv.Itoa(h.config.FrontendPort) {
+		if (parsedHost == "127.0.0.1" || parsedHost == "localhost") && parsedPort == strconv.Itoa(h.getConfig(r.Context()).FrontendPort) {
 			// Prefer a user-configured public URL when we're running on loopback.
-			if publicURL := strings.TrimSpace(h.config.PublicURL); publicURL != "" {
+			if publicURL := strings.TrimSpace(h.getConfig(r.Context()).PublicURL); publicURL != "" {
 				if parsedURL, err := url.Parse(publicURL); err == nil && parsedURL.Host != "" {
 					host = parsedURL.Host
 				}
@@ -4844,8 +4928,8 @@ func (h *ConfigHandlers) HandleUpdateMockMode(w http.ResponseWriter, r *http.Req
 	mock.SetMockConfig(currentCfg)
 
 	if req.Enabled != nil {
-		if h.monitor != nil {
-			h.monitor.SetMockMode(*req.Enabled)
+		if h.getMonitor(r.Context()) != nil {
+			h.getMonitor(r.Context()).SetMockMode(*req.Enabled)
 		} else {
 			mock.SetEnabled(*req.Enabled)
 		}
@@ -4914,14 +4998,14 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	log.Debug().
 		Bool("hasAuthToken", strings.TrimSpace(req.AuthToken) != "").
 		Bool("hasSetupCode", strings.TrimSpace(authCode) != "").
-		Bool("hasConfigToken", h.config.HasAPITokens()).
+		Bool("hasConfigToken", h.getConfig(r.Context()).HasAPITokens()).
 		Msg("Checking authentication for auto-register")
 
 	// First check for setup code/auth token in the request
 	if authCode != "" {
 		matchedAPIToken := false
-		if h.config.HasAPITokens() {
-			if _, ok := h.config.ValidateAPIToken(authCode); ok {
+		if h.getConfig(r.Context()).HasAPITokens() {
+			if _, ok := h.getConfig(r.Context()).ValidateAPIToken(authCode); ok {
 				authenticated = true
 				matchedAPIToken = true
 				log.Info().
@@ -4950,6 +5034,12 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				// what's entered in the UI and what's provided in the setup script URL
 				if setupCode.NodeType == req.Type {
 					setupCode.Used = true // Mark as used immediately
+
+					// Inject OrgID from setup code into context for subsequent processing
+					if setupCode.OrgID != "" {
+						ctx := context.WithValue(r.Context(), OrgIDContextKey, setupCode.OrgID)
+						r = r.WithContext(ctx)
+					}
 					// Allow a short grace period for follow-up actions without keeping tokens alive too long
 					graceExpiry := time.Now().Add(1 * time.Minute)
 					if setupCode.ExpiresAt.Before(graceExpiry) {
@@ -4980,9 +5070,9 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	// If not authenticated via setup code, check API token if configured
-	if !authenticated && h.config.HasAPITokens() {
+	if !authenticated && h.getConfig(r.Context()).HasAPITokens() {
 		apiToken := r.Header.Get("X-API-Token")
-		if _, ok := h.config.ValidateAPIToken(apiToken); ok {
+		if _, ok := h.getConfig(r.Context()).ValidateAPIToken(apiToken); ok {
 			authenticated = true
 			log.Info().Msg("Auto-register authenticated via API token")
 		}
@@ -5100,7 +5190,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	newHostIP := extractHostIP(host)
 
 	if req.Type == "pve" {
-		for i, node := range h.config.PVEInstances {
+		for i, node := range h.getConfig(r.Context()).PVEInstances {
 			if node.Host == host {
 				existingIndex = i
 				break
@@ -5141,7 +5231,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			}
 		}
 	} else {
-		for i, node := range h.config.PBSInstances {
+		for i, node := range h.getConfig(r.Context()).PBSInstances {
 			if node.Host == host {
 				existingIndex = i
 				break
@@ -5182,7 +5272,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	if existingIndex >= 0 {
 		// Update existing node
 		if req.Type == "pve" {
-			instance := &h.config.PVEInstances[existingIndex]
+			instance := &h.getConfig(r.Context()).PVEInstances[existingIndex]
 			// Update host in case IP changed (DHCP scenario)
 			// But preserve user's configured hostname when matched by IP resolution (Issue #940)
 			if !preserveHost {
@@ -5220,7 +5310,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			}
 			// Keep other settings as they were
 		} else {
-			instance := &h.config.PBSInstances[existingIndex]
+			instance := &h.getConfig(r.Context()).PBSInstances[existingIndex]
 			// Update host in case IP changed (DHCP scenario)
 			// But preserve user's configured hostname when matched by IP resolution (Issue #940)
 			if !preserveHost {
@@ -5263,8 +5353,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			// CLUSTER DEDUPLICATION: Check if we already have this cluster configured
 			// If so, merge this node as an endpoint instead of creating a duplicate instance
 			if isCluster && clusterName != "" {
-				for i := range h.config.PVEInstances {
-					existingInstance := &h.config.PVEInstances[i]
+				for i := range h.getConfig(r.Context()).PVEInstances {
+					existingInstance := &h.getConfig(r.Context()).PVEInstances[i]
 					if existingInstance.IsCluster && existingInstance.ClusterName == clusterName {
 						// Found existing cluster with same name - merge endpoints!
 						log.Info().
@@ -5289,8 +5379,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 						}
 
 						// Save and reload
-						if h.persistence != nil {
-							if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+						if h.getPersistence(r.Context()) != nil {
+							if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 								log.Warn().Err(err).Msg("Failed to persist cluster endpoint merge during auto-registration")
 							}
 						}
@@ -5333,7 +5423,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			}
 
 			// Disambiguate node name if duplicate hostnames exist
-			displayName := h.disambiguateNodeName(nodeConfig.Name, nodeConfig.Host, "pve")
+			displayName := h.disambiguateNodeName(r.Context(), nodeConfig.Name, nodeConfig.Host, "pve")
 
 			newInstance := config.PVEInstance{
 				Name:              displayName,
@@ -5350,7 +5440,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				ClusterEndpoints:  clusterEndpoints,
 				Source:            req.Source, // Track how this node was registered
 			}
-			h.config.PVEInstances = append(h.config.PVEInstances, newInstance)
+			h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, newInstance)
 
 			if isCluster {
 				log.Info().
@@ -5385,7 +5475,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			}
 
 			// Disambiguate node name if duplicate hostnames exist
-			pbsDisplayName := h.disambiguateNodeName(nodeConfig.Name, nodeConfig.Host, "pbs")
+			pbsDisplayName := h.disambiguateNodeName(r.Context(), nodeConfig.Name, nodeConfig.Host, "pbs")
 
 			newInstance := config.PBSInstance{
 				Name:               pbsDisplayName,
@@ -5401,14 +5491,14 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				MonitorGarbageJobs: monitorGarbageJobs,
 				Source:             req.Source, // Track how this node was registered
 			}
-			h.config.PBSInstances = append(h.config.PBSInstances, newInstance)
+			h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, newInstance)
 		}
 		log.Info().Str("host", req.Host).Str("type", req.Type).Msg("Added new node via auto-registration")
 	}
 
 	// Log what we're about to save
-	if req.Type == "pve" && len(h.config.PVEInstances) > 0 {
-		lastNode := h.config.PVEInstances[len(h.config.PVEInstances)-1]
+	if req.Type == "pve" && len(h.getConfig(r.Context()).PVEInstances) > 0 {
+		lastNode := h.getConfig(r.Context()).PVEInstances[len(h.getConfig(r.Context()).PVEInstances)-1]
 		log.Info().
 			Str("name", lastNode.Name).
 			Str("host", lastNode.Host).
@@ -5418,7 +5508,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Save configuration
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save auto-registered node")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -5426,7 +5516,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 
 	log.Info().Msg("Configuration saved successfully")
 
-	actualName := h.findInstanceNameByHost(req.Type, host)
+	actualName := h.findInstanceNameByHost(r.Context(), req.Type, host)
 	if actualName == "" {
 		actualName = strings.TrimSpace(req.ServerName)
 	}
@@ -5452,9 +5542,9 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Trigger a discovery refresh to remove the node from discovered list
-	if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
+	if h.getMonitor(r.Context()) != nil && h.getMonitor(r.Context()).GetDiscoveryService() != nil {
 		log.Info().Msg("Triggering discovery refresh after auto-registration")
-		h.monitor.GetDiscoveryService().ForceRefresh()
+		h.getMonitor(r.Context()).GetDiscoveryService().ForceRefresh()
 	}
 
 	// Broadcast auto-registration success via WebSocket
@@ -5477,8 +5567,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		})
 
 		// Also broadcast a discovery update to refresh the UI
-		if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
-			result, _ := h.monitor.GetDiscoveryService().GetCachedResult()
+		if h.getMonitor(r.Context()) != nil && h.getMonitor(r.Context()).GetDiscoveryService() != nil {
+			result, _ := h.getMonitor(r.Context()).GetDiscoveryService().GetCachedResult()
 			if result != nil {
 				h.wsHub.BroadcastMessage(websocket.Message{
 					Type: "discovery_update",
@@ -5512,7 +5602,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 }
 
 // handleSecureAutoRegister handles the new secure registration flow where Pulse generates the token
-func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, _ *http.Request, req *AutoRegisterRequest, clientIP string) {
+func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http.Request, req *AutoRegisterRequest, clientIP string) {
 	log.Info().
 		Str("type", req.Type).
 		Str("host", req.Host).
@@ -5629,7 +5719,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, _ *http
 			MonitorStorage:    true,
 			MonitorBackups:    true,
 		}
-		h.config.PVEInstances = append(h.config.PVEInstances, pveNode)
+		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pveNode)
 	} else if req.Type == "pbs" {
 		pbsNode := config.PBSInstance{
 			Name:              serverName,
@@ -5644,17 +5734,17 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, _ *http
 			MonitorVerifyJobs: true,
 			MonitorPruneJobs:  true,
 		}
-		h.config.PBSInstances = append(h.config.PBSInstances, pbsNode)
+		h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbsNode)
 	}
 
 	// Save configuration
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save auto-registered node")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
 	}
 
-	actualName := h.findInstanceNameByHost(req.Type, host)
+	actualName := h.findInstanceNameByHost(r.Context(), req.Type, host)
 	if actualName == "" {
 		actualName = serverName
 	}
@@ -5849,13 +5939,13 @@ func (h *ConfigHandlers) HandleAgentInstallCommand(w http.ResponseWriter, r *htt
 
 	// Persist the token
 	config.Mu.Lock()
-	h.config.APITokens = append(h.config.APITokens, *record)
-	h.config.SortAPITokens()
+	h.getConfig(r.Context()).APITokens = append(h.getConfig(r.Context()).APITokens, *record)
+	h.getConfig(r.Context()).SortAPITokens()
 
-	if h.persistence != nil {
-		if err := h.persistence.SaveAPITokens(h.config.APITokens); err != nil {
+	if h.getPersistence(r.Context()) != nil {
+		if err := h.getPersistence(r.Context()).SaveAPITokens(h.getConfig(r.Context()).APITokens); err != nil {
 			// Rollback the in-memory addition
-			h.config.APITokens = h.config.APITokens[:len(h.config.APITokens)-1]
+			h.getConfig(r.Context()).APITokens = h.getConfig(r.Context()).APITokens[:len(h.getConfig(r.Context()).APITokens)-1]
 			config.Mu.Unlock()
 			log.Error().Err(err).Msg("Failed to persist API tokens after creation")
 			http.Error(w, "Failed to save token to disk: "+err.Error(), http.StatusInternalServerError)
@@ -5867,9 +5957,9 @@ func (h *ConfigHandlers) HandleAgentInstallCommand(w http.ResponseWriter, r *htt
 	// Derive Pulse URL from the request
 	host := r.Host
 	if parsedHost, parsedPort, err := net.SplitHostPort(host); err == nil {
-		if (parsedHost == "127.0.0.1" || parsedHost == "localhost") && parsedPort == strconv.Itoa(h.config.FrontendPort) {
+		if (parsedHost == "127.0.0.1" || parsedHost == "localhost") && parsedPort == strconv.Itoa(h.getConfig(r.Context()).FrontendPort) {
 			// Prefer a user-configured public URL when we're running on loopback
-			if publicURL := strings.TrimSpace(h.config.PublicURL); publicURL != "" {
+			if publicURL := strings.TrimSpace(h.getConfig(r.Context()).PublicURL); publicURL != "" {
 				if parsedURL, err := url.Parse(publicURL); err == nil && parsedURL.Host != "" {
 					host = parsedURL.Host
 				}
