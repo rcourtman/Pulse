@@ -7,6 +7,7 @@ import Filter from 'lucide-solid/icons/filter';
 import Info from 'lucide-solid/icons/info';
 import Play from 'lucide-solid/icons/play';
 import X from 'lucide-solid/icons/x';
+import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import Toggle from '@/components/shared/Toggle';
 import {
@@ -142,7 +143,9 @@ export default function AuditLogPanel() {
                 }, 0);
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Unknown error');
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            setError(msg);
+            showWarning('Audit Log Error', msg);
         } finally {
             setLoading(false);
         }
@@ -835,14 +838,36 @@ export default function AuditLogPanel() {
 
             {/* Empty State */}
             <Show when={!loading() && isPersistent() && filteredEvents().length === 0}>
-                <div class="text-center py-12 text-gray-500 dark:text-gray-400">
-                    <Shield class="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>No audit events found</p>
-                    <Show when={verificationFilter() !== 'all'}>
-                        <p class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-                            Try clearing the verification filter.
+                <div class="text-center py-12 px-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+                    <div class="flex flex-col items-center max-w-sm mx-auto">
+                        <Show
+                            when={activeFilterCount() > 0}
+                            fallback={<Shield class="w-12 h-12 text-gray-300 dark:text-gray-600 mb-4" />}
+                        >
+                            <ShieldAlert class="w-12 h-12 text-indigo-300 dark:text-indigo-900 mb-4" />
+                        </Show>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">No audit events found</h3>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            {activeFilterCount() > 0
+                                ? "No events match your current filters. Try adjusting or clearing them."
+                                : "Audit logging is active, but no events have been recorded yet."}
                         </p>
-                    </Show>
+                        <Show when={activeFilterCount() > 0}>
+                            <button
+                                onClick={() => {
+                                    setEventFilter('');
+                                    setUserFilter('');
+                                    setSuccessFilter('all');
+                                    setVerificationFilter('all');
+                                    setPageOffset(0);
+                                    void fetchAuditEvents({ offset: 0 });
+                                }}
+                                class="mt-6 px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                            >
+                                Clear all filters
+                            </button>
+                        </Show>
+                    </div>
                 </div>
             </Show>
 

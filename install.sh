@@ -2587,7 +2587,7 @@ setup_directories() {
         fi
     done
 
-    for config_dir in "$CONFIG_DIR"/alerts "$CONFIG_DIR"/notifications; do
+    for config_dir in "$CONFIG_DIR"/alerts "$CONFIG_DIR"/notifications "$CONFIG_DIR"/audit; do
         if [[ -d "$config_dir" ]]; then
             chown -R pulse:pulse "$config_dir"
         fi
