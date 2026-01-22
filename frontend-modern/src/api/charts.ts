@@ -55,6 +55,7 @@ export interface MetricsHistoryParams {
     resourceId: string;
     metric?: string;  // Optional: 'cpu', 'memory', 'disk', etc. Omit for all metrics
     range?: HistoryTimeRange;  // Default: '24h'
+    maxPoints?: number; // Optional cap on returned points (backend may downsample)
 }
 
 export interface SingleMetricHistoryResponse {
@@ -65,6 +66,7 @@ export interface SingleMetricHistoryResponse {
     start: number;  // Unix timestamp in milliseconds
     end: number;    // Unix timestamp in milliseconds
     points: AggregatedMetricPoint[];
+    source?: 'store' | 'memory' | 'live';
 }
 
 export interface AllMetricsHistoryResponse {
@@ -74,6 +76,7 @@ export interface AllMetricsHistoryResponse {
     start: number;  // Unix timestamp in milliseconds
     end: number;    // Unix timestamp in milliseconds
     metrics: Record<string, AggregatedMetricPoint[]>;
+    source?: 'store' | 'memory' | 'live';
 }
 
 export interface MetricsStoreStats {
@@ -136,6 +139,9 @@ export class ChartsAPI {
         if (params.range) {
             searchParams.set('range', params.range);
         }
+        if (typeof params.maxPoints === 'number' && Number.isFinite(params.maxPoints) && params.maxPoints > 0) {
+            searchParams.set('maxPoints', Math.round(params.maxPoints).toString());
+        }
         const url = `${this.baseUrl}/metrics-store/history?${searchParams.toString()}`;
         return apiFetchJSON(url);
     }
@@ -148,4 +154,3 @@ export class ChartsAPI {
         return apiFetchJSON(url);
     }
 }
-

@@ -30,36 +30,66 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
     const [loading, setLoading] = createSignal(false);
     const [error, setError] = createSignal<string | null>(null);
     const [hoveredPoint, setHoveredPoint] = createSignal<HoverInfo | null>(null);
+    const [source, setSource] = createSignal<'store' | 'memory' | 'live' | null>(null);
+    const [maxPoints, setMaxPoints] = createSignal<number | null>(null);
+    const [group, setGroup] = createSignal<'utilization' | 'io'>('utilization');
+    const [refreshTick, setRefreshTick] = createSignal(0);
 
-    const metricConfigs = {
-        cpu: { label: 'CPU', color: '#8b5cf6', unit: '%' },      // violet-500
-        memory: { label: 'Memory', color: '#f59e0b', unit: '%' }, // amber-500
-        disk: { label: 'Disk', color: '#10b981', unit: '%' }      // emerald-500
+    const metricGroups: Record<'utilization' | 'io', Record<string, { label: string; color: string; unit: string }>> = {
+        utilization: {
+            cpu: { label: 'CPU', color: '#8b5cf6', unit: '%' },      // violet-500
+            memory: { label: 'Memory', color: '#f59e0b', unit: '%' }, // amber-500
+            disk: { label: 'Disk', color: '#10b981', unit: '%' }      // emerald-500
+        },
+        io: {
+            diskread: { label: 'Disk Read', color: '#3b82f6', unit: 'B/s' },  // blue-500
+            diskwrite: { label: 'Disk Write', color: '#6366f1', unit: 'B/s' }, // indigo-500
+            netin: { label: 'Net In', color: '#10b981', unit: 'B/s' },         // emerald-500
+            netout: { label: 'Net Out', color: '#f59e0b', unit: 'B/s' }        // amber-500
+        }
     };
 
     const isLocked = createMemo(() => (range() === '30d' || range() === '90d') && !hasFeature('long_term_metrics'));
     const lockDays = createMemo(() => (range() === '30d' ? '30' : '90'));
+    const refreshIntervalMs = createMemo(() => {
+        const r = range();
+        switch (r) {
+            case '7d':
+                return 30000;
+            case '30d':
+                return 60000;
+            case '90d':
+                return 120000;
+            default:
+                return 10000;
+        }
+    });
 
-    const loadData = async (resourceType: ResourceType, resourceId: string, rangeValue: HistoryTimeRange) => {
+    const loadData = async (resourceType: ResourceType, resourceId: string, rangeValue: HistoryTimeRange, pointsCap?: number | null) => {
         setLoading(true);
         setError(null);
+        setSource(null);
         try {
             // Fetch all metrics for the resource
             const response = await ChartsAPI.getMetricsHistory({
                 resourceType,
                 resourceId,
-                range: rangeValue
+                range: rangeValue,
+                maxPoints: pointsCap ?? undefined
             });
 
             if ('metrics' in response) {
                 setMetricsData(response.metrics);
+                setSource(response.source ?? 'store');
             } else {
                 // Should not happen with multi-metric query, but handle fallback
                 setMetricsData({ [response.metric]: response.points });
+                setSource(response.source ?? 'store');
             }
         } catch (err: any) {
             console.error('[UnifiedHistoryChart] Failed to load history:', err);
             setError('Failed to load history data');
+            setSource(null);
         } finally {
             setLoading(false);
         }
@@ -78,6 +108,8 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         const resourceId = props.resourceId;
         const rangeValue = props.range ?? range();
         const locked = isLocked();
+        const pointsCap = maxPoints();
+        refreshTick();
 
         if (!resourceType || !resourceId) return;
         if (locked) {
@@ -85,7 +117,16 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
             setError(null);
             return;
         }
-        loadData(resourceType, resourceId, rangeValue);
+        loadData(resourceType, resourceId, rangeValue, pointsCap);
+    });
+
+    createEffect(() => {
+        const interval = refreshIntervalMs();
+        if (!interval || interval <= 0) return;
+        const timer = window.setInterval(() => {
+            setRefreshTick((t) => t + 1);
+        }, interval);
+        onCleanup(() => window.clearInterval(timer));
     });
 
     const drawChart = () => {
@@ -95,6 +136,8 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
 
         const w = canvasRef.parentElement?.clientWidth || 300;
         const h = props.height || 200;
+        const activeGroup = group();
+        const metricConfigs = metricGroups[activeGroup];
 
         const dpr = window.devicePixelRatio || 1;
         canvasRef.width = w * dpr;
@@ -108,6 +151,7 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         const isDark = document.documentElement.classList.contains('dark');
         const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
         const textColor = isDark ? '#9ca3af' : '#6b7280';
+        const axisTextColor = isDark ? '#9ca3af' : '#6b7280';
 
         // Draw grid
         ctx.strokeStyle = gridColor;
@@ -123,11 +167,36 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
             ctx.font = '10px sans-serif';
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
-            ctx.fillText(`${Math.round(pct * 100)}%`, 35, y);
+            if (activeGroup === 'utilization') {
+                ctx.fillText(`${Math.round(pct * 100)}%`, 35, y);
+            }
         });
 
         // Plot each series
         const dataMap = metricsData();
+        const pointsForAxis = Object.keys(metricConfigs)
+            .map(metricId => dataMap[metricId])
+            .find(points => points && points.length > 0);
+        let axisStart = 0;
+        let axisEnd = 0;
+        if (pointsForAxis && pointsForAxis.length > 0) {
+            axisStart = pointsForAxis[0].timestamp;
+            axisEnd = pointsForAxis[pointsForAxis.length - 1].timestamp;
+        }
+
+        let maxAxisValue = 100;
+        if (activeGroup === 'io') {
+            let maxValue = 0;
+            Object.keys(metricConfigs).forEach(metricId => {
+                const points = dataMap[metricId];
+                if (!points || points.length === 0) return;
+                for (const p of points) {
+                    const v = p.max || p.value || 0;
+                    if (v > maxValue) maxValue = v;
+                }
+            });
+            maxAxisValue = Math.max(1, maxValue * 1.1);
+        }
 
         Object.entries(metricConfigs).forEach(([metricId, config]) => {
             const points = dataMap[metricId];
@@ -141,7 +210,10 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
             const timeSpan = endTime - startTime || 1;
 
             const getX = (ts: number) => 40 + ((ts - startTime) / timeSpan) * (w - 40);
-            const getY = (val: number) => h - 20 - (Math.min(Math.max(val, 0), 100) / 100) * (h - 40);
+            const getY = (val: number) => {
+                const clamped = Math.max(0, Math.min(val, maxAxisValue));
+                return h - 20 - (clamped / maxAxisValue) * (h - 40);
+            };
 
             // Draw Area (Transparent)
             ctx.fillStyle = `${config.color}15`; // 15 order opacity
@@ -162,6 +234,43 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
             });
             ctx.stroke();
         });
+
+        if (axisStart > 0 && axisEnd > axisStart) {
+            const timeSpan = axisEnd - axisStart;
+            const getAxisX = (ts: number) => 40 + ((ts - axisStart) / timeSpan) * (w - 40);
+            const formatTimeLabel = (ts: number) => {
+                const date = new Date(ts);
+                const r = range();
+                if (r === '30d' || r === '90d' || r === '7d') {
+                    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                }
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            };
+
+            ctx.fillStyle = axisTextColor;
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+
+            const labelCount = 4;
+            for (let i = 0; i < labelCount; i++) {
+                const t = axisStart + (timeSpan * i) / (labelCount - 1);
+                const x = getAxisX(t);
+                ctx.fillText(formatTimeLabel(t), x, h - 2);
+            }
+        }
+
+        if (activeGroup === 'io') {
+            ctx.fillStyle = textColor;
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            [0, 0.5, 1].forEach(pct => {
+                const y = h - 20 - (pct * (h - 40));
+                const value = maxAxisValue * pct;
+                ctx.fillText(`${formatBytes(value)}/s`, 35, y);
+            });
+        }
     };
 
     createEffect(() => {
@@ -171,8 +280,28 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
 
     createEffect(() => {
         if (!containerRef) return;
-        const ro = new ResizeObserver(() => drawChart());
+        const computeMaxPoints = (width: number) => {
+            const safeWidth = Math.max(120, Math.floor(width));
+            const dpr = window.devicePixelRatio || 1;
+            const points = Math.round(safeWidth * dpr);
+            return Math.min(1200, Math.max(180, points));
+        };
+
+        const updateMaxPoints = () => {
+            const width = containerRef?.clientWidth || 0;
+            if (width <= 0) return;
+            const next = computeMaxPoints(width);
+            if (next !== maxPoints()) {
+                setMaxPoints(next);
+            }
+        };
+
+        const ro = new ResizeObserver(() => {
+            updateMaxPoints();
+            drawChart();
+        });
         ro.observe(containerRef);
+        updateMaxPoints();
         onCleanup(() => ro.disconnect());
     });
 
@@ -186,8 +315,10 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         }
 
         const dataMap = metricsData();
-        const firstMetric = Object.keys(dataMap)[0];
-        const points = dataMap[firstMetric];
+        const activeGroup = group();
+        const metricConfigs = metricGroups[activeGroup];
+        const firstMetric = Object.keys(metricConfigs).find(metricId => dataMap[metricId]?.length);
+        const points = firstMetric ? dataMap[firstMetric] : undefined;
         if (!points || points.length === 0) return;
 
         const startTime = points[0].timestamp;
@@ -242,8 +373,20 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-3">
                     <span class="text-sm font-bold text-gray-700 dark:text-gray-200">{props.label || 'Unified History'}</span>
+                    <Show when={source() && source() !== 'store'}>
+                        <span
+                            class={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
+                                source() === 'live'
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                            }`}
+                            title={source() === 'live' ? 'Live sample shown because history is not available yet.' : 'In-memory buffer shown while history is warming up.'}
+                        >
+                            {source() === 'live' ? 'Live' : 'Memory'}
+                        </span>
+                    </Show>
                     <div class="flex items-center gap-2">
-                        <For each={Object.values(metricConfigs)}>
+                        <For each={Object.values(metricGroups[group()])}>
                             {(c) => (
                                 <div class="flex items-center gap-1">
                                     <div class="w-2 h-2 rounded-full" style={{ 'background-color': c.color }} />
@@ -254,21 +397,37 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
                     </div>
                 </div>
 
-                <Show when={!props.hideSelector}>
+                <div class="flex items-center gap-2">
                     <div class="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
-                        {(['24h', '7d', '30d', '90d'] as HistoryTimeRange[]).map(r => (
+                        {(['utilization', 'io'] as const).map(mode => (
                             <button
-                                onClick={() => updateRange(r)}
-                                class={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${range() === r
+                                onClick={() => setGroup(mode)}
+                                class={`px-2.5 py-1 text-[10px] font-semibold rounded-md transition-colors ${group() === mode
                                     ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
                                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                     }`}
+                                title={mode === 'utilization' ? 'CPU / Memory / Disk %' : 'Disk / Network throughput'}
                             >
-                                {r}
+                                {mode === 'utilization' ? 'Utilization' : 'IO'}
                             </button>
                         ))}
                     </div>
-                </Show>
+                    <Show when={!props.hideSelector}>
+                        <div class="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+                            {(['24h', '7d', '30d', '90d'] as HistoryTimeRange[]).map(r => (
+                                <button
+                                    onClick={() => updateRange(r)}
+                                    class={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${range() === r
+                                        ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                        }`}
+                                >
+                                    {r}
+                                </button>
+                            ))}
+                        </div>
+                    </Show>
+                </div>
             </div>
 
             <div class="relative flex-1 min-h-[220px] w-full" ref={containerRef}>
@@ -329,7 +488,7 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
                                                 <span class="opacity-70">{m.label}</span>
                                             </div>
                                             <span class="font-mono font-bold" style={{ color: m.color }}>
-                                                {m.unit === '%' ? `${m.value.toFixed(1)}%` : formatBytes(m.value)}
+                                                {m.unit === '%' ? `${m.value.toFixed(1)}%` : `${formatBytes(m.value)}/s`}
                                             </span>
                                         </div>
                                     )}

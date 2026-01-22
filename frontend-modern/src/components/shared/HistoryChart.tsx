@@ -14,7 +14,7 @@ import { formatBytes } from '@/utils/format';
 interface HistoryChartProps {
     resourceType: ResourceType;
     resourceId: string;
-    metric: 'cpu' | 'memory' | 'disk';
+    metric: 'cpu' | 'memory' | 'disk' | 'diskread' | 'diskwrite' | 'netin' | 'netout';
     height?: number;
     color?: string;
     label?: string;
@@ -32,6 +32,23 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     const [data, setData] = createSignal<AggregatedMetricPoint[]>([]);
     const [loading, setLoading] = createSignal(false);
     const [error, setError] = createSignal<string | null>(null);
+    const [source, setSource] = createSignal<'store' | 'memory' | 'live' | null>(null);
+    const [maxPoints, setMaxPoints] = createSignal<number | null>(null);
+    const [refreshTick, setRefreshTick] = createSignal(0);
+
+    const refreshIntervalMs = createMemo(() => {
+        const r = range();
+        switch (r) {
+            case '7d':
+                return 30000;
+            case '30d':
+                return 60000;
+            case '90d':
+                return 120000;
+            default:
+                return 10000;
+        }
+    });
 
     // Load license status on mount to ensure hasFeature works correctly
     onMount(() => {
@@ -82,37 +99,54 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         const id = props.resourceId;
         const metric = props.metric;
         const locked = isLocked();
+        const pointsCap = maxPoints();
+        refreshTick();
 
         if (!id || !type) return;
 
         if (locked) {
             setLoading(false);
             setError(null);
+            setSource(null);
             return;
         }
 
         setLoading(true);
         setError(null);
+        setSource(null);
         try {
             const result = await ChartsAPI.getMetricsHistory({
                 resourceType: type,
                 resourceId: id,
                 metric: metric,
-                range: r
+                range: r,
+                maxPoints: pointsCap ?? undefined
             });
 
             if ('points' in result) {
                 setData(result.points || []);
+                setSource(result.source ?? 'store');
             } else {
                 // Should not happen as we request single metric
                 setData([]);
+                setSource(result.source ?? 'store');
             }
         } catch (err) {
             console.error('Failed to fetch metrics history:', err);
             setError('Failed to load history data');
+            setSource(null);
         } finally {
             setLoading(false);
         }
+    });
+
+    createEffect(() => {
+        const interval = refreshIntervalMs();
+        if (!interval || interval <= 0) return;
+        const timer = window.setInterval(() => {
+            setRefreshTick((t) => t + 1);
+        }, interval);
+        onCleanup(() => window.clearInterval(timer));
     });
 
     // Draw chart
@@ -141,6 +175,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         const isDark = document.documentElement.classList.contains('dark');
         const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
         const textColor = isDark ? '#9ca3af' : '#6b7280';
+        const axisTextColor = isDark ? '#9ca3af' : '#6b7280';
 
         // Dynamic color based on prop or default
         let mainColor = props.color || '#3b82f6'; // blue-500
@@ -219,6 +254,28 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         });
         ctx.stroke();
 
+        // X-axis time labels
+        const formatTimeLabel = (ts: number) => {
+            const date = new Date(ts);
+            const r = range();
+            if (r === '30d' || r === '90d' || r === '7d') {
+                return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            }
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        };
+
+        ctx.fillStyle = axisTextColor;
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+
+        const labelCount = 4;
+        for (let i = 0; i < labelCount; i++) {
+            const t = startTime + (timeSpan * i) / (labelCount - 1);
+            const x = getX(t);
+            ctx.fillText(formatTimeLabel(t), x, h - 2);
+        }
+
         // Min/Max envelope (optional, for pro feel?)
         // Let's keep it clean for now, maybe add later.
     };
@@ -231,8 +288,28 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     // Resize observer
     createEffect(() => {
         if (!containerRef) return;
-        const resizeObserver = new ResizeObserver(() => drawChart());
+        const computeMaxPoints = (width: number) => {
+            const safeWidth = Math.max(120, Math.floor(width));
+            const dpr = window.devicePixelRatio || 1;
+            const points = Math.round(safeWidth * dpr);
+            return Math.min(1200, Math.max(180, points));
+        };
+
+        const updateMaxPoints = () => {
+            const width = containerRef?.clientWidth || 0;
+            if (width <= 0) return;
+            const next = computeMaxPoints(width);
+            if (next !== maxPoints()) {
+                setMaxPoints(next);
+            }
+        };
+
+        const resizeObserver = new ResizeObserver(() => {
+            updateMaxPoints();
+            drawChart();
+        });
         resizeObserver.observe(containerRef);
+        updateMaxPoints();
         onCleanup(() => resizeObserver.disconnect());
     });
 
@@ -292,6 +369,18 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                     <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{props.label || 'History'}</span>
                     <Show when={props.unit}>
                         <span class="text-xs text-gray-400">({props.unit})</span>
+                    </Show>
+                    <Show when={source() && source() !== 'store'}>
+                        <span
+                            class={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
+                                source() === 'live'
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                            }`}
+                            title={source() === 'live' ? 'Live sample shown because history is not available yet.' : 'In-memory buffer shown while history is warming up.'}
+                        >
+                            {source() === 'live' ? 'Live' : 'Memory'}
+                        </span>
                     </Show>
                 </div>
 
@@ -390,14 +479,18 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                         >
                             <div class="font-medium text-center mb-0.5">{new Date(point().timestamp).toLocaleString()}</div>
                             <div class="text-gray-300">
-                                {props.unit === '%' ?
-                                    `${point().value.toFixed(1)}%` :
-                                    formatBytes(point().value)}
+                                {props.unit === '%'
+                                    ? `${point().value.toFixed(1)}%`
+                                    : `${formatBytes(point().value)}${props.unit === 'B/s' ? '/s' : ''}`}
                             </div>
                             <Show when={point().min !== point().value}>
                                 <div class="text-[10px] text-gray-400 mt-0.5">
-                                    Min: {props.unit === '%' ? point().min.toFixed(1) : formatBytes(point().min)} •
-                                    Max: {props.unit === '%' ? point().max.toFixed(1) : formatBytes(point().max)}
+                                    Min: {props.unit === '%'
+                                        ? point().min.toFixed(1)
+                                        : `${formatBytes(point().min)}${props.unit === 'B/s' ? '/s' : ''}`} •
+                                    Max: {props.unit === '%'
+                                        ? point().max.toFixed(1)
+                                        : `${formatBytes(point().max)}${props.unit === 'B/s' ? '/s' : ''}`}
                                 </div>
                             </Show>
                         </div>

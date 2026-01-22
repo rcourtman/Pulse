@@ -2,7 +2,6 @@ import { Component, Show, For, createSignal } from 'solid-js';
 import { VM, Container } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { DiskList } from './DiskList';
-import { HistoryChart } from '../shared/HistoryChart';
 import { UnifiedHistoryChart } from '../shared/UnifiedHistoryChart';
 import { HistoryTimeRange, ResourceType } from '@/api/charts';
 
@@ -98,7 +97,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
     const [activeTab, setActiveTab] = createSignal<'overview' | 'history'>('overview');
     const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>('24h');
-    const [viewMode, setViewMode] = createSignal<'unified' | 'split'>('unified');
 
     return (
         <div class="space-y-3">
@@ -313,32 +311,8 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
             <Show when={activeTab() === 'history'}>
                 <div class="space-y-6">
-                    {/* Toolbar: Range and View Toggle */}
+                    {/* Toolbar: Range */}
                     <div class="flex flex-wrap items-center gap-2 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg border border-gray-100 dark:border-gray-700/50 shadow-sm">
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">View</span>
-                            <div class="flex bg-gray-100 dark:bg-gray-700 rounded-md p-0.5">
-                                <button
-                                    onClick={() => setViewMode('unified')}
-                                    class={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${viewMode() === 'unified'
-                                        ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                        }`}
-                                >
-                                    Unified
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('split')}
-                                    class={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${viewMode() === 'split'
-                                        ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                        }`}
-                                >
-                                    Split
-                                </button>
-                            </div>
-                        </div>
-
                         <div class="flex items-center gap-2 sm:ml-auto">
                             <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Range</span>
                             <div class="flex bg-gray-100 dark:bg-gray-700 rounded-md p-0.5">
@@ -357,51 +331,14 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                         </div>
                     </div>
 
-                    <Show when={viewMode() === 'unified'}>
-                        <UnifiedHistoryChart
-                            resourceType={metricsResource().type}
-                            resourceId={metricsResource().id}
-                            label="Resource Performance"
-                            height={280}
-                            range={historyRange()}
-                            hideSelector={true}
-                        />
-                    </Show>
-
-                    <Show when={viewMode() === 'split'}>
-                        <div class="grid grid-cols-1 gap-4">
-                            <HistoryChart
-                                resourceType={metricsResource().type}
-                                resourceId={metricsResource().id}
-                                metric="cpu"
-                                label="CPU Usage"
-                                unit="%"
-                                height={160}
-                                range={historyRange()}
-                                hideSelector={true}
-                            />
-                            <HistoryChart
-                                resourceType={metricsResource().type}
-                                resourceId={metricsResource().id}
-                                metric="memory"
-                                label="Memory Usage"
-                                unit="%"
-                                height={160}
-                                range={historyRange()}
-                                hideSelector={true}
-                            />
-                            <HistoryChart
-                                resourceType={metricsResource().type}
-                                resourceId={metricsResource().id}
-                                metric="disk"
-                                label="Disk Usage"
-                                unit="%"
-                                height={160}
-                                range={historyRange()}
-                                hideSelector={true}
-                            />
-                        </div>
-                    </Show>
+                    <UnifiedHistoryChart
+                        resourceType={metricsResource().type}
+                        resourceId={metricsResource().id}
+                        label="Resource Performance"
+                        height={280}
+                        range={historyRange()}
+                        hideSelector={true}
+                    />
                 </div>
             </Show>
         </div>
