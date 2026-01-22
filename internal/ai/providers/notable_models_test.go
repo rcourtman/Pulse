@@ -71,3 +71,43 @@ func TestIsNotable_Integration(t *testing.T) {
 	t.Logf("Cache size: %d", len(cache.data))
 	cache.mu.RUnlock()
 }
+
+func TestGetModelFamilyAliases(t *testing.T) {
+	tests := []struct {
+		model string
+		want  []string
+	}{
+		{"claude-3-5-haiku", []string{"claude-haiku-4-5", "claude-3-5-haiku-latest"}},
+		{"claude-3-5-sonnet", []string{"claude-sonnet-4-5", "claude-3-5-sonnet-latest"}},
+		{"claude-3-opus", []string{"claude-opus-4-5", "claude-opus-4-1", "claude-opus-4-0"}},
+		{"gpt-4o", []string{"gpt-4o", "gpt-4o-2024-11-20"}},
+		{"o1-mini", []string{"o1", "o1-pro", "o3-mini"}},
+		{"unknown", nil},
+	}
+
+	for _, tt := range tests {
+		got := getModelFamilyAliases(tt.model)
+		if len(tt.want) == 0 && len(got) != 0 {
+			t.Fatalf("model %s: expected no aliases, got %+v", tt.model, got)
+		}
+		if len(tt.want) > 0 && len(got) != len(tt.want) {
+			t.Fatalf("model %s: expected %d aliases, got %d", tt.model, len(tt.want), len(got))
+		}
+	}
+}
+
+func TestParseFlexibleDate_Invalid(t *testing.T) {
+	_, err := parseFlexibleDate("not-a-date")
+	if err == nil {
+		t.Fatal("expected error for invalid date")
+	}
+}
+
+func TestIsRecentlyReleased(t *testing.T) {
+	if !isRecentlyReleased("2100-01-01", "") {
+		t.Fatal("expected future release date to be notable")
+	}
+	if isRecentlyReleased("2000-01-01", "") {
+		t.Fatal("expected old release date to be not notable")
+	}
+}

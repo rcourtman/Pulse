@@ -189,6 +189,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		backupProvider:      cfg.BackupProvider,
 		storageProvider:     cfg.StorageProvider,
 		diskHealthProvider:  cfg.DiskHealthProvider,
+		updatesProvider:     cfg.UpdatesProvider,
 		metadataUpdater:     cfg.MetadataUpdater,
 		findingsManager:     cfg.FindingsManager,
 		agentProfileManager: cfg.AgentProfileManager,

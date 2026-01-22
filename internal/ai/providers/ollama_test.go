@@ -157,3 +157,74 @@ func TestNewOllamaClient_Normalization(t *testing.T) {
 		assert.Equal(t, tt.expect, client.baseURL)
 	}
 }
+
+func TestOllamaClient_Chat_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/chat", r.URL.Path)
+
+		var req ollamaRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.False(t, req.Stream)
+		assert.Equal(t, "llama3", req.Model)
+		require.Len(t, req.Tools, 1)
+		assert.Equal(t, "function", req.Tools[0].Type)
+		assert.Equal(t, "get_time", req.Tools[0].Function.Name)
+
+		_ = json.NewEncoder(w).Encode(ollamaResponse{
+			Model: "llama3",
+			Message: ollamaMessageResp{
+				Role:    "assistant",
+				Content: "Hello",
+				ToolCalls: []ollamaToolCall{
+					{Function: ollamaFunctionCall{Name: "get_time", Arguments: map[string]interface{}{"tz": "UTC"}}},
+				},
+			},
+			DoneReason:      "stop",
+			PromptEvalCount: 2,
+			EvalCount:       3,
+		})
+	}))
+	defer server.Close()
+
+	client := NewOllamaClient("llama3", server.URL, 0)
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Tools: []Tool{
+			{
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]interface{}{"type": "object"},
+			},
+			{
+				Type: "web_search_20250305",
+				Name: "web_search",
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Hello", resp.Content)
+	assert.Equal(t, "tool_use", resp.StopReason)
+	require.Len(t, resp.ToolCalls, 1)
+	assert.Equal(t, "get_time", resp.ToolCalls[0].Name)
+	assert.Equal(t, 2, resp.InputTokens)
+	assert.Equal(t, 3, resp.OutputTokens)
+}
+
+func TestOllamaClient_TestConnection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/version", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewOllamaClient("llama3", server.URL, 0)
+	err := client.TestConnection(context.Background())
+	require.NoError(t, err)
+}
+
+func TestOllamaClient_SupportsThinking(t *testing.T) {
+	client := NewOllamaClient("llama3", "http://localhost:11434", 0)
+	if client.SupportsThinking("llama3") {
+		t.Fatal("expected SupportsThinking to be false")
+	}
+}

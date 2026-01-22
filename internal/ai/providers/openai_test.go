@@ -213,3 +213,129 @@ func TestOpenAIClient_ListModels(t *testing.T) {
 	assert.Equal(t, "gpt-4", models[0].ID)
 	assert.Equal(t, "gpt-3.5-turbo", models[1].ID)
 }
+
+func TestOpenAIClient_Chat_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
+
+		var req openaiRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.Equal(t, "gpt-4", req.Model)
+		assert.Equal(t, 123, req.MaxCompletionTokens)
+		assert.Equal(t, 0.7, req.Temperature)
+		require.Len(t, req.Tools, 1)
+		assert.Equal(t, "function", req.Tools[0].Type)
+		assert.Equal(t, "get_time", req.Tools[0].Function.Name)
+		assert.Equal(t, "auto", req.ToolChoice)
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			ID:    "chatcmpl-1",
+			Model: "gpt-4",
+			Choices: []openaiChoice{
+				{
+					Message:      openaiRespMsg{Role: "assistant", Content: "Hello"},
+					FinishReason: "stop",
+				},
+			},
+			Usage: openaiUsage{PromptTokens: 2, CompletionTokens: 3},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "gpt-4", server.URL, 0)
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		System:      "You are helpful",
+		MaxTokens:   123,
+		Temperature: 0.7,
+		Messages: []Message{
+			{Role: "user", Content: "Hi"},
+		},
+		Tools: []Tool{
+			{
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]interface{}{"type": "object"},
+			},
+			{
+				Type: "web_search_20250305",
+				Name: "web_search",
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Hello", resp.Content)
+	assert.Equal(t, 2, resp.InputTokens)
+	assert.Equal(t, 3, resp.OutputTokens)
+}
+
+func TestOpenAIClient_Chat_GPT52NonChat(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+
+		var req openaiCompletionsRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.Equal(t, "gpt-5.2-pro", req.Model)
+		assert.Contains(t, req.Prompt, "System: sys")
+		assert.Contains(t, req.Prompt, "user: hi")
+		assert.Equal(t, 55, req.MaxCompletionTokens)
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			ID:    "cmpl-1",
+			Model: "gpt-5.2-pro",
+			Choices: []openaiChoice{
+				{
+					Text:         "Answer",
+					FinishReason: "stop",
+				},
+			},
+			Usage: openaiUsage{PromptTokens: 3, CompletionTokens: 4},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "gpt-5.2-pro", server.URL, 0)
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		System:    "sys",
+		MaxTokens: 55,
+		Messages: []Message{
+			{Role: "user", Content: "hi"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Answer", resp.Content)
+}
+
+func TestOpenAIClient_HelperFlags(t *testing.T) {
+	client := NewOpenAIClient("sk", "gpt-4", "https://api.openai.com", 0)
+	assert.True(t, client.requiresMaxCompletionTokens("o1-mini"))
+	assert.False(t, client.requiresMaxCompletionTokens("gpt-4"))
+
+	assert.True(t, client.isGPT52NonChat("gpt-5.2-pro"))
+	assert.False(t, client.isGPT52NonChat("gpt-5.2-chat-latest"))
+}
+
+func TestOpenAIClient_SupportsThinking(t *testing.T) {
+	client := NewOpenAIClient("sk", "deepseek-reasoner", "https://api.deepseek.com", 0)
+	assert.True(t, client.SupportsThinking("deepseek-reasoner"))
+
+	client = NewOpenAIClient("sk", "gpt-4", "https://api.openai.com", 0)
+	assert.False(t, client.SupportsThinking("gpt-4"))
+}
+
+func TestOpenAIClient_TestConnection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/models", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "gpt-4", "object": "model", "created": 123, "owned_by": "openai"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "gpt-4", server.URL, 0)
+	err := client.TestConnection(context.Background())
+	require.NoError(t, err)
+}

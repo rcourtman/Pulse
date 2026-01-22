@@ -55,6 +55,76 @@ func TestGeminiClient_Name(t *testing.T) {
 	}
 }
 
+func TestGeminiClient_ChatStream(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "streamGenerateContent") {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		events := []string{
+			`{"candidates":[{"content":{"parts":[{"text":"Hello"}]}}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":3}}`,
+			`{"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_time","args":{"tz":"UTC"}}}]},"finishReason":"STOP"}]}`,
+		}
+
+		for _, event := range events {
+			w.Write([]byte("data: " + event + "\n\n"))
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer server.Close()
+
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
+
+	var content string
+	var done DoneEvent
+	var doneCalled bool
+	var toolStarts int
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			if data, ok := event.Data.(ContentEvent); ok {
+				content += data.Text
+			}
+		case "tool_start":
+			toolStarts++
+		case "done":
+			if data, ok := event.Data.(DoneEvent); ok {
+				done = data
+				doneCalled = true
+			}
+		}
+	})
+
+	if err != nil {
+		t.Fatalf("ChatStream: %v", err)
+	}
+	if content != "Hello" {
+		t.Fatalf("content = %q", content)
+	}
+	if toolStarts != 1 {
+		t.Fatalf("toolStarts = %d, want 1", toolStarts)
+	}
+	if !doneCalled {
+		t.Fatalf("done event not called")
+	}
+	if done.StopReason != "tool_use" || len(done.ToolCalls) != 1 {
+		t.Fatalf("unexpected done: %+v", done)
+	}
+}
+
+func TestGeminiClient_SupportsThinking(t *testing.T) {
+	client := NewGeminiClient("key", "gemini-pro", "", 0)
+	if client.SupportsThinking("gemini-pro") {
+		t.Fatal("expected SupportsThinking to be false")
+	}
+}
+
 func TestGeminiClient_Chat_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {

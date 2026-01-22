@@ -393,3 +393,78 @@ func TestAnthropicClient_ModelsEndpoint_Invalid(t *testing.T) {
 		t.Errorf("Expected default models endpoint for invalid baseURL, got %s", endpoint)
 	}
 }
+
+func TestAnthropicClient_ChatStream_ToolUse(t *testing.T) {
+	stream := []string{
+		`{"type":"message_start","message":{"usage":{"input_tokens":5}}}`,
+		`{"type":"content_block_start","content_block":{"type":"text"}}`,
+		`{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi "}}`,
+		`{"type":"content_block_stop"}`,
+		`{"type":"content_block_start","content_block":{"type":"tool_use","id":"tool_1","name":"get_time"}}`,
+		`{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{\"tz\":\"UTC\"}"}}`,
+		`{"type":"content_block_stop"}`,
+		`{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":7}}`,
+		`{"type":"message_stop"}`,
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for _, event := range stream {
+			_, _ = w.Write([]byte("data: " + event + "\n\n"))
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL, 0)
+
+	var content string
+	var done DoneEvent
+	var doneCalled bool
+	var toolStarts int
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			if data, ok := event.Data.(ContentEvent); ok {
+				content += data.Text
+			}
+		case "tool_start":
+			toolStarts++
+		case "done":
+			if data, ok := event.Data.(DoneEvent); ok {
+				done = data
+				doneCalled = true
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("ChatStream: %v", err)
+	}
+
+	if content != "Hi " {
+		t.Fatalf("content = %q", content)
+	}
+	if toolStarts != 1 {
+		t.Fatalf("toolStarts = %d, want 1", toolStarts)
+	}
+	if !doneCalled {
+		t.Fatalf("done event not called")
+	}
+	if done.StopReason != "tool_use" || len(done.ToolCalls) != 1 {
+		t.Fatalf("unexpected done: %+v", done)
+	}
+	if done.ToolCalls[0].Name != "get_time" || done.InputTokens != 5 || done.OutputTokens != 7 {
+		t.Fatalf("unexpected tool call or usage: %+v", done)
+	}
+}
+
+func TestAnthropicClient_SupportsThinking(t *testing.T) {
+	client := NewAnthropicClient("test-key", "claude-3-5-sonnet", 0)
+	if client.SupportsThinking("claude-3-5-sonnet") {
+		t.Fatal("expected SupportsThinking to be false")
+	}
+}
