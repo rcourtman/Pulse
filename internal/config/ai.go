@@ -64,7 +64,7 @@ type AIConfig struct {
 
 	// AI Infrastructure Control settings
 	// These control whether AI can take actions on infrastructure (start/stop VMs, containers, etc.)
-	ControlLevel    string   `json:"control_level,omitempty"`    // "read_only", "suggest", "controlled", "autonomous"
+	ControlLevel    string   `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs or names that AI cannot control
 }
 
@@ -81,8 +81,6 @@ const (
 const (
 	// ControlLevelReadOnly - AI can only query infrastructure, no control tools available
 	ControlLevelReadOnly = "read_only"
-	// ControlLevelSuggest - AI suggests commands, user must copy/paste to execute
-	ControlLevelSuggest = "suggest"
 	// ControlLevelControlled - AI can execute with per-command approval
 	ControlLevelControlled = "controlled"
 	// ControlLevelAutonomous - AI executes without approval (requires Pro license)
@@ -506,7 +504,14 @@ func (c *AIConfig) GetControlLevel() string {
 		}
 		return ControlLevelReadOnly
 	}
-	return c.ControlLevel
+	switch c.ControlLevel {
+	case ControlLevelReadOnly, ControlLevelControlled, ControlLevelAutonomous:
+		return c.ControlLevel
+	case "suggest":
+		return ControlLevelControlled
+	default:
+		return ControlLevelReadOnly
+	}
 }
 
 // IsControlEnabled returns true if AI has any control capability beyond read-only
@@ -523,7 +528,7 @@ func (c *AIConfig) IsAutonomous() bool {
 // IsValidControlLevel checks if a control level string is valid
 func IsValidControlLevel(level string) bool {
 	switch level {
-	case ControlLevelReadOnly, ControlLevelSuggest, ControlLevelControlled, ControlLevelAutonomous:
+	case ControlLevelReadOnly, ControlLevelControlled, ControlLevelAutonomous:
 		return true
 	default:
 		return false

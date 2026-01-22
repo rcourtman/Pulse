@@ -1661,10 +1661,10 @@ func (c *ConfigPersistence) SaveAIConfig(settings AIConfig) error {
 // LoadAIConfig retrieves the persisted AI settings. It returns default config when no configuration exists yet.
 func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 
 	data, err := c.fs.ReadFile(c.aiFile)
 	if err != nil {
+		c.mu.RUnlock()
 		if os.IsNotExist(err) {
 			// Return default config if file doesn't exist
 			return NewDefaultAIConfig(), nil
@@ -1675,6 +1675,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 	if c.crypto != nil {
 		decrypted, err := c.crypto.Decrypt(data)
 		if err != nil {
+			c.mu.RUnlock()
 			return nil, err
 		}
 		data = decrypted
@@ -1683,6 +1684,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 	// Start with defaults so new fields get proper values
 	settings := NewDefaultAIConfig()
 	if err := json.Unmarshal(data, settings); err != nil {
+		c.mu.RUnlock()
 		return nil, err
 	}
 
@@ -1690,6 +1692,22 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 	// PatrolIntervalMinutes=0 means it was never set - use default
 	if settings.PatrolIntervalMinutes <= 0 {
 		settings.PatrolIntervalMinutes = 15
+	}
+
+	migratedControlLevel := false
+	if settings.ControlLevel == "suggest" {
+		settings.ControlLevel = ControlLevelControlled
+		migratedControlLevel = true
+	}
+
+	c.mu.RUnlock()
+
+	if migratedControlLevel {
+		if err := c.SaveAIConfig(*settings); err != nil {
+			log.Warn().Err(err).Msg("Failed to save migrated AI control level")
+		} else {
+			log.Info().Str("control_level", settings.ControlLevel).Msg("Migrated AI control level")
+		}
 	}
 
 	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Bool("patrol_enabled", settings.PatrolEnabled).Bool("alert_triggered_analysis", settings.AlertTriggeredAnalysis).Msg("AI configuration loaded")

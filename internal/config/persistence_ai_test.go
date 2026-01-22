@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -113,6 +114,31 @@ func TestPersistence_AIConfig(t *testing.T) {
 	// If Unmarshal fails:
 	_, err = p.LoadAIConfig()
 	assert.Error(t, err)
+}
+
+func TestPersistence_AIConfig_MigratesSuggestControlLevel(t *testing.T) {
+	tempDir := t.TempDir()
+	p := NewConfigPersistence(tempDir)
+
+	cfg := NewDefaultAIConfig()
+	cfg.ControlLevel = "suggest"
+	require.NoError(t, p.SaveAIConfig(*cfg))
+
+	loaded, err := p.LoadAIConfig()
+	require.NoError(t, err)
+	assert.Equal(t, ControlLevelControlled, loaded.ControlLevel)
+
+	updatedRaw, err := os.ReadFile(filepath.Join(tempDir, "ai.enc"))
+	require.NoError(t, err)
+	if p.crypto != nil {
+		decoded, err := p.crypto.Decrypt(updatedRaw)
+		require.NoError(t, err)
+		updatedRaw = decoded
+	}
+
+	var saved AIConfig
+	require.NoError(t, json.Unmarshal(updatedRaw, &saved))
+	assert.Equal(t, ControlLevelControlled, saved.ControlLevel)
 }
 
 func TestPersistence_PatrolRunHistory(t *testing.T) {
