@@ -17,6 +17,7 @@ import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint, type ColumnPriority } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
+import { aiChatStore } from '@/stores/aiChat';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourcesAsLegacy } from '@/hooks/useResources';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -40,11 +41,11 @@ export interface HostColumnDef {
 // Host table column definitions - all essential for horizontal scroll like Docker
 export const HOST_COLUMNS: HostColumnDef[] = [
   // Core columns - all essential (visible on all screens with horizontal scroll)
-  { id: 'name', label: 'Host', priority: 'essential', width: '210px', sortKey: 'name' },
-  { id: 'platform', label: 'Platform', priority: 'essential', width: '110px', sortKey: 'platform' },
+  { id: 'name', label: 'Host', priority: 'essential', width: '100px', sortKey: 'name' },
+  { id: 'platform', label: 'Platform', priority: 'essential', width: '70px', sortKey: 'platform' },
   { id: 'cpu', label: 'CPU', priority: 'essential', width: '60px', sortKey: 'cpu' },
   { id: 'memory', label: 'Memory', priority: 'essential', width: '60px', sortKey: 'memory' },
-  { id: 'disk', label: 'Disk', priority: 'essential', width: '220px', sortKey: 'disk' },
+  { id: 'disk', label: 'Disk', priority: 'essential', width: '60px', sortKey: 'disk' },
 
   // Additional columns - essential but toggleable by user
   { id: 'temp', label: 'Temp', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, priority: 'essential', width: '50px', toggleable: true },
@@ -172,7 +173,6 @@ interface HostSensorSummaryForCell {
 function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null | undefined }) {
   const [showTooltip, setShowTooltip] = createSignal(false);
   const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
-  const [tooltipDirection, setTooltipDirection] = createSignal<'above' | 'below'>('above');
   const alertsActivation = useAlertsActivation();
   const threshold = createMemo(() => alertsActivation.getTemperatureThreshold());
   let closeTimeout: number | undefined;
@@ -240,22 +240,7 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
   const handleMouseEnter = (e: MouseEvent) => {
     if (closeTimeout) window.clearTimeout(closeTimeout);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = rect.left + rect.width / 2;
-    const y = rect.top;
-
-    // Estimate tooltip height (~400px max) and check if it fits above
-    const estimatedTooltipHeight = 400;
-    const spaceAbove = rect.top;
-    const spaceBelow = window.innerHeight - rect.bottom;
-
-    // Position below if not enough space above, but also check if below has more space
-    if (spaceAbove < estimatedTooltipHeight && spaceBelow > spaceAbove) {
-      setTooltipDirection('below');
-      setTooltipPos({ x, y: rect.bottom });
-    } else {
-      setTooltipDirection('above');
-      setTooltipPos({ x, y });
-    }
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
     setShowTooltip(true);
   };
 
@@ -338,12 +323,8 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
             class="fixed z-[9999]"
             style={{
               left: `${tooltipPos().x}px`,
-              top: tooltipDirection() === 'above'
-                ? `${tooltipPos().y - 8}px`
-                : `${tooltipPos().y + 8}px`,
-              transform: tooltipDirection() === 'above'
-                ? 'translate(-50%, -100%)'
-                : 'translate(-50%, 0)',
+              top: `${tooltipPos().y - 8}px`,
+              transform: 'translate(-50%, -100%)',
             }}
             onMouseEnter={handleTooltipEnter}
             onMouseLeave={handleTooltipLeave}
@@ -984,26 +965,26 @@ export const HostsOverview: Component = () => {
                       <thead>
                         <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                           {/* Essential columns */}
-                          <th class={`${thClass} text-left pl-4`} style={{ "width": isMobile() ? "140px" : "210px" }} onClick={() => handleSort('name')}>
+                          <th class={`${thClass} text-left pl-4`} onClick={() => handleSort('name')}>
                             Host {renderSortIndicator('name')}
                           </th>
                           <Show when={isColVisible('platform')}>
-                            <th class={thClass} style={{ "width": isMobile() ? "100px" : "120px" }} onClick={() => handleSort('platform')}>
+                            <th class={thClass} onClick={() => handleSort('platform')}>
                               Platform {renderSortIndicator('platform')}
                             </th>
                           </Show>
                           <Show when={isColVisible('cpu')}>
-                            <th class={thClass} style={{ "width": isMobile() ? "60px" : "140px" }} onClick={() => handleSort('cpu')}>
+                            <th class={thClass} style={{ "min-width": isMobile() ? "60px" : "140px" }} onClick={() => handleSort('cpu')}>
                               CPU {renderSortIndicator('cpu')}
                             </th>
                           </Show>
                           <Show when={isColVisible('memory')}>
-                            <th class={thClass} style={{ "width": isMobile() ? "60px" : "140px" }} onClick={() => handleSort('memory')}>
+                            <th class={thClass} style={{ "min-width": isMobile() ? "60px" : "140px" }} onClick={() => handleSort('memory')}>
                               Memory {renderSortIndicator('memory')}
                             </th>
                           </Show>
                           <Show when={isColVisible('disk')}>
-                            <th class={thClass} style={{ "width": isMobile() ? "90px" : "220px" }} onClick={() => handleSort('disk')}>
+                            <th class={thClass} style={{ "min-width": isMobile() ? "60px" : "140px" }} onClick={() => handleSort('disk')}>
                               Disk {renderSortIndicator('disk')}
                             </th>
                           </Show>
@@ -1106,6 +1087,8 @@ const HostRow: Component<HostRowProps> = (props) => {
   // NOTE: Do NOT destructure props.host - it breaks SolidJS reactivity!
   // Always access props.host directly to ensure updates flow through.
 
+  // Check if this host is in AI context
+  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(props.host.id));
 
   // URL editing using shared hook
   const urlEdit = createUrlEditState();
@@ -1146,7 +1129,39 @@ const HostRow: Component<HostRowProps> = (props) => {
     }
   };
 
+  // Build context for AI - includes routing fields
+  const buildHostContext = (): Record<string, unknown> => ({
+    hostName: props.host.displayName || props.host.hostname,
+    hostname: props.host.hostname,
+    node: props.host.hostname,           // Used by AI for command routing
+    target_host: props.host.hostname,    // Explicit routing hint
+    platform: props.host.platform,
+    osName: props.host.osName,
+    osVersion: props.host.osVersion,
+    cpuUsage: props.host.cpuUsage ? `${props.host.cpuUsage.toFixed(1)}%` : undefined,
+    memoryUsage: props.host.memory?.usage ? `${props.host.memory.usage.toFixed(1)}%` : undefined,
+    uptime: props.host.uptimeSeconds ? formatUptime(props.host.uptimeSeconds) : undefined,
+  });
 
+  // Handle row click - toggle AI context selection
+  const handleRowClick = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('a, button, [data-prevent-toggle], [data-url-editor]')) {
+      return;
+    }
+
+    // If AI is enabled, toggle AI context
+    if (aiChatStore.enabled) {
+      if (aiChatStore.hasContextItem(props.host.id)) {
+        aiChatStore.removeContextItem(props.host.id);
+      } else {
+        aiChatStore.addContextItem('host', props.host.id, props.host.displayName || props.host.hostname, buildHostContext());
+        if (!aiChatStore.isOpen) {
+          aiChatStore.open();
+        }
+      }
+    }
+  };
 
   // Reactive getters to ensure values update when WebSocket data changes
   const hostStatus = createMemo(() => getHostStatusIndicator(props.host));
@@ -1157,15 +1172,17 @@ const HostRow: Component<HostRowProps> = (props) => {
   const rowClass = () => {
     const base = 'transition-all duration-200';
     const hover = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
+    const clickable = aiChatStore.enabled ? 'cursor-pointer' : '';
+    const aiContext = isInAIContext() ? 'ai-context-row' : '';
     const offline = !isOnline() ? 'opacity-60' : '';
-    return `${base} ${hover} ${offline}`;
+    return `${base} ${hover} ${clickable} ${aiContext} ${offline}`;
   };
 
   return (
     <>
-      <tr class={rowClass()}>
+      <tr class={rowClass()} onClick={handleRowClick}>
         {/* Host Name - always visible */}
-        <td class="pl-4 pr-2 py-1 align-middle overflow-hidden">
+        <td class="pl-4 pr-2 py-1 align-middle">
           <div class="flex items-center gap-2 min-w-0">
             <StatusDot
               variant={hostStatus().variant}
@@ -1173,21 +1190,18 @@ const HostRow: Component<HostRowProps> = (props) => {
               ariaLabel={hostStatus().label}
               size="xs"
             />
-            <div class="min-w-0 flex items-center gap-1.5 group/name flex-1">
-              <div class="min-w-0 flex-1">
-                <p
-                  class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate"
-                  title={props.host.displayName || props.host.hostname || props.host.id}
-                >
+            <div class="min-w-0 flex items-center gap-1.5 group/name">
+              <div>
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                   {props.host.displayName || props.host.hostname || props.host.id}
                 </p>
                 <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate" title={props.host.hostname}>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
                     {props.host.hostname}
                   </p>
                 </Show>
                 <Show when={props.host.lastSeen}>
-                  <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                  <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
                     Updated {formatRelativeTime(props.host.lastSeen!)}
                   </p>
                 </Show>
@@ -1228,18 +1242,25 @@ const HostRow: Component<HostRowProps> = (props) => {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                 </svg>
               </button>
-
+              {/* AI context indicator */}
+              <Show when={isInAIContext()}>
+                <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                  </svg>
+                </span>
+              </Show>
             </div>
           </div>
         </td>
 
         {/* Platform */}
         <Show when={props.isColVisible('platform')}>
-          <td class="px-2 py-1 align-middle overflow-hidden">
-            <div class="text-xs text-gray-700 dark:text-gray-300 min-w-0">
-              <p class="font-medium capitalize truncate" title={props.host.platform || '—'}>{props.host.platform || '—'}</p>
+          <td class="px-2 py-1 align-middle">
+            <div class="text-xs text-gray-700 dark:text-gray-300">
+              <p class="font-medium capitalize whitespace-nowrap">{props.host.platform || '—'}</p>
               <Show when={props.host.osName}>
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate" title={`${props.host.osName} ${props.host.osVersion}`.trim()}>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
                   {props.host.osName} {props.host.osVersion}
                 </p>
               </Show>
@@ -1249,7 +1270,7 @@ const HostRow: Component<HostRowProps> = (props) => {
 
         {/* CPU */}
         <Show when={props.isColVisible('cpu')}>
-          <td class="px-2 py-1 align-middle">
+          <td class="px-2 py-1 align-middle" style={{ "min-width": props.isMobile() ? "60px" : "140px", "width": props.isMobile() ? undefined : "140px", "max-width": props.isMobile() ? undefined : "140px" }}>
             <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
               <EnhancedCPUBar
                 usage={cpuPercent()}
@@ -1262,7 +1283,7 @@ const HostRow: Component<HostRowProps> = (props) => {
 
         {/* Memory */}
         <Show when={props.isColVisible('memory')}>
-          <td class="px-2 py-1 align-middle">
+          <td class="px-2 py-1 align-middle" style={{ "min-width": props.isMobile() ? "60px" : "140px", "width": props.isMobile() ? undefined : "140px", "max-width": props.isMobile() ? undefined : "140px" }}>
             <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
               <StackedMemoryBar
                 used={props.host.memory?.used || 0}
@@ -1277,11 +1298,10 @@ const HostRow: Component<HostRowProps> = (props) => {
 
         {/* Disk */}
         <Show when={props.isColVisible('disk')}>
-          <td class="px-2 py-1 align-middle">
+          <td class="px-2 py-1 align-middle" style={{ "min-width": props.isMobile() ? "60px" : "140px", "width": props.isMobile() ? undefined : "140px", "max-width": props.isMobile() ? undefined : "140px" }}>
             <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
               <StackedDiskBar
                 disks={props.host.disks}
-                mode="mini"
                 aggregateDisk={{
                   total: diskStats().total,
                   used: diskStats().used,
