@@ -99,8 +99,12 @@ func TestResolveSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != target {
-		t.Fatalf("expected %q, got %q", target, got)
+	expected, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		t.Fatalf("eval symlinks target: %v", err)
+	}
+	if got != expected {
+		t.Fatalf("expected %q, got %q", expected, got)
 	}
 
 	if _, err := resolveSymlink(filepath.Join(dir, "missing")); err == nil {

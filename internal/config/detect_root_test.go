@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -93,7 +94,7 @@ func TestDetectAppRoot_Scenarios(t *testing.T) {
 			name:           "Executable in temp, getwd error",
 			mockExec:       os.TempDir() + "/go-build123/exe",
 			mockGetwdErr:   os.ErrPermission,
-			expectedResult: os.TempDir() + "/go-build123", // Falls back to exe dir
+			expectedResult: filepath.Join(os.TempDir(), "go-build123"), // Falls back to exe dir
 		},
 		{
 			name:           "Executable error, getwd error",

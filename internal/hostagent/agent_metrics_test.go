@@ -3,6 +3,7 @@ package hostagent
 import (
 	"context"
 	"errors"
+	"runtime"
 	"testing"
 	"time"
 
@@ -184,6 +185,12 @@ func TestBuildReport(t *testing.T) {
 			t.Fatalf("buildReport failed: %v", err)
 		}
 
+		if runtime.GOOS != "linux" {
+			if len(report.RAID) != 0 {
+				t.Errorf("Expected no RAID arrays on %s, got %d", runtime.GOOS, len(report.RAID))
+			}
+			return
+		}
 		if len(report.RAID) != 1 {
 			t.Errorf("Expected 1 RAID array, got %d", len(report.RAID))
 		} else if report.RAID[0].Name != "md0" {
@@ -270,6 +277,12 @@ func TestBuildReport(t *testing.T) {
 		}
 
 		// SMART data is attached to Sensors in the report
+		if runtime.GOOS != "linux" {
+			if len(report.Sensors.SMART) != 0 {
+				t.Errorf("Expected no SMART disks on %s, got %d", runtime.GOOS, len(report.Sensors.SMART))
+			}
+			return
+		}
 		if len(report.Sensors.SMART) != 1 {
 			t.Errorf("Expected 1 SMART disk, got %d", len(report.Sensors.SMART))
 		} else {

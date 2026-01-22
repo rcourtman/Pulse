@@ -830,6 +830,50 @@ func Load() (*Config, error) {
 		}
 	}
 
+	if intervalStr := utils.GetenvTrim("PBS_POLLING_INTERVAL"); intervalStr != "" {
+		if dur, err := time.ParseDuration(intervalStr); err == nil {
+			if dur < 10*time.Second {
+				log.Warn().Dur("interval", dur).Msg("Ignoring PBS_POLLING_INTERVAL below 10s from environment")
+			} else {
+				cfg.PBSPollingInterval = dur
+				cfg.EnvOverrides["PBS_POLLING_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Overriding PBS polling interval from environment")
+			}
+		} else if seconds, err := strconv.Atoi(intervalStr); err == nil {
+			if seconds < 10 {
+				log.Warn().Int("seconds", seconds).Msg("Ignoring PBS_POLLING_INTERVAL below 10s from environment")
+			} else {
+				cfg.PBSPollingInterval = time.Duration(seconds) * time.Second
+				cfg.EnvOverrides["PBS_POLLING_INTERVAL"] = true
+				log.Info().Int("seconds", seconds).Msg("Overriding PBS polling interval (seconds) from environment")
+			}
+		} else {
+			log.Warn().Str("value", intervalStr).Msg("Invalid PBS_POLLING_INTERVAL value, expected duration or seconds")
+		}
+	}
+
+	if intervalStr := utils.GetenvTrim("PMG_POLLING_INTERVAL"); intervalStr != "" {
+		if dur, err := time.ParseDuration(intervalStr); err == nil {
+			if dur < 10*time.Second {
+				log.Warn().Dur("interval", dur).Msg("Ignoring PMG_POLLING_INTERVAL below 10s from environment")
+			} else {
+				cfg.PMGPollingInterval = dur
+				cfg.EnvOverrides["PMG_POLLING_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Overriding PMG polling interval from environment")
+			}
+		} else if seconds, err := strconv.Atoi(intervalStr); err == nil {
+			if seconds < 10 {
+				log.Warn().Int("seconds", seconds).Msg("Ignoring PMG_POLLING_INTERVAL below 10s from environment")
+			} else {
+				cfg.PMGPollingInterval = time.Duration(seconds) * time.Second
+				cfg.EnvOverrides["PMG_POLLING_INTERVAL"] = true
+				log.Info().Int("seconds", seconds).Msg("Overriding PMG polling interval (seconds) from environment")
+			}
+		} else {
+			log.Warn().Str("value", intervalStr).Msg("Invalid PMG_POLLING_INTERVAL value, expected duration or seconds")
+		}
+	}
+
 	if enabledStr := utils.GetenvTrim("ENABLE_TEMPERATURE_MONITORING"); enabledStr != "" {
 		if enabled, err := strconv.ParseBool(enabledStr); err == nil {
 			cfg.TemperatureMonitoringEnabled = enabled

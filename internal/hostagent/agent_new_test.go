@@ -172,6 +172,10 @@ func TestNew_FallsBackToHostnameWhenMachineIDAndMACEmpty(t *testing.T) {
 }
 
 func TestNew_FallsBackToMACWhenMachineIDEmpty(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("MAC fallback is Linux-only")
+	}
+
 	originalHostInfo := hostInfoWithContext
 	originalReadFile := readFile
 	originalNetInterfaces := netInterfaces
