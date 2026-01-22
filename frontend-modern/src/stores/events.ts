@@ -6,7 +6,8 @@ export type EventType =
   | 'refresh_nodes'
   | 'discovery_updated'
   | 'discovery_status'
-  | 'theme_changed';
+  | 'theme_changed'
+  | 'websocket_reconnected';
 
 // Event data types
 export interface NodeAutoRegisteredData {
@@ -51,6 +52,7 @@ export type EventDataMap = {
   discovery_updated: DiscoveryUpdatedData;
   discovery_status: DiscoveryStatusData;
   theme_changed: string; // 'light' or 'dark'
+  websocket_reconnected: void; // Emitted when WebSocket successfully reconnects
 };
 
 // Generic event handler

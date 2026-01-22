@@ -486,14 +486,25 @@ function App() {
       }
     };
 
-    // Subscribe to theme change events
+    // Handle WebSocket reconnection - refresh alert config to restore activation state
+    // This fixes issue where alert toggle appears disabled after connection loss
+    const handleWebSocketReconnected = () => {
+      logger.info('WebSocket reconnected, refreshing alert configuration');
+      void alertsActivation.refreshConfig();
+      void alertsActivation.refreshActiveAlerts();
+    };
+
+    // Subscribe to events
     eventBus.on('theme_changed', handleThemeChange);
+    eventBus.on('websocket_reconnected', handleWebSocketReconnected);
 
     // Cleanup on unmount
     onCleanup(() => {
       eventBus.off('theme_changed', handleThemeChange);
+      eventBus.off('websocket_reconnected', handleWebSocketReconnected);
     });
   });
+
 
   // Check auth on mount
   onMount(async () => {

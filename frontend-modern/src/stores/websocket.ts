@@ -308,6 +308,7 @@ export function createWebSocketStore(url: string) {
 
     ws.onopen = () => {
       logger.debug('connect');
+      const wasReconnecting = reconnectAttempt > 0;
       setConnected(true);
       setReconnecting(false); // Clear reconnecting state
       reconnectAttempt = 0; // Reset reconnect attempts on successful connection
@@ -329,8 +330,16 @@ export function createWebSocketStore(url: string) {
         }
       }, heartbeatIntervalMs);
 
+      // Emit reconnection event so App can refresh alert config
+      // This ensures the alert activation state is re-fetched after connection loss
+      if (wasReconnecting) {
+        logger.info('WebSocket reconnected, emitting event for config refresh');
+        eventBus.emit('websocket_reconnected');
+      }
+
       // Alerts will come with the initial state broadcast
     };
+
 
     ws.onmessage = (event) => {
       let data;
