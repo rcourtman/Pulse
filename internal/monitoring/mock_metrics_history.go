@@ -222,7 +222,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		queueMetric("node", node.ID, "disk", node.Disk.Usage, now)
 	}
 
-	recordGuest := func(metricID, storeType, storeID string, cpuPercent, memPercent, diskPercent float64) {
+	recordGuest := func(metricID, storeType, storeID string, cpuPercent, memPercent, diskPercent, diskRead, diskWrite, netIn, netOut float64, includeIO bool) {
 		if metricID == "" || storeID == "" {
 			return
 		}
@@ -231,6 +231,16 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		cpuSeries := generateSeededSeries(cpuPercent, numPoints, hashSeed(storeType, storeID, "cpu"), 0, 100)
 		memSeries := generateSeededSeries(memPercent, numPoints, hashSeed(storeType, storeID, "memory"), 0, 100)
 		diskSeries := generateSeededSeries(diskPercent, numPoints, hashSeed(storeType, storeID, "disk"), 0, 100)
+		var diskReadSeries, diskWriteSeries, netInSeries, netOutSeries []float64
+		if includeIO {
+			ioMax := func(value float64) float64 {
+				return math.Max(value*1.8, 1)
+			}
+			diskReadSeries = generateSeededSeries(diskRead, numPoints, hashSeed(storeType, storeID, "diskread"), 0, ioMax(diskRead))
+			diskWriteSeries = generateSeededSeries(diskWrite, numPoints, hashSeed(storeType, storeID, "diskwrite"), 0, ioMax(diskWrite))
+			netInSeries = generateSeededSeries(netIn, numPoints, hashSeed(storeType, storeID, "netin"), 0, ioMax(netIn))
+			netOutSeries = generateSeededSeries(netOut, numPoints, hashSeed(storeType, storeID, "netout"), 0, ioMax(netOut))
+		}
 
 		startTime := now.Add(-seedDuration)
 		for i := 0; i < numPoints; i++ {
@@ -241,6 +251,16 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			queueMetric(storeType, storeID, "cpu", cpuSeries[i], ts)
 			queueMetric(storeType, storeID, "memory", memSeries[i], ts)
 			queueMetric(storeType, storeID, "disk", diskSeries[i], ts)
+			if includeIO {
+				mh.AddGuestMetric(metricID, "diskread", diskReadSeries[i], ts)
+				mh.AddGuestMetric(metricID, "diskwrite", diskWriteSeries[i], ts)
+				mh.AddGuestMetric(metricID, "netin", netInSeries[i], ts)
+				mh.AddGuestMetric(metricID, "netout", netOutSeries[i], ts)
+				queueMetric(storeType, storeID, "diskread", diskReadSeries[i], ts)
+				queueMetric(storeType, storeID, "diskwrite", diskWriteSeries[i], ts)
+				queueMetric(storeType, storeID, "netin", netInSeries[i], ts)
+				queueMetric(storeType, storeID, "netout", netOutSeries[i], ts)
+			}
 		}
 
 		// Ensure the latest point lands at "now" for full-range charts.
@@ -250,6 +270,16 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		queueMetric(storeType, storeID, "cpu", cpuPercent, now)
 		queueMetric(storeType, storeID, "memory", memPercent, now)
 		queueMetric(storeType, storeID, "disk", diskPercent, now)
+		if includeIO {
+			mh.AddGuestMetric(metricID, "diskread", diskRead, now)
+			mh.AddGuestMetric(metricID, "diskwrite", diskWrite, now)
+			mh.AddGuestMetric(metricID, "netin", netIn, now)
+			mh.AddGuestMetric(metricID, "netout", netOut, now)
+			queueMetric(storeType, storeID, "diskread", diskRead, now)
+			queueMetric(storeType, storeID, "diskwrite", diskWrite, now)
+			queueMetric(storeType, storeID, "netin", netIn, now)
+			queueMetric(storeType, storeID, "netout", netOut, now)
+		}
 	}
 
 	for _, node := range state.Nodes {
@@ -261,7 +291,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		if vm.Status != "running" {
 			continue
 		}
-		recordGuest(vm.ID, "vm", vm.ID, vm.CPU*100, vm.Memory.Usage, vm.Disk.Usage)
+		recordGuest(vm.ID, "vm", vm.ID, vm.CPU*100, vm.Memory.Usage, vm.Disk.Usage, float64(vm.DiskRead), float64(vm.DiskWrite), float64(vm.NetworkIn), float64(vm.NetworkOut), true)
 		time.Sleep(200 * time.Millisecond)
 	}
 
@@ -269,7 +299,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		if ct.Status != "running" {
 			continue
 		}
-		recordGuest(ct.ID, "container", ct.ID, ct.CPU*100, ct.Memory.Usage, ct.Disk.Usage)
+		recordGuest(ct.ID, "container", ct.ID, ct.CPU*100, ct.Memory.Usage, ct.Disk.Usage, float64(ct.DiskRead), float64(ct.DiskWrite), float64(ct.NetworkIn), float64(ct.NetworkOut), true)
 		time.Sleep(200 * time.Millisecond)
 	}
 
@@ -310,7 +340,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			diskPercent = float64(usedTotal) / float64(totalTotal) * 100
 		}
 
-		recordGuest("dockerHost:"+host.ID, "dockerHost", host.ID, host.CPUUsage, host.Memory.Usage, diskPercent)
+		recordGuest("dockerHost:"+host.ID, "dockerHost", host.ID, host.CPUUsage, host.Memory.Usage, diskPercent, 0, 0, 0, 0, false)
 
 		for _, container := range host.Containers {
 			if container.ID == "" || container.State != "running" {
@@ -322,7 +352,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 				containerDisk = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
 				containerDisk = clampFloat(containerDisk, 0, 100)
 			}
-			recordGuest("docker:"+container.ID, "docker", container.ID, container.CPUPercent, container.MemoryPercent, containerDisk)
+			recordGuest("docker:"+container.ID, "docker", container.ID, container.CPUPercent, container.MemoryPercent, containerDisk, 0, 0, 0, 0, false)
 		}
 	}
 
@@ -367,6 +397,10 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 			ms.Write("vm", vm.ID, "cpu", vm.CPU*100, ts)
 			ms.Write("vm", vm.ID, "memory", vm.Memory.Usage, ts)
 			ms.Write("vm", vm.ID, "disk", vm.Disk.Usage, ts)
+			ms.Write("vm", vm.ID, "diskread", float64(vm.DiskRead), ts)
+			ms.Write("vm", vm.ID, "diskwrite", float64(vm.DiskWrite), ts)
+			ms.Write("vm", vm.ID, "netin", float64(vm.NetworkIn), ts)
+			ms.Write("vm", vm.ID, "netout", float64(vm.NetworkOut), ts)
 		}
 	}
 
@@ -386,6 +420,10 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 			ms.Write("container", ct.ID, "cpu", ct.CPU*100, ts)
 			ms.Write("container", ct.ID, "memory", ct.Memory.Usage, ts)
 			ms.Write("container", ct.ID, "disk", ct.Disk.Usage, ts)
+			ms.Write("container", ct.ID, "diskread", float64(ct.DiskRead), ts)
+			ms.Write("container", ct.ID, "diskwrite", float64(ct.DiskWrite), ts)
+			ms.Write("container", ct.ID, "netin", float64(ct.NetworkIn), ts)
+			ms.Write("container", ct.ID, "netout", float64(ct.NetworkOut), ts)
 		}
 	}
 

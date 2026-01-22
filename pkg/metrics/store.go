@@ -305,9 +305,33 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 
 // Query retrieves metrics for a resource within a time range, with optional downsampling
 func (s *Store) Query(resourceType, resourceID, metricType string, start, end time.Time, stepSecs int64) ([]MetricPoint, error) {
-	// Select appropriate tier based on time range
-	tier := s.selectTier(end.Sub(start))
+	tiers := s.tierFallbacks(end.Sub(start))
+	if len(tiers) == 0 {
+		return []MetricPoint{}, nil
+	}
 
+	for i, tier := range tiers {
+		points, err := s.queryWithTier(resourceType, resourceID, metricType, start, end, stepSecs, tier)
+		if err != nil {
+			return nil, err
+		}
+		if len(points) > 0 || i == len(tiers)-1 {
+			return points, nil
+		}
+
+		log.Debug().
+			Str("resourceType", resourceType).
+			Str("resourceId", resourceID).
+			Str("metric", metricType).
+			Str("fromTier", string(tier)).
+			Str("toTier", string(tiers[i+1])).
+			Msg("Metrics query empty; falling back to more detailed tier")
+	}
+
+	return []MetricPoint{}, nil
+}
+
+func (s *Store) queryWithTier(resourceType, resourceID, metricType string, start, end time.Time, stepSecs int64, tier Tier) ([]MetricPoint, error) {
 	var rows *sql.Rows
 	var err error
 
@@ -323,7 +347,7 @@ func (s *Store) Query(resourceType, resourceID, metricType string, start, end ti
 	if stepSecs > 1 {
 		sqlQuery = `
 			SELECT 
-				(timestamp / ?) * ? as bucket_ts, 
+				(timestamp / ?) * ? + (? / 2) as bucket_ts, 
 				AVG(value), 
 				MIN(COALESCE(min_value, value)), 
 				MAX(COALESCE(max_value, value))
@@ -334,7 +358,7 @@ func (s *Store) Query(resourceType, resourceID, metricType string, start, end ti
 			ORDER BY bucket_ts ASC
 		`
 		queryParams = []interface{}{
-			stepSecs, stepSecs,
+			stepSecs, stepSecs, stepSecs,
 			resourceType, resourceID, metricType, string(tier), start.Unix(), end.Unix(),
 		}
 	}
@@ -371,8 +395,57 @@ func (s *Store) Query(resourceType, resourceID, metricType string, start, end ti
 
 // QueryAll retrieves all metric types for a resource within a time range, with optional downsampling
 func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time, stepSecs int64) (map[string][]MetricPoint, error) {
-	tier := s.selectTier(end.Sub(start))
+	tiers := s.tierFallbacks(end.Sub(start))
+	if len(tiers) == 0 {
+		return map[string][]MetricPoint{}, nil
+	}
 
+	result := make(map[string][]MetricPoint)
+	for i, tier := range tiers {
+		tierResult, err := s.queryAllWithTier(resourceType, resourceID, start, end, stepSecs, tier)
+		if err != nil {
+			return nil, err
+		}
+		if len(tierResult) == 0 {
+			if i < len(tiers)-1 && len(result) == 0 {
+				log.Debug().
+					Str("resourceType", resourceType).
+					Str("resourceId", resourceID).
+					Str("fromTier", string(tier)).
+					Str("toTier", string(tiers[i+1])).
+					Msg("Metrics query empty; falling back to more detailed tier")
+			}
+			continue
+		}
+
+		// Merge in any metrics missing from higher tier results.
+		added := 0
+		for metric, points := range tierResult {
+			if len(points) == 0 {
+				continue
+			}
+			if existing, ok := result[metric]; !ok || len(existing) == 0 {
+				result[metric] = points
+				added++
+			}
+		}
+
+		// If we already have some metrics and this tier didn't add anything new,
+		// keep going in case lower tiers have newly introduced metrics.
+		if added == 0 && i < len(tiers)-1 && len(result) == 0 {
+			log.Debug().
+				Str("resourceType", resourceType).
+				Str("resourceId", resourceID).
+				Str("fromTier", string(tier)).
+				Str("toTier", string(tiers[i+1])).
+				Msg("Metrics query empty; falling back to more detailed tier")
+		}
+	}
+
+	return result, nil
+}
+
+func (s *Store) queryAllWithTier(resourceType, resourceID string, start, end time.Time, stepSecs int64, tier Tier) (map[string][]MetricPoint, error) {
 	var rows *sql.Rows
 	var err error
 
@@ -439,13 +512,13 @@ func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time, 
 // selectTier chooses the appropriate data tier based on time range
 // Note: Tier selection uses fixed thresholds to ensure queries use tiers with complete data:
 // - Raw: up to 2 hours (high-resolution real-time data)
-// - Minute: up to 6 hours (recent detailed data)
+// - Minute: up to 24 hours (recent detailed data)
 // - Hourly: up to 7 days (medium-term with mock/seeded data coverage)
 // - Daily: beyond 7 days (long-term historical data)
 func (s *Store) selectTier(duration time.Duration) Tier {
 	const (
 		rawThreshold    = 2 * time.Hour
-		minuteThreshold = 6 * time.Hour // 24h queries use hourly tier which has complete historical data
+		minuteThreshold = 24 * time.Hour
 		hourlyThreshold = 7 * 24 * time.Hour
 	)
 
@@ -458,6 +531,21 @@ func (s *Store) selectTier(duration time.Duration) Tier {
 		return TierHourly
 	default:
 		return TierDaily
+	}
+}
+
+func (s *Store) tierFallbacks(duration time.Duration) []Tier {
+	switch s.selectTier(duration) {
+	case TierRaw:
+		return []Tier{TierRaw}
+	case TierMinute:
+		return []Tier{TierMinute, TierRaw}
+	case TierHourly:
+		return []Tier{TierHourly, TierMinute, TierRaw}
+	case TierDaily:
+		return []Tier{TierDaily, TierHourly, TierMinute, TierRaw}
+	default:
+		return []Tier{TierRaw}
 	}
 }
 

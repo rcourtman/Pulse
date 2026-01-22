@@ -7196,12 +7196,36 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			if vm.Disk.Usage >= 0 {
 				m.metricsHistory.AddGuestMetric(vm.ID, "disk", vm.Disk.Usage, now)
 			}
+			if vm.DiskRead >= 0 {
+				m.metricsHistory.AddGuestMetric(vm.ID, "diskread", float64(vm.DiskRead), now)
+			}
+			if vm.DiskWrite >= 0 {
+				m.metricsHistory.AddGuestMetric(vm.ID, "diskwrite", float64(vm.DiskWrite), now)
+			}
+			if vm.NetworkIn >= 0 {
+				m.metricsHistory.AddGuestMetric(vm.ID, "netin", float64(vm.NetworkIn), now)
+			}
+			if vm.NetworkOut >= 0 {
+				m.metricsHistory.AddGuestMetric(vm.ID, "netout", float64(vm.NetworkOut), now)
+			}
 			// Also write to persistent store
 			if m.metricsStore != nil {
 				m.metricsStore.Write("vm", vm.ID, "cpu", vm.CPU*100, now)
 				m.metricsStore.Write("vm", vm.ID, "memory", vm.Memory.Usage, now)
 				if vm.Disk.Usage >= 0 {
 					m.metricsStore.Write("vm", vm.ID, "disk", vm.Disk.Usage, now)
+				}
+				if vm.DiskRead >= 0 {
+					m.metricsStore.Write("vm", vm.ID, "diskread", float64(vm.DiskRead), now)
+				}
+				if vm.DiskWrite >= 0 {
+					m.metricsStore.Write("vm", vm.ID, "diskwrite", float64(vm.DiskWrite), now)
+				}
+				if vm.NetworkIn >= 0 {
+					m.metricsStore.Write("vm", vm.ID, "netin", float64(vm.NetworkIn), now)
+				}
+				if vm.NetworkOut >= 0 {
+					m.metricsStore.Write("vm", vm.ID, "netout", float64(vm.NetworkOut), now)
 				}
 			}
 		}
@@ -7213,12 +7237,36 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			if ct.Disk.Usage >= 0 {
 				m.metricsHistory.AddGuestMetric(ct.ID, "disk", ct.Disk.Usage, now)
 			}
+			if ct.DiskRead >= 0 {
+				m.metricsHistory.AddGuestMetric(ct.ID, "diskread", float64(ct.DiskRead), now)
+			}
+			if ct.DiskWrite >= 0 {
+				m.metricsHistory.AddGuestMetric(ct.ID, "diskwrite", float64(ct.DiskWrite), now)
+			}
+			if ct.NetworkIn >= 0 {
+				m.metricsHistory.AddGuestMetric(ct.ID, "netin", float64(ct.NetworkIn), now)
+			}
+			if ct.NetworkOut >= 0 {
+				m.metricsHistory.AddGuestMetric(ct.ID, "netout", float64(ct.NetworkOut), now)
+			}
 			// Also write to persistent store
 			if m.metricsStore != nil {
 				m.metricsStore.Write("container", ct.ID, "cpu", ct.CPU*100, now)
 				m.metricsStore.Write("container", ct.ID, "memory", ct.Memory.Usage, now)
 				if ct.Disk.Usage >= 0 {
 					m.metricsStore.Write("container", ct.ID, "disk", ct.Disk.Usage, now)
+				}
+				if ct.DiskRead >= 0 {
+					m.metricsStore.Write("container", ct.ID, "diskread", float64(ct.DiskRead), now)
+				}
+				if ct.DiskWrite >= 0 {
+					m.metricsStore.Write("container", ct.ID, "diskwrite", float64(ct.DiskWrite), now)
+				}
+				if ct.NetworkIn >= 0 {
+					m.metricsStore.Write("container", ct.ID, "netin", float64(ct.NetworkIn), now)
+				}
+				if ct.NetworkOut >= 0 {
+					m.metricsStore.Write("container", ct.ID, "netout", float64(ct.NetworkOut), now)
 				}
 			}
 		}

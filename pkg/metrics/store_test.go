@@ -100,6 +100,39 @@ func TestStoreSelectTierAndStats(t *testing.T) {
 	}
 }
 
+func TestStoreQueryFallbacksToRaw(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-test.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	ts := time.Now()
+	store.WriteWithTier("vm", "vm-101", "cpu", 42.0, ts, TierRaw)
+	store.Flush()
+
+	points, err := store.Query("vm", "vm-101", "cpu", ts.Add(-24*time.Hour), ts.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("Query returned error: %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("expected 1 point, got %d", len(points))
+	}
+
+	all, err := store.QueryAll("vm", "vm-101", ts.Add(-24*time.Hour), ts.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("QueryAll returned error: %v", err)
+	}
+	if len(all["cpu"]) != 1 {
+		t.Fatalf("expected QueryAll to return 1 cpu point, got %+v", all)
+	}
+}
+
 func TestStoreRollupTier(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig(dir)
