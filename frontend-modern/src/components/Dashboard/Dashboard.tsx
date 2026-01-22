@@ -2,12 +2,14 @@ import { createSignal, createMemo, createEffect, For, Show, onMount } from 'soli
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import { GuestRow, GUEST_COLUMNS, type GuestColumnDef } from './GuestRow';
+import { GuestDrawer } from './GuestDrawer';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
+import { buildMetricKey } from '@/utils/metricsKeys';
 import { DashboardFilter } from './DashboardFilter';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
@@ -228,6 +230,7 @@ export function Dashboard(props: DashboardProps) {
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
+  const [selectedGuestId, setSelectedGuestId] = createSignal<string | null>(null);
   const [guestMetadata, setGuestMetadata] = createSignal<GuestMetadataRecord>(
     readGuestMetadataCache(),
   );
@@ -1143,7 +1146,21 @@ export function Dashboard(props: DashboardProps) {
                                     onCustomUrlUpdate={handleCustomUrlUpdate}
                                     isGroupedView={groupingMode() === 'grouped'}
                                     visibleColumnIds={visibleColumnIds()}
+                                    onClick={() => setSelectedGuestId(selectedGuestId() === guestId ? null : guestId)}
                                   />
+                                  <Show when={selectedGuestId() === guestId}>
+                                    <tr>
+                                      <td colspan={totalColumns()} class="p-0 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                                        <div class="p-4" onClick={(e) => e.stopPropagation()}>
+                                          <GuestDrawer
+                                            guest={guest}
+                                            metricsKey={buildMetricKey(guest.type === 'qemu' ? 'vm' : 'container', guestId)}
+                                            onClose={() => setSelectedGuestId(null)}
+                                          />
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  </Show>
                                 </ComponentErrorBoundary>
                               );
                             }}
