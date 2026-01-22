@@ -5,6 +5,7 @@
 # - Go backend with auto-rebuild on file changes (via inotifywait)
 # - Vite frontend dev server with HMR
 # - Auto-detection of pulse-pro module for Pro features
+# - File backup watcher (if scripts/watch-backup.sh exists)
 #
 # Environment Variables:
 #   HOT_DEV_USE_PROD_DATA=true   Use /etc/pulse for data (sessions, config, etc.)
@@ -575,13 +576,29 @@ cleanup() {
         kill "${VITE_PID}" 2>/dev/null || true
     fi
     
+    # Kill file backup watcher
+    if [[ -n ${BACKUP_WATCHER_PID:-} ]] && kill -0 "${BACKUP_WATCHER_PID}" 2>/dev/null; then
+        kill "${BACKUP_WATCHER_PID}" 2>/dev/null || true
+    fi
+
     # Fallback cleanup
     pkill -f "inotifywait.*pulse" 2>/dev/null || true
     pkill -f "fswatch.*pulse" 2>/dev/null || true
-    
+    pkill -f "watch-backup.sh" 2>/dev/null || true
+
     log_info "Hot-dev stopped."
 }
 trap cleanup INT TERM EXIT
+
+# --- Start File Backup Watcher (optional) ---
+
+BACKUP_SCRIPT="${ROOT_DIR}/scripts/watch-backup.sh"
+if [[ -x "${BACKUP_SCRIPT}" ]]; then
+    log_info "Starting file backup watcher..."
+    "${BACKUP_SCRIPT}" > /tmp/pulse-watch-backup.log 2>&1 &
+    BACKUP_WATCHER_PID=$!
+    log_info "File backups: ~/.pulse-backups (PID: ${BACKUP_WATCHER_PID})"
+fi
 
 # --- Start Frontend ---
 

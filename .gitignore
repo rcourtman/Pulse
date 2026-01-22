@@ -196,3 +196,11 @@ measure_sessions.sh
 # SQLite temp files
 *.db-shm
 *.db-wal
+
+# Auto-backup logs
+
+# Local backup scripts (not committed)
+scripts/watch-backup.sh
+scripts/auto-backup.sh
+scripts/safe-checkout.sh
+BACKUP_SYSTEM.md
