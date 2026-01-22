@@ -66,12 +66,28 @@ const configureDOMPurify = () => {
   });
 };
 
+const coerceMarkdownInput = (content: unknown): string => {
+  if (typeof content === 'string') return content;
+  if (content && typeof content === 'object') {
+    const record = content as Record<string, unknown>;
+    if (typeof record.text === 'string') return record.text;
+    if (typeof record.content === 'string') return record.content;
+    try {
+      return JSON.stringify(content);
+    } catch {
+      return String(content);
+    }
+  }
+  return content == null ? '' : String(content);
+};
+
 // Helper to render markdown safely with XSS protection
 // LLM output should NEVER be trusted - always sanitize before rendering as HTML
-export const renderMarkdown = (content: string): string => {
+export const renderMarkdown = (content: unknown): string => {
+  const normalized = coerceMarkdownInput(content);
   try {
     configureDOMPurify();
-    const rawHtml = marked.parse(content) as string;
+    const rawHtml = marked.parse(normalized) as string;
     // Sanitize to prevent XSS from malicious LLM output or injected content
     return DOMPurify.sanitize(rawHtml, {
       // Allow common formatting tags but block scripts, iframes, etc.
@@ -84,7 +100,7 @@ export const renderMarkdown = (content: string): string => {
     });
   } catch {
     // If parsing fails, escape HTML entities as fallback
-    return content.replace(/[&<>"']/g, (char) => {
+    return normalized.replace(/[&<>"']/g, (char) => {
       const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
       return entities[char];
     });

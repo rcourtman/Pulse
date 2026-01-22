@@ -49,7 +49,7 @@ export interface AISettings {
   request_timeout_seconds?: number;
 
   // Infrastructure control settings
-  control_level?: 'read_only' | 'suggest' | 'controlled' | 'autonomous';
+  control_level?: 'read_only' | 'controlled' | 'autonomous';
   protected_guests?: string[];
 }
 
@@ -92,7 +92,7 @@ export interface AISettingsUpdateRequest {
   request_timeout_seconds?: number;
 
   // Infrastructure control settings
-  control_level?: 'read_only' | 'suggest' | 'controlled' | 'autonomous';
+  control_level?: 'read_only' | 'controlled' | 'autonomous';
   protected_guests?: string[];
 }
 

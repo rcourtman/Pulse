@@ -86,6 +86,16 @@ export function useChat(options: UseChatOptions = {}) {
   };
 
   // Process stream events
+  const extractText = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+      if (typeof record.text === 'string') return record.text;
+      if (typeof record.content === 'string') return record.content;
+    }
+    return '';
+  };
+
   const processEvent = (
     assistantId: string,
     event: StreamEvent
@@ -97,7 +107,7 @@ export function useChat(options: UseChatOptions = {}) {
         try {
         switch (event.type) {
           case 'content': {
-            const content = event.data as string;
+            const content = extractText(event.data);
             if (!content) return msg;
             const existing = msg.content || '';
             // Add to streamEvents for chronological display
@@ -109,7 +119,7 @@ export function useChat(options: UseChatOptions = {}) {
           }
 
           case 'thinking': {
-            const thinking = event.data as string;
+            const thinking = extractText(event.data);
             if (!thinking) return msg;
             // Add thinking to streamEvents
             const updated = addStreamEvent(msg, { type: 'thinking', thinking });
