@@ -13,6 +13,8 @@
 #   --enable-kubernetes Force enable Kubernetes monitoring (default: auto-detect)
 #   --kubeconfig <path> Path to kubeconfig file (auto-detected if not specified)
 #   --disable-kubernetes Disable Kubernetes monitoring even if detected
+#   --kube-include-all-pods Include all non-succeeded pods (default: false)
+#   --kube-include-all-deployments Include all deployments (default: false)
 #   --enable-proxmox    Force enable Proxmox integration (default: auto-detect)
 #   --disable-proxmox   Disable Proxmox integration even if detected
 #   --interval <dur>    Reporting interval (default: 30s)
@@ -45,12 +47,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# --- Check Root ---
-if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root. Please use sudo." 
-   exit 1
-fi
-
 # --- Configuration ---
 AGENT_NAME="pulse-agent"
 BINARY_NAME="pulse-agent"
@@ -78,6 +74,8 @@ INSECURE="false"
 AGENT_ID=""
 ENABLE_COMMANDS="false"
 KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
+KUBE_INCLUDE_ALL_PODS="false"
+KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
 
 # Track if flags were explicitly set (to override auto-detection)
@@ -97,6 +95,35 @@ fail() {
         read -r -p "Press Enter to exit..." < /dev/tty
     fi
     exit 1
+}
+
+show_help() {
+    cat <<EOF
+Pulse Unified Agent Installer
+
+Usage:
+  install.sh [options]
+
+Options:
+  --url <url>             Pulse server URL (e.g. http://pulse:7655)
+  --token <token>         Pulse API token
+  --interval <duration>   Reporting interval (default: 30s)
+  --enable-host           Enable host metrics (default: true)
+  --disable-host          Disable host metrics
+  --enable-docker         Force enable Docker monitoring
+  --enable-kubernetes     Force enable Kubernetes monitoring
+  --kubeconfig <path>     Path to kubeconfig file
+  --kube-include-all-pods Include all non-succeeded pods
+  --kube-include-all-deployments Include all deployments
+  --enable-proxmox        Force enable Proxmox integration
+  --agent-id <id>         Custom agent identifier
+  --disk-exclude <path>   Exclude mount point (repeatable)
+  --insecure              Skip TLS verification
+  --enable-commands       Enable AI command execution
+  --uninstall             Remove the agent
+  --help, -h              Show this help
+
+EOF
 }
 
 # --- SELinux Context Restoration ---
@@ -240,6 +267,8 @@ build_exec_args() {
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
+    if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-pods"; fi
+    if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
@@ -264,6 +293,8 @@ build_exec_args_array() {
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS_ARRAY+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-commands); fi
+    if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-pods); fi
+    if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-deployments); fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
@@ -274,6 +305,7 @@ build_exec_args_array() {
 # --- Parse Arguments ---
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --help|-h) show_help; exit 0 ;;
         --url) PULSE_URL="$2"; shift 2 ;;
         --token) PULSE_TOKEN="$2"; shift 2 ;;
         --interval) INTERVAL="$2"; shift 2 ;;
@@ -291,10 +323,18 @@ while [[ $# -gt 0 ]]; do
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
+        --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
+        --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
         --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
         *) fail "Unknown argument: $1" ;;
     esac
 done
+
+# --- Check Root ---
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root. Please use sudo." 
+   exit 1
+fi
 
 # --- URL Normalization ---
 # Strip trailing slashes from PULSE_URL to prevent double-slash URLs
@@ -1122,6 +1162,8 @@ PULSE_INTERVAL=${INTERVAL}
 PULSE_ENABLE_HOST=${ENABLE_HOST}
 PULSE_ENABLE_DOCKER=${ENABLE_DOCKER}
 PULSE_ENABLE_KUBERNETES=${ENABLE_KUBERNETES}
+PULSE_KUBE_INCLUDE_ALL_PODS=${KUBE_INCLUDE_ALL_PODS}
+PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS=${KUBE_INCLUDE_ALL_DEPLOYMENTS}
 EOF
     chmod 600 "$TRUENAS_ENV_FILE"
 

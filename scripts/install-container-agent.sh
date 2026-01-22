@@ -146,6 +146,8 @@ NO_AUTO_UPDATE_FLAG=""
 DOWNLOAD_ARCH=""
 AGENT_PATH_OVERRIDE=""
 AGENT_PATH=""
+KUBE_INCLUDE_ALL_PODS="false"
+KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 
 PULSE_TARGETS_ENV="${PULSE_TARGETS:-}"
 PULSE_RUNTIME_ENV="$(trim "${PULSE_RUNTIME:-}")"
@@ -175,6 +177,8 @@ Options:
   --rootless              Force rootless install (user service).
   --system                Force system-wide install (requires root).
   --agent-path <path>     Override binary installation path.
+  --kube-include-all-pods Include all non-succeeded pods.
+  --kube-include-all-deployments Include all deployments.
   --uninstall             Remove existing installation.
   --purge                 Remove config files when uninstalling.
   --help                  Show this help message.
@@ -237,6 +241,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --agent-path=*)
       AGENT_PATH_OVERRIDE="${1#*=}"
+      shift
+      ;;
+    --kube-include-all-pods)
+      KUBE_INCLUDE_ALL_PODS="true"
+      shift
+      ;;
+    --kube-include-all-deployments)
+      KUBE_INCLUDE_ALL_DEPLOYMENTS="true"
       shift
       ;;
     --uninstall)
@@ -674,6 +686,8 @@ write_rootful_env() {
     if [[ "$PRIMARY_INSECURE" == "true" ]]; then
       printf 'PULSE_INSECURE_SKIP_VERIFY=true\n'
     fi
+    printf 'PULSE_KUBE_INCLUDE_ALL_PODS=%q\n' "$KUBE_INCLUDE_ALL_PODS"
+    printf 'PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS=%q\n' "$KUBE_INCLUDE_ALL_DEPLOYMENTS"
   } > "$tmp"
 
   mv "$tmp" "$ROOTFUL_ENV_FILE"
@@ -817,6 +831,8 @@ write_rootless_env() {
     if [[ "$PRIMARY_INSECURE" == "true" ]]; then
       printf 'PULSE_INSECURE_SKIP_VERIFY=true\n'
     fi
+    printf 'PULSE_KUBE_INCLUDE_ALL_PODS=%q\n' "$KUBE_INCLUDE_ALL_PODS"
+    printf 'PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS=%q\n' "$KUBE_INCLUDE_ALL_DEPLOYMENTS"
   } > "$tmp"
 
   mv "$tmp" "$ROOTLESS_ENV_FILE"
