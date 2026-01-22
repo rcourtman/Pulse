@@ -100,7 +100,7 @@ type Tool struct {
 // InputSchema describes the expected input for a tool
 type InputSchema struct {
 	Type       string                    `json:"type"` // Always "object"
-	Properties map[string]PropertySchema `json:"properties,omitempty"`
+	Properties map[string]PropertySchema `json:"properties"`
 	Required   []string                  `json:"required,omitempty"`
 }
 
