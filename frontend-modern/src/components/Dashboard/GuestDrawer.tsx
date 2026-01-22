@@ -314,13 +314,13 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
             <Show when={activeTab() === 'history'}>
                 <div class="space-y-6">
                     {/* Toolbar: Range and View Toggle */}
-                    <div class="flex flex-col gap-4 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700/50 shadow-sm">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Controls</span>
-                            <div class="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+                    <div class="flex flex-wrap items-center gap-2 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg border border-gray-100 dark:border-gray-700/50 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">View</span>
+                            <div class="flex bg-gray-100 dark:bg-gray-700 rounded-md p-0.5">
                                 <button
                                     onClick={() => setViewMode('unified')}
-                                    class={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${viewMode() === 'unified'
+                                    class={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${viewMode() === 'unified'
                                         ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                         }`}
@@ -329,7 +329,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                 </button>
                                 <button
                                     onClick={() => setViewMode('split')}
-                                    class={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${viewMode() === 'split'
+                                    class={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${viewMode() === 'split'
                                         ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                         }`}
@@ -339,13 +339,13 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                             </div>
                         </div>
 
-                        <div class="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700/30">
-                            <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Range</span>
-                            <div class="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+                        <div class="flex items-center gap-2 sm:ml-auto">
+                            <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Range</span>
+                            <div class="flex bg-gray-100 dark:bg-gray-700 rounded-md p-0.5">
                                 {(['24h', '7d', '30d', '90d'] as HistoryTimeRange[]).map(r => (
                                     <button
                                         onClick={() => setHistoryRange(r)}
-                                        class={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${historyRange() === r
+                                        class={`px-2.5 py-1 text-[10px] font-semibold rounded-md transition-all ${historyRange() === r
                                             ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
                                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                             }`}
