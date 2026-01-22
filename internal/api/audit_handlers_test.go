@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -449,6 +450,14 @@ func TestIsPrivateOrReservedIP(t *testing.T) {
 }
 
 func TestValidateWebhookURL(t *testing.T) {
+	origResolver := resolveWebhookIPs
+	resolveWebhookIPs = func(_ context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
+	}
+	t.Cleanup(func() {
+		resolveWebhookIPs = origResolver
+	})
+
 	testCases := []struct {
 		url     string
 		wantErr bool
@@ -474,6 +483,20 @@ func TestValidateWebhookURL(t *testing.T) {
 		if (err != nil) != tc.wantErr {
 			t.Errorf("validateWebhookURL(%s) error = %v, wantErr %v", tc.url, err, tc.wantErr)
 		}
+	}
+}
+
+func TestValidateWebhookURLBlocksPrivateResolution(t *testing.T) {
+	origResolver := resolveWebhookIPs
+	resolveWebhookIPs = func(_ context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("10.0.0.1")}}, nil
+	}
+	t.Cleanup(func() {
+		resolveWebhookIPs = origResolver
+	})
+
+	if err := validateWebhookURL("https://example.com"); err == nil {
+		t.Fatalf("expected hostname resolving to private IP to be rejected")
 	}
 }
 

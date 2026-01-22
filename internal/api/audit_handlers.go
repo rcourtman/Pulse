@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -16,6 +17,8 @@ import (
 
 // validAuditEventID matches alphanumeric IDs with hyphens (UUID format)
 var validAuditEventID = regexp.MustCompile(`^[a-zA-Z0-9\-]+$`)
+
+var resolveWebhookIPs = net.DefaultResolver.LookupIPAddr
 
 // AuditHandlers provides HTTP handlers for audit log endpoints.
 type AuditHandlers struct{}
@@ -262,6 +265,7 @@ func validateWebhookURL(rawURL string) error {
 		if isPrivateOrReservedIP(ip) {
 			return fmt.Errorf("private or reserved IP addresses are not allowed")
 		}
+		return nil
 	}
 
 	// Block common internal hostnames
@@ -277,6 +281,21 @@ func validateWebhookURL(rawURL string) error {
 	for _, pattern := range blockedPatterns {
 		if strings.Contains(lowerHost, pattern) {
 			return fmt.Errorf("internal hostnames are not allowed")
+		}
+	}
+
+	resolveCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	addrs, err := resolveWebhookIPs(resolveCtx, hostname)
+	if err != nil {
+		return fmt.Errorf("failed to resolve hostname")
+	}
+	if len(addrs) == 0 {
+		return fmt.Errorf("hostname did not resolve")
+	}
+	for _, addr := range addrs {
+		if isPrivateOrReservedIP(addr.IP) {
+			return fmt.Errorf("hostname resolves to private or reserved IP addresses")
 		}
 	}
 
