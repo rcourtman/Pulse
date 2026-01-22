@@ -11,6 +11,13 @@ DEV_DIR=${DEV_DIR:-"/opt/pulse/tmp/dev-config"}
 mkdir -p "$DEV_DIR"
 chmod 700 "$DEV_DIR"
 
+# If production config is missing, skip sync and let dev config stand alone.
+if [ ! -d "$PROD_DIR" ]; then
+    echo "⚠ Production config directory not found: $PROD_DIR"
+    echo "✓ Skipping production sync; using dev-only config in $DEV_DIR"
+    exit 0
+fi
+
 # Copy essential production config files to dev
 # Skip session/csrf/alert files which are runtime-specific
 echo "Syncing production config to dev environment..."

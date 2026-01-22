@@ -9,8 +9,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-MOCK_ENV_FILE="/opt/pulse/mock.env"
-ROOT_DIR="/opt/pulse"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+MOCK_ENV_FILE="${ROOT_DIR}/mock.env"
 BACKEND_PORT=7656
 DEV_DATA_DIR="${ROOT_DIR}/tmp/dev-config"
 DEV_KEY_FILE="${DEV_DATA_DIR}/.encryption.key"

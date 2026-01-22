@@ -409,11 +409,14 @@ fi
 
 # --- Backend Health Monitor ---
 # Restarts Pulse if it dies unexpectedly (not from file watcher rebuild)
+# IMPORTANT: Enforces single-instance - kills duplicates if found
 log_info "Starting backend health monitor..."
 (
     while true; do
         sleep 10
-        if ! pgrep -f "^\./pulse$" > /dev/null 2>&1; then
+        PULSE_COUNT=$(pgrep -f "^\./pulse$" 2>/dev/null | wc -l | tr -d ' ')
+
+        if [[ "$PULSE_COUNT" -eq 0 ]]; then
             log_warn "⚠️  Pulse died unexpectedly, restarting..."
             LOG_LEVEL=debug \
             FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
@@ -433,6 +436,28 @@ log_info "Starting backend health monitor..."
             else
                 log_error "✗ Backend failed to auto-restart!"
             fi
+        elif [[ "$PULSE_COUNT" -gt 1 ]]; then
+            log_error "⚠️  Multiple Pulse processes detected ($PULSE_COUNT), killing all and restarting..."
+            pkill -9 -f "^\./pulse$" 2>/dev/null || true
+            sleep 2
+            LOG_LEVEL=debug \
+            FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
+            PORT="${PULSE_DEV_API_PORT:-7655}" \
+            PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
+            PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
+            ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
+            PULSE_DEV="${PULSE_DEV:-true}" \
+            PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
+            PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
+            ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
+            ./pulse >> /tmp/pulse-debug.log 2>&1 &
+            NEW_PID=$!
+            sleep 2
+            if kill -0 "$NEW_PID" 2>/dev/null; then
+                log_info "✓ Backend restarted after killing duplicates (PID: $NEW_PID)"
+            else
+                log_error "✗ Backend failed to restart after killing duplicates!"
+            fi
         fi
     done
 ) &
@@ -446,15 +471,13 @@ log_info "Starting backend file watcher..."
     
     restart_backend() {
         log_info "Restarting backend..."
-        
-        OLD_PID=$(pgrep -f "^\./pulse$" || true)
-        if [[ -n "$OLD_PID" ]]; then
-            kill "$OLD_PID" 2>/dev/null || true
-            sleep 1
-            if kill -0 "$OLD_PID" 2>/dev/null; then
-                kill -9 "$OLD_PID" 2>/dev/null || true
-            fi
-        fi
+
+        # Kill ALL pulse processes (not just one) to prevent duplicates
+        pkill -f "^\./pulse$" 2>/dev/null || true
+        sleep 1
+        # Force kill any remaining
+        pkill -9 -f "^\./pulse$" 2>/dev/null || true
+        sleep 1
 
         LOG_LEVEL=debug \
         FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
@@ -470,8 +493,13 @@ log_info "Starting backend file watcher..."
         NEW_PID=$!
         sleep 1
 
-        if kill -0 "$NEW_PID" 2>/dev/null; then
+        # Verify exactly one process is running
+        PULSE_COUNT=$(pgrep -f "^\./pulse$" 2>/dev/null | wc -l | tr -d ' ')
+        if [[ "$PULSE_COUNT" -eq 1 ]] && kill -0 "$NEW_PID" 2>/dev/null; then
             log_info "✓ Backend restarted (PID: $NEW_PID)"
+        elif [[ "$PULSE_COUNT" -gt 1 ]]; then
+            log_error "✗ Multiple processes after restart ($PULSE_COUNT) - killing all"
+            pkill -9 -f "^\./pulse$" 2>/dev/null || true
         else
             log_error "✗ Backend failed to start! Check /tmp/pulse-debug.log"
         fi
