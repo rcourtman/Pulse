@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -30,6 +31,14 @@ type ThresholdProvider interface {
 	GetGuestDiskThreshold() float64
 	// GetStorageThreshold returns the usage alert trigger threshold for storage (0-100%)
 	GetStorageThreshold() float64
+}
+
+// AlertResolver provides the ability to review and resolve alerts
+type AlertResolver interface {
+	// GetActiveAlerts returns all currently active alerts
+	GetActiveAlerts() []AlertInfo
+	// ResolveAlert clears an active alert, returns true if successful
+	ResolveAlert(alertID string) bool
 }
 
 // PatrolThresholds holds calculated thresholds for patrol (derived from alert thresholds)
@@ -257,6 +266,7 @@ type PatrolService struct {
 	patternDetector     *PatternDetector       // For failure prediction from historical patterns
 	correlationDetector *CorrelationDetector   // For multi-resource correlation
 	incidentStore       *memory.IncidentStore  // For incident timeline capture
+	alertResolver       AlertResolver          // For AI-based alert resolution
 
 	// Unified intelligence facade - aggregates all subsystems for unified view
 	intelligence *Intelligence
@@ -323,6 +333,22 @@ func (p *PatrolService) GetIncidentStore() *memory.IncidentStore {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.incidentStore
+}
+
+// SetAlertResolver sets the alert resolver for AI-based alert management.
+// This allows patrol to review and auto-resolve alerts when issues are fixed.
+func (p *PatrolService) SetAlertResolver(resolver AlertResolver) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.alertResolver = resolver
+	log.Info().Msg("AI Patrol: Alert resolver configured for autonomous alert management")
+}
+
+// GetAlertResolver returns the alert resolver if configured.
+func (p *PatrolService) GetAlertResolver() AlertResolver {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.alertResolver
 }
 
 // SetChatPatrol sets the chat-based patrol runner for delegation.
@@ -821,6 +847,20 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		if err := chatPatrol.RunPatrol(ctx); err != nil {
 			log.Error().Err(err).Msg("AI Patrol: AI chat patrol failed")
 		}
+
+		// AI-resolve findings after chat patrol completes
+		// The AI uses MCP tools to query current state and decide what's resolved
+		resolvedCount := p.aiResolveFindings(ctx)
+		if resolvedCount > 0 {
+			log.Info().Int("resolved_count", resolvedCount).Msg("AI Patrol: AI resolved findings after investigation")
+		}
+
+		// Clean up old resolved findings
+		cleaned := p.findings.Cleanup(24 * time.Hour)
+		if cleaned > 0 {
+			log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
+		}
+
 		return
 	}
 
@@ -970,10 +1010,11 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	}
 	_ = autoFixEnabled // Auto-fix via runbooks removed - dynamic AI remediation handles this
 
-	// Auto-resolve findings that weren't seen in this patrol run
+	// AI-resolve findings: the AI uses tools to query current state and decides what's resolved
+	// This is TRUE AI-powered resolution - we provide context, AI provides intelligence
 	var resolvedCount int
 	if hasPatrolFeature {
-		resolvedCount = p.autoResolveStaleFindings(start, nil)
+		resolvedCount = p.aiResolveFindings(ctx)
 
 		// Cleanup old resolved findings (only when licensed to modify AI findings)
 		cleaned := p.findings.Cleanup(24 * time.Hour)
@@ -981,9 +1022,17 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 			log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
 		}
 	} else {
-		resolvedCount = p.autoResolveStaleFindings(start, map[string]bool{"heuristic": true})
+		// Without patrol feature, still do basic AI resolution but only for heuristic findings
+		// The AI will naturally focus on active findings regardless
+		resolvedCount = p.aiResolveFindings(ctx)
 	}
 	resolvedCount += runbookResolved
+
+	// AI-based alert review: check active alerts against current state and auto-resolve fixed issues
+	alertsResolved := p.reviewAndResolveAlerts(ctx, state)
+	if alertsResolved > 0 {
+		log.Info().Int("alerts_resolved", alertsResolved).Msg("AI Patrol: Auto-resolved alerts where issues are fixed")
+	}
 
 	duration := time.Since(start)
 	completedAt := time.Now()
@@ -1620,34 +1669,478 @@ func (p *PatrolService) analyzeStorage(storage models.Storage) []*Finding {
 	return findings
 }
 
-// autoResolveHealthyResources marks findings as resolved when they weren't seen in the current patrol
-// patrolStartTime is used to determine which findings are stale (LastSeenAt < patrolStartTime)
-// Returns the count of findings that were resolved
-func (p *PatrolService) autoResolveStaleFindings(patrolStartTime time.Time, sourceAllowlist map[string]bool) int {
-	// Get all active findings and check if they're stale
-	activeFindings := p.findings.GetActive(FindingSeverityInfo)
-	resolvedCount := 0
+// aiResolveFindings uses the LLM with MCP tools to intelligently evaluate active findings.
+// This is TRUE AI-powered resolution - the AI uses tools to query current infrastructure state,
+// analyzes each finding against live data, and decides which are resolved.
+// We provide the scaffolding and context; the AI provides the intelligence.
+func (p *PatrolService) aiResolveFindings(ctx context.Context) int {
+	p.mu.RLock()
+	aiService := p.aiService
+	p.mu.RUnlock()
 
-	for _, f := range activeFindings {
-		if sourceAllowlist != nil {
-			if !sourceAllowlist[f.Source] {
-				continue
+	if aiService == nil || !aiService.IsEnabled() {
+		return 0
+	}
+
+	activeFindings := p.findings.GetActive(FindingSeverityInfo)
+	if len(activeFindings) == 0 {
+		return 0
+	}
+
+	// Build context: list all active findings for the AI to evaluate
+	var findingsContext strings.Builder
+	findingsContext.WriteString("ACTIVE FINDINGS TO EVALUATE FOR RESOLUTION:\n\n")
+
+	for i, f := range activeFindings {
+		findingsContext.WriteString(fmt.Sprintf("FINDING %d:\n", i+1))
+		findingsContext.WriteString(fmt.Sprintf("- ID: %s\n", f.ID))
+		findingsContext.WriteString(fmt.Sprintf("- Resource: %s (type: %s)\n", f.ResourceName, f.ResourceType))
+		findingsContext.WriteString(fmt.Sprintf("- Category: %s, Severity: %s\n", f.Category, f.Severity))
+		findingsContext.WriteString(fmt.Sprintf("- Title: %s\n", f.Title))
+		findingsContext.WriteString(fmt.Sprintf("- Description: %s\n", f.Description))
+		findingsContext.WriteString(fmt.Sprintf("- Evidence when detected: %s\n", f.Evidence))
+		findingsContext.WriteString(fmt.Sprintf("- First detected: %s ago\n", time.Since(f.DetectedAt).Round(time.Minute)))
+		findingsContext.WriteString("\n")
+	}
+
+	// Build the prompt - give AI full toolkit for intelligent investigation
+	prompt := fmt.Sprintf(`You are the AI Patrol resolution agent. Your job is to intelligently determine which findings are still valid issues and which have been resolved.
+
+%s
+
+## Your Available Tools
+You have access to comprehensive infrastructure monitoring tools:
+
+**Current State:**
+- pulse_get_topology - Full infrastructure snapshot (nodes, VMs, containers, storage)
+- pulse_get_resource - Detailed info on a specific resource
+- pulse_search_resources - Search for resources by name/type
+
+**Deep Analysis:**
+- pulse_get_metrics - Time-series metrics to see trends (is it improving or worsening?)
+- pulse_get_baselines - Learned NORMAL behavior patterns for each resource
+- pulse_get_patterns - Detected anomaly patterns
+
+**Infrastructure Health:**
+- pulse_get_disk_health - SMART data, disk errors, predicted failures
+- pulse_get_temperatures - CPU and disk temperatures
+- pulse_get_ceph_status - Ceph cluster health (if applicable)
+- pulse_get_host_raid_status - RAID array status
+- pulse_get_connection_health - API connectivity status
+- pulse_get_cluster_status - PVE cluster health
+
+**Storage & Backups:**
+- pulse_list_storage - Storage pool details
+- pulse_list_backups - Backup status and history
+- pulse_list_pbs_jobs - PBS backup jobs
+- pulse_list_physical_disks - Physical disk information
+
+**I/O & Network:**
+- pulse_get_network_stats - Network throughput
+- pulse_get_diskio_stats - Disk I/O statistics
+
+## Investigation Strategy
+For each finding, do a THOROUGH investigation:
+
+1. **Check current state** - Is the metric still problematic?
+2. **Check trends** - Is it getting better, worse, or stable?
+3. **Check baselines** - Is current behavior normal for this resource?
+4. **Look for root cause** - A finding might be a symptom of something else
+5. **Correlate data** - High CPU might be caused by disk I/O issues, thermal throttling, etc.
+
+## Decision Criteria
+RESOLVE when:
+- The metric has improved significantly AND is stable
+- The issue was transient and baseline shows this is normal now
+- The root cause has been addressed (e.g., disk was replaced)
+
+KEEP when:
+- Issue is still present, even if slightly improved
+- Metrics are unstable or fluctuating
+- You can't determine the current state with confidence
+- There's a risk the issue could recur
+
+## Output Format
+After your investigation, respond with a JSON object:
+{"resolve": [{"id": "finding-id", "reason": "detailed explanation based on your investigation"}]}
+
+If nothing should be resolved:
+{"resolve": []}
+
+Begin your investigation now. Use multiple tools to build a complete picture before making decisions.`, findingsContext.String())
+
+	log.Debug().Int("findings", len(activeFindings)).Msg("AI Patrol: Using AI with MCP tools to evaluate findings for resolution")
+
+	// Execute with streaming - AI has access to MCP tools to query current infrastructure state
+	var responseBuffer strings.Builder
+	_, err := aiService.ExecuteStream(ctx, ExecuteRequest{
+		Prompt:  prompt,
+		UseCase: "patrol", // Use patrol model for this background task
+	}, func(event StreamEvent) {
+		if event.Type == "content" {
+			if content, ok := event.Data.(string); ok {
+				responseBuffer.WriteString(content)
 			}
 		}
-		// If the finding wasn't updated during this patrol (LastSeenAt is before patrol started),
-		// it means the condition that caused it has been resolved
-		if f.LastSeenAt.Before(patrolStartTime) {
+	})
+
+	if err != nil {
+		log.Debug().Err(err).Msg("AI Patrol: Failed to get AI judgment on findings")
+		return 0
+	}
+
+	response := responseBuffer.String()
+
+	// Parse the AI's response and resolve findings
+	resolvedCount := p.parseAndResolveFindings(response, activeFindings)
+	if resolvedCount > 0 {
+		log.Info().Int("resolved", resolvedCount).Msg("AI Patrol: AI resolved findings after tool-based investigation")
+	}
+	return resolvedCount
+}
+
+// parseAndResolveFindings parses the AI's JSON response and resolves the indicated findings
+func (p *PatrolService) parseAndResolveFindings(response string, findings []*Finding) int {
+	response = strings.TrimSpace(response)
+
+	// Find JSON in the response (it might have surrounding text from tool use)
+	startIdx := strings.Index(response, "{")
+	endIdx := strings.LastIndex(response, "}")
+	if startIdx == -1 || endIdx == -1 || endIdx <= startIdx {
+		log.Debug().Str("response", response[:min(200, len(response))]).Msg("AI Patrol: Could not find JSON in AI response")
+		return 0
+	}
+	jsonStr := response[startIdx : endIdx+1]
+
+	// Parse the JSON
+	type resolveItem struct {
+		ID     string `json:"id"`
+		Reason string `json:"reason"`
+	}
+	type aiResponse struct {
+		Resolve []resolveItem `json:"resolve"`
+	}
+
+	var parsed aiResponse
+	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
+		log.Debug().Err(err).Str("json", jsonStr[:min(200, len(jsonStr))]).Msg("AI Patrol: Failed to parse AI response JSON")
+		return 0
+	}
+
+	// Build a map of findings by ID for quick lookup
+	findingMap := make(map[string]*Finding)
+	for _, f := range findings {
+		findingMap[f.ID] = f
+	}
+
+	// Resolve the findings the AI indicated
+	resolvedCount := 0
+	for _, item := range parsed.Resolve {
+		if f, exists := findingMap[item.ID]; exists {
 			if p.findings.Resolve(f.ID, true) {
 				resolvedCount++
 				log.Info().
 					Str("finding_id", f.ID).
 					Str("resource", f.ResourceName).
 					Str("title", f.Title).
-					Msg("AI Patrol: Auto-resolved finding")
+					Str("ai_reason", item.Reason).
+					Msg("AI Patrol: AI resolved finding after investigation")
 			}
 		}
 	}
+
 	return resolvedCount
+}
+
+// reviewAndResolveAlerts uses AI to review active alerts and resolve those where the issue is fixed.
+// This is the core of autonomous alert management - the AI looks at each alert, checks current state,
+// and determines if the underlying issue has been resolved.
+func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models.StateSnapshot) int {
+	p.mu.RLock()
+	resolver := p.alertResolver
+	aiService := p.aiService
+	p.mu.RUnlock()
+
+	if resolver == nil {
+		return 0
+	}
+
+	activeAlerts := resolver.GetActiveAlerts()
+	if len(activeAlerts) == 0 {
+		return 0
+	}
+
+	// Only review alerts that have been active for at least 10 minutes
+	// This avoids thrashing on transient alerts
+	minAge := 10 * time.Minute
+	var alertsToReview []AlertInfo
+	for _, alert := range activeAlerts {
+		if time.Since(alert.StartTime) >= minAge {
+			alertsToReview = append(alertsToReview, alert)
+		}
+	}
+
+	if len(alertsToReview) == 0 {
+		return 0
+	}
+
+	log.Info().
+		Int("total_active", len(activeAlerts)).
+		Int("to_review", len(alertsToReview)).
+		Msg("AI Patrol: Reviewing alerts for auto-resolution")
+
+	resolvedCount := 0
+
+	for _, alert := range alertsToReview {
+		shouldResolve, reason := p.shouldResolveAlert(ctx, alert, state, aiService)
+		if shouldResolve {
+			if resolver.ResolveAlert(alert.ID) {
+				resolvedCount++
+				log.Info().
+					Str("alertID", alert.ID).
+					Str("resource", alert.ResourceName).
+					Str("reason", reason).
+					Dur("age", time.Since(alert.StartTime)).
+					Msg("AI Patrol: Auto-resolved alert - issue no longer detected")
+			}
+		}
+	}
+
+	if resolvedCount > 0 {
+		log.Info().
+			Int("resolved", resolvedCount).
+			Msg("AI Patrol: Completed alert review")
+	}
+
+	return resolvedCount
+}
+
+// shouldResolveAlert determines if an alert should be auto-resolved based on current state.
+// Returns (shouldResolve, reason)
+func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo, state models.StateSnapshot, aiService *Service) (bool, string) {
+	// First, try smart heuristic checks based on alert type
+	switch alert.Type {
+	case "usage": // Storage usage alert
+		// Find the storage in current state
+		for _, storage := range state.Storage {
+			if storage.ID == alert.ResourceID {
+				// If current usage is below the threshold (with some margin), resolve
+				if storage.Usage < alert.Threshold*0.95 { // 5% margin below threshold
+					return true, fmt.Sprintf("storage usage dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
+						alert.Value, storage.Usage, alert.Threshold)
+				}
+				// Still high, don't resolve
+				return false, ""
+			}
+		}
+		// Storage not found in current state - might have been removed
+		// Resolve after 24 hours if resource is gone
+		if time.Since(alert.StartTime) > 24*time.Hour {
+			return true, "resource no longer present in infrastructure"
+		}
+
+	case "cpu", "memory": // Resource utilization alerts
+		// Check if this is a node, VM, container, or docker container
+		currentValue := p.getCurrentMetricValue(alert, state)
+		if currentValue >= 0 && currentValue < alert.Threshold*0.95 {
+			return true, fmt.Sprintf("%s dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
+				alert.Type, alert.Value, currentValue, alert.Threshold)
+		}
+
+	case "offline", "stopped", "docker-offline":
+		// Check if the resource is now online
+		if p.isResourceOnline(alert, state) {
+			return true, "resource is now online/running"
+		}
+	}
+
+	// For complex cases or when heuristics don't apply, use AI judgment if available
+	if aiService != nil && aiService.IsEnabled() {
+		return p.askAIAboutAlert(ctx, alert, state, aiService)
+	}
+
+	return false, ""
+}
+
+// getCurrentMetricValue gets the current value of the metric that triggered the alert
+func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, state models.StateSnapshot) float64 {
+	switch alert.ResourceType {
+	case "node":
+		for _, node := range state.Nodes {
+			if node.ID == alert.ResourceID || node.Name == alert.ResourceName {
+				if alert.Type == "cpu" {
+					return node.CPU
+				} else if alert.Type == "memory" {
+					return node.Memory.Usage
+				}
+			}
+		}
+	case "guest", "vm":
+		for _, vm := range state.VMs {
+			if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
+				if alert.Type == "cpu" {
+					return vm.CPU
+				} else if alert.Type == "memory" {
+					return vm.Memory.Usage
+				}
+			}
+		}
+	case "container":
+		for _, ct := range state.Containers {
+			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
+				if alert.Type == "cpu" {
+					return ct.CPU
+				} else if alert.Type == "memory" {
+					return ct.Memory.Usage
+				}
+			}
+		}
+	case "docker":
+		for _, host := range state.DockerHosts {
+			for _, container := range host.Containers {
+				if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
+					if alert.Type == "cpu" {
+						return container.CPUPercent
+					} else if alert.Type == "memory" {
+						return container.MemoryPercent
+					}
+				}
+			}
+		}
+	case "Storage":
+		for _, storage := range state.Storage {
+			if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
+				return storage.Usage
+			}
+		}
+	}
+	return -1 // Not found
+}
+
+// isResourceOnline checks if a resource that triggered an offline alert is now online
+func (p *PatrolService) isResourceOnline(alert AlertInfo, state models.StateSnapshot) bool {
+	switch alert.ResourceType {
+	case "node":
+		for _, node := range state.Nodes {
+			if (node.ID == alert.ResourceID || node.Name == alert.ResourceName) && node.Status == "online" {
+				return true
+			}
+		}
+	case "guest", "vm":
+		for _, vm := range state.VMs {
+			if (vm.ID == alert.ResourceID || vm.Name == alert.ResourceName) && vm.Status == "running" {
+				return true
+			}
+		}
+	case "container":
+		for _, ct := range state.Containers {
+			if (ct.ID == alert.ResourceID || ct.Name == alert.ResourceName) && ct.Status == "running" {
+				return true
+			}
+		}
+	case "docker":
+		for _, host := range state.DockerHosts {
+			for _, container := range host.Containers {
+				if (container.ID == alert.ResourceID || container.Name == alert.ResourceName) && container.State == "running" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// askAIAboutAlert uses the AI to determine if an alert should be resolved
+func (p *PatrolService) askAIAboutAlert(ctx context.Context, alert AlertInfo, state models.StateSnapshot, aiService *Service) (bool, string) {
+	// Build a focused prompt for the AI
+	prompt := fmt.Sprintf(`Review this alert and determine if it should be auto-resolved based on current state.
+
+ALERT:
+- ID: %s
+- Type: %s
+- Resource: %s (%s)
+- Message: %s
+- Value when triggered: %.1f
+- Threshold: %.1f
+- Active for: %s
+
+CURRENT STATE OF THIS RESOURCE:
+%s
+
+Should this alert be RESOLVED because the underlying issue is fixed?
+Respond with ONLY one of:
+- RESOLVE: <brief reason>
+- KEEP: <brief reason>`,
+		alert.ID, alert.Type, alert.ResourceName, alert.ResourceType,
+		alert.Message, alert.Value, alert.Threshold, alert.Duration,
+		p.getResourceCurrentState(alert, state))
+
+	// Use a quick, low-cost AI call
+	response, err := aiService.QuickAnalysis(ctx, prompt)
+	if err != nil {
+		log.Debug().Err(err).Str("alertID", alert.ID).Msg("AI Patrol: Failed to get AI judgment on alert")
+		return false, ""
+	}
+
+	response = strings.TrimSpace(response)
+	if strings.HasPrefix(strings.ToUpper(response), "RESOLVE:") {
+		reason := strings.TrimSpace(strings.TrimPrefix(response, "RESOLVE:"))
+		if reason == "" {
+			reason = strings.TrimSpace(strings.TrimPrefix(strings.ToUpper(response), "RESOLVE:"))
+		}
+		return true, "AI: " + reason
+	}
+
+	return false, ""
+}
+
+// getResourceCurrentState returns a description of the resource's current state
+func (p *PatrolService) getResourceCurrentState(alert AlertInfo, state models.StateSnapshot) string {
+	switch alert.ResourceType {
+	case "Storage":
+		for _, storage := range state.Storage {
+			if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
+				return fmt.Sprintf("Storage '%s': %.1f%% used, status: %s", storage.Name, storage.Usage, storage.Status)
+			}
+		}
+		return "Storage not found in current state (may have been removed)"
+	case "node":
+		for _, node := range state.Nodes {
+			if node.ID == alert.ResourceID || node.Name == alert.ResourceName {
+				return fmt.Sprintf("Node '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+					node.Name, node.CPU, node.Memory.Usage, node.Status)
+			}
+		}
+		return "Node not found in current state"
+	case "guest", "vm":
+		for _, vm := range state.VMs {
+			if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
+				return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+					vm.Name, vm.CPU, vm.Memory.Usage, vm.Status)
+			}
+		}
+		return "VM not found in current state"
+	case "container":
+		for _, ct := range state.Containers {
+			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
+				return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+					ct.Name, ct.CPU, ct.Memory.Usage, ct.Status)
+			}
+		}
+		return "Container not found in current state"
+	case "docker":
+		for _, host := range state.DockerHosts {
+			for _, container := range host.Containers {
+				if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
+					return fmt.Sprintf("Docker container '%s': CPU %.1f%%, Memory %.1f%%, State: %s",
+						container.Name, container.CPUPercent, container.MemoryPercent, container.State)
+				}
+			}
+		}
+		return "Docker container not found in current state"
+	default:
+		return "Resource state unknown"
+	}
 }
 
 // GetFindingsForResource returns active findings for a specific resource

@@ -28,9 +28,10 @@ type Message struct {
 
 // ToolCall represents a tool invocation
 type ToolCall struct {
-	ID    string                 `json:"id"`
-	Name  string                 `json:"name"`
-	Input map[string]interface{} `json:"input"`
+	ID               string                 `json:"id"`
+	Name             string                 `json:"name"`
+	Input            map[string]interface{} `json:"input"`
+	ThoughtSignature json.RawMessage        `json:"thought_signature,omitempty"`
 }
 
 // ToolResult represents the result of a tool execution
@@ -135,7 +136,6 @@ type DoneData struct {
 // Control level constants
 const (
 	ControlLevelReadOnly   = "read_only"
-	ControlLevelSuggest    = "suggest"
 	ControlLevelControlled = "controlled"
 	ControlLevelAutonomous = "autonomous"
 )

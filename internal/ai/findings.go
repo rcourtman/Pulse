@@ -532,19 +532,14 @@ func (s *FindingsStore) IsSuppressed(resourceID string, category FindingCategory
 }
 
 // isSuppressedInternal checks suppression without locking (caller must hold lock)
+// IMPORTANT: Only explicit manual suppression rules block new findings.
+// A dismissed finding (even with "not_an_issue") does NOT block future findings.
+// This ensures that if an issue recurs, it will be detected and alerted.
+// For permanent suppression, users must create an explicit suppression rule.
 func (s *FindingsStore) isSuppressedInternal(resourceID string, category FindingCategory) bool {
-	// Check if any finding for this resource+category is suppressed
-	ids := s.byResource[resourceID]
-	for _, id := range ids {
-		if f, exists := s.findings[id]; exists {
-			// Match by resource+category only
-			if f.Suppressed && f.Category == category {
-				return true
-			}
-		}
-	}
-
-	// Also check manual suppression rules
+	// Only check manual suppression rules - dismissed findings should NOT block new findings
+	// Rationale: If frigate-storage was full and user dismissed it as "fixed", we still
+	// want to alert if frigate-storage fills up again in the future.
 	for _, rule := range s.suppressionRules {
 		resourceMatches := rule.ResourceID == "" || rule.ResourceID == resourceID
 		categoryMatches := rule.Category == "" || rule.Category == category
@@ -678,7 +673,20 @@ func (s *FindingsStore) Cleanup(maxAge time.Duration) int {
 	removed := 0
 
 	for id, f := range s.findings {
+		shouldRemove := false
+
+		// Remove old resolved findings
 		if f.ResolvedAt != nil && f.ResolvedAt.Before(cutoff) {
+			shouldRemove = true
+		}
+
+		// Also remove old suppressed/dismissed findings (they're no longer relevant)
+		// These are findings the user marked as "fixed" or "not an issue" - after 24h they should disappear
+		if (f.Suppressed || f.DismissedReason != "") && f.LastSeenAt.Before(cutoff) {
+			shouldRemove = true
+		}
+
+		if shouldRemove {
 			delete(s.findings, id)
 			// Clean up resource index
 			ids := s.byResource[f.ResourceID]

@@ -183,9 +183,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			assistantMsg.ToolCalls = make([]ToolCall, len(toolCalls))
 			for i, tc := range toolCalls {
 				assistantMsg.ToolCalls[i] = ToolCall{
-					ID:    tc.ID,
-					Name:  tc.Name,
-					Input: tc.Input,
+					ID:               tc.ID,
+					Name:             tc.Name,
+					Input:            tc.Input,
+					ThoughtSignature: tc.ThoughtSignature,
 				}
 			}
 		}
@@ -200,9 +201,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 		for _, tc := range toolCalls {
 			providerAssistant.ToolCalls = append(providerAssistant.ToolCalls, providers.ToolCall{
-				ID:    tc.ID,
-				Name:  tc.Name,
-				Input: tc.Input,
+				ID:               tc.ID,
+				Name:             tc.Name,
+				Input:            tc.Input,
+				ThoughtSignature: tc.ThoughtSignature,
 			})
 		}
 		providerMessages = append(providerMessages, providerAssistant)
@@ -457,9 +459,10 @@ func convertToProviderMessages(messages []Message) []providers.Message {
 		if len(m.ToolCalls) > 0 {
 			for _, tc := range m.ToolCalls {
 				pm.ToolCalls = append(pm.ToolCalls, providers.ToolCall{
-					ID:    tc.ID,
-					Name:  tc.Name,
-					Input: tc.Input,
+					ID:               tc.ID,
+					Name:             tc.Name,
+					Input:            tc.Input,
+					ThoughtSignature: tc.ThoughtSignature,
 				})
 			}
 		}

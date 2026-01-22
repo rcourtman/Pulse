@@ -16,6 +16,7 @@ type AlertManagerAdapter struct {
 type alertManager interface {
 	GetActiveAlerts() []alerts.Alert
 	GetRecentlyResolved() []models.ResolvedAlert
+	ClearAlert(alertID string) bool
 }
 
 // NewAlertManagerAdapter creates a new adapter for the alert manager
@@ -186,6 +187,14 @@ func inferResourceType(alertType string, metadata map[string]interface{}) string
 	default:
 		return "guest"
 	}
+}
+
+// ResolveAlert clears an active alert. Returns true if the alert was found and cleared.
+func (a *AlertManagerAdapter) ResolveAlert(alertID string) bool {
+	if a.manager == nil {
+		return false
+	}
+	return a.manager.ClearAlert(alertID)
 }
 
 // formatDuration returns a human-readable duration string

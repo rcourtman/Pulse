@@ -54,6 +54,18 @@ func (s *Service) SetAlertProvider(ap AlertProvider) {
 	s.alertProvider = ap
 }
 
+// SetAlertResolver sets the alert resolver for AI Patrol to use for autonomous alert management.
+// This allows the patrol service to review and auto-resolve alerts when issues are fixed.
+func (s *Service) SetAlertResolver(resolver AlertResolver) {
+	s.mu.Lock()
+	patrol := s.patrolService
+	s.mu.Unlock()
+
+	if patrol != nil {
+		patrol.SetAlertResolver(resolver)
+	}
+}
+
 // buildAlertContext generates AI context from current alerts
 func (s *Service) buildAlertContext() string {
 	s.mu.RLock()

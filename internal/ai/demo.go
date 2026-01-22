@@ -424,7 +424,7 @@ EVIDENCE: PermitRootLogin yes found in config
 			"### This Demo Shows\n" +
 			"- How AI-powered analysis works in Pulse\n" +
 			"- The types of insights and recommendations you'll receive\n" +
-			"- Command suggestions with approval workflow\n\n" +
+			"- Command approvals with manual confirmation\n\n" +
 			"To enable full AI capabilities in your own Pulse installation:\n" +
 			"1. Go to **Settings → AI Settings**\n" +
 			"2. Add your API key (Anthropic, OpenAI, DeepSeek, or Ollama)\n" +

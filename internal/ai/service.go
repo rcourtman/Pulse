@@ -962,6 +962,51 @@ func (s *Service) IsEnabled() bool {
 	return s.cfg != nil && s.cfg.Enabled && s.provider != nil
 }
 
+// QuickAnalysis performs a lightweight AI analysis for simple decisions.
+// This is used for things like determining if an alert should be auto-resolved.
+// It uses a single-turn, no-tools call for efficiency.
+func (s *Service) QuickAnalysis(ctx context.Context, prompt string) (string, error) {
+	s.mu.RLock()
+	provider := s.provider
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	if provider == nil {
+		return "", fmt.Errorf("AI is not enabled or configured")
+	}
+
+	// Use a fast model for quick analysis if available
+	model := ""
+	if cfg != nil && cfg.PatrolModel != "" {
+		model = cfg.PatrolModel
+	}
+
+	messages := []providers.Message{
+		{
+			Role:    "system",
+			Content: "You are a brief, decisive infrastructure monitoring assistant. Give short, direct answers.",
+		},
+		{
+			Role:    "user",
+			Content: prompt,
+		},
+	}
+
+	resp, err := provider.Chat(ctx, providers.ChatRequest{
+		Messages: messages,
+		Model:    model,
+	})
+	if err != nil {
+		return "", fmt.Errorf("AI analysis failed: %w", err)
+	}
+
+	if resp.Content == "" {
+		return "", fmt.Errorf("AI returned empty response")
+	}
+
+	return resp.Content, nil
+}
+
 // GetConfig returns a copy of the current AI config
 func (s *Service) GetConfig() *config.AIConfig {
 	s.mu.RLock()
