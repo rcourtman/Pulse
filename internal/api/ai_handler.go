@@ -316,11 +316,34 @@ func (h *AIHandler) Stop(ctx context.Context) error {
 // Restart restarts the AI chat service with updated configuration
 // Call this when model or other settings change
 func (h *AIHandler) Restart(ctx context.Context) error {
-	if h.legacyService == nil || !h.legacyService.IsRunning() {
-		return nil // Not running, nothing to restart
-	}
 	// Load fresh config from persistence to get latest settings
 	newCfg := h.loadAIConfig(ctx)
+
+	if h.legacyService == nil {
+		return nil
+	}
+
+	if !h.legacyService.IsRunning() {
+		// If not running but enabled, try to start
+		if newCfg != nil && newCfg.Enabled {
+			log.Info().Msg("Starting AI service via restart trigger")
+
+			// We need a state provider to start
+			// Try to get default state provider from existing map if available
+			var sp AIStateProvider
+			h.stateProvidersMu.RLock()
+			for _, p := range h.stateProviders {
+				sp = p
+				break
+			}
+			h.stateProvidersMu.RUnlock()
+
+			// Reuse start logic
+			return h.Start(ctx, sp)
+		}
+		return nil // Not running and not enabled, nothing to do
+	}
+
 	return h.legacyService.Restart(ctx, newCfg)
 }
 

@@ -493,7 +493,7 @@ type AISettingsResponse struct {
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
 	// Infrastructure control settings
-	ControlLevel    string   `json:"control_level"`              // "read_only", "suggest", "controlled", "autonomous"
+	ControlLevel    string   `json:"control_level"`              // "read_only", "controlled", "autonomous"
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control
 }
 
@@ -534,7 +534,7 @@ type AISettingsUpdateRequest struct {
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds *int `json:"request_timeout_seconds,omitempty"`
 	// Infrastructure control settings
-	ControlLevel    *string  `json:"control_level,omitempty"`    // "read_only", "suggest", "controlled", "autonomous"
+	ControlLevel    *string  `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control (nil = don't update, empty = clear)
 }
 
@@ -742,7 +742,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 			settings.AutonomousMode = true
 		} else if settings.GetControlLevel() == config.ControlLevelAutonomous {
 			// Only downgrade from autonomous to controlled; preserve other levels
-			// (e.g., don't change read_only or suggest to controlled)
+			// (e.g., don't change read_only to controlled)
 			settings.ControlLevel = config.ControlLevelControlled
 			settings.AutonomousMode = false
 		}
@@ -897,12 +897,16 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	// Handle infrastructure control settings
 	if req.ControlLevel != nil {
-		if !config.IsValidControlLevel(*req.ControlLevel) {
-			http.Error(w, "invalid control_level: must be read_only, suggest, controlled, or autonomous", http.StatusBadRequest)
+		level := strings.TrimSpace(*req.ControlLevel)
+		if level == "suggest" {
+			level = config.ControlLevelControlled
+		}
+		if !config.IsValidControlLevel(level) {
+			http.Error(w, "invalid control_level: must be read_only, controlled, or autonomous", http.StatusBadRequest)
 			return
 		}
 		// "autonomous" requires Pro license (same as autonomous_mode)
-		if *req.ControlLevel == config.ControlLevelAutonomous {
+		if level == config.ControlLevelAutonomous {
 			if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusPaymentRequired)
@@ -915,9 +919,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				return
 			}
 		}
-		settings.ControlLevel = *req.ControlLevel
+		settings.ControlLevel = level
 		// Keep legacy AutonomousMode in sync to prevent fallback issues
-		settings.AutonomousMode = (*req.ControlLevel == config.ControlLevelAutonomous)
+		settings.AutonomousMode = (level == config.ControlLevelAutonomous)
 	}
 
 	// Handle protected guests (nil = don't update)
@@ -947,7 +951,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	// Trigger AI chat service restart if model changed
 	// This ensures the new model is picked up by the service
-	if h.onModelChange != nil && (req.Model != nil || req.ChatModel != nil) {
+	// Trigger AI chat service restart if model changed or AI enabled
+	// This ensures the new model is picked up by the service
+	if h.onModelChange != nil && (req.Model != nil || req.ChatModel != nil || req.Enabled != nil) {
 		h.onModelChange()
 	}
 
@@ -2272,6 +2278,11 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 // SetAlertProvider sets the alert provider for AI context
 func (h *AISettingsHandler) SetAlertProvider(ap ai.AlertProvider) {
 	h.GetAIService(context.Background()).SetAlertProvider(ap)
+}
+
+// SetAlertResolver sets the alert resolver for AI Patrol autonomous alert management
+func (h *AISettingsHandler) SetAlertResolver(resolver ai.AlertResolver) {
+	h.GetAIService(context.Background()).SetAlertResolver(resolver)
 }
 
 // oauthSessions stores active OAuth sessions (state -> session)

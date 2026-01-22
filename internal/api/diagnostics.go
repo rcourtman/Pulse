@@ -29,18 +29,19 @@ import (
 
 // DiagnosticsInfo contains comprehensive diagnostic information
 type DiagnosticsInfo struct {
-	Version      string                 `json:"version"`
-	Runtime      string                 `json:"runtime"`
-	Uptime       float64                `json:"uptime"`
-	Nodes        []NodeDiagnostic       `json:"nodes"`
-	PBS          []PBSDiagnostic        `json:"pbs"`
-	System       SystemDiagnostic       `json:"system"`
-	Discovery    *DiscoveryDiagnostic   `json:"discovery,omitempty"`
-	APITokens    *APITokenDiagnostic    `json:"apiTokens,omitempty"`
-	DockerAgents *DockerAgentDiagnostic `json:"dockerAgents,omitempty"`
-	Alerts       *AlertsDiagnostic      `json:"alerts,omitempty"`
-	AIChat       *AIChatDiagnostic      `json:"aiChat,omitempty"`
-	Errors       []string               `json:"errors"`
+	Version      string                  `json:"version"`
+	Runtime      string                  `json:"runtime"`
+	Uptime       float64                 `json:"uptime"`
+	Nodes        []NodeDiagnostic        `json:"nodes"`
+	PBS          []PBSDiagnostic         `json:"pbs"`
+	System       SystemDiagnostic        `json:"system"`
+	MetricsStore *MetricsStoreDiagnostic `json:"metricsStore,omitempty"`
+	Discovery    *DiscoveryDiagnostic    `json:"discovery,omitempty"`
+	APITokens    *APITokenDiagnostic     `json:"apiTokens,omitempty"`
+	DockerAgents *DockerAgentDiagnostic  `json:"dockerAgents,omitempty"`
+	Alerts       *AlertsDiagnostic       `json:"alerts,omitempty"`
+	AIChat       *AIChatDiagnostic       `json:"aiChat,omitempty"`
+	Errors       []string                `json:"errors"`
 	// NodeSnapshots captures the raw memory payload and derived usage Pulse last observed per node.
 	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots,omitempty"`
 	// GuestSnapshots captures recent per-guest memory breakdowns (VM/LXC) with the raw Proxmox fields.
@@ -88,12 +89,73 @@ type MemorySourceStat struct {
 	Fallback    bool   `json:"fallback"`
 }
 
+// MetricsStoreDiagnostic summarizes metrics store health and data availability.
+type MetricsStoreDiagnostic struct {
+	Enabled     bool     `json:"enabled"`
+	Status      string   `json:"status"`
+	DBSize      int64    `json:"dbSize,omitempty"`
+	RawCount    int64    `json:"rawCount,omitempty"`
+	MinuteCount int64    `json:"minuteCount,omitempty"`
+	HourlyCount int64    `json:"hourlyCount,omitempty"`
+	DailyCount  int64    `json:"dailyCount,omitempty"`
+	TotalPoints int64    `json:"totalPoints,omitempty"`
+	BufferSize  int      `json:"bufferSize,omitempty"`
+	Notes       []string `json:"notes,omitempty"`
+	Error       string   `json:"error,omitempty"`
+}
+
 func isFallbackMemorySource(source string) bool {
 	switch strings.ToLower(source) {
 	case "", "unknown", "nodes-endpoint", "node-status-used", "previous-snapshot":
 		return true
 	default:
 		return false
+	}
+}
+
+func buildMetricsStoreDiagnostic(monitor *monitoring.Monitor) *MetricsStoreDiagnostic {
+	if monitor == nil {
+		return &MetricsStoreDiagnostic{
+			Enabled: false,
+			Status:  "unavailable",
+			Error:   "monitor not initialized",
+		}
+	}
+
+	store := monitor.GetMetricsStore()
+	if store == nil {
+		return &MetricsStoreDiagnostic{
+			Enabled: false,
+			Status:  "unavailable",
+			Error:   "metrics store not initialized",
+		}
+	}
+
+	stats := store.GetStats()
+	total := stats.RawCount + stats.MinuteCount + stats.HourlyCount + stats.DailyCount
+	status := "healthy"
+	notes := []string{}
+
+	switch {
+	case total == 0 && stats.BufferSize > 0:
+		status = "buffering"
+		notes = append(notes, "Metrics are buffered but not yet flushed")
+	case total == 0:
+		status = "empty"
+		notes = append(notes, "No historical metrics written yet")
+	}
+
+	return &MetricsStoreDiagnostic{
+		Enabled:     true,
+		Status:      status,
+		DBSize:      stats.DBSize,
+		RawCount:    stats.RawCount,
+		MinuteCount: stats.MinuteCount,
+		HourlyCount: stats.HourlyCount,
+		DailyCount:  stats.DailyCount,
+		TotalPoints: total,
+		BufferSize:  stats.BufferSize,
+		Notes:       notes,
 	}
 }
 
@@ -390,6 +452,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	}
 
 	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
+	diag.MetricsStore = buildMetricsStoreDiagnostic(r.monitor)
 
 	// Test each configured node
 	for _, node := range r.config.PVEInstances {
