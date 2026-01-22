@@ -198,3 +198,18 @@ export function getBackupInfo(
     ageFormatted: formatTimeDiff(ageMs),
   };
 }
+
+/**
+ * Shorten image registry URLs to show only the last two name components (repo/name).
+ * e.g., "ghcr.io/rcourtman/pulse:latest" -> "rcourtman/pulse:latest"
+ */
+export function getShortImageName(fullImage: string | undefined): string {
+  if (!fullImage) return '—';
+  // Handle case with @sha256: digests
+  const cleanImage = fullImage.split('@')[0];
+  const parts = cleanImage.split('/');
+  if (parts.length >= 2) {
+    return parts.slice(-2).join('/');
+  }
+  return cleanImage;
+}

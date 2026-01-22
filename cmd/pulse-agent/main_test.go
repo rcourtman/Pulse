@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -177,6 +178,81 @@ func TestGatherCSV(t *testing.T) {
 				t.Fatalf("expected %v, got %v", tc.expected, got)
 			}
 		})
+	}
+}
+
+func TestApplyRemoteSettings(t *testing.T) {
+	originalLevel := zerolog.GlobalLevel()
+	defer zerolog.SetGlobalLevel(originalLevel)
+
+	logger := zerolog.New(io.Discard).Level(zerolog.InfoLevel)
+	cfg := &Config{
+		Interval: time.Second,
+		Logger:   &logger,
+	}
+
+	settings := map[string]interface{}{
+		"enable_host":                   true,
+		"enable_docker":                 true,
+		"enable_kubernetes":             true,
+		"enable_proxmox":                true,
+		"proxmox_type":                  "Auto",
+		"docker_runtime":                "PoDmAn",
+		"log_level":                     "debug",
+		"interval":                      "45s",
+		"disable_auto_update":           true,
+		"disable_docker_update_checks":  true,
+		"kube_include_all_pods":         true,
+		"kube_include_all_deployments":  true,
+		"report_ip":                     "10.0.0.1",
+		"disable_ceph":                  true,
+		"unknown_key_should_be_ignored": true,
+	}
+
+	applyRemoteSettings(cfg, settings, &logger)
+
+	if !cfg.EnableHost || !cfg.EnableDocker || !cfg.EnableKubernetes || !cfg.EnableProxmox {
+		t.Fatalf("expected module flags enabled, got host=%v docker=%v kube=%v proxmox=%v", cfg.EnableHost, cfg.EnableDocker, cfg.EnableKubernetes, cfg.EnableProxmox)
+	}
+	if !cfg.DockerConfigured {
+		t.Fatalf("expected DockerConfigured to be true")
+	}
+	if cfg.ProxmoxType != "" {
+		t.Fatalf("expected proxmox type to normalize to empty for auto, got %q", cfg.ProxmoxType)
+	}
+	if cfg.DockerRuntime != "podman" {
+		t.Fatalf("expected docker runtime to be normalized, got %q", cfg.DockerRuntime)
+	}
+	if cfg.LogLevel != zerolog.DebugLevel {
+		t.Fatalf("expected log level debug, got %v", cfg.LogLevel)
+	}
+	if cfg.Logger == nil {
+		t.Fatalf("expected logger to be updated")
+	}
+	if cfg.Interval != 45*time.Second {
+		t.Fatalf("expected interval 45s, got %v", cfg.Interval)
+	}
+	if !cfg.DisableAutoUpdate || !cfg.DisableDockerUpdateChecks {
+		t.Fatalf("expected auto-update disables to be true")
+	}
+	if !cfg.KubeIncludeAllPods || !cfg.KubeIncludeAllDeployments {
+		t.Fatalf("expected kube include flags to be true")
+	}
+	if cfg.ReportIP != "10.0.0.1" || !cfg.DisableCeph {
+		t.Fatalf("unexpected report ip / disable ceph: %q %v", cfg.ReportIP, cfg.DisableCeph)
+	}
+}
+
+func TestApplyRemoteSettingsIntervalFloat(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	cfg := &Config{}
+
+	applyRemoteSettings(cfg, map[string]interface{}{
+		"interval": float64(12),
+	}, &logger)
+
+	if cfg.Interval != 12*time.Second {
+		t.Fatalf("expected interval 12s, got %v", cfg.Interval)
 	}
 }
 

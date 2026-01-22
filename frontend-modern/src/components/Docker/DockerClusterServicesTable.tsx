@@ -3,7 +3,7 @@ import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { formatRelativeTime } from '@/utils/format';
+import { formatRelativeTime, getShortImageName } from '@/utils/format';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import {
   groupHostsByCluster,
@@ -171,8 +171,8 @@ const ServiceRow: Component<{ service: ClusterService }> = (props) => {
             {props.service.service.name}
           </span>
           <Show when={props.service.service.image}>
-            <span class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
-              {props.service.service.image?.split('@')[0]}
+            <span class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]" title={props.service.service.image || undefined}>
+              {getShortImageName(props.service.service.image)}
             </span>
           </Show>
         </div>

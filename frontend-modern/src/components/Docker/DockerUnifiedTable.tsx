@@ -3,7 +3,7 @@ import type { DockerHost, DockerContainer, DockerService, DockerTask } from '@/t
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
-import { formatBytes, formatPercent, formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
+import { formatBytes, formatPercent, formatUptime, formatRelativeTime, formatAbsoluteTime, getShortImageName } from '@/utils/format';
 import type { DockerMetadata } from '@/api/dockerMetadata';
 import { DockerMetadataAPI } from '@/api/dockerMetadata';
 import type { DockerHostMetadata } from '@/api/dockerHostMetadata';
@@ -42,14 +42,6 @@ const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
   }
 };
 
-// Extract just the image name + tag from a full image path
-// e.g., "ghcr.io/org/image-name:tag" → "image-name:tag"
-const getShortImageName = (fullImage: string | undefined): string => {
-  if (!fullImage) return '—';
-  // Get everything after the last slash
-  const lastSlash = fullImage.lastIndexOf('/');
-  return lastSlash >= 0 ? fullImage.slice(lastSlash + 1) : fullImage;
-};
 
 type StatsFilter =
   | { type: 'host-status'; value: string }
@@ -139,7 +131,7 @@ interface DockerColumnDef extends ColumnConfig {
 // - supplementary: Visible on large screens and up (lg: 1024px+)
 // - detailed: Visible on extra large screens and up (xl: 1280px+)
 export const DOCKER_COLUMNS: DockerColumnDef[] = [
-  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource', width: '18%' },
+  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource', width: '22%' },
   { id: 'type', label: 'Type', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'type', width: '70px' },
   { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: '80px', maxWidth: '200px', sortKey: 'image', width: '12%' },
   { id: 'status', label: 'Status', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'status', width: '90px' },
@@ -1137,10 +1129,10 @@ const DockerContainerRow: Component<{
                 ariaLabel={containerStatusIndicator().label}
                 size="xs"
               />
-              <div class="flex-1 min-w-0 truncate">
+              <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
                   <span
-                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate min-w-[60px] flex-shrink"
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate min-w-0 flex-1"
                     title={containerTitle()}
                   >
                     {container.name || container.id}
@@ -1321,7 +1313,7 @@ const DockerContainerRow: Component<{
         <For each={DOCKER_COLUMNS}>
           {(column) => (
             <td
-              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[300px]' : ''}`}
+              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[400px]' : ''}`}
               style={{
                 "min-width": (column.id === 'cpu' || column.id === 'memory') ? (props.isMobile() ? '60px' : '140px') : undefined,
                 "width": (column.id === 'cpu' || column.id === 'memory') && !props.isMobile() ? '140px' : undefined,
@@ -1972,7 +1964,7 @@ const DockerServiceRow: Component<{
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
                   <span
-                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none"
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate min-w-0 flex-1"
                     title={serviceTitle()}
                   >
                     {service.name || service.id || 'Service'}
@@ -2091,7 +2083,7 @@ const DockerServiceRow: Component<{
         <For each={DOCKER_COLUMNS}>
           {(column) => (
             <td
-              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[300px]' : ''}`}
+              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[400px]' : ''}`}
               style={{
                 "min-width": (column.id === 'cpu' || column.id === 'memory') ? (props.isMobile() ? '60px' : '140px') : undefined,
                 "width": (column.id === 'cpu' || column.id === 'memory') && !props.isMobile() ? '140px' : undefined,
