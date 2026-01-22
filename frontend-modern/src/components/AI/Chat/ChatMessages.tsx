@@ -69,9 +69,9 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
       <Show when={props.messages.length === 0 && props.emptyState}>
         <div class="flex flex-col items-center justify-center h-full text-center py-12">
           {/* AI Icon */}
-          <div class="w-16 h-16 mb-4 rounded-2xl bg-gradient-to-br from-purple-100 to-violet-100 dark:from-purple-900/30 dark:to-violet-900/30 flex items-center justify-center shadow-lg shadow-purple-500/10">
+          <div class="w-16 h-16 mb-4 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm">
             <svg
-              class="w-8 h-8 text-purple-500 dark:text-purple-400"
+              class="w-8 h-8 text-blue-500 dark:text-blue-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -100,9 +100,9 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                   <button
                     type="button"
                     onClick={() => props.emptyState!.onSuggestionClick?.(suggestion)}
-                    class="w-full text-left px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 hover:border-purple-300 dark:hover:border-purple-700"
+                    class="w-full text-left px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700"
                   >
-                    <span class="text-purple-500 dark:text-purple-400 mr-2">→</span>
+                    <span class="text-blue-500 dark:text-blue-400 mr-2">→</span>
                     {suggestion}
                   </button>
                 )}

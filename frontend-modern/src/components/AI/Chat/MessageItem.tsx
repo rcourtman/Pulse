@@ -105,7 +105,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     <div class={`${isUser() ? 'flex justify-end' : ''} mb-4`}>
       {/* User message - compact bubble */}
       <Show when={isUser()}>
-        <div class="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-br-md bg-gradient-to-br from-purple-600 to-violet-600 text-white shadow-md">
+        <div class="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-br-md bg-blue-600 text-white shadow-sm">
           <p class="text-sm whitespace-pre-wrap">{props.message.content}</p>
         </div>
       </Show>
@@ -115,7 +115,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         <div class="w-full">
           {/* Assistant indicator */}
           <div class="flex items-center gap-2 mb-2 text-xs text-slate-500 dark:text-slate-400">
-            <div class="w-5 h-5 rounded-md bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center">
+            <div class="w-5 h-5 rounded-md bg-blue-600 flex items-center justify-center">
               <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082" />
               </svg>
@@ -164,8 +164,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                         class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none overflow-x-auto
                                prose-p:leading-relaxed prose-p:my-2
                                prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs prose-pre:overflow-x-auto prose-pre:max-w-full
-                               prose-code:text-purple-600 dark:prose-code:text-purple-400
-                               prose-code:bg-purple-50 dark:prose-code:bg-purple-900/30
+                               prose-code:text-blue-600 dark:prose-code:text-blue-400
+                               prose-code:bg-blue-50 dark:prose-code:bg-blue-900/30
                                prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:break-all
                                prose-code:before:content-none prose-code:after:content-none
                                prose-headings:text-slate-900 dark:prose-headings:text-slate-100
@@ -208,8 +208,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                 class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none overflow-x-auto
                        prose-p:leading-relaxed prose-p:my-2
                        prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs prose-pre:overflow-x-auto prose-pre:max-w-full
-                       prose-code:text-purple-600 dark:prose-code:text-purple-400
-                       prose-code:bg-purple-50 dark:prose-code:bg-purple-900/30
+                       prose-code:text-blue-600 dark:prose-code:text-blue-400
+                       prose-code:bg-blue-50 dark:prose-code:bg-blue-900/30
                        prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:break-all
                        prose-code:before:content-none prose-code:after:content-none
                        prose-headings:text-slate-900 dark:prose-headings:text-slate-100
@@ -222,7 +222,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
             {/* Streaming text indicator */}
             <Show when={isStreamingText()}>
-              <span class="inline-block w-2 h-4 ml-0.5 bg-purple-500 dark:bg-purple-400 animate-pulse rounded-sm" />
+              <span class="inline-block w-2 h-4 ml-0.5 bg-blue-500 dark:bg-blue-400 animate-pulse rounded-sm" />
             </Show>
 
             <Show when={!props.message.isStreaming && contextTools().length > 0}>

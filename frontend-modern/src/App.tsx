@@ -914,9 +914,9 @@ function App() {
                     <button
                       type="button"
                       onClick={() => aiChatStore.toggle()}
-                      class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 pl-2 pr-1.5 py-3 rounded-l-xl bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-20 translate-y-0"
-                      title={aiChatStore.context.context?.name ? `AI Assistant - ${aiChatStore.context.context.name}` : 'AI Assistant (⌘K)'}
-                      aria-label="Expand AI Assistant"
+                      class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 pl-2 pr-1.5 py-3 rounded-l-xl bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-20 translate-y-0"
+                      title={aiChatStore.context.context?.name ? `Pulse Assistant - ${aiChatStore.context.context.name}` : 'Pulse Assistant (⌘K)'}
+                      aria-label="Expand Pulse Assistant"
                     >
                       <svg
                         class="h-4 w-4 flex-shrink-0"
@@ -1319,7 +1319,7 @@ function AppLayout(props: {
         <div class={`header-controls flex items-center gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}>
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
-              {/* AI Patrol Status Indicator */}
+              {/* Pulse Patrol Status Indicator */}
               <AIStatusIndicator />
               {/* Kiosk Mode Toggle */}
               <button
