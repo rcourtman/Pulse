@@ -491,8 +491,8 @@ func (r *Router) ensureOIDCConfig() *config.OIDCConfig {
 // respecting X-Forwarded-* headers when behind a reverse proxy
 func buildRedirectURL(req *http.Request, configuredURL string) string {
 	// If explicitly configured, use that
-	if strings.TrimSpace(configuredURL) != "" {
-		return configuredURL
+	if configured := strings.TrimSpace(configuredURL); configured != "" {
+		return configured
 	}
 
 	// Build from request headers (respects reverse proxy headers)
@@ -500,15 +500,38 @@ func buildRedirectURL(req *http.Request, configuredURL string) string {
 	if req.TLS != nil {
 		scheme = "https"
 	}
-	// Check X-Forwarded-Proto header (set by reverse proxies)
-	if proto := req.Header.Get("X-Forwarded-Proto"); proto != "" {
-		scheme = proto
+
+	peerIP := extractRemoteIP(req.RemoteAddr)
+	trustedProxy := isTrustedProxyIP(peerIP)
+
+	if trustedProxy {
+		if proto := firstForwardedValue(req.Header.Get("X-Forwarded-Proto")); proto != "" {
+			scheme = proto
+		} else if proto := firstForwardedValue(req.Header.Get("X-Forwarded-Scheme")); proto != "" {
+			scheme = proto
+		}
+	}
+	scheme = strings.ToLower(strings.TrimSpace(scheme))
+	switch scheme {
+	case "https", "http":
+	default:
+		if req.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
 	}
 
-	host := req.Host
-	// Check X-Forwarded-Host header (set by reverse proxies)
-	if fwdHost := req.Header.Get("X-Forwarded-Host"); fwdHost != "" {
-		host = fwdHost
+	rawHost := ""
+	if trustedProxy {
+		rawHost = firstForwardedValue(req.Header.Get("X-Forwarded-Host"))
+	}
+	if rawHost == "" {
+		rawHost = req.Host
+	}
+	host, _ := sanitizeForwardedHost(rawHost)
+	if host == "" {
+		host = req.Host
 	}
 
 	redirectURL := fmt.Sprintf("%s://%s%s", scheme, host, config.DefaultOIDCCallbackPath)
@@ -518,6 +541,8 @@ func buildRedirectURL(req *http.Request, configuredURL string) string {
 		Str("host", host).
 		Str("x_forwarded_proto", req.Header.Get("X-Forwarded-Proto")).
 		Str("x_forwarded_host", req.Header.Get("X-Forwarded-Host")).
+		Bool("trusted_proxy", trustedProxy).
+		Str("peer_ip", peerIP).
 		Str("redirect_url", redirectURL).
 		Bool("has_tls", req.TLS != nil).
 		Msg("Built OIDC redirect URL from request")

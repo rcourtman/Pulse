@@ -105,9 +105,12 @@ func (rl *RateLimiter) cleanup() {
 // Middleware for rate limiting
 func (rl *RateLimiter) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			ip = forwarded
+		ip := GetClientIP(r)
+		if ip == "" {
+			ip = extractRemoteIP(r.RemoteAddr)
+		}
+		if ip == "" {
+			ip = r.RemoteAddr
 		}
 
 		if !rl.Allow(ip) {

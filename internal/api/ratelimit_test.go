@@ -368,6 +368,9 @@ func TestRateLimiter_Middleware_Denied(t *testing.T) {
 }
 
 func TestRateLimiter_Middleware_XForwardedFor(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	resetTrustedProxyConfig()
+
 	rl := NewRateLimiter(1, time.Minute)
 	defer rl.Stop()
 

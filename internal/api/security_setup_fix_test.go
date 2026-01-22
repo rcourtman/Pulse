@@ -262,12 +262,11 @@ func TestQuickSecuritySetupRequiresSettingsScopeForTokens(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		AuthUser:        "admin",
-		AuthPass:        hashed,
-		DataPath:        dataDir,
-		ConfigPath:      dataDir,
-		APITokens:       []config.APITokenRecord{*record},
-		APITokenEnabled: true,
+		AuthUser:   "admin",
+		AuthPass:   hashed,
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		APITokens:  []config.APITokenRecord{*record},
 	}
 	cfg.SortAPITokens()
 
@@ -306,12 +305,11 @@ func TestRegenerateAPITokenRequiresSettingsScope(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		AuthUser:        "admin",
-		AuthPass:        hashed,
-		DataPath:        dataDir,
-		ConfigPath:      dataDir,
-		APITokens:       []config.APITokenRecord{*record},
-		APITokenEnabled: true,
+		AuthUser:   "admin",
+		AuthPass:   hashed,
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		APITokens:  []config.APITokenRecord{*record},
 	}
 	cfg.SortAPITokens()
 
@@ -347,12 +345,11 @@ func TestValidateAPITokenRequiresSettingsScope(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		AuthUser:        "admin",
-		AuthPass:        hashed,
-		DataPath:        dataDir,
-		ConfigPath:      dataDir,
-		APITokens:       []config.APITokenRecord{*record},
-		APITokenEnabled: true,
+		AuthUser:   "admin",
+		AuthPass:   hashed,
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		APITokens:  []config.APITokenRecord{*record},
 	}
 	cfg.SortAPITokens()
 
@@ -390,12 +387,11 @@ func TestResetLockoutRequiresSettingsScope(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		AuthUser:        "admin",
-		AuthPass:        hashed,
-		DataPath:        dataDir,
-		ConfigPath:      dataDir,
-		APITokens:       []config.APITokenRecord{*record},
-		APITokenEnabled: true,
+		AuthUser:   "admin",
+		AuthPass:   hashed,
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		APITokens:  []config.APITokenRecord{*record},
 	}
 	cfg.SortAPITokens()
 
@@ -428,10 +424,9 @@ func TestEnsureSettingsWriteScopeWithValidScope(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		DataPath:        dataDir,
-		ConfigPath:      dataDir,
-		APITokens:       []config.APITokenRecord{*record},
-		APITokenEnabled: true,
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		APITokens:  []config.APITokenRecord{*record},
 	}
 	cfg.SortAPITokens()
 

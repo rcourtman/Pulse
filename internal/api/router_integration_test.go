@@ -44,7 +44,6 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		BackendHost:       "127.0.0.1",
 		BackendPort:       7655,
 		ConfigPath:        tmpDir,
 		DataPath:          tmpDir,
@@ -283,7 +282,6 @@ func TestAPIOnlyModeRequiresToken(t *testing.T) {
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
 		cfg.AuthUser = ""
 		cfg.AuthPass = ""
-		cfg.APITokenEnabled = true
 		cfg.APITokens = []config.APITokenRecord{*tokenRecord}
 	})
 
@@ -492,7 +490,6 @@ func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
 	const apiToken = "test-token"
 
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
-		cfg.APITokenEnabled = true
 		record, err := config.NewAPITokenRecord(apiToken, "Integration test token", nil)
 		if err != nil {
 			t.Fatalf("create API token record: %v", err)
@@ -589,7 +586,6 @@ func TestAPITokenQueryParameterRejected(t *testing.T) {
 	const apiToken = "query-token-1234567890"
 
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
-		cfg.APITokenEnabled = true
 		record, err := config.NewAPITokenRecord(apiToken, "Query token test", nil)
 		if err != nil {
 			t.Fatalf("create API token record: %v", err)
@@ -740,7 +736,6 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 
 func TestSessionCookieAllowsAuthenticatedAccess(t *testing.T) {
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
-		cfg.APITokenEnabled = false
 		hashedPass, err := internalauth.HashPassword("super-secure-pass")
 		if err != nil {
 			t.Fatalf("hash password: %v", err)
@@ -817,7 +812,6 @@ func TestPublicURLDetectionUsesForwardedHeaders(t *testing.T) {
 	api.ResetTrustedProxyConfigForTests()
 
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
-		cfg.APITokenEnabled = true
 		record, err := config.NewAPITokenRecord(apiToken, "Public URL detection test", nil)
 		if err != nil {
 			t.Fatalf("create API token record: %v", err)

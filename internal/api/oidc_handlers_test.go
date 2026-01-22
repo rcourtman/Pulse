@@ -747,7 +747,8 @@ func TestIntersects(t *testing.T) {
 }
 
 func TestBuildRedirectURL(t *testing.T) {
-	t.Parallel()
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	resetTrustedProxyConfig()
 
 	tests := []struct {
 		name          string
@@ -820,10 +821,9 @@ func TestBuildRedirectURL(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			req, _ := http.NewRequest("GET", "http://"+tc.host+"/", nil)
 			req.Host = tc.host
+			req.RemoteAddr = "127.0.0.1:12345"
 			if tc.tls {
 				req.TLS = &tls.ConnectionState{}
 			}

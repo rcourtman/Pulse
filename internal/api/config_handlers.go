@@ -4737,17 +4737,12 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		backupPerms = "&backup_perms=true"
 	}
 
-	authParam := ""
-	if token != "" {
-		authParam = "&auth_token=" + url.QueryEscape(token)
-	}
+	// Build script URL (setup token is passed via environment variable).
+	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s",
+		pulseURL, req.Type, encodedHost, pulseURL, backupPerms)
 
-	// Build script URL and include the one-time auth token for automatic registration
-	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s%s",
-		pulseURL, req.Type, encodedHost, pulseURL, backupPerms, authParam)
-
-	// Return a simple curl command - no environment variables needed
-	// The setup token is returned separately so the script can prompt the user
+	// Return a curl command; the setup token is passed via environment variable.
+	// The setup token is returned separately so the script can prompt the user.
 	tokenHint := token
 	if len(token) > 6 {
 		tokenHint = fmt.Sprintf("%s…%s", token[:3], token[len(token)-3:])
@@ -5062,16 +5057,25 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	fingerprint := ""
+	if fp, err := tlsutil.FetchFingerprint(host); err != nil {
+		log.Warn().Err(err).Str("host", host).Msg("Failed to fetch TLS fingerprint for auto-register")
+	} else {
+		fingerprint = fp
+	}
+
 	// Create a node configuration
 	boolFalse := false
 	boolTrue := true
+	verifySSL := true
 	nodeConfig := NodeConfigRequest{
 		Type:               req.Type,
 		Name:               req.ServerName,
 		Host:               host, // Use normalized host
 		TokenName:          req.TokenID,
 		TokenValue:         req.TokenValue,
-		VerifySSL:          &boolFalse, // Default to not verifying SSL for auto-registration
+		Fingerprint:        fingerprint,
+		VerifySSL:          &verifySSL,
 		MonitorVMs:         &boolTrue,
 		MonitorContainers:  &boolTrue,
 		MonitorStorage:     &boolTrue,
@@ -5539,6 +5543,14 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, _ *http
 		return
 	}
 
+	fingerprint := ""
+	if fp, err := tlsutil.FetchFingerprint(host); err != nil {
+		log.Warn().Err(err).Str("host", host).Msg("Failed to fetch TLS fingerprint for auto-register")
+	} else {
+		fingerprint = fp
+	}
+	verifySSL := true
+
 	// Create the token on the remote server
 	var fullTokenID string
 	var createErr error
@@ -5557,10 +5569,11 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, _ *http
 			Msg("Creating PBS token via API")
 
 		pbsClient, err := pbs.NewClient(pbs.ClientConfig{
-			Host:      host,
-			User:      req.Username,
-			Password:  req.Password,
-			VerifySSL: false, // Self-signed certs common
+			Host:        host,
+			User:        req.Username,
+			Password:    req.Password,
+			Fingerprint: fingerprint,
+			VerifySSL:   verifySSL,
 		})
 		if err != nil {
 			log.Error().Err(err).Str("host", host).Msg("Failed to create PBS client")
@@ -5609,7 +5622,8 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, _ *http
 			Host:              host,
 			TokenName:         fullTokenID,
 			TokenValue:        tokenValue,
-			VerifySSL:         false,
+			Fingerprint:       fingerprint,
+			VerifySSL:         verifySSL,
 			MonitorVMs:        true,
 			MonitorContainers: true,
 			MonitorStorage:    true,
@@ -5622,7 +5636,8 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, _ *http
 			Host:              host,
 			TokenName:         fullTokenID,
 			TokenValue:        tokenValue,
-			VerifySSL:         false,
+			Fingerprint:       fingerprint,
+			VerifySSL:         verifySSL,
 			MonitorBackups:    true,
 			MonitorDatastores: true,
 			MonitorSyncJobs:   true,
@@ -5836,7 +5851,6 @@ func (h *ConfigHandlers) HandleAgentInstallCommand(w http.ResponseWriter, r *htt
 	config.Mu.Lock()
 	h.config.APITokens = append(h.config.APITokens, *record)
 	h.config.SortAPITokens()
-	h.config.APITokenEnabled = true
 
 	if h.persistence != nil {
 		if err := h.persistence.SaveAPITokens(h.config.APITokens); err != nil {

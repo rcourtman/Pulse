@@ -1109,7 +1109,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/setup-script", r.configHandlers.HandleSetupScript)
 
 	// Generate setup script URL with temporary token (for authenticated users)
-	r.mux.HandleFunc("/api/setup-script-url", r.configHandlers.HandleSetupScriptURL)
+	r.mux.HandleFunc("/api/setup-script-url", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleSetupScriptURL)))
 
 	// Generate agent install command with API token (for authenticated users)
 	r.mux.HandleFunc("/api/agent-install-command", RequireAuth(r.config, r.configHandlers.HandleAgentInstallCommand))
@@ -4287,28 +4287,60 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 	// Parse time range
 	var duration time.Duration
+	var stepSecs int64 = 0 // Default to no downsampling (raw)
+
 	switch timeRange {
 	case "1h":
 		duration = time.Hour
+		stepSecs = 0 // Raw for 1h
 	case "6h":
 		duration = 6 * time.Hour
+		stepSecs = 60 // 1m for 6h (~360 points)
 	case "12h":
 		duration = 12 * time.Hour
+		stepSecs = 120 // 2m for 12h (~360 points)
 	case "24h", "1d", "":
 		duration = 24 * time.Hour
+		stepSecs = 600 // 10m for 24h (~144 points)
 	case "7d":
 		duration = 7 * 24 * time.Hour
+		stepSecs = 3600 // 1h for 7d (~168 points)
 	case "30d":
 		duration = 30 * 24 * time.Hour
+		stepSecs = 14400 // 4h for 30d (~180 points)
 	case "90d":
 		duration = 90 * 24 * time.Hour
+		stepSecs = 43200 // 12h for 90d (~180 points)
 	default:
 		// Try parsing as duration
 		var err error
 		duration, err = time.ParseDuration(timeRange)
 		if err != nil {
 			duration = 24 * time.Hour // Default to 24 hours
+			stepSecs = 600
+		} else {
+			// Dynamic step for custom durations: target ~200 points
+			stepSecs = int64(duration.Seconds()) / 200
+			if stepSecs < 60 {
+				stepSecs = 0 // No downsampling if very short
+			}
 		}
+	}
+
+	// Enforce license limits: 7d free, 30d/90d require Pro
+	// Returns 402 Payment Required for unlicensed long-term requests
+	maxFreeDuration := 7 * 24 * time.Hour
+	if duration > maxFreeDuration && !r.licenseHandlers.Service().HasFeature(license.FeatureLongTermMetrics) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":       "license_required",
+			"message":     "Long-term metrics history (30d/90d) requires a Pulse Pro license",
+			"feature":     license.FeatureLongTermMetrics,
+			"upgrade_url": "https://pulserelay.pro/",
+			"max_free":    "7d",
+		})
+		return
 	}
 
 	end := time.Now()
@@ -4318,7 +4350,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 	if metricType != "" {
 		// Query single metric type
-		points, err := store.Query(resourceType, resourceID, metricType, start, end)
+		points, err := store.Query(resourceType, resourceID, metricType, start, end, stepSecs)
 		if err != nil {
 			log.Error().Err(err).
 				Str("resourceType", resourceType).
@@ -4351,7 +4383,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 	} else {
 		// Query all metrics for this resource
-		metricsMap, err := store.QueryAll(resourceType, resourceID, start, end)
+		metricsMap, err := store.QueryAll(resourceType, resourceID, start, end, stepSecs)
 		if err != nil {
 			log.Error().Err(err).
 				Str("resourceType", resourceType).
@@ -5312,7 +5344,6 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 
 	r.config.APITokens = append(r.config.APITokens, *record)
 	r.config.SortAPITokens()
-	r.config.APITokenEnabled = true
 
 	if r.persistence != nil {
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {

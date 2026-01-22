@@ -280,7 +280,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		r.config.AuthPass = hashedPassword
 		r.config.APITokens = []config.APITokenRecord{*tokenRecord}
 		r.config.SortAPITokens()
-		r.config.APITokenEnabled = true
 		config.Mu.Unlock()
 
 		if r.persistence != nil {
@@ -556,7 +555,6 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 	config.Mu.Lock()
 	r.config.APITokens = []config.APITokenRecord{*tokenRecord}
 	r.config.SortAPITokens()
-	r.config.APITokenEnabled = true
 	config.Mu.Unlock()
 	log.Info().Msg("Runtime config updated with new API token - active immediately")
 
@@ -678,7 +676,7 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 	}
 
 	// Check if API token auth is enabled
-	if !r.config.APITokenEnabled || !r.config.HasAPITokens() {
+	if !r.config.HasAPITokens() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"valid":   false,

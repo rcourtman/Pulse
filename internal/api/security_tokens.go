@@ -151,7 +151,6 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	r.config.APITokens = append(r.config.APITokens, *record)
 	r.config.SortAPITokens()
-	r.config.APITokenEnabled = true
 
 	if r.persistence != nil {
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
@@ -203,7 +202,6 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 	}
 
 	r.config.SortAPITokens()
-	r.config.APITokenEnabled = r.config.HasAPITokens()
 
 	if r.persistence != nil {
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
