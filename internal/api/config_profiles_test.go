@@ -13,12 +13,14 @@ import (
 
 func TestConfigProfileHandlers(t *testing.T) {
 	tempDir := t.TempDir()
-	persistence := config.NewConfigPersistence(tempDir)
-	if err := persistence.EnsureConfigDir(); err != nil {
-		t.Fatalf("EnsureConfigDir: %v", err)
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	// Ensure default persistence exists
+	_, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("Failed to initialize default persistence: %v", err)
 	}
 
-	handler := NewConfigProfileHandler(persistence)
+	handler := NewConfigProfileHandler(mtp)
 
 	// 1. List Profiles (Empty)
 	t.Run("ListProfilesEmpty", func(t *testing.T) {

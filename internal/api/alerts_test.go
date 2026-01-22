@@ -123,7 +123,7 @@ func TestGetAlertConfig(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	cfg := alerts.AlertConfig{Enabled: true}
 	mockManager.On("GetConfig").Return(cfg)
@@ -148,7 +148,7 @@ func TestUpdateAlertConfig(t *testing.T) {
 	mockMonitor.On("GetConfigPersistence").Return(mockPersist)
 	mockMonitor.On("GetNotificationManager").Return(&notifications.NotificationManager{})
 
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	cfg := alerts.AlertConfig{Enabled: true}
 	mockManager.On("UpdateConfig", testifymock.Anything).Return()
@@ -169,7 +169,7 @@ func TestGetActiveAlerts(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("GetActiveAlerts").Return([]alerts.Alert{{ID: "a1"}})
 
@@ -191,7 +191,7 @@ func TestAcknowledgeAlert(t *testing.T) {
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
 
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
 
@@ -210,7 +210,7 @@ func TestClearAlert(t *testing.T) {
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
 
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("ClearAlert", "a1").Return(true)
 
@@ -248,17 +248,17 @@ func TestValidateAlertID(t *testing.T) {
 func TestAlertHandlers_SetMonitor(t *testing.T) {
 	mockMonitor1 := new(MockAlertMonitor)
 	mockMonitor2 := new(MockAlertMonitor)
-	h := NewAlertHandlers(mockMonitor1, nil)
-	assert.Equal(t, mockMonitor1, h.monitor)
+	h := NewAlertHandlers(nil, mockMonitor1, nil)
+	assert.Equal(t, mockMonitor1, h.legacyMonitor)
 	h.SetMonitor(mockMonitor2)
-	assert.Equal(t, mockMonitor2, h.monitor)
+	assert.Equal(t, mockMonitor2, h.legacyMonitor)
 }
 
 func TestGetAlertHistory(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("GetAlertHistory", testifymock.Anything).Return([]alerts.Alert{{ID: "h1"}})
 
@@ -277,7 +277,7 @@ func TestUnacknowledgeAlert(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("UnacknowledgeAlert", "a1").Return(nil)
 
@@ -293,7 +293,7 @@ func TestClearAlertHistory(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("ClearAlertHistory").Return(nil).Once()
 
@@ -309,7 +309,7 @@ func TestAcknowledgeAlertURL_Success(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("AcknowledgeAlert", "a/b", "admin").Return(nil).Once()
 
@@ -325,7 +325,7 @@ func TestUnacknowledgeAlertURL_Success(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("UnacknowledgeAlert", "a/b").Return(nil).Once()
 
@@ -341,7 +341,7 @@ func TestClearAlertURL_Success(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("ClearAlert", "a/b").Return(true).Once()
 
@@ -356,7 +356,7 @@ func TestSaveAlertIncidentNote(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
 	mockMonitor.On("GetIncidentStore").Return(mockStore)
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	// Create an incident first so RecordNote has something to attach to
 	alert := &alerts.Alert{ID: "a1", Type: "test"}
@@ -375,7 +375,7 @@ func TestBulkAcknowledgeAlerts(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("AcknowledgeAlert", "a1", "admin").Return(nil)
 	mockManager.On("AcknowledgeAlert", "a2", "admin").Return(fmt.Errorf("error"))
@@ -400,7 +400,7 @@ func TestHandleAlerts(t *testing.T) {
 	mockMonitor.On("GetConfigPersistence").Return(new(MockConfigPersistence))
 	mockMonitor.On("GetNotificationManager").Return(&notifications.NotificationManager{})
 	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	type route struct {
 		method string
@@ -488,7 +488,7 @@ func TestBulkClearAlerts(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("ClearAlert", "a1").Return(true)
 	mockManager.On("ClearAlert", "a2").Return(false)
@@ -506,7 +506,7 @@ func TestAcknowledgeAlertByBody_Success(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("AcknowledgeAlert", "a1", "admin").Return(nil)
 
@@ -523,7 +523,7 @@ func TestUnacknowledgeAlertByBody_Success(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("UnacknowledgeAlert", "a1").Return(nil)
 
@@ -540,7 +540,7 @@ func TestClearAlertByBody_Success(t *testing.T) {
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	mockManager.On("ClearAlert", "a1").Return(true)
 
@@ -556,7 +556,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
 	mockMonitor.On("GetAlertManager").Return(mockManager)
-	h := NewAlertHandlers(mockMonitor, nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	t.Run("AcknowledgeAlertByBody_InvalidJSON", func(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{invalid`))
@@ -654,7 +654,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	t.Run("SaveAlertIncidentNote_NoStore", func(t *testing.T) {
 		mockMonitor2 := new(MockAlertMonitor)
 		mockMonitor2.On("GetIncidentStore").Return(nil)
-		h2 := NewAlertHandlers(mockMonitor2, nil)
+		h2 := NewAlertHandlers(nil, mockMonitor2, nil)
 		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{}`))
 		w := httptest.NewRecorder()
 		h2.SaveAlertIncidentNote(w, req)

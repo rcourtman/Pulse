@@ -23,9 +23,8 @@ func TestHandleSetupScriptURL(t *testing.T) {
 		FrontendPort: 8080,
 		PublicURL:    "https://pulse.example.com",
 	}
-	dummyPersistence := config.NewConfigPersistence(tempDir)
-	handler := NewConfigHandlers(dummyCfg, nil, func() error { return nil }, nil, nil, func() {})
-	handler.persistence = dummyPersistence
+	dummyCfg.DataPath = tempDir
+	handler := newTestConfigHandlers(t, dummyCfg)
 
 	tests := []struct {
 		name           string
@@ -119,8 +118,8 @@ func TestHandleSetupScriptURL_MethodNotAllowed(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	handler := NewConfigHandlers(&config.Config{}, nil, func() error { return nil }, nil, nil, func() {})
-	handler.persistence = config.NewConfigPersistence(tempDir)
+	cfg := &config.Config{DataPath: tempDir}
+	handler := newTestConfigHandlers(t, cfg)
 
 	req := httptest.NewRequest("GET", "/api/setup/url", nil)
 	w := httptest.NewRecorder()

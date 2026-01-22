@@ -18,10 +18,8 @@ func TestHandleTestConnection(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	dummyPersistence := config.NewConfigPersistence(tempDir)
-	// Signature: cfg, monitor, reloadFunc, wsHub, guestMetadataHandler, reloadSystemSettingsFunc
-	handler := NewConfigHandlers(&config.Config{}, nil, func() error { return nil }, nil, nil, func() {})
-	handler.persistence = dummyPersistence
+	cfg := &config.Config{DataPath: tempDir}
+	handler := newTestConfigHandlers(t, cfg)
 
 	tests := []struct {
 		name           string

@@ -55,7 +55,7 @@ type AISettingsHandler struct {
 	incidentStore           *memory.IncidentStore
 	patternDetector         *ai.PatternDetector
 	correlationDetector     *ai.CorrelationDetector
-	licenseChecker          ai.LicenseChecker
+	licenseHandlers         *LicenseHandlers
 }
 
 // NewAISettingsHandler creates a new AI settings handler
@@ -126,6 +126,49 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	svc = ai.NewService(persistence, h.agentServer)
 	if err := svc.LoadConfig(); err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to load AI config for tenant")
+	}
+
+	// Set providers on new service
+	if h.stateProvider != nil {
+		svc.SetStateProvider(h.stateProvider)
+	}
+	if h.resourceProvider != nil {
+		svc.SetResourceProvider(h.resourceProvider)
+	}
+	if h.metadataProvider != nil {
+		svc.SetMetadataProvider(h.metadataProvider)
+	}
+	if h.patrolThresholdProvider != nil {
+		svc.SetPatrolThresholdProvider(h.patrolThresholdProvider)
+	}
+	if h.metricsHistoryProvider != nil {
+		svc.SetMetricsHistoryProvider(h.metricsHistoryProvider)
+	}
+	if h.baselineStore != nil {
+		svc.SetBaselineStore(h.baselineStore)
+	}
+	if h.changeDetector != nil {
+		svc.SetChangeDetector(h.changeDetector)
+	}
+	if h.remediationLog != nil {
+		svc.SetRemediationLog(h.remediationLog)
+	}
+	if h.incidentStore != nil {
+		svc.SetIncidentStore(h.incidentStore)
+	}
+	if h.patternDetector != nil {
+		svc.SetPatternDetector(h.patternDetector)
+	}
+	if h.correlationDetector != nil {
+		svc.SetCorrelationDetector(h.correlationDetector)
+	}
+
+	// Set license checker if handler available
+	if h.licenseHandlers != nil {
+		// Used context to resolve tenant license service
+		if licSvc, _, err := h.licenseHandlers.getTenantComponents(ctx); err == nil {
+			svc.SetLicenseChecker(licSvc)
+		}
 	}
 
 	h.aiServices[orgID] = svc
@@ -389,9 +432,15 @@ func (h *AISettingsHandler) GetAlertTriggeredAnalyzer(ctx context.Context) *ai.A
 	return h.GetAIService(ctx).GetAlertTriggeredAnalyzer()
 }
 
-// SetLicenseChecker sets the license checker for Pro feature gating
-func (h *AISettingsHandler) SetLicenseChecker(checker ai.LicenseChecker) {
-	h.GetAIService(context.Background()).SetLicenseChecker(checker)
+// SetLicenseHandlers sets the license handlers for Pro feature gating
+func (h *AISettingsHandler) SetLicenseHandlers(handlers *LicenseHandlers) {
+	h.licenseHandlers = handlers
+	// Update legacy service?
+	// legacy service needs a legacy/default license checker?
+	// We can try to get it using background context (default tenant)
+	if svc, _, err := handlers.getTenantComponents(context.Background()); err == nil {
+		h.legacyAIService.SetLicenseChecker(svc)
+	}
 }
 
 // SetOnModelChange sets a callback to be invoked when model settings change

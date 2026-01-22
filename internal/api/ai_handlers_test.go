@@ -9,11 +9,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func newTestAISettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, agentServer *agentexec.Server) *AISettingsHandler {
+	handler := NewAISettingsHandler(nil, nil, agentServer)
+	handler.legacyConfig = cfg
+	handler.legacyPersistence = persistence
+	if persistence != nil {
+		handler.legacyAIService = ai.NewService(persistence, agentServer)
+		_ = handler.legacyAIService.LoadConfig()
+	}
+	return handler
+}
 
 func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	t.Parallel()
@@ -22,7 +35,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// GET should return defaults if no config has been saved yet.
 	{
@@ -121,7 +134,7 @@ func TestAISettingsHandler_ListModels_Ollama(t *testing.T) {
 		t.Fatalf("SaveAIConfig: %v", err)
 	}
 
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/models", nil)
 	rec := httptest.NewRecorder()
@@ -189,7 +202,7 @@ func TestAISettingsHandler_Execute_Ollama(t *testing.T) {
 		t.Fatalf("SaveAIConfig: %v", err)
 	}
 
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body, _ := json.Marshal(AIExecuteRequest{Prompt: "hi"})
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", bytes.NewReader(body))
@@ -236,7 +249,7 @@ func TestAISettingsHandler_TestConnection_Ollama(t *testing.T) {
 		t.Fatalf("SaveAIConfig: %v", err)
 	}
 
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
 	rec := httptest.NewRecorder()
@@ -282,7 +295,7 @@ func TestAISettingsHandler_TestProvider_Ollama(t *testing.T) {
 		t.Fatalf("SaveAIConfig: %v", err)
 	}
 
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
 	rec := httptest.NewRecorder()
@@ -314,7 +327,7 @@ func TestHandleGetAICostSummary_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/cost/summary", nil)
 	rec := httptest.NewRecorder()
@@ -331,7 +344,7 @@ func TestHandleGetAICostSummary_NoAIService(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary", nil)
 	rec := httptest.NewRecorder()
@@ -359,7 +372,7 @@ func TestHandleGetAICostSummary_CustomDays(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=7", nil)
 	rec := httptest.NewRecorder()
@@ -386,7 +399,7 @@ func TestHandleGetAICostSummary_MaxDays(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Test that days > 365 is capped at 365
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=1000", nil)
@@ -418,7 +431,7 @@ func TestHandleResetAICostHistory_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/reset", nil)
 	rec := httptest.NewRecorder()
@@ -435,7 +448,7 @@ func TestHandleResetAICostHistory_Success(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/cost/reset", nil)
 	rec := httptest.NewRecorder()
@@ -466,7 +479,7 @@ func TestHandleExportAICostHistory_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/cost/export", nil)
 	rec := httptest.NewRecorder()
@@ -487,7 +500,7 @@ func TestHandleGetSuppressionRules_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/suppressions", nil)
 	rec := httptest.NewRecorder()
@@ -508,7 +521,7 @@ func TestHandleAddSuppressionRule_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/suppressions", nil)
 	rec := httptest.NewRecorder()
@@ -529,7 +542,7 @@ func TestHandleDeleteSuppressionRule_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/suppressions/rule-123", nil)
 	rec := httptest.NewRecorder()
@@ -550,7 +563,7 @@ func TestHandleGetDismissedFindings_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/dismissed", nil)
 	rec := httptest.NewRecorder()
@@ -571,7 +584,7 @@ func TestHandleGetGuestKnowledge_MissingGuestID(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/knowledge", nil)
 	rec := httptest.NewRecorder()
@@ -592,7 +605,7 @@ func TestHandleSaveGuestNote_InvalidBody(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge", bytes.NewReader([]byte(`{invalid json}`)))
 	rec := httptest.NewRecorder()
@@ -609,7 +622,7 @@ func TestHandleSaveGuestNote_MissingFields(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{"guest_id": "vm-100"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge", bytes.NewReader(body))
@@ -631,7 +644,7 @@ func TestHandleDeleteGuestNote_InvalidBody(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader([]byte(`{invalid json}`)))
 	rec := httptest.NewRecorder()
@@ -648,7 +661,7 @@ func TestHandleDeleteGuestNote_MissingFields(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{"guest_id": "vm-100"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
@@ -670,7 +683,7 @@ func TestHandleClearGuestKnowledge_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/knowledge/clear", nil)
 	rec := httptest.NewRecorder()
@@ -687,7 +700,7 @@ func TestHandleClearGuestKnowledge_MissingGuestID(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/clear", bytes.NewReader(body))
@@ -709,7 +722,7 @@ func TestHandleDebugContext_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/debug/context", nil)
 	rec := httptest.NewRecorder()
@@ -730,7 +743,7 @@ func TestHandleGetConnectedAgents_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/agents", nil)
 	rec := httptest.NewRecorder()
@@ -748,7 +761,7 @@ func TestHandleGetConnectedAgents_NoAgentServer(t *testing.T) {
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	// handler created with nil agentServer
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/agents", nil)
 	rec := httptest.NewRecorder()
@@ -783,7 +796,7 @@ func TestHandleRunCommand_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/run-command", nil)
 	rec := httptest.NewRecorder()
@@ -800,7 +813,7 @@ func TestHandleRunCommand_InvalidBody(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader([]byte(`{invalid json}`)))
 	rec := httptest.NewRecorder()
@@ -821,7 +834,7 @@ func TestHandleAnalyzeKubernetesCluster_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/kubernetes/analyze", nil)
 	rec := httptest.NewRecorder()
@@ -838,7 +851,7 @@ func TestHandleAnalyzeKubernetesCluster_InvalidBody(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/kubernetes/analyze", bytes.NewReader([]byte(`{invalid json}`)))
 	rec := httptest.NewRecorder()
@@ -859,7 +872,7 @@ func TestHandleInvestigateAlert_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/investigate", nil)
 	rec := httptest.NewRecorder()
@@ -876,7 +889,7 @@ func TestHandleInvestigateAlert_InvalidBody(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader([]byte(`{invalid json}`)))
 	rec := httptest.NewRecorder()
@@ -893,7 +906,7 @@ func TestHandleInvestigateAlert_MissingAlertID(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
@@ -915,7 +928,7 @@ func TestAISettingsHandler_SetConfig(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// SetConfig with nil should be a no-op
 	handler.SetConfig(nil)
@@ -932,7 +945,7 @@ func TestAISettingsHandler_StopPatrol(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// StopPatrol should be safe to call even when patrol is not running
 	handler.StopPatrol()
@@ -945,10 +958,10 @@ func TestAISettingsHandler_GetAlertTriggeredAnalyzer(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Should return the analyzer (may be nil if not initialized)
-	analyzer := handler.GetAlertTriggeredAnalyzer()
+	analyzer := handler.GetAlertTriggeredAnalyzer(context.Background())
 	// Just verify it doesn't panic and returns something
 	_ = analyzer
 }
@@ -959,7 +972,7 @@ func TestAISettingsHandler_StartPatrol(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Start patrol with a cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -977,7 +990,7 @@ func TestAISettingsHandler_SetPatrolFindingsPersistence(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Set nil persistence should not panic
 	err := handler.SetPatrolFindingsPersistence(nil)
@@ -992,7 +1005,7 @@ func TestAISettingsHandler_SetPatrolRunHistoryPersistence(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Set nil persistence should not panic
 	err := handler.SetPatrolRunHistoryPersistence(nil)
@@ -1007,7 +1020,7 @@ func TestAISettingsHandler_SetPatrolThresholdProvider(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Set nil threshold provider should not panic
 	handler.SetPatrolThresholdProvider(nil)
@@ -1019,7 +1032,7 @@ func TestAISettingsHandler_SetMetricsHistoryProvider(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Set nil metrics provider should not panic
 	handler.SetMetricsHistoryProvider(nil)
@@ -1031,7 +1044,7 @@ func TestAISettingsHandler_SetBaselineStore(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Set nil baseline store should not panic
 	handler.SetBaselineStore(nil)
@@ -1043,7 +1056,7 @@ func TestAISettingsHandler_SetChangeDetector(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Set nil change detector should not panic
 	handler.SetChangeDetector(nil)
@@ -1055,7 +1068,7 @@ func TestAISettingsHandler_SetRemediationLog(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Set nil remediation log should not panic
 	handler.SetRemediationLog(nil)
@@ -1067,7 +1080,7 @@ func TestAISettingsHandler_SetPatternDetector(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Set nil pattern detector should not panic
 	handler.SetPatternDetector(nil)
@@ -1079,7 +1092,7 @@ func TestAISettingsHandler_SetCorrelationDetector(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Set nil correlation detector should not panic
 	handler.SetCorrelationDetector(nil)
@@ -1090,10 +1103,13 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Initialize approval store
-	approvalStore, _ := approval.NewStore(approval.StoreConfig{DataDir: tmp})
+	approvalStore, _ := approval.NewStore(approval.StoreConfig{
+		DataDir:            tmp,
+		DisablePersistence: true,
+	})
 	approval.SetStore(approvalStore)
 
 	appID := "app-123"
@@ -1150,7 +1166,7 @@ func TestAISettingsHandler_ChatSessions(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	t.Run("HandleSaveAndGetSession", func(t *testing.T) {
 		sessionID := "sess-123"

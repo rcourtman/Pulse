@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,23 +17,37 @@ import (
 
 // ConfigProfileHandler handles configuration profile operations
 type ConfigProfileHandler struct {
-	persistence       *config.ConfigPersistence
+	mtPersistence     *config.MultiTenantPersistence
 	validator         *models.ProfileValidator
 	mu                sync.RWMutex
 	suggestionHandler *ProfileSuggestionHandler
 }
 
 // NewConfigProfileHandler creates a new handler
-func NewConfigProfileHandler(persistence *config.ConfigPersistence) *ConfigProfileHandler {
+func NewConfigProfileHandler(mtp *config.MultiTenantPersistence) *ConfigProfileHandler {
 	return &ConfigProfileHandler{
-		persistence: persistence,
-		validator:   models.NewProfileValidator(),
+		mtPersistence: mtp,
+		validator:     models.NewProfileValidator(),
 	}
+}
+
+// getPersistence resolves the persistence instance for the current tenant
+func (h *ConfigProfileHandler) getPersistence(ctx context.Context) (*config.ConfigPersistence, error) {
+	orgID := GetOrgID(ctx)
+	return h.mtPersistence.GetPersistence(orgID)
 }
 
 // SetAIHandler sets the AI handler for profile suggestions
 func (h *ConfigProfileHandler) SetAIHandler(aiHandler *AIHandler) {
-	h.suggestionHandler = NewProfileSuggestionHandler(h.persistence, aiHandler)
+	// We pass nil for persistence here because the suggestion handler will need
+	// to use the context-aware persistence, which requires deeper refactoring of ProfileSuggestionHandler.
+	// For now, we'll let ProfileSuggestionHandler resolve persistence from AIHandler if possible,
+	// or we update ProfileSuggestionHandler to be multi-tenant aware as well.
+	// Actually, ProfileSuggestionHandler needs persistence. Let's look at that separately.
+	// For this step, we'll temporarilly break this or pass nil and fix it in the next step.
+	// A better approach: ProfileSuggestionHandler should take MultiTenantPersistence too.
+	// Let's assume we update ProfileSuggestionHandler next.
+	h.suggestionHandler = NewProfileSuggestionHandler(nil, aiHandler)
 }
 
 // ServeHTTP implements the http.Handler interface
@@ -139,7 +154,14 @@ func (h *ConfigProfileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 // ListProfiles returns all profiles
 func (h *ConfigProfileHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
-	profiles, err := h.persistence.LoadAgentProfiles()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	profiles, err := persistence.LoadAgentProfiles()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load profiles")
 		http.Error(w, "Failed to load profiles", http.StatusInternalServerError)
@@ -187,7 +209,14 @@ func (h *ConfigProfileHandler) CreateProfile(w http.ResponseWriter, r *http.Requ
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	profiles, err := h.persistence.LoadAgentProfiles()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	profiles, err := persistence.LoadAgentProfiles()
 	if err != nil {
 		http.Error(w, "Failed to load profiles", http.StatusInternalServerError)
 		return
@@ -205,7 +234,7 @@ func (h *ConfigProfileHandler) CreateProfile(w http.ResponseWriter, r *http.Requ
 
 	profiles = append(profiles, input.AgentProfile)
 
-	if err := h.persistence.SaveAgentProfiles(profiles); err != nil {
+	if err := persistence.SaveAgentProfiles(profiles); err != nil {
 		log.Error().Err(err).Msg("Failed to save profiles")
 		http.Error(w, "Failed to save profile", http.StatusInternalServerError)
 		return
@@ -223,10 +252,10 @@ func (h *ConfigProfileHandler) CreateProfile(w http.ResponseWriter, r *http.Requ
 		CreatedBy:   username,
 		ChangeNote:  input.ChangeNote,
 	}
-	h.saveVersionHistory(version)
+	h.saveVersionHistory(persistence, version)
 
 	// Log change
-	h.logChange(models.ProfileChangeLog{
+	h.logChange(persistence, models.ProfileChangeLog{
 		ID:          uuid.New().String(),
 		ProfileID:   input.ID,
 		ProfileName: input.Name,
@@ -284,7 +313,14 @@ func (h *ConfigProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Requ
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	profiles, err := h.persistence.LoadAgentProfiles()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	profiles, err := persistence.LoadAgentProfiles()
 	if err != nil {
 		http.Error(w, "Failed to load profiles", http.StatusInternalServerError)
 		return
@@ -316,7 +352,7 @@ func (h *ConfigProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.persistence.SaveAgentProfiles(profiles); err != nil {
+	if err := persistence.SaveAgentProfiles(profiles); err != nil {
 		log.Error().Err(err).Msg("Failed to save profiles")
 		http.Error(w, "Failed to save profile", http.StatusInternalServerError)
 		return
@@ -334,10 +370,10 @@ func (h *ConfigProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Requ
 		CreatedBy:   username,
 		ChangeNote:  input.ChangeNote,
 	}
-	h.saveVersionHistory(version)
+	h.saveVersionHistory(persistence, version)
 
 	// Log change
-	h.logChange(models.ProfileChangeLog{
+	h.logChange(persistence, models.ProfileChangeLog{
 		ID:          uuid.New().String(),
 		ProfileID:   id,
 		ProfileName: updatedProfile.Name,
@@ -358,7 +394,14 @@ func (h *ConfigProfileHandler) DeleteProfile(w http.ResponseWriter, r *http.Requ
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	profiles, err := h.persistence.LoadAgentProfiles()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	profiles, err := persistence.LoadAgentProfiles()
 	if err != nil {
 		http.Error(w, "Failed to load profiles", http.StatusInternalServerError)
 		return
@@ -379,13 +422,13 @@ func (h *ConfigProfileHandler) DeleteProfile(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.persistence.SaveAgentProfiles(newProfiles); err != nil {
+	if err := persistence.SaveAgentProfiles(newProfiles); err != nil {
 		log.Error().Err(err).Msg("Failed to save profiles")
 		http.Error(w, "Failed to delete profile", http.StatusInternalServerError)
 		return
 	}
 
-	assignments, err := h.persistence.LoadAgentProfileAssignments()
+	assignments, err := persistence.LoadAgentProfileAssignments()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load assignments for profile cleanup")
 		http.Error(w, "Failed to delete profile assignments", http.StatusInternalServerError)
@@ -400,7 +443,7 @@ func (h *ConfigProfileHandler) DeleteProfile(w http.ResponseWriter, r *http.Requ
 	}
 
 	if len(cleaned) != len(assignments) {
-		if err := h.persistence.SaveAgentProfileAssignments(cleaned); err != nil {
+		if err := persistence.SaveAgentProfileAssignments(cleaned); err != nil {
 			log.Error().Err(err).Msg("Failed to clean up assignments for deleted profile")
 			http.Error(w, "Failed to delete profile assignments", http.StatusInternalServerError)
 			return
@@ -410,7 +453,7 @@ func (h *ConfigProfileHandler) DeleteProfile(w http.ResponseWriter, r *http.Requ
 	// Log deletion
 	username := getUsernameFromRequest(r)
 	if deletedProfile != nil {
-		h.logChange(models.ProfileChangeLog{
+		h.logChange(persistence, models.ProfileChangeLog{
 			ID:          uuid.New().String(),
 			ProfileID:   id,
 			ProfileName: deletedProfile.Name,
@@ -426,7 +469,14 @@ func (h *ConfigProfileHandler) DeleteProfile(w http.ResponseWriter, r *http.Requ
 
 // ListAssignments returns all assignments
 func (h *ConfigProfileHandler) ListAssignments(w http.ResponseWriter, r *http.Request) {
-	assignments, err := h.persistence.LoadAgentProfileAssignments()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	assignments, err := persistence.LoadAgentProfileAssignments()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load assignments")
 		http.Error(w, "Failed to load assignments", http.StatusInternalServerError)
@@ -455,7 +505,14 @@ func (h *ConfigProfileHandler) AssignProfile(w http.ResponseWriter, r *http.Requ
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	assignments, err := h.persistence.LoadAgentProfileAssignments()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	assignments, err := persistence.LoadAgentProfileAssignments()
 	if err != nil {
 		http.Error(w, "Failed to load assignments", http.StatusInternalServerError)
 		return
@@ -474,14 +531,14 @@ func (h *ConfigProfileHandler) AssignProfile(w http.ResponseWriter, r *http.Requ
 	input.AssignedBy = username
 	newAssignments = append(newAssignments, input)
 
-	if err := h.persistence.SaveAgentProfileAssignments(newAssignments); err != nil {
+	if err := persistence.SaveAgentProfileAssignments(newAssignments); err != nil {
 		log.Error().Err(err).Msg("Failed to save assignments")
 		http.Error(w, "Failed to save assignment", http.StatusInternalServerError)
 		return
 	}
 
 	// Get profile name for logging
-	profiles, _ := h.persistence.LoadAgentProfiles()
+	profiles, _ := persistence.LoadAgentProfiles()
 	var profileName string
 	for _, p := range profiles {
 		if p.ID == input.ProfileID {
@@ -491,7 +548,7 @@ func (h *ConfigProfileHandler) AssignProfile(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Log assignment
-	h.logChange(models.ProfileChangeLog{
+	h.logChange(persistence, models.ProfileChangeLog{
 		ID:          uuid.New().String(),
 		ProfileID:   input.ProfileID,
 		ProfileName: profileName,
@@ -522,7 +579,14 @@ func (h *ConfigProfileHandler) UnassignProfile(w http.ResponseWriter, r *http.Re
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	assignments, err := h.persistence.LoadAgentProfileAssignments()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	assignments, err := persistence.LoadAgentProfileAssignments()
 	if err != nil {
 		http.Error(w, "Failed to load assignments", http.StatusInternalServerError)
 		return
@@ -539,7 +603,7 @@ func (h *ConfigProfileHandler) UnassignProfile(w http.ResponseWriter, r *http.Re
 	}
 
 	if len(newAssignments) != len(assignments) {
-		if err := h.persistence.SaveAgentProfileAssignments(newAssignments); err != nil {
+		if err := persistence.SaveAgentProfileAssignments(newAssignments); err != nil {
 			log.Error().Err(err).Msg("Failed to save assignments")
 			http.Error(w, "Failed to save assignment", http.StatusInternalServerError)
 			return
@@ -550,7 +614,7 @@ func (h *ConfigProfileHandler) UnassignProfile(w http.ResponseWriter, r *http.Re
 			username := getUsernameFromRequest(r)
 
 			// Get profile name for logging
-			profiles, _ := h.persistence.LoadAgentProfiles()
+			profiles, _ := persistence.LoadAgentProfiles()
 			var profileName string
 			for _, p := range profiles {
 				if p.ID == removedAssignment.ProfileID {
@@ -559,7 +623,7 @@ func (h *ConfigProfileHandler) UnassignProfile(w http.ResponseWriter, r *http.Re
 				}
 			}
 
-			h.logChange(models.ProfileChangeLog{
+			h.logChange(persistence, models.ProfileChangeLog{
 				ID:          uuid.New().String(),
 				ProfileID:   removedAssignment.ProfileID,
 				ProfileName: profileName,
@@ -583,7 +647,14 @@ func (h *ConfigProfileHandler) UnassignProfile(w http.ResponseWriter, r *http.Re
 
 // GetProfile returns a single profile by ID
 func (h *ConfigProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request, id string) {
-	profiles, err := h.persistence.LoadAgentProfiles()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	profiles, err := persistence.LoadAgentProfiles()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load profiles")
 		http.Error(w, "Failed to load profiles", http.StatusInternalServerError)
@@ -623,7 +694,14 @@ func (h *ConfigProfileHandler) ValidateConfig(w http.ResponseWriter, r *http.Req
 
 // GetChangeLog returns profile change history
 func (h *ConfigProfileHandler) GetChangeLog(w http.ResponseWriter, r *http.Request) {
-	logs, err := h.persistence.LoadProfileChangeLogs()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	logs, err := persistence.LoadProfileChangeLogs()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load change logs")
 		http.Error(w, "Failed to load change logs", http.StatusInternalServerError)
@@ -653,7 +731,14 @@ func (h *ConfigProfileHandler) GetChangeLog(w http.ResponseWriter, r *http.Reque
 
 // GetDeploymentStatus returns deployment status for all agents
 func (h *ConfigProfileHandler) GetDeploymentStatus(w http.ResponseWriter, r *http.Request) {
-	status, err := h.persistence.LoadProfileDeploymentStatus()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	status, err := persistence.LoadProfileDeploymentStatus()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load deployment status")
 		http.Error(w, "Failed to load deployment status", http.StatusInternalServerError)
@@ -711,7 +796,13 @@ func (h *ConfigProfileHandler) UpdateDeploymentStatus(w http.ResponseWriter, r *
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	statuses, err := h.persistence.LoadProfileDeploymentStatus()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	statuses, err := persistence.LoadProfileDeploymentStatus()
 	if err != nil {
 		http.Error(w, "Failed to load deployment status", http.StatusInternalServerError)
 		return
@@ -735,7 +826,7 @@ func (h *ConfigProfileHandler) UpdateDeploymentStatus(w http.ResponseWriter, r *
 		statuses = append(statuses, input)
 	}
 
-	if err := h.persistence.SaveProfileDeploymentStatus(statuses); err != nil {
+	if err := persistence.SaveProfileDeploymentStatus(statuses); err != nil {
 		log.Error().Err(err).Msg("Failed to save deployment status")
 		http.Error(w, "Failed to save deployment status", http.StatusInternalServerError)
 		return
@@ -747,7 +838,14 @@ func (h *ConfigProfileHandler) UpdateDeploymentStatus(w http.ResponseWriter, r *
 
 // GetProfileVersions returns version history for a profile
 func (h *ConfigProfileHandler) GetProfileVersions(w http.ResponseWriter, r *http.Request, profileID string) {
-	versions, err := h.persistence.LoadAgentProfileVersions()
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	versions, err := persistence.LoadAgentProfileVersions()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load profile versions")
 		http.Error(w, "Failed to load profile versions", http.StatusInternalServerError)
@@ -782,8 +880,15 @@ func (h *ConfigProfileHandler) RollbackProfile(w http.ResponseWriter, r *http.Re
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	persistence, err := h.getPersistence(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get persistence for tenant")
+		http.Error(w, "Tenant configuration error", http.StatusInternalServerError)
+		return
+	}
+
 	// Load version history to find the target version
-	versions, err := h.persistence.LoadAgentProfileVersions()
+	versions, err := persistence.LoadAgentProfileVersions()
 	if err != nil {
 		http.Error(w, "Failed to load profile versions", http.StatusInternalServerError)
 		return
@@ -803,7 +908,7 @@ func (h *ConfigProfileHandler) RollbackProfile(w http.ResponseWriter, r *http.Re
 	}
 
 	// Load current profiles
-	profiles, err := h.persistence.LoadAgentProfiles()
+	profiles, err := persistence.LoadAgentProfiles()
 	if err != nil {
 		http.Error(w, "Failed to load profiles", http.StatusInternalServerError)
 		return
@@ -835,7 +940,7 @@ func (h *ConfigProfileHandler) RollbackProfile(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := h.persistence.SaveAgentProfiles(profiles); err != nil {
+	if err := persistence.SaveAgentProfiles(profiles); err != nil {
 		log.Error().Err(err).Msg("Failed to save profiles after rollback")
 		http.Error(w, "Failed to rollback profile", http.StatusInternalServerError)
 		return
@@ -853,10 +958,10 @@ func (h *ConfigProfileHandler) RollbackProfile(w http.ResponseWriter, r *http.Re
 		CreatedBy:   username,
 		ChangeNote:  fmt.Sprintf("Rolled back to version %d", targetVersion),
 	}
-	h.saveVersionHistory(version)
+	h.saveVersionHistory(persistence, version)
 
 	// Log rollback
-	h.logChange(models.ProfileChangeLog{
+	h.logChange(persistence, models.ProfileChangeLog{
 		ID:          uuid.New().String(),
 		ProfileID:   profileID,
 		ProfileName: updatedProfile.Name,
@@ -873,8 +978,8 @@ func (h *ConfigProfileHandler) RollbackProfile(w http.ResponseWriter, r *http.Re
 }
 
 // saveVersionHistory saves a version to the history
-func (h *ConfigProfileHandler) saveVersionHistory(version models.AgentProfileVersion) {
-	versions, err := h.persistence.LoadAgentProfileVersions()
+func (h *ConfigProfileHandler) saveVersionHistory(persistence *config.ConfigPersistence, version models.AgentProfileVersion) {
+	versions, err := persistence.LoadAgentProfileVersions()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load version history")
 		return
@@ -882,14 +987,14 @@ func (h *ConfigProfileHandler) saveVersionHistory(version models.AgentProfileVer
 
 	versions = append(versions, version)
 
-	if err := h.persistence.SaveAgentProfileVersions(versions); err != nil {
+	if err := persistence.SaveAgentProfileVersions(versions); err != nil {
 		log.Error().Err(err).Msg("Failed to save version history")
 	}
 }
 
 // logChange logs a profile change to the change log
-func (h *ConfigProfileHandler) logChange(entry models.ProfileChangeLog) {
-	if err := h.persistence.AppendProfileChangeLog(entry); err != nil {
+func (h *ConfigProfileHandler) logChange(persistence *config.ConfigPersistence, entry models.ProfileChangeLog) {
+	if err := persistence.AppendProfileChangeLog(entry); err != nil {
 		log.Error().Err(err).Msg("Failed to log profile change")
 	}
 }

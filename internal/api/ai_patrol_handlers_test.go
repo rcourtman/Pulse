@@ -185,7 +185,7 @@ func TestHandleDismissFinding_InvalidReason(t *testing.T) {
 	// Set up auth - needed for authenticated handlers
 	InitSessionStore(tmp)
 
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Invalid dismiss reason
 	body, _ := json.Marshal(map[string]string{
@@ -214,7 +214,7 @@ func TestHandleSnoozeFinding_DurationValidation(t *testing.T) {
 
 	InitSessionStore(tmp)
 
-	handler := NewAISettingsHandler(cfg, persistence, nil)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Missing finding_id
 	body, _ := json.Marshal(map[string]interface{}{

@@ -44,13 +44,12 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		BackendPort:       7655,
-		ConfigPath:        tmpDir,
-		DataPath:          tmpDir,
-		DemoMode:          false,
-		AllowedOrigins:    "*",
-		ConcurrentPolling: true,
-		EnvOverrides:      make(map[string]bool),
+		BackendPort:    7655,
+		ConfigPath:     tmpDir,
+		DataPath:       tmpDir,
+		DemoMode:       false,
+		AllowedOrigins: "*",
+		EnvOverrides:   make(map[string]bool),
 	}
 
 	if customize != nil {
@@ -83,7 +82,7 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 		version = "dev"
 	}
 
-	router := api.NewRouter(cfg, monitor, hub, func() error {
+	router := api.NewRouter(cfg, monitor, nil, hub, func() error {
 		monitor.SyncAlertState()
 		return nil
 	}, version)

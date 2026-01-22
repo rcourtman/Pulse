@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-func TestHandleAddNodeRejectsTempsWithoutTransport(t *testing.T) {
+func TestHandleAddNodeAllowsTempsWithoutTransport(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DOCKER", "true")
 	cfg := &config.Config{DataPath: tempDir, ConfigPath: tempDir}
@@ -22,15 +21,15 @@ func TestHandleAddNodeRejectsTempsWithoutTransport(t *testing.T) {
 
 	handler.HandleAddNode(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", rec.Code)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "proxy") {
-		t.Fatalf("expected proxy error, got %s", rec.Body.String())
+	if len(cfg.PVEInstances) != 1 || cfg.PVEInstances[0].TemperatureMonitoringEnabled == nil || !*cfg.PVEInstances[0].TemperatureMonitoringEnabled {
+		t.Fatalf("expected temperature monitoring to be enabled, got %+v", cfg.PVEInstances)
 	}
 }
 
-func TestHandleUpdateNodeRejectsTempsWithoutTransport(t *testing.T) {
+func TestHandleUpdateNodeAllowsTempsWithoutTransport(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DOCKER", "true")
 	cfg := &config.Config{DataPath: tempDir, ConfigPath: tempDir}
@@ -46,10 +45,10 @@ func TestHandleUpdateNodeRejectsTempsWithoutTransport(t *testing.T) {
 
 	handler.HandleUpdateNode(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "proxy") {
-		t.Fatalf("expected proxy error, got %s", rec.Body.String())
+	if cfg.PVEInstances[0].TemperatureMonitoringEnabled == nil || !*cfg.PVEInstances[0].TemperatureMonitoringEnabled {
+		t.Fatalf("expected temperature monitoring to be enabled, got %+v", cfg.PVEInstances[0].TemperatureMonitoringEnabled)
 	}
 }

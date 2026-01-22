@@ -15,7 +15,7 @@ func createTestAIHandler(t *testing.T) *AISettingsHandler {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	return NewAISettingsHandler(cfg, persistence, nil)
+	return newTestAISettingsHandler(cfg, persistence, nil)
 }
 
 // TestHandleGetPatterns tests the patterns endpoint

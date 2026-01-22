@@ -32,11 +32,11 @@ func TestHandleExportConfig(t *testing.T) {
 	}
 
 	// Save initial config so export has something to read
-	if err := handler.persistence.SaveNodesConfig(cfg.PVEInstances, cfg.PBSInstances, cfg.PMGInstances); err != nil {
+	if err := handler.legacyPersistence.SaveNodesConfig(cfg.PVEInstances, cfg.PBSInstances, cfg.PMGInstances); err != nil {
 		t.Fatalf("Failed to save initial config: %v", err)
 	}
 	// Also save empty settings to avoid nil pointer issues during export
-	if err := handler.persistence.SaveSystemSettings(*config.DefaultSystemSettings()); err != nil {
+	if err := handler.legacyPersistence.SaveSystemSettings(*config.DefaultSystemSettings()); err != nil {
 		t.Fatalf("Failed to save system settings: %v", err)
 	}
 
@@ -136,7 +136,7 @@ func TestHandleImportConfig(t *testing.T) {
 		},
 	}
 	dummyPersistence := config.NewConfigPersistence(tempDir)
-	handler.persistence = dummyPersistence // Override handler's persistence
+	handler.legacyPersistence = dummyPersistence // Override handler's persistence
 	if err := dummyPersistence.SaveNodesConfig(dummyCfg.PVEInstances, dummyCfg.PBSInstances, dummyCfg.PMGInstances); err != nil {
 		t.Fatalf("Failed to save dummy config: %v", err)
 	}

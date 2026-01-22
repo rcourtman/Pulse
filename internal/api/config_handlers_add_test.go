@@ -25,11 +25,10 @@ func TestHandleAddNode(t *testing.T) {
 			{Name: "existing", Host: "https://10.0.0.1:8006"},
 		},
 	}
+	dummyCfg.DataPath = tempDir
 
 	// Create handler
-	// Signature: cfg, monitor, reloadFunc, wsHub, guestMetadataHandler, reloadSystemSettingsFunc
-	handler := NewConfigHandlers(dummyCfg, nil, func() error { return nil }, nil, nil, func() {})
-	handler.persistence = config.NewConfigPersistence(tempDir)
+	handler := newTestConfigHandlers(t, dummyCfg)
 
 	tests := []struct {
 		name           string

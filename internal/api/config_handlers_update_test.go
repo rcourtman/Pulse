@@ -31,9 +31,9 @@ func TestHandleUpdateNode(t *testing.T) {
 			},
 		},
 	}
+	dummyCfg.DataPath = tempDir
 
-	handler := NewConfigHandlers(dummyCfg, nil, func() error { return nil }, nil, nil, func() {})
-	handler.persistence = config.NewConfigPersistence(tempDir)
+	handler := newTestConfigHandlers(t, dummyCfg)
 
 	tests := []struct {
 		name           string

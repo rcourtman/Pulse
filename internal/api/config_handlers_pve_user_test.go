@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -462,7 +463,7 @@ func TestFindInstanceNameByHost(t *testing.T) {
 				{Name: "pve-node3", Host: "https://pve3.example.com:8006"},
 			},
 		}
-		h := &ConfigHandlers{config: cfg}
+		h := &ConfigHandlers{legacyConfig: cfg}
 
 		tests := []struct {
 			name     string
@@ -504,9 +505,9 @@ func TestFindInstanceNameByHost(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				got := h.findInstanceNameByHost(tt.nodeType, tt.host)
+				got := h.findInstanceNameByHost(context.Background(), tt.nodeType, tt.host)
 				if got != tt.want {
-					t.Errorf("findInstanceNameByHost(%q, %q) = %q, want %q", tt.nodeType, tt.host, got, tt.want)
+					t.Errorf("findInstanceNameByHost(context.Background(), %q, %q) = %q, want %q", tt.nodeType, tt.host, got, tt.want)
 				}
 			})
 		}
@@ -519,7 +520,7 @@ func TestFindInstanceNameByHost(t *testing.T) {
 				{Name: "pbs-backup2", Host: "https://backup.example.com:8007"},
 			},
 		}
-		h := &ConfigHandlers{config: cfg}
+		h := &ConfigHandlers{legacyConfig: cfg}
 
 		tests := []struct {
 			name     string
@@ -549,9 +550,9 @@ func TestFindInstanceNameByHost(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				got := h.findInstanceNameByHost(tt.nodeType, tt.host)
+				got := h.findInstanceNameByHost(context.Background(), tt.nodeType, tt.host)
 				if got != tt.want {
-					t.Errorf("findInstanceNameByHost(%q, %q) = %q, want %q", tt.nodeType, tt.host, got, tt.want)
+					t.Errorf("findInstanceNameByHost(context.Background(), %q, %q) = %q, want %q", tt.nodeType, tt.host, got, tt.want)
 				}
 			})
 		}
@@ -566,7 +567,7 @@ func TestFindInstanceNameByHost(t *testing.T) {
 				{Name: "pbs-backup1", Host: "https://192.168.1.20:8007"},
 			},
 		}
-		h := &ConfigHandlers{config: cfg}
+		h := &ConfigHandlers{legacyConfig: cfg}
 
 		tests := []struct {
 			name     string
@@ -596,9 +597,9 @@ func TestFindInstanceNameByHost(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				got := h.findInstanceNameByHost(tt.nodeType, tt.host)
+				got := h.findInstanceNameByHost(context.Background(), tt.nodeType, tt.host)
 				if got != tt.want {
-					t.Errorf("findInstanceNameByHost(%q, %q) = %q, want %q", tt.nodeType, tt.host, got, tt.want)
+					t.Errorf("findInstanceNameByHost(context.Background(), %q, %q) = %q, want %q", tt.nodeType, tt.host, got, tt.want)
 				}
 			})
 		}
@@ -606,9 +607,9 @@ func TestFindInstanceNameByHost(t *testing.T) {
 
 	t.Run("empty config", func(t *testing.T) {
 		cfg := &config.Config{}
-		h := &ConfigHandlers{config: cfg}
+		h := &ConfigHandlers{legacyConfig: cfg}
 
-		got := h.findInstanceNameByHost("pve", "https://192.168.1.10:8006")
+		got := h.findInstanceNameByHost(context.Background(), "pve", "https://192.168.1.10:8006")
 		if got != "" {
 			t.Errorf("expected empty string for empty config, got %q", got)
 		}

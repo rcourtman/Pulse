@@ -2,14 +2,27 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 )
+
+func createTestHandler(t *testing.T) *LicenseHandlers {
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	// Ensure default persistence exists
+	_, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("Failed to initialize default persistence: %v", err)
+	}
+	return NewLicenseHandlers(mtp)
+}
 
 type licenseFeaturesResponse struct {
 	LicenseStatus string          `json:"license_status"`
@@ -18,7 +31,7 @@ type licenseFeaturesResponse struct {
 }
 
 func TestHandleLicenseFeatures_MethodNotAllowed(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/license/features", nil)
 	rec := httptest.NewRecorder()
@@ -31,7 +44,7 @@ func TestHandleLicenseFeatures_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleLicenseFeatures_NoLicense(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/license/features", nil)
 	rec := httptest.NewRecorder()
@@ -72,12 +85,12 @@ func TestHandleLicenseFeatures_NoLicense(t *testing.T) {
 func TestHandleLicenseFeatures_WithActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 	licenseKey, err := license.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
-	if _, err := handler.Service().Activate(licenseKey); err != nil {
+	if _, err := handler.Service(context.Background()).Activate(licenseKey); err != nil {
 		t.Fatalf("failed to activate test license: %v", err)
 	}
 
@@ -119,7 +132,7 @@ func TestHandleLicenseFeatures_WithActiveLicense(t *testing.T) {
 // ========================================
 
 func TestHandleLicenseStatus_MethodNotAllowed(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/license/status", nil)
 	rec := httptest.NewRecorder()
@@ -132,7 +145,7 @@ func TestHandleLicenseStatus_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleLicenseStatus_NoLicense(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil)
 	rec := httptest.NewRecorder()
@@ -161,12 +174,12 @@ func TestHandleLicenseStatus_NoLicense(t *testing.T) {
 func TestHandleLicenseStatus_WithActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 	licenseKey, err := license.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
-	if _, err := handler.Service().Activate(licenseKey); err != nil {
+	if _, err := handler.Service(context.Background()).Activate(licenseKey); err != nil {
 		t.Fatalf("failed to activate test license: %v", err)
 	}
 
@@ -202,7 +215,7 @@ func TestHandleLicenseStatus_WithActiveLicense(t *testing.T) {
 // ========================================
 
 func TestHandleActivateLicense_MethodNotAllowed(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/license/activate", nil)
 	rec := httptest.NewRecorder()
@@ -215,7 +228,7 @@ func TestHandleActivateLicense_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleActivateLicense_EmptyKey(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	body := []byte(`{"license_key":""}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/license/activate", bytes.NewReader(body))
@@ -240,7 +253,7 @@ func TestHandleActivateLicense_EmptyKey(t *testing.T) {
 }
 
 func TestHandleActivateLicense_InvalidKey(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	body := []byte(`{"license_key":"invalid-license-key"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/license/activate", bytes.NewReader(body))
@@ -262,7 +275,7 @@ func TestHandleActivateLicense_InvalidKey(t *testing.T) {
 }
 
 func TestHandleActivateLicense_InvalidBody(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	body := []byte(`{invalid json}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/license/activate", bytes.NewReader(body))
@@ -289,7 +302,7 @@ func TestHandleActivateLicense_InvalidBody(t *testing.T) {
 func TestHandleActivateLicense_ValidKey(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 	licenseKey, err := license.GenerateLicenseForTesting("pro@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
@@ -325,7 +338,7 @@ func TestHandleActivateLicense_ValidKey(t *testing.T) {
 // ========================================
 
 func TestHandleClearLicense_MethodNotAllowed(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/license/clear", nil)
 	rec := httptest.NewRecorder()
@@ -338,7 +351,7 @@ func TestHandleClearLicense_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleClearLicense_NoLicense(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/license/clear", nil)
 	rec := httptest.NewRecorder()
@@ -361,17 +374,17 @@ func TestHandleClearLicense_NoLicense(t *testing.T) {
 func TestHandleClearLicense_WithActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 	licenseKey, err := license.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
-	if _, err := handler.Service().Activate(licenseKey); err != nil {
+	if _, err := handler.Service(context.Background()).Activate(licenseKey); err != nil {
 		t.Fatalf("failed to activate test license: %v", err)
 	}
 
 	// Verify license is active
-	if !handler.Service().IsValid() {
+	if !handler.Service(context.Background()).IsValid() {
 		t.Fatalf("expected license to be valid before clearing")
 	}
 
@@ -385,7 +398,7 @@ func TestHandleClearLicense_WithActiveLicense(t *testing.T) {
 	}
 
 	// Verify license is cleared
-	if handler.Service().IsValid() {
+	if handler.Service(context.Background()).IsValid() {
 		t.Fatalf("expected license to be invalid after clearing")
 	}
 
@@ -403,10 +416,10 @@ func TestHandleClearLicense_WithActiveLicense(t *testing.T) {
 // ========================================
 
 func TestRequireLicenseFeature_NoLicense(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	handlerCalled := false
-	wrappedHandler := RequireLicenseFeature(handler.Service(), license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
+	wrappedHandler := RequireLicenseFeature(handler, license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
@@ -427,17 +440,17 @@ func TestRequireLicenseFeature_NoLicense(t *testing.T) {
 func TestRequireLicenseFeature_WithLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 	licenseKey, err := license.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
-	if _, err := handler.Service().Activate(licenseKey); err != nil {
+	if _, err := handler.Service(context.Background()).Activate(licenseKey); err != nil {
 		t.Fatalf("failed to activate test license: %v", err)
 	}
 
 	handlerCalled := false
-	wrappedHandler := RequireLicenseFeature(handler.Service(), license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
+	wrappedHandler := RequireLicenseFeature(handler, license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
@@ -460,10 +473,10 @@ func TestRequireLicenseFeature_WithLicense(t *testing.T) {
 // ========================================
 
 func TestLicenseGatedEmptyResponse_NoLicense(t *testing.T) {
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 
 	handlerCalled := false
-	wrappedHandler := LicenseGatedEmptyResponse(handler.Service(), license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
+	wrappedHandler := LicenseGatedEmptyResponse(handler, license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"data":"real"}`))
@@ -489,17 +502,17 @@ func TestLicenseGatedEmptyResponse_NoLicense(t *testing.T) {
 func TestLicenseGatedEmptyResponse_WithLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
-	handler := NewLicenseHandlers(t.TempDir())
+	handler := createTestHandler(t)
 	licenseKey, err := license.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
-	if _, err := handler.Service().Activate(licenseKey); err != nil {
+	if _, err := handler.Service(context.Background()).Activate(licenseKey); err != nil {
 		t.Fatalf("failed to activate test license: %v", err)
 	}
 
 	handlerCalled := false
-	wrappedHandler := LicenseGatedEmptyResponse(handler.Service(), license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
+	wrappedHandler := LicenseGatedEmptyResponse(handler, license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"data":"real"}`))

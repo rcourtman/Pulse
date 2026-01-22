@@ -30,6 +30,12 @@ func (m *mockMonitor) EnableTemperatureMonitoring()                             
 func (m *mockMonitor) DisableTemperatureMonitoring()                              {}
 func (m *mockMonitor) GetNotificationManager() *notifications.NotificationManager { return nil }
 
+func newTestSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, monitor SystemSettingsMonitor, reloadSystemSettingsFunc func(), reloadMonitorFunc func() error) *SystemSettingsHandler {
+	handler := NewSystemSettingsHandler(cfg, persistence, nil, nil, monitor, reloadSystemSettingsFunc, reloadMonitorFunc)
+	handler.mtMonitor = nil
+	return handler
+}
+
 func TestHandleGetSystemSettings(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{
@@ -42,7 +48,7 @@ func TestHandleGetSystemSettings(t *testing.T) {
 	}
 	persistence := config.NewConfigPersistence(tempDir)
 	monitor := &mockMonitor{}
-	handler := NewSystemSettingsHandler(cfg, persistence, nil, monitor, func() {}, func() error { return nil })
+	handler := newTestSystemSettingsHandler(cfg, persistence, monitor, func() {}, func() error { return nil })
 
 	// Save some settings first
 	initialSettings := config.DefaultSystemSettings()
@@ -76,7 +82,7 @@ func TestHandleGetSystemSettings_LoadError(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{DataPath: tempDir}
 	persistence := config.NewConfigPersistence(tempDir)
-	handler := NewSystemSettingsHandler(cfg, persistence, nil, &mockMonitor{}, func() {}, func() error { return nil })
+	handler := newTestSystemSettingsHandler(cfg, persistence, &mockMonitor{}, func() {}, func() error { return nil })
 
 	// Write invalid JSON
 	systemFile := filepath.Join(tempDir, "system.json")
@@ -106,7 +112,7 @@ func TestHandleUpdateSystemSettings_Basic(t *testing.T) {
 	}
 	persistence := config.NewConfigPersistence(tempDir)
 	monitor := &mockMonitor{}
-	handler := NewSystemSettingsHandler(cfg, persistence, nil, monitor, func() {}, func() error { return nil })
+	handler := newTestSystemSettingsHandler(cfg, persistence, monitor, func() {}, func() error { return nil })
 
 	// Setup Authentication (API Token)
 	tokenVal := "testtoken123"
@@ -162,7 +168,7 @@ func TestHandleUpdateSystemSettings_Unauthorized(t *testing.T) {
 		AuthPass: "password", // Requires auth
 	}
 	persistence := config.NewConfigPersistence(tempDir)
-	handler := NewSystemSettingsHandler(cfg, persistence, nil, &mockMonitor{}, func() {}, func() error { return nil })
+	handler := newTestSystemSettingsHandler(cfg, persistence, &mockMonitor{}, func() {}, func() error { return nil })
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", nil)
 	rec := httptest.NewRecorder()
@@ -181,7 +187,7 @@ func TestHandleUpdateSystemSettings_Validation(t *testing.T) {
 		ConfigPath: tempDir,
 	}
 	persistence := config.NewConfigPersistence(tempDir)
-	handler := NewSystemSettingsHandler(cfg, persistence, nil, &mockMonitor{}, func() {}, func() error { return nil })
+	handler := newTestSystemSettingsHandler(cfg, persistence, &mockMonitor{}, func() {}, func() error { return nil })
 
 	// Setup Auth
 	tokenVal := "testtoken123"

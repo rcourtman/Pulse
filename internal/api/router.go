@@ -217,8 +217,8 @@ func (r *Router) setupRoutes() {
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.resourceHandlers = NewResourceHandlers()
-	r.configProfileHandler = NewConfigProfileHandler(r.persistence)
-	r.licenseHandlers = NewLicenseHandlers(r.config.DataPath)
+	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
+	r.licenseHandlers = NewLicenseHandlers(r.multiTenant)
 	r.reportingHandlers = NewReportingHandlers()
 	rbacHandlers := NewRBACHandlers(r.config)
 
@@ -469,7 +469,7 @@ func (r *Router) setupRoutes() {
 
 	// Config Profile Routes - Protected by Admin Auth and Pro License
 	// r.configProfileHandler.ServeHTTP implements http.Handler, so we wrap it
-	r.mux.Handle("/api/admin/profiles/", RequireAdmin(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAgentProfiles, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.Handle("/api/admin/profiles/", RequireAdmin(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAgentProfiles, func(w http.ResponseWriter, req *http.Request) {
 		http.StripPrefix("/api/admin/profiles", r.configProfileHandler).ServeHTTP(w, req)
 	})))
 
@@ -505,21 +505,21 @@ func (r *Router) setupRoutes() {
 
 	// Audit log routes (Enterprise feature)
 	auditHandlers := NewAuditHandlers()
-	r.mux.HandleFunc("GET /api/audit", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
-	r.mux.HandleFunc("GET /api/audit/", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
-	r.mux.HandleFunc("GET /api/audit/{id}/verify", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))))
+	r.mux.HandleFunc("GET /api/audit", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers, license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
+	r.mux.HandleFunc("GET /api/audit/", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers, license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
+	r.mux.HandleFunc("GET /api/audit/{id}/verify", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers, license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))))
 
 	// RBAC routes (Phase 2 - Enterprise feature)
-	r.mux.HandleFunc("/api/admin/roles", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoles)))
-	r.mux.HandleFunc("/api/admin/roles/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoles)))
-	r.mux.HandleFunc("/api/admin/users", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleGetUsers)))
-	r.mux.HandleFunc("/api/admin/users/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleUserRoleActions)))
+	r.mux.HandleFunc("/api/admin/roles", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, license.FeatureRBAC, rbacHandlers.HandleRoles)))
+	r.mux.HandleFunc("/api/admin/roles/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, license.FeatureRBAC, rbacHandlers.HandleRoles)))
+	r.mux.HandleFunc("/api/admin/users", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, license.FeatureRBAC, rbacHandlers.HandleGetUsers)))
+	r.mux.HandleFunc("/api/admin/users/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, license.FeatureRBAC, rbacHandlers.HandleUserRoleActions)))
 
 	// Advanced Reporting routes
-	r.mux.HandleFunc("/api/admin/reports/generate", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAdvancedReporting, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateReport))))
+	r.mux.HandleFunc("/api/admin/reports/generate", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, RequireLicenseFeature(r.licenseHandlers, license.FeatureAdvancedReporting, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateReport))))
 
 	// Audit Webhook routes
-	r.mux.HandleFunc("/api/admin/webhooks/audit", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/admin/webhooks/audit", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers, license.FeatureAuditLogging, func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			RequireScope(config.ScopeSettingsRead, auditHandlers.HandleGetWebhooks)(w, req)
 		} else {
@@ -1242,7 +1242,7 @@ func (r *Router) setupRoutes() {
 	// AI chat handler
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
 	// Wire license checker for Pro feature gating (AI Patrol, Alert Analysis, Auto-Fix)
-	r.aiSettingsHandler.SetLicenseChecker(r.licenseHandlers.Service())
+	r.aiSettingsHandler.SetLicenseHandlers(r.licenseHandlers)
 	// Wire model change callback to restart AI chat service when model is changed
 	r.aiSettingsHandler.SetOnModelChange(func() {
 		r.RestartAIChat(context.Background())
@@ -1266,7 +1266,7 @@ func (r *Router) setupRoutes() {
 	if r.monitor != nil {
 		alertMgr := r.monitor.GetAlertManager()
 		if alertMgr != nil {
-			licSvc := r.licenseHandlers.Service()
+			licSvc := r.licenseHandlers.Service(context.Background())
 			alertMgr.SetLicenseChecker(func(feature string) bool {
 				return licSvc.HasFeature(feature)
 			})
@@ -1279,8 +1279,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, r.aiSettingsHandler.HandleListModels))
 	r.mux.HandleFunc("/api/ai/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecute))
 	r.mux.HandleFunc("/api/ai/execute/stream", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteStream))
-	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureKubernetesAI, r.aiSettingsHandler.HandleAnalyzeKubernetesCluster)))
-	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIAlerts, r.aiSettingsHandler.HandleInvestigateAlert)))
+	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureKubernetesAI, r.aiSettingsHandler.HandleAnalyzeKubernetesCluster)))
+	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIAlerts, r.aiSettingsHandler.HandleInvestigateAlert)))
 
 	r.mux.HandleFunc("/api/ai/run-command", RequireAuth(r.config, r.aiSettingsHandler.HandleRunCommand))
 	r.mux.HandleFunc("/api/ai/knowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleGetGuestKnowledge))
@@ -1305,7 +1305,7 @@ func (r *Router) setupRoutes() {
 	// Read endpoints (findings, history, runs) return redacted preview data when unlicensed
 	// Mutation endpoints (run, acknowledge, dismiss, etc.) return 402 to prevent unauthorized actions
 	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolStatus))
-	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandlePatrolStream)))
+	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandlePatrolStream)))
 	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -1318,13 +1318,13 @@ func (r *Router) setupRoutes() {
 		}
 	}))
 	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, r.aiSettingsHandler.HandleGetFindingsHistory))
-	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleForcePatrol)))
-	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleAcknowledgeFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleForcePatrol)))
+	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleAcknowledgeFinding)))
 	// Dismiss and resolve don't require Pro license - users should be able to clear findings they can see
 	// This is especially important for users who accumulated findings before fixing the patrol-without-AI bug
 	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, r.aiSettingsHandler.HandleDismissFinding))
-	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleSuppressFinding)))
-	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleSnoozeFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleSuppressFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleSnoozeFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, r.aiSettingsHandler.HandleResolveFinding))
 	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolRunHistory))
 	// Suppression rules management (also Pro-only since they control LLM behavior)
@@ -1333,7 +1333,7 @@ func (r *Router) setupRoutes() {
 		switch req.Method {
 		case http.MethodGet:
 			// GET: return empty array if unlicensed
-			if err := r.licenseHandlers.Service().RequireFeature(license.FeatureAIPatrol); err != nil {
+			if err := r.licenseHandlers.Service(req.Context()).RequireFeature(license.FeatureAIPatrol); err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("X-License-Required", "true")
 				w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
@@ -1343,7 +1343,7 @@ func (r *Router) setupRoutes() {
 			r.aiSettingsHandler.HandleGetSuppressionRules(w, req)
 		case http.MethodPost:
 			// POST: return 402 if unlicensed
-			if err := r.licenseHandlers.Service().RequireFeature(license.FeatureAIPatrol); err != nil {
+			if err := r.licenseHandlers.Service(req.Context()).RequireFeature(license.FeatureAIPatrol); err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusPaymentRequired)
 				json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1359,8 +1359,8 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
-	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleDeleteSuppressionRule)))
-	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, LicenseGatedEmptyResponse(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleGetDismissedFindings)))
+	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleDeleteSuppressionRule)))
+	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, LicenseGatedEmptyResponse(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleGetDismissedFindings)))
 
 	// AI Intelligence endpoints - expose learned patterns, correlations, and predictions
 	// Unified intelligence endpoint - aggregates all AI subsystems into a single view
@@ -1979,7 +1979,12 @@ func (r *Router) wireAIChatProviders() {
 	}
 
 	if r.persistence != nil {
-		manager := NewMCPAgentProfileManager(r.persistence, r.licenseHandlers.Service())
+		// For MCP, we normally use a scoped context or default.
+		// Assuming MCP server is tenant-aware or global.
+		// If global, we might use background context, but if it receives requests, it should have request context.
+		// The MCPAgentProfileManager likely needs refactoring for multi-tenancy too or accepts a helper.
+		// For now, let's use Background context as a temporary fix, assuming default tenant.
+		manager := NewMCPAgentProfileManager(r.persistence, r.licenseHandlers.Service(context.Background()))
 		service.SetAgentProfileManager(manager)
 		log.Debug().Msg("AI chat: Agent profile manager wired")
 	}
@@ -4341,7 +4346,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	// Enforce license limits: 7d free, 30d/90d require Pro
 	// Returns 402 Payment Required for unlicensed long-term requests
 	maxFreeDuration := 7 * 24 * time.Hour
-	if duration > maxFreeDuration && !r.licenseHandlers.Service().HasFeature(license.FeatureLongTermMetrics) {
+	// Check license for long-term metrics
+	if duration > maxFreeDuration && !r.licenseHandlers.Service(req.Context()).HasFeature(license.FeatureLongTermMetrics) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusPaymentRequired)
 		json.NewEncoder(w).Encode(map[string]interface{}{

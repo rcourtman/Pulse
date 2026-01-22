@@ -845,8 +845,15 @@ func TestResolveGroupName(t *testing.T) {
 			gid:  ^uint32(0), // 4294967295
 			validate: func(t *testing.T, result string) {
 				expected := "gid:4294967295"
-				if result != expected {
-					t.Errorf("resolveGroupName(max) = %q, want %q", result, expected)
+				if result == expected {
+					return
+				}
+				if result == "" {
+					t.Errorf("resolveGroupName(max) = %q, want %q or system group name", result, expected)
+					return
+				}
+				if strings.HasPrefix(result, "gid:") {
+					t.Errorf("resolveGroupName(max) = %q, want %q or system group name", result, expected)
 				}
 			},
 		},

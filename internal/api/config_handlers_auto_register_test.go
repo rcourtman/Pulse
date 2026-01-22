@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,14 +17,15 @@ import (
 func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
 	t.Helper()
 
-	h := &ConfigHandlers{
-		config:               cfg,
-		persistence:          config.NewConfigPersistence(cfg.DataPath),
-		setupCodes:           make(map[string]*SetupCode),
-		recentSetupTokens:    make(map[string]time.Time),
-		lastClusterDetection: make(map[string]time.Time),
-		recentAutoRegistered: make(map[string]time.Time),
+	if cfg == nil {
+		cfg = &config.Config{}
 	}
+	if cfg.DataPath == "" {
+		cfg.DataPath = t.TempDir()
+	}
+	h := NewConfigHandlers(nil, nil, func() error { return nil }, nil, nil, func() {})
+	h.legacyConfig = cfg
+	h.legacyPersistence = config.NewConfigPersistence(cfg.DataPath)
 
 	return h
 }
@@ -165,7 +167,7 @@ func TestDisambiguateNodeName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := handler.disambiguateNodeName(tt.nodeName, tt.host, tt.nodeType)
+			got := handler.disambiguateNodeName(context.Background(), tt.nodeName, tt.host, tt.nodeType)
 			if got != tt.want {
 				t.Errorf("disambiguateNodeName() = %q, want %q", got, tt.want)
 			}

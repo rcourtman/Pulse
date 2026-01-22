@@ -28,13 +28,10 @@ func TestHandleDeleteNode(t *testing.T) {
 			{Name: "pbs1", Host: "10.0.0.3"},
 		},
 	}
-	dummyPersistence := config.NewConfigPersistence(tempDir)
+	dummyCfg.DataPath = tempDir
 
 	// Create handler with dummy persistence
-	// Signature: cfg, monitor, reloadFunc, wsHub, guestMetadataHandler, reloadSystemSettingsFunc
-	handler := NewConfigHandlers(dummyCfg, nil, func() error { return nil }, nil, nil, func() {})
-	// Override persistence to use our temp dir one, as factory created a fresh one
-	handler.persistence = dummyPersistence
+	handler := newTestConfigHandlers(t, dummyCfg)
 
 	tests := []struct {
 		name           string

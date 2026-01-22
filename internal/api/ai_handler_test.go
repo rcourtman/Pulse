@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -140,6 +141,7 @@ func (m *MockAIService) GetBaseURL() string {
 
 type MockAIPersistence struct {
 	mock.Mock
+	dataDir string
 }
 
 func (m *MockAIPersistence) LoadAIConfig() (*config.AIConfig, error) {
@@ -150,6 +152,10 @@ func (m *MockAIPersistence) LoadAIConfig() (*config.AIConfig, error) {
 	return args.Get(0).(*config.AIConfig), args.Error(1)
 }
 
+func (m *MockAIPersistence) DataDir() string {
+	return m.dataDir
+}
+
 type MockAIStateProvider struct {
 	mock.Mock
 }
@@ -157,6 +163,13 @@ type MockAIStateProvider struct {
 func (m *MockAIStateProvider) GetState() models.StateSnapshot {
 	args := m.Called()
 	return args.Get(0).(models.StateSnapshot)
+}
+
+func newTestAIHandler(cfg *config.Config, persistence AIPersistence, _ *agentexec.Server) *AIHandler {
+	handler := NewAIHandler(nil, nil, nil)
+	handler.legacyConfig = cfg
+	handler.legacyPersistence = persistence
+	return handler
 }
 
 func TestStart(t *testing.T) {
@@ -170,13 +183,13 @@ func TestStart(t *testing.T) {
 	}
 
 	mockPersist := new(MockAIPersistence)
-	h := NewAIHandler(&config.Config{}, mockPersist, nil)
+	h := newTestAIHandler(&config.Config{}, mockPersist, nil)
 
 	// AI disabled in config
 	mockPersist.On("LoadAIConfig").Return(&config.AIConfig{Enabled: false}, nil).Once()
 	err := h.Start(context.Background(), nil)
 	assert.NoError(t, err)
-	assert.Nil(t, h.service)
+	assert.Nil(t, h.legacyService)
 
 	// AI enabled
 	aiCfg := &config.AIConfig{Enabled: true, Model: "test"}
@@ -185,20 +198,20 @@ func TestStart(t *testing.T) {
 
 	err = h.Start(context.Background(), nil)
 	assert.NoError(t, err)
-	assert.Equal(t, mockSvc, h.service)
+	assert.Equal(t, mockSvc, h.legacyService)
 }
 
 func TestStop(t *testing.T) {
 	mockSvc := new(MockAIService)
-	h := NewAIHandler(nil, nil, nil)
-	h.service = mockSvc
+	h := newTestAIHandler(nil, nil, nil)
+	h.legacyService = mockSvc
 
 	mockSvc.On("Stop", mock.Anything).Return(nil)
 	err := h.Stop(context.Background())
 	assert.NoError(t, err)
 
 	// Nil service
-	h.service = nil
+	h.legacyService = nil
 	err = h.Stop(context.Background())
 	assert.NoError(t, err)
 }
@@ -213,7 +226,7 @@ func TestStart_Error(t *testing.T) {
 	}
 
 	mockPersist := new(MockAIPersistence)
-	h := NewAIHandler(&config.Config{}, mockPersist, nil)
+	h := newTestAIHandler(&config.Config{}, mockPersist, nil)
 
 	aiCfg := &config.AIConfig{Enabled: true, Model: "test"}
 	mockPersist.On("LoadAIConfig").Return(aiCfg, nil)
@@ -226,8 +239,8 @@ func TestStart_Error(t *testing.T) {
 func TestRestart(t *testing.T) {
 	mockPersist := new(MockAIPersistence)
 	mockSvc := new(MockAIService)
-	h := NewAIHandler(nil, mockPersist, nil)
-	h.service = mockSvc
+	h := newTestAIHandler(nil, mockPersist, nil)
+	h.legacyService = mockSvc
 
 	aiCfg := &config.AIConfig{}
 	mockPersist.On("LoadAIConfig").Return(aiCfg, nil)
@@ -237,36 +250,36 @@ func TestRestart(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Service nil
-	h.service = nil
+	h.legacyService = nil
 	err = h.Restart(context.Background())
 	assert.NoError(t, err)
 }
 
 func TestGetService(t *testing.T) {
 	mockSvc := new(MockAIService)
-	h := NewAIHandler(nil, nil, nil)
-	h.service = mockSvc
-	assert.Equal(t, mockSvc, h.GetService())
+	h := newTestAIHandler(nil, nil, nil)
+	h.legacyService = mockSvc
+	assert.Equal(t, mockSvc, h.GetService(context.Background()))
 }
 
 func TestGetAIConfig(t *testing.T) {
 	mockPersist := new(MockAIPersistence)
-	h := NewAIHandler(nil, mockPersist, nil)
+	h := newTestAIHandler(nil, mockPersist, nil)
 
 	aiCfg := &config.AIConfig{Model: "test"}
 	mockPersist.On("LoadAIConfig").Return(aiCfg, nil)
 
-	result := h.GetAIConfig()
+	result := h.GetAIConfig(context.Background())
 	assert.Equal(t, aiCfg, result)
 }
 
 func TestLoadAIConfig_Error(t *testing.T) {
 	mockPersist := new(MockAIPersistence)
-	h := NewAIHandler(nil, mockPersist, nil)
+	h := newTestAIHandler(nil, mockPersist, nil)
 
 	mockPersist.On("LoadAIConfig").Return((*config.AIConfig)(nil), assert.AnError)
 
-	result := h.loadAIConfig()
+	result := h.loadAIConfig(context.Background())
 	assert.Nil(t, result)
 }
 
@@ -274,9 +287,9 @@ func TestHandleStatus(t *testing.T) {
 	cfg := &config.Config{
 		APIToken: "test-token",
 	}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 
@@ -296,9 +309,9 @@ func TestHandleStatus(t *testing.T) {
 
 func TestHandleSessions(t *testing.T) {
 	cfg := &config.Config{}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 	sessions := []chat.Session{{ID: "s1"}, {ID: "s2"}}
@@ -314,9 +327,9 @@ func TestHandleSessions(t *testing.T) {
 
 func TestHandleCreateSession(t *testing.T) {
 	cfg := &config.Config{}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 	session := &chat.Session{ID: "new-session"}
@@ -332,9 +345,9 @@ func TestHandleCreateSession(t *testing.T) {
 
 func TestHandleDeleteSession(t *testing.T) {
 	cfg := &config.Config{}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("DeleteSession", mock.Anything, "s1").Return(nil)
@@ -349,9 +362,9 @@ func TestHandleDeleteSession(t *testing.T) {
 
 func TestHandleMessages(t *testing.T) {
 	cfg := &config.Config{}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 	messages := []chat.Message{{Role: "user", Content: "hello"}}
@@ -367,9 +380,9 @@ func TestHandleMessages(t *testing.T) {
 
 func TestHandleChat_NotRunning(t *testing.T) {
 	cfg := &config.Config{}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 
 	mockSvc.On("IsRunning").Return(false)
 
@@ -383,9 +396,9 @@ func TestHandleChat_NotRunning(t *testing.T) {
 
 func TestHandleChat_InvalidJSON(t *testing.T) {
 	cfg := &config.Config{}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 
@@ -399,9 +412,9 @@ func TestHandleChat_InvalidJSON(t *testing.T) {
 
 func TestHandleChat_Success(t *testing.T) {
 	cfg := &config.Config{}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 
@@ -424,9 +437,9 @@ func TestHandleChat_Success(t *testing.T) {
 
 func TestHandleAnswerQuestion(t *testing.T) {
 	cfg := &config.Config{}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("AnswerQuestion", mock.Anything, "q1", mock.Anything).Return(nil)
@@ -441,9 +454,9 @@ func TestHandleAnswerQuestion(t *testing.T) {
 }
 
 func TestHandleSessions_NotRunning(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(false)
 
 	req := httptest.NewRequest("GET", "/api/ai/sessions", nil)
@@ -453,9 +466,9 @@ func TestHandleSessions_NotRunning(t *testing.T) {
 }
 
 func TestHandleSessions_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("ListSessions", mock.Anything).Return(([]chat.Session)(nil), assert.AnError)
 
@@ -466,9 +479,9 @@ func TestHandleSessions_Error(t *testing.T) {
 }
 
 func TestHandleCreateSession_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("CreateSession", mock.Anything).Return((*chat.Session)(nil), assert.AnError)
 
@@ -479,9 +492,9 @@ func TestHandleCreateSession_Error(t *testing.T) {
 }
 
 func TestHandleDeleteSession_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("DeleteSession", mock.Anything, "s1").Return(assert.AnError)
 
@@ -492,9 +505,9 @@ func TestHandleDeleteSession_Error(t *testing.T) {
 }
 
 func TestHandleMessages_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("GetMessages", mock.Anything, "s1").Return(([]chat.Message)(nil), assert.AnError)
 
@@ -505,9 +518,9 @@ func TestHandleMessages_Error(t *testing.T) {
 }
 
 func TestHandleAbort_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("AbortSession", mock.Anything, "s1").Return(assert.AnError)
 
@@ -518,9 +531,9 @@ func TestHandleAbort_Error(t *testing.T) {
 }
 
 func TestHandleSummarize_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("SummarizeSession", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
@@ -531,9 +544,9 @@ func TestHandleSummarize_Error(t *testing.T) {
 }
 
 func TestHandleAnswerQuestion_InvalidJSON(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 
 	req := httptest.NewRequest("POST", "/api/ai/question/q1/answer", strings.NewReader("invalid"))
@@ -543,9 +556,9 @@ func TestHandleAnswerQuestion_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleAnswerQuestion_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("AnswerQuestion", mock.Anything, "q1", mock.Anything).Return(assert.AnError)
 
@@ -557,7 +570,7 @@ func TestHandleAnswerQuestion_Error(t *testing.T) {
 }
 
 func TestHandleChat_Options(t *testing.T) {
-	h := NewAIHandler(nil, nil, nil)
+	h := newTestAIHandler(nil, nil, nil)
 	req := httptest.NewRequest("OPTIONS", "/api/ai/chat", nil)
 	req.Header.Set("Origin", "http://example.com")
 	w := httptest.NewRecorder()
@@ -567,7 +580,7 @@ func TestHandleChat_Options(t *testing.T) {
 }
 
 func TestHandleChat_MethodNotAllowed(t *testing.T) {
-	h := NewAIHandler(nil, nil, nil)
+	h := newTestAIHandler(nil, nil, nil)
 	req := httptest.NewRequest("GET", "/api/ai/chat", nil)
 	w := httptest.NewRecorder()
 	h.HandleChat(w, req)
@@ -576,9 +589,9 @@ func TestHandleChat_MethodNotAllowed(t *testing.T) {
 
 func TestHandleChat_Error(t *testing.T) {
 	cfg := &config.Config{}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).Return(assert.AnError)
 
@@ -592,9 +605,9 @@ func TestHandleChat_Error(t *testing.T) {
 }
 
 func TestHandleDiff_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("GetSessionDiff", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
@@ -605,9 +618,9 @@ func TestHandleDiff_Error(t *testing.T) {
 }
 
 func TestHandleFork_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("ForkSession", mock.Anything, "s1").Return((*chat.Session)(nil), assert.AnError)
 
@@ -618,9 +631,9 @@ func TestHandleFork_Error(t *testing.T) {
 }
 
 func TestHandleRevert_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("RevertSession", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
@@ -631,9 +644,9 @@ func TestHandleRevert_Error(t *testing.T) {
 }
 
 func TestHandleUnrevert_Error(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("UnrevertSession", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
@@ -644,9 +657,9 @@ func TestHandleUnrevert_Error(t *testing.T) {
 }
 
 func TestHandleStatus_NotRunning(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(false)
 
 	req := httptest.NewRequest("GET", "/api/ai/status", nil)
@@ -664,8 +677,8 @@ func TestMockUnimplemented(t *testing.T) {
 	mockSvc.On("SetMetadataUpdater", mock.Anything).Return()
 	mockSvc.On("UpdateControlSettings", mock.Anything).Return()
 
-	h := NewAIHandler(nil, nil, nil)
-	h.service = mockSvc
+	h := newTestAIHandler(nil, nil, nil)
+	h.legacyService = mockSvc
 
 	h.SetFindingsManager(nil)
 	h.SetMetadataUpdater(nil)
@@ -675,9 +688,9 @@ func TestMockUnimplemented(t *testing.T) {
 }
 
 func TestProviders(t *testing.T) {
-	h := NewAIHandler(nil, nil, nil)
+	h := newTestAIHandler(nil, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 
 	mockSvc.On("SetAlertProvider", mock.Anything).Return()
 	mockSvc.On("SetFindingsProvider", mock.Anything).Return()
@@ -705,9 +718,9 @@ func TestProviders(t *testing.T) {
 }
 
 func TestHandleAbort_Success(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("AbortSession", mock.Anything, "s1").Return(nil)
 
@@ -718,9 +731,9 @@ func TestHandleAbort_Success(t *testing.T) {
 }
 
 func TestHandleSummarize_Success(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("SummarizeSession", mock.Anything, "s1").Return(map[string]interface{}{"summary": "ok"}, nil)
 
@@ -731,9 +744,9 @@ func TestHandleSummarize_Success(t *testing.T) {
 }
 
 func TestHandleDiff_Success(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("GetSessionDiff", mock.Anything, "s1").Return(map[string]interface{}{"diff": "test"}, nil)
 
@@ -744,9 +757,9 @@ func TestHandleDiff_Success(t *testing.T) {
 }
 
 func TestHandleFork_Success(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("ForkSession", mock.Anything, "s1").Return(&chat.Session{ID: "s2"}, nil)
 
@@ -757,9 +770,9 @@ func TestHandleFork_Success(t *testing.T) {
 }
 
 func TestHandleRevert_Success(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("RevertSession", mock.Anything, "s1").Return(map[string]interface{}{"reverted": true}, nil)
 
@@ -770,9 +783,9 @@ func TestHandleRevert_Success(t *testing.T) {
 }
 
 func TestHandleUnrevert_Success(t *testing.T) {
-	h := NewAIHandler(&config.Config{}, nil, nil)
+	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.service = mockSvc
+	h.legacyService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("UnrevertSession", mock.Anything, "s1").Return(map[string]interface{}{"unreverted": true}, nil)
 
@@ -785,7 +798,7 @@ func TestHandleUnrevert_Success(t *testing.T) {
 func TestHandleStatus_NoService(t *testing.T) {
 	// HandleStatus with no service initialized should still return 200 with running=false
 	cfg := &config.Config{}
-	h := NewAIHandler(cfg, nil, nil)
+	h := newTestAIHandler(cfg, nil, nil)
 
 	req := httptest.NewRequest("GET", "/api/ai/status", nil)
 	w := httptest.NewRecorder()

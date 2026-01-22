@@ -11,7 +11,8 @@ import (
 )
 
 func TestGuestMetadataHandler(t *testing.T) {
-	handler := NewGuestMetadataHandler(t.TempDir())
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	handler := NewGuestMetadataHandler(mtp)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/guests/metadata", nil)
 	resp := httptest.NewRecorder()
@@ -80,7 +81,8 @@ func TestGuestMetadataHandler(t *testing.T) {
 }
 
 func TestHostMetadataHandler(t *testing.T) {
-	handler := NewHostMetadataHandler(t.TempDir())
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	handler := NewHostMetadataHandler(mtp)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/hosts/metadata", nil)
 	resp := httptest.NewRecorder()

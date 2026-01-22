@@ -286,7 +286,7 @@ func TestNotificationHandlers(t *testing.T) {
 	mockMonitor.On("GetNotificationManager").Return(mockManager)
 	mockMonitor.On("GetConfigPersistence").Return(mockPersistence)
 
-	h := NewNotificationHandlers(mockMonitor)
+	h := NewNotificationHandlers(nil, mockMonitor)
 
 	t.Run("SetMonitor", func(t *testing.T) {
 		h.SetMonitor(mockMonitor)
