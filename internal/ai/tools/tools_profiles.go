@@ -188,30 +188,6 @@ func (e *PulseToolExecutor) executeSetAgentScope(ctx context.Context, args map[s
 		return NewErrorResult(fmt.Errorf("use either profile_id or settings, not both")), nil
 	}
 
-	if e.controlLevel == ControlLevelSuggest {
-		if profileID != "" {
-			return NewJSONResult(map[string]interface{}{
-				"type":        "suggestion",
-				"action":      "assign_profile",
-				"agent_id":    agentID,
-				"agent_label": agentLabel,
-				"profile_id":  profileID,
-				"message":     fmt.Sprintf("Suggestion: assign profile %s to agent %s.", profileID, agentLabel),
-			}), nil
-		}
-		if len(settings) == 0 {
-			return NewErrorResult(fmt.Errorf("settings are required when profile_id is not provided")), nil
-		}
-		return NewJSONResult(map[string]interface{}{
-			"type":        "suggestion",
-			"action":      "apply_settings",
-			"agent_id":    agentID,
-			"agent_label": agentLabel,
-			"settings":    settings,
-			"message":     fmt.Sprintf("Suggestion: apply agent scope to %s with settings: %s", agentLabel, formatSettingsSummary(settings)),
-		}), nil
-	}
-
 	if profileID != "" {
 		profileName, err := e.agentProfileManager.AssignProfile(ctx, agentID, profileID)
 		if err != nil {

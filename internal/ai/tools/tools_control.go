@@ -167,10 +167,6 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		}
 	}
 
-	if e.controlLevel == ControlLevelSuggest {
-		return NewTextResult(formatCommandSuggestion(command, runOnHost, targetHost)), nil
-	}
-
 	// Skip approval checks if pre-approved
 	if !preApproved && e.controlLevel == ControlLevelControlled {
 		targetType := "container"
@@ -305,10 +301,6 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 	}
 
-	if e.controlLevel == ControlLevelSuggest {
-		return NewTextResult(formatControlSuggestion(guest.Name, guest.VMID, action, command, guest.Node)), nil
-	}
-
 	if e.agentServer == nil {
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
@@ -387,10 +379,6 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 	if !preApproved && e.controlLevel == ControlLevelControlled {
 		approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", action, container.Name))
 		return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, action, command, approvalID)), nil
-	}
-
-	if e.controlLevel == ControlLevelSuggest {
-		return NewTextResult(formatDockerSuggestion(container.Name, dockerHost.Hostname, action, command)), nil
 	}
 
 	if e.agentServer == nil {
@@ -738,17 +726,6 @@ func formatTargetHostRequired(agents []agentexec.ConnectedAgent) string {
 	return message
 }
 
-func formatCommandSuggestion(command string, runOnHost bool, targetHost string) string {
-	target := "current target"
-	if runOnHost {
-		target = "host"
-	}
-	if strings.TrimSpace(targetHost) != "" {
-		target = fmt.Sprintf("host %s", targetHost)
-	}
-	return fmt.Sprintf("Suggested command for %s:\n%s", target, command)
-}
-
 func formatControlApprovalNeeded(name string, vmid int, action, command, approvalID string) string {
 	payload := map[string]interface{}{
 		"type":           "approval_required",
@@ -777,20 +754,4 @@ func formatDockerApprovalNeeded(name, host, action, command, approvalID string) 
 	}
 	b, _ := json.Marshal(payload)
 	return "APPROVAL_REQUIRED: " + string(b)
-}
-
-func formatControlSuggestion(name string, vmid int, action, command, node string) string {
-	return fmt.Sprintf(`To %s %s (VMID %d), run this command on node %s:
-
-%s
-
-Copy and paste this command to execute it manually.`, action, name, vmid, node, command)
-}
-
-func formatDockerSuggestion(name, host, action, command string) string {
-	return fmt.Sprintf(`To %s container '%s' on host %s, run:
-
-%s
-
-Copy and paste this command to execute it manually.`, action, name, host, command)
 }

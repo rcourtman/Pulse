@@ -983,11 +983,6 @@ func (e *PulseToolExecutor) executeCheckDockerUpdates(_ context.Context, args ma
 
 	hostName := e.getDockerHostName(hostID)
 
-	// Control level check - suggest mode just returns the suggestion
-	if e.controlLevel == ControlLevelSuggest {
-		return NewTextResult(fmt.Sprintf("To check for Docker updates on host '%s', use the UI or API:\n\nPOST /api/agents/docker/hosts/%s/check-updates", hostName, hostID)), nil
-	}
-
 	// Trigger the update check
 	cmdStatus, err := e.updatesProvider.TriggerUpdateCheck(hostID)
 	if err != nil {
@@ -1033,18 +1028,6 @@ func (e *PulseToolExecutor) executeUpdateDockerContainer(ctx context.Context, ar
 	}
 
 	containerName := trimContainerName(container.Name)
-
-	// Control level handling
-	if e.controlLevel == ControlLevelSuggest {
-		return NewTextResult(fmt.Sprintf(`To update container '%s' on host '%s', use the UI or run:
-
-POST /api/agents/docker/containers/update
-{
-  "hostId": "%s",
-  "containerId": "%s",
-  "containerName": "%s"
-}`, containerName, dockerHost.Hostname, dockerHost.ID, container.ID, containerName)), nil
-	}
 
 	// Controlled mode - require approval
 	if e.controlLevel == ControlLevelControlled {

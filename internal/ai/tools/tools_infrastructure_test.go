@@ -221,7 +221,7 @@ func TestDockerUpdateTools(t *testing.T) {
 	stateProv.On("GetState").Return(state)
 	executor := NewPulseToolExecutor(ExecutorConfig{
 		StateProvider: stateProv,
-		ControlLevel:  ControlLevelSuggest,
+		ControlLevel:  ControlLevelControlled,
 	})
 	updates := &stubUpdatesProvider{
 		pending: []ContainerUpdateInfo{
@@ -251,8 +251,12 @@ func TestDockerUpdateTools(t *testing.T) {
 	}
 
 	result, _ = executor.executeCheckDockerUpdates(context.Background(), map[string]interface{}{"host": "Docker One"})
-	if !strings.Contains(result.Content[0].Text, "check-updates") {
-		t.Fatalf("unexpected suggest response: %s", result.Content[0].Text)
+	var checkResp DockerCheckUpdatesResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &checkResp); err != nil {
+		t.Fatalf("decode docker check response: %v", err)
+	}
+	if checkResp.CommandID != "cmd1" || checkResp.HostID != "host1" {
+		t.Fatalf("unexpected check response: %+v", checkResp)
 	}
 
 	executor.controlLevel = ControlLevelAutonomous

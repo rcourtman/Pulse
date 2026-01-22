@@ -322,65 +322,6 @@ func TestExecuteSetAgentScopeErrors(t *testing.T) {
 	}
 }
 
-func TestExecuteSetAgentScopeSuggestProfile(t *testing.T) {
-	executor := NewPulseToolExecutor(ExecutorConfig{
-		ControlLevel:        ControlLevelSuggest,
-		AgentProfileManager: &mockProfileManager{},
-	})
-
-	result, err := executor.executeSetAgentScope(context.Background(), map[string]interface{}{
-		"agent_id":   "agent-1",
-		"profile_id": "profile-1",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.IsError {
-		t.Fatal("expected suggestion response")
-	}
-
-	var payload map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &payload); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if payload["type"] != "suggestion" || payload["action"] != "assign_profile" {
-		t.Fatalf("unexpected suggestion payload: %v", payload)
-	}
-}
-
-func TestExecuteSetAgentScopeSuggestSettings(t *testing.T) {
-	executor := NewPulseToolExecutor(ExecutorConfig{
-		ControlLevel:        ControlLevelSuggest,
-		AgentProfileManager: &mockProfileManager{},
-	})
-
-	result, err := executor.executeSetAgentScope(context.Background(), map[string]interface{}{
-		"agent_id": "agent-1",
-		"settings": map[string]interface{}{
-			"alpha": 1,
-			"beta":  true,
-		},
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.IsError {
-		t.Fatal("expected suggestion response")
-	}
-
-	var payload map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &payload); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if payload["type"] != "suggestion" || payload["action"] != "apply_settings" {
-		t.Fatalf("unexpected suggestion payload: %v", payload)
-	}
-	message, _ := payload["message"].(string)
-	if !strings.Contains(message, "alpha=1, beta=true") {
-		t.Fatalf("expected settings summary, got %q", message)
-	}
-}
-
 func TestExecuteSetAgentScopeAssignProfile(t *testing.T) {
 	manager := &mockProfileManager{
 		assignName: "Gold",

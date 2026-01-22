@@ -49,17 +49,6 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		assert.Contains(t, result.Content[0].Text, "Multiple agents are connected")
 	})
 
-	t.Run("SuggestMode", func(t *testing.T) {
-		exec := NewPulseToolExecutor(ExecutorConfig{ControlLevel: ControlLevelSuggest})
-		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
-			"command":     "ls",
-			"run_on_host": true,
-			"target_host": "node1",
-		})
-		assert.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "Suggested command for host node1")
-	})
-
 	t.Run("ControlledRequiresApproval", func(t *testing.T) {
 		approval.SetStore(nil)
 		exec := NewPulseToolExecutor(ExecutorConfig{ControlLevel: ControlLevelControlled})

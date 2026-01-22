@@ -91,12 +91,6 @@ func TestFormattingHelpers(t *testing.T) {
 		assert.Contains(t, msg, "(+1 more)")
 	})
 
-	t.Run("formatCommandSuggestion", func(t *testing.T) {
-		msg := formatCommandSuggestion("ls", true, "host-1")
-		assert.Contains(t, msg, "Suggested command for host host-1")
-		assert.Contains(t, msg, "ls")
-	})
-
 	t.Run("formatControlApprovalNeeded", func(t *testing.T) {
 		payload := decodePayload(t, formatControlApprovalNeeded("vm1", 101, "start", "qm start 101", "id-2"), "APPROVAL_REQUIRED: ")
 		assert.Equal(t, "approval_required", payload["type"])
@@ -115,19 +109,6 @@ func TestFormattingHelpers(t *testing.T) {
 		assert.Equal(t, "restart", payload["action"])
 		assert.Equal(t, "docker restart web", payload["command"])
 		assert.Equal(t, "id-3", payload["approval_id"])
-	})
-
-	t.Run("formatControlSuggestion", func(t *testing.T) {
-		msg := formatControlSuggestion("vm1", 101, "start", "qm start 101", "node-1")
-		assert.Contains(t, msg, "To start vm1 (VMID 101)")
-		assert.Contains(t, msg, "node node-1")
-		assert.Contains(t, msg, "qm start 101")
-	})
-
-	t.Run("formatDockerSuggestion", func(t *testing.T) {
-		msg := formatDockerSuggestion("web", "node-1", "restart", "docker restart web")
-		assert.Contains(t, msg, "To restart container 'web' on host node-1")
-		assert.Contains(t, msg, "docker restart web")
 	})
 }
 

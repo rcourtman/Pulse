@@ -99,8 +99,6 @@ type ControlLevel string
 const (
 	// ControlLevelReadOnly - AI can only query, no control tools available
 	ControlLevelReadOnly ControlLevel = "read_only"
-	// ControlLevelSuggest - AI suggests commands, user must copy/paste to execute
-	ControlLevelSuggest ControlLevel = "suggest"
 	// ControlLevelControlled - AI can execute with per-command approval
 	ControlLevelControlled ControlLevel = "controlled"
 	// ControlLevelAutonomous - AI executes without approval (requires Pro license)

@@ -32,17 +32,6 @@ func TestExecuteCheckDockerUpdates(t *testing.T) {
 		},
 	}
 
-	exec = NewPulseToolExecutor(ExecutorConfig{
-		UpdatesProvider: updatesProvider,
-		StateProvider:   &mockStateProvider{state: state},
-		ControlLevel:    ControlLevelSuggest,
-	})
-	result, err = exec.executeCheckDockerUpdates(ctx, map[string]interface{}{
-		"host": "dock1",
-	})
-	require.NoError(t, err)
-	assert.Contains(t, result.Content[0].Text, "POST /api/agents/docker/hosts/host1/check-updates")
-
 	updatesProvider.On("TriggerUpdateCheck", "host1").Return(DockerCommandStatus{
 		ID:     "cmd1",
 		Type:   "check",
