@@ -178,7 +178,7 @@ export const AIRecentChangesPanel: Component<{ hours?: number; showWhenEmpty?: b
                                                         </span>
                                                     </div>
                                                     <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                                                        {change.description || 'Change detected by AI Patrol.'}
+                                                        {change.description || 'Change detected by Pulse Patrol.'}
                                                     </p>
                                                 </div>
                                                 <span class="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">

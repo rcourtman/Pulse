@@ -1,8 +1,8 @@
 /**
- * AIStatusIndicator - Subtle header component showing AI patrol health and anomalies
+ * AIStatusIndicator - Subtle header component showing Pulse patrol health and anomalies
  * 
  * Design: Minimal presence when healthy, highlighted when issues or anomalies detected.
- * Clicking navigates to the Alerts page where AI Insights are displayed.
+ * Clicking navigates to the Alerts page where Pulse Insights are displayed.
  */
 
 import { createResource, Show, createMemo, onCleanup } from 'solid-js';
@@ -106,30 +106,30 @@ export function AIStatusIndicator() {
         const resourceCount = learningStatus.resourceCount();
         if (parts.length === 0 && resourceCount > 0) {
             // Show learning progress when healthy
-            return `AI: All healthy • ${resourceCount} resources baselined`;
+            return `Pulse: All healthy • ${resourceCount} resources baselined`;
         }
 
         if (parts.length === 0) {
             if (!s?.enabled) {
                 // Show baseline info even when patrol disabled
                 if (resourceCount > 0) {
-                    return `AI Learning: ${resourceCount} resources baselined`;
+                    return `Pulse Learning: ${resourceCount} resources baselined`;
                 }
-                return 'AI Baseline Learning active';
+                return 'Pulse Baseline Learning active';
             }
             if (s?.license_required) {
                 if (s.license_status === 'active') {
-                    return 'AI Patrol is not included in this license tier';
+                    return 'Pulse Patrol is not included in this license tier';
                 }
                 if (s.license_status === 'expired') {
-                    return 'AI Patrol license expired';
+                    return 'Pulse Patrol license expired';
                 }
-                return 'AI Patrol requires Pulse Pro';
+                return 'Pulse Patrol requires Pulse Pro';
             }
-            return 'AI: All systems healthy';
+            return 'Pulse: All systems healthy';
         }
 
-        return `AI Intelligence: ${parts.join(' | ')}`;
+        return `Pulse Intelligence: ${parts.join(' | ')}`;
     });
 
 
@@ -140,7 +140,7 @@ export function AIStatusIndicator() {
     });
 
     const handleClick = () => {
-        // Navigate to Alerts page with AI Insights subtab selected
+        // Navigate to Alerts page with Pulse Insights subtab selected
         navigate('/alerts?subtab=ai-insights');
     };
 

@@ -1307,7 +1307,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <ul class="text-xs text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
                                     <li>One-command setup (creates API user and token automatically)</li>
                                     <li>Built-in temperature monitoring (no SSH required)</li>
-                                    <li>AI features (execute commands via Pulse AI)</li>
+                                    <li>Pulse features (execute commands via Pulse AI)</li>
                                     <li>Automatic reconnection on network issues</li>
                                   </ul>
                                   <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">

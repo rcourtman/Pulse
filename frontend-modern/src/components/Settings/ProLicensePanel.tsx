@@ -17,8 +17,8 @@ const TIER_LABELS: Record<string, string> = {
 };
 
 const FEATURE_LABELS: Record<string, string> = {
-  ai_patrol: 'AI Patrol',
-  ai_alerts: 'AI Alert Analysis',
+  ai_patrol: 'Pulse Patrol',
+  ai_alerts: 'Pulse Alert Analysis',
   ai_autofix: 'AI Auto-Fix',
   kubernetes_ai: 'Kubernetes AI',
   update_alerts: 'Update Alerts',
@@ -281,7 +281,7 @@ export const ProLicensePanel: Component = () => {
             <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
               <p class="font-medium">Upgrade to Pulse Pro</p>
               <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                Unlock AI Patrol, alert analysis, auto-fix, and more.
+                Unlock Pulse Patrol, alert analysis, auto-fix, and more.
               </p>
               <a
                 class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"

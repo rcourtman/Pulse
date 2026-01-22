@@ -302,7 +302,7 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     description: 'Control how often Pulse queries Proxmox for backup tasks and snapshots.',
   },
   'system-ai': {
-    title: 'AI Assistant',
+    title: 'Pulse Assistant',
     description: 'Configure AI-powered infrastructure analysis and remediation suggestions.',
   },
   'system-pro': {
@@ -967,7 +967,7 @@ const Settings: Component<SettingsProps> = (props) => {
           },
           {
             id: 'system-ai',
-            label: 'AI Assistant',
+            label: 'Pulse Assistant',
             icon: Sparkles,
             iconProps: { strokeWidth: 2 },
           },

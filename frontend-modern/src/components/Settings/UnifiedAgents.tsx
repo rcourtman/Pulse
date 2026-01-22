@@ -158,7 +158,7 @@ export const UnifiedAgents: Component = () => {
     const [lookupError, setLookupError] = createSignal<string | null>(null);
     const [lookupLoading, setLookupLoading] = createSignal(false);
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
-    const [enableCommands, setEnableCommands] = createSignal(false); // Enable AI command execution (issue #903)
+    const [enableCommands, setEnableCommands] = createSignal(false); // Enable Pulse command execution (issue #903)
     const [customAgentUrl, setCustomAgentUrl] = createSignal('');
     const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
     const [assignments, setAssignments] = createSignal<AgentProfileAssignment[]>([]);
@@ -955,18 +955,18 @@ export const UnifiedAgents: Component = () => {
                                     />
                                     Skip TLS certificate verification (self-signed certs; not recommended)
                                 </label>
-                                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Allow AI Patrol to execute diagnostic and fix commands on this agent (requires Pulse Pro)">
+                                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (requires Pulse Pro)">
                                     <input
                                         type="checkbox"
                                         checked={enableCommands()}
                                         onChange={(e) => setEnableCommands(e.currentTarget.checked)}
                                         class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
                                     />
-                                    Enable AI command execution (for AI auto-fix)
+                                    Enable Pulse command execution (for AI auto-fix)
                                 </label>
                                 <Show when={enableCommands()}>
                                     <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
-                                        <span class="font-medium">AI commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse AI features.
+                                        <span class="font-medium">Pulse commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse AI features.
                                     </div>
                                 </Show>
                                 <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
@@ -1288,7 +1288,7 @@ export const UnifiedAgents: Component = () => {
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Type</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Scope</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">AI Commands</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Pulse Cmds</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Last Seen</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Version</th>
                                 <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>

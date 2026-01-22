@@ -232,7 +232,7 @@ export const AICostDashboard: Component = () => {
             </svg>
           </div>
           <SectionHeader
-            title="AI Cost & Usage"
+            title="Pulse Cost & Usage"
             description="Token usage and estimated spend across providers"
             size="sm"
             class="flex-1"

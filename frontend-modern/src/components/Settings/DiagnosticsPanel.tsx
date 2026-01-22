@@ -99,6 +99,20 @@ interface AlertsDiagnostic {
     notes?: string[];
 }
 
+interface MetricsStoreDiagnostic {
+    enabled: boolean;
+    status: 'healthy' | 'buffering' | 'empty' | 'unavailable';
+    dbSize?: number;
+    rawCount?: number;
+    minuteCount?: number;
+    hourlyCount?: number;
+    dailyCount?: number;
+    totalPoints?: number;
+    bufferSize?: number;
+    notes?: string[];
+    error?: string;
+}
+
 interface AIChatDiagnostic {
     enabled: boolean;
     running: boolean;
@@ -118,6 +132,7 @@ interface DiagnosticsData {
     nodes: DiagnosticsNode[];
     pbs: DiagnosticsPBS[];
     system: SystemDiagnostic;
+    metricsStore?: MetricsStoreDiagnostic | null;
     apiTokens?: APITokenDiagnostic | null;
     dockerAgents?: DockerAgentDiagnostic | null;
     alerts?: AlertsDiagnostic | null;
@@ -285,6 +300,8 @@ export const DiagnosticsPanel: Component = () => {
         // Check for errors
         if (data.errors?.length > 0) issues.push('errors');
 
+        // Check metrics store health
+        if (data.metricsStore && data.metricsStore.status === 'unavailable') issues.push('metrics');
 
         // Check alerts config
         if (data.alerts?.legacyThresholdsDetected || data.alerts?.missingCooldown) issues.push('alerts');
@@ -498,6 +515,61 @@ export const DiagnosticsPanel: Component = () => {
 
                 {/* Detailed Status Cards */}
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Metrics Store */}
+                    <Show when={diagnosticsData()?.metricsStore}>
+                        <Card padding="md">
+                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
+                                <div class="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                                    <Database class="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Metrics Store</h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">History persistence health</p>
+                                </div>
+                                <div class="ml-auto">
+                                    <StatusBadge
+                                        status={
+                                            diagnosticsData()?.metricsStore?.status === 'healthy'
+                                                ? 'online'
+                                                : diagnosticsData()?.metricsStore?.status === 'buffering'
+                                                    ? 'warning'
+                                                    : diagnosticsData()?.metricsStore?.status === 'empty'
+                                                        ? 'warning'
+                                                        : 'offline'
+                                        }
+                                        label={diagnosticsData()?.metricsStore?.status || 'unknown'}
+                                    />
+                                </div>
+                            </div>
+                            <div class="space-y-2 text-xs">
+                                <MetricRow label="Enabled" value={diagnosticsData()?.metricsStore?.enabled ? 'Yes' : 'No'} />
+                                <MetricRow label="DB Size" value={`${Math.round((diagnosticsData()?.metricsStore?.dbSize ?? 0) / (1024 * 1024))} MB`} />
+                                <MetricRow label="Total Points" value={diagnosticsData()?.metricsStore?.totalPoints ?? 0} />
+                                <MetricRow label="Raw Points" value={diagnosticsData()?.metricsStore?.rawCount ?? 0} />
+                                <MetricRow label="Minute Points" value={diagnosticsData()?.metricsStore?.minuteCount ?? 0} />
+                                <MetricRow label="Hourly Points" value={diagnosticsData()?.metricsStore?.hourlyCount ?? 0} />
+                                <MetricRow label="Daily Points" value={diagnosticsData()?.metricsStore?.dailyCount ?? 0} />
+                                <MetricRow label="Buffer Size" value={diagnosticsData()?.metricsStore?.bufferSize ?? 0} />
+                            </div>
+                            <Show when={(diagnosticsData()?.metricsStore?.notes?.length || 0) > 0}>
+                                <div class="mt-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-2">
+                                    <div class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+                                        <AlertTriangle class="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                        <div class="space-y-1">
+                                            <For each={diagnosticsData()?.metricsStore?.notes || []}>
+                                                {(note) => <div>{note}</div>}
+                                            </For>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Show>
+                            <Show when={diagnosticsData()?.metricsStore?.error}>
+                                <div class="mt-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-2 text-xs text-red-700 dark:text-red-300">
+                                    {diagnosticsData()?.metricsStore?.error}
+                                </div>
+                            </Show>
+                        </Card>
+                    </Show>
 
                     {/* API Tokens */}
                     <Show when={diagnosticsData()?.apiTokens}>
@@ -611,7 +683,7 @@ export const DiagnosticsPanel: Component = () => {
                                     <Sparkles class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">AI Assistant</h4>
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Pulse Assistant</h4>
                                     <p class="text-xs text-gray-500 dark:text-gray-400">Pulse AI Service</p>
                                 </div>
                                 <div class="ml-auto">

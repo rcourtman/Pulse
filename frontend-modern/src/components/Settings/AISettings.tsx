@@ -23,6 +23,18 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   ollama: 'Ollama',
 };
 
+type ControlLevel = 'read_only' | 'controlled' | 'autonomous';
+
+const normalizeControlLevel = (value?: string): ControlLevel => {
+  if (value === 'controlled' || value === 'autonomous' || value === 'read_only') {
+    return value;
+  }
+  if (value === 'suggest') {
+    return 'controlled';
+  }
+  return 'read_only';
+};
+
 // Parse provider from model ID (format: "provider:model-name")
 function getProviderFromModelId(modelId: string): string {
   const colonIndex = modelId.indexOf(':');
@@ -152,7 +164,7 @@ export const AISettings: Component = () => {
     // Request timeout (seconds) - for slow Ollama hardware
     requestTimeoutSeconds: 300,
     // Infrastructure control settings
-    controlLevel: 'read_only' as 'read_only' | 'suggest' | 'controlled' | 'autonomous',
+    controlLevel: 'read_only' as ControlLevel,
     protectedGuests: '' as string, // Comma-separated VMIDs/names
   });
 
@@ -213,7 +225,7 @@ export const AISettings: Component = () => {
           ? String(data.cost_budget_usd_30d)
           : '',
       requestTimeoutSeconds: data.request_timeout_seconds ?? 300,
-      controlLevel: (data.control_level as 'read_only' | 'suggest' | 'controlled' | 'autonomous') || 'read_only',
+      controlLevel: normalizeControlLevel(data.control_level),
       protectedGuests: Array.isArray(data.protected_guests) ? data.protected_guests.join(', ') : '',
     });
 
@@ -708,7 +720,7 @@ export const AISettings: Component = () => {
               </svg>
             </div>
             <SectionHeader
-              title="AI Assistant"
+              title="Pulse Assistant"
               description="Configure AI-powered infrastructure analysis"
               size="sm"
               class="flex-1"
@@ -734,7 +746,7 @@ export const AISettings: Component = () => {
                     try {
                       const updated = await AIAPI.updateSettings({ enabled: newValue });
                       setSettings(updated);
-                      notificationStore.success(newValue ? 'AI Assistant enabled' : 'AI Assistant disabled');
+                      notificationStore.success(newValue ? 'Pulse Assistant enabled' : 'Pulse Assistant disabled');
                     } catch (error) {
                       // Revert on failure
                       setForm('enabled', !newValue);
@@ -1327,7 +1339,7 @@ export const AISettings: Component = () => {
                 </div>
               </div>
 
-              {/* AI Patrol & Efficiency Settings - Collapsible */}
+              {/* Pulse Patrol & Efficiency Settings - Collapsible */}
               <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                 <button
                   type="button"
@@ -1338,7 +1350,7 @@ export const AISettings: Component = () => {
                     <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">AI Patrol Settings</span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Pulse Patrol Settings</span>
                     {/* Summary badges */}
                     <Show when={form.patrolIntervalMinutes > 0}>
                       <span class="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
@@ -1564,21 +1576,20 @@ export const AISettings: Component = () => {
                 💡 Increase for slow Ollama hardware (default: 300s / 5 min)
               </p>
 
-              {/* AI Permission Level */}
+              {/* Pulse Permission Level */}
               <div class={`space-y-3 p-4 rounded-lg border ${form.controlLevel === 'autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20' : 'border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20'}`}>
                 <div class="flex items-center gap-2">
                   <svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
-                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">AI Permission Level</span>
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Pulse Permission Level</span>
                   <Show when={form.controlLevel !== 'read_only'}>
-                    <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                      form.controlLevel === 'autonomous'
+                    <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${form.controlLevel === 'autonomous'
                         ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
                         : form.controlLevel === 'controlled'
-                        ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
-                        : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                    }`}>
+                          ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
+                          : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                      }`}>
                       {form.controlLevel}
                     </span>
                   </Show>
@@ -1589,19 +1600,17 @@ export const AISettings: Component = () => {
                   <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-28 flex-shrink-0">Permission</label>
                   <select
                     value={form.controlLevel}
-                    onChange={(e) => setForm('controlLevel', e.currentTarget.value as 'read_only' | 'suggest' | 'controlled' | 'autonomous')}
+                    onChange={(e) => setForm('controlLevel', e.currentTarget.value as ControlLevel)}
                     class="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
                     disabled={saving()}
                   >
                     <option value="read_only">Read Only - AI can only observe</option>
-                    <option value="suggest">Suggest - AI suggests commands for you to run</option>
                     <option value="controlled">Controlled - AI executes with your approval</option>
                     <option value="autonomous">Autonomous - AI executes without approval (Pro)</option>
                   </select>
                 </div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 ml-[7.5rem]">
                   {form.controlLevel === 'read_only' && '🔒 AI can only query and observe - no commands or control actions'}
-                  {form.controlLevel === 'suggest' && '💬 AI suggests commands for you to copy/paste and run manually'}
                   {form.controlLevel === 'controlled' && '✅ AI can execute commands and control VMs/containers with your approval'}
                   {form.controlLevel === 'autonomous' && '⚠️ AI executes all commands and control actions without asking'}
                 </p>
@@ -1879,9 +1888,9 @@ export const AISettings: Component = () => {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
             {/* Header */}
-            <div class="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-4">
-              <h3 class="text-lg font-semibold text-white">Set Up AI Assistant</h3>
-              <p class="text-purple-100 text-sm mt-1">Choose a provider to get started</p>
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+              <h3 class="text-lg font-semibold text-white">Set Up Pulse Assistant</h3>
+              <p class="text-blue-100 text-sm mt-1">Choose a provider to get started</p>
             </div>
 
             {/* Provider Selection */}
@@ -2057,7 +2066,7 @@ export const AISettings: Component = () => {
                     resetForm(updated);
                     setShowSetupModal(false);
                     setSetupApiKey('');
-                    notificationStore.success('AI Assistant enabled! You can customize settings below.');
+                    notificationStore.success('Pulse Assistant enabled! You can customize settings below.');
                     // Load models after setup
                     loadModels();
                   } catch (error) {

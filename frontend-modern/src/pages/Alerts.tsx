@@ -2294,10 +2294,10 @@ function OverviewTab(props: {
     if (!patrolRequiresLicense()) return '';
     const status = patrolStatus()?.license_status;
     if (status === 'active') {
-      return 'Your license is active but does not include AI Patrol.';
+      return 'Your license is active but does not include Pulse Patrol.';
     }
     if (status === 'expired') {
-      return 'Your license has expired. Renew to restore AI Patrol.';
+      return 'Your license has expired. Renew to restore Pulse Patrol.';
     }
     if (status === 'none') {
       return 'No Pulse Pro license is active.';
@@ -2305,7 +2305,7 @@ function OverviewTab(props: {
     if (status === 'grace_period') {
       return 'Your license is in the grace period.';
     }
-    return 'AI Patrol insights require Pulse Pro.';
+    return 'Pulse Patrol insights require Pulse Pro.';
   });
 
   const loadIncidentTimeline = async (alertId: string, startedAt?: string) => {
@@ -2627,7 +2627,7 @@ function OverviewTab(props: {
 
   const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
 
-  // Sub-tab for switching between AI Insights and Active Alerts
+  // Sub-tab for switching between Pulse Insights and Active Alerts
   type OverviewSubTab = 'ai-insights' | 'active-alerts';
 
   // Read subtab from URL query parameter to allow deep linking
@@ -2752,9 +2752,9 @@ function OverviewTab(props: {
               aria-disabled={props.alertsDisabled()}
               disabled={props.alertsDisabled()}
             >
-              AI Insights
+              Pulse Insights
               <Show when={aiFindings().length > 0}>
-                <span class="ml-2 px-1.5 py-0.5 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">
+                <span class="ml-2 px-1.5 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
                   {aiFindings().length}
                 </span>
               </Show>
@@ -2767,7 +2767,7 @@ function OverviewTab(props: {
           <div class="space-y-3 sm:space-y-4">
             <div class="flex items-center justify-between mb-2">
               <SectionHeader
-                title="AI Insights"
+                title="Pulse Insights"
                 size="md"
                 class="mb-0"
               />
@@ -2787,7 +2787,7 @@ function OverviewTab(props: {
                         }
                       }
                     }}
-                    title="Clear all AI findings"
+                    title="Clear all Pulse insights"
                   >
                     <span class="flex items-center gap-1.5">
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2802,7 +2802,7 @@ function OverviewTab(props: {
                   onClick={() => handleForcePatrol(true)}
                   disabled={forcePatrolLoading() || patrolStatus()?.running || patrolRequiresLicense()}
                   title={patrolRequiresLicense()
-                    ? 'Pulse Pro required to run AI Patrol'
+                    ? 'Pulse Pro required to run Pulse Patrol'
                     : (patrolStatus()?.running ? 'Patrol in progress - see table below' : 'Run a patrol check now')}
                 >
                   <span class="flex items-center gap-1.5">
@@ -2826,10 +2826,10 @@ function OverviewTab(props: {
                   <div class="flex-1">
                     <div class="flex items-center gap-2">
                       <p class="text-sm font-bold text-gray-900 dark:text-white">Pulse Pro Required</p>
-                      <span class="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded">AI Patrol</span>
+                      <span class="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded">Pulse Patrol</span>
                     </div>
                     <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
-                      {patrolLicenseNote() || 'AI Patrol insights require Pulse Pro.'}
+                      {patrolLicenseNote() || 'Pulse Patrol insights require Pulse Pro.'}
                     </p>
                     <a
                       class={`inline-flex items-center gap-1.5 mt-2.5 text-xs font-bold text-amber-600 dark:text-amber-400 transition-colors group/link ${props.alertsDisabled()
@@ -2923,7 +2923,7 @@ function OverviewTab(props: {
                         </svg>
                       </div>
                       <p class="text-sm font-medium text-green-700 dark:text-green-400">All Systems Healthy</p>
-                      <p class="text-xs text-green-600 dark:text-green-500 mt-1">AI patrol found no issues to report</p>
+                      <p class="text-xs text-green-600 dark:text-green-500 mt-1">Pulse Patrol found no issues to report</p>
                     </div>
                   }
                 >
@@ -3889,7 +3889,7 @@ function OverviewTab(props: {
             <SectionHeader title="Active Alerts" size="md" class="mb-3" />
             <Show when={showAIAlertsUpgrade()}>
               <div class="mb-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
-                <p class="font-medium">AI alert investigation requires Pulse Pro</p>
+                <p class="font-medium">Pulse alert investigation requires Pulse Pro</p>
                 <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
                   Upgrade to unlock one-click AI analysis for active alerts.
                 </p>
@@ -6920,7 +6920,7 @@ function HistoryTab() {
         >
           <option value="all">All Sources</option>
           <option value="alerts">Alerts Only</option>
-          <option value="ai">AI Insights Only</option>
+          <option value="ai">Pulse Insights Only</option>
         </select>
 
         <div class="w-full sm:flex-1 sm:max-w-xs">
