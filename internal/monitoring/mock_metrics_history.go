@@ -9,12 +9,13 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
 )
 
 const (
-	defaultMockSeedDuration   = time.Hour
-	defaultMockSampleInterval = 30 * time.Second
+	defaultMockSeedDuration   = 90 * 24 * time.Hour
+	defaultMockSampleInterval = 1 * time.Minute // 1m for detailed recent charts
 )
 
 type mockMetricsSamplerConfig struct {
@@ -30,8 +31,8 @@ func mockMetricsSamplerConfigFromEnv() mockMetricsSamplerConfig {
 	if seedDuration < 5*time.Minute {
 		seedDuration = 5 * time.Minute
 	}
-	if seedDuration > 12*time.Hour {
-		seedDuration = 12 * time.Hour
+	if seedDuration > 90*24*time.Hour {
+		seedDuration = 90 * 24 * time.Hour
 	}
 	if sampleInterval < 5*time.Second {
 		sampleInterval = 5 * time.Second
@@ -138,7 +139,7 @@ func generateSeededSeries(current float64, points int, seed uint64, min, max flo
 	return raw
 }
 
-func seedMockMetricsHistory(mh *MetricsHistory, state models.StateSnapshot, now time.Time, seedDuration, interval time.Duration) {
+func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.StateSnapshot, now time.Time, seedDuration, interval time.Duration) {
 	if mh == nil {
 		return
 	}
@@ -146,76 +147,130 @@ func seedMockMetricsHistory(mh *MetricsHistory, state models.StateSnapshot, now 
 		return
 	}
 
-	points := int(seedDuration/interval) + 1
-	if points < 2 {
-		points = 2
+	// Choose a seed interval that respects the requested sample interval
+	// while keeping the total number of points bounded.
+	seedInterval := interval
+	if seedInterval <= 0 {
+		seedInterval = 30 * time.Second
 	}
+	const maxSeedPoints = 2000
+	if seedDuration/seedInterval > maxSeedPoints {
+		seedInterval = seedDuration / maxSeedPoints
+	}
+	if seedInterval < 30*time.Second {
+		seedInterval = 30 * time.Second
+	}
+	const seedBatchSize = 5000
 
-	start := now.Add(-time.Duration(points-1) * interval)
+	var seedBatch []metrics.WriteMetric
+	queueMetric := func(resourceType, resourceID, metricType string, value float64, ts time.Time) {
+		if ms == nil {
+			return
+		}
+		seedBatch = append(seedBatch,
+			metrics.WriteMetric{
+				ResourceType: resourceType,
+				ResourceID:   resourceID,
+				MetricType:   metricType,
+				Value:        value,
+				Timestamp:    ts,
+				Tier:         metrics.TierHourly,
+			},
+			metrics.WriteMetric{
+				ResourceType: resourceType,
+				ResourceID:   resourceID,
+				MetricType:   metricType,
+				Value:        value,
+				Timestamp:    ts,
+				Tier:         metrics.TierDaily,
+			},
+		)
+
+		if len(seedBatch) >= seedBatchSize {
+			ms.WriteBatchSync(seedBatch)
+			seedBatch = seedBatch[:0]
+		}
+	}
 
 	recordNode := func(node models.Node) {
 		if node.ID == "" {
 			return
 		}
 
-		cpuSeries := generateSeededSeries(node.CPU*100, points, hashSeed("node", node.ID, "cpu"), 5, 85)
-		memSeries := generateSeededSeries(node.Memory.Usage, points, hashSeed("node", node.ID, "memory"), 10, 85)
-		diskSeries := generateSeededSeries(node.Disk.Usage, points, hashSeed("node", node.ID, "disk"), 5, 95)
+		numPoints := int(seedDuration / seedInterval)
+		cpuSeries := generateSeededSeries(node.CPU*100, numPoints, hashSeed("node", node.ID, "cpu"), 5, 85)
+		memSeries := generateSeededSeries(node.Memory.Usage, numPoints, hashSeed("node", node.ID, "memory"), 10, 85)
+		diskSeries := generateSeededSeries(node.Disk.Usage, numPoints, hashSeed("node", node.ID, "disk"), 5, 95)
 
-		for i := 0; i < points; i++ {
-			ts := start.Add(time.Duration(i) * interval)
+		startTime := now.Add(-seedDuration)
+		for i := 0; i < numPoints; i++ {
+			ts := startTime.Add(time.Duration(i) * seedInterval)
 			mh.AddNodeMetric(node.ID, "cpu", cpuSeries[i], ts)
 			mh.AddNodeMetric(node.ID, "memory", memSeries[i], ts)
 			mh.AddNodeMetric(node.ID, "disk", diskSeries[i], ts)
+			queueMetric("node", node.ID, "cpu", cpuSeries[i], ts)
+			queueMetric("node", node.ID, "memory", memSeries[i], ts)
+			queueMetric("node", node.ID, "disk", diskSeries[i], ts)
 		}
 	}
 
-	recordGuest := func(id string, cpuPercent, memPercent, diskPercent float64) {
-		if id == "" {
+	recordGuest := func(metricID, storeType, storeID string, cpuPercent, memPercent, diskPercent float64) {
+		if metricID == "" || storeID == "" {
 			return
 		}
-		cpuSeries := generateSeededSeries(cpuPercent, points, hashSeed("guest", id, "cpu"), 0, 100)
-		memSeries := generateSeededSeries(memPercent, points, hashSeed("guest", id, "memory"), 0, 100)
-		diskSeries := generateSeededSeries(diskPercent, points, hashSeed("guest", id, "disk"), 0, 100)
 
-		for i := 0; i < points; i++ {
-			ts := start.Add(time.Duration(i) * interval)
-			mh.AddGuestMetric(id, "cpu", cpuSeries[i], ts)
-			mh.AddGuestMetric(id, "memory", memSeries[i], ts)
-			mh.AddGuestMetric(id, "disk", diskSeries[i], ts)
+		numPoints := int(seedDuration / seedInterval)
+		cpuSeries := generateSeededSeries(cpuPercent, numPoints, hashSeed(storeType, storeID, "cpu"), 0, 100)
+		memSeries := generateSeededSeries(memPercent, numPoints, hashSeed(storeType, storeID, "memory"), 0, 100)
+		diskSeries := generateSeededSeries(diskPercent, numPoints, hashSeed(storeType, storeID, "disk"), 0, 100)
+
+		startTime := now.Add(-seedDuration)
+		for i := 0; i < numPoints; i++ {
+			ts := startTime.Add(time.Duration(i) * seedInterval)
+			mh.AddGuestMetric(metricID, "cpu", cpuSeries[i], ts)
+			mh.AddGuestMetric(metricID, "memory", memSeries[i], ts)
+			mh.AddGuestMetric(metricID, "disk", diskSeries[i], ts)
+			queueMetric(storeType, storeID, "cpu", cpuSeries[i], ts)
+			queueMetric(storeType, storeID, "memory", memSeries[i], ts)
+			queueMetric(storeType, storeID, "disk", diskSeries[i], ts)
 		}
 	}
 
 	for _, node := range state.Nodes {
 		recordNode(node)
+		time.Sleep(200 * time.Millisecond)
 	}
 
 	for _, vm := range state.VMs {
 		if vm.Status != "running" {
 			continue
 		}
-		recordGuest(vm.ID, vm.CPU*100, vm.Memory.Usage, vm.Disk.Usage)
+		recordGuest(vm.ID, "vm", vm.ID, vm.CPU*100, vm.Memory.Usage, vm.Disk.Usage)
+		time.Sleep(200 * time.Millisecond)
 	}
 
 	for _, ct := range state.Containers {
 		if ct.Status != "running" {
 			continue
 		}
-		recordGuest(ct.ID, ct.CPU*100, ct.Memory.Usage, ct.Disk.Usage)
+		recordGuest(ct.ID, "container", ct.ID, ct.CPU*100, ct.Memory.Usage, ct.Disk.Usage)
+		time.Sleep(200 * time.Millisecond)
 	}
 
 	for _, storage := range state.Storage {
 		if storage.ID == "" {
 			continue
 		}
-		usageSeries := generateSeededSeries(storage.Usage, points, hashSeed("storage", storage.ID, "usage"), 0, 100)
-		for i := 0; i < points; i++ {
-			ts := start.Add(time.Duration(i) * interval)
+		numPoints := int(seedDuration / seedInterval)
+		usageSeries := generateSeededSeries(storage.Usage, numPoints, hashSeed("storage", storage.ID, "usage"), 0, 100)
+
+		startTime := now.Add(-seedDuration)
+		for i := 0; i < numPoints; i++ {
+			ts := startTime.Add(time.Duration(i) * seedInterval)
 			mh.AddStorageMetric(storage.ID, "usage", usageSeries[i], ts)
-			mh.AddStorageMetric(storage.ID, "used", float64(storage.Used), ts)
-			mh.AddStorageMetric(storage.ID, "total", float64(storage.Total), ts)
-			mh.AddStorageMetric(storage.ID, "avail", float64(storage.Free), ts)
+			queueMetric("storage", storage.ID, "usage", usageSeries[i], ts)
 		}
+		time.Sleep(200 * time.Millisecond)
 	}
 
 	for _, host := range state.DockerHosts {
@@ -235,7 +290,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, state models.StateSnapshot, now 
 			diskPercent = float64(usedTotal) / float64(totalTotal) * 100
 		}
 
-		recordGuest("dockerHost:"+host.ID, host.CPUUsage, host.Memory.Usage, diskPercent)
+		recordGuest("dockerHost:"+host.ID, "dockerHost", host.ID, host.CPUUsage, host.Memory.Usage, diskPercent)
 
 		for _, container := range host.Containers {
 			if container.ID == "" || container.State != "running" {
@@ -247,12 +302,16 @@ func seedMockMetricsHistory(mh *MetricsHistory, state models.StateSnapshot, now 
 				containerDisk = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
 				containerDisk = clampFloat(containerDisk, 0, 100)
 			}
-			recordGuest("docker:"+container.ID, container.CPUPercent, container.MemoryPercent, containerDisk)
+			recordGuest("docker:"+container.ID, "docker", container.ID, container.CPUPercent, container.MemoryPercent, containerDisk)
 		}
+	}
+
+	if ms != nil && len(seedBatch) > 0 {
+		ms.WriteBatchSync(seedBatch)
 	}
 }
 
-func recordMockStateToMetricsHistory(mh *MetricsHistory, state models.StateSnapshot, ts time.Time) {
+func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.StateSnapshot, ts time.Time) {
 	if mh == nil {
 		return
 	}
@@ -264,6 +323,12 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, state models.StateSnaps
 		mh.AddNodeMetric(node.ID, "cpu", node.CPU*100, ts)
 		mh.AddNodeMetric(node.ID, "memory", node.Memory.Usage, ts)
 		mh.AddNodeMetric(node.ID, "disk", node.Disk.Usage, ts)
+
+		if ms != nil {
+			ms.Write("node", node.ID, "cpu", node.CPU*100, ts)
+			ms.Write("node", node.ID, "memory", node.Memory.Usage, ts)
+			ms.Write("node", node.ID, "disk", node.Disk.Usage, ts)
+		}
 	}
 
 	for _, vm := range state.VMs {
@@ -277,6 +342,12 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, state models.StateSnaps
 		mh.AddGuestMetric(vm.ID, "diskwrite", float64(vm.DiskWrite), ts)
 		mh.AddGuestMetric(vm.ID, "netin", float64(vm.NetworkIn), ts)
 		mh.AddGuestMetric(vm.ID, "netout", float64(vm.NetworkOut), ts)
+
+		if ms != nil {
+			ms.Write("vm", vm.ID, "cpu", vm.CPU*100, ts)
+			ms.Write("vm", vm.ID, "memory", vm.Memory.Usage, ts)
+			ms.Write("vm", vm.ID, "disk", vm.Disk.Usage, ts)
+		}
 	}
 
 	for _, ct := range state.Containers {
@@ -290,6 +361,12 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, state models.StateSnaps
 		mh.AddGuestMetric(ct.ID, "diskwrite", float64(ct.DiskWrite), ts)
 		mh.AddGuestMetric(ct.ID, "netin", float64(ct.NetworkIn), ts)
 		mh.AddGuestMetric(ct.ID, "netout", float64(ct.NetworkOut), ts)
+
+		if ms != nil {
+			ms.Write("container", ct.ID, "cpu", ct.CPU*100, ts)
+			ms.Write("container", ct.ID, "memory", ct.Memory.Usage, ts)
+			ms.Write("container", ct.ID, "disk", ct.Disk.Usage, ts)
+		}
 	}
 
 	for _, storage := range state.Storage {
@@ -300,6 +377,10 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, state models.StateSnaps
 		mh.AddStorageMetric(storage.ID, "used", float64(storage.Used), ts)
 		mh.AddStorageMetric(storage.ID, "total", float64(storage.Total), ts)
 		mh.AddStorageMetric(storage.ID, "avail", float64(storage.Free), ts)
+
+		if ms != nil {
+			ms.Write("storage", storage.ID, "usage", storage.Usage, ts)
+		}
 	}
 
 	for _, host := range state.DockerHosts {
@@ -324,6 +405,12 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, state models.StateSnaps
 		mh.AddGuestMetric(hostKey, "memory", host.Memory.Usage, ts)
 		mh.AddGuestMetric(hostKey, "disk", diskPercent, ts)
 
+		if ms != nil {
+			ms.Write("dockerHost", host.ID, "cpu", host.CPUUsage, ts)
+			ms.Write("dockerHost", host.ID, "memory", host.Memory.Usage, ts)
+			ms.Write("dockerHost", host.ID, "disk", diskPercent, ts)
+		}
+
 		for _, container := range host.Containers {
 			if container.ID == "" || container.State != "running" {
 				continue
@@ -339,6 +426,12 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, state models.StateSnaps
 			mh.AddGuestMetric(metricKey, "cpu", container.CPUPercent, ts)
 			mh.AddGuestMetric(metricKey, "memory", container.MemoryPercent, ts)
 			mh.AddGuestMetric(metricKey, "disk", containerDisk, ts)
+
+			if ms != nil {
+				ms.Write("docker", container.ID, "cpu", container.CPUPercent, ts)
+				ms.Write("docker", container.ID, "memory", container.MemoryPercent, ts)
+				ms.Write("docker", container.ID, "disk", containerDisk, ts)
+			}
 		}
 	}
 }
@@ -352,6 +445,11 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	}
 
 	cfg := mockMetricsSamplerConfigFromEnv()
+	seedDuration := cfg.SeedDuration
+	if seedDuration < 7*24*time.Hour {
+		seedDuration = 7 * 24 * time.Hour
+	}
+	maxPoints := int(seedDuration / cfg.SampleInterval)
 
 	m.mu.Lock()
 	if m.mockMetricsCancel != nil {
@@ -360,12 +458,17 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	}
 	samplerCtx, cancel := context.WithCancel(ctx)
 	m.mockMetricsCancel = cancel
+	m.metricsHistory = NewMetricsHistory(maxPoints, seedDuration)
 	m.mu.Unlock()
 
-	m.metricsHistory.Reset()
 	state := mock.GetMockState()
-	seedMockMetricsHistory(m.metricsHistory, state, time.Now(), cfg.SeedDuration, cfg.SampleInterval)
-	recordMockStateToMetricsHistory(m.metricsHistory, state, time.Now())
+	seedMockMetricsHistory(m.metricsHistory, m.metricsStore, state, time.Now(), seedDuration, cfg.SampleInterval)
+	recordMockStateToMetricsHistory(m.metricsHistory, m.metricsStore, state, time.Now())
+
+	// Flush metrics store to ensure all seeded data is written to disk
+	if m.metricsStore != nil {
+		m.metricsStore.Flush()
+	}
 
 	m.mockMetricsWg.Add(1)
 	go func() {
@@ -382,13 +485,13 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 				if !mock.IsMockEnabled() {
 					continue
 				}
-				recordMockStateToMetricsHistory(m.metricsHistory, mock.GetMockState(), time.Now())
+				recordMockStateToMetricsHistory(m.metricsHistory, m.metricsStore, mock.GetMockState(), time.Now())
 			}
 		}
 	}()
 
 	log.Info().
-		Dur("seedDuration", cfg.SeedDuration).
+		Dur("seedDuration", seedDuration).
 		Dur("sampleInterval", cfg.SampleInterval).
 		Msg("Mock metrics history sampler started")
 }

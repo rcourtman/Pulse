@@ -73,7 +73,7 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 	}
 
 	mh := NewMetricsHistory(1000, 24*time.Hour)
-	seedMockMetricsHistory(mh, state, now, time.Hour, 30*time.Second)
+	seedMockMetricsHistory(mh, nil, state, now, time.Hour, 30*time.Second)
 
 	nodeCPU := mh.GetNodeMetrics("node-1", "cpu", time.Hour)
 	if len(nodeCPU) < 10 {

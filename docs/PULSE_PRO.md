@@ -70,6 +70,7 @@ Pulse Pro licenses enable specific server-side features. These are enforced at t
 - `agent_profiles`: centralized agent configuration profiles.
 - `advanced_reporting`: infrastructure health report generation (PDF/CSV).
 - `audit_logging`: persistent audit trail and real-time webhook delivery.
+- `long_term_metrics`: 30-day and 90-day metrics history (7-day history is free).
 
 ## Why It Matters (Technical Value)
 

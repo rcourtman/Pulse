@@ -28,7 +28,7 @@ func TestStoreWriteBatchAndQuery(t *testing.T) {
 		{resourceType: "vm", resourceID: "vm-101", metricType: "cpu", value: 2.5, timestamp: ts.Add(1 * time.Second)},
 	})
 
-	points, err := store.Query("vm", "vm-101", "cpu", ts.Add(-1*time.Second), ts.Add(2*time.Second))
+	points, err := store.Query("vm", "vm-101", "cpu", ts.Add(-1*time.Second), ts.Add(2*time.Second), 0)
 	if err != nil {
 		t.Fatalf("Query returned error: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestStoreWriteBatchAndQuery(t *testing.T) {
 		t.Fatalf("unexpected query values: %+v", points)
 	}
 
-	all, err := store.QueryAll("vm", "vm-101", ts.Add(-1*time.Second), ts.Add(2*time.Second))
+	all, err := store.QueryAll("vm", "vm-101", ts.Add(-1*time.Second), ts.Add(2*time.Second), 0)
 	if err != nil {
 		t.Fatalf("QueryAll returned error: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestStoreWriteFlushesBuffer(t *testing.T) {
 
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		points, err := store.Query("vm", "vm-101", "cpu", ts.Add(-time.Second), ts.Add(time.Second))
+		points, err := store.Query("vm", "vm-101", "cpu", ts.Add(-time.Second), ts.Add(time.Second), 0)
 		if err == nil && len(points) == 1 {
 			return
 		}
@@ -228,4 +228,35 @@ func TestStoreWriteFlushesBuffer(t *testing.T) {
 	}
 
 	t.Fatal("expected buffered metric to flush to database")
+}
+
+func TestStoreQueryDownsampling(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(DefaultConfig(dir))
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	start := time.Unix(1000, 0)
+	for i := 0; i < 10; i++ {
+		store.writeBatch([]bufferedMetric{
+			{resourceType: "vm", resourceID: "v1", metricType: "cpu", value: float64(i * 10), timestamp: start.Add(time.Duration(i) * time.Minute)},
+		})
+	}
+
+	// Query with 5m step
+	points, err := store.Query("vm", "v1", "cpu", start.Add(-1*time.Hour), start.Add(1*time.Hour), 300)
+	if err != nil {
+		t.Fatalf("Query downsampled failed: %v", err)
+	}
+
+	// 10 minutes of data at 1m resolution (10 points)
+	// Bucketed by 5m (300s):
+	// Buckets: [1000-1300), [1300-1600), [1600-1900)
+	// Points at: 1000, 1060, 1120, 1180, 1240 (5 points) -> Bucket 1000
+	// Points at: 1300, 1360, 1420, 1480, 1540 (5 points) -> Bucket 1300
+	if len(points) != 2 {
+		t.Fatalf("expected 2 bucketed points, got %d", len(points))
+	}
 }

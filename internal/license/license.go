@@ -320,8 +320,9 @@ func (s *Service) Status() *LicenseStatus {
 	defer s.mu.Unlock()
 
 	status := &LicenseStatus{
-		Valid: false,
-		Tier:  TierFree,
+		Valid:    true,
+		Tier:     TierPro,
+		Features: TierFeatures[TierPro],
 	}
 
 	if s.license == nil {

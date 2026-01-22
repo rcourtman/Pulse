@@ -22,6 +22,7 @@ const (
 	FeatureSSO               = "sso"                // OIDC/SSO authentication (Basic)
 	FeatureAdvancedSSO       = "advanced_sso"       // SAML, Multi-provider, Role Mapping
 	FeatureAdvancedReporting = "advanced_reporting" // PDF/CSV reporting engine
+	FeatureLongTermMetrics   = "long_term_metrics"  // 90-day historical metrics (SQLite)
 
 	// MSP/Enterprise tier features (for volume deals)
 	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
@@ -61,6 +62,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureRBAC,
 		FeatureAuditLogging,
 		FeatureAdvancedReporting,
+		FeatureLongTermMetrics,
 	},
 	TierProAnnual: {
 		FeatureAIPatrol,
@@ -74,6 +76,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureRBAC,
 		FeatureAuditLogging,
 		FeatureAdvancedReporting,
+		FeatureLongTermMetrics,
 	},
 	TierLifetime: {
 		FeatureAIPatrol,
@@ -87,6 +90,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureRBAC,
 		FeatureAuditLogging,
 		FeatureAdvancedReporting,
+		FeatureLongTermMetrics,
 	},
 	TierMSP: {
 		FeatureAIPatrol,
@@ -101,6 +105,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureRBAC,
 		FeatureAuditLogging,
 		FeatureAdvancedReporting,
+		FeatureLongTermMetrics,
 		// Note: FeatureMultiUser, FeatureWhiteLabel, FeatureMultiTenant
 		// are on the roadmap but NOT included until implemented
 	},
@@ -120,6 +125,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAdvancedSSO,
 		FeatureRBAC,
 		FeatureAdvancedReporting,
+		FeatureLongTermMetrics,
 	},
 }
 
@@ -190,6 +196,8 @@ func GetFeatureDisplayName(feature string) string {
 		return "Advanced SSO (SAML/Multi-Provider)"
 	case FeatureAdvancedReporting:
 		return "Advanced Infrastructure Reporting (PDF/CSV)"
+	case FeatureLongTermMetrics:
+		return "90-Day Metric History"
 	default:
 		return feature
 	}

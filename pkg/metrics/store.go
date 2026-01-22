@@ -63,6 +63,17 @@ type bufferedMetric struct {
 	metricType   string
 	value        float64
 	timestamp    time.Time
+	tier         Tier
+}
+
+// WriteMetric represents a metric sample to be written synchronously.
+type WriteMetric struct {
+	ResourceType string
+	ResourceID   string
+	MetricType   string
+	Value        float64
+	Timestamp    time.Time
+	Tier         Tier
 }
 
 // Store provides persistent metrics storage
@@ -75,6 +86,7 @@ type Store struct {
 	buffer   []bufferedMetric
 
 	// Background workers
+	writeCh  chan []bufferedMetric
 	stopCh   chan struct{}
 	doneCh   chan struct{}
 	stopOnce sync.Once
@@ -88,11 +100,15 @@ func NewStore(config StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("failed to create metrics directory: %w", err)
 	}
 
-	// Open database with WAL mode for better concurrent access
-	db, err := sql.Open("sqlite", config.DBPath+"?_journal_mode=WAL&_busy_timeout=5000")
+	// Open database
+	db, err := sql.Open("sqlite", config.DBPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open metrics database: %w", err)
 	}
+
+	// Set busy timeout and WAL mode explicitly
+	_, _ = db.Exec("PRAGMA busy_timeout = 5000")
+	_, _ = db.Exec("PRAGMA journal_mode = WAL")
 
 	// Configure connection pool (SQLite works best with single writer)
 	db.SetMaxOpenConns(1)
@@ -100,11 +116,12 @@ func NewStore(config StoreConfig) (*Store, error) {
 	db.SetConnMaxLifetime(0)
 
 	store := &Store{
-		db:     db,
-		config: config,
-		buffer: make([]bufferedMetric, 0, config.WriteBufferSize),
-		stopCh: make(chan struct{}),
-		doneCh: make(chan struct{}),
+		db:      db,
+		config:  config,
+		buffer:  make([]bufferedMetric, 0, config.WriteBufferSize),
+		writeCh: make(chan []bufferedMetric, 100), // Buffer for write batches
+		stopCh:  make(chan struct{}),
+		doneCh:  make(chan struct{}),
 	}
 
 	// Initialize schema
@@ -148,6 +165,10 @@ func (s *Store) initSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_metrics_tier_time 
 		ON metrics(tier, timestamp);
 
+		-- Covering index for Unified History (QueryAll) performance
+		CREATE INDEX IF NOT EXISTS idx_metrics_query_all
+		ON metrics(resource_type, resource_id, tier, timestamp, metric_type);
+
 		-- Metadata table for tracking rollup state
 		CREATE TABLE IF NOT EXISTS metrics_meta (
 			key TEXT PRIMARY KEY,
@@ -164,8 +185,13 @@ func (s *Store) initSchema() error {
 	return nil
 }
 
-// Write adds a metric to the write buffer
+// Write adds a metric to the write buffer with the 'raw' tier by default
 func (s *Store) Write(resourceType, resourceID, metricType string, value float64, timestamp time.Time) {
+	s.WriteWithTier(resourceType, resourceID, metricType, value, timestamp, TierRaw)
+}
+
+// WriteWithTier adds a metric to the write buffer with a specific tier
+func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value float64, timestamp time.Time, tier Tier) {
 	s.bufferMu.Lock()
 	defer s.bufferMu.Unlock()
 
@@ -175,12 +201,34 @@ func (s *Store) Write(resourceType, resourceID, metricType string, value float64
 		metricType:   metricType,
 		value:        value,
 		timestamp:    timestamp,
+		tier:         tier,
 	})
 
 	// Flush if buffer is full
 	if len(s.buffer) >= s.config.WriteBufferSize {
 		s.flushLocked()
 	}
+}
+
+// WriteBatchSync writes metrics directly to the database without buffering.
+func (s *Store) WriteBatchSync(metrics []WriteMetric) {
+	if len(metrics) == 0 {
+		return
+	}
+
+	batch := make([]bufferedMetric, len(metrics))
+	for i, metric := range metrics {
+		batch[i] = bufferedMetric{
+			resourceType: metric.ResourceType,
+			resourceID:   metric.ResourceID,
+			metricType:   metric.MetricType,
+			value:        metric.Value,
+			timestamp:    metric.Timestamp,
+			tier:         metric.Tier,
+		}
+	}
+
+	s.writeBatch(batch)
 }
 
 // flush writes buffered metrics to the database (caller must hold bufferMu)
@@ -194,8 +242,12 @@ func (s *Store) flushLocked() {
 	copy(toWrite, s.buffer)
 	s.buffer = s.buffer[:0]
 
-	// Write in background to not block callers
-	go s.writeBatch(toWrite)
+	// Send to serialized write channel
+	select {
+	case s.writeCh <- toWrite:
+	default:
+		log.Warn().Msg("Metrics write channel full, dropping batch")
+	}
 }
 
 // writeBatch writes a batch of metrics to the database
@@ -204,15 +256,26 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 		return
 	}
 
-	tx, err := s.db.Begin()
-	if err != nil {
+	var tx *sql.Tx
+	var err error
+
+	// Retry on SQLITE_BUSY with exponential backoff
+	for i := 0; i < 5; i++ {
+		tx, err = s.db.Begin()
+		if err == nil {
+			break
+		}
+		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
+			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+			continue
+		}
 		log.Error().Err(err).Msg("Failed to begin metrics transaction")
 		return
 	}
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier)
-		VALUES (?, ?, ?, ?, ?, 'raw')
+		VALUES (?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -222,7 +285,7 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 	defer stmt.Close()
 
 	for _, m := range metrics {
-		_, err := stmt.Exec(m.resourceType, m.resourceID, m.metricType, m.value, m.timestamp.Unix())
+		_, err := stmt.Exec(m.resourceType, m.resourceID, m.metricType, m.value, m.timestamp.Unix(), string(m.tier))
 		if err != nil {
 			log.Warn().Err(err).
 				Str("resource", m.resourceID).
@@ -239,19 +302,53 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 	log.Debug().Int("count", len(metrics)).Msg("Wrote metrics batch")
 }
 
-// Query retrieves metrics for a resource within a time range
-func (s *Store) Query(resourceType, resourceID, metricType string, start, end time.Time) ([]MetricPoint, error) {
+// Query retrieves metrics for a resource within a time range, with optional downsampling
+func (s *Store) Query(resourceType, resourceID, metricType string, start, end time.Time, stepSecs int64) ([]MetricPoint, error) {
 	// Select appropriate tier based on time range
 	tier := s.selectTier(end.Sub(start))
 
-	rows, err := s.db.Query(`
+	var rows *sql.Rows
+	var err error
+
+	sqlQuery := `
 		SELECT timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
 		FROM metrics
 		WHERE resource_type = ? AND resource_id = ? AND metric_type = ? AND tier = ?
 		AND timestamp >= ? AND timestamp <= ?
 		ORDER BY timestamp ASC
-	`, resourceType, resourceID, metricType, string(tier), start.Unix(), end.Unix())
-	if err != nil {
+	`
+	queryParams := []interface{}{resourceType, resourceID, metricType, string(tier), start.Unix(), end.Unix()}
+
+	if stepSecs > 1 {
+		sqlQuery = `
+			SELECT 
+				(timestamp / ?) * ? as bucket_ts, 
+				AVG(value), 
+				MIN(COALESCE(min_value, value)), 
+				MAX(COALESCE(max_value, value))
+			FROM metrics
+			WHERE resource_type = ? AND resource_id = ? AND metric_type = ? AND tier = ?
+			AND timestamp >= ? AND timestamp <= ?
+			GROUP BY bucket_ts
+			ORDER BY bucket_ts ASC
+		`
+		queryParams = []interface{}{
+			stepSecs, stepSecs,
+			resourceType, resourceID, metricType, string(tier), start.Unix(), end.Unix(),
+		}
+	}
+
+	// Retry on SQLITE_BUSY
+	for i := 0; i < 5; i++ {
+		rows, err = s.db.Query(sqlQuery, queryParams...)
+
+		if err == nil {
+			break
+		}
+		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
+			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+			continue
+		}
 		return nil, fmt.Errorf("failed to query metrics: %w", err)
 	}
 	defer rows.Close()
@@ -271,18 +368,53 @@ func (s *Store) Query(resourceType, resourceID, metricType string, start, end ti
 	return points, rows.Err()
 }
 
-// QueryAll retrieves all metric types for a resource within a time range
-func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time) (map[string][]MetricPoint, error) {
+// QueryAll retrieves all metric types for a resource within a time range, with optional downsampling
+func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time, stepSecs int64) (map[string][]MetricPoint, error) {
 	tier := s.selectTier(end.Sub(start))
 
-	rows, err := s.db.Query(`
+	var rows *sql.Rows
+	var err error
+
+	sqlQuery := `
 		SELECT metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
 		FROM metrics
 		WHERE resource_type = ? AND resource_id = ? AND tier = ?
 		AND timestamp >= ? AND timestamp <= ?
 		ORDER BY metric_type, timestamp ASC
-	`, resourceType, resourceID, string(tier), start.Unix(), end.Unix())
-	if err != nil {
+	`
+	queryParams := []interface{}{resourceType, resourceID, string(tier), start.Unix(), end.Unix()}
+
+	if stepSecs > 1 {
+		sqlQuery = `
+			SELECT 
+				metric_type,
+				(timestamp / ?) * ? + (? / 2) as bucket_ts, 
+				AVG(value), 
+				MIN(COALESCE(min_value, value)), 
+				MAX(COALESCE(max_value, value))
+			FROM metrics
+			WHERE resource_type = ? AND resource_id = ? AND tier = ?
+			AND timestamp >= ? AND timestamp <= ?
+			GROUP BY metric_type, bucket_ts
+			ORDER BY metric_type, bucket_ts ASC
+		`
+		queryParams = []interface{}{
+			stepSecs, stepSecs, stepSecs,
+			resourceType, resourceID, string(tier), start.Unix(), end.Unix(),
+		}
+	}
+
+	// Retry on SQLITE_BUSY
+	for i := 0; i < 5; i++ {
+		rows, err = s.db.Query(sqlQuery, queryParams...)
+
+		if err == nil {
+			break
+		}
+		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
+			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+			continue
+		}
 		return nil, fmt.Errorf("failed to query all metrics: %w", err)
 	}
 	defer rows.Close()
@@ -304,13 +436,24 @@ func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time) 
 }
 
 // selectTier chooses the appropriate data tier based on time range
+// Note: Tier selection uses fixed thresholds to ensure queries use tiers with complete data:
+// - Raw: up to 2 hours (high-resolution real-time data)
+// - Minute: up to 6 hours (recent detailed data)
+// - Hourly: up to 7 days (medium-term with mock/seeded data coverage)
+// - Daily: beyond 7 days (long-term historical data)
 func (s *Store) selectTier(duration time.Duration) Tier {
+	const (
+		rawThreshold    = 2 * time.Hour
+		minuteThreshold = 6 * time.Hour // 24h queries use hourly tier which has complete historical data
+		hourlyThreshold = 7 * 24 * time.Hour
+	)
+
 	switch {
-	case duration <= s.config.RetentionRaw:
+	case duration <= rawThreshold:
 		return TierRaw
-	case duration <= s.config.RetentionMinute:
+	case duration <= minuteThreshold:
 		return TierMinute
-	case duration <= s.config.RetentionHourly:
+	case duration <= hourlyThreshold:
 		return TierHourly
 	default:
 		return TierDaily
@@ -334,7 +477,15 @@ func (s *Store) backgroundWorker() {
 		case <-s.stopCh:
 			// Final flush before stopping
 			s.Flush()
+			// Process remaining writes
+			close(s.writeCh)
+			for batch := range s.writeCh {
+				s.writeBatch(batch)
+			}
 			return
+
+		case batch := <-s.writeCh:
+			s.writeBatch(batch)
 
 		case <-flushTicker.C:
 			s.Flush()
@@ -500,6 +651,12 @@ func (s *Store) runRetention() {
 			Dur("duration", time.Since(start)).
 			Msg("Metrics retention cleanup completed")
 	}
+}
+
+// SetMaxOpenConns sets the maximum number of open connections to the database.
+func (s *Store) SetMaxOpenConns(n int) {
+	s.db.SetMaxOpenConns(n)
+	s.db.SetMaxIdleConns(n)
 }
 
 // Close shuts down the store gracefully
