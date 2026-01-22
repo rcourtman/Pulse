@@ -3,7 +3,7 @@
 This `frontend-modern` directory is **AUTO-GENERATED** during builds.
 
 ## The REAL frontend location is
-### `/opt/pulse/frontend-modern`
+### `${PULSE_REPOS_DIR}/pulse/frontend-modern`
 
 ## Why does this exist?
 - Go's `embed` directive cannot access files outside the module
@@ -15,7 +15,7 @@ This `frontend-modern` directory is **AUTO-GENERATED** during builds.
 - The Makefile deletes and recreates this directory
 
 ## How to edit frontend code
-1. Edit files in `/opt/pulse/frontend-modern/src/`
+1. Edit files in `${PULSE_REPOS_DIR}/pulse/frontend-modern/src/`
 2. The dev server (port 7655) will hot-reload
 3. When building for production, the Makefile copies it here
 

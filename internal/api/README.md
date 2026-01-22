@@ -11,7 +11,7 @@ The `frontend-modern/` subdirectory that appears here is:
 - **REQUIRED BY GO** - The embed directive needs it here
 
 ### Frontend Development Location
-👉 **Edit frontend files at: `/opt/pulse/frontend-modern/src/`**
+👉 **Edit frontend files at: `${PULSE_REPOS_DIR}/pulse/frontend-modern/src/`**
 
 ### Why This Structure?
 Go's `//go:embed` directive has limitations:

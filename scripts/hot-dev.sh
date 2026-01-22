@@ -15,7 +15,7 @@
 #   FRONTEND_DEV_PORT=5173       Frontend dev server port (default: 5173)
 #
 # Pro Features Mode:
-#   When /opt/pulse-enterprise exists and HOT_DEV_USE_PRO is not "false",
+#   When pulse-enterprise repo exists and HOT_DEV_USE_PRO is not "false",
 #   the script builds the Pro binary which includes:
 #   - SQLite-based persistent audit logging
 #   - RBAC (Role-Based Access Control)
@@ -130,7 +130,14 @@ ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://localhost:${FRONTEND_DEV_PORT:-7655},
 ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://localhost:5173,http://127.0.0.1:5173"
 
 # Detect and add all system IPs (V4)
-for ip in $(hostname -I); do
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    # macOS: get IPs from ifconfig
+    ALL_IPS=$(ifconfig 2>/dev/null | grep "inet " | awk '{print $2}' | grep -v "^127\.")
+else
+    # Linux: use hostname -I
+    ALL_IPS=$(hostname -I 2>/dev/null || echo "")
+fi
+for ip in $ALL_IPS; do
     if [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         if [[ "${ip}" != "127.0.0.1" ]]; then
             ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://${ip}:${FRONTEND_DEV_PORT:-7655}"
@@ -261,7 +268,9 @@ mkdir -p internal/api/frontend-modern/dist
 touch internal/api/frontend-modern/dist/index.html
 
 # Check if Pro module is available and use it for full audit logging support
-PRO_MODULE_DIR="/opt/pulse-enterprise"
+# Use PULSE_REPOS_DIR env var or default to ~/Development/pulse/repos
+PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-$HOME/Development/pulse/repos}"
+PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
 if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
     log_info "Building Pro binary (includes persistent audit logging)..."
     cd "${PRO_MODULE_DIR}"
@@ -271,10 +280,10 @@ if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; the
         go build -o pulse ./cmd/pulse
     }
     cd "${ROOT_DIR}"
-    # Set up audit directory for Pro features
-    export PULSE_AUDIT_DIR="${PULSE_DATA_DIR:-/etc/pulse}"
-    log_info "Pro audit logging enabled (SQLite storage in ${PULSE_AUDIT_DIR})"
+    # Note: PULSE_AUDIT_DIR is set after PULSE_DATA_DIR is determined below
+    PRO_BUILD_SUCCESS=true
 else
+    PRO_BUILD_SUCCESS=false
     go build -o pulse ./cmd/pulse
 fi
 
@@ -293,6 +302,11 @@ if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
     export PULSE_DATA_DIR="${ROOT_DIR}/tmp/mock-data"
     mkdir -p "$PULSE_DATA_DIR"
     log_info "Mock mode: Using isolated data directory: ${PULSE_DATA_DIR}"
+    # Set audit dir for Pro features (must be after PULSE_DATA_DIR is set)
+    if [[ ${PRO_BUILD_SUCCESS:-false} == "true" ]]; then
+        export PULSE_AUDIT_DIR="${PULSE_DATA_DIR}"
+        log_info "Pro audit logging enabled (SQLite storage in ${PULSE_AUDIT_DIR})"
+    fi
 else
     if [[ -n ${PULSE_DATA_DIR:-} ]]; then
         log_info "Using preconfigured data directory: ${PULSE_DATA_DIR}"
@@ -316,8 +330,9 @@ else
             log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
             log_error "!! Backup used: ${BACKUP_KEY}"
             log_error "!! "
-            log_error "!! To find out what deleted the key, run:"
-            log_error "!!   sudo journalctl -u encryption-key-watcher -n 100"
+            log_error "!! To find out what deleted the key:"
+            log_error "!!   Linux: sudo journalctl -u encryption-key-watcher -n 100"
+            log_error "!!   macOS: check /tmp/pulse-debug.log"
             log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
             echo ""
             cp -f "${BACKUP_KEY}" "${PULSE_DATA_DIR}/.encryption.key"
@@ -362,6 +377,12 @@ else
         else
             log_warn "No encryption key found for ${PULSE_DATA_DIR}. Encrypted config may fail to load."
         fi
+    fi
+
+    # Set audit dir for Pro features (must be after PULSE_DATA_DIR is set)
+    if [[ ${PRO_BUILD_SUCCESS:-false} == "true" ]]; then
+        export PULSE_AUDIT_DIR="${PULSE_DATA_DIR}"
+        log_info "Pro audit logging enabled (SQLite storage in ${PULSE_AUDIT_DIR})"
     fi
 fi
 
@@ -451,7 +472,7 @@ log_info "Starting backend file watcher..."
         if kill -0 "$NEW_PID" 2>/dev/null; then
             log_info "✓ Backend restarted (PID: $NEW_PID)"
         else
-            log_error "✗ Backend failed to start! Check /opt/pulse/hotdev.log"
+            log_error "✗ Backend failed to start! Check /tmp/pulse-debug.log"
         fi
     }
 
@@ -463,7 +484,8 @@ log_info "Starting backend file watcher..."
 
         # Use the same build logic as the initial build
         local build_success=0
-        PRO_MODULE_DIR="/opt/pulse-enterprise"
+        PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-$HOME/Development/pulse/repos}"
+        PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
         if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
             log_info "Building Pro binary..."
             if (cd "${PRO_MODULE_DIR}" && go build -buildvcs=false -o "${ROOT_DIR}/pulse" ./cmd/pulse-enterprise 2>&1 | grep -v "^#"); then

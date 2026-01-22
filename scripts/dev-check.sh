@@ -27,9 +27,9 @@ echo ""
 
 # Check for duplicate Pulse processes (CRITICAL!)
 # Count both installed binary and dev binary patterns
-# Use tr to strip newlines for robustness
-PULSE_COUNT_BIN=$(pgrep -c -f "bin/pulse$" 2>/dev/null | tr -d '\n' || echo 0)
-PULSE_COUNT_DEV=$(pgrep -c -f "^\./pulse$" 2>/dev/null | tr -d '\n' || echo 0)
+# Note: macOS pgrep doesn't support -c, so we use wc -l
+PULSE_COUNT_BIN=$(pgrep -f "bin/pulse$" 2>/dev/null | wc -l | tr -d ' ')
+PULSE_COUNT_DEV=$(pgrep -f "^\./pulse$" 2>/dev/null | wc -l | tr -d ' ')
 PULSE_COUNT=$(( ${PULSE_COUNT_BIN:-0} + ${PULSE_COUNT_DEV:-0} ))
 echo -n "Pulse processes: "
 if [[ $PULSE_COUNT -eq 0 ]]; then
@@ -47,7 +47,7 @@ fi
 echo -n "Pulse backend (port 7655): "
 if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:7655/api/health 2>/dev/null | grep -q "200\|401\|403"; then
     echo -e "${GREEN}✓ Responding${NC}"
-elif systemctl is-active --quiet pulse 2>/dev/null; then
+elif [[ "$(uname -s)" == "Linux" ]] && systemctl is-active --quiet pulse 2>/dev/null; then
     echo -e "${YELLOW}⚠ Service running but not responding${NC}"
 else
     echo -e "${RED}✗ NOT RESPONDING${NC}"
@@ -59,7 +59,7 @@ if curl -s -o /dev/null http://127.0.0.1:5173/ 2>/dev/null; then
     echo -e "${GREEN}✓ Running${NC}"
 else
     echo -e "${RED}✗ NOT RUNNING${NC}"
-    echo "   Fix: cd /opt/pulse/frontend-modern && npm run dev"
+    echo "   Fix: cd \${PULSE_REPOS_DIR:-~/Development/pulse/repos}/pulse/frontend-modern && npm run dev"
 fi
 
 # Check AI status
@@ -74,7 +74,13 @@ fi
 # Show recent errors
 echo ""
 echo "=== Recent Pulse Errors (last 5) ==="
-journalctl -u pulse-dev --no-pager -n 20 2>/dev/null | grep -i "error\|fatal\|panic" | tail -5 || echo "None found"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    # macOS: check the debug log
+    grep -i "error\|fatal\|panic" /tmp/pulse-debug.log 2>/dev/null | tail -5 || echo "None found"
+else
+    # Linux: use journalctl
+    journalctl -u pulse-dev --no-pager -n 20 2>/dev/null | grep -i "error\|fatal\|panic" | tail -5 || echo "None found"
+fi
 
 echo ""
 echo "Done."
