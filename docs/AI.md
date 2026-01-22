@@ -194,6 +194,14 @@ Pulse includes settings that control how "active" AI features are:
 
 If you enable execution features, ensure agent tokens and scopes are appropriately restricted.
 
+### Control Levels
+
+Pulse uses three AI permission levels for infrastructure control:
+
+- **Read-only**: AI can observe and query data only.
+- **Controlled**: AI asks for approval before executing commands or control actions.
+- **Autonomous (Pro)**: AI executes actions without prompting.
+
 ### Advanced Network Restrictions
 
 Pulse blocks AI tool HTTP fetches to loopback and link-local addresses by default. For local development, you can allow loopback targets:
