@@ -3,10 +3,13 @@ package agentbinaries
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -55,6 +58,9 @@ var (
 	httpClient            = &http.Client{Timeout: 2 * time.Minute}
 	downloadURLForVersion = func(version string) string {
 		return fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%[1]s/pulse-%[1]s.tar.gz", version)
+	}
+	checksumURLForVersion = func(version string) string {
+		return downloadURLForVersion(version) + ".sha256"
 	}
 	downloadAndInstallHostAgentBinariesFn = DownloadAndInstallHostAgentBinaries
 	findMissingHostAgentBinariesFn        = findMissingHostAgentBinaries
@@ -182,11 +188,108 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 		return fmt.Errorf("failed to close temporary bundle file: %w", err)
 	}
 
+	checksumURL := checksumURLForVersion(normalizedVersion)
+	if err := verifyHostAgentBundleChecksum(tempFile.Name(), url, checksumURL); err != nil {
+		return err
+	}
+
 	if err := extractHostAgentBinaries(tempFile.Name(), targetDir); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func verifyHostAgentBundleChecksum(bundlePath, bundleURL, checksumURL string) error {
+	checksum, filename, err := downloadHostAgentChecksum(checksumURL)
+	if err != nil {
+		return err
+	}
+
+	expectedName := fileNameFromURL(bundleURL)
+	if filename != "" && expectedName != "" && filename != expectedName {
+		return fmt.Errorf("checksum file does not match bundle name (got %q, expected %q)", filename, expectedName)
+	}
+
+	actual, err := hashFileSHA256(bundlePath)
+	if err != nil {
+		return err
+	}
+
+	if !strings.EqualFold(actual, checksum) {
+		return fmt.Errorf("host agent bundle checksum mismatch")
+	}
+
+	return nil
+}
+
+func downloadHostAgentChecksum(checksumURL string) (string, string, error) {
+	resp, err := httpClient.Get(checksumURL)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to download checksum from %s: %w", checksumURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return "", "", fmt.Errorf("unexpected status %d downloading checksum %s: %s", resp.StatusCode, checksumURL, strings.TrimSpace(string(body)))
+	}
+
+	payload, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read checksum file: %w", err)
+	}
+
+	fields := strings.Fields(string(payload))
+	if len(fields) == 0 {
+		return "", "", fmt.Errorf("checksum file is empty")
+	}
+
+	checksum := strings.ToLower(strings.TrimSpace(fields[0]))
+	if len(checksum) != 64 {
+		return "", "", fmt.Errorf("checksum file has invalid hash")
+	}
+	if _, err := hex.DecodeString(checksum); err != nil {
+		return "", "", fmt.Errorf("checksum file has invalid hash")
+	}
+
+	filename := ""
+	if len(fields) > 1 {
+		filename = path.Base(fields[1])
+	}
+
+	return checksum, filename, nil
+}
+
+func fileNameFromURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(rawURL)
+	if err == nil {
+		if base := path.Base(parsed.Path); base != "" && base != "." {
+			return base
+		}
+	}
+	base := path.Base(rawURL)
+	if idx := strings.IndexAny(base, "?#"); idx != -1 {
+		base = base[:idx]
+	}
+	return base
+}
+
+func hashFileSHA256(path string) (string, error) {
+	file, err := openFileFn(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to open bundle for checksum: %w", err)
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", fmt.Errorf("failed to hash bundle: %w", err)
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func findMissingHostAgentBinaries(binDirs []string) map[string]HostAgentBinary {

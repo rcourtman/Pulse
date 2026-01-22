@@ -4,7 +4,9 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -81,6 +83,7 @@ func saveHostAgentHooks() func() {
 	origDownloadFn := downloadAndInstallHostAgentBinariesFn
 	origFindMissing := findMissingHostAgentBinariesFn
 	origURL := downloadURLForVersion
+	origChecksumURL := checksumURLForVersion
 	origClient := httpClient
 	origMkdirAll := mkdirAllFn
 	origCreateTemp := createTempFn
@@ -98,6 +101,7 @@ func saveHostAgentHooks() func() {
 		downloadAndInstallHostAgentBinariesFn = origDownloadFn
 		findMissingHostAgentBinariesFn = origFindMissing
 		downloadURLForVersion = origURL
+		checksumURLForVersion = origChecksumURL
 		httpClient = origClient
 		mkdirAllFn = origMkdirAll
 		createTempFn = origCreateTemp
@@ -370,8 +374,19 @@ func TestDownloadAndInstallHostAgentBinariesErrors(t *testing.T) {
 		restore := saveHostAgentHooks()
 		t.Cleanup(restore)
 
+		payload := []byte("not a tarball")
+		checksum := sha256.Sum256(payload)
+		checksumLine := fmt.Sprintf("%x  bundle.tar.gz\n", checksum)
+
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte("not a tarball"))
+			switch r.URL.Path {
+			case "/bundle.tar.gz":
+				_, _ = w.Write(payload)
+			case "/bundle.tar.gz.sha256":
+				_, _ = w.Write([]byte(checksumLine))
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
 		}))
 		t.Cleanup(server.Close)
 
@@ -396,9 +411,18 @@ func TestDownloadAndInstallHostAgentBinariesSuccess(t *testing.T) {
 		{name: "bin/pulse-host-agent-linux-amd64", body: []byte("binary"), mode: 0o644},
 		{name: "bin/pulse-host-agent-linux-amd64.exe", typeflag: tar.TypeSymlink, linkname: "pulse-host-agent-linux-amd64"},
 	})
+	checksum := sha256.Sum256(payload)
+	checksumLine := fmt.Sprintf("%x  bundle.tar.gz\n", checksum)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write(payload)
+		switch r.URL.Path {
+		case "/bundle.tar.gz":
+			_, _ = w.Write(payload)
+		case "/bundle.tar.gz.sha256":
+			_, _ = w.Write([]byte(checksumLine))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
 	}))
 	t.Cleanup(server.Close)
 

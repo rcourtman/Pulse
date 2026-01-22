@@ -149,8 +149,9 @@ func TestPollPBSInstance(t *testing.T) {
 				},
 			},
 		},
-		state:            models.NewState(),
-		stalenessTracker: NewStalenessTracker(nil), // Pass nil or mock PollMetrics
+		state:                   models.NewState(),
+		stalenessTracker:        NewStalenessTracker(nil), // Pass nil or mock PollMetrics
+		nodePendingUpdatesCache: make(map[string]pendingUpdatesCache),
 	}
 
 	// Execute polling
@@ -219,7 +220,8 @@ func TestPollPBSBackups(t *testing.T) {
 				{Name: "pbs1", Host: server.URL},
 			},
 		},
-		state: models.NewState(),
+		state:                   models.NewState(),
+		nodePendingUpdatesCache: make(map[string]pendingUpdatesCache),
 		// We need to initialize pbsBackups map in state if it's nil?
 		// NewState() initializes it.
 	}
@@ -249,9 +251,10 @@ func TestPollPBSBackups(t *testing.T) {
 
 func TestMonitor_GettersAndSetters(t *testing.T) {
 	m := &Monitor{
-		config:    &config.Config{},
-		state:     models.NewState(),
-		startTime: time.Now(),
+		config:                  &config.Config{},
+		state:                   models.NewState(),
+		startTime:               time.Now(),
+		nodePendingUpdatesCache: make(map[string]pendingUpdatesCache),
 	}
 
 	// Temperature Monitoring (just ensuring no panic/execution)
@@ -307,7 +310,8 @@ func TestMonitor_GettersAndSetters(t *testing.T) {
 
 func TestMonitor_DiscoveryService(t *testing.T) {
 	m := &Monitor{
-		config: &config.Config{},
+		config:                  &config.Config{},
+		nodePendingUpdatesCache: make(map[string]pendingUpdatesCache),
 	}
 
 	// StartDiscoveryService
@@ -341,9 +345,10 @@ func TestMonitor_TaskWorker(t *testing.T) {
 	execChan := make(chan PollTask, 1)
 
 	m := &Monitor{
-		taskQueue:  queue,
-		executor:   &mockPollExecutor{executed: execChan},
-		pbsClients: map[string]*pbs.Client{"test-instance": {}}, // Dummy client, struct pointer is enough for check
+		taskQueue:               queue,
+		executor:                &mockPollExecutor{executed: execChan},
+		pbsClients:              map[string]*pbs.Client{"test-instance": {}}, // Dummy client, struct pointer is enough for check
+		nodePendingUpdatesCache: make(map[string]pendingUpdatesCache),
 		// scheduler: nil -> will use fallback rescheduling
 	}
 
@@ -448,11 +453,12 @@ func TestMonitor_ResourceUpdate(t *testing.T) {
 
 func TestMonitor_DockerHostManagement(t *testing.T) {
 	m := &Monitor{
-		state:               models.NewState(),
-		removedDockerHosts:  make(map[string]time.Time),
-		dockerTokenBindings: make(map[string]string),
-		dockerCommands:      make(map[string]*dockerHostCommand),
-		dockerCommandIndex:  make(map[string]string),
+		state:                   models.NewState(),
+		removedDockerHosts:      make(map[string]time.Time),
+		dockerTokenBindings:     make(map[string]string),
+		dockerCommands:          make(map[string]*dockerHostCommand),
+		dockerCommandIndex:      make(map[string]string),
+		nodePendingUpdatesCache: make(map[string]pendingUpdatesCache),
 	}
 
 	// Initialize config
@@ -534,6 +540,7 @@ func TestMonitor_HostAgentManagement(t *testing.T) {
 		LinkedNodeID: "node1",
 	}
 	m.state.UpsertHost(host)
+	m.nodePendingUpdatesCache = make(map[string]pendingUpdatesCache)
 
 	// Test UnlinkHostAgent
 	err := m.UnlinkHostAgent("host1")
@@ -603,12 +610,44 @@ func (m *mockPVEClientExtended) GetNodeStatus(ctx context.Context, node string) 
 	}, nil
 }
 
+func (m *mockPVEClientExtended) GetNodeRRDData(ctx context.Context, node string, timeframe string, cf string, ds []string) ([]proxmox.NodeRRDPoint, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetVMs(ctx context.Context, node string) ([]proxmox.VM, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetContainers(ctx context.Context, node string) ([]proxmox.Container, error) {
+	return nil, nil
+}
+
 func (m *mockPVEClientExtended) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) {
 	return []proxmox.Storage{}, nil
 }
 
+func (m *mockPVEClientExtended) GetAllStorage(ctx context.Context) ([]proxmox.Storage, error) {
+	return nil, nil
+}
+
 func (m *mockPVEClientExtended) GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error) {
 	return []proxmox.Disk{}, nil
+}
+
+func (m *mockPVEClientExtended) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetVMSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error) {
+	return nil, nil
 }
 
 func (m *mockPVEClientExtended) GetZFSPoolsWithDetails(ctx context.Context, node string) ([]proxmox.ZFSPoolInfo, error) {
@@ -617,6 +656,50 @@ func (m *mockPVEClientExtended) GetZFSPoolsWithDetails(ctx context.Context, node
 
 func (m *mockPVEClientExtended) GetCephStatus(ctx context.Context) (*proxmox.CephStatus, error) {
 	return nil, fmt.Errorf("ceph not enabled")
+}
+
+func (m *mockPVEClientExtended) GetCephDF(ctx context.Context) (*proxmox.CephDF, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetContainerStatus(ctx context.Context, node string, vmid int) (*proxmox.Container, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetContainerInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.ContainerInterface, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) IsClusterMember(ctx context.Context) (bool, error) {
+	return false, nil
+}
+
+func (m *mockPVEClientExtended) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.VMNetworkInterface, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	return "", nil
+}
+
+func (m *mockPVEClientExtended) GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error) {
+	return nil, nil
+}
+
+func (m *mockPVEClientExtended) GetNodePendingUpdates(ctx context.Context, node string) ([]proxmox.AptPackage, error) {
+	return nil, nil
 }
 
 func (m *mockPVEClientExtended) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) {
@@ -633,7 +716,8 @@ func (m *mockPVEClientExtended) GetReplicationStatus(ctx context.Context) ([]pro
 
 func TestMonitor_PollBackupAndReplication(t *testing.T) {
 	m := &Monitor{
-		state: models.NewState(),
+		state:                   models.NewState(),
+		nodePendingUpdatesCache: make(map[string]pendingUpdatesCache),
 	}
 
 	client := &mockPVEClientExtended{}
@@ -685,6 +769,7 @@ func TestPollPVEInstance(t *testing.T) {
 		authFailures:             make(map[string]int),
 		lastAuthAttempt:          make(map[string]time.Time),
 		pollStatusMap:            make(map[string]*pollStatus),
+		nodePendingUpdatesCache:  make(map[string]pendingUpdatesCache),
 		instanceInfoCache:        make(map[string]*instanceInfo),
 		lastOutcome:              make(map[string]taskOutcome),
 		failureCounts:            make(map[string]int),

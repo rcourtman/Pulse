@@ -131,7 +131,7 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 
 	if req.MetricType != "" {
 		// Query specific metric
-		points, queryErr := e.metricsStore.Query(req.ResourceType, req.ResourceID, req.MetricType, req.Start, req.End)
+		points, queryErr := e.metricsStore.Query(req.ResourceType, req.ResourceID, req.MetricType, req.Start, req.End, 0)
 		if queryErr != nil {
 			return nil, queryErr
 		}
@@ -140,7 +140,7 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 		}
 	} else {
 		// Query all metrics for the resource
-		metricsMap, err = e.metricsStore.QueryAll(req.ResourceType, req.ResourceID, req.Start, req.End)
+		metricsMap, err = e.metricsStore.QueryAll(req.ResourceType, req.ResourceID, req.Start, req.End, 0)
 		if err != nil {
 			return nil, err
 		}

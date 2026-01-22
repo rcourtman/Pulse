@@ -1198,7 +1198,6 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 		tokenRemoved := m.config.RemoveAPIToken(host.TokenID)
 		if tokenRemoved != nil {
 			m.config.SortAPITokens()
-			m.config.APITokenEnabled = m.config.HasAPITokens()
 
 			if m.persistence != nil {
 				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
@@ -1295,7 +1294,6 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		tokenRemoved = m.config.RemoveAPIToken(tokenID)
 		if tokenRemoved != nil {
 			m.config.SortAPITokens()
-			m.config.APITokenEnabled = m.config.HasAPITokens()
 
 			if m.persistence != nil {
 				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
@@ -3432,10 +3430,44 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if cfg.MetricsRetentionDailyDays > 0 {
 		metricsStoreConfig.RetentionDaily = time.Duration(cfg.MetricsRetentionDailyDays) * 24 * time.Hour
 	}
+
+	// In mock mode, extend ALL tier retentions to 90 days to match the seeded
+	// data range. Different query ranges use different tiers, so all need coverage.
+	// Also increase buffer size to handle heavy initial seeding.
+	if mock.IsMockEnabled() {
+		metricsStoreConfig.WriteBufferSize = 2000
+		metricsStoreConfig.RetentionRaw = 90 * 24 * time.Hour
+		metricsStoreConfig.RetentionMinute = 90 * 24 * time.Hour
+		metricsStoreConfig.RetentionHourly = 90 * 24 * time.Hour
+		metricsStoreConfig.RetentionDaily = 90 * 24 * time.Hour
+	}
 	ms, err := metrics.NewStore(metricsStoreConfig)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to initialize persistent metrics store - continuing with in-memory only")
+		log.Error().Err(err).Msg("Failed to initialize persistent metrics store - attempting recovery by clearing DB")
+
+		// Attempt recovery by removing the likely locked/corrupted DB
+		if err := os.Remove(metricsStoreConfig.DBPath); err != nil {
+			log.Error().Err(err).Msg("Failed to remove corrupted metrics DB")
+		} else {
+			// Remove SHM/WAL files too just in case
+			os.Remove(metricsStoreConfig.DBPath + "-shm")
+			os.Remove(metricsStoreConfig.DBPath + "-wal")
+
+			ms, err = metrics.NewStore(metricsStoreConfig)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to initialize persistent metrics store after recovery - continuing with in-memory only")
+			} else {
+				if mock.IsMockEnabled() {
+					ms.SetMaxOpenConns(10)
+				}
+				metricsStore = ms
+				log.Info().Msg("Recovered persistent metrics store by clearing corrupted DB")
+			}
+		}
 	} else {
+		if mock.IsMockEnabled() {
+			ms.SetMaxOpenConns(10)
+		}
 		metricsStore = ms
 		log.Info().
 			Str("path", metricsStoreConfig.DBPath).

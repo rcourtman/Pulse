@@ -132,7 +132,6 @@ func NewHarness(scenario HarnessScenario) *Harness {
 		AdaptivePollingBaseInterval: baseInterval,
 		AdaptivePollingMinInterval:  minInterval,
 		AdaptivePollingMaxInterval:  maxInterval,
-		BackendHost:                 "127.0.0.1",
 		FrontendPort:                7655,
 		PublicURL:                   "http://127.0.0.1",
 	}

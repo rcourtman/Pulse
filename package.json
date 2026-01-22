@@ -9,7 +9,9 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prepare": "husky"
+    "prepare": "husky",
+    "mock:on": "sed -i 's/PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=true/' .env || echo 'PULSE_MOCK_MODE=true' >> .env",
+    "mock:off": "sed -i 's/PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=false/' .env || echo 'PULSE_MOCK_MODE=false' >> .env"
   },
   "repository": {
     "type": "git",

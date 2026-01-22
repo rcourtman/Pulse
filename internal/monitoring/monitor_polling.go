@@ -2382,6 +2382,15 @@ func (m *Monitor) pollPVENode(
 	if effectiveStatus == "online" {
 		now := time.Now()
 		m.mu.RLock()
+		if m.nodePendingUpdatesCache == nil {
+			m.mu.RUnlock()
+			m.mu.Lock()
+			if m.nodePendingUpdatesCache == nil {
+				m.nodePendingUpdatesCache = make(map[string]pendingUpdatesCache)
+			}
+			m.mu.Unlock()
+			m.mu.RLock()
+		}
 		cached, hasCached := m.nodePendingUpdatesCache[nodeID]
 		m.mu.RUnlock()
 

@@ -126,8 +126,9 @@ VERIFIED_BUG_FIXES=$(echo "$VERIFIED_BUG_FIXES" | sed '/^$/d' | head -15)
 echo "Collected diffs from key areas"
 
 # Auto-load API keys from local secrets if not already set
-if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -f "/home/pulse/.secrets/anthropic/api_key" ]; then
-    ANTHROPIC_API_KEY=$(cat /home/pulse/.secrets/anthropic/api_key)
+PULSE_SECRETS_DIR="${PULSE_SECRETS_DIR:-$HOME/Development/pulse/secrets}"
+if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -f "${PULSE_SECRETS_DIR}/anthropic/api_key" ]; then
+    ANTHROPIC_API_KEY=$(cat "${PULSE_SECRETS_DIR}/anthropic/api_key")
     export ANTHROPIC_API_KEY
 fi
 

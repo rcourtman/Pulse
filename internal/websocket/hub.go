@@ -171,12 +171,13 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 
 // Client represents a WebSocket client
 type Client struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	id       string
-	lastPing time.Time
-	closed   atomic.Bool // Set when the client is unregistered; prevents sends to closed channel
+	hub           *Hub
+	conn          *websocket.Conn
+	send          chan []byte
+	id            string
+	lastPing      time.Time
+	closed        atomic.Bool // Set when the client is unregistered; prevents sends to closed channel
+	writeFailures int32       // Consecutive write failures; disconnects after maxWriteFailures
 }
 
 // safeSend attempts to send data to the client's send channel.
@@ -757,6 +758,15 @@ func (c *Client) readPump() {
 
 // writePump handles outgoing messages to the client
 func (c *Client) writePump() {
+	// Maximum consecutive write failures before disconnecting.
+	// This provides graceful degradation for slow clients.
+	const maxWriteFailures = 3
+	// Write deadline for messages. Increased from 10s to 30s to handle
+	// large state payloads on slower connections (e.g., Raspberry Pi, slow networks).
+	const writeDeadline = 30 * time.Second
+	// Ping deadline can be shorter since pings are small
+	const pingDeadline = 10 * time.Second
+
 	ticker := time.NewTicker(54 * time.Second)
 	defer func() {
 		log.Info().Str("client", c.id).Msg("WritePump exiting")
@@ -769,7 +779,7 @@ func (c *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
-			if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+			if err := c.conn.SetWriteDeadline(time.Now().Add(writeDeadline)); err != nil {
 				log.Warn().Err(err).Str("client", c.id).Msg("Failed to set write deadline before message send")
 			}
 			if !ok {
@@ -782,9 +792,28 @@ func (c *Client) writePump() {
 
 			// Send the primary message
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
-				log.Error().Err(err).Str("client", c.id).Msg("Failed to write message")
-				return
+				c.writeFailures++
+				log.Warn().
+					Err(err).
+					Str("client", c.id).
+					Int("msgSize", len(message)).
+					Int32("consecutiveFailures", c.writeFailures).
+					Msg("Failed to write message")
+
+				// Graceful degradation: only disconnect after multiple consecutive failures
+				if c.writeFailures >= maxWriteFailures {
+					log.Error().
+						Str("client", c.id).
+						Int32("failures", c.writeFailures).
+						Msg("Too many consecutive write failures, disconnecting client")
+					return
+				}
+				// Skip this message and continue - don't disconnect immediately
+				continue
 			}
+
+			// Reset failure count on successful write
+			c.writeFailures = 0
 
 			// Send any queued messages
 			n := len(c.send)
@@ -792,8 +821,9 @@ func (c *Client) writePump() {
 				select {
 				case msg := <-c.send:
 					if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-						log.Error().Err(err).Str("client", c.id).Msg("Failed to flush queued message")
-						return
+						log.Warn().Err(err).Str("client", c.id).Int("msgSize", len(msg)).Msg("Failed to flush queued message")
+						// Don't disconnect on queued message failure, just break the flush loop
+						break
 					}
 				default:
 					// No more messages
@@ -801,7 +831,7 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+			if err := c.conn.SetWriteDeadline(time.Now().Add(pingDeadline)); err != nil {
 				log.Warn().Err(err).Str("client", c.id).Msg("Failed to set write deadline for ping")
 			}
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {

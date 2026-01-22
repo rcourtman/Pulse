@@ -241,7 +241,6 @@ func (m *Monitor) RemoveKubernetesCluster(clusterID string) (models.KubernetesCl
 		tokenRemoved := m.config.RemoveAPIToken(cluster.TokenID)
 		if tokenRemoved != nil {
 			m.config.SortAPITokens()
-			m.config.APITokenEnabled = m.config.HasAPITokens()
 
 			if m.persistence != nil {
 				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
