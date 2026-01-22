@@ -598,7 +598,7 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 	// Parse SSE stream
 	reader := resp.Body
 	buf := make([]byte, 4096)
-	var eventData string
+	var pendingData string
 	var toolCalls []ToolCall
 	var currentToolID string
 	var currentToolName string
@@ -607,29 +607,24 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 
 	for {
 		n, err := reader.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("stream read error: %w", err)
-		}
+		if n > 0 {
+			pendingData += string(buf[:n])
+			lines := strings.Split(pendingData, "\n")
+			pendingData = lines[len(lines)-1]
+			lines = lines[:len(lines)-1]
 
-		data := string(buf[:n])
-		lines := strings.Split(data, "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
 
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "event:") {
+					continue
+				}
 
-			if strings.HasPrefix(line, "event:") {
-				// New event type, reset data
-				eventData = ""
-				continue
-			}
+				if !strings.HasPrefix(line, "data:") {
+					continue
+				}
 
-			if strings.HasPrefix(line, "data:") {
-				eventData = strings.TrimPrefix(line, "data:")
-				eventData = strings.TrimSpace(eventData)
-
+				eventData := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 				if eventData == "" {
 					continue
 				}
@@ -724,6 +719,12 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 					return fmt.Errorf("stream error from Anthropic")
 				}
 			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("stream read error: %w", err)
 		}
 	}
 

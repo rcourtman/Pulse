@@ -3,7 +3,14 @@ import type { DockerHost, DockerContainer, DockerService, DockerTask } from '@/t
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
-import { formatBytes, formatPercent, formatUptime, formatRelativeTime, formatAbsoluteTime, getShortImageName } from '@/utils/format';
+import {
+  formatPercent,
+  formatBytes,
+  formatUptime,
+  formatRelativeTime,
+  getShortImageName,
+  formatAbsoluteTime,
+} from '@/utils/format';
 import type { DockerMetadata } from '@/api/dockerMetadata';
 import { DockerMetadataAPI } from '@/api/dockerMetadata';
 import type { DockerHostMetadata } from '@/api/dockerHostMetadata';
@@ -41,7 +48,6 @@ const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
       return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
   }
 };
-
 
 type StatsFilter =
   | { type: 'host-status'; value: string }
@@ -131,9 +137,9 @@ interface DockerColumnDef extends ColumnConfig {
 // - supplementary: Visible on large screens and up (lg: 1024px+)
 // - detailed: Visible on extra large screens and up (xl: 1280px+)
 export const DOCKER_COLUMNS: DockerColumnDef[] = [
-  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource', width: '22%' },
+  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource', width: '15%' },
   { id: 'type', label: 'Type', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'type', width: '70px' },
-  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: '80px', maxWidth: '200px', sortKey: 'image', width: '12%' },
+  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: '80px', maxWidth: '200px', sortKey: 'image', width: '15%' },
   { id: 'status', label: 'Status', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'status', width: '90px' },
   // Metric columns - need fixed width to match progress bar max-width (140px + padding)
   // Note: Disk column removed - Docker API rarely provides this data
@@ -153,6 +159,10 @@ const [dockerEditingValuesVersion, setDockerEditingValuesVersion] = createSignal
 const [dockerPopoverPosition, setDockerPopoverPosition] = createSignal<{ top: number; left: number } | null>(null);
 
 const toLower = (value?: string | null) => value?.toLowerCase() ?? '';
+
+
+
+
 
 const ensureMs = (value?: number | string | null): number | null => {
   if (!value) return null;
@@ -1129,23 +1139,23 @@ const DockerContainerRow: Component<{
                 ariaLabel={containerStatusIndicator().label}
                 size="xs"
               />
-              <div class="flex-1 min-w-0">
+              <div class="flex-1 min-w-0 truncate">
                 <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
                   <span
-                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate min-w-0 flex-1"
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate"
                     title={containerTitle()}
                   >
                     {container.name || container.id}
                   </span>
                   <Show when={podName()}>
                     {(name) => (
-                      <span class="inline-flex items-center gap-0.5 rounded bg-purple-100 px-1 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 flex-shrink-0 max-w-[90px]" title={`Pod: ${name()}`}>
-                        <span class="truncate">{name()}</span>
-                        <Show when={isPodInfra()}>
-                          <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200 ml-1">
-                            infra
-                          </span>
-                        </Show>
+                      <span
+                        class="flex-shrink-0 text-purple-500 dark:text-purple-400 cursor-help"
+                        title={`Pod: ${name()}${isPodInfra() ? ' (Infra)' : ''}`}
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
                       </span>
                     )}
                   </Show>
@@ -1176,14 +1186,13 @@ const DockerContainerRow: Component<{
                   </button>
                   <Show when={props.showHostContext}>
                     <span
-                      class="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0 max-w-[80px]"
+                      class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0 max-w-[120px]"
                       title={`Host: ${hostDisplayName()}`}
                     >
                       <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
                       <span class="truncate">{hostDisplayName()}</span>
                     </span>
                   </Show>
-
                 </div>
               </div>
             </div>
@@ -1313,7 +1322,7 @@ const DockerContainerRow: Component<{
         <For each={DOCKER_COLUMNS}>
           {(column) => (
             <td
-              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[400px]' : ''}`}
+              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[300px]' : ''}`}
               style={{
                 "min-width": (column.id === 'cpu' || column.id === 'memory') ? (props.isMobile() ? '60px' : '140px') : undefined,
                 "width": (column.id === 'cpu' || column.id === 'memory') && !props.isMobile() ? '140px' : undefined,
@@ -1964,7 +1973,7 @@ const DockerServiceRow: Component<{
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
                   <span
-                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate min-w-0 flex-1"
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none"
                     title={serviceTitle()}
                   >
                     {service.name || service.id || 'Service'}
@@ -2083,7 +2092,7 @@ const DockerServiceRow: Component<{
         <For each={DOCKER_COLUMNS}>
           {(column) => (
             <td
-              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[400px]' : ''}`}
+              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[300px]' : ''}`}
               style={{
                 "min-width": (column.id === 'cpu' || column.id === 'memory') ? (props.isMobile() ? '60px' : '140px') : undefined,
                 "width": (column.id === 'cpu' || column.id === 'memory') && !props.isMobile() ? '140px' : undefined,

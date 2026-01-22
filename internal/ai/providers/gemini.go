@@ -610,76 +610,77 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 	for {
 		n, err := reader.Read(buf)
+		if n > 0 {
+			pendingData += string(buf[:n])
+			lines := strings.Split(pendingData, "\n")
+
+			// Keep the last incomplete line for next iteration
+			pendingData = lines[len(lines)-1]
+			lines = lines[:len(lines)-1]
+
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+
+				if !strings.HasPrefix(line, "data:") {
+					continue
+				}
+
+				data := strings.TrimPrefix(line, "data:")
+				data = strings.TrimSpace(data)
+
+				if data == "" {
+					continue
+				}
+
+				var event geminiStreamEvent
+				if err := json.Unmarshal([]byte(data), &event); err != nil {
+					log.Debug().Err(err).Str("data", data).Msg("Failed to parse Gemini stream event")
+					continue
+				}
+
+				if event.UsageMetadata != nil {
+					inputTokens = event.UsageMetadata.PromptTokenCount
+					outputTokens = event.UsageMetadata.CandidatesTokenCount
+				}
+
+				for _, candidate := range event.Candidates {
+					if candidate.FinishReason != "" {
+						finishReason = candidate.FinishReason
+					}
+
+					for _, part := range candidate.Content.Parts {
+						if part.Text != "" {
+							callback(StreamEvent{
+								Type: "content",
+								Data: ContentEvent{Text: part.Text},
+							})
+						}
+
+						if part.FunctionCall != nil {
+							toolID := fmt.Sprintf("%s_%d", part.FunctionCall.Name, len(toolCalls))
+							callback(StreamEvent{
+								Type: "tool_start",
+								Data: ToolStartEvent{
+									ID:    toolID,
+									Name:  part.FunctionCall.Name,
+									Input: part.FunctionCall.Args,
+								},
+							})
+							toolCalls = append(toolCalls, ToolCall{
+								ID:    toolID,
+								Name:  part.FunctionCall.Name,
+								Input: part.FunctionCall.Args,
+							})
+						}
+					}
+				}
+			}
+		}
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
 			return fmt.Errorf("stream read error: %w", err)
-		}
-
-		pendingData += string(buf[:n])
-		lines := strings.Split(pendingData, "\n")
-
-		// Keep the last incomplete line for next iteration
-		pendingData = lines[len(lines)-1]
-		lines = lines[:len(lines)-1]
-
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-
-			if !strings.HasPrefix(line, "data:") {
-				continue
-			}
-
-			data := strings.TrimPrefix(line, "data:")
-			data = strings.TrimSpace(data)
-
-			if data == "" {
-				continue
-			}
-
-			var event geminiStreamEvent
-			if err := json.Unmarshal([]byte(data), &event); err != nil {
-				log.Debug().Err(err).Str("data", data).Msg("Failed to parse Gemini stream event")
-				continue
-			}
-
-			if event.UsageMetadata != nil {
-				inputTokens = event.UsageMetadata.PromptTokenCount
-				outputTokens = event.UsageMetadata.CandidatesTokenCount
-			}
-
-			for _, candidate := range event.Candidates {
-				if candidate.FinishReason != "" {
-					finishReason = candidate.FinishReason
-				}
-
-				for _, part := range candidate.Content.Parts {
-					if part.Text != "" {
-						callback(StreamEvent{
-							Type: "content",
-							Data: ContentEvent{Text: part.Text},
-						})
-					}
-
-					if part.FunctionCall != nil {
-						toolID := fmt.Sprintf("%s_%d", part.FunctionCall.Name, len(toolCalls))
-						callback(StreamEvent{
-							Type: "tool_start",
-							Data: ToolStartEvent{
-								ID:    toolID,
-								Name:  part.FunctionCall.Name,
-								Input: part.FunctionCall.Args,
-							},
-						})
-						toolCalls = append(toolCalls, ToolCall{
-							ID:    toolID,
-							Name:  part.FunctionCall.Name,
-							Input: part.FunctionCall.Args,
-						})
-					}
-				}
-			}
 		}
 	}
 

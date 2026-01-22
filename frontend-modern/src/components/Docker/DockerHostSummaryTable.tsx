@@ -1,5 +1,4 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
-import { StackedContainerBar } from './StackedContainerBar';
 import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { renderDockerStatusBadge } from './DockerStatusBadge';
@@ -430,12 +429,9 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                             when={summary.totalCount > 0}
                             fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}
                           >
-                            <StackedContainerBar
-                              running={summary.runningCount}
-                              stopped={summary.stoppedCount}
-                              error={summary.errorCount}
-                              total={summary.totalCount}
-                            />
+                            <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                              {summary.totalCount}
+                            </span>
                           </Show>
                         </div>
                       </td>

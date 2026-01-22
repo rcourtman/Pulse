@@ -4,6 +4,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -322,5 +323,5 @@ func parseFlexibleDate(dateStr string) (time.Time, error) {
 		}
 	}
 
-	return time.Time{}, nil
+	return time.Time{}, fmt.Errorf("invalid date format: %s", dateStr)
 }

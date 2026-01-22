@@ -2,7 +2,7 @@
  * HistoryChart Component
  *
  * Canvas-based chart for displaying historical metrics data (up to 90 days).
- * Includes user-friendly empty states and Pro-tier gating for >24h data.
+ * Includes user-friendly empty states and Pro-tier gating for 30d/90d data.
  */
 
 import { Component, createEffect, createSignal, onCleanup, Show, createMemo, onMount } from 'solid-js';
@@ -63,6 +63,8 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         return !isLongTermEnabled() && (r === '30d' || r === '90d');
     });
 
+    const lockDays = createMemo(() => (range() === '30d' ? '30' : '90'));
+
     // Hover state for tooltip
     const [hoveredPoint, setHoveredPoint] = createSignal<{
         value: number;
@@ -79,17 +81,15 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         const type = props.resourceType;
         const id = props.resourceId;
         const metric = props.metric;
+        const locked = isLocked();
 
         if (!id || !type) return;
 
-        // If locked, we don't fetch data (or we fetch 24h data to show blurred?)
-        // Better: Fetch data even if locked, let the API enforce the cap (which we did), 
-        // or just don't fetch and show the lock screen immediately?
-        // Decision: If locked, show the lock screen over the *previous* data or just empty.
-        // But to make it look nice "blurred", we might want some data.
-        // However, the API enforces 24h cap. So fetching '7d' will return 24h data.
-        // We can display that 24h data scaled to 7d (which would look short) or just show the lock overlay.
-        // Let's just fetch. The API will return what's allowed.
+        if (locked) {
+            setLoading(false);
+            setError(null);
+            return;
+        }
 
         setLoading(true);
         setError(null);
@@ -362,9 +362,9 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                             </svg>
                         </div>
-                        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">90-Day History</h3>
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">{lockDays()}-Day History</h3>
                         <p class="text-sm text-gray-600 dark:text-gray-300 text-center max-w-[200px] mb-4">
-                            Upgrade to Pulse Pro to unlock 90 days of historical data retention.
+                            Upgrade to Pulse Pro to unlock {lockDays()} days of historical data retention.
                         </p>
                         <a
                             href="https://pulserelay.pro/pricing"

@@ -2,12 +2,16 @@ package chat
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,6 +40,24 @@ func (m *mockAgentServer) GetConnectedAgents() []agentexec.ConnectedAgent {
 
 func (m *mockAgentServer) ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
 	return &agentexec.CommandResultPayload{}, nil
+}
+
+func hasTool(toolsList []tools.Tool, name string) bool {
+	for _, tool := range toolsList {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasProviderTool(toolsList []providers.Tool, name string) bool {
+	for _, tool := range toolsList {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func TestNewService(t *testing.T) {
@@ -389,4 +411,108 @@ func TestParseRunCommandDecision(t *testing.T) {
 			assert.Equal(t, tc.want, got.Allow)
 		})
 	}
+}
+
+func TestService_SettersAndUpdateControlSettings(t *testing.T) {
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{ControlLevel: config.ControlLevelReadOnly},
+		// Agent server makes pulse_run_command eligible when control is enabled.
+		AgentServer: &mockAgentServer{},
+	})
+
+	require.NotNil(t, service.executor)
+	assert.False(t, hasTool(service.executor.ListTools(), "pulse_run_command"))
+
+	service.SetAlertProvider(nil)
+	service.SetFindingsProvider(nil)
+	service.SetBaselineProvider(nil)
+	service.SetPatternProvider(nil)
+	service.SetMetricsHistory(nil)
+	service.SetBackupProvider(nil)
+	service.SetStorageProvider(nil)
+	service.SetDiskHealthProvider(nil)
+	service.SetUpdatesProvider(nil)
+	service.SetAgentProfileManager(nil)
+	service.SetFindingsManager(nil)
+	service.SetMetadataUpdater(nil)
+
+	service.UpdateControlSettings(nil)
+	service.UpdateControlSettings(&config.AIConfig{
+		ControlLevel:    config.ControlLevelControlled,
+		ProtectedGuests: []string{"101"},
+	})
+
+	assert.True(t, hasTool(service.executor.ListTools(), "pulse_run_command"))
+}
+
+func TestService_ClassifyRunCommand(t *testing.T) {
+	t.Run("ProviderMissing", func(t *testing.T) {
+		service := &Service{}
+		_, err := service.classifyRunCommand(context.Background(), "run ls")
+		assert.Error(t, err)
+	})
+
+	t.Run("AllowTrue", func(t *testing.T) {
+		mockProvider := &MockProvider{}
+		mockProvider.On("Chat", mock.Anything, mock.Anything).
+			Return(&providers.ChatResponse{Content: `{"allow_run_command": true}`}, nil).
+			Once()
+
+		service := &Service{provider: mockProvider}
+		allow, err := service.classifyRunCommand(context.Background(), "run ls")
+		require.NoError(t, err)
+		assert.True(t, allow)
+		mockProvider.AssertExpectations(t)
+	})
+}
+
+func TestService_FilterToolsForPrompt_ClassificationError(t *testing.T) {
+	service := NewService(Config{
+		AIConfig:    &config.AIConfig{ControlLevel: config.ControlLevelControlled},
+		AgentServer: &mockAgentServer{},
+	})
+	require.True(t, hasTool(service.executor.ListTools(), "pulse_run_command"))
+
+	mockProvider := &MockProvider{}
+	mockProvider.On("Chat", mock.Anything, mock.Anything).
+		Return((*providers.ChatResponse)(nil), errors.New("boom")).
+		Once()
+	service.provider = mockProvider
+
+	filtered := service.filterToolsForPrompt(context.Background(), "run uptime")
+	assert.False(t, hasProviderTool(filtered, "pulse_run_command"))
+	mockProvider.AssertExpectations(t)
+}
+
+func TestService_Execute_NonStreaming(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	require.NoError(t, err)
+
+	mockProvider := &MockProvider{}
+	mockProvider.On("Chat", mock.Anything, mock.Anything).
+		Return(&providers.ChatResponse{Content: `{"allow_run_command": false}`}, nil).
+		Once()
+	mockProvider.On("ChatStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			callback := args.Get(2).(providers.StreamCallback)
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "Hello"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		}).
+		Once()
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	service := &Service{
+		executor:    executor,
+		sessions:    store,
+		agenticLoop: NewAgenticLoop(mockProvider, executor, "prompt"),
+		provider:    mockProvider,
+		started:     true,
+	}
+
+	resp, err := service.Execute(context.Background(), ExecuteRequest{Prompt: "Hi"})
+	require.NoError(t, err)
+	assert.Equal(t, "Hello", resp["content"])
+	mockProvider.AssertExpectations(t)
 }

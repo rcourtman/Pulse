@@ -200,12 +200,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     if (isPVE(item)) {
       const node = item;
       if (!node.disk) return undefined;
-      return `${formatBytes(node.disk.used, 0)}/${formatBytes(node.disk.total, 0)}`;
+      return `${formatBytes(node.disk.used)}/${formatBytes(node.disk.total)}`;
     }
     const pbs = item;
     if (!pbs.datastores || pbs.datastores.length === 0) return undefined;
     const totals = getPbsTotals(pbs);
-    return `${formatBytes(totals.used, 0)}/${formatBytes(totals.total, 0)}`;
+    return `${formatBytes(totals.used)}/${formatBytes(totals.total)}`;
   };
 
   const getTemperatureValue = (item: TableItem) => {
@@ -346,7 +346,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
   // Cell class constants for consistency
   const tdClass = "px-2 py-1 align-middle";
-  const metricColumnStyle = { width: "200px", "min-width": "200px", "max-width": "200px" } as const;
+  const metricColumnStyle = { "min-width": "140px", "max-width": "180px" } as const;
 
   return (
     <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
@@ -360,41 +360,41 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               >
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'} {renderSortIndicator('name')}
               </th>
-              <th class={thClass} style={{ "min-width": '80px' }} onClick={() => handleSort('uptime')}>
+              <th class={thClass} style={{ width: '80px', "min-width": '80px', "max-width": '80px' }} onClick={() => handleSort('uptime')}>
                 Uptime {renderSortIndicator('uptime')}
               </th>
-              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }} onClick={() => handleSort('cpu')}>
+              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('cpu')}>
                 CPU {renderSortIndicator('cpu')}
               </th>
-              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }} onClick={() => handleSort('memory')}>
+              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('memory')}>
                 Memory {renderSortIndicator('memory')}
               </th>
-              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }} onClick={() => handleSort('disk')}>
+              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('disk')}>
                 Disk {renderSortIndicator('disk')}
               </th>
               <Show when={hasAnyTemperatureData()}>
-                <th class={thClass} style={{ "min-width": '60px' }} onClick={() => handleSort('temperature')}>
+                <th class={thClass} style={{ width: '60px', "min-width": '60px', "max-width": '60px' }} onClick={() => handleSort('temperature')}>
                   Temp {renderSortIndicator('temperature')}
                 </th>
               </Show>
               <Show when={props.currentTab === 'dashboard'}>
-                <th class={thClass} style={{ "min-width": '50px' }} onClick={() => handleSort('vmCount')}>
+                <th class={thClass} style={{ width: '50px', "min-width": '50px', "max-width": '50px' }} onClick={() => handleSort('vmCount')}>
                   VMs {renderSortIndicator('vmCount')}
                 </th>
-                <th class={thClass} style={{ "min-width": '50px' }} onClick={() => handleSort('containerCount')}>
+                <th class={thClass} style={{ width: '50px', "min-width": '50px', "max-width": '50px' }} onClick={() => handleSort('containerCount')}>
                   CTs {renderSortIndicator('containerCount')}
                 </th>
               </Show>
               <Show when={props.currentTab === 'storage'}>
-                <th class={thClass} style={{ "min-width": '70px' }} onClick={() => handleSort('storageCount')}>
+                <th class={thClass} style={{ width: '70px', "min-width": '70px', "max-width": '70px' }} onClick={() => handleSort('storageCount')}>
                   Storage {renderSortIndicator('storageCount')}
                 </th>
-                <th class={thClass} style={{ "min-width": '60px' }} onClick={() => handleSort('diskCount')}>
+                <th class={thClass} style={{ width: '60px', "min-width": '60px', "max-width": '60px' }} onClick={() => handleSort('diskCount')}>
                   Disks {renderSortIndicator('diskCount')}
                 </th>
               </Show>
               <Show when={props.currentTab === 'backups'}>
-                <th class={thClass} style={{ "min-width": '70px' }} onClick={() => handleSort('backupCount')}>
+                <th class={thClass} style={{ width: '70px', "min-width": '70px', "max-width": '70px' }} onClick={() => handleSort('backupCount')}>
                   Backups {renderSortIndicator('backupCount')}
                 </th>
               </Show>
@@ -490,8 +490,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
                   >
                     {/* Name */}
-                    <td class={`pr-2 py-1 align-middle ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
-                      <div class="flex items-center gap-1.5">
+                    <td class={`pr-2 py-1 align-middle overflow-hidden ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
+                      <div class="flex items-center gap-1.5 min-w-0">
                         <StatusDot
                           variant={statusIndicator().variant}
                           title={statusIndicator().label}
@@ -516,7 +516,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             ({(node as Node).name})
                           </span>
                         </Show>
-                        <div class="hidden xl:flex items-center gap-1.5 ml-1">
+                        <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
                           <Show when={isPVEItem}>
                             <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
                               PVE
@@ -543,6 +543,17 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               title="Pulse host agent installed for enhanced metrics"
                             >
                               +Agent
+                            </span>
+                          </Show>
+                          <Show when={isPVEItem && online && node!.pendingUpdates !== undefined && node!.pendingUpdates > 0}>
+                            <span
+                              class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${(node!.pendingUpdates ?? 0) >= 10
+                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                }`}
+                              title={`${node!.pendingUpdates} pending apt update${node!.pendingUpdates !== 1 ? 's' : ''}`}
+                            >
+                              {node!.pendingUpdates} updates
                             </span>
                           </Show>
                           <Show when={isPBSItem}>
@@ -598,7 +609,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             value={memoryPercentValue}
                             type="memory"
                             resourceId={metricsKey}
-                            sublabel={pbs!.memoryTotal ? `${formatBytes(pbs!.memoryUsed, 0)}/${formatBytes(pbs!.memoryTotal, 0)}` : undefined}
+                            sublabel={pbs!.memoryTotal ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}` : undefined}
                             isRunning={online}
                             showMobile={false}
                           />

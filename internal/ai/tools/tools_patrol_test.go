@@ -286,3 +286,147 @@ func TestExecuteResolveAndDismissFinding(t *testing.T) {
 		t.Fatalf("unexpected dismiss response: %+v", okResp)
 	}
 }
+
+func TestExecuteGetMetrics_InvalidResourceType(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, _ := executor.executeGetMetrics(context.Background(), map[string]interface{}{
+		"period":        "24h",
+		"resource_type": "bad",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for invalid resource_type")
+	}
+}
+
+func TestExecuteGetMetrics_FilterAndPagination(t *testing.T) {
+	metricsProv := &mockMetricsHistoryProvider{}
+	metricsProv.On("GetAllMetricsSummary", mock.Anything).Return(map[string]ResourceMetricsSummary{
+		"vm1": {ResourceID: "vm1", ResourceType: "vm"},
+		"vm2": {ResourceID: "vm2", ResourceType: "vm"},
+		"ct1": {ResourceID: "ct1", ResourceType: "container"},
+	}, nil)
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider:  &mockStateProvider{},
+		MetricsHistory: metricsProv,
+	})
+
+	result, _ := executor.executeGetMetrics(context.Background(), map[string]interface{}{
+		"period":        "24h",
+		"resource_type": "vm",
+		"limit":         1,
+		"offset":        1,
+	})
+	var resp MetricsResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("decode metrics response: %v", err)
+	}
+	if len(resp.Summary) != 1 {
+		t.Fatalf("unexpected summary: %+v", resp.Summary)
+	}
+	if resp.Pagination == nil || resp.Pagination.Total != 2 || resp.Pagination.Offset != 1 {
+		t.Fatalf("unexpected pagination: %+v", resp.Pagination)
+	}
+}
+
+func TestExecuteGetBaselines_FilterAndErrors(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, _ := executor.executeGetBaselines(context.Background(), map[string]interface{}{
+		"resource_type": "bad",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for invalid resource_type")
+	}
+
+	executor = NewPulseToolExecutor(ExecutorConfig{
+		BaselineProvider: &stubBaselineProvider{
+			baselines: map[string]map[string]*MetricBaseline{"100": {"cpu": {Mean: 1}}},
+		},
+	})
+	result, _ = executor.executeGetBaselines(context.Background(), map[string]interface{}{
+		"resource_type": "vm",
+	})
+	if !result.IsError {
+		t.Fatal("expected error without state provider")
+	}
+
+	executor = NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: models.StateSnapshot{
+			VMs: []models.VM{{VMID: 100}, {VMID: 101}},
+		}},
+		BaselineProvider: &stubBaselineProvider{
+			baselines: map[string]map[string]*MetricBaseline{
+				"100": {"cpu": {Mean: 1}},
+				"101": {"cpu": {Mean: 2}},
+			},
+		},
+	})
+	result, _ = executor.executeGetBaselines(context.Background(), map[string]interface{}{
+		"resource_type": "vm",
+		"limit":         1,
+		"offset":        1,
+	})
+	var baselines BaselinesResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &baselines); err != nil {
+		t.Fatalf("decode baselines: %v", err)
+	}
+	if len(baselines.Baselines) != 1 {
+		t.Fatalf("unexpected baselines: %+v", baselines.Baselines)
+	}
+	if baselines.Pagination == nil || baselines.Pagination.Total != 2 || baselines.Pagination.Offset != 1 {
+		t.Fatalf("unexpected pagination: %+v", baselines.Pagination)
+	}
+}
+
+func TestExecuteGetPatterns_EmptySlices(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	executor.patternProvider = &stubPatternProvider{}
+	result, _ := executor.executeGetPatterns(context.Background(), map[string]interface{}{})
+	var resp PatternsResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("decode patterns: %v", err)
+	}
+	if resp.Patterns == nil || resp.Predictions == nil {
+		t.Fatal("expected non-nil slices")
+	}
+	if len(resp.Patterns) != 0 || len(resp.Predictions) != 0 {
+		t.Fatalf("unexpected patterns: %+v", resp)
+	}
+}
+
+func TestExecuteListFindings_ResourceTypeFilter(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, _ := executor.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type": "bad",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for invalid resource_type")
+	}
+
+	findingsProv := &mockFindingsProvider{}
+	findingsProv.On("GetActiveFindings").Return([]Finding{
+		{ID: "f1", Severity: "warning", ResourceType: "docker container", ResourceID: "r1"},
+		{ID: "f2", Severity: "warning", ResourceType: "lxc container", ResourceID: "r2"},
+	})
+	findingsProv.On("GetDismissedFindings").Return([]Finding{
+		{ID: "f3", Severity: "warning", ResourceType: "docker-container", ResourceID: "r3"},
+	})
+
+	executor.findingsProvider = findingsProv
+	result, _ = executor.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type":     "docker",
+		"include_dismissed": true,
+		"limit":             1,
+		"offset":            1,
+	})
+	var resp FindingsResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("decode findings: %v", err)
+	}
+	if resp.Counts.Active != 1 || resp.Counts.Dismissed != 1 {
+		t.Fatalf("unexpected counts: %+v", resp.Counts)
+	}
+	if resp.Pagination == nil || resp.Pagination.Offset != 1 {
+		t.Fatalf("unexpected pagination: %+v", resp.Pagination)
+	}
+}

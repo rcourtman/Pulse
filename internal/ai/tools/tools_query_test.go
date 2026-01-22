@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -239,6 +240,27 @@ func TestExecuteSearchResources(t *testing.T) {
 	}
 }
 
+func TestExecuteSearchResources_Errors(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
+	})
+
+	result, _ := executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for empty query")
+	}
+
+	result, _ = executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "node",
+		"type":  "bad",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for invalid type")
+	}
+}
+
 func TestExecuteSetResourceURLAndGetResource(t *testing.T) {
 	executor := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{}})
 
@@ -306,11 +328,337 @@ func TestExecuteSetResourceURLAndGetResource(t *testing.T) {
 	}
 }
 
+func TestExecuteGetResource_DockerDetails(t *testing.T) {
+	state := models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			Hostname: "dock1",
+			Containers: []models.DockerContainer{{
+				ID:            "abcd1234",
+				Name:          "web",
+				State:         "running",
+				Image:         "nginx:latest",
+				Health:        "healthy",
+				CPUPercent:    1.2,
+				MemoryPercent: 3.4,
+				MemoryUsage:   1024,
+				MemoryLimit:   2048,
+				RestartCount:  2,
+				Labels: map[string]string{
+					"service": "web",
+				},
+				UpdateStatus: &models.DockerContainerUpdateStatus{
+					UpdateAvailable: true,
+				},
+				Ports: []models.DockerContainerPort{
+					{PrivatePort: 80, PublicPort: 8080, Protocol: "tcp", IP: "0.0.0.0"},
+				},
+				Networks: []models.DockerContainerNetworkLink{
+					{Name: "bridge", IPv4: "172.17.0.2"},
+				},
+				Mounts: []models.DockerContainerMount{
+					{Source: "/src", Destination: "/dst", RW: true},
+				},
+			}},
+		}},
+	}
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+	})
+
+	result, _ := executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "docker",
+		"resource_id":   "web",
+	})
+	var res ResourceResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &res); err != nil {
+		t.Fatalf("decode docker resource: %v", err)
+	}
+	if !res.UpdateAvailable || len(res.Ports) != 1 || len(res.Networks) != 1 || len(res.Mounts) != 1 {
+		t.Fatalf("unexpected docker details: %+v", res)
+	}
+}
+
+func TestExecuteSetResourceURL_ClearAndMissingUpdater(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, _ := executor.executeSetResourceURL(context.Background(), map[string]interface{}{
+		"resource_type": "vm",
+		"resource_id":   "100",
+	})
+	if result.Content[0].Text != "Metadata updater not available." {
+		t.Fatalf("unexpected response: %s", result.Content[0].Text)
+	}
+
+	updater := &fakeMetadataUpdater{}
+	executor.metadataUpdater = updater
+	result, _ = executor.executeSetResourceURL(context.Background(), map[string]interface{}{
+		"resource_type": "vm",
+		"resource_id":   "100",
+		"url":           "",
+	})
+	var resp map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["action"] != "cleared" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+}
+
 func TestIntArg(t *testing.T) {
 	if got := intArg(map[string]interface{}{}, "limit", 10); got != 10 {
 		t.Fatalf("unexpected default: %d", got)
 	}
 	if got := intArg(map[string]interface{}{"limit": float64(5)}, "limit", 10); got != 5 {
 		t.Fatalf("unexpected value: %d", got)
+	}
+}
+
+func TestParseAndValidateFetchURL(t *testing.T) {
+	t.Run("Empty", func(t *testing.T) {
+		if _, err := parseAndValidateFetchURL(context.Background(), ""); err == nil {
+			t.Fatal("expected error for empty URL")
+		}
+	})
+
+	t.Run("InvalidURL", func(t *testing.T) {
+		if _, err := parseAndValidateFetchURL(context.Background(), "http://%"); err == nil {
+			t.Fatal("expected error for invalid URL")
+		}
+	})
+
+	t.Run("NotAbsolute", func(t *testing.T) {
+		if _, err := parseAndValidateFetchURL(context.Background(), "example.com"); err == nil {
+			t.Fatal("expected error for relative URL")
+		}
+	})
+
+	t.Run("BadScheme", func(t *testing.T) {
+		if _, err := parseAndValidateFetchURL(context.Background(), "ftp://example.com"); err == nil {
+			t.Fatal("expected error for scheme")
+		}
+	})
+
+	t.Run("Credentials", func(t *testing.T) {
+		if _, err := parseAndValidateFetchURL(context.Background(), "http://user:pass@example.com"); err == nil {
+			t.Fatal("expected error for credentials")
+		}
+	})
+
+	t.Run("Fragment", func(t *testing.T) {
+		if _, err := parseAndValidateFetchURL(context.Background(), "https://example.com/#frag"); err == nil {
+			t.Fatal("expected error for fragment")
+		}
+	})
+
+	t.Run("MissingHost", func(t *testing.T) {
+		if _, err := parseAndValidateFetchURL(context.Background(), "http:///"); err == nil {
+			t.Fatal("expected error for missing host")
+		}
+	})
+
+	t.Run("BlockedHost", func(t *testing.T) {
+		if _, err := parseAndValidateFetchURL(context.Background(), "http://localhost"); err == nil {
+			t.Fatal("expected error for blocked host")
+		}
+	})
+
+	t.Run("BlockedIP", func(t *testing.T) {
+		if _, err := parseAndValidateFetchURL(context.Background(), "http://127.0.0.1"); err == nil {
+			t.Fatal("expected error for blocked IP")
+		}
+	})
+
+	t.Run("AllowLoopback", func(t *testing.T) {
+		t.Setenv("PULSE_AI_ALLOW_LOOPBACK", "true")
+		parsed, err := parseAndValidateFetchURL(context.Background(), "http://127.0.0.1:8080")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if parsed.Hostname() != "127.0.0.1" {
+			t.Fatalf("unexpected host: %s", parsed.Hostname())
+		}
+	})
+}
+
+func TestIsBlockedFetchIP(t *testing.T) {
+	if !isBlockedFetchIP(nil) {
+		t.Fatal("expected nil IP to be blocked")
+	}
+	if !isBlockedFetchIP(net.ParseIP("0.0.0.0")) {
+		t.Fatal("expected unspecified IP to be blocked")
+	}
+	if !isBlockedFetchIP(net.ParseIP("169.254.1.1")) {
+		t.Fatal("expected link-local IP to be blocked")
+	}
+	if isBlockedFetchIP(net.ParseIP("8.8.8.8")) {
+		t.Fatal("expected global IP to be allowed")
+	}
+
+	t.Run("LoopbackAllowed", func(t *testing.T) {
+		t.Setenv("PULSE_AI_ALLOW_LOOPBACK", "true")
+		if isBlockedFetchIP(net.ParseIP("127.0.0.1")) {
+			t.Fatal("expected loopback IP to be allowed")
+		}
+	})
+}
+
+func TestExecuteListInfrastructurePaginationAndDockerFilter(t *testing.T) {
+	state := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node1", Name: "node1", Status: "online"},
+			{ID: "node2", Name: "node2", Status: "offline"},
+		},
+		DockerHosts: []models.DockerHost{
+			{
+				ID:       "host1",
+				Hostname: "dock1",
+				Containers: []models.DockerContainer{
+					{ID: "c1", Name: "app", State: "running"},
+					{ID: "c2", Name: "db", State: "stopped"},
+				},
+			},
+			{
+				ID:       "host2",
+				Hostname: "dock2",
+				Containers: []models.DockerContainer{
+					{ID: "c3", Name: "cache", State: "stopped"},
+				},
+			},
+		},
+	}
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+	})
+
+	result, err := executor.executeListInfrastructure(context.Background(), map[string]interface{}{
+		"type":   "nodes",
+		"limit":  1,
+		"offset": 1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var nodesResp InfrastructureResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &nodesResp); err != nil {
+		t.Fatalf("decode nodes response: %v", err)
+	}
+	if len(nodesResp.Nodes) != 1 || nodesResp.Nodes[0].Name != "node2" {
+		t.Fatalf("unexpected nodes response: %+v", nodesResp.Nodes)
+	}
+	if nodesResp.Pagination == nil || nodesResp.Pagination.Total != 2 || nodesResp.Pagination.Offset != 1 {
+		t.Fatalf("unexpected pagination: %+v", nodesResp.Pagination)
+	}
+
+	result, err = executor.executeListInfrastructure(context.Background(), map[string]interface{}{
+		"type":                           "docker",
+		"status":                         "running",
+		"max_docker_containers_per_host": 1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var dockerResp InfrastructureResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &dockerResp); err != nil {
+		t.Fatalf("decode docker response: %v", err)
+	}
+	if len(dockerResp.DockerHosts) != 1 || dockerResp.DockerHosts[0].Hostname != "dock1" {
+		t.Fatalf("unexpected docker hosts: %+v", dockerResp.DockerHosts)
+	}
+	if len(dockerResp.DockerHosts[0].Containers) != 1 || dockerResp.DockerHosts[0].Containers[0].State != "running" {
+		t.Fatalf("unexpected docker containers: %+v", dockerResp.DockerHosts[0].Containers)
+	}
+}
+
+func TestExecuteGetResourceErrorsAndContainer(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, _ := executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "vm",
+		"resource_id":   "100",
+	})
+	if result.Content[0].Text != "State information not available." {
+		t.Fatalf("unexpected response: %s", result.Content[0].Text)
+	}
+
+	executor.stateProvider = &mockStateProvider{state: models.StateSnapshot{
+		Containers: []models.Container{
+			{ID: "ct1", VMID: 200, Name: "ct1", Status: "running", Node: "node1"},
+		},
+	}}
+
+	result, _ = executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "container",
+		"resource_id":   "ct1",
+	})
+	var res ResourceResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &res); err != nil {
+		t.Fatalf("decode container response: %v", err)
+	}
+	if res.Type != "container" || res.Name != "ct1" {
+		t.Fatalf("unexpected container response: %+v", res)
+	}
+
+	result, _ = executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "vm",
+		"resource_id":   "999",
+	})
+	var notFound map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &notFound); err != nil {
+		t.Fatalf("decode not found response: %v", err)
+	}
+	if notFound["error"] != "not_found" {
+		t.Fatalf("unexpected not found response: %+v", notFound)
+	}
+
+	result, _ = executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "bad",
+		"resource_id":   "1",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for invalid resource_type")
+	}
+}
+
+func TestExecuteListInfrastructure_NoStateProvider(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, _ := executor.executeListInfrastructure(context.Background(), map[string]interface{}{})
+	if !result.IsError {
+		t.Fatal("expected error without state provider")
+	}
+}
+
+func TestExecuteGetResource_MissingArgs(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
+	})
+
+	result, _ := executor.executeGetResource(context.Background(), map[string]interface{}{})
+	if !result.IsError {
+		t.Fatal("expected error for missing resource_type")
+	}
+
+	result, _ = executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "vm",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for missing resource_id")
+	}
+}
+
+func TestExecuteGetURLContent_InvalidURL(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, err := executor.executeGetURLContent(context.Background(), map[string]interface{}{
+		"url": "ftp://example.com",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var response URLFetchResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Error == "" {
+		t.Fatalf("expected error response: %+v", response)
 	}
 }

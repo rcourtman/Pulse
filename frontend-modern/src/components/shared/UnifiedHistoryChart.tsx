@@ -1,4 +1,4 @@
-import { Component, createSignal, createEffect, onCleanup, onMount, Show, For } from 'solid-js';
+import { Component, createSignal, createEffect, onCleanup, onMount, Show, For, createMemo } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { AggregatedMetricPoint, ChartsAPI, HistoryTimeRange, ResourceType } from '@/api/charts';
 import { formatBytes } from '@/utils/format';
@@ -37,6 +37,9 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         disk: { label: 'Disk', color: '#10b981', unit: '%' }      // emerald-500
     };
 
+    const isLocked = createMemo(() => (range() === '30d' || range() === '90d') && !hasFeature('long_term_metrics'));
+    const lockDays = createMemo(() => (range() === '30d' ? '30' : '90'));
+
     const loadData = async (resourceType: ResourceType, resourceId: string, rangeValue: HistoryTimeRange) => {
         setLoading(true);
         setError(null);
@@ -74,8 +77,14 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         const resourceType = props.resourceType;
         const resourceId = props.resourceId;
         const rangeValue = props.range ?? range();
+        const locked = isLocked();
 
         if (!resourceType || !resourceId) return;
+        if (locked) {
+            setLoading(false);
+            setError(null);
+            return;
+        }
         loadData(resourceType, resourceId, rangeValue);
     });
 
@@ -228,8 +237,6 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         if (props.onRangeChange) props.onRangeChange(r);
     };
 
-    const isLocked = () => (range() === '30d' || range() === '90d') && !hasFeature('long_term_metrics');
-
     return (
         <div class="flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <div class="flex items-center justify-between mb-4">
@@ -292,7 +299,10 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                             </svg>
                         </div>
-                        <h3 class="text-sm font-bold text-gray-900 dark:text-white mb-3 text-center">90-Day History Locked</h3>
+                        <h3 class="text-sm font-bold text-gray-900 dark:text-white mb-1 text-center">{lockDays()}-Day History Locked</h3>
+                        <p class="text-[10px] text-gray-600 dark:text-gray-300 mb-3 text-center">
+                            Upgrade to Pulse Pro to unlock {lockDays()} days of history.
+                        </p>
                         <a href="https://pulserelay.pro/pricing" target="_blank" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-full shadow-lg transition-all transform hover:scale-105">Upgrade to Pro</a>
                     </div>
                 </Show>
