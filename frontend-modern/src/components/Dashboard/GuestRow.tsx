@@ -484,6 +484,8 @@ interface GuestRowProps {
   isGroupedView?: boolean;
   /** IDs of columns that should be visible */
   visibleColumnIds?: string[];
+  /** Click handler for the row */
+  onClick?: () => void;
 }
 
 export function GuestRow(props: GuestRowProps) {
@@ -762,9 +764,10 @@ export function GuestRow(props: GuestRowProps) {
   return (
     <>
       <tr
-        class={rowClass()}
+        class={`${rowClass()} ${props.onClick ? 'cursor-pointer' : ''}`}
         style={rowStyle()}
         data-guest-id={guestId()}
+        onClick={props.onClick}
       >
         {/* Name - always visible */}
         <td class={`pr-2 py-1 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
