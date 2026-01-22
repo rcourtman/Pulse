@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -526,13 +527,33 @@ func (s *Store) runRollup() {
 func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Duration) {
 	cutoff := time.Now().Add(-minAge).Unix()
 	bucketSecs := int64(bucketSize.Seconds())
+	if bucketSecs <= 0 {
+		return
+	}
+	cutoffBucket := (cutoff / bucketSecs) * bucketSecs
+	if cutoffBucket <= 0 {
+		return
+	}
+
+	metaKey := fmt.Sprintf("rollup:%s:%s", fromTier, toTier)
+	lastBucket, ok := s.getMetaInt(metaKey)
+	if !ok {
+		if maxTs, ok := s.getMaxTimestampForTier(toTier); ok {
+			lastBucket = (maxTs / bucketSecs) * bucketSecs
+			_ = s.setMetaInt(metaKey, lastBucket)
+		}
+	}
+
+	if cutoffBucket <= lastBucket {
+		return
+	}
 
 	// Find distinct resource/metric combinations that need rollup
 	rows, err := s.db.Query(`
 		SELECT DISTINCT resource_type, resource_id, metric_type
 		FROM metrics
-		WHERE tier = ? AND timestamp < ?
-	`, string(fromTier), cutoff)
+		WHERE tier = ? AND timestamp >= ? AND timestamp < ?
+	`, string(fromTier), lastBucket, cutoffBucket)
 	if err != nil {
 		log.Error().Err(err).Str("tier", string(fromTier)).Msg("Failed to find rollup candidates")
 		return
@@ -562,12 +583,19 @@ func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Durati
 
 	// Process each candidate
 	for _, c := range candidates {
-		s.rollupCandidate(c.resourceType, c.resourceID, c.metricType, fromTier, toTier, bucketSecs, cutoff)
+		s.rollupCandidate(c.resourceType, c.resourceID, c.metricType, fromTier, toTier, bucketSecs, lastBucket, cutoffBucket)
+	}
+
+	if err := s.setMetaInt(metaKey, cutoffBucket); err != nil {
+		log.Warn().Err(err).Str("tier", string(fromTier)).Msg("Failed to persist rollup checkpoint")
 	}
 }
 
 // rollupCandidate aggregates a single resource/metric from one tier to another
-func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fromTier, toTier Tier, bucketSecs, cutoff int64) {
+func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fromTier, toTier Tier, bucketSecs, startTs, endTs int64) {
+	if startTs >= endTs {
+		return
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return
@@ -588,9 +616,9 @@ func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fro
 			?
 		FROM metrics
 		WHERE resource_type = ? AND resource_id = ? AND metric_type = ? 
-		AND tier = ? AND timestamp < ?
+		AND tier = ? AND timestamp >= ? AND timestamp < ?
 		GROUP BY resource_type, resource_id, metric_type, bucket_ts
-	`, bucketSecs, bucketSecs, string(toTier), resourceType, resourceID, metricType, string(fromTier), cutoff)
+	`, bucketSecs, bucketSecs, string(toTier), resourceType, resourceID, metricType, string(fromTier), startTs, endTs)
 
 	if err != nil {
 		log.Warn().Err(err).
@@ -601,19 +629,46 @@ func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fro
 		return
 	}
 
-	// Delete rolled-up raw data
-	_, err = tx.Exec(`
-		DELETE FROM metrics
-		WHERE resource_type = ? AND resource_id = ? AND metric_type = ?
-		AND tier = ? AND timestamp < ?
-	`, resourceType, resourceID, metricType, string(fromTier), cutoff)
-
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to delete rolled-up metrics")
-		return
-	}
-
 	tx.Commit()
+}
+
+func (s *Store) getMetaInt(key string) (int64, bool) {
+	var value string
+	err := s.db.QueryRow(`SELECT value FROM metrics_meta WHERE key = ?`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return 0, false
+	}
+	if err != nil {
+		log.Warn().Err(err).Str("key", key).Msg("Failed to read metrics metadata")
+		return 0, false
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		log.Warn().Err(err).Str("key", key).Msg("Invalid metrics metadata value")
+		return 0, false
+	}
+	return parsed, true
+}
+
+func (s *Store) setMetaInt(key string, value int64) error {
+	_, err := s.db.Exec(`
+		INSERT INTO metrics_meta (key, value)
+		VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, key, strconv.FormatInt(value, 10))
+	return err
+}
+
+func (s *Store) getMaxTimestampForTier(tier Tier) (int64, bool) {
+	var maxTs sql.NullInt64
+	if err := s.db.QueryRow(`SELECT MAX(timestamp) FROM metrics WHERE tier = ?`, string(tier)).Scan(&maxTs); err != nil {
+		log.Warn().Err(err).Str("tier", string(tier)).Msg("Failed to read metrics max timestamp")
+		return 0, false
+	}
+	if !maxTs.Valid || maxTs.Int64 <= 0 {
+		return 0, false
+	}
+	return maxTs.Int64, true
 }
 
 // runRetention deletes data older than retention period
@@ -673,6 +728,16 @@ func (s *Store) Close() error {
 	}
 
 	return s.db.Close()
+}
+
+// Clear removes all stored metrics data.
+func (s *Store) Clear() error {
+	s.Flush()
+	if _, err := s.db.Exec("DELETE FROM metrics"); err != nil {
+		return err
+	}
+	_, _ = s.db.Exec("DELETE FROM metrics_meta")
+	return nil
 }
 
 // Stats holds metrics store statistics

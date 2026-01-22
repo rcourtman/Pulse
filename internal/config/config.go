@@ -80,6 +80,7 @@ func IsPasswordHashed(password string) bool {
 type Config struct {
 	// Server settings
 	BackendPort     int
+	BackendHost     string
 	FrontendPort    int `envconfig:"FRONTEND_PORT" default:"7655"`
 	ConfigPath      string
 	DataPath        string
@@ -556,6 +557,7 @@ func Load() (*Config, error) {
 	// Initialize config with defaults
 	cfg := &Config{
 		BackendPort:                     3000,
+		BackendHost:                     "0.0.0.0",
 		FrontendPort:                    7655,
 		ConfigPath:                      dataDir,
 		DataPath:                        dataDir,
@@ -1009,6 +1011,11 @@ func Load() (*Config, error) {
 	if allowedOrigins := utils.GetenvTrim("ALLOWED_ORIGINS"); allowedOrigins != "" {
 		cfg.AllowedOrigins = allowedOrigins
 		cfg.EnvOverrides["ALLOWED_ORIGINS"] = true
+	}
+
+	if backendHost := utils.GetenvTrim("BACKEND_HOST"); backendHost != "" {
+		cfg.BackendHost = backendHost
+		cfg.EnvOverrides["BACKEND_HOST"] = true
 	}
 
 	if sshPort := utils.GetenvTrim("SSH_PORT"); sshPort != "" {

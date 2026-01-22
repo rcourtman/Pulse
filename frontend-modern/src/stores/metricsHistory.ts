@@ -23,7 +23,7 @@ interface RingBuffer {
 }
 
 // Configuration
-const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours (to support all time ranges)
+const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days (to support all time ranges)
 const SAMPLE_INTERVAL_MS = 30 * 1000;   // 30 seconds
 const MAX_POINTS = Math.ceil(MAX_AGE_MS / SAMPLE_INTERVAL_MS); // ~2880 points
 const STORAGE_KEY = 'pulse_metrics_history';

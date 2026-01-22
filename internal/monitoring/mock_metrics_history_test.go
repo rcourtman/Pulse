@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
 func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
@@ -97,5 +98,54 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 	}
 	if got, want := dockerCPU[len(dockerCPU)-1].Value, state.DockerHosts[0].Containers[0].CPUPercent; math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected last docker cpu point to match current, got=%v want=%v", got, want)
+	}
+}
+
+func TestSeedMockMetricsHistory_SeedsMetricsStore(t *testing.T) {
+	now := time.Now()
+
+	state := models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:     "node-1",
+				Status: "online",
+				CPU:    0.33,
+				Memory: models.Memory{Usage: 62, Total: 128 * 1024 * 1024 * 1024},
+				Disk:   models.Disk{Usage: 41, Total: 1024, Used: 512},
+			},
+		},
+		VMs: []models.VM{
+			{
+				ID:     "vm-100",
+				Status: "running",
+				CPU:    0.21,
+				Memory: models.Memory{Usage: 47, Total: 8 * 1024 * 1024 * 1024},
+				Disk:   models.Disk{Usage: 28, Total: 1024, Used: 256},
+			},
+		},
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	cfg.RetentionRaw = 90 * 24 * time.Hour
+	cfg.RetentionMinute = 90 * 24 * time.Hour
+	cfg.RetentionHourly = 90 * 24 * time.Hour
+	cfg.RetentionDaily = 90 * 24 * time.Hour
+	cfg.WriteBufferSize = 500
+
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("failed to create metrics store: %v", err)
+	}
+	defer store.Close()
+
+	mh := NewMetricsHistory(1000, 7*24*time.Hour)
+	seedMockMetricsHistory(mh, store, state, now, 7*24*time.Hour, time.Minute)
+
+	points, err := store.Query("vm", "vm-100", "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query metrics store: %v", err)
+	}
+	if len(points) == 0 {
+		t.Fatal("expected metrics store to have seeded points for 7d range")
 	}
 }

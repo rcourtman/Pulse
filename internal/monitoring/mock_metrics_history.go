@@ -462,6 +462,11 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	m.mu.Unlock()
 
 	state := mock.GetMockState()
+	if m.metricsStore != nil {
+		if err := m.metricsStore.Clear(); err != nil {
+			log.Warn().Err(err).Msg("Failed to clear metrics store before mock seeding")
+		}
+	}
 	seedMockMetricsHistory(m.metricsHistory, m.metricsStore, state, time.Now(), seedDuration, cfg.SampleInterval)
 	recordMockStateToMetricsHistory(m.metricsHistory, m.metricsStore, state, time.Now())
 
