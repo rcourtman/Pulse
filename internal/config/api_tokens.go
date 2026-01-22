@@ -269,7 +269,6 @@ func (c *Config) SortAPITokens() {
 
 	if len(c.APITokens) > 0 {
 		c.APIToken = c.APITokens[0].Hash
-		c.APITokenEnabled = true
 	} else {
 		c.APIToken = ""
 	}

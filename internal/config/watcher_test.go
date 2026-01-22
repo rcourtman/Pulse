@@ -354,7 +354,7 @@ API_TOKENS="token2,token3"`
 	cw.reloadConfig()
 
 	assert.Len(t, cfg.APITokens, 3)
-	assert.True(t, cfg.APITokenEnabled)
+	assert.True(t, cfg.HasAPITokens())
 
 	// Scenario 2: Legacy tokens ignored if APITokens not empty (manually added via UI/Persistence)
 	// Let's simulate that by adding a token directly to config

@@ -2080,9 +2080,16 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		return nil
 	}
 
-	// Write to temp file first
+	// Write to temp file first using owner-only permissions.
 	tempFile := envFile + ".tmp"
-	if err := c.fs.WriteFile(tempFile, []byte(content), 0644); err != nil {
+	perm := os.FileMode(0600)
+	if info, err := c.fs.Stat(envFile); err == nil {
+		perm = info.Mode().Perm() & 0700
+		if perm == 0 {
+			perm = 0600
+		}
+	}
+	if err := c.fs.WriteFile(tempFile, []byte(content), perm); err != nil {
 		return err
 	}
 

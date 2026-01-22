@@ -84,7 +84,7 @@ func TestLoad_APITokens_Migration(t *testing.T) {
 	// But we only have token1, token2 in list.
 	// If getting 3, something is weird. We assert >= 2.
 	assert.GreaterOrEqual(t, len(cfg.APITokens), 2)
-	assert.True(t, cfg.APITokenEnabled)
+	assert.True(t, cfg.HasAPITokens())
 
 	// Verify hashed
 	assert.NotEqual(t, "token1", cfg.APITokens[0].Hash)

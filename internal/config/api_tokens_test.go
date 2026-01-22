@@ -1047,16 +1047,12 @@ func TestSortAPITokens(t *testing.T) {
 		if cfg.APIToken != "primary-hash" {
 			t.Errorf("expected APIToken to be set to primary hash, got %q", cfg.APIToken)
 		}
-		if !cfg.APITokenEnabled {
-			t.Error("expected APITokenEnabled to be true")
-		}
 	})
 
 	t.Run("empty tokens clears APIToken", func(t *testing.T) {
 		cfg := &Config{
-			APIToken:        "old-value",
-			APITokenEnabled: true,
-			APITokens:       []APITokenRecord{},
+			APIToken:  "old-value",
+			APITokens: []APITokenRecord{},
 		}
 
 		cfg.SortAPITokens()

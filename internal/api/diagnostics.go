@@ -651,7 +651,7 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 	}
 
 	diag := &APITokenDiagnostic{
-		Enabled:    len(cfg.APITokens) > 0,
+		Enabled:    cfg.APITokenEnabled,
 		TokenCount: len(cfg.APITokens),
 	}
 
@@ -682,7 +682,9 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 	diag.RecommendTokenSetup = len(cfg.APITokens) == 0
 	diag.RecommendTokenRotation = envTokens || legacyToken
 
-	if diag.RecommendTokenSetup {
+	if !cfg.APITokenEnabled && len(cfg.APITokens) > 0 {
+		appendNote("API token authentication is currently disabled. Enable it under Settings → Security so agents can use dedicated tokens.")
+	} else if diag.RecommendTokenSetup {
 		appendNote("No API tokens are configured. Open Settings → Security to generate dedicated tokens for each automation or agent.")
 	}
 

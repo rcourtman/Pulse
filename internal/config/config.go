@@ -79,12 +79,10 @@ func IsPasswordHashed(password string) bool {
 // NOTE: The envconfig tags are legacy and not used - configuration is loaded from encrypted JSON files
 type Config struct {
 	// Server settings
-	BackendHost     string `envconfig:"BACKEND_HOST" default:""`
-	BackendPort     int    `envconfig:"BACKEND_PORT" default:"3000"`
-	FrontendHost    string `envconfig:"FRONTEND_HOST" default:""`
-	FrontendPort    int    `envconfig:"FRONTEND_PORT" default:"7655"`
-	ConfigPath      string `envconfig:"CONFIG_PATH"`
-	DataPath        string `envconfig:"DATA_DIR"`
+	BackendPort     int
+	FrontendPort    int `envconfig:"FRONTEND_PORT" default:"7655"`
+	ConfigPath      string
+	DataPath        string
 	AppRoot         string `json:"-"`                                       // Root directory of the application (where binary lives)
 	PublicURL       string `envconfig:"PULSE_PUBLIC_URL" default:""`        // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
 	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""` // Dedicated direct connect URL for agents (e.g. http://192.168.1.5:7655)
@@ -99,10 +97,9 @@ type Config struct {
 	PMGInstances []PMGInstance
 
 	// Monitoring settings
-	PVEPollingInterval              time.Duration `envconfig:"PVE_POLLING_INTERVAL"` // PVE polling interval (10s default)
-	PBSPollingInterval              time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
-	PMGPollingInterval              time.Duration `envconfig:"PMG_POLLING_INTERVAL"` // PMG polling interval (60s default)
-	ConcurrentPolling               bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
+	PVEPollingInterval              time.Duration `envconfig:"PVE_POLLING_INTERVAL"`             // PVE polling interval (10s default)
+	PBSPollingInterval              time.Duration `envconfig:"PBS_POLLING_INTERVAL"`             // PBS polling interval (60s default)
+	PMGPollingInterval              time.Duration `envconfig:"PMG_POLLING_INTERVAL"`             // PMG polling interval (60s default)
 	ConnectionTimeout               time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
 	BackupPollingCycles             int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
 	BackupPollingInterval           time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
@@ -138,7 +135,6 @@ type Config struct {
 
 	// Security settings
 	APIToken                   string           `envconfig:"API_TOKEN"`
-	APITokenEnabled            bool             `envconfig:"API_TOKEN_ENABLED" default:"false"`
 	APITokens                  []APITokenRecord `json:"-"`
 	SuppressedEnvMigrations    []string         `json:"-"` // Hashes of env tokens deleted by user (prevent re-migration)
 	AuthUser                   string           `envconfig:"PULSE_AUTH_USER"`
@@ -146,7 +142,6 @@ type Config struct {
 	DisableAuthEnvDetected     bool             `json:"-"`
 	DemoMode                   bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
 	AllowedOrigins             string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
-	IframeEmbeddingAllow       string           `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
 	HideLocalLogin             bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
 	DisableDockerUpdateActions bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"` // Hide Docker update buttons (read-only mode for containers)
 
@@ -166,19 +161,15 @@ type Config struct {
 	TLSKeyFile   string `envconfig:"TLS_KEY_FILE" default:""`
 
 	// Update settings
-	UpdateChannel           string        `envconfig:"UPDATE_CHANNEL" default:"stable"`
-	AutoUpdateEnabled       bool          `envconfig:"AUTO_UPDATE_ENABLED" default:"false"`
-	AutoUpdateCheckInterval time.Duration `envconfig:"AUTO_UPDATE_CHECK_INTERVAL" default:"24h"`
-	AutoUpdateTime          string        `envconfig:"AUTO_UPDATE_TIME" default:"03:00"`
+	UpdateChannel           string
+	AutoUpdateEnabled       bool
+	AutoUpdateCheckInterval time.Duration
+	AutoUpdateTime          string
 
 	// Discovery settings
 	DiscoveryEnabled bool            `envconfig:"DISCOVERY_ENABLED" default:"false"`
 	DiscoverySubnet  string          `envconfig:"DISCOVERY_SUBNET" default:"auto"`
 	Discovery        DiscoveryConfig `json:"discoveryConfig"`
-
-	// Deprecated - for backward compatibility
-	Port  int  `envconfig:"PORT"` // Maps to BackendPort
-	Debug bool `envconfig:"DEBUG" default:"false"`
 
 	// Track which settings are overridden by environment variables
 	EnvOverrides map[string]bool `json:"-"`
@@ -460,7 +451,6 @@ type ClusterEndpoint struct {
 	PulseReachable *bool      // Pulse's view: can Pulse reach this endpoint? nil = not yet checked
 	LastPulseCheck *time.Time // Last time Pulse checked connectivity
 	PulseError     string     // Last error Pulse encountered connecting to this endpoint
-
 }
 
 // EffectiveIP returns the IP to use for this endpoint, preferring IPOverride if set
@@ -565,20 +555,16 @@ func Load() (*Config, error) {
 
 	// Initialize config with defaults
 	cfg := &Config{
-		BackendHost:                     "",
 		BackendPort:                     3000,
-		FrontendHost:                    "",
 		FrontendPort:                    7655,
 		ConfigPath:                      dataDir,
 		DataPath:                        dataDir,
 		AppRoot:                         detectAppRoot(),
-		ConcurrentPolling:               true,
 		ConnectionTimeout:               60 * time.Second,
 		BackupPollingCycles:             10,
 		BackupPollingInterval:           0,
 		EnableBackupPolling:             true,
 		PVEPollingInterval:              10 * time.Second,
-		WebhookBatchDelay:               10 * time.Second,
 		AdaptivePollingEnabled:          false,
 		AdaptivePollingBaseInterval:     10 * time.Second,
 		AdaptivePollingMinInterval:      5 * time.Second,
@@ -593,8 +579,7 @@ func Load() (*Config, error) {
 		LogMaxSize:                      100,
 		LogMaxAge:                       30,
 		LogCompress:                     true,
-		AllowedOrigins:                  "", // Empty means no CORS headers (same-origin only)
-		IframeEmbeddingAllow:            "SAMEORIGIN",
+		AllowedOrigins:                  "",               // Empty means no CORS headers (same-origin only)
 		PBSPollingInterval:              60 * time.Second, // Default PBS polling (slower)
 		PMGPollingInterval:              60 * time.Second, // Default PMG polling (aggregated stats)
 		DiscoveryEnabled:                false,
@@ -1127,15 +1112,6 @@ func Load() (*Config, error) {
 					Msg("Migrated API tokens from .env to api_tokens.json - API_TOKEN/API_TOKENS in .env are deprecated and will be ignored in future releases. Manage tokens via the UI instead.")
 			}
 		}
-	}
-
-	// Check if API token is enabled
-	if apiTokenEnabled := os.Getenv("API_TOKEN_ENABLED"); apiTokenEnabled != "" {
-		cfg.APITokenEnabled = apiTokenEnabled == "true" || apiTokenEnabled == "1"
-		log.Debug().Bool("enabled", cfg.APITokenEnabled).Msg("API token enabled status from env var")
-	} else if cfg.HasAPITokens() {
-		cfg.APITokenEnabled = true
-		log.Debug().Msg("API tokens exist without explicit enabled flag, assuming enabled for backwards compatibility")
 	}
 
 	// Legacy migration: if a single token is present without metadata, wrap it.

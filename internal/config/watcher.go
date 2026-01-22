@@ -456,7 +456,6 @@ func (cw *ConfigWatcher) reloadConfig() {
 
 		cw.config.APITokens = newRecords
 		cw.config.SortAPITokens()
-		cw.config.APITokenEnabled = len(newRecords) > 0
 
 		newHashes := cw.config.ActiveAPITokenHashes()
 		if !reflect.DeepEqual(oldTokenHashes, newHashes) {
@@ -541,7 +540,6 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	Mu.Lock()
 	cw.config.APITokens = tokens
 	cw.config.SortAPITokens()
-	cw.config.APITokenEnabled = len(tokens) > 0
 	Mu.Unlock()
 
 	if cw.apiTokensPath != "" {
