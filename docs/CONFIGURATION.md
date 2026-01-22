@@ -226,6 +226,16 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `MAX_POLL_TIMEOUT` | Maximum time per polling cycle | `3m` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
 
+### Logging Overrides
+
+| Variable | Description | Default |
+| ---------- | ------------- | --------- |
+| `LOG_FILE` | Log file path (empty = stderr only) | *(unset)* |
+| `LOG_MAX_SIZE` | Log file max size (MB) | `100` |
+| `LOG_MAX_AGE` | Log file retention (days, `0` disables cleanup) | `30` |
+| `LOG_COMPRESS` | Compress rotated logs | `true` |
+
+
 ### Update Settings (system.json)
 
 These are stored in `system.json` and managed via the UI.
@@ -236,7 +246,6 @@ These are stored in `system.json` and managed via the UI.
 | `autoUpdateEnabled` | Allow one-click updates | `false` |
 | `autoUpdateCheckInterval` | Background update check interval in hours (`0` disables) | `24` |
 | `autoUpdateTime` | Stored UI preference (systemd timer has its own schedule) | `03:00` |
-
 
 > **Note**: Update settings are stored in `system.json`. Legacy `.env` entries (`UPDATE_CHANNEL`, `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CHECK_INTERVAL`, `AUTO_UPDATE_TIME`) are kept in sync for backwards compatibility but are not read at runtime.
 
