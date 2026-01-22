@@ -173,8 +173,10 @@ func TestExecuteGetAgentScopeErrors(t *testing.T) {
 }
 
 func TestExecuteGetAgentScopeNotFound(t *testing.T) {
+	stateProv := &mockStateProvider{}
+	stateProv.On("GetState").Return(models.StateSnapshot{})
 	executor := NewPulseToolExecutor(ExecutorConfig{
-		StateProvider: &mockStateProvider{},
+		StateProvider: stateProv,
 	})
 
 	result, err := executor.executeGetAgentScope(context.Background(), map[string]interface{}{
@@ -200,8 +202,10 @@ func TestExecuteGetAgentScopeProfileManagerError(t *testing.T) {
 	manager := &mockProfileManager{
 		getErr: errors.New("boom"),
 	}
+	stateProv := &mockStateProvider{}
+	stateProv.On("GetState").Return(models.StateSnapshot{})
 	executor := NewPulseToolExecutor(ExecutorConfig{
-		StateProvider:       &mockStateProvider{},
+		StateProvider:       stateProv,
 		AgentProfileManager: manager,
 	})
 
@@ -248,8 +252,10 @@ func TestExecuteGetAgentScopeWithProfile(t *testing.T) {
 		},
 	}
 
+	stateProv := &mockStateProvider{}
+	stateProv.On("GetState").Return(state)
 	executor := NewPulseToolExecutor(ExecutorConfig{
-		StateProvider:       &mockStateProvider{state: state},
+		StateProvider:       stateProv,
 		AgentProfileManager: manager,
 	})
 

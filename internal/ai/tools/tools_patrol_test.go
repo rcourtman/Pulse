@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/mock"
 )
 
 type stubBaselineProvider struct {
@@ -58,14 +60,14 @@ func TestExecuteGetMetrics(t *testing.T) {
 		t.Fatal("expected metrics not available message")
 	}
 
-	executor.metricsHistory = &mockMetricsHistoryProvider{
-		metrics: map[string][]MetricPoint{
-			"res1": {{CPU: 1, Memory: 2}},
-		},
-		summary: map[string]ResourceMetricsSummary{
-			"res1": {ResourceID: "res1"},
-		},
-	}
+	metricsProv := &mockMetricsHistoryProvider{}
+	metricsProv.On("GetAllMetricsSummary", mock.Anything).Return(map[string]ResourceMetricsSummary{
+		"res1": {ResourceID: "res1"},
+	}, nil)
+	metricsProv.On("GetResourceMetrics", "res1", mock.Anything).Return([]MetricPoint{
+		{CPU: 1, Memory: 2},
+	}, nil)
+	executor.metricsHistory = metricsProv
 	result, _ = executor.executeGetMetrics(context.Background(), map[string]interface{}{
 		"period":      "bad",
 		"resource_id": "res1",
@@ -138,12 +140,12 @@ func TestExecuteListAlertsAndFindings(t *testing.T) {
 		t.Fatal("expected alerts not available message")
 	}
 
-	executor.alertProvider = &mockAlertProvider{
-		alerts: []ActiveAlert{
-			{ID: "a1", Severity: "warning"},
-			{ID: "a2", Severity: "critical"},
-		},
-	}
+	alertProv := &mockAlertProvider{}
+	alertProv.On("GetActiveAlerts").Return([]ActiveAlert{
+		{ID: "a1", Severity: "warning"},
+		{ID: "a2", Severity: "critical"},
+	})
+	executor.alertProvider = alertProv
 	result, _ = executor.executeListAlerts(context.Background(), map[string]interface{}{
 		"severity": "critical",
 		"limit":    float64(1),
@@ -156,10 +158,10 @@ func TestExecuteListAlertsAndFindings(t *testing.T) {
 		t.Fatalf("unexpected alerts: %+v", alerts)
 	}
 
-	executor.findingsProvider = &mockFindingsProvider{
-		active:    []Finding{{ID: "f1", Severity: "warning"}},
-		dismissed: []Finding{{ID: "f2", Severity: "info"}},
-	}
+	findingsProv := &mockFindingsProvider{}
+	findingsProv.On("GetActiveFindings").Return([]Finding{{ID: "f1", Severity: "warning"}})
+	findingsProv.On("GetDismissedFindings").Return([]Finding{{ID: "f2", Severity: "info"}})
+	executor.findingsProvider = findingsProv
 	result, _ = executor.executeListFindings(context.Background(), map[string]interface{}{
 		"include_dismissed": true,
 		"severity":          "warning",

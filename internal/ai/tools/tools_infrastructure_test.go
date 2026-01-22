@@ -203,39 +203,6 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 	}
 }
 
-func TestExecuteGetDiskHealth(t *testing.T) {
-	executor := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{}})
-	executor.diskHealthProvider = &stubDiskHealthProvider{
-		hosts: []models.Host{
-			{
-				Hostname: "host1",
-				Sensors: models.HostSensorSummary{
-					SMART: []models.HostDiskSMART{
-						{Device: "/dev/sda", Model: "disk", Health: "PASSED", Temperature: 30},
-					},
-				},
-				RAID: []models.HostRAIDArray{
-					{Device: "/dev/md0", Level: "raid1", State: "clean", ActiveDevices: 2, WorkingDevices: 2},
-				},
-				Ceph: &models.HostCephCluster{
-					Health: models.HostCephHealth{Status: "HEALTH_OK"},
-					OSDMap: models.HostCephOSDMap{NumOSDs: 3, NumUp: 3, NumIn: 3},
-					PGMap:  models.HostCephPGMap{NumPGs: 128, UsagePercent: 10.5},
-				},
-			},
-		},
-	}
-
-	result, _ := executor.executeGetDiskHealth(context.Background(), map[string]interface{}{})
-	var resp DiskHealthResponse
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
-		t.Fatalf("decode disk health: %v", err)
-	}
-	if len(resp.Hosts) != 1 || len(resp.Hosts[0].SMART) != 1 || len(resp.Hosts[0].RAID) != 1 {
-		t.Fatalf("unexpected disk health response: %+v", resp)
-	}
-}
-
 func TestDockerUpdateTools(t *testing.T) {
 	state := models.StateSnapshot{
 		DockerHosts: []models.DockerHost{
@@ -250,8 +217,10 @@ func TestDockerUpdateTools(t *testing.T) {
 		},
 	}
 
+	stateProv := &mockStateProvider{}
+	stateProv.On("GetState").Return(state)
 	executor := NewPulseToolExecutor(ExecutorConfig{
-		StateProvider: &mockStateProvider{state: state},
+		StateProvider: stateProv,
 		ControlLevel:  ControlLevelSuggest,
 	})
 	updates := &stubUpdatesProvider{

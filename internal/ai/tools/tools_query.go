@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -299,17 +302,48 @@ func (e *PulseToolExecutor) executeGetCapabilities(_ context.Context) (CallToolR
 	return NewJSONResult(response), nil
 }
 
-func (e *PulseToolExecutor) executeGetURLContent(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	url, _ := args["url"].(string)
-	if url == "" {
+func (e *PulseToolExecutor) executeGetURLContent(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	urlStr, _ := args["url"].(string)
+	if urlStr == "" {
 		return NewErrorResult(fmt.Errorf("url is required")), nil
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	parsedURL, err := parseAndValidateFetchURL(ctx, urlStr)
 	if err != nil {
 		return NewJSONResult(URLFetchResponse{
-			URL:   url,
+			URL:   urlStr,
+			Error: err.Error(),
+		}), nil
+	}
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return fmt.Errorf("too many redirects")
+			}
+			if _, err := parseAndValidateFetchURL(ctx, req.URL.String()); err != nil {
+				return err
+			}
+			return nil
+		},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), nil)
+	if err != nil {
+		return NewJSONResult(URLFetchResponse{
+			URL:   urlStr,
+			Error: err.Error(),
+		}), nil
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return NewJSONResult(URLFetchResponse{
+			URL:   urlStr,
 			Error: err.Error(),
 		}), nil
 	}
@@ -318,7 +352,7 @@ func (e *PulseToolExecutor) executeGetURLContent(_ context.Context, args map[str
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 50*1024))
 	if err != nil {
 		return NewJSONResult(URLFetchResponse{
-			URL:   url,
+			URL:   urlStr,
 			Error: fmt.Sprintf("error reading response: %v", err),
 		}), nil
 	}
@@ -331,11 +365,90 @@ func (e *PulseToolExecutor) executeGetURLContent(_ context.Context, args map[str
 	}
 
 	return NewJSONResult(URLFetchResponse{
-		URL:        url,
+		URL:        urlStr,
 		StatusCode: resp.StatusCode,
 		Headers:    headers,
 		Body:       string(body),
 	}), nil
+}
+
+func parseAndValidateFetchURL(ctx context.Context, urlStr string) (*url.URL, error) {
+	clean := strings.TrimSpace(urlStr)
+	if clean == "" {
+		return nil, fmt.Errorf("url is required")
+	}
+
+	parsed, err := url.Parse(clean)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL: %w", err)
+	}
+	if !parsed.IsAbs() {
+		return nil, fmt.Errorf("URL must be absolute")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("only http/https URLs are allowed")
+	}
+	if parsed.User != nil {
+		return nil, fmt.Errorf("URLs with embedded credentials are not allowed")
+	}
+	if parsed.Fragment != "" {
+		return nil, fmt.Errorf("URL fragments are not allowed")
+	}
+
+	host := parsed.Hostname()
+	if host == "" {
+		return nil, fmt.Errorf("URL must include a host")
+	}
+
+	if isBlockedFetchHost(host) {
+		return nil, fmt.Errorf("URL host is blocked")
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		if isBlockedFetchIP(ip) {
+			return nil, fmt.Errorf("URL IP is blocked")
+		}
+		return parsed, nil
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve host: %w", err)
+	}
+	for _, addr := range addrs {
+		if isBlockedFetchIP(addr.IP) {
+			return nil, fmt.Errorf("URL host resolves to a blocked address")
+		}
+	}
+
+	return parsed, nil
+}
+
+func isBlockedFetchHost(host string) bool {
+	h := strings.TrimSpace(strings.ToLower(host))
+	if h == "localhost" || h == "localhost." {
+		return true
+	}
+	return false
+}
+
+func isBlockedFetchIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		if ip.IsLoopback() && os.Getenv("PULSE_AI_ALLOW_LOOPBACK") == "true" {
+			return false
+		}
+		return true
+	}
+	if !ip.IsGlobalUnicast() && !ip.IsPrivate() {
+		return true
+	}
+	return false
 }
 
 func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
