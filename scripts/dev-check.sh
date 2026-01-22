@@ -17,6 +17,7 @@ if [[ "${1:-}" == "--kill" ]]; then
     pkill -9 -f "bin/pulse$" 2>/dev/null || true
     pkill -9 -f "^\./pulse$" 2>/dev/null || true
     pkill -f "node.*vite" 2>/dev/null || true
+    pkill -f "watch-backup.sh" 2>/dev/null || true
     sleep 2
     echo -e "${GREEN}✓${NC} All dev processes stopped"
     exit 0
@@ -69,6 +70,17 @@ if [[ "$AI_STATUS" == "true" ]]; then
     echo -e "${GREEN}✓ Running (direct integration)${NC}"
 else
     echo -e "${YELLOW}⚠ Not running (enable in settings)${NC}"
+fi
+
+# Check file backup watcher
+echo -n "File backup watcher: "
+BACKUP_PID=$(pgrep -f "watch-backup.sh" 2>/dev/null | head -1)
+if [[ -n "$BACKUP_PID" ]]; then
+    BACKUP_COUNT=$(ls ~/.pulse-backups 2>/dev/null | wc -l | tr -d ' ')
+    echo -e "${GREEN}✓ Running (PID: $BACKUP_PID, $BACKUP_COUNT backups)${NC}"
+else
+    echo -e "${YELLOW}⚠ Not running (optional - protects against accidental file loss)${NC}"
+    echo "   Start: ./scripts/watch-backup.sh &"
 fi
 
 # Show recent errors
