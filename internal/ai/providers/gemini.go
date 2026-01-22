@@ -68,9 +68,11 @@ type geminiContent struct {
 }
 
 type geminiPart struct {
-	Text             string                  `json:"text,omitempty"`
-	FunctionCall     *geminiFunctionCall     `json:"functionCall,omitempty"`
-	FunctionResponse *geminiFunctionResponse `json:"functionResponse,omitempty"`
+	Text                  string                  `json:"text,omitempty"`
+	FunctionCall          *geminiFunctionCall     `json:"functionCall,omitempty"`
+	FunctionResponse      *geminiFunctionResponse `json:"functionResponse,omitempty"`
+	ThoughtSignature      json.RawMessage         `json:"thoughtSignature,omitempty"`
+	ThoughtSignatureSnake json.RawMessage         `json:"thought_signature,omitempty"`
 }
 
 type geminiFunctionCall struct {
@@ -186,6 +188,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 						Name: tc.Name,
 						Args: tc.Input,
 					},
+					ThoughtSignature: tc.ThoughtSignature,
 				})
 			}
 			contents = append(contents, geminiContent{
@@ -400,10 +403,15 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			// Generate a unique ID for this tool call since Gemini doesn't provide one
 			// Use name + index to ensure uniqueness when same function is called multiple times
 			toolID := fmt.Sprintf("%s_%d", part.FunctionCall.Name, len(toolCalls))
+			signature := part.ThoughtSignature
+			if len(signature) == 0 {
+				signature = part.ThoughtSignatureSnake
+			}
 			toolCalls = append(toolCalls, ToolCall{
-				ID:    toolID,
-				Name:  part.FunctionCall.Name,
-				Input: part.FunctionCall.Args,
+				ID:               toolID,
+				Name:             part.FunctionCall.Name,
+				Input:            part.FunctionCall.Args,
+				ThoughtSignature: signature,
 			})
 		}
 	}
@@ -462,35 +470,88 @@ type geminiStreamEvent struct {
 func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
 	// Convert messages to Gemini format (same as Chat)
 	contents := make([]geminiContent, 0, len(req.Messages))
-	for _, m := range req.Messages {
+
+	for i := 0; i < len(req.Messages); i++ {
+		m := req.Messages[i]
 		if m.Role == "system" {
 			continue
 		}
 
+		// Convert role names (Gemini uses "user" and "model")
 		role := m.Role
 		if role == "assistant" {
 			role = "model"
 		}
 
+		// Handle tool results - merge consecutive tool results into one content block
 		if m.ToolResult != nil {
-			contents = append(contents, geminiContent{
-				Role: "user",
-				Parts: []geminiPart{
-					{
-						FunctionResponse: &geminiFunctionResponse{
-							Name: m.ToolResult.ToolUseID,
-							Response: struct {
-								Content string `json:"content"`
-							}{
-								Content: m.ToolResult.Content,
-							},
+			// Find the preceding assistant message to resolve function names
+			// Gemini requires the 'name' in FunctionResponse to match the function name, not the ID
+			var assistantMsg *Message
+			if i > 0 && req.Messages[i-1].Role == "assistant" {
+				assistantMsg = &req.Messages[i-1]
+			}
+
+			// Helper to resolve name
+			resolveName := func(id string) string {
+				if assistantMsg != nil {
+					for _, call := range assistantMsg.ToolCalls {
+						if call.ID == id {
+							return call.Name
+						}
+					}
+				}
+				return id
+			}
+
+			toolName := resolveName(m.ToolResult.ToolUseID)
+
+			parts := []geminiPart{
+				{
+					FunctionResponse: &geminiFunctionResponse{
+						Name: toolName,
+						Response: struct {
+							Content string `json:"content"`
+						}{
+							Content: m.ToolResult.Content,
 						},
 					},
 				},
+			}
+
+			// Look ahead for more tool results
+			for i+1 < len(req.Messages) {
+				next := req.Messages[i+1]
+				if next.ToolResult == nil {
+					break
+				}
+
+				nextToolName := resolveName(next.ToolResult.ToolUseID)
+
+				// Add next tool result to parts
+				parts = append(parts, geminiPart{
+					FunctionResponse: &geminiFunctionResponse{
+						Name: nextToolName,
+						Response: struct {
+							Content string `json:"content"`
+						}{
+							Content: next.ToolResult.Content,
+						},
+					},
+				})
+
+				// Advance index
+				i++
+			}
+
+			contents = append(contents, geminiContent{
+				Role:  "user",
+				Parts: parts,
 			})
 			continue
 		}
 
+		// Handle assistant messages with tool calls
 		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
 			parts := make([]geminiPart, 0)
 			if m.Content != "" {
@@ -502,6 +563,7 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 						Name: tc.Name,
 						Args: tc.Input,
 					},
+					ThoughtSignature: tc.ThoughtSignature,
 				})
 			}
 			contents = append(contents, geminiContent{
@@ -516,6 +578,7 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 			continue
 		}
 
+		// Simple text message
 		contents = append(contents, geminiContent{
 			Role: role,
 			Parts: []geminiPart{
@@ -658,6 +721,10 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 						if part.FunctionCall != nil {
 							toolID := fmt.Sprintf("%s_%d", part.FunctionCall.Name, len(toolCalls))
+							signature := part.ThoughtSignature
+							if len(signature) == 0 {
+								signature = part.ThoughtSignatureSnake
+							}
 							callback(StreamEvent{
 								Type: "tool_start",
 								Data: ToolStartEvent{
@@ -667,9 +734,10 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 								},
 							})
 							toolCalls = append(toolCalls, ToolCall{
-								ID:    toolID,
-								Name:  part.FunctionCall.Name,
-								Input: part.FunctionCall.Args,
+								ID:               toolID,
+								Name:             part.FunctionCall.Name,
+								Input:            part.FunctionCall.Args,
+								ThoughtSignature: signature,
 							})
 						}
 					}

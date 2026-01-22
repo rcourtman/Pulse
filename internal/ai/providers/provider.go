@@ -3,6 +3,7 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 )
 
 // Message represents a chat message
@@ -16,9 +17,10 @@ type Message struct {
 
 // ToolCall represents a tool invocation from the AI
 type ToolCall struct {
-	ID    string                 `json:"id"`
-	Name  string                 `json:"name"`
-	Input map[string]interface{} `json:"input"`
+	ID               string                 `json:"id"`
+	Name             string                 `json:"name"`
+	Input            map[string]interface{} `json:"input"`
+	ThoughtSignature json.RawMessage        `json:"thought_signature,omitempty"`
 }
 
 // ToolResult represents the result of a tool execution
