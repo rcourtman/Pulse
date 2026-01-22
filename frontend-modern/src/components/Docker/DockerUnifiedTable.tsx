@@ -161,85 +161,6 @@ const [dockerEditingValuesVersion, setDockerEditingValuesVersion] = createSignal
 const [dockerPopoverPosition, setDockerPopoverPosition] = createSignal<{ top: number; left: number } | null>(null);
 
 const toLower = (value?: string | null) => value?.toLowerCase() ?? '';
-const MUTABLE_IMAGE_TAGS = new Set([
-  'latest',
-  'stable',
-  'main',
-  'master',
-  'edge',
-  'dev',
-  'nightly',
-  'canary',
-]);
-
-type ImageVersionInfo = {
-  value: string;
-  source: 'label' | 'tag';
-  mutable: boolean;
-  title: string;
-};
-
-const getVersionLabelFromLabels = (labels?: Record<string, string>) => {
-  if (!labels) return null;
-  if (labels['org.opencontainers.image.version']) {
-    return { value: labels['org.opencontainers.image.version'], key: 'org.opencontainers.image.version' };
-  }
-  if (labels['org.label-schema.version']) {
-    return { value: labels['org.label-schema.version'], key: 'org.label-schema.version' };
-  }
-  return null;
-};
-
-const getImageTag = (image?: string): string | undefined => {
-  if (!image) return undefined;
-  const withoutDigest = image.split('@')[0];
-  const lastSlash = withoutDigest.lastIndexOf('/');
-  const lastColon = withoutDigest.lastIndexOf(':');
-  if (lastColon > lastSlash) return withoutDigest.slice(lastColon + 1);
-  return undefined;
-};
-
-const getImageVersionInfo = (image?: string, labels?: Record<string, string>): ImageVersionInfo | null => {
-  const labelInfo = getVersionLabelFromLabels(labels);
-  if (labelInfo && labelInfo.value) {
-    return {
-      value: labelInfo.value,
-      source: 'label',
-      mutable: false,
-      title: `Version from image label (${labelInfo.key})`,
-    };
-  }
-
-  const tag = getImageTag(image);
-  if (!tag) return null;
-
-  const isMutable = MUTABLE_IMAGE_TAGS.has(tag.toLowerCase());
-  return {
-    value: tag,
-    source: 'tag',
-    mutable: isMutable,
-    title: isMutable ? 'Tag is mutable; version unverified' : 'Version from image tag (unverified)',
-  };
-};
-
-const getVersionBadgeClass = (info: ImageVersionInfo) => {
-  if (info.source === 'label') {
-    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200';
-  }
-  if (info.mutable) {
-    return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200';
-  }
-  return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200';
-};
-
-
-const MAX_VERSION_LABEL = 12;
-
-const getShortVersionLabel = (value: string) => {
-  if (value.length <= MAX_VERSION_LABEL) return value;
-  return `${value.slice(0, MAX_VERSION_LABEL - 3)}...`;
-};
-
 
 const ensureMs = (value?: number | string | null): number | null => {
   if (!value) return null;
@@ -893,7 +814,6 @@ const DockerContainerRow: Component<{
   const { host, container } = props.row;
   const runtimeInfo = resolveHostRuntime(host);
   const runtimeVersion = () => host.runtimeVersion || host.dockerVersion || null;
-  const imageVersion = createMemo(() => getImageVersionInfo(container.image, container.labels));
   const hostStatus = createMemo(() => getDockerHostStatusIndicator(host));
   const hostDisplayName = () => getHostDisplayName(host);
   const rowId = buildRowId(host, props.row);
@@ -1822,7 +1742,6 @@ const DockerServiceRow: Component<{
   resourceIndentClass?: string;
 }> = (props) => {
   const { host, service, tasks } = props.row;
-  const imageVersion = createMemo(() => getImageVersionInfo(service.image, service.labels));
   const rowId = buildRowId(host, props.row);
   const resourceId = () => `${host.id}:service:${service.id || service.name}`;
   const isEditingUrl = createMemo(() => currentlyEditingDockerResourceId() === resourceId());
