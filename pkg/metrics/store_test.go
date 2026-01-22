@@ -24,8 +24,8 @@ func TestStoreWriteBatchAndQuery(t *testing.T) {
 
 	ts := time.Unix(1000, 0)
 	store.writeBatch([]bufferedMetric{
-		{resourceType: "vm", resourceID: "vm-101", metricType: "cpu", value: 1.5, timestamp: ts},
-		{resourceType: "vm", resourceID: "vm-101", metricType: "cpu", value: 2.5, timestamp: ts.Add(1 * time.Second)},
+		{resourceType: "vm", resourceID: "vm-101", metricType: "cpu", value: 1.5, timestamp: ts, tier: TierRaw},
+		{resourceType: "vm", resourceID: "vm-101", metricType: "cpu", value: 2.5, timestamp: ts.Add(1 * time.Second), tier: TierRaw},
 	})
 
 	points, err := store.Query("vm", "vm-101", "cpu", ts.Add(-1*time.Second), ts.Add(2*time.Second), 0)
@@ -64,16 +64,16 @@ func TestStoreSelectTierAndStats(t *testing.T) {
 	}
 	defer store.Close()
 
-	if store.selectTier(5*time.Second) != TierRaw {
+	if store.selectTier(30*time.Minute) != TierRaw {
 		t.Fatalf("expected raw tier")
 	}
-	if store.selectTier(15*time.Second) != TierMinute {
+	if store.selectTier(3*time.Hour) != TierMinute {
 		t.Fatalf("expected minute tier")
 	}
-	if store.selectTier(25*time.Second) != TierHourly {
+	if store.selectTier(48*time.Hour) != TierHourly {
 		t.Fatalf("expected hourly tier")
 	}
-	if store.selectTier(35*time.Second) != TierDaily {
+	if store.selectTier(10*24*time.Hour) != TierDaily {
 		t.Fatalf("expected daily tier")
 	}
 
@@ -131,8 +131,8 @@ func TestStoreRollupTier(t *testing.T) {
 	if err := store.db.QueryRow(`SELECT COUNT(*) FROM metrics WHERE tier = 'raw'`).Scan(&countRaw); err != nil {
 		t.Fatalf("query raw count: %v", err)
 	}
-	if countRaw != 0 {
-		t.Fatalf("expected raw metrics to be rolled up, got %d", countRaw)
+	if countRaw != 2 {
+		t.Fatalf("expected raw metrics to be retained, got %d", countRaw)
 	}
 
 	var value, minValue, maxValue float64
@@ -241,7 +241,7 @@ func TestStoreQueryDownsampling(t *testing.T) {
 	start := time.Unix(1000, 0)
 	for i := 0; i < 10; i++ {
 		store.writeBatch([]bufferedMetric{
-			{resourceType: "vm", resourceID: "v1", metricType: "cpu", value: float64(i * 10), timestamp: start.Add(time.Duration(i) * time.Minute)},
+			{resourceType: "vm", resourceID: "v1", metricType: "cpu", value: float64(i * 10), timestamp: start.Add(time.Duration(i) * time.Minute), tier: TierRaw},
 		})
 	}
 
@@ -256,7 +256,7 @@ func TestStoreQueryDownsampling(t *testing.T) {
 	// Buckets: [1000-1300), [1300-1600), [1600-1900)
 	// Points at: 1000, 1060, 1120, 1180, 1240 (5 points) -> Bucket 1000
 	// Points at: 1300, 1360, 1420, 1480, 1540 (5 points) -> Bucket 1300
-	if len(points) != 2 {
-		t.Fatalf("expected 2 bucketed points, got %d", len(points))
+	if len(points) != 3 {
+		t.Fatalf("expected 3 bucketed points, got %d", len(points))
 	}
 }

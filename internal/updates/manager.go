@@ -1154,7 +1154,10 @@ func (m *Manager) createBackup() (string, error) {
 
 	// Backup important directories
 	dirsToBackup := []string{"data", "config"}
-	pulseDir := "/opt/pulse"
+	pulseDir := os.Getenv("PULSE_INSTALL_DIR")
+	if pulseDir == "" {
+		pulseDir = "/opt/pulse"
+	}
 
 	for _, dir := range dirsToBackup {
 		src := filepath.Join(pulseDir, dir)

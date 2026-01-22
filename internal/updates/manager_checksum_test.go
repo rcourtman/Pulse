@@ -94,9 +94,11 @@ func TestManagerCloseAndBackup(t *testing.T) {
 	}
 
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	installDir := t.TempDir()
+	t.Setenv("PULSE_INSTALL_DIR", installDir)
 
-	dataDir := filepath.Join("/opt/pulse", "data")
-	configDir := filepath.Join("/opt/pulse", "config")
+	dataDir := filepath.Join(installDir, "data")
+	configDir := filepath.Join(installDir, "config")
 
 	if _, err := os.Stat(dataDir); err == nil {
 		t.Skip("data dir already exists; skip backup test to avoid interference")

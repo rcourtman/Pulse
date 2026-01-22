@@ -212,6 +212,14 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			queueMetric("node", node.ID, "memory", memSeries[i], ts)
 			queueMetric("node", node.ID, "disk", diskSeries[i], ts)
 		}
+
+		// Ensure the latest point lands at "now" for full-range charts.
+		mh.AddNodeMetric(node.ID, "cpu", node.CPU*100, now)
+		mh.AddNodeMetric(node.ID, "memory", node.Memory.Usage, now)
+		mh.AddNodeMetric(node.ID, "disk", node.Disk.Usage, now)
+		queueMetric("node", node.ID, "cpu", node.CPU*100, now)
+		queueMetric("node", node.ID, "memory", node.Memory.Usage, now)
+		queueMetric("node", node.ID, "disk", node.Disk.Usage, now)
 	}
 
 	recordGuest := func(metricID, storeType, storeID string, cpuPercent, memPercent, diskPercent float64) {
@@ -234,6 +242,14 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			queueMetric(storeType, storeID, "memory", memSeries[i], ts)
 			queueMetric(storeType, storeID, "disk", diskSeries[i], ts)
 		}
+
+		// Ensure the latest point lands at "now" for full-range charts.
+		mh.AddGuestMetric(metricID, "cpu", cpuPercent, now)
+		mh.AddGuestMetric(metricID, "memory", memPercent, now)
+		mh.AddGuestMetric(metricID, "disk", diskPercent, now)
+		queueMetric(storeType, storeID, "cpu", cpuPercent, now)
+		queueMetric(storeType, storeID, "memory", memPercent, now)
+		queueMetric(storeType, storeID, "disk", diskPercent, now)
 	}
 
 	for _, node := range state.Nodes {
@@ -270,6 +286,10 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			mh.AddStorageMetric(storage.ID, "usage", usageSeries[i], ts)
 			queueMetric("storage", storage.ID, "usage", usageSeries[i], ts)
 		}
+
+		// Ensure the latest point lands at "now" for full-range charts.
+		mh.AddStorageMetric(storage.ID, "usage", storage.Usage, now)
+		queueMetric("storage", storage.ID, "usage", storage.Usage, now)
 		time.Sleep(200 * time.Millisecond)
 	}
 

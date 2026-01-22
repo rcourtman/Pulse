@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -25,7 +26,14 @@ func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func testBinary() []byte {
-	return []byte{0x7f, 'E', 'L', 'F', 0x01, 0x02, 0x03, 0x04}
+	switch runtime.GOOS {
+	case "darwin":
+		return []byte{0xcf, 0xfa, 0xed, 0xfe, 0x01, 0x02, 0x03, 0x04}
+	case "windows":
+		return []byte{'M', 'Z', 0x90, 0x00, 0x01, 0x02, 0x03, 0x04}
+	default:
+		return []byte{0x7f, 'E', 'L', 'F', 0x01, 0x02, 0x03, 0x04}
+	}
 }
 
 func checksum(data []byte) string {
@@ -637,7 +645,7 @@ func TestPerformUpdateStatusFallbackAndSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read updated exec: %v", err)
 	}
-	if !bytes.HasPrefix(updated, []byte{0x7f, 'E', 'L', 'F'}) {
+	if !bytes.HasPrefix(updated, testBinary()[:4]) {
 		t.Fatalf("expected updated binary content")
 	}
 }

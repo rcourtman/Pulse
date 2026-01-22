@@ -886,6 +886,9 @@ func TestMonitor_ExecuteScheduledTask_Extra(t *testing.T) {
 }
 
 func TestMonitor_Start_Extra(t *testing.T) {
+	t.Setenv("PULSE_MOCK_TRENDS_SEED_DURATION", "5m")
+	t.Setenv("PULSE_MOCK_TRENDS_SAMPLE_INTERVAL", "5m")
+
 	m := &Monitor{
 		config: &config.Config{
 			DiscoveryEnabled: false,
@@ -901,6 +904,7 @@ func TestMonitor_Start_Extra(t *testing.T) {
 	// Use MockMode to skip discovery
 	m.SetMockMode(true)
 	defer m.SetMockMode(false)
+	m.mockMetricsCancel = func() {} // Skip mock metrics seeding to keep Start responsive in tests.
 
 	ctx, cancel := context.WithCancel(context.Background())
 

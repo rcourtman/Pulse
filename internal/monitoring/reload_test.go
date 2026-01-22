@@ -21,7 +21,8 @@ func TestReloadableMonitorLifecycle(t *testing.T) {
 	}
 
 	hub := websocket.NewHub(nil)
-	rm, err := NewReloadableMonitor(cfg, hub)
+	mtp := config.NewMultiTenantPersistence(cfg.DataPath)
+	rm, err := NewReloadableMonitor(cfg, mtp, hub)
 	if err != nil {
 		t.Fatalf("new reloadable monitor: %v", err)
 	}
