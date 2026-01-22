@@ -42,6 +42,15 @@ const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
   }
 };
 
+// Extract just the image name + tag from a full image path
+// e.g., "ghcr.io/org/image-name:tag" → "image-name:tag"
+const getShortImageName = (fullImage: string | undefined): string => {
+  if (!fullImage) return '—';
+  // Get everything after the last slash
+  const lastSlash = fullImage.lastIndexOf('/');
+  return lastSlash >= 0 ? fullImage.slice(lastSlash + 1) : fullImage;
+};
+
 type StatsFilter =
   | { type: 'host-status'; value: string }
   | { type: 'container-state'; value: string }
@@ -130,9 +139,9 @@ interface DockerColumnDef extends ColumnConfig {
 // - supplementary: Visible on large screens and up (lg: 1024px+)
 // - detailed: Visible on extra large screens and up (xl: 1280px+)
 export const DOCKER_COLUMNS: DockerColumnDef[] = [
-  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource', width: '15%' },
+  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource', width: '18%' },
   { id: 'type', label: 'Type', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'type', width: '70px' },
-  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: '80px', maxWidth: '200px', sortKey: 'image', width: '15%' },
+  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: '80px', maxWidth: '200px', sortKey: 'image', width: '12%' },
   { id: 'status', label: 'Status', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'status', width: '90px' },
   // Metric columns - need fixed width to match progress bar max-width (140px + padding)
   // Note: Disk column removed - Docker API rarely provides this data
@@ -1211,15 +1220,15 @@ const DockerContainerRow: Component<{
               <div class="flex-1 min-w-0 truncate">
                 <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
                   <span
-                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate"
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate min-w-[60px] flex-shrink"
                     title={containerTitle()}
                   >
                     {container.name || container.id}
                   </span>
                   <Show when={podName()}>
                     {(name) => (
-                      <span class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 flex-shrink-0">
-                        Pod: {name()}
+                      <span class="inline-flex items-center gap-0.5 rounded bg-purple-100 px-1 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 flex-shrink-0 max-w-[90px]" title={`Pod: ${name()}`}>
+                        <span class="truncate">{name()}</span>
                         <Show when={isPodInfra()}>
                           <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200 ml-1">
                             infra
@@ -1255,7 +1264,7 @@ const DockerContainerRow: Component<{
                   </button>
                   <Show when={props.showHostContext}>
                     <span
-                      class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0 max-w-[120px]"
+                      class="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0 max-w-[80px]"
                       title={`Host: ${hostDisplayName()}`}
                     >
                       <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
@@ -1287,25 +1296,8 @@ const DockerContainerRow: Component<{
                 class="truncate"
                 title={container.image || undefined}
               >
-                {container.image || '—'}
+                {getShortImageName(container.image)}
               </span>
-              <Show when={imageVersion()}>
-                {(version) => {
-                  const display = getShortVersionLabel(version().value);
-                  const title = `${version().title}: ${version().value}`;
-                  return (
-                    <span
-                      class={`flex-shrink-0 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${getVersionBadgeClass(version())}`}
-                      title={title}
-                    >
-                      {display}
-                      <Show when={version().mutable}>
-                        <span class="text-[9px] leading-none">!</span>
-                      </Show>
-                    </span>
-                  );
-                }}
-              </Show>
               <UpdateButton
                 updateStatus={container.updateStatus}
                 hostId={host.id}
@@ -2127,25 +2119,8 @@ const DockerServiceRow: Component<{
                 class="truncate"
                 title={service.image || undefined}
               >
-                {service.image || '—'}
+                {getShortImageName(service.image)}
               </span>
-              <Show when={imageVersion()}>
-                {(version) => {
-                  const display = getShortVersionLabel(version().value);
-                  const title = `${version().title}: ${version().value}`;
-                  return (
-                    <span
-                      class={`flex-shrink-0 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${getVersionBadgeClass(version())}`}
-                      title={title}
-                    >
-                      {display}
-                      <Show when={version().mutable}>
-                        <span class="text-[9px] leading-none">!</span>
-                      </Show>
-                    </span>
-                  );
-                }}
-              </Show>
             </div>
           </div>
         );
