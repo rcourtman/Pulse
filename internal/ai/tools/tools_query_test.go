@@ -46,6 +46,8 @@ func TestExecuteGetCapabilities(t *testing.T) {
 }
 
 func TestExecuteGetURLContent(t *testing.T) {
+	t.Setenv("PULSE_AI_ALLOW_LOOPBACK", "true")
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Test", "ok")
 		w.WriteHeader(http.StatusOK)

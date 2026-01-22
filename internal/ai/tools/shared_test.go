@@ -13,10 +13,17 @@ import (
 
 type mockStateProvider struct {
 	mock.Mock
+	state models.StateSnapshot
 }
 
 func (m *mockStateProvider) GetState() models.StateSnapshot {
+	if len(m.ExpectedCalls) == 0 {
+		return m.state
+	}
 	args := m.Called()
+	if args.Get(0) == nil {
+		return models.StateSnapshot{}
+	}
 	return args.Get(0).(models.StateSnapshot)
 }
 
@@ -31,10 +38,17 @@ func (m *mockCommandPolicy) Evaluate(command string) agentexec.PolicyDecision {
 
 type mockAgentServer struct {
 	mock.Mock
+	agents []agentexec.ConnectedAgent
 }
 
 func (m *mockAgentServer) GetConnectedAgents() []agentexec.ConnectedAgent {
+	if len(m.ExpectedCalls) == 0 {
+		return m.agents
+	}
 	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
 	return args.Get(0).([]agentexec.ConnectedAgent)
 }
 

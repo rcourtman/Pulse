@@ -133,6 +133,33 @@ func TestGetPendingApprovals(t *testing.T) {
 	}
 }
 
+func TestGetApprovalsByExecution(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-1", Command: "cmd-1"})
+	store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-1", Command: "cmd-2"})
+	store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-2", Command: "cmd-3"})
+
+	results := store.GetApprovalsByExecution("exec-1")
+	if len(results) != 2 {
+		t.Fatalf("GetApprovalsByExecution() count = %v, want %v", len(results), 2)
+	}
+	for _, req := range results {
+		if req.ExecutionID != "exec-1" {
+			t.Fatalf("GetApprovalsByExecution() returned wrong execution ID: %v", req.ExecutionID)
+		}
+	}
+}
+
 func TestApprove(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "approval-test-*")
 	if err != nil {
@@ -193,6 +220,53 @@ func TestDeny(t *testing.T) {
 	}
 	if got.DenyReason != "Too dangerous" {
 		t.Errorf("Deny() DenyReason = %v, want %v", got.DenyReason, "Too dangerous")
+	}
+}
+
+func TestGetStats(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	pending := &ApprovalRequest{Command: "pending"}
+	store.CreateApproval(pending)
+
+	approved := &ApprovalRequest{Command: "approved"}
+	store.CreateApproval(approved)
+	if _, err := store.Approve(approved.ID, "admin"); err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+
+	denied := &ApprovalRequest{Command: "denied"}
+	store.CreateApproval(denied)
+	if _, err := store.Deny(denied.ID, "admin", "no"); err != nil {
+		t.Fatalf("Deny() error = %v", err)
+	}
+
+	expired := &ApprovalRequest{
+		Command:   "expired",
+		ExpiresAt: time.Now().Add(-time.Minute),
+	}
+	store.CreateApproval(expired)
+	store.CleanupExpired()
+
+	if err := store.StoreExecution(&ExecutionState{ID: "exec-1"}); err != nil {
+		t.Fatalf("StoreExecution() error = %v", err)
+	}
+
+	stats := store.GetStats()
+	if stats["pending"] != 1 || stats["approved"] != 1 || stats["denied"] != 1 || stats["expired"] != 1 {
+		t.Fatalf("GetStats() unexpected approval counts: %+v", stats)
+	}
+	if stats["executions"] != 1 {
+		t.Fatalf("GetStats() executions = %v, want %v", stats["executions"], 1)
 	}
 }
 

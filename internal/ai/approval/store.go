@@ -70,6 +70,7 @@ type Store struct {
 	dataDir        string
 	defaultTimeout time.Duration
 	maxApprovals   int
+	persist        bool
 }
 
 // StoreConfig configures the approval store.
@@ -77,6 +78,8 @@ type StoreConfig struct {
 	DataDir        string
 	DefaultTimeout time.Duration // Default 5 minutes
 	MaxApprovals   int           // Maximum pending approvals (default 100)
+	// DisablePersistence skips load/save for in-memory use (tests, ephemeral flows).
+	DisablePersistence bool
 }
 
 // NewStore creates a new approval store.
@@ -99,11 +102,14 @@ func NewStore(cfg StoreConfig) (*Store, error) {
 		dataDir:        cfg.DataDir,
 		defaultTimeout: cfg.DefaultTimeout,
 		maxApprovals:   cfg.MaxApprovals,
+		persist:        !cfg.DisablePersistence,
 	}
 
 	// Load existing data
-	if err := s.load(); err != nil {
-		log.Warn().Err(err).Msg("Failed to load approval data, starting fresh")
+	if s.persist {
+		if err := s.load(); err != nil {
+			log.Warn().Err(err).Msg("Failed to load approval data, starting fresh")
+		}
 	}
 
 	// Note: Call StartCleanup(ctx) after creating the store to begin cleanup goroutine
@@ -147,7 +153,7 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 	s.approvals[req.ID] = req
 
 	// Persist asynchronously
-	go s.save()
+	s.saveAsync()
 
 	log.Info().
 		Str("id", req.ID).
@@ -232,7 +238,7 @@ func (s *Store) Approve(id, username string) (*ApprovalRequest, error) {
 
 	if time.Now().After(req.ExpiresAt) {
 		req.Status = StatusExpired
-		go s.save()
+		s.saveAsync()
 		return nil, fmt.Errorf("approval request has expired")
 	}
 
@@ -241,7 +247,7 @@ func (s *Store) Approve(id, username string) (*ApprovalRequest, error) {
 	req.DecidedAt = &now
 	req.DecidedBy = username
 
-	go s.save()
+	s.saveAsync()
 
 	log.Info().
 		Str("id", id).
@@ -272,7 +278,7 @@ func (s *Store) Deny(id, username, reason string) (*ApprovalRequest, error) {
 	req.DecidedBy = username
 	req.DenyReason = reason
 
-	go s.save()
+	s.saveAsync()
 
 	log.Info().
 		Str("id", id).
@@ -299,7 +305,7 @@ func (s *Store) StoreExecution(state *ExecutionState) error {
 
 	s.executions[state.ID] = state
 
-	go s.save()
+	s.saveAsync()
 
 	return nil
 }
@@ -328,7 +334,7 @@ func (s *Store) DeleteExecution(id string) {
 	defer s.mu.Unlock()
 
 	delete(s.executions, id)
-	go s.save()
+	s.saveAsync()
 }
 
 // CleanupExpired removes expired approvals and executions.
@@ -365,7 +371,7 @@ func (s *Store) CleanupExpired() int {
 	}
 
 	if cleaned > 0 {
-		go s.save()
+		s.saveAsync()
 	}
 
 	return cleaned
@@ -435,6 +441,9 @@ func (s *Store) load() error {
 }
 
 func (s *Store) save() {
+	if !s.persist {
+		return
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -455,6 +464,13 @@ func (s *Store) save() {
 	if data, err := json.MarshalIndent(executions, "", "  "); err == nil {
 		os.WriteFile(s.executionsFile(), data, 0600)
 	}
+}
+
+func (s *Store) saveAsync() {
+	if !s.persist {
+		return
+	}
+	go s.save()
 }
 
 // StartCleanup begins periodic cleanup of expired approvals and executions.

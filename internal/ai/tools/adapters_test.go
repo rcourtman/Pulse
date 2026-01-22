@@ -177,7 +177,9 @@ func TestStorageBackupDiskAdapters(t *testing.T) {
 	state := models.StateSnapshot{
 		Storage:      []models.Storage{{ID: "s1"}},
 		CephClusters: []models.CephCluster{{ID: "c1"}},
-		Backups:      models.Backups{PVE: models.PVEBackups{}},
+		Backups: models.Backups{PVE: models.PVEBackups{
+			BackupTasks: []models.BackupTask{{ID: "task1"}},
+		}},
 		PBSInstances: []models.PBSInstance{{ID: "pbs1"}},
 		Hosts:        []models.Host{{ID: "h1"}},
 	}
@@ -202,6 +204,9 @@ func TestStorageBackupDiskAdapters(t *testing.T) {
 		t.Fatal("expected nil backup adapter for nil state")
 	}
 	backupAdapter := NewBackupMCPAdapter(fakeStateGetter{state: state})
+	if len(backupAdapter.GetBackups().PVE.BackupTasks) != 1 {
+		t.Fatal("expected backup tasks")
+	}
 	if len(backupAdapter.GetPBSInstances()) != 1 {
 		t.Fatal("expected pbs instances")
 	}

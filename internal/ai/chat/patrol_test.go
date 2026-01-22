@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -217,7 +218,32 @@ EVIDENCE: logs
 	assert.Equal(t, 1, result.NewFindings)
 	assert.Len(t, result.Findings, 1)
 	assert.Equal(t, "test-issue", result.Findings[0].Key)
+	assert.Equal(t, result, patrolService.GetLastResult())
 
 	mockProvider.AssertExpectations(t)
 	mockStore.AssertExpectations(t)
+}
+
+func TestPatrolService_SubscribeUnsubscribe(t *testing.T) {
+	patrolService := NewPatrolService(nil)
+	ch := patrolService.Subscribe()
+
+	patrolService.broadcast(PatrolStreamEvent{Type: "content", Content: "hello"})
+	select {
+	case event := <-ch:
+		assert.Equal(t, "content", event.Type)
+		assert.Equal(t, "hello", event.Content)
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected to receive patrol stream event")
+	}
+
+	patrolService.Unsubscribe(ch)
+	_, ok := <-ch
+	assert.False(t, ok)
+}
+
+func TestPatrolService_RunPatrol_Error(t *testing.T) {
+	patrolService := NewPatrolService(nil)
+	err := patrolService.RunPatrol(context.Background())
+	require.Error(t, err)
 }

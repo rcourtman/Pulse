@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/stretchr/testify/assert"
@@ -14,6 +16,16 @@ import (
 
 type MockProvider struct {
 	mock.Mock
+}
+
+type mockMetricsHistory struct{}
+
+func (m *mockMetricsHistory) GetResourceMetrics(resourceID string, period time.Duration) ([]tools.MetricPoint, error) {
+	return nil, nil
+}
+
+func (m *mockMetricsHistory) GetAllMetricsSummary(period time.Duration) (map[string]tools.ResourceMetricsSummary, error) {
+	return map[string]tools.ResourceMetricsSummary{}, nil
 }
 
 func (m *MockProvider) Name() string {
@@ -149,5 +161,111 @@ func TestAgenticLoop(t *testing.T) {
 		loop.Abort("abort-me")
 		// In a real execution, loop would check aborted map
 		assert.True(t, loop.aborted["abort-me"])
+	})
+}
+
+func TestAgenticLoop_UpdateTools(t *testing.T) {
+	mockProvider := &MockProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(mockProvider, executor, "test")
+
+	hasMetrics := false
+	for _, tool := range loop.tools {
+		if tool.Name == "pulse_get_metrics" {
+			hasMetrics = true
+			break
+		}
+	}
+	assert.False(t, hasMetrics)
+
+	executor.SetMetricsHistory(&mockMetricsHistory{})
+	loop.UpdateTools()
+
+	hasMetrics = false
+	for _, tool := range loop.tools {
+		if tool.Name == "pulse_get_metrics" {
+			hasMetrics = true
+			break
+		}
+	}
+	assert.True(t, hasMetrics)
+}
+
+func TestAgenticLoop_AnswerQuestion(t *testing.T) {
+	mockProvider := &MockProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(mockProvider, executor, "test")
+
+	t.Run("NoPendingQuestion", func(t *testing.T) {
+		err := loop.AnswerQuestion("missing", nil)
+		require.Error(t, err)
+	})
+
+	t.Run("AnswersDelivered", func(t *testing.T) {
+		ch := make(chan []QuestionAnswer, 1)
+		loop.pendingQs["q1"] = ch
+
+		answers := []QuestionAnswer{{ID: "q", Value: "a"}}
+		err := loop.AnswerQuestion("q1", answers)
+		require.NoError(t, err)
+
+		select {
+		case got := <-ch:
+			assert.Equal(t, answers, got)
+		default:
+			t.Fatal("expected answers to be delivered")
+		}
+	})
+
+	t.Run("AlreadyAnswered", func(t *testing.T) {
+		ch := make(chan []QuestionAnswer)
+		loop.pendingQs["q2"] = ch
+
+		err := loop.AnswerQuestion("q2", []QuestionAnswer{{ID: "q", Value: "a"}})
+		require.Error(t, err)
+	})
+}
+
+func TestWaitForApprovalDecision(t *testing.T) {
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            t.TempDir(),
+		DisablePersistence: true,
+	})
+	require.NoError(t, err)
+
+	t.Run("ContextCancelled", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+
+		_, err := waitForApprovalDecision(ctx, store, "missing")
+		require.Error(t, err)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		_, err := waitForApprovalDecision(ctx, store, "missing")
+		require.Error(t, err)
+	})
+
+	t.Run("Approved", func(t *testing.T) {
+		req := &approval.ApprovalRequest{
+			ID:      "app-1",
+			Command: "ls",
+		}
+		require.NoError(t, store.CreateApproval(req))
+
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			_, _ = store.Approve("app-1", "tester")
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		decision, err := waitForApprovalDecision(ctx, store, "app-1")
+		require.NoError(t, err)
+		assert.Equal(t, approval.StatusApproved, decision.Status)
 	})
 }

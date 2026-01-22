@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -130,6 +132,72 @@ func TestExecuteGetBaselinesAndPatterns(t *testing.T) {
 	}
 	if len(patterns.Patterns) != 1 || len(patterns.Predictions) != 1 {
 		t.Fatalf("unexpected patterns: %+v", patterns)
+	}
+}
+
+func TestExecuteListResolvedAlerts(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, _ := executor.executeListResolvedAlerts(context.Background(), map[string]interface{}{})
+	if result.Content[0].Text != "State provider not available." {
+		t.Fatalf("unexpected response: %s", result.Content[0].Text)
+	}
+
+	executor.stateProvider = &mockStateProvider{state: models.StateSnapshot{}}
+	result, _ = executor.executeListResolvedAlerts(context.Background(), map[string]interface{}{})
+	if result.Content[0].Text != "No recently resolved alerts." {
+		t.Fatalf("unexpected response: %s", result.Content[0].Text)
+	}
+
+	now := time.Now()
+	executor.stateProvider = &mockStateProvider{state: models.StateSnapshot{
+		RecentlyResolved: []models.ResolvedAlert{
+			{
+				Alert: models.Alert{
+					ID:           "a1",
+					Type:         "cpu",
+					Level:        "warning",
+					ResourceID:   "r1",
+					ResourceName: "node1",
+					Node:         "node1",
+					Instance:     "i1",
+					Message:      "msg",
+					Value:        1,
+					Threshold:    2,
+					StartTime:    now,
+				},
+				ResolvedTime: now,
+			},
+			{
+				Alert: models.Alert{
+					ID:           "a2",
+					Type:         "disk",
+					Level:        "critical",
+					ResourceID:   "r2",
+					ResourceName: "node2",
+					Node:         "node2",
+					Instance:     "i2",
+					Message:      "msg2",
+					Value:        3,
+					Threshold:    4,
+					StartTime:    now,
+				},
+				ResolvedTime: now,
+			},
+		},
+	}}
+
+	result, _ = executor.executeListResolvedAlerts(context.Background(), map[string]interface{}{
+		"type":  "cpu",
+		"level": "warning",
+		"limit": 1,
+	})
+
+	var resp ResolvedAlertsResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("decode resolved alerts: %v", err)
+	}
+	if len(resp.Alerts) != 1 || resp.Alerts[0].ID != "a1" {
+		t.Fatalf("unexpected resolved alerts: %+v", resp)
 	}
 }
 
