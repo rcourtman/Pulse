@@ -9212,6 +9212,46 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 	}
 
+	// Auto-resolve stale alerts - alerts where the resource hasn't been polled in 24 hours.
+	// This handles cases where a resource (e.g., Docker container, storage) stops being
+	// monitored but its alert remains active. Without this, alerts would persist indefinitely.
+	staleAlerts := make([]string, 0)
+	for alertID, alert := range m.activeAlerts {
+		if alert != nil && now.Sub(alert.LastSeen) > staleThreshold {
+			staleAlerts = append(staleAlerts, alertID)
+		}
+	}
+	staleResolved := 0
+	for _, alertID := range staleAlerts {
+		alert := m.activeAlerts[alertID]
+		log.Info().
+			Str("alertID", alertID).
+			Str("resourceName", alert.ResourceName).
+			Time("lastSeen", alert.LastSeen).
+			Dur("staleFor", now.Sub(alert.LastSeen)).
+			Msg("Auto-resolving stale alert - resource no longer being monitored")
+		m.clearAlertNoLock(alertID)
+		cleaned++
+		staleResolved++
+	}
+
+	// Persist changes if we resolved any stale alerts
+	if staleResolved > 0 {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (stale cleanup)")
+				}
+			}()
+			if err := m.SaveActiveAlerts(); err != nil {
+				log.Error().Err(err).Msg("Failed to save active alerts after stale cleanup")
+			}
+		}()
+		log.Info().
+			Int("count", staleResolved).
+			Msg("Auto-resolved stale alerts")
+	}
+
 	if cleaned > 0 {
 		log.Debug().
 			Int("entriesCleaned", cleaned).
