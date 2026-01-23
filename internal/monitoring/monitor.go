@@ -720,6 +720,7 @@ type Monitor struct {
 	metricsHistory             *MetricsHistory
 	metricsStore               *metrics.Store // Persistent SQLite metrics storage
 	alertManager               *alerts.Manager
+	alertResolvedAICallback    func(*alerts.Alert)
 	incidentStore              *memory.IncidentStore
 	notificationMgr            *notifications.NotificationManager
 	configPersist              *config.ConfigPersistence
@@ -6609,6 +6610,12 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							var skippedFS []string
 							var includedFS []string
 
+							// Track seen filesystems to dedupe btrfs/zfs subvolumes that share the same pool.
+							// These filesystems mount multiple subvolumes from one storage pool, each reporting
+							// the same TotalBytes. Without deduplication, we'd sum 11 × 77GB = 851GB instead of 77GB.
+							// Key: "fstype:device:totalBytes" or "fstype::totalBytes" if device unknown.
+							seenFilesystems := make(map[string]bool)
+
 							// Log all filesystems received for debugging
 							log.Debug().
 								Str("instance", instanceName).
@@ -6644,12 +6651,46 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								// Only count real filesystems with valid data
 								// Some filesystems report 0 bytes (like unformatted or system partitions)
 								if fs.TotalBytes > 0 {
-									totalBytes += fs.TotalBytes
-									usedBytes += fs.UsedBytes
+									// Deduplication for COW filesystems (btrfs, zfs) that mount multiple
+									// subvolumes from the same pool. Each subvolume reports identical TotalBytes
+									// because they share the underlying storage pool.
+									// Key format: "fstype:device:totalBytes" - if multiple mounts have the same
+									// key, they're subvolumes of the same pool and should only be counted once.
+									fsTypeLower := strings.ToLower(fs.Type)
+									needsDedupe := fsTypeLower == "btrfs" || fsTypeLower == "zfs" ||
+										strings.HasPrefix(fsTypeLower, "zfs")
+
+									countThisFS := true
+									if needsDedupe {
+										// Use device if available, otherwise fall back to just type+size
+										dedupeKey := fmt.Sprintf("%s:%s:%d", fsTypeLower, fs.Disk, fs.TotalBytes)
+										if seenFilesystems[dedupeKey] {
+											// Already counted this pool - skip adding to totals but still add to
+											// individual disks for display purposes
+											countThisFS = false
+											log.Debug().
+												Str("instance", instanceName).
+												Str("vm", res.Name).
+												Int("vmid", res.VMID).
+												Str("mountpoint", fs.Mountpoint).
+												Str("type", fs.Type).
+												Str("device", fs.Disk).
+												Uint64("total", fs.TotalBytes).
+												Str("dedupe_key", dedupeKey).
+												Msg("Skipping duplicate btrfs/zfs subvolume in total calculation")
+										} else {
+											seenFilesystems[dedupeKey] = true
+										}
+									}
+
+									if countThisFS {
+										totalBytes += fs.TotalBytes
+										usedBytes += fs.UsedBytes
+									}
 									includedFS = append(includedFS, fmt.Sprintf("%s(%s,%.1fGB)",
 										fs.Mountpoint, fs.Type, float64(fs.TotalBytes)/1073741824))
 
-									// Add to individual disks array
+									// Add to individual disks array (always include for display)
 									individualDisks = append(individualDisks, models.Disk{
 										Total:      int64(fs.TotalBytes),
 										Used:       int64(fs.UsedBytes),
@@ -6670,6 +6711,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 										Uint64("used", fs.UsedBytes).
 										Float64("total_gb", float64(fs.TotalBytes)/1073741824).
 										Float64("used_gb", float64(fs.UsedBytes)/1073741824).
+										Bool("counted_in_total", countThisFS).
 										Msg("Including filesystem in disk usage calculation")
 								} else if fs.TotalBytes == 0 && len(fs.Mountpoint) > 0 {
 									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s,0GB)", fs.Mountpoint, fs.Type))
@@ -8401,6 +8443,16 @@ func (m *Monitor) SetAlertTriggeredAICallback(callback func(*alerts.Alert)) {
 	log.Info().Msg("Alert-triggered AI callback registered")
 }
 
+// SetAlertResolvedAICallback sets an additional callback when alerts are resolved.
+// This enables AI systems (like incident recording) to stop or finalize context after resolution.
+func (m *Monitor) SetAlertResolvedAICallback(callback func(*alerts.Alert)) {
+	if m.alertManager == nil {
+		return
+	}
+	m.alertResolvedAICallback = callback
+	log.Info().Msg("Alert-resolved AI callback registered")
+}
+
 func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 	if alert == nil {
 		return
@@ -8424,6 +8476,8 @@ func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 }
 
 func (m *Monitor) handleAlertResolved(alertID string) {
+	var resolvedAlert *alerts.ResolvedAlert
+
 	if m.wsHub != nil {
 		m.wsHub.BroadcastAlertResolved(alertID)
 	}
@@ -8431,6 +8485,7 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 		m.notificationMgr.CancelAlert(alertID)
 		if m.notificationMgr.GetNotifyOnResolve() {
 			if resolved := m.alertManager.GetResolvedAlert(alertID); resolved != nil {
+				resolvedAlert = resolved
 				// Check if recovery notification should be suppressed during quiet hours
 				if m.alertManager.ShouldSuppressResolvedNotification(resolved.Alert) {
 					return
@@ -8441,8 +8496,20 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 	}
 
 	if m.incidentStore != nil {
-		if resolved := m.alertManager.GetResolvedAlert(alertID); resolved != nil && resolved.Alert != nil {
-			m.incidentStore.RecordAlertResolved(resolved.Alert, resolved.ResolvedTime)
+		if resolvedAlert == nil {
+			resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
+		}
+		if resolvedAlert != nil && resolvedAlert.Alert != nil {
+			m.incidentStore.RecordAlertResolved(resolvedAlert.Alert, resolvedAlert.ResolvedTime)
+		}
+	}
+
+	if m.alertResolvedAICallback != nil {
+		if resolvedAlert == nil {
+			resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
+		}
+		if resolvedAlert != nil && resolvedAlert.Alert != nil {
+			go m.alertResolvedAICallback(resolvedAlert.Alert)
 		}
 	}
 }

@@ -1055,7 +1055,7 @@ func buildAlertsDiagnostic(m *monitoring.Monitor) *AlertsDiagnostic {
 
 	if config.Schedule.Cooldown <= 0 {
 		diag.MissingCooldown = true
-		appendNote("Alert cooldown is not configured. Set a cooldown under Settings → Alerts → Schedule to prevent alert storms.")
+		appendNote("Alert cooldown is not configured. Set a cooldown under Alerts → Schedule to prevent alert storms.")
 	}
 	if config.Schedule.Grouping.Window <= 0 {
 		diag.MissingGroupingWindow = true
