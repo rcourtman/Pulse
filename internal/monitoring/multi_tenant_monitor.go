@@ -57,10 +57,16 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	log.Info().Str("org_id", orgID).Msg("Initializing tenant monitor")
 
 	// 1. Load Tenant Config
-	// We need a specific config for this tenant.
-	// For now, we clone the base config (assuming shared defaults)
-	// In the future, we'll load overrides from persistence.GetPersistence(orgID)
-	tenantConfig := *mtm.baseConfig // Shallow copy
+	// Deep copy the base config to ensure tenant isolation.
+	// Each tenant gets its own independent config that won't share
+	// credential slices or other mutable state with other tenants.
+	tenantConfig := mtm.baseConfig.DeepCopy()
+
+	// Clear inherited credentials - tenants must load their own
+	// This prevents credential leakage between tenants
+	tenantConfig.PVEInstances = nil
+	tenantConfig.PBSInstances = nil
+	tenantConfig.PMGInstances = nil
 
 	// Ensure the DataPath is correct for this tenant to isolate storage (sqlite, etc)
 	tenantPersistence, err := mtm.persistence.GetPersistence(orgID)
@@ -69,12 +75,33 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	}
 	tenantConfig.DataPath = tenantPersistence.GetConfigDir()
 
+	// Load tenant-specific nodes from <orgDir>/nodes.enc
+	nodesConfig, err := tenantPersistence.LoadNodesConfig()
+	if err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to load tenant nodes config, starting with empty config")
+		// Not a fatal error - tenant may not have configured any nodes yet
+	} else if nodesConfig != nil {
+		tenantConfig.PVEInstances = nodesConfig.PVEInstances
+		tenantConfig.PBSInstances = nodesConfig.PBSInstances
+		tenantConfig.PMGInstances = nodesConfig.PMGInstances
+		log.Info().
+			Str("org_id", orgID).
+			Int("pve_count", len(nodesConfig.PVEInstances)).
+			Int("pbs_count", len(nodesConfig.PBSInstances)).
+			Int("pmg_count", len(nodesConfig.PMGInstances)).
+			Msg("Loaded tenant nodes config")
+	}
+
 	// 2. Create Monitor
 	// Usage of internal New constructor
-	monitor, err = New(&tenantConfig)
+	monitor, err = New(tenantConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create monitor for org %s: %w", orgID, err)
 	}
+
+	// Set org ID for tenant isolation
+	// This enables tenant-scoped WebSocket broadcasts
+	monitor.SetOrgID(orgID)
 
 	// 3. Start Monitor
 	// We pass the global context, but maybe we should give it a derived one?

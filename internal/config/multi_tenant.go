@@ -75,12 +75,32 @@ func (mtp *MultiTenantPersistence) GetPersistence(orgID string) (*ConfigPersiste
 	return cp, nil
 }
 
-// LoadOrganizationMetadata loads basic metadata for an organization.
-// This is separate from the tenant's internal config.
+// LoadOrganization loads the organization metadata including members.
+// Org metadata is stored in <orgDir>/org.json.
 func (mtp *MultiTenantPersistence) LoadOrganization(orgID string) (*models.Organization, error) {
-	// TODO: implementing organization metadata storage in system.json later
-	return &models.Organization{
-		ID:          orgID,
-		DisplayName: orgID, // Placeholder
-	}, nil
+	persistence, err := mtp.GetPersistence(orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	org, err := persistence.LoadOrganization()
+	if err != nil {
+		// If org.json doesn't exist, return a default org
+		return &models.Organization{
+			ID:          orgID,
+			DisplayName: orgID,
+		}, nil
+	}
+
+	return org, nil
+}
+
+// SaveOrganization saves the organization metadata.
+func (mtp *MultiTenantPersistence) SaveOrganization(org *models.Organization) error {
+	persistence, err := mtp.GetPersistence(org.ID)
+	if err != nil {
+		return err
+	}
+
+	return persistence.SaveOrganization(org)
 }
