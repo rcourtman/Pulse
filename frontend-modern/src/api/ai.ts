@@ -12,18 +12,62 @@ import type {
   AIChatSessionSummary,
 } from '@/types/ai';
 import type {
-  PatternsResponse,
-  PredictionsResponse,
-  CorrelationsResponse,
-  ChangesResponse,
-  BaselinesResponse,
-  RemediationsResponse,
   AnomaliesResponse,
   LearningStatusResponse,
-  IntelligenceSummary,
-  ResourceIntelligence,
 } from '@/types/aiIntelligence';
 
+const toNumber = (value: unknown, fallback = 0) => {
+  if (typeof value === 'number' && !Number.isNaN(value)) return value;
+  if (typeof value === 'string') {
+    const num = Number(value);
+    if (!Number.isNaN(num)) return num;
+  }
+  return fallback;
+};
+
+const normalizeForecastResponse = (data: any): ForecastResponse => {
+  const raw = data?.forecast ?? data;
+  if (!raw) {
+    throw new Error('No forecast data available');
+  }
+
+  const trendDirection = typeof raw.trend === 'string' ? raw.trend : raw.trend?.direction;
+  const trend =
+    trendDirection === 'increasing' || trendDirection === 'decreasing' || trendDirection === 'stable'
+      ? trendDirection
+      : 'stable';
+
+  const currentValue = toNumber(raw.current_value ?? raw.currentValue, 0);
+  const predictedValue = toNumber(raw.predicted_value ?? raw.predictedValue, currentValue);
+  const startTime = Date.now();
+  const endTime = raw.predicted_at ? new Date(raw.predicted_at).getTime() : startTime;
+  const points = 12;
+  const stepMs = points > 1 ? (endTime - startTime) / (points - 1) : 0;
+  const confidence = Math.min(Math.max(toNumber(raw.confidence, 0), 0), 1);
+  const baseSpread = Math.max(Math.abs(predictedValue - currentValue) * (1 - confidence + 0.15), Math.abs(currentValue) * 0.05);
+
+  const predictions: ForecastPrediction[] = [];
+  for (let i = 0; i < points; i += 1) {
+    const ratio = points > 1 ? i / (points - 1) : 1;
+    const value = currentValue + (predictedValue - currentValue) * ratio;
+    const spread = baseSpread * (0.6 + ratio * 0.8);
+    predictions.push({
+      timestamp: new Date(startTime + stepMs * i).toISOString(),
+      value,
+      lower_bound: Math.max(0, value - spread),
+      upper_bound: value + spread,
+    });
+  }
+
+  return {
+    resource_id: raw.resource_id ?? raw.resourceId ?? '',
+    metric: raw.metric ?? '',
+    predictions,
+    confidence,
+    trend,
+    message: raw.description ?? raw.message,
+  };
+};
 
 export class AIAPI {
   private static baseUrl = '/api';
@@ -81,49 +125,18 @@ export class AIAPI {
   // AI Intelligence API - Patterns, Predictions, Correlations
   // ============================================
 
-  // Get detected failure patterns
-  static async getPatterns(resourceId?: string): Promise<PatternsResponse> {
-    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
-    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/patterns${params}`) as Promise<PatternsResponse>;
-  }
-
-  // Get failure predictions
-  static async getPredictions(resourceId?: string): Promise<PredictionsResponse> {
-    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
-    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/predictions${params}`) as Promise<PredictionsResponse>;
-  }
-
-  // Get resource correlations
-  static async getCorrelations(resourceId?: string): Promise<CorrelationsResponse> {
-    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
-    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/correlations${params}`) as Promise<CorrelationsResponse>;
-  }
-
-  // Get recent infrastructure changes
-  static async getRecentChanges(hours = 24): Promise<ChangesResponse> {
-    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/changes?hours=${hours}`) as Promise<ChangesResponse>;
-  }
-
-  // Get learned baselines
-  static async getBaselines(resourceId?: string): Promise<BaselinesResponse> {
-    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
-    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/baselines${params}`) as Promise<BaselinesResponse>;
-  }
-
-  // Get remediation history
-  static async getRemediations(options?: {
+  // Get unified findings (alerts + AI findings)
+  static async getUnifiedFindings(options?: {
     resourceId?: string;
-    findingId?: string;
-    hours?: number;
-    limit?: number;
-  }): Promise<RemediationsResponse> {
+    source?: string;
+    includeResolved?: boolean;
+  }): Promise<UnifiedFindingsResponse> {
     const params = new URLSearchParams();
     if (options?.resourceId) params.set('resource_id', options.resourceId);
-    if (options?.findingId) params.set('finding_id', options.findingId);
-    if (options?.hours) params.set('hours', String(options.hours));
-    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.source) params.set('source', options.source);
+    if (options?.includeResolved) params.set('include_resolved', '1');
     const query = params.toString();
-    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/remediations${query ? `?${query}` : ''}`) as Promise<RemediationsResponse>;
+    return apiFetchJSON(`${this.baseUrl}/ai/unified/findings${query ? `?${query}` : ''}`) as Promise<UnifiedFindingsResponse>;
   }
 
   // Get current anomalies (real-time baseline deviation detection)
@@ -138,24 +151,6 @@ export class AIAPI {
   static async getLearningStatus(): Promise<LearningStatusResponse> {
     return apiFetchJSON(`${this.baseUrl}/ai/intelligence/learning`) as Promise<LearningStatusResponse>;
   }
-
-  // ============================================
-  // Unified Intelligence API
-  // Aggregates all AI subsystems into a single view
-  // ============================================
-
-  // Get system-wide intelligence summary
-  // Returns overall health, findings, predictions, recent activity, and learning progress
-  static async getIntelligenceSummary(): Promise<IntelligenceSummary> {
-    return apiFetchJSON(`${this.baseUrl}/ai/intelligence`) as Promise<IntelligenceSummary>;
-  }
-
-  // Get intelligence for a specific resource
-  // Returns health score, findings, predictions, correlations, and baselines for the resource
-  static async getResourceIntelligence(resourceId: string): Promise<ResourceIntelligence> {
-    return apiFetchJSON(`${this.baseUrl}/ai/intelligence?resource_id=${encodeURIComponent(resourceId)}`) as Promise<ResourceIntelligence>;
-  }
-
 
   // Start OAuth flow for Claude Pro/Max subscription
   // Returns the authorization URL to redirect the user to
@@ -545,4 +540,196 @@ export class AIAPI {
       })),
     };
   }
+
+  // ============================================
+  // Phase 7: Event-Driven Intelligence API
+  // ============================================
+
+  // Get forecast for a metric
+  static async getForecast(options: { resourceId: string; metric: string; horizonHours?: number }): Promise<ForecastResponse> {
+    const params = new URLSearchParams();
+    params.set('resource_id', options.resourceId);
+    params.set('metric', options.metric);
+    if (options.horizonHours) params.set('horizon_hours', String(options.horizonHours));
+    const data = await apiFetchJSON(`${this.baseUrl}/ai/forecast?${params.toString()}`);
+    return normalizeForecastResponse(data);
+  }
+
+  // Get forecast overview for all resources sorted by urgency
+  static async getForecastOverview(params: {
+    metric: string;
+    horizonHours?: number;
+    threshold?: number;
+  }): Promise<ForecastOverviewResponse> {
+    const urlParams = new URLSearchParams();
+    urlParams.set('metric', params.metric);
+    if (params.horizonHours) urlParams.set('horizon_hours', String(params.horizonHours));
+    if (params.threshold) urlParams.set('threshold', String(params.threshold));
+    return apiFetchJSON(`${this.baseUrl}/ai/forecasts/overview?${urlParams.toString()}`) as Promise<ForecastOverviewResponse>;
+  }
+
+  // Remediation plans
+  static async getRemediationPlans(): Promise<RemediationPlansResponse> {
+    const data = await apiFetchJSON(`${this.baseUrl}/ai/remediation/plans`) as { plans?: RemediationPlan[]; executions?: unknown[] };
+    if (Array.isArray(data?.plans)) {
+      return { plans: data.plans };
+    }
+    if (Array.isArray(data?.executions)) {
+      return { plans: [] };
+    }
+    return { plans: [] };
+  }
+
+  static async getRemediationPlan(planId: string): Promise<RemediationPlan> {
+    return apiFetchJSON(`${this.baseUrl}/ai/remediation/plan?plan_id=${planId}`) as Promise<RemediationPlan>;
+  }
+
+  static async approveRemediationPlan(planId: string): Promise<{ success: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/remediation/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ plan_id: planId }),
+    }) as Promise<{ success: boolean }>;
+  }
+
+  static async executeRemediationPlan(planId: string): Promise<RemediationExecutionResult> {
+    return apiFetchJSON(`${this.baseUrl}/ai/remediation/execute`, {
+      method: 'POST',
+      body: JSON.stringify({ plan_id: planId }),
+    }) as Promise<RemediationExecutionResult>;
+  }
+
+  static async rollbackRemediationPlan(executionId: string): Promise<{ success: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/remediation/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ execution_id: executionId }),
+    }) as Promise<{ success: boolean }>;
+  }
+
+  // Circuit breaker status
+  static async getCircuitBreakerStatus(): Promise<CircuitBreakerStatus> {
+    return apiFetchJSON(`${this.baseUrl}/ai/circuit/status`) as Promise<CircuitBreakerStatus>;
+  }
+}
+
+// ============================================
+// Phase 7 Type Definitions
+// ============================================
+
+export interface UnifiedFindingRecord {
+  id: string;
+  source: string;
+  severity: string;
+  category: string;
+  resource_id: string;
+  resource_name: string;
+  resource_type: string;
+  node?: string;
+  title: string;
+  description: string;
+  recommendation?: string;
+  evidence?: string;
+  alert_id?: string;
+  alert_type?: string;
+  value?: number;
+  threshold?: number;
+  is_threshold?: boolean;
+  ai_context?: string;
+  root_cause_id?: string;
+  correlated_ids?: string[];
+  remediation_id?: string;
+  ai_confidence?: number;
+  enhanced_by_ai?: boolean;
+  ai_enhanced_at?: string;
+  detected_at: string;
+  last_seen_at?: string;
+  resolved_at?: string;
+  acknowledged_at?: string;
+  snoozed_until?: string;
+  dismissed_reason?: string;
+  user_note?: string;
+  suppressed?: boolean;
+  times_raised?: number;
+  status?: string;
+}
+
+export interface UnifiedFindingsResponse {
+  findings: UnifiedFindingRecord[];
+  count?: number;
+  active_count?: number;
+}
+
+export interface ForecastResponse {
+  resource_id: string;
+  metric: string;
+  predictions: ForecastPrediction[];
+  confidence: number;
+  trend: 'increasing' | 'decreasing' | 'stable';
+  message?: string;
+}
+
+export interface ForecastPrediction {
+  timestamp: string;
+  value: number;
+  lower_bound: number;
+  upper_bound: number;
+}
+
+export interface ForecastOverviewItem {
+  resource_id: string;
+  resource_name: string;
+  resource_type: 'node' | 'vm' | 'lxc';
+  metric: string;
+  current_value: number;
+  predicted_value: number;
+  time_to_threshold: number | null;  // seconds, null if won't breach
+  confidence: number;
+  trend: 'increasing' | 'decreasing' | 'stable' | 'volatile';
+}
+
+export interface ForecastOverviewResponse {
+  forecasts: ForecastOverviewItem[];
+  metric: string;
+  threshold: number;
+  horizon_hours: number;
+  error?: string;
+}
+
+export interface RemediationPlansResponse {
+  plans: RemediationPlan[];
+}
+
+export interface RemediationPlan {
+  id: string;
+  finding_id: string;
+  resource_id: string;
+  title: string;
+  description: string;
+  steps: RemediationStep[];
+  risk_level: 'low' | 'medium' | 'high';
+  status: 'pending' | 'approved' | 'executing' | 'completed' | 'failed' | 'rolled_back';
+  created_at: string;
+}
+
+export interface RemediationStep {
+  order: number;
+  action: string;
+  command?: string;
+  rollback_command?: string;
+  risk_level: 'low' | 'medium' | 'high';
+}
+
+export interface RemediationExecutionResult {
+  execution_id: string;
+  plan_id: string;
+  status: 'success' | 'failed' | 'partial';
+  steps_completed: number;
+  error?: string;
+}
+
+export interface CircuitBreakerStatus {
+  state: 'closed' | 'open' | 'half-open';
+  can_patrol: boolean;
+  consecutive_failures: number;
+  total_successes: number;
+  total_failures: number;
 }
