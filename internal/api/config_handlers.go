@@ -2395,14 +2395,20 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
 		pbs := &h.getConfig(r.Context()).PBSInstances[index]
-		pbs.Name = req.Name
 
-		host, err := normalizeNodeHost(req.Host, nodeType)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+		// Only update name if provided
+		if req.Name != "" {
+			pbs.Name = req.Name
 		}
-		pbs.Host = host
+
+		if req.Host != "" {
+			host, err := normalizeNodeHost(req.Host, nodeType)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			pbs.Host = host
+		}
 
 		// Update GuestURL if provided
 		pbs.GuestURL = req.GuestURL
