@@ -22,6 +22,8 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
     const [isOpen, setIsOpen] = createSignal(false);
     const [showAllModels, setShowAllModels] = createSignal(false);
     const [searchQuery, setSearchQuery] = createSignal('');
+    const [dropdownPosition, setDropdownPosition] = createSignal({ top: 0, right: 0 });
+    let buttonRef: HTMLButtonElement | undefined;
 
     // Filter models by notable status (show only recent/notable models by default)
     const notableFilteredModels = createMemo(() => {
@@ -65,6 +67,23 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
         return !props.models.some((model) => model.id === candidate);
     });
 
+    const updateDropdownPosition = () => {
+        if (buttonRef) {
+            const rect = buttonRef.getBoundingClientRect();
+            setDropdownPosition({
+                top: rect.bottom + 4, // 4px gap (mt-1)
+                right: window.innerWidth - rect.right,
+            });
+        }
+    };
+
+    const handleToggle = () => {
+        if (!isOpen()) {
+            updateDropdownPosition();
+        }
+        setIsOpen(!isOpen());
+    };
+
     const handleSelect = (modelId: string) => {
         props.onModelSelect(modelId);
         setIsOpen(false);
@@ -94,7 +113,8 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
     return (
         <div class="relative" data-dropdown>
             <button
-                onClick={() => setIsOpen(!isOpen())}
+                ref={buttonRef}
+                onClick={handleToggle}
                 class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 transition-colors"
                 title="Select model for this chat"
             >
@@ -114,7 +134,10 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
             </button>
 
             <Show when={isOpen()}>
-                <div class="absolute right-0 top-full mt-1 w-80 max-h-96 overflow-hidden bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50">
+                <div
+                    class="fixed w-80 max-h-96 overflow-hidden bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-[9999]"
+                    style={{ top: `${dropdownPosition().top}px`, right: `${dropdownPosition().right}px` }}
+                >
                     {/* Search bar */}
                     <div class="flex items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
                         <input

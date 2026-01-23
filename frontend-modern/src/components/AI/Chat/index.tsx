@@ -29,6 +29,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [input, setInput] = createSignal('');
   const [sessions, setSessions] = createSignal<ChatSession[]>([]);
   const [showSessions, setShowSessions] = createSignal(false);
+  const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
+  let sessionButtonRef: HTMLButtonElement | undefined;
   const [models, setModels] = createSignal<ModelInfo[]>([]);
   const [modelsLoading, setModelsLoading] = createSignal(false);
   const [modelsError, setModelsError] = createSignal('');
@@ -162,6 +164,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const currentModel = chat.model();
     if (currentModel && sessionId) {
       updateStoredModel(sessionId, currentModel);
+    }
+  });
+
+  // Refresh models when AI settings change (e.g., new API key added)
+  createEffect(() => {
+    const version = aiChatStore.settingsVersionSignal();
+    // Skip the initial run (version 0)
+    if (version > 0) {
+      loadModels();
+      loadSettings();
     }
   });
 
@@ -337,7 +349,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   return (
     <div
-      class={`flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 overflow-hidden ${isOpen() ? 'w-full sm:w-[480px]' : 'w-0 border-l-0'
+      class={`flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 ${isOpen() ? 'w-full sm:w-[480px]' : 'w-0 border-l-0 overflow-hidden'
         }`}
     >
       <Show when={isOpen()}>
@@ -386,8 +398,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
             {/* Session picker */}
             <div class="relative" data-dropdown>
               <button
+                ref={sessionButtonRef}
                 onClick={() => {
                   const next = !showSessions();
+                  if (next && sessionButtonRef) {
+                    const rect = sessionButtonRef.getBoundingClientRect();
+                    setSessionDropdownPosition({
+                      top: rect.bottom + 4,
+                      right: window.innerWidth - rect.right,
+                    });
+                  }
                   setShowSessions(next);
                 }}
                 class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -399,7 +419,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </button>
 
               <Show when={showSessions()}>
-                <div class="absolute right-0 top-full mt-1 w-72 max-h-96 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden">
+                <div
+                  class="fixed w-72 max-h-96 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-[9999] overflow-hidden"
+                  style={{ top: `${sessionDropdownPosition().top}px`, right: `${sessionDropdownPosition().right}px` }}
+                >
                   <button
                     onClick={handleNewConversation}
                     class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-b border-slate-200 dark:border-slate-700"

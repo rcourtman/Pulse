@@ -95,6 +95,7 @@ const [aiChatContext, setAIChatContext] = createSignal<AIChatContext>({});
 const [contextItems, setContextItems] = createSignal<ContextItem[]>([]);
 const [messages, setMessages] = createSignal<Message[]>(loadMessagesFromStorage());
 const [aiEnabled, setAiEnabled] = createSignal<boolean | null>(null); // null = not checked yet
+const [settingsVersion, setSettingsVersion] = createSignal(0); // Increments when AI settings change
 
 // Session management state
 const [currentSessionId, setCurrentSessionId] = createSignal<string>(loadOrCreateSessionId());
@@ -189,6 +190,14 @@ export const aiChatStore = {
   // Set AI enabled state (called from settings check)
   setEnabled(enabled: boolean) {
     setAiEnabled(enabled);
+  },
+
+  // Signal for settings changes - components can watch this to refresh
+  settingsVersionSignal: settingsVersion,
+
+  // Notify that AI settings have changed (call after saving settings)
+  notifySettingsChanged() {
+    setSettingsVersion(v => v + 1);
   },
 
   // Set messages (for persistence from AIChat component)

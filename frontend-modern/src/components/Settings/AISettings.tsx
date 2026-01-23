@@ -6,6 +6,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
+import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
@@ -587,6 +588,8 @@ export const AISettings: Component = () => {
       setSettings(updated);
       resetForm(updated);
       notificationStore.success('AI settings saved');
+      // Notify other components (like AIChat) that settings changed so they can refresh models
+      aiChatStore.notifySettingsChanged();
     } catch (error) {
       logger.error('[AISettings] Failed to save settings:', error);
       const message = error instanceof Error ? error.message : 'Failed to save AI settings';
@@ -681,6 +684,8 @@ export const AISettings: Component = () => {
       if (provider === 'ollama') setForm('ollamaBaseUrl', '');
 
       notificationStore.success(`${provider} credentials cleared`);
+      // Notify other components (like AIChat) that settings changed
+      aiChatStore.notifySettingsChanged();
     } catch (error) {
       logger.error(`[AISettings] Clear ${provider} failed:`, error);
       const message = error instanceof Error ? error.message : 'Failed to clear credentials';
@@ -747,6 +752,7 @@ export const AISettings: Component = () => {
                       const updated = await AIAPI.updateSettings({ enabled: newValue });
                       setSettings(updated);
                       notificationStore.success(newValue ? 'Pulse Assistant enabled' : 'Pulse Assistant disabled');
+                      aiChatStore.notifySettingsChanged();
                     } catch (error) {
                       // Revert on failure
                       setForm('enabled', !newValue);
@@ -2069,6 +2075,8 @@ export const AISettings: Component = () => {
                     notificationStore.success('Pulse Assistant enabled! You can customize settings below.');
                     // Load models after setup
                     loadModels();
+                    // Notify other components (like AIChat) that settings changed
+                    aiChatStore.notifySettingsChanged();
                   } catch (error) {
                     logger.error('[AISettings] Setup failed:', error);
                     const message = error instanceof Error ? error.message : 'Setup failed';
