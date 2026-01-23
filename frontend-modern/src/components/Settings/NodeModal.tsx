@@ -193,7 +193,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       host: node.host || '',
       guestURL: ('guestURL' in node ? node.guestURL : '') || '',
       authType: node.hasPassword ? 'password' : 'token',
-      setupMode: 'auto' as const,
+      setupMode: node.source === 'agent' ? 'agent' : 'auto',
       user: username,
       password: '',
       tokenName: tokenName,

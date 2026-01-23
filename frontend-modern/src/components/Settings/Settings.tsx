@@ -424,10 +424,8 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/security-roles')) return 'security-roles';
     if (path.includes('/settings/security-users')) return 'security-users';
     if (path.includes('/settings/security-audit')) return 'security-audit';
-    if (path.includes('/settings/security')) return 'security-overview';
-    if (path.includes('/settings/diagnostics')) return 'diagnostics';
-    if (path.includes('/settings/reporting')) return 'reporting';
     if (path.includes('/settings/security-webhooks')) return 'security-webhooks';
+    if (path.includes('/settings/security')) return 'security-overview';
     if (path.includes('/settings/updates')) return 'updates';
     // Legacy platform paths map to the Proxmox tab
     if (
