@@ -373,7 +373,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 							// Check rate limiting for auth attempts
 							if !authLimiter.Allow(clientIP) {
 								log.Warn().Str("ip", clientIP).Msg("Rate limit exceeded for auth")
-								LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Rate limited")
+								LogAuditEventForTenant(GetOrgID(r.Context()), "login", parts[0], clientIP, r.URL.Path, false, "Rate limited")
 								if w != nil {
 									http.Error(w, "Too many authentication attempts", http.StatusTooManyRequests)
 								}
@@ -397,7 +397,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 							}
 
 							log.Warn().Str("user", parts[0]).Str("ip", clientIP).Msg("Account locked out")
-							LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Account locked")
+							LogAuditEventForTenant(GetOrgID(r.Context()), "login", parts[0], clientIP, r.URL.Path, false, "Account locked")
 							if w != nil {
 								w.Header().Set("Content-Type", "application/json")
 								w.WriteHeader(http.StatusForbidden)
@@ -486,7 +486,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 								})
 
 								// Audit log successful login
-								LogAuditEvent("login", parts[0], GetClientIP(r), r.URL.Path, true, "Basic auth login")
+								LogAuditEventForTenant(GetOrgID(r.Context()), "login", parts[0], GetClientIP(r), r.URL.Path, true, "Basic auth login")
 							}
 							w.Header().Set("X-Authenticated-User", parts[0])
 							w.Header().Set("X-Auth-Method", "basic")
@@ -495,7 +495,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 							// Failed login
 							RecordFailedLogin(parts[0])
 							RecordFailedLogin(clientIP)
-							LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Invalid credentials")
+							LogAuditEventForTenant(GetOrgID(r.Context()), "login", parts[0], clientIP, r.URL.Path, false, "Invalid credentials")
 
 							// Get updated attempt counts
 							newUserAttempts, _, _ := GetLockoutInfo(parts[0])
@@ -740,6 +740,109 @@ func attachAPITokenRecord(r *http.Request, record *config.APITokenRecord) {
 	clone := record.Clone()
 	ctx := internalauth.WithAPIToken(r.Context(), &clone)
 	*r = *r.WithContext(ctx)
+}
+
+// attachUserContext stores the authenticated username in the request context.
+func attachUserContext(r *http.Request, username string) *http.Request {
+	if username == "" {
+		return r
+	}
+	ctx := internalauth.WithUser(r.Context(), username)
+	return r.WithContext(ctx)
+}
+
+// AuthContextMiddleware creates a middleware that extracts auth info and stores it in context.
+// This should run early in the middleware chain so subsequent middleware can access auth context.
+// Note: This middleware does NOT enforce authentication - it only populates context.
+// Use RequireAuth for enforcement.
+func AuthContextMiddleware(cfg *config.Config, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Try to extract auth info and store in context WITHOUT enforcing auth
+		// This allows tenant middleware to check authorization later
+		r = extractAndStoreAuthContext(cfg, r)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// extractAndStoreAuthContext extracts user/token info from the request and stores in context.
+// Returns the request with updated context. Does not enforce auth.
+func extractAndStoreAuthContext(cfg *config.Config, r *http.Request) *http.Request {
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+
+	// Dev mode bypass
+	if adminBypassEnabled() {
+		return attachUserContext(r, "admin")
+	}
+
+	// Check proxy auth
+	if cfg.ProxyAuthSecret != "" {
+		if valid, username, _ := CheckProxyAuth(cfg, r); valid && username != "" {
+			return attachUserContext(r, username)
+		}
+	}
+
+	// Check OIDC session
+	if cfg.OIDC != nil && cfg.OIDC.Enabled {
+		if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+			if ValidateSession(cookie.Value) {
+				if username := GetSessionUsername(cookie.Value); username != "" {
+					return attachUserContext(r, username)
+				}
+			}
+		}
+	}
+
+	// Check API tokens
+	if cfg.HasAPITokens() {
+		// Header
+		if token := r.Header.Get("X-API-Token"); token != "" {
+			if record, ok := cfg.ValidateAPIToken(token); ok {
+				attachAPITokenRecord(r, record)
+				tokenID := record.ID
+				if tokenID == "" && len(record.Hash) >= 8 {
+					tokenID = "legacy-" + record.Hash[:8]
+				}
+				return attachUserContext(r, fmt.Sprintf("token:%s", tokenID))
+			}
+		}
+		// Bearer
+		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+				token := strings.TrimSpace(authHeader[7:])
+				if record, ok := cfg.ValidateAPIToken(token); ok {
+					attachAPITokenRecord(r, record)
+					tokenID := record.ID
+					if tokenID == "" && len(record.Hash) >= 8 {
+						tokenID = "legacy-" + record.Hash[:8]
+					}
+					return attachUserContext(r, fmt.Sprintf("token:%s", tokenID))
+				}
+			}
+		}
+		// Query param (for WebSocket)
+		if queryToken := r.URL.Query().Get("token"); queryToken != "" {
+			if record, ok := cfg.ValidateAPIToken(queryToken); ok {
+				attachAPITokenRecord(r, record)
+				tokenID := record.ID
+				if tokenID == "" && len(record.Hash) >= 8 {
+					tokenID = "legacy-" + record.Hash[:8]
+				}
+				return attachUserContext(r, fmt.Sprintf("token:%s", tokenID))
+			}
+		}
+	}
+
+	// Check session cookie
+	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+		if ValidateSession(cookie.Value) {
+			if username := GetSessionUsername(cookie.Value); username != "" {
+				return attachUserContext(r, username)
+			}
+		}
+	}
+
+	return r
 }
 
 func getAPITokenRecordFromRequest(r *http.Request) *config.APITokenRecord {

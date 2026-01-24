@@ -27,11 +27,20 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/adapters"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
@@ -186,14 +195,26 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 
 	// Apply middleware chain:
 	// 1. Universal rate limiting (outermost to stop attacks early)
-	// 2. Demo mode (read-only protection)
-	// 3. Error handling
-	// 4. Security headers with embedding configuration
+	// 2. Auth context extraction (populates user/token in context)
+	// 3. Tenant selection and authorization (uses auth context)
+	// 4. Demo mode (read-only protection)
+	// 5. Error handling
+	// 6. Security headers with embedding configuration
 	// Note: TimeoutHandler breaks WebSocket upgrades
 	handler := SecurityHeadersWithConfig(r, allowEmbedding, allowedOrigins)
 	handler = ErrorHandler(handler)
 	handler = DemoModeMiddleware(cfg, handler)
-	handler = NewTenantMiddleware(r.multiTenant).Middleware(handler)
+
+	// Create tenant middleware with authorization checker
+	tenantMiddleware := NewTenantMiddleware(r.multiTenant)
+	// Wire authorization checker for org access control
+	authChecker := NewAuthorizationChecker(nil) // No org loader yet - uses token binding only
+	tenantMiddleware.SetAuthChecker(authChecker)
+	handler = tenantMiddleware.Middleware(handler)
+
+	// Auth context middleware extracts user/token info BEFORE tenant middleware
+	handler = AuthContextMiddleware(cfg, handler)
+
 	handler = UniversalRateLimitMiddleware(handler)
 	r.wrapped = handler
 	return r
@@ -219,6 +240,8 @@ func (r *Router) setupRoutes() {
 	r.resourceHandlers = NewResourceHandlers()
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant)
+	// Wire license service provider so middleware can access per-tenant license services
+	SetLicenseServiceProvider(r.licenseHandlers)
 	r.reportingHandlers = NewReportingHandlers()
 	rbacHandlers := NewRBACHandlers(r.config)
 
@@ -1265,6 +1288,8 @@ func (r *Router) setupRoutes() {
 	})
 	// Wire AI handler to profile handler for AI-assisted suggestions
 	r.configProfileHandler.SetAIHandler(r.aiHandler)
+	// Wire chat handler to AI settings handler for investigation orchestration
+	r.aiSettingsHandler.SetChatHandler(r.aiHandler)
 	// Wire license checker for alert manager Pro features (Update Alerts)
 	if r.monitor != nil {
 		alertMgr := r.monitor.GetAlertManager()
@@ -1365,6 +1390,33 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleDeleteSuppressionRule)))
 	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, LicenseGatedEmptyResponse(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleGetDismissedFindings)))
 
+	// Patrol Autonomy - autonomous investigation and remediation of findings (requires Pro license)
+	r.mux.HandleFunc("/api/ai/patrol/autonomy", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			r.aiSettingsHandler.HandleGetPatrolAutonomy(w, req)
+		case http.MethodPut:
+			RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleUpdatePatrolAutonomy)(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// Investigation endpoints - view and trigger investigations of findings
+	r.mux.HandleFunc("/api/ai/findings/", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, func(w http.ResponseWriter, req *http.Request) {
+		path := req.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/investigation/messages"):
+			r.aiSettingsHandler.HandleGetInvestigationMessages(w, req)
+		case strings.HasSuffix(path, "/investigation"):
+			r.aiSettingsHandler.HandleGetInvestigation(w, req)
+		case strings.HasSuffix(path, "/reinvestigate"):
+			r.aiSettingsHandler.HandleReinvestigateFinding(w, req)
+		default:
+			http.Error(w, "Not found", http.StatusNotFound)
+		}
+	})))
+
 	// AI Intelligence endpoints - expose learned patterns, correlations, and predictions
 	// Unified intelligence endpoint - aggregates all AI subsystems into a single view
 	r.mux.HandleFunc("/api/ai/intelligence", RequireAuth(r.config, r.aiSettingsHandler.HandleGetIntelligence))
@@ -1377,6 +1429,32 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/intelligence/remediations", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRemediations))
 	r.mux.HandleFunc("/api/ai/intelligence/anomalies", RequireAuth(r.config, r.aiSettingsHandler.HandleGetAnomalies))
 	r.mux.HandleFunc("/api/ai/intelligence/learning", RequireAuth(r.config, r.aiSettingsHandler.HandleGetLearningStatus))
+	// Unified findings endpoint (alerts + AI findings)
+	r.mux.HandleFunc("/api/ai/unified/findings", RequireAuth(r.config, r.aiSettingsHandler.HandleGetUnifiedFindings))
+
+	// Phase 6: AI Intelligence Services
+	r.mux.HandleFunc("/api/ai/forecast", RequireAuth(r.config, r.aiSettingsHandler.HandleGetForecast))
+	r.mux.HandleFunc("/api/ai/forecasts/overview", RequireAuth(r.config, r.aiSettingsHandler.HandleGetForecastOverview))
+	r.mux.HandleFunc("/api/ai/learning/preferences", RequireAuth(r.config, r.aiSettingsHandler.HandleGetLearningPreferences))
+	r.mux.HandleFunc("/api/ai/proxmox/events", RequireAuth(r.config, r.aiSettingsHandler.HandleGetProxmoxEvents))
+	r.mux.HandleFunc("/api/ai/proxmox/correlations", RequireAuth(r.config, r.aiSettingsHandler.HandleGetProxmoxCorrelations))
+	r.mux.HandleFunc("/api/ai/remediation/plans", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			r.aiSettingsHandler.HandleGetRemediationPlans(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	r.mux.HandleFunc("/api/ai/remediation/plan", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRemediationPlan))
+	r.mux.HandleFunc("/api/ai/remediation/approve", RequireAuth(r.config, r.aiSettingsHandler.HandleApproveRemediationPlan))
+	r.mux.HandleFunc("/api/ai/remediation/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteRemediationPlan))
+	r.mux.HandleFunc("/api/ai/remediation/rollback", RequireAuth(r.config, r.aiSettingsHandler.HandleRollbackRemediationPlan))
+	r.mux.HandleFunc("/api/ai/circuit/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetCircuitBreakerStatus))
+
+	// Phase 7: Incident Recording API
+	r.mux.HandleFunc("/api/ai/incidents", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRecentIncidents))
+	r.mux.HandleFunc("/api/ai/incidents/", RequireAuth(r.config, r.aiSettingsHandler.HandleGetIncidentData))
 
 	// AI Chat Sessions - sync across devices (legacy endpoints)
 	r.mux.HandleFunc("/api/ai/chat/sessions", RequireAuth(r.config, r.aiSettingsHandler.HandleListAIChatSessions))
@@ -1705,6 +1783,21 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 			log.Warn().Msg("[Router] resourceHandlers is nil, cannot inject resource store")
 		}
 
+		// Set state provider on AI handler so patrol service gets created
+		// (Critical: patrol service is created lazily in SetStateProvider)
+		if r.aiSettingsHandler != nil {
+			r.aiSettingsHandler.SetStateProvider(m)
+			// Also inject alert provider and resolver now that monitor is available
+			if alertManager := m.GetAlertManager(); alertManager != nil {
+				alertAdapter := ai.NewAlertManagerAdapter(alertManager)
+				r.aiSettingsHandler.SetAlertProvider(alertAdapter)
+				r.aiSettingsHandler.SetAlertResolver(alertAdapter)
+			}
+			if incidentStore := m.GetIncidentStore(); incidentStore != nil {
+				r.aiSettingsHandler.SetIncidentStore(incidentStore)
+			}
+		}
+
 		// Set up Docker detector for automatic Docker detection in LXC containers
 		if r.agentExecServer != nil {
 			// Create a command executor function that wraps the agent exec server
@@ -1729,6 +1822,32 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 			log.Info().Msg("[Router] Docker detector configured for automatic LXC Docker detection")
 		}
 	}
+}
+
+// getTenantMonitor returns the appropriate monitor for the current request's tenant.
+// It extracts the org ID from the request context and returns the corresponding monitor.
+// Falls back to the default monitor if multi-tenant is not configured or on error.
+func (r *Router) getTenantMonitor(ctx context.Context) *monitoring.Monitor {
+	// Get org ID from context
+	orgID := GetOrgID(ctx)
+
+	// If multi-tenant monitor is configured, get the tenant-specific monitor
+	if r.mtMonitor != nil && orgID != "" {
+		monitor, err := r.mtMonitor.GetMonitor(orgID)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("org_id", orgID).
+				Msg("Failed to get tenant monitor, falling back to default")
+			return r.monitor
+		}
+		if monitor != nil {
+			return monitor
+		}
+	}
+
+	// Fall back to the default monitor
+	return r.monitor
 }
 
 // SetConfig refreshes the configuration reference used by the router and dependent handlers.
@@ -1893,8 +2012,281 @@ func (r *Router) StartPatrol(ctx context.Context) {
 			}
 		}
 
+		// Initialize new AI intelligence services (Phase 6)
+		r.initializeAIIntelligenceServices(ctx, dataDir)
+
+		// Wire unified finding callback AFTER initializeAIIntelligenceServices
+		// (unified store is created there) and AFTER findings persistence is loaded
+		patrol := r.aiSettingsHandler.GetAIService(ctx).GetPatrolService()
+		if patrol != nil {
+			if unifiedStore := r.aiSettingsHandler.GetUnifiedStore(); unifiedStore != nil {
+				patrol.SetUnifiedFindingCallback(func(f *ai.Finding) bool {
+					// Convert ai.Finding to unified.UnifiedFinding
+					uf := &unified.UnifiedFinding{
+						ID:             f.ID,
+						Source:         unified.SourceAIPatrol,
+						Severity:       unified.UnifiedSeverity(f.Severity),
+						Category:       unified.UnifiedCategory(f.Category),
+						ResourceID:     f.ResourceID,
+						ResourceName:   f.ResourceName,
+						ResourceType:   f.ResourceType,
+						Node:           f.Node,
+						Title:          f.Title,
+						Description:    f.Description,
+						Recommendation: f.Recommendation,
+						Evidence:       f.Evidence,
+						DetectedAt:     f.DetectedAt,
+						LastSeenAt:     f.LastSeenAt,
+					}
+					_, isNew := unifiedStore.AddFromAI(uf)
+					return isNew
+				})
+				log.Info().Msg("AI Intelligence: Patrol findings wired to unified store")
+
+				// Sync existing findings from persistence to the unified store
+				// (findings loaded from disk before the callback was set)
+				existingFindings := patrol.GetFindingsHistory(nil)
+				if len(existingFindings) > 0 {
+					for _, f := range existingFindings {
+						if f == nil {
+							continue
+						}
+						uf := &unified.UnifiedFinding{
+							ID:             f.ID,
+							Source:         unified.SourceAIPatrol,
+							Severity:       unified.UnifiedSeverity(f.Severity),
+							Category:       unified.UnifiedCategory(f.Category),
+							ResourceID:     f.ResourceID,
+							ResourceName:   f.ResourceName,
+							ResourceType:   f.ResourceType,
+							Node:           f.Node,
+							Title:          f.Title,
+							Description:    f.Description,
+							Recommendation: f.Recommendation,
+							Evidence:       f.Evidence,
+							DetectedAt:     f.DetectedAt,
+							LastSeenAt:     f.LastSeenAt,
+						}
+						// Copy resolution timestamp if resolved
+						if f.ResolvedAt != nil || f.AutoResolved {
+							now := time.Now()
+							if f.ResolvedAt != nil {
+								uf.ResolvedAt = f.ResolvedAt
+							} else {
+								uf.ResolvedAt = &now
+							}
+						}
+						unifiedStore.AddFromAI(uf)
+					}
+					log.Info().Int("count", len(existingFindings)).Msg("AI Intelligence: Synced existing patrol findings to unified store")
+				}
+			}
+		}
+
+		// Finally start the actual patrol loop
 		r.aiSettingsHandler.StartPatrol(ctx)
 	}
+}
+
+// initializeAIIntelligenceServices sets up the new AI intelligence subsystems
+func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir string) {
+	// Only initialize if AI is enabled
+	if !r.aiSettingsHandler.IsAIEnabled(ctx) {
+		return
+	}
+
+	// 1. Initialize circuit breaker for resilient patrol
+	circuitBreaker := circuit.NewBreaker("patrol", circuit.DefaultConfig())
+	r.aiSettingsHandler.SetCircuitBreaker(circuitBreaker)
+	log.Info().Msg("AI Intelligence: Circuit breaker initialized")
+
+	// 2. Initialize learning store for feedback learning
+	learningCfg := learning.LearningStoreConfig{
+		DataDir: dataDir,
+	}
+	learningStore := learning.NewLearningStore(learningCfg)
+	r.aiSettingsHandler.SetLearningStore(learningStore)
+	log.Info().Msg("AI Intelligence: Learning store initialized")
+
+	// 4. Initialize forecast service for trend forecasting
+	forecastCfg := forecast.DefaultForecastConfig()
+	forecastService := forecast.NewService(forecastCfg)
+	// Wire up data provider adapter
+	if r.monitor != nil {
+		if metricsHistory := r.monitor.GetMetricsHistory(); metricsHistory != nil {
+			dataAdapter := adapters.NewForecastDataAdapter(metricsHistory)
+			if dataAdapter != nil {
+				forecastService.SetDataProvider(dataAdapter)
+			}
+		}
+	}
+	// Wire up state provider for forecast context
+	if r.monitor != nil {
+		forecastStateAdapter := &forecastStateProviderWrapper{monitor: r.monitor}
+		forecastService.SetStateProvider(forecastStateAdapter)
+	}
+	r.aiSettingsHandler.SetForecastService(forecastService)
+	log.Info().Msg("AI Intelligence: Forecast service initialized")
+
+	// 5. Initialize Proxmox event correlator
+	proxmoxCfg := proxmox.DefaultEventCorrelatorConfig()
+	proxmoxCfg.DataDir = dataDir
+	proxmoxCorrelator := proxmox.NewEventCorrelator(proxmoxCfg)
+	r.aiSettingsHandler.SetProxmoxCorrelator(proxmoxCorrelator)
+	log.Info().Msg("AI Intelligence: Proxmox event correlator initialized")
+
+	// 7. Initialize remediation engine for AI-guided fixes
+	remediationCfg := remediation.DefaultEngineConfig()
+	remediationCfg.DataDir = dataDir
+	remediationEngine := remediation.NewEngine(remediationCfg)
+	// Wire up command executor (disabled by default for safety)
+	cmdExecutor := adapters.NewCommandExecutorAdapter()
+	remediationEngine.SetCommandExecutor(cmdExecutor)
+	r.aiSettingsHandler.SetRemediationEngine(remediationEngine)
+	log.Info().Msg("AI Intelligence: Remediation engine initialized (command execution disabled)")
+
+	// 8. Initialize unified alert/finding system and bridge
+	if r.monitor != nil {
+		if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+			// Create unified store
+			unifiedStore := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
+			r.aiSettingsHandler.SetUnifiedStore(unifiedStore)
+
+			// Create alert bridge
+			alertBridge := unified.NewAlertBridge(unifiedStore, unified.DefaultBridgeConfig())
+
+			// Create and set alert provider adapter
+			alertAdapter := unified.NewAlertManagerAdapter(alertManager)
+			alertBridge.SetAlertProvider(alertAdapter)
+
+			// Set patrol trigger function (triggers mini-patrol on alert events)
+			patrol := r.aiSettingsHandler.GetAIService(ctx).GetPatrolService()
+			if patrol != nil {
+				alertBridge.SetPatrolTrigger(func(resourceID, reason string) {
+					log.Debug().
+						Str("resource_id", resourceID).
+						Str("reason", reason).
+						Msg("Alert bridge: Triggering mini-patrol")
+					// Could trigger a targeted patrol here in future
+				})
+			}
+
+			// Start the bridge
+			alertBridge.Start()
+			r.aiSettingsHandler.SetAlertBridge(alertBridge)
+			log.Info().Msg("AI Intelligence: Unified alert/finding bridge initialized and started")
+		}
+	}
+
+	// 9. Wire up AI intelligence providers to patrol service for context injection
+	patrol := r.aiSettingsHandler.GetAIService(ctx).GetPatrolService()
+	if patrol != nil {
+		// Wire learning store for user preference context
+		if learningStore != nil {
+			patrol.SetLearningProvider(learningStore)
+		}
+
+		// Wire proxmox correlator for operations context
+		if proxmoxCorrelator != nil {
+			patrol.SetProxmoxEventProvider(proxmoxCorrelator)
+		}
+
+		// Wire forecast service for trend predictions
+		if forecastService != nil {
+			patrol.SetForecastProvider(forecastService)
+		}
+
+		// Wire remediation engine for auto-generating fix plans from findings
+		if remediationEngine != nil {
+			patrol.SetRemediationEngine(remediationEngine)
+		}
+
+		// NOTE: Unified finding callback is wired in StartPatrol after findings persistence is loaded
+
+		log.Info().Msg("AI Intelligence: Patrol context providers wired up")
+	}
+
+	// 10. Initialize event-driven patrol trigger manager (Phase 7)
+	if patrol != nil {
+		triggerManager := ai.NewTriggerManager(ai.DefaultTriggerManagerConfig())
+
+		// Set the patrol executor callback
+		triggerManager.SetOnTrigger(func(ctx context.Context, scope ai.PatrolScope) {
+			patrol.TriggerScopedPatrol(ctx, scope)
+		})
+
+		// Start the trigger manager
+		triggerManager.Start(ctx)
+
+		// Wire to patrol service
+		patrol.SetTriggerManager(triggerManager)
+
+		// Store reference for shutdown and alert callbacks
+		r.aiSettingsHandler.SetTriggerManager(triggerManager)
+
+		// 11. Wire baseline anomaly callback to TriggerManager
+		if baselineStore := patrol.GetBaselineStore(); baselineStore != nil {
+			baselineStore.SetAnomalyCallback(func(resourceID, resourceType, metric string, severity baseline.AnomalySeverity, value, baselineValue float64) {
+				// Only trigger for significant anomalies (high or critical)
+				if severity == baseline.AnomalyHigh || severity == baseline.AnomalyCritical {
+					scope := ai.AnomalyTriggeredPatrolScope(
+						resourceID,
+						resourceType,
+						metric,
+						string(severity),
+					)
+					if triggerManager.TriggerPatrol(scope) {
+						log.Debug().
+							Str("resourceID", resourceID).
+							Str("metric", metric).
+							Str("severity", string(severity)).
+							Msg("Anomaly triggered mini-patrol via TriggerManager")
+					}
+				}
+			})
+			log.Info().Msg("AI Intelligence: Baseline anomaly callback wired to trigger manager")
+		}
+
+		log.Info().Msg("AI Intelligence: Event-driven trigger manager initialized and started")
+	}
+
+	// 12. Initialize incident coordinator for high-frequency recording
+	if patrol != nil {
+		incidentCoordinator := ai.NewIncidentCoordinator(ai.DefaultIncidentCoordinatorConfig())
+
+		// Wire the incident store if available
+		if incidentStore := patrol.GetIncidentStore(); incidentStore != nil {
+			incidentCoordinator.SetIncidentStore(incidentStore)
+		}
+
+		// Create metrics adapter for incident recorder
+		var metricsAdapter *adapters.MetricsAdapter
+		if stateProvider := r.aiSettingsHandler.GetStateProvider(); stateProvider != nil {
+			metricsAdapter = adapters.NewMetricsAdapter(stateProvider)
+		}
+
+		// Initialize and wire the incident recorder (high-frequency metrics)
+		if metricsAdapter != nil {
+			recorderCfg := metrics.DefaultIncidentRecorderConfig()
+			recorderCfg.DataDir = dataDir
+			recorder := metrics.NewIncidentRecorder(recorderCfg)
+			recorder.SetMetricsProvider(metricsAdapter)
+			recorder.Start()
+			incidentCoordinator.SetRecorder(recorder)
+			r.aiSettingsHandler.SetIncidentRecorder(recorder)
+			log.Info().Msg("AI Intelligence: Incident recorder initialized and started")
+		}
+
+		// Start the coordinator
+		incidentCoordinator.Start()
+
+		// Store reference
+		r.aiSettingsHandler.SetIncidentCoordinator(incidentCoordinator)
+
+		log.Info().Msg("AI Intelligence: Incident coordinator initialized and started")
+	}
+
+	log.Info().Msg("AI Intelligence: All Phase 6 & 7 services initialized successfully")
 }
 
 // StopPatrol stops the AI patrol service
@@ -1902,6 +2294,48 @@ func (r *Router) StopPatrol() {
 	if r.aiSettingsHandler != nil {
 		r.aiSettingsHandler.StopPatrol()
 	}
+}
+
+// ShutdownAIIntelligence gracefully shuts down all AI intelligence services (Phase 6)
+// This should be called during application shutdown to ensure proper cleanup
+func (r *Router) ShutdownAIIntelligence() {
+	if r.aiSettingsHandler == nil {
+		return
+	}
+
+	log.Info().Msg("AI Intelligence: Starting graceful shutdown")
+
+	// 1. Stop alert bridge (stop listening for alert events)
+	if alertBridge := r.aiSettingsHandler.GetAlertBridge(); alertBridge != nil {
+		alertBridge.Stop()
+		log.Debug().Msg("AI Intelligence: Alert bridge stopped")
+	}
+
+	// 3. Stop trigger manager (stop event-driven patrol scheduling)
+	if triggerManager := r.aiSettingsHandler.GetTriggerManager(); triggerManager != nil {
+		triggerManager.Stop()
+		log.Debug().Msg("AI Intelligence: Trigger manager stopped")
+	}
+
+	// 4. Stop incident coordinator (stop high-frequency recording)
+	if incidentCoordinator := r.aiSettingsHandler.GetIncidentCoordinator(); incidentCoordinator != nil {
+		incidentCoordinator.Stop()
+		log.Debug().Msg("AI Intelligence: Incident coordinator stopped")
+	}
+
+	// 4b. Stop incident recorder (stops background sampling)
+	if incidentRecorder := r.aiSettingsHandler.GetIncidentRecorder(); incidentRecorder != nil {
+		incidentRecorder.Stop()
+		log.Debug().Msg("AI Intelligence: Incident recorder stopped")
+	}
+
+	// 5. Cleanup learning store (removes old records, persists if data dir configured)
+	if learningStore := r.aiSettingsHandler.GetLearningStore(); learningStore != nil {
+		learningStore.Cleanup()
+		log.Debug().Msg("AI Intelligence: Learning store cleaned up")
+	}
+
+	log.Info().Msg("AI Intelligence: Graceful shutdown complete")
 }
 
 // StartAIChat starts the AI chat service
@@ -1923,23 +2357,20 @@ func (r *Router) StartAIChat(ctx context.Context) {
 	// Wire up MCP tool providers so AI can access real data
 	r.wireAIChatProviders()
 
-	// Wire up AI patrol if AI is running
-	aiCfg := r.aiHandler.GetAIConfig(context.Background())
-	if aiCfg != nil && r.aiHandler.IsRunning(context.Background()) {
-		service := r.aiHandler.GetService(context.Background())
-		if service != nil {
-			// Create patrol service - need concrete type for patrol
-			chatService, ok := service.(*chat.Service)
-			if !ok {
-				log.Warn().Msg("AI service is not a *chat.Service, patrol disabled")
-			}
-			aiPatrol := chat.NewPatrolService(chatService)
+	// Wire up investigation orchestrator now that chat service is ready
+	// This must happen after Start() because the orchestrator needs the chat service
+	if r.aiSettingsHandler != nil {
+		r.aiSettingsHandler.WireOrchestratorAfterChatStart()
+	}
 
-			// Wire to existing patrol service
-			if r.aiSettingsHandler != nil {
-				if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
-					patrolSvc.SetChatPatrol(aiPatrol, true)
-					log.Info().Msg("AI patrol integration enabled")
+	// Wire circuit breaker for patrol if AI is running
+	if r.aiHandler != nil && r.aiHandler.IsRunning(context.Background()) {
+		if r.aiSettingsHandler != nil {
+			if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
+				// Wire circuit breaker for resilient AI API calls
+				if breaker := r.aiSettingsHandler.GetCircuitBreaker(); breaker != nil {
+					patrolSvc.SetCircuitBreaker(breaker)
+					log.Info().Msg("AI patrol circuit breaker wired")
 				}
 			}
 		}
@@ -2091,7 +2522,199 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
+	// Wire intelligence providers for MCP tools
+	// - IncidentRecorderProvider: high-frequency incident data (pulse_get_incident_window)
+	// - EventCorrelatorProvider: Proxmox events (pulse_correlate_events)
+	// - TopologyProvider: relationship graph (pulse_get_relationship_graph)
+	// - KnowledgeStoreProvider: notes (pulse_remember, pulse_recall)
+
+	// Wire incident recorder provider (high-frequency incident data)
+	if r.aiSettingsHandler != nil {
+		if recorder := r.aiSettingsHandler.GetIncidentRecorder(); recorder != nil {
+			service.SetIncidentRecorderProvider(&incidentRecorderProviderWrapper{recorder: recorder})
+			log.Debug().Msg("AI chat: Incident recorder provider wired")
+		}
+	}
+
+	// Wire event correlator provider (Proxmox events)
+	if r.aiSettingsHandler != nil {
+		if correlator := r.aiSettingsHandler.GetProxmoxCorrelator(); correlator != nil {
+			service.SetEventCorrelatorProvider(&eventCorrelatorProviderWrapper{correlator: correlator})
+			log.Debug().Msg("AI chat: Event correlator provider wired")
+		}
+	}
+
+	// Wire knowledge store provider for notes (pulse_remember, pulse_recall)
+	if r.aiSettingsHandler != nil {
+		if aiSvc := r.aiSettingsHandler.GetAIService(context.Background()); aiSvc != nil {
+			if patrolSvc := aiSvc.GetPatrolService(); patrolSvc != nil {
+				if knowledgeStore := patrolSvc.GetKnowledgeStore(); knowledgeStore != nil {
+					service.SetKnowledgeStoreProvider(&knowledgeStoreProviderWrapper{store: knowledgeStore})
+					log.Debug().Msg("AI chat: Knowledge store provider wired")
+				}
+			}
+		}
+	}
+
 	log.Info().Msg("AI chat MCP tool providers wired")
+}
+
+// forecastStateProviderWrapper wraps monitor to implement forecast.StateProvider
+type forecastStateProviderWrapper struct {
+	monitor *monitoring.Monitor
+}
+
+func (w *forecastStateProviderWrapper) GetState() forecast.StateSnapshot {
+	if w.monitor == nil {
+		return forecast.StateSnapshot{}
+	}
+
+	state := w.monitor.GetState()
+	result := forecast.StateSnapshot{
+		VMs:        make([]forecast.VMInfo, 0, len(state.VMs)),
+		Containers: make([]forecast.ContainerInfo, 0, len(state.Containers)),
+		Nodes:      make([]forecast.NodeInfo, 0, len(state.Nodes)),
+		Storage:    make([]forecast.StorageInfo, 0, len(state.Storage)),
+	}
+
+	for _, vm := range state.VMs {
+		result.VMs = append(result.VMs, forecast.VMInfo{
+			ID:   vm.ID,
+			Name: vm.Name,
+		})
+	}
+
+	for _, ct := range state.Containers {
+		result.Containers = append(result.Containers, forecast.ContainerInfo{
+			ID:   ct.ID,
+			Name: ct.Name,
+		})
+	}
+
+	for _, node := range state.Nodes {
+		result.Nodes = append(result.Nodes, forecast.NodeInfo{
+			ID:   node.ID,
+			Name: node.Name,
+		})
+	}
+
+	for _, storage := range state.Storage {
+		result.Storage = append(result.Storage, forecast.StorageInfo{
+			ID:   storage.ID,
+			Name: storage.Name,
+		})
+	}
+
+	return result
+}
+
+// incidentRecorderProviderWrapper adapts metrics.IncidentRecorder to tools.IncidentRecorderProvider.
+type incidentRecorderProviderWrapper struct {
+	recorder *metrics.IncidentRecorder
+}
+
+func (w *incidentRecorderProviderWrapper) GetWindowsForResource(resourceID string, limit int) []*tools.IncidentWindow {
+	if w.recorder == nil {
+		return nil
+	}
+
+	windows := w.recorder.GetWindowsForResource(resourceID, limit)
+	if len(windows) == 0 {
+		return nil
+	}
+
+	result := make([]*tools.IncidentWindow, 0, len(windows))
+	for _, window := range windows {
+		if window == nil {
+			continue
+		}
+		result = append(result, convertIncidentWindow(window))
+	}
+	return result
+}
+
+func (w *incidentRecorderProviderWrapper) GetWindow(windowID string) *tools.IncidentWindow {
+	if w.recorder == nil {
+		return nil
+	}
+	window := w.recorder.GetWindow(windowID)
+	if window == nil {
+		return nil
+	}
+	return convertIncidentWindow(window)
+}
+
+func convertIncidentWindow(window *metrics.IncidentWindow) *tools.IncidentWindow {
+	if window == nil {
+		return nil
+	}
+
+	points := make([]tools.IncidentDataPoint, 0, len(window.DataPoints))
+	for _, point := range window.DataPoints {
+		points = append(points, tools.IncidentDataPoint{
+			Timestamp: point.Timestamp,
+			Metrics:   point.Metrics,
+		})
+	}
+
+	var summary *tools.IncidentSummary
+	if window.Summary != nil {
+		summary = &tools.IncidentSummary{
+			Duration:   window.Summary.Duration,
+			DataPoints: window.Summary.DataPoints,
+			Peaks:      window.Summary.Peaks,
+			Lows:       window.Summary.Lows,
+			Averages:   window.Summary.Averages,
+			Changes:    window.Summary.Changes,
+		}
+	}
+
+	return &tools.IncidentWindow{
+		ID:           window.ID,
+		ResourceID:   window.ResourceID,
+		ResourceName: window.ResourceName,
+		ResourceType: window.ResourceType,
+		TriggerType:  window.TriggerType,
+		TriggerID:    window.TriggerID,
+		StartTime:    window.StartTime,
+		EndTime:      window.EndTime,
+		Status:       string(window.Status),
+		DataPoints:   points,
+		Summary:      summary,
+	}
+}
+
+// eventCorrelatorProviderWrapper adapts proxmox.EventCorrelator to tools.EventCorrelatorProvider.
+type eventCorrelatorProviderWrapper struct {
+	correlator *proxmox.EventCorrelator
+}
+
+func (w *eventCorrelatorProviderWrapper) GetCorrelationsForResource(resourceID string, window time.Duration) []tools.EventCorrelation {
+	if w.correlator == nil {
+		return nil
+	}
+
+	correlations := w.correlator.GetCorrelationsForResource(resourceID)
+	if len(correlations) == 0 {
+		return nil
+	}
+
+	result := make([]tools.EventCorrelation, 0, len(correlations))
+	for _, corr := range correlations {
+		result = append(result, tools.EventCorrelation{
+			EventType:    string(corr.Event.Type),
+			Timestamp:    corr.Event.Timestamp,
+			ResourceID:   corr.Event.ResourceID,
+			ResourceName: corr.Event.ResourceName,
+			Description:  corr.Explanation,
+			Metadata: map[string]interface{}{
+				"confidence": corr.Confidence,
+				"anomalies":  len(corr.Anomalies),
+				"event_id":   corr.Event.ID,
+			},
+		})
+	}
+	return result
 }
 
 // metricsSourceWrapper wraps monitoring.MetricsHistory to implement tools.MetricsSource
@@ -2384,21 +3007,84 @@ func (r *Router) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyzer {
 
 // WireAlertTriggeredAI connects the alert-triggered AI analyzer to the monitor's alert callback
 // This should be called after StartPatrol() to ensure the analyzer is initialized
+// WireAlertTriggeredAI connects the alert-triggered AI analyzer to the monitor's alert callback
+// This should be called after StartPatrol() to ensure the analyzer is initialized
 func (r *Router) WireAlertTriggeredAI() {
-	analyzer := r.GetAlertTriggeredAnalyzer()
-	if analyzer == nil {
-		log.Debug().Msg("Alert-triggered AI analyzer not available")
+	// 1. Get the AI service (default tenant for now)
+	if r.aiSettingsHandler == nil {
+		log.Debug().Msg("AI settings handler not available for wiring")
+		return
+	}
+	aiService := r.aiSettingsHandler.GetAIService(context.Background())
+	if aiService == nil {
+		log.Debug().Msg("AI service not available for wiring")
 		return
 	}
 
+	// 2. Get the Patrol Service (The Watchdog)
+	patrol := aiService.GetPatrolService()
+	if patrol == nil {
+		log.Debug().Msg("Patrol service not available for wiring")
+		return
+	}
+
+	// 3. Get the Monitor (The Trigger)
 	if r.monitor == nil {
 		log.Debug().Msg("Monitor not available for AI alert callback")
 		return
 	}
 
-	// Wire the analyzer's OnAlertFired method to the monitor's alert callback
-	r.monitor.SetAlertTriggeredAICallback(analyzer.OnAlertFired)
-	log.Info().Msg("Alert-triggered AI analysis wired to monitor")
+	// 4. Connect Trigger -> Watchdog
+	// When an alert fires, we immediately trigger the Patrol Agent to investigate
+	r.monitor.SetAlertTriggeredAICallback(func(alert *alerts.Alert) {
+		log.Info().Str("alert_id", alert.ID).Msg("Alert fired leading to Patrol Trigger")
+		patrol.TriggerPatrolForAlert(alert)
+
+		// We also trigger the specific analyzer if enabled, as it tracks specific stats
+		if analyzer := r.GetAlertTriggeredAnalyzer(); analyzer != nil {
+			analyzer.OnAlertFired(alert)
+		}
+	})
+
+	log.Info().Msg("Alert-triggered AI Watchdog wired to monitor")
+}
+
+// deriveResourceTypeFromAlert derives the resource type from an alert
+func deriveResourceTypeFromAlert(alert *alerts.Alert) string {
+	if alert == nil {
+		return ""
+	}
+
+	// Try to derive from alert type
+	alertType := strings.ToLower(alert.Type)
+	switch {
+	case strings.HasPrefix(alertType, "node") || strings.Contains(alert.ResourceID, "/node/"):
+		return "node"
+	case strings.Contains(alertType, "qemu") || strings.Contains(alert.ResourceID, "/qemu/"):
+		return "vm"
+	case strings.Contains(alertType, "lxc") || strings.Contains(alert.ResourceID, "/lxc/"):
+		return "container"
+	case strings.Contains(alertType, "docker"):
+		return "docker"
+	case strings.Contains(alertType, "storage"):
+		return "storage"
+	case strings.Contains(alertType, "pbs"):
+		return "pbs"
+	case strings.Contains(alertType, "kubernetes") || strings.Contains(alertType, "k8s"):
+		return "kubernetes"
+	default:
+		// Try to infer from resource ID patterns
+		if strings.Contains(alert.ResourceID, "/qemu/") {
+			return "vm"
+		}
+		if strings.Contains(alert.ResourceID, "/lxc/") {
+			return "container"
+		}
+		if strings.Contains(alert.ResourceID, "docker") {
+			return "docker"
+		}
+		return "guest" // Default fallback
+	}
 }
 
 // reloadSystemSettings loads system settings from disk and caches them
@@ -2687,7 +3373,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !CheckCSRF(w, req) {
 			http.Error(w, "CSRF token validation failed", http.StatusForbidden)
-			LogAuditEvent("csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Invalid CSRF token")
+			LogAuditEventForTenant(GetOrgID(req.Context()), "csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Invalid CSRF token")
 			return
 		}
 
@@ -3190,7 +3876,7 @@ PULSE_AUTH_PASS='%s'
 		InvalidateUserSessions(r.config.AuthUser)
 
 		// Audit log
-		LogAuditEvent("password_change", r.config.AuthUser, GetClientIP(req), req.URL.Path, true, "Password changed (Docker)")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "password_change", r.config.AuthUser, GetClientIP(req), req.URL.Path, true, "Password changed (Docker)")
 
 		// Return success with Docker-specific message
 		w.Header().Set("Content-Type", "application/json")
@@ -3260,7 +3946,7 @@ PULSE_AUTH_PASS='%s'
 		InvalidateUserSessions(r.config.AuthUser)
 
 		// Audit log
-		LogAuditEvent("password_change", r.config.AuthUser, GetClientIP(req), req.URL.Path, true, "Password changed")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "password_change", r.config.AuthUser, GetClientIP(req), req.URL.Path, true, "Password changed")
 
 		// Detect service name for restart instructions
 		serviceName := detectServiceName()
@@ -3313,7 +3999,7 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	})
 
 	// Audit log logout (use admin as username since we have single user for now)
-	LogAuditEvent("logout", "admin", GetClientIP(req), req.URL.Path, true, "User logged out")
+	LogAuditEventForTenant(GetOrgID(req.Context()), "logout", "admin", GetClientIP(req), req.URL.Path, true, "User logged out")
 
 	log.Info().
 		Str("user", "admin").
@@ -3447,7 +4133,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			remainingMinutes = 1
 		}
 
-		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, false, "Account locked")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "login", loginReq.Username, clientIP, req.URL.Path, false, "Account locked")
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
@@ -3462,7 +4148,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 
 	// Check rate limiting
 	if !authLimiter.Allow(clientIP) {
-		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, false, "Rate limited")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "login", loginReq.Username, clientIP, req.URL.Path, false, "Rate limited")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -3528,7 +4214,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		})
 
 		// Audit log successful login
-		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, true, "Successful login")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "login", loginReq.Username, clientIP, req.URL.Path, true, "Successful login")
 
 		// Return success
 		w.Header().Set("Content-Type", "application/json")
@@ -3540,7 +4226,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		// Failed login
 		RecordFailedLogin(loginReq.Username)
 		RecordFailedLogin(clientIP)
-		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, false, "Invalid credentials")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "login", loginReq.Username, clientIP, req.URL.Path, false, "Invalid credentials")
 
 		// Get updated attempt counts
 		newUserAttempts, _, _ := GetLockoutInfo(loginReq.Username)
@@ -3616,7 +4302,7 @@ func (r *Router) handleResetLockout(w http.ResponseWriter, req *http.Request) {
 	ClearFailedLogins(resetReq.Identifier)
 
 	// Audit log the reset
-	LogAuditEvent("lockout_reset", "admin", GetClientIP(req), req.URL.Path, true,
+	LogAuditEventForTenant(GetOrgID(req.Context()), "lockout_reset", "admin", GetClientIP(req), req.URL.Path, true,
 		fmt.Sprintf("Lockout reset for: %s", resetReq.Identifier))
 
 	log.Info().
@@ -3653,12 +4339,25 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	state := r.monitor.GetState()
+	// Use tenant-aware monitor to get state for the current organization
+	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "no_monitor",
+			"Monitor not available", nil)
+		return
+	}
+	state := monitor.GetState()
 
 	// Also populate the unified resource store (Phase 1 of unified architecture)
 	// This runs on every state request to keep resources up-to-date
+	// Use tenant-specific store to prevent cross-tenant data contamination
 	if r.resourceHandlers != nil {
-		r.resourceHandlers.PopulateFromSnapshot(state)
+		orgID := GetOrgID(req.Context())
+		if orgID != "" && orgID != "default" {
+			r.resourceHandlers.PopulateFromSnapshotForTenant(orgID, state)
+		} else {
+			r.resourceHandlers.PopulateFromSnapshot(state)
+		}
 	}
 
 	frontendState := state.ToFrontend()
@@ -3797,8 +4496,9 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Get current state
-	state := r.monitor.GetState()
+	// Get tenant-specific monitor and current state
+	monitor := r.getTenantMonitor(req.Context())
+	state := monitor.GetState()
 
 	// Find the storage by ID
 	var storageDetail *models.Storage
@@ -3868,8 +4568,9 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		duration = time.Hour
 	}
 
-	// Get current state from monitor
-	state := r.monitor.GetState()
+	// Get tenant-specific monitor and current state
+	monitor := r.getTenantMonitor(req.Context())
+	state := monitor.GetState()
 
 	// Create chart data structure that matches frontend expectations
 	chartData := make(map[string]VMChartData)
@@ -3885,7 +4586,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Get historical metrics
-		metrics := r.monitor.GetGuestMetrics(vm.ID, duration)
+		metrics := monitor.GetGuestMetrics(vm.ID, duration)
 
 		// Convert metric points to API format
 		for metricType, points := range metrics {
@@ -3935,7 +4636,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Get historical metrics
-		metrics := r.monitor.GetGuestMetrics(ct.ID, duration)
+		metrics := monitor.GetGuestMetrics(ct.ID, duration)
 
 		// Convert metric points to API format
 		for metricType, points := range metrics {
@@ -3986,7 +4687,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Get historical metrics
-		metrics := r.monitor.GetStorageMetrics(storage.ID, duration)
+		metrics := monitor.GetStorageMetrics(storage.ID, duration)
 
 		// Convert usage metrics to chart format
 		if usagePoints, ok := metrics["usage"]; ok && len(usagePoints) > 0 {
@@ -4022,7 +4723,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 
 		// Get historical metrics for each type
 		for _, metricType := range []string{"cpu", "memory", "disk"} {
-			points := r.monitor.GetNodeMetrics(node.ID, metricType, duration)
+			points := monitor.GetNodeMetrics(node.ID, metricType, duration)
 			nodeData[node.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
@@ -4076,7 +4777,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 
 			// Get historical metrics using the docker: prefix key
 			metricKey := fmt.Sprintf("docker:%s", container.ID)
-			metrics := r.monitor.GetGuestMetrics(metricKey, duration)
+			metrics := monitor.GetGuestMetrics(metricKey, duration)
 
 			// Convert metric points to API format
 			for metricType, points := range metrics {
@@ -4129,7 +4830,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 
 		// Get historical metrics using the dockerHost: prefix key
 		metricKey := fmt.Sprintf("dockerHost:%s", host.ID)
-		metrics := r.monitor.GetGuestMetrics(metricKey, duration)
+		metrics := monitor.GetGuestMetrics(metricKey, duration)
 
 		// Convert metric points to API format
 		for metricType, points := range metrics {
@@ -4211,13 +4912,20 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	}
 
 	duration := time.Duration(rangeMinutes) * time.Minute
-	state := r.monitor.GetState()
+
+	// Use tenant-aware monitor
+	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		http.Error(w, "Monitor not available", http.StatusInternalServerError)
+		return
+	}
+	state := monitor.GetState()
 
 	// Build storage chart data
 	storageData := make(StorageChartsResponse)
 
 	for _, storage := range state.Storage {
-		metrics := r.monitor.GetStorageMetrics(storage.ID, duration)
+		metrics := monitor.GetStorageMetrics(storage.ID, duration)
 
 		storageData[storage.ID] = StorageMetrics{
 			Usage: metrics["usage"],
@@ -4241,7 +4949,14 @@ func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	store := r.monitor.GetMetricsStore()
+	// Use tenant-aware monitor
+	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		http.Error(w, "Monitor not available", http.StatusInternalServerError)
+		return
+	}
+
+	store := monitor.GetMetricsStore()
 	if store == nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -4280,6 +4995,13 @@ func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Reques
 func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Use tenant-aware monitor
+	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		http.Error(w, "Monitor not available", http.StatusInternalServerError)
 		return
 	}
 
@@ -4453,7 +5175,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 		return apiPoints
 	}
-	state := r.monitor.GetState()
+	state := monitor.GetState()
 
 	parseGuestID := func(id string) (string, string, int, bool) {
 		parts := strings.Split(id, ":")
@@ -4633,7 +5355,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		switch resourceType {
 		case "vm", "container", "guest":
-			metrics := r.monitor.GetGuestMetrics(resourceID, duration)
+			metrics := monitor.GetGuestMetrics(resourceID, duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(resourceType, resourceID)
@@ -4644,7 +5366,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
 		case "dockerHost":
-			metrics := r.monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
+			metrics := monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(resourceType, resourceID)
@@ -4655,7 +5377,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
 		case "docker", "dockerContainer":
-			metrics := r.monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
+			metrics := monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(resourceType, resourceID)
@@ -4666,7 +5388,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
 		case "node":
-			points := r.monitor.GetNodeMetrics(resourceID, metricType, duration)
+			points := monitor.GetNodeMetrics(resourceID, metricType, duration)
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(resourceType, resourceID)
 				if live, ok := livePoints[metricType]; ok {
@@ -4676,7 +5398,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
 		case "storage":
-			metrics := r.monitor.GetStorageMetrics(resourceID, duration)
+			metrics := monitor.GetStorageMetrics(resourceID, duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(resourceType, resourceID)
@@ -4703,19 +5425,19 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		var metrics map[string][]monitoring.MetricPoint
 		switch resourceType {
 		case "vm", "container", "guest":
-			metrics = r.monitor.GetGuestMetrics(resourceID, duration)
+			metrics = monitor.GetGuestMetrics(resourceID, duration)
 		case "dockerHost":
-			metrics = r.monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
+			metrics = monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
 		case "docker", "dockerContainer":
-			metrics = r.monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
+			metrics = monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 		case "storage":
-			metrics = r.monitor.GetStorageMetrics(resourceID, duration)
+			metrics = monitor.GetStorageMetrics(resourceID, duration)
 		default:
 			if resourceType == "node" {
 				metrics = map[string][]monitoring.MetricPoint{
-					"cpu":    r.monitor.GetNodeMetrics(resourceID, "cpu", duration),
-					"memory": r.monitor.GetNodeMetrics(resourceID, "memory", duration),
-					"disk":   r.monitor.GetNodeMetrics(resourceID, "disk", duration),
+					"cpu":    monitor.GetNodeMetrics(resourceID, "cpu", duration),
+					"memory": monitor.GetNodeMetrics(resourceID, "memory", duration),
+					"disk":   monitor.GetNodeMetrics(resourceID, "disk", duration),
 				}
 			} else {
 				return nil, "", false
@@ -4743,7 +5465,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return apiData, source, true
 	}
 
-	store := r.monitor.GetMetricsStore()
+	store := monitor.GetMetricsStore()
 	if store == nil {
 		if metricType != "" {
 			if apiPoints, source, ok := fallbackSingle(); ok {
@@ -4954,8 +5676,9 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Get current state
-	state := r.monitor.GetState()
+	// Get tenant-specific monitor and current state
+	monitor := r.getTenantMonitor(req.Context())
+	state := monitor.GetState()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(struct {
@@ -4984,8 +5707,9 @@ func (r *Router) handleBackupsPVE(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Get state and extract PVE backups
-	state := r.monitor.GetState()
+	// Get tenant-specific monitor and state, then extract PVE backups
+	monitor := r.getTenantMonitor(req.Context())
+	state := monitor.GetState()
 
 	// Return PVE backup data in expected format
 	backups := state.PVEBackups.StorageBackups
@@ -5012,8 +5736,9 @@ func (r *Router) handleBackupsPBS(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Get state and extract PBS backups
-	state := r.monitor.GetState()
+	// Get tenant-specific monitor and state, then extract PBS backups
+	monitor := r.getTenantMonitor(req.Context())
+	state := monitor.GetState()
 
 	// Return PBS backup data in expected format
 	instances := state.PBSInstances
@@ -5040,8 +5765,9 @@ func (r *Router) handleSnapshots(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Get state and extract guest snapshots
-	state := r.monitor.GetState()
+	// Get tenant-specific monitor and state, then extract guest snapshots
+	monitor := r.getTenantMonitor(req.Context())
+	state := monitor.GetState()
 
 	// Return snapshot data
 	snaps := state.PVEBackups.GuestSnapshots
@@ -5339,7 +6065,9 @@ func (r *Router) forwardUpdateProgress() {
 		}
 
 		// Broadcast to all connected clients
-		r.wsHub.BroadcastMessage(message)
+		if r.wsHub != nil {
+			r.wsHub.BroadcastMessage(message)
+		}
 
 		// Log progress
 		log.Debug().
@@ -5962,6 +6690,64 @@ func normalizeDockerAgentArch(arch string) string {
 	default:
 		return ""
 	}
+}
+
+// knowledgeStoreProviderWrapper adapts knowledge.Store to tools.KnowledgeStoreProvider.
+type knowledgeStoreProviderWrapper struct {
+	store *knowledge.Store
+}
+
+func (w *knowledgeStoreProviderWrapper) SaveNote(resourceID, note, category string) error {
+	if w.store == nil {
+		return fmt.Errorf("knowledge store not available")
+	}
+	// Use resourceID as both guestID and guestName, with a generic type and category
+	return w.store.SaveNote(resourceID, resourceID, "resource", category, "Note", note)
+}
+
+func (w *knowledgeStoreProviderWrapper) GetKnowledge(resourceID string, category string) []tools.KnowledgeEntry {
+	if w.store == nil {
+		return nil
+	}
+
+	guestKnowledge, err := w.store.GetKnowledge(resourceID)
+	if err != nil || guestKnowledge == nil {
+		return nil
+	}
+
+	var result []tools.KnowledgeEntry
+
+	// If category is specified, only get notes from that category
+	if category != "" {
+		notes, err := w.store.GetNotesByCategory(resourceID, category)
+		if err != nil {
+			return nil
+		}
+		for _, note := range notes {
+			result = append(result, tools.KnowledgeEntry{
+				ID:         note.ID,
+				ResourceID: resourceID,
+				Note:       note.Content,
+				Category:   note.Category,
+				CreatedAt:  note.CreatedAt,
+				UpdatedAt:  note.UpdatedAt,
+			})
+		}
+		return result
+	}
+
+	// Otherwise return all notes
+	for _, note := range guestKnowledge.Notes {
+		result = append(result, tools.KnowledgeEntry{
+			ID:         note.ID,
+			ResourceID: resourceID,
+			Note:       note.Content,
+			Category:   note.Category,
+			CreatedAt:  note.CreatedAt,
+			UpdatedAt:  note.UpdatedAt,
+		})
+	}
+	return result
 }
 
 // trigger rebuild Fri Jan 16 10:52:41 UTC 2026

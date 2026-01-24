@@ -223,8 +223,12 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	// Security: Validate OIDC URLs
-	if provider.Type == config.SSOProviderTypeOIDC && provider.OIDC != nil {
+	// Security: Validate OIDC configuration
+	if provider.Type == config.SSOProviderTypeOIDC {
+		if provider.OIDC == nil {
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "OIDC configuration is required", nil)
+			return
+		}
 		if provider.OIDC.IssuerURL != "" && !validateURL(provider.OIDC.IssuerURL, []string{"https", "http"}) {
 			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid OIDC issuer URL", nil)
 			return
@@ -235,8 +239,12 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
-	// Security: Validate SAML URLs
-	if provider.Type == config.SSOProviderTypeSAML && provider.SAML != nil {
+	// Security: Validate SAML configuration
+	if provider.Type == config.SSOProviderTypeSAML {
+		if provider.SAML == nil {
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "SAML configuration is required", nil)
+			return
+		}
 		if provider.SAML.IDPMetadataURL != "" && !validateURL(provider.SAML.IDPMetadataURL, []string{"https", "http"}) {
 			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid SAML metadata URL", nil)
 			return
@@ -285,7 +293,7 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
-	LogAuditEvent("sso_provider_created", "", GetClientIP(req), req.URL.Path, true, "Created provider: "+provider.Name)
+	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_provider_created", "", GetClientIP(req), req.URL.Path, true, "Created provider: "+provider.Name)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -392,7 +400,7 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
-	LogAuditEvent("sso_provider_updated", "", GetClientIP(req), req.URL.Path, true, "Updated provider: "+updated.Name)
+	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_provider_updated", "", GetClientIP(req), req.URL.Path, true, "Updated provider: "+updated.Name)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(providerToResponse(&updated, r.config.PublicURL))
@@ -430,7 +438,7 @@ func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Reques
 		r.samlManager.RemoveProvider(providerID)
 	}
 
-	LogAuditEvent("sso_provider_deleted", "", GetClientIP(req), req.URL.Path, true, "Deleted provider: "+existing.Name)
+	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_provider_deleted", "", GetClientIP(req), req.URL.Path, true, "Deleted provider: "+existing.Name)
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -592,7 +600,7 @@ func (r *Router) handleTestSSOProvider(w http.ResponseWriter, req *http.Request)
 		response = r.testOIDCConnection(ctx, testReq.OIDC)
 	}
 
-	LogAuditEvent("sso_provider_test", "", clientIP, req.URL.Path, response.Success,
+	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_provider_test", "", clientIP, req.URL.Path, response.Success,
 		"Tested "+testReq.Type+" provider connection")
 
 	w.Header().Set("Content-Type", "application/json")

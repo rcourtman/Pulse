@@ -1607,13 +1607,13 @@ func buildAIChatDiagnostic(cfg *config.Config, aiHandler *AIHandler) *AIChatDiag
 			diag.MCPConnected = diag.Running // Assume connected if running for now
 
 			if !diag.Running && diag.Enabled {
-				diag.Notes = append(diag.Notes, "AI chat service is enabled but not running")
+				diag.Notes = append(diag.Notes, "Pulse Assistant service is enabled but not running")
 			}
 		} else if diag.Enabled {
-			diag.Notes = append(diag.Notes, "AI chat service is nil")
+			diag.Notes = append(diag.Notes, "Pulse Assistant service is nil")
 		}
 	} else {
-		diag.Notes = append(diag.Notes, "AI Handler not initialized")
+		diag.Notes = append(diag.Notes, "Pulse Assistant handler not initialized")
 	}
 
 	return diag

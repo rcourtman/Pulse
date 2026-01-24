@@ -111,7 +111,7 @@ func (r *Router) handleSAMLLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	LogAuditEvent("saml_login_initiated", "", GetClientIP(req), req.URL.Path, true, "Provider: "+providerID)
+	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login_initiated", "", GetClientIP(req), req.URL.Path, true, "Provider: "+providerID)
 
 	// Redirect for GET, return JSON for POST
 	if req.Method == http.MethodGet {
@@ -160,7 +160,7 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 	result, relayState, err := service.ProcessResponse(req)
 	if err != nil {
 		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to process SAML response")
-		LogAuditEvent("saml_login", "", GetClientIP(req), req.URL.Path, false, "SAML response validation failed: "+err.Error())
+		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", "", GetClientIP(req), req.URL.Path, false, "SAML response validation failed: "+err.Error())
 		r.redirectSAMLError(w, req, relayState, "saml_validation_failed")
 		return
 	}
@@ -173,7 +173,7 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 				Strs("user_groups", result.Groups).
 				Strs("allowed_groups", provider.AllowedGroups).
 				Msg("User not in allowed groups")
-			LogAuditEvent("saml_login", result.Username, GetClientIP(req), req.URL.Path, false, "Group restriction failed")
+			LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", result.Username, GetClientIP(req), req.URL.Path, false, "Group restriction failed")
 			r.redirectSAMLError(w, req, relayState, "group_restricted")
 			return
 		}
@@ -186,7 +186,7 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 				Str("email", result.Email).
 				Strs("allowed_domains", provider.AllowedDomains).
 				Msg("Email domain not allowed")
-			LogAuditEvent("saml_login", result.Username, GetClientIP(req), req.URL.Path, false, "Domain restriction failed")
+			LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", result.Username, GetClientIP(req), req.URL.Path, false, "Domain restriction failed")
 			r.redirectSAMLError(w, req, relayState, "domain_restricted")
 			return
 		}
@@ -199,7 +199,7 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 				Str("email", result.Email).
 				Strs("allowed_emails", provider.AllowedEmails).
 				Msg("Email not in allowed list")
-			LogAuditEvent("saml_login", result.Username, GetClientIP(req), req.URL.Path, false, "Email restriction failed")
+			LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", result.Username, GetClientIP(req), req.URL.Path, false, "Email restriction failed")
 			r.redirectSAMLError(w, req, relayState, "email_restricted")
 			return
 		}
@@ -226,9 +226,9 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 				Msg("Auto-assigning roles based on SAML group mapping")
 			if err := authManager.UpdateUserRoles(result.Username, rolesToAssign); err != nil {
 				log.Error().Err(err).Str("user", result.Username).Msg("Failed to auto-assign SAML roles")
-				LogAuditEvent("saml_role_assignment", result.Username, GetClientIP(req), req.URL.Path, false, "Failed to auto-assign roles: "+strings.Join(rolesToAssign, ", "))
+				LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", result.Username, GetClientIP(req), req.URL.Path, false, "Failed to auto-assign roles: "+strings.Join(rolesToAssign, ", "))
 			} else {
-				LogAuditEvent("saml_role_assignment", result.Username, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
+				LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", result.Username, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 			}
 		}
 	}
@@ -251,12 +251,12 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 
 	if err := r.establishSAMLSession(w, req, username, samlSession); err != nil {
 		log.Error().Err(err).Msg("Failed to establish session after SAML login")
-		LogAuditEvent("saml_login", username, GetClientIP(req), req.URL.Path, false, "Session creation failed")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", username, GetClientIP(req), req.URL.Path, false, "Session creation failed")
 		r.redirectSAMLError(w, req, relayState, "session_failed")
 		return
 	}
 
-	LogAuditEvent("saml_login", username, GetClientIP(req), req.URL.Path, true, "SAML login success via "+providerID)
+	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", username, GetClientIP(req), req.URL.Path, true, "SAML login success via "+providerID)
 
 	// Redirect to return URL
 	target := relayState
@@ -359,12 +359,12 @@ func (r *Router) handleSAMLLogout(w http.ResponseWriter, req *http.Request) {
 	logoutURL, err := service.MakeLogoutRequest(session.NameID, session.SessionIndex)
 	if err != nil {
 		log.Warn().Err(err).Str("provider_id", providerID).Msg("SAML SLO not available, local logout only")
-		LogAuditEvent("saml_logout", "", GetClientIP(req), req.URL.Path, true, "Local logout only (SLO not available)")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_logout", "", GetClientIP(req), req.URL.Path, true, "Local logout only (SLO not available)")
 		http.Redirect(w, req, "/?logout=success", http.StatusFound)
 		return
 	}
 
-	LogAuditEvent("saml_logout", "", GetClientIP(req), req.URL.Path, true, "Initiating SAML SLO")
+	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_logout", "", GetClientIP(req), req.URL.Path, true, "Initiating SAML SLO")
 	http.Redirect(w, req, logoutURL, http.StatusFound)
 }
 
@@ -373,7 +373,7 @@ func (r *Router) handleSAMLSLO(w http.ResponseWriter, req *http.Request) {
 	// For now, just redirect to home with logout success
 	// A full implementation would validate the LogoutResponse
 	r.clearSession(w, req)
-	LogAuditEvent("saml_slo_callback", "", GetClientIP(req), req.URL.Path, true, "SAML SLO complete")
+	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_slo_callback", "", GetClientIP(req), req.URL.Path, true, "SAML SLO complete")
 	http.Redirect(w, req, "/?logout=success", http.StatusFound)
 }
 

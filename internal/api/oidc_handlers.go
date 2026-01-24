@@ -120,28 +120,28 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 	query := req.URL.Query()
 	if errParam := query.Get("error"); errParam != "" {
 		log.Warn().Str("error", errParam).Msg("OIDC provider returned error")
-		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "Provider error: "+errParam)
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", "", GetClientIP(req), req.URL.Path, false, "Provider error: "+errParam)
 		r.redirectOIDCError(w, req, "", errParam)
 		return
 	}
 
 	state := query.Get("state")
 	if state == "" {
-		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "Missing state parameter")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", "", GetClientIP(req), req.URL.Path, false, "Missing state parameter")
 		r.redirectOIDCError(w, req, "", "missing_state")
 		return
 	}
 
 	entry, ok := service.consumeState(state)
 	if !ok {
-		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "Invalid or expired state")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", "", GetClientIP(req), req.URL.Path, false, "Invalid or expired state")
 		r.redirectOIDCError(w, req, "", "invalid_state")
 		return
 	}
 
 	code := query.Get("code")
 	if code == "" {
-		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "Missing authorization code")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", "", GetClientIP(req), req.URL.Path, false, "Missing authorization code")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "missing_code")
 		return
 	}
@@ -153,7 +153,7 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 	token, err := service.exchangeCode(ctx, code, entry)
 	if err != nil {
 		log.Error().Err(err).Str("issuer", cfg.IssuerURL).Msg("OIDC code exchange failed")
-		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "Code exchange failed: "+err.Error())
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", "", GetClientIP(req), req.URL.Path, false, "Code exchange failed: "+err.Error())
 		r.redirectOIDCError(w, req, entry.ReturnTo, "exchange_failed")
 		return
 	}
@@ -162,7 +162,7 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok || rawIDToken == "" {
-		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "Missing ID token")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", "", GetClientIP(req), req.URL.Path, false, "Missing ID token")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "missing_id_token")
 		return
 	}
@@ -182,7 +182,7 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 			Str("client_id", cfg.ClientID).
 			Str("redirect_url", cfg.RedirectURL).
 			Msg(logMessage)
-		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "ID token verification failed: "+err.Error())
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", "", GetClientIP(req), req.URL.Path, false, "ID token verification failed: "+err.Error())
 		r.redirectOIDCError(w, req, entry.ReturnTo, errorCode)
 		return
 	}
@@ -192,7 +192,7 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 	claims := make(map[string]any)
 	if err := idToken.Claims(&claims); err != nil {
 		log.Error().Err(err).Msg("Failed to parse ID token claims")
-		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "Invalid token claims")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", "", GetClientIP(req), req.URL.Path, false, "Invalid token claims")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "invalid_claims")
 		return
 	}
@@ -219,14 +219,14 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 
 	if len(cfg.AllowedEmails) > 0 && !matchesValue(email, cfg.AllowedEmails) {
 		log.Debug().Str("email", email).Strs("allowed_emails", cfg.AllowedEmails).Msg("Email not in allowed list")
-		LogAuditEvent("oidc_login", email, GetClientIP(req), req.URL.Path, false, "Email not permitted")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", email, GetClientIP(req), req.URL.Path, false, "Email not permitted")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "email_restricted")
 		return
 	}
 
 	if len(cfg.AllowedDomains) > 0 && !matchesDomain(email, cfg.AllowedDomains) {
 		log.Debug().Str("email", email).Strs("allowed_domains", cfg.AllowedDomains).Msg("Email domain not in allowed list")
-		LogAuditEvent("oidc_login", email, GetClientIP(req), req.URL.Path, false, "Email domain restricted")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", email, GetClientIP(req), req.URL.Path, false, "Email domain restricted")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "domain_restricted")
 		return
 	}
@@ -240,7 +240,7 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 			Msg("Checking group membership")
 		if !intersects(groups, cfg.AllowedGroups) {
 			log.Debug().Msg("User not in any allowed groups")
-			LogAuditEvent("oidc_login", username, GetClientIP(req), req.URL.Path, false, "Group restriction failed")
+			LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", username, GetClientIP(req), req.URL.Path, false, "Group restriction failed")
 			r.redirectOIDCError(w, req, entry.ReturnTo, "group_restricted")
 			return
 		}
@@ -269,10 +269,10 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 				Msg("Auto-assigning roles based on OIDC group mapping")
 			if err := authManager.UpdateUserRoles(username, rolesToAssign); err != nil {
 				log.Error().Err(err).Str("user", username).Msg("Failed to auto-assign OIDC roles")
-				LogAuditEvent("oidc_role_assignment", username, GetClientIP(req), req.URL.Path, false, "Failed to auto-assign roles: "+strings.Join(rolesToAssign, ", "))
+				LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_role_assignment", username, GetClientIP(req), req.URL.Path, false, "Failed to auto-assign roles: "+strings.Join(rolesToAssign, ", "))
 				// We don't fail the login here, but log the error
 			} else {
-				LogAuditEvent("oidc_role_assignment", username, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
+				LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_role_assignment", username, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 			}
 		}
 	}
@@ -294,12 +294,12 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 
 	if err := r.establishOIDCSession(w, req, username, oidcTokens); err != nil {
 		log.Error().Err(err).Msg("Failed to establish session after OIDC login")
-		LogAuditEvent("oidc_login", username, GetClientIP(req), req.URL.Path, false, "Session creation failed")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", username, GetClientIP(req), req.URL.Path, false, "Session creation failed")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "session_failed")
 		return
 	}
 
-	LogAuditEvent("oidc_login", username, GetClientIP(req), req.URL.Path, true, "OIDC login success")
+	LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", username, GetClientIP(req), req.URL.Path, true, "OIDC login success")
 
 	target := entry.ReturnTo
 	if target == "" {

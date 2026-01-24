@@ -387,7 +387,7 @@ func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Reque
 	record := getAPITokenRecordFromRequest(r)
 	if !h.canReadConfig(record) {
 		respondMissingScope(w, config.ScopeHostConfigRead)
-		LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+		LogAuditEventForTenant(GetOrgID(r.Context()), "host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
 			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 		return
 	}
@@ -395,7 +395,7 @@ func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Reque
 	host, ok := h.resolveConfigHost(r.Context(), hostID, record)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Host has not registered with Pulse yet", nil)
-		LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+		LogAuditEventForTenant(GetOrgID(r.Context()), "host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
 			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 		return
 	}
@@ -407,7 +407,7 @@ func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign host config payload")
 		writeErrorResponse(w, http.StatusInternalServerError, "config_signing_failed", "Failed to sign host config", nil)
-		LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+		LogAuditEventForTenant(GetOrgID(r.Context()), "host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
 			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 		return
 	}
@@ -420,12 +420,12 @@ func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Reque
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize host config response")
-		LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+		LogAuditEventForTenant(GetOrgID(r.Context()), "host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
 			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 		return
 	}
 
-	LogAuditEvent("host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true,
+	LogAuditEventForTenant(GetOrgID(r.Context()), "host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true,
 		fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 }
 

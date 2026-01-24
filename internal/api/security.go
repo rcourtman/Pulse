@@ -483,8 +483,44 @@ type AuditEvent struct {
 // LogAuditEvent logs security-relevant events using the audit package.
 // This function delegates to the configured audit.Logger, allowing enterprise
 // versions to provide persistent storage and signing.
+// For tenant-aware logging, use LogAuditEventForTenant instead.
 func LogAuditEvent(event string, user string, ip string, path string, success bool, details string) {
 	audit.Log(event, user, ip, path, success, details)
+}
+
+// LogAuditEventForTenant logs security-relevant events to a tenant-specific audit log.
+// Uses the TenantLoggerManager to route events to the correct tenant's audit database.
+func LogAuditEventForTenant(orgID, event, user, ip, path string, success bool, details string) {
+	manager := GetTenantAuditManager()
+	if manager == nil {
+		// Fall back to global logger
+		audit.Log(event, user, ip, path, success, details)
+		return
+	}
+	if err := manager.Log(orgID, event, user, ip, path, success, details); err != nil {
+		// If tenant logging fails, fall back to global logger
+		audit.Log(event, user, ip, path, success, details)
+	}
+}
+
+// global tenant audit manager
+var (
+	tenantAuditManager   *audit.TenantLoggerManager
+	tenantAuditManagerMu sync.RWMutex
+)
+
+// SetTenantAuditManager sets the global tenant audit manager.
+func SetTenantAuditManager(manager *audit.TenantLoggerManager) {
+	tenantAuditManagerMu.Lock()
+	defer tenantAuditManagerMu.Unlock()
+	tenantAuditManager = manager
+}
+
+// GetTenantAuditManager returns the global tenant audit manager.
+func GetTenantAuditManager() *audit.TenantLoggerManager {
+	tenantAuditManagerMu.RLock()
+	defer tenantAuditManagerMu.RUnlock()
+	return tenantAuditManager
 }
 
 // Session Management Improvements

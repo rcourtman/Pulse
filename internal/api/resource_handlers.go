@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
@@ -14,16 +15,25 @@ type StateProvider interface {
 	GetState() models.StateSnapshot
 }
 
+// TenantStateProvider allows ResourceHandlers to fetch current state for a specific tenant.
+type TenantStateProvider interface {
+	GetStateForTenant(orgID string) models.StateSnapshot
+}
+
 // ResourceHandlers provides HTTP handlers for the unified resource API.
 type ResourceHandlers struct {
-	store         *resources.Store
-	stateProvider StateProvider
+	store               *resources.Store            // Default store (legacy/default tenant)
+	storesByTenant      map[string]*resources.Store // Per-tenant stores
+	storeMu             sync.RWMutex                // Protects storesByTenant
+	stateProvider       StateProvider               // Legacy state provider
+	tenantStateProvider TenantStateProvider         // Tenant-aware state provider
 }
 
 // NewResourceHandlers creates resource handlers with a new store.
 func NewResourceHandlers() *ResourceHandlers {
 	return &ResourceHandlers{
-		store: resources.NewStore(),
+		store:          resources.NewStore(),
+		storesByTenant: make(map[string]*resources.Store),
 	}
 }
 
@@ -32,9 +42,58 @@ func (h *ResourceHandlers) SetStateProvider(provider StateProvider) {
 	h.stateProvider = provider
 }
 
+// SetTenantStateProvider sets the tenant-aware state provider.
+func (h *ResourceHandlers) SetTenantStateProvider(provider TenantStateProvider) {
+	h.tenantStateProvider = provider
+}
+
 // Store returns the underlying resource store for populating from the monitor.
 func (h *ResourceHandlers) Store() *resources.Store {
 	return h.store
+}
+
+// getStoreForTenant returns the resource store for a specific tenant.
+// Creates a new store lazily if one doesn't exist.
+func (h *ResourceHandlers) getStoreForTenant(orgID string) *resources.Store {
+	if orgID == "" || orgID == "default" {
+		return h.store
+	}
+
+	h.storeMu.RLock()
+	store, exists := h.storesByTenant[orgID]
+	h.storeMu.RUnlock()
+
+	if exists {
+		return store
+	}
+
+	// Create new store for tenant
+	h.storeMu.Lock()
+	defer h.storeMu.Unlock()
+
+	// Double-check after acquiring write lock
+	if store, exists = h.storesByTenant[orgID]; exists {
+		return store
+	}
+
+	store = resources.NewStore()
+	h.storesByTenant[orgID] = store
+	return store
+}
+
+// GetStoreStats returns stats for all tenant stores.
+func (h *ResourceHandlers) GetStoreStats() map[string]resources.StoreStats {
+	h.storeMu.RLock()
+	defer h.storeMu.RUnlock()
+
+	stats := make(map[string]resources.StoreStats)
+	stats["default"] = h.store.GetStats()
+
+	for orgID, store := range h.storesByTenant {
+		stats[orgID] = store.GetStats()
+	}
+
+	return stats
 }
 
 // HandleGetResources returns all resources, optionally filtered by query params.
@@ -52,13 +111,20 @@ func (h *ResourceHandlers) HandleGetResources(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Get the tenant-specific store
+	orgID := GetOrgID(r.Context())
+	store := h.getStoreForTenant(orgID)
+
 	// Populate from current state if we have a state provider
 	// This ensures fresh data even if the store hasn't been populated yet
-	if h.stateProvider != nil {
+	if h.tenantStateProvider != nil && orgID != "" && orgID != "default" {
+		// Use tenant-aware state provider
+		h.PopulateFromSnapshotForTenant(orgID, h.tenantStateProvider.GetStateForTenant(orgID))
+	} else if h.stateProvider != nil {
 		h.PopulateFromSnapshot(h.stateProvider.GetState())
 	}
 
-	query := h.store.Query()
+	query := store.Query()
 
 	// Parse type filter
 	if typeParam := r.URL.Query().Get("type"); typeParam != "" {
@@ -99,9 +165,9 @@ func (h *ResourceHandlers) HandleGetResources(w http.ResponseWriter, r *http.Req
 
 	// Handle infrastructure/workloads shortcut
 	if r.URL.Query().Get("infrastructure") == "true" {
-		result = h.store.GetInfrastructure()
+		result = store.GetInfrastructure()
 	} else if r.URL.Query().Get("workloads") == "true" {
-		result = h.store.GetWorkloads()
+		result = store.GetWorkloads()
 	} else {
 		result = query.Execute()
 	}
@@ -110,7 +176,7 @@ func (h *ResourceHandlers) HandleGetResources(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(ResourcesResponse{
 		Resources: result,
 		Count:     len(result),
-		Stats:     h.store.GetStats(),
+		Stats:     store.GetStats(),
 	})
 }
 
@@ -122,6 +188,10 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Get the tenant-specific store
+	orgID := GetOrgID(r.Context())
+	store := h.getStoreForTenant(orgID)
+
 	// Extract ID from path: /api/resources/{id}
 	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	if path == "" || path == "/" {
@@ -129,7 +199,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	resource, ok := h.store.Get(path)
+	resource, ok := store.Get(path)
 	if !ok {
 		http.Error(w, "Resource not found", http.StatusNotFound)
 		return
@@ -147,7 +217,11 @@ func (h *ResourceHandlers) HandleGetResourceStats(w http.ResponseWriter, r *http
 		return
 	}
 
-	stats := h.store.GetStats()
+	// Get the tenant-specific store
+	orgID := GetOrgID(r.Context())
+	store := h.getStoreForTenant(orgID)
+
+	stats := store.GetStats()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -209,6 +283,59 @@ func (h *ResourceHandlers) PopulateFromSnapshot(snapshot models.StateSnapshot) {
 	for _, storage := range snapshot.Storage {
 		r := resources.FromStorage(storage)
 		h.store.Upsert(r)
+	}
+}
+
+// PopulateFromSnapshotForTenant converts all resources from a StateSnapshot to a tenant-specific store.
+func (h *ResourceHandlers) PopulateFromSnapshotForTenant(orgID string, snapshot models.StateSnapshot) {
+	store := h.getStoreForTenant(orgID)
+
+	// Convert nodes
+	for _, node := range snapshot.Nodes {
+		r := resources.FromNode(node)
+		store.Upsert(r)
+	}
+
+	// Convert VMs
+	for _, vm := range snapshot.VMs {
+		r := resources.FromVM(vm)
+		store.Upsert(r)
+	}
+
+	// Convert containers
+	for _, ct := range snapshot.Containers {
+		r := resources.FromContainer(ct)
+		store.Upsert(r)
+	}
+
+	// Convert hosts
+	for _, host := range snapshot.Hosts {
+		r := resources.FromHost(host)
+		store.Upsert(r)
+	}
+
+	// Convert docker hosts and their containers
+	for _, dh := range snapshot.DockerHosts {
+		r := resources.FromDockerHost(dh)
+		store.Upsert(r)
+
+		// Convert containers within the docker host
+		for _, dc := range dh.Containers {
+			r := resources.FromDockerContainer(dc, dh.ID, dh.Hostname)
+			store.Upsert(r)
+		}
+	}
+
+	// Convert PBS instances
+	for _, pbs := range snapshot.PBSInstances {
+		r := resources.FromPBSInstance(pbs)
+		store.Upsert(r)
+	}
+
+	// Convert storage
+	for _, storage := range snapshot.Storage {
+		r := resources.FromStorage(storage)
+		store.Upsert(r)
 	}
 }
 

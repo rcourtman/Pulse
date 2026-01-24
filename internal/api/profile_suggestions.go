@@ -50,7 +50,7 @@ func (h *ProfileSuggestionHandler) HandleSuggestProfile(w http.ResponseWriter, r
 
 	// Check if AI is running
 	if h.aiHandler == nil || !h.aiHandler.IsRunning(r.Context()) {
-		http.Error(w, "AI service is not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service is not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -126,8 +126,8 @@ Only include settings that are relevant to the user's request. Do not include se
 
 	fullResponse, _ := response["content"].(string)
 	if fullResponse == "" {
-		log.Error().Msg("AI returned empty response")
-		http.Error(w, "AI returned empty response", http.StatusInternalServerError)
+		log.Error().Msg("Pulse Assistant returned empty response")
+		http.Error(w, "Pulse Assistant returned empty response", http.StatusInternalServerError)
 		return
 	}
 
@@ -135,7 +135,7 @@ Only include settings that are relevant to the user's request. Do not include se
 	if err != nil {
 		log.Error().Err(err).Str("response", fullResponse).Msg("Failed to parse AI suggestion")
 		// Return a friendly error with partial info if available
-		http.Error(w, fmt.Sprintf("Failed to parse AI response: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to parse Pulse Assistant response: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -222,7 +222,7 @@ func parseAISuggestion(text string) (*ProfileSuggestion, error) {
 		suggestion.Name = "Suggested Profile"
 	}
 	if suggestion.Description == "" {
-		suggestion.Description = "AI-generated configuration profile"
+		suggestion.Description = "Pulse Assistant-generated configuration profile"
 	}
 	if suggestion.Config == nil {
 		suggestion.Config = make(map[string]interface{})

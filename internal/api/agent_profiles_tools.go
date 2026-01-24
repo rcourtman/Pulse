@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const aiProfileDescription = "Managed by Pulse AI"
+const aiProfileDescription = "Managed by Pulse Patrol"
 
 // MCPAgentProfileManager manages agent profiles for MCP tools.
 type MCPAgentProfileManager struct {
@@ -91,7 +91,7 @@ func (m *MCPAgentProfileManager) ApplyAgentScope(_ context.Context, agentID, age
 		return "", "", false, fmt.Errorf("failed to save profile: %w", err)
 	}
 
-	if err := m.saveVersion(profile, "AI scope update"); err != nil {
+	if err := m.saveVersion(profile, "Patrol scope update"); err != nil {
 		log.Warn().Err(err).Msg("Failed to record profile version history")
 	}
 
@@ -303,7 +303,7 @@ func (m *MCPAgentProfileManager) requireLicense() error {
 func buildScopeProfileName(agentLabel, agentID string) string {
 	label := strings.TrimSpace(agentLabel)
 	if label == "" || strings.EqualFold(label, agentID) {
-		return fmt.Sprintf("AI Scope: %s", agentID)
+		return fmt.Sprintf("Patrol Scope: %s", agentID)
 	}
-	return fmt.Sprintf("AI Scope: %s (%s)", label, agentID)
+	return fmt.Sprintf("Patrol Scope: %s (%s)", label, agentID)
 }

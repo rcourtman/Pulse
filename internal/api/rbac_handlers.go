@@ -85,12 +85,12 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := manager.SaveRole(role); err != nil {
-			LogAuditEvent("role_create_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to create role %s", role.ID))
+			LogAuditEventForTenant(GetOrgID(r.Context()), "role_create_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to create role %s", role.ID))
 			writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save role", nil)
 			return
 		}
 
-		LogAuditEvent("role_created", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Created role "+role.ID)
+		LogAuditEventForTenant(GetOrgID(r.Context()), "role_created", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Created role "+role.ID)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(role)
 
@@ -115,12 +115,12 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := manager.SaveRole(role); err != nil {
-			LogAuditEvent("role_update_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to update role %s", role.ID))
+			LogAuditEventForTenant(GetOrgID(r.Context()), "role_update_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to update role %s", role.ID))
 			writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save role", nil)
 			return
 		}
 
-		LogAuditEvent("role_updated", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Updated role "+role.ID)
+		LogAuditEventForTenant(GetOrgID(r.Context()), "role_updated", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Updated role "+role.ID)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(role)
 
@@ -131,12 +131,12 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := manager.DeleteRole(id); err != nil {
-			LogAuditEvent("role_delete_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to delete role %s", id))
+			LogAuditEventForTenant(GetOrgID(r.Context()), "role_delete_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to delete role %s", id))
 			writeErrorResponse(w, http.StatusInternalServerError, "delete_failed", "Failed to delete role", nil)
 			return
 		}
 
-		LogAuditEvent("role_deleted", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Deleted role "+id)
+		LogAuditEventForTenant(GetOrgID(r.Context()), "role_deleted", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Deleted role "+id)
 		w.WriteHeader(http.StatusNoContent)
 
 	default:
@@ -207,12 +207,12 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 		}
 
 		if err := manager.UpdateUserRoles(username, req.RoleIDs); err != nil {
-			LogAuditEvent("user_roles_update_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to update roles for user %s", username))
+			LogAuditEventForTenant(GetOrgID(r.Context()), "user_roles_update_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to update roles for user %s", username))
 			writeErrorResponse(w, http.StatusInternalServerError, "update_failed", "Failed to update user roles", nil)
 			return
 		}
 
-		LogAuditEvent("user_roles_updated", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Updated roles for user "+username+": ["+strings.Join(req.RoleIDs, ", ")+"]")
+		LogAuditEventForTenant(GetOrgID(r.Context()), "user_roles_updated", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Updated roles for user "+username+": ["+strings.Join(req.RoleIDs, ", ")+"]")
 		w.WriteHeader(http.StatusNoContent)
 
 	case http.MethodGet:
