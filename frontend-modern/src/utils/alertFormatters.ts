@@ -73,18 +73,3 @@ export function formatAlertThreshold(
     return `${value}${getAlertUnit(metricType)}`;
 }
 
-/**
- * Checks if a metric type represents a temperature measurement.
- */
-export function isTemperatureMetric(metricType?: string): boolean {
-    if (!metricType) return false;
-    return TEMPERATURE_METRIC_TYPES.has(metricType.toLowerCase());
-}
-
-/**
- * Checks if a metric type represents a throughput measurement (MB/s).
- */
-export function isThroughputMetric(metricType?: string): boolean {
-    if (!metricType) return false;
-    return THROUGHPUT_METRIC_TYPES.has(metricType);
-}
