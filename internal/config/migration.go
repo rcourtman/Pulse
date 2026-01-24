@@ -18,8 +18,7 @@ type MigrationStatus struct {
 }
 
 // filesToMigrate lists files that should be moved to the default org directory.
-// NOTE: This migration is currently dormant - RunMigrationIfNeeded is not called anywhere.
-// If enabled in the future, .encryption.key should be added to this list FIRST.
+// NOTE: If adding new files to migrate, .encryption.key should be handled first.
 var filesToMigrate = []string{
 	"nodes.enc",
 	"system.json",
