@@ -1,12 +1,117 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
+
+type mockCephPVEClient struct {
+	mock.Mock
+	PVEClientInterface
+}
+
+func (m *mockCephPVEClient) GetCephStatus(ctx context.Context) (*proxmox.CephStatus, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*proxmox.CephStatus), args.Error(1)
+}
+
+func (m *mockCephPVEClient) GetCephDF(ctx context.Context) (*proxmox.CephDF, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*proxmox.CephDF), args.Error(1)
+}
+
+func TestPollCephCluster(t *testing.T) {
+	t.Run("clears state when ceph not detected", func(t *testing.T) {
+		m := &Monitor{state: models.NewState()}
+		m.state.UpdateCephClustersForInstance("pve1", []models.CephCluster{{ID: "old", Instance: "pve1"}})
+
+		m.pollCephCluster(context.Background(), "pve1", nil, false)
+
+		clusters := m.state.GetSnapshot().CephClusters
+		assert.Empty(t, clusters)
+	})
+
+	t.Run("handles status error", func(t *testing.T) {
+		m := &Monitor{state: models.NewState()}
+		client := &mockCephPVEClient{}
+		client.On("GetCephStatus", mock.Anything).Return(nil, fmt.Errorf("api error"))
+
+		m.pollCephCluster(context.Background(), "pve1", client, true)
+
+		clusters := m.state.GetSnapshot().CephClusters
+		assert.Empty(t, clusters)
+	})
+
+	t.Run("handles nil status", func(t *testing.T) {
+		m := &Monitor{state: models.NewState()}
+		client := &mockCephPVEClient{}
+		client.On("GetCephStatus", mock.Anything).Return(nil, nil)
+
+		m.pollCephCluster(context.Background(), "pve1", client, true)
+
+		clusters := m.state.GetSnapshot().CephClusters
+		assert.Empty(t, clusters)
+	})
+
+	t.Run("successful poll with status only", func(t *testing.T) {
+		m := &Monitor{state: models.NewState()}
+		client := &mockCephPVEClient{}
+
+		status := &proxmox.CephStatus{
+			FSID:   "fsid123",
+			Health: proxmox.CephHealth{Status: "HEALTH_OK"},
+		}
+		client.On("GetCephStatus", mock.Anything).Return(status, nil)
+		client.On("GetCephDF", mock.Anything).Return(nil, fmt.Errorf("df error"))
+
+		m.pollCephCluster(context.Background(), "pve1", client, true)
+
+		clusters := m.state.GetSnapshot().CephClusters
+		assert.Len(t, clusters, 1)
+		assert.Equal(t, "pve1-fsid123", clusters[0].ID)
+		assert.Equal(t, "HEALTH_OK", clusters[0].Health)
+	})
+
+	t.Run("successful poll with full data", func(t *testing.T) {
+		m := &Monitor{state: models.NewState()}
+		client := &mockCephPVEClient{}
+
+		status := &proxmox.CephStatus{
+			FSID:   "fsid123",
+			Health: proxmox.CephHealth{Status: "HEALTH_OK"},
+		}
+		df := &proxmox.CephDF{
+			Data: proxmox.CephDFData{
+				Stats: proxmox.CephDFStats{
+					TotalBytes:     1000,
+					TotalUsedBytes: 200,
+				},
+			},
+		}
+		client.On("GetCephStatus", mock.Anything).Return(status, nil)
+		client.On("GetCephDF", mock.Anything).Return(df, nil)
+
+		m.pollCephCluster(context.Background(), "pve1", client, true)
+
+		clusters := m.state.GetSnapshot().CephClusters
+		assert.Len(t, clusters, 1)
+		assert.Equal(t, int64(1000), clusters[0].TotalBytes)
+		assert.Equal(t, int64(200), clusters[0].UsedBytes)
+	})
+}
 
 func TestIsCephStorageType(t *testing.T) {
 	t.Parallel()

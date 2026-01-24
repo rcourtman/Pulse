@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConvertHostSensorsToTemperature_Empty(t *testing.T) {
@@ -301,4 +302,115 @@ func TestMergeTemperatureData_FallbackToProxy(t *testing.T) {
 	if len(result.GPU) != 1 {
 		t.Errorf("expected 1 GPU from host, got %d", len(result.GPU))
 	}
+}
+
+func TestGetHostAgentTemperature(t *testing.T) {
+	m := &Monitor{state: models.NewState()}
+
+	t.Run("no hosts in state", func(t *testing.T) {
+		result := m.getHostAgentTemperature("node1")
+		assert.Nil(t, result)
+	})
+
+	t.Run("match by linked node id", func(t *testing.T) {
+		host := models.Host{
+			ID:           "host1",
+			LinkedNodeID: "node-123",
+			Sensors: models.HostSensorSummary{
+				TemperatureCelsius: map[string]float64{"cpu_package": 60.0},
+			},
+		}
+		m.state.UpsertHost(host)
+
+		result := m.getHostAgentTemperatureByID("node-123", "different-name")
+		assert.NotNil(t, result)
+		assert.Equal(t, 60.0, result.CPUPackage)
+	})
+
+	t.Run("match by hostname fallback", func(t *testing.T) {
+		host := models.Host{
+			ID:       "host2",
+			Hostname: "node2",
+			Sensors: models.HostSensorSummary{
+				TemperatureCelsius: map[string]float64{"cpu_package": 65.0},
+			},
+		}
+		m.state.UpsertHost(host)
+
+		result := m.getHostAgentTemperature("node2")
+		assert.NotNil(t, result)
+		assert.Equal(t, 65.0, result.CPUPackage)
+	})
+
+	t.Run("no matching host", func(t *testing.T) {
+		result := m.getHostAgentTemperature("node-missing")
+		assert.Nil(t, result)
+	})
+
+	t.Run("matching host but no sensor data", func(t *testing.T) {
+		host := models.Host{
+			ID:       "host3",
+			Hostname: "node3",
+		}
+		m.state.UpsertHost(host)
+		result := m.getHostAgentTemperature("node3")
+		assert.Nil(t, result)
+	})
+}
+
+func TestConvertHostSensorsToTemperature_ExtraBranches(t *testing.T) {
+	t.Run("SMART disk standby", func(t *testing.T) {
+		sensors := models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{"cpu_package": 45.0},
+			SMART: []models.HostDiskSMART{
+				{Device: "sda", Temperature: 35, Standby: false},
+				{Device: "sdb", Temperature: 0, Standby: true},
+			},
+		}
+		result := convertHostSensorsToTemperature(sensors, time.Now())
+		assert.NotNil(t, result)
+		assert.Len(t, result.SMART, 1)
+		assert.Equal(t, "/dev/sda", result.SMART[0].Device)
+	})
+
+	t.Run("GPU merge into same device", func(t *testing.T) {
+		sensors := models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{
+				"gpu_edge":     60.0,
+				"gpu_junction": 65.0,
+			},
+		}
+		result := convertHostSensorsToTemperature(sensors, time.Now())
+		assert.NotNil(t, result)
+		assert.Len(t, result.GPU, 1)
+		assert.Equal(t, "gpu0", result.GPU[0].Device)
+		assert.Equal(t, 60.0, result.GPU[0].Edge)
+		assert.Equal(t, 65.0, result.GPU[0].Junction)
+	})
+}
+
+func TestMergeTemperatureData_HistoricalOverrides(t *testing.T) {
+	t.Run("historical max update", func(t *testing.T) {
+		host := &models.Temperature{CPUPackage: 70.0, HasCPU: true, Available: true}
+		proxy := &models.Temperature{CPUPackage: 50.0, CPUMaxRecord: 60.0, HasCPU: true}
+
+		result := mergeTemperatureData(host, proxy)
+		assert.Equal(t, 70.0, result.CPUMaxRecord)
+	})
+
+	t.Run("fallback to proxy GPU and NVMe", func(t *testing.T) {
+		host := &models.Temperature{CPUPackage: 50.0, HasCPU: true}
+		proxy := &models.Temperature{
+			HasGPU:  true,
+			GPU:     []models.GPUTemp{{Device: "gpu0", Edge: 55.0}},
+			HasNVMe: true,
+			NVMe:    []models.NVMeTemp{{Device: "nvme0", Temp: 40.0}},
+		}
+
+		result := mergeTemperatureData(host, proxy)
+		assert.True(t, result.HasGPU)
+		assert.True(t, result.HasNVMe)
+		assert.Len(t, result.GPU, 1)
+		assert.Len(t, result.NVMe, 1)
+	})
 }

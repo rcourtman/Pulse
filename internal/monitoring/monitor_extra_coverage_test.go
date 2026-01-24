@@ -635,11 +635,20 @@ func TestMonitor_AI_Extra(t *testing.T) {
 	// Enable alerts
 	cfg := m.alertManager.GetConfig()
 	cfg.ActivationState = alerts.ActivationActive
+	// Set very short grouping window to ensure callback fires immediately for test
+	cfg.Schedule.Grouping.Window = 1
 	m.alertManager.UpdateConfig(cfg)
 
 	called := make(chan bool)
 	m.SetAlertTriggeredAICallback(func(a *alerts.Alert) {
 		called <- true
+	})
+
+	// Manually wire AlertManager to Monitor (mimicking Start)
+	m.alertManager.SetAlertForAICallback(func(alert *alerts.Alert) {
+		if m.alertTriggeredAICallback != nil {
+			m.alertTriggeredAICallback(alert)
+		}
 	})
 
 	// Trigger an alert

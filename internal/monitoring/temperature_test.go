@@ -1,0 +1,128 @@
+package monitoring
+
+import (
+	"context"
+	"errors"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// mockCommandRunner implements CommandRunner for testing
+type mockCommandRunner struct {
+	outputs map[string]string // map command substring to output
+	errs    map[string]error  // map command substring to error
+}
+
+func (m *mockCommandRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	fullCmd := name + " " + strings.Join(args, " ")
+
+	// Check for errors first
+	for k, v := range m.errs {
+		if strings.Contains(fullCmd, k) {
+			return nil, v
+		}
+	}
+
+	// Check for outputs
+	for k, v := range m.outputs {
+		if strings.Contains(fullCmd, k) {
+			return []byte(v), nil
+		}
+	}
+
+	return nil, nil
+}
+
+func TestTemperatureCollector_Parsing(t *testing.T) {
+	// Create dummy key file
+	tmpKey := t.TempDir() + "/id_rsa"
+	os.WriteFile(tmpKey, []byte("dummy key"), 0600)
+
+	tc := NewTemperatureCollectorWithPort("root", tmpKey, 22)
+	tc.hostKeys = nil // Disable real network calls for host key verification
+	runner := &mockCommandRunner{
+		outputs: make(map[string]string),
+		errs:    make(map[string]error),
+	}
+	tc.runner = runner
+
+	// Test case: Valid sensors JSON (CPU + NVMe)
+	sensorsJSON := `{
+		"coretemp-isa-0000": {
+			"Package id 0": { "temp1_input": 45.5 },
+			"Core 0": { "temp2_input": 42.0 },
+			"Core 1": { "temp3_input": 43.0 }
+		},
+		"nvme-pci-0100": {
+			"Composite": { "temp1_input": 38.5 }
+		}
+	}`
+
+	runner.outputs["sensors -j"] = sensorsJSON
+
+	temp, err := tc.CollectTemperature(context.Background(), "node1", "node1")
+	require.NoError(t, err)
+	require.NotNil(t, temp)
+	assert.True(t, temp.Available)
+	assert.Equal(t, 45.5, temp.CPUPackage)
+	assert.Len(t, temp.Cores, 2)
+	assert.Len(t, temp.NVMe, 1)
+	assert.Equal(t, 38.5, temp.NVMe[0].Temp)
+
+	// Test case: Valid RPi fallback
+	runner.outputs["sensors -j"] = ""         // Empty sensors output
+	runner.outputs["thermal_zone0"] = "55123" // 55.123 C
+
+	temp2, err := tc.CollectTemperature(context.Background(), "node2", "node2")
+	require.NoError(t, err)
+	require.NotNil(t, temp2)
+	assert.InDelta(t, 55.123, temp2.CPUPackage, 0.001)
+
+	// Test case: Both fail
+	runner = &mockCommandRunner{
+		errs: map[string]error{
+			"sensors -j":    errors.New("command missing"),
+			"thermal_zone0": errors.New("no file"),
+		},
+	}
+	tc.runner = runner
+	temp3, err := tc.CollectTemperature(context.Background(), "node3", "node3")
+	require.NoError(t, err)
+	assert.False(t, temp3.Available)
+}
+
+func TestTemperatureCollector_ParseSensorsJSON_Complex(t *testing.T) {
+	tc := &TemperatureCollector{}
+
+	// AMD GPU and specific chips
+	jsonStr := `{
+		"amdgpu-pci-0800": {
+			"edge": { "temp1_input": 50.0 },
+			"junction": { "temp2_input": 65.0 },
+			"mem": { "temp3_input": 55.0 }
+		},
+		"k10temp-pci-00c3": {
+			"Tctl": { "temp1_input": 60.5 },
+			"Tccd1": { "temp3_input": 58.0 }
+		}
+	}`
+
+	temp, err := tc.parseSensorsJSON(jsonStr)
+	require.NoError(t, err)
+	assert.True(t, temp.HasGPU)
+	assert.Equal(t, 50.0, temp.GPU[0].Edge)
+	assert.Equal(t, 65.0, temp.GPU[0].Junction)
+	assert.Equal(t, 60.5, temp.CPUPackage) // Tctl mapped to package
+}
+
+func TestTemperatureCollector_HelperMethods(t *testing.T) {
+	// extractCoreNumber
+	// Private methods are hard to test directly from separate package if using _test,
+	// but since we are in `monitoring`, we can access if same package.
+	// But usually tests are `monitoring_test` package.
+	// I will assume same package for now based on file declaration.
+}

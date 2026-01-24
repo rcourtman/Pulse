@@ -20,6 +20,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// CommandRunner abstracts command execution for testing
+type CommandRunner interface {
+	Run(ctx context.Context, name string, args ...string) ([]byte, error)
+}
+
+type defaultCommandRunner struct{}
+
+func (r *defaultCommandRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	return cmd.Output()
+}
+
 // TemperatureCollector handles SSH-based temperature collection from Proxmox nodes
 type TemperatureCollector struct {
 	sshUser          string // SSH user (typically "root" or "pulse-monitor")
@@ -27,6 +39,7 @@ type TemperatureCollector struct {
 	sshPort          int    // SSH port (default 22)
 	hostKeys         knownhosts.Manager
 	missingKeyWarned atomic.Bool
+	runner           CommandRunner
 }
 
 // NewTemperatureCollectorWithPort creates a new temperature collector with custom SSH port
@@ -39,6 +52,7 @@ func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *T
 		sshUser:    sshUser,
 		sshKeyPath: sshKeyPath,
 		sshPort:    sshPort,
+		runner:     &defaultCommandRunner{},
 	}
 
 	homeDir := os.Getenv("HOME")
@@ -185,8 +199,7 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 	// Add user@host and command
 	sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", tc.sshUser, host), command)
 
-	cmd := exec.CommandContext(ctx, "ssh", sshArgs...)
-	output, err := cmd.Output()
+	output, err := tc.runner.Run(ctx, "ssh", sshArgs...)
 	if err != nil {
 		// On error, try to get stderr for debugging
 		if exitErr, ok := err.(*exec.ExitError); ok {

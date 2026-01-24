@@ -146,11 +146,12 @@ func (rm *ReloadableMonitor) GetConfig() *config.Config {
 	return rm.config
 }
 
-// GetState returns the current state
-func (rm *ReloadableMonitor) GetState() interface{} {
-	// For backward compatibility / frontend simplicity, return default org state
-	// TODO: Make WebSocket state getter tenant-aware
-	monitor, err := rm.GetMultiTenantMonitor().GetMonitor("default")
+// GetState returns the current state for a specific tenant
+func (rm *ReloadableMonitor) GetState(orgID string) interface{} {
+	if orgID == "" {
+		orgID = "default"
+	}
+	monitor, err := rm.GetMultiTenantMonitor().GetMonitor(orgID)
 	if err != nil {
 		return nil
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/stretchr/testify/assert"
 )
 
 func newTestMonitorForCommands(t *testing.T) *Monitor {
@@ -1218,4 +1219,67 @@ func TestQueueDockerContainerUpdateCommand(t *testing.T) {
 	if cmdStatus.Type != DockerCommandTypeUpdateContainer {
 		t.Errorf("Expected type %s, got %s", DockerCommandTypeUpdateContainer, cmdStatus.Type)
 	}
+}
+
+func TestQueueDockerCheckUpdatesCommand(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+	host := models.DockerHost{
+		ID:          "host-check",
+		Hostname:    "node-check",
+		DisplayName: "node-check",
+		Status:      "online",
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	t.Run("successfully queue check updates", func(t *testing.T) {
+		status, err := monitor.QueueDockerCheckUpdatesCommand(host.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, DockerCommandTypeCheckUpdates, status.Type)
+		assert.Equal(t, DockerCommandStatusQueued, status.Status)
+	})
+
+	t.Run("existing command in progress", func(t *testing.T) {
+		_, err := monitor.QueueDockerCheckUpdatesCommand(host.ID)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "already has a command in progress")
+	})
+
+	t.Run("host not found", func(t *testing.T) {
+		_, err := monitor.QueueDockerCheckUpdatesCommand("missing")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+	})
+}
+
+func TestMarkInProgress(t *testing.T) {
+	t.Parallel()
+
+	t.Run("transitions status and updates message", func(t *testing.T) {
+		cmd := newDockerHostCommand(DockerCommandTypeCheckUpdates, "queued", dockerCommandDefaultTTL, nil)
+		cmd.markInProgress("running now")
+
+		assert.Equal(t, DockerCommandStatusInProgress, cmd.status.Status)
+		assert.Equal(t, "running now", cmd.status.Message)
+		assert.False(t, cmd.status.UpdatedAt.IsZero())
+	})
+
+	t.Run("lifecycle through AcknowledgeDockerHostCommand", func(t *testing.T) {
+		monitor := newTestMonitorForCommands(t)
+		host := models.DockerHost{ID: "h1", Hostname: "n1"}
+		monitor.state.UpsertDockerHost(host)
+
+		status, _ := monitor.QueueDockerCheckUpdatesCommand("h1")
+
+		newStatus, _, _, err := monitor.AcknowledgeDockerHostCommand(status.ID, "h1", DockerCommandStatusInProgress, "in progress message")
+		assert.NoError(t, err)
+		assert.Equal(t, DockerCommandStatusInProgress, newStatus.Status)
+		assert.Equal(t, "in progress message", newStatus.Message)
+
+		// Verify state update
+		hostState := findDockerHost(t, monitor, "h1")
+		assert.NotNil(t, hostState.Command)
+		assert.Equal(t, DockerCommandStatusInProgress, hostState.Command.Status)
+	})
 }

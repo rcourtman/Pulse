@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
-	"encoding/json"
 	stderrors "errors"
 	"fmt"
 	"math"
@@ -695,6 +694,7 @@ func timePtr(t time.Time) *time.Time {
 type Monitor struct {
 	config                     *config.Config
 	state                      *models.State
+	orgID                      string // Organization ID for tenant isolation (empty = default/legacy)
 	pveClients                 map[string]PVEClientInterface
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
@@ -721,6 +721,7 @@ type Monitor struct {
 	metricsStore               *metrics.Store // Persistent SQLite metrics storage
 	alertManager               *alerts.Manager
 	alertResolvedAICallback    func(*alerts.Alert)
+	alertTriggeredAICallback   func(*alerts.Alert)
 	incidentStore              *memory.IncidentStore
 	notificationMgr            *notifications.NotificationManager
 	configPersist              *config.ConfigPersistence
@@ -4225,6 +4226,14 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
 		m.handleAlertFired(alert)
 	})
+	// Set up AI analysis callback - this bypasses activation state and other notification suppression
+	// so AI can analyze alerts even during pending_review setup phase
+	m.alertManager.SetAlertForAICallback(func(alert *alerts.Alert) {
+		log.Debug().Str("alertID", alert.ID).Msg("AI alert callback invoked (bypassing notification suppression)")
+		if m.alertTriggeredAICallback != nil {
+			m.alertTriggeredAICallback(alert)
+		}
+	})
 	m.alertManager.SetResolvedCallback(func(alertID string) {
 		m.handleAlertResolved(alertID)
 		// Don't broadcast full state here - it causes a cascade with many guests.
@@ -4337,7 +4346,8 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			// Update and inject unified resources if resource store is available
 			m.updateResourceStore(state)
 			frontendState.Resources = m.getResourcesForBroadcast()
-			wsHub.BroadcastState(frontendState)
+			// Use tenant-aware broadcast method
+			m.broadcastState(wsHub, frontendState)
 
 		case <-ctx.Done():
 			log.Info().Msg("Monitoring loop stopped")
@@ -8267,6 +8277,40 @@ func (m *Monitor) GetState() models.StateSnapshot {
 	return m.state.GetSnapshot()
 }
 
+// SetOrgID sets the organization ID for this monitor instance.
+// This is used for tenant isolation in multi-tenant deployments.
+func (m *Monitor) SetOrgID(orgID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.orgID = orgID
+}
+
+// GetOrgID returns the organization ID for this monitor instance.
+// Returns empty string for default/legacy monitors.
+func (m *Monitor) GetOrgID() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.orgID
+}
+
+// broadcastState broadcasts state to WebSocket clients.
+// For tenant monitors, it broadcasts only to clients of that tenant.
+// For default monitors, it broadcasts to all clients.
+func (m *Monitor) broadcastState(hub *websocket.Hub, frontendState interface{}) {
+	if hub == nil {
+		return
+	}
+
+	orgID := m.GetOrgID()
+	if orgID != "" && orgID != "default" {
+		// Tenant-specific broadcast
+		hub.BroadcastStateToTenant(orgID, frontendState)
+	} else {
+		// Legacy broadcast to all clients
+		hub.BroadcastState(frontendState)
+	}
+}
+
 // SetMockMode switches between mock data and real infrastructure data at runtime.
 func (m *Monitor) SetMockMode(enable bool) {
 	current := mock.IsMockEnabled()
@@ -8312,7 +8356,8 @@ func (m *Monitor) SetMockMode(enable bool) {
 		frontendState := state.ToFrontend()
 		m.updateResourceStore(state)
 		frontendState.Resources = m.getResourcesForBroadcast()
-		hub.BroadcastState(frontendState)
+		// Use tenant-aware broadcast method
+		m.broadcastState(hub, frontendState)
 	}
 
 	if !enable && ctx != nil && hub != nil {
@@ -8427,19 +8472,12 @@ func (m *Monitor) GetIncidentStore() *memory.IncidentStore {
 
 // SetAlertTriggeredAICallback sets an additional callback for AI analysis when alerts fire
 // This enables token-efficient, real-time AI insights on specific resources
+// SetAlertTriggeredAICallback sets an additional callback for AI analysis when alerts fire
+// This enables token-efficient, real-time AI insights on specific resources
 func (m *Monitor) SetAlertTriggeredAICallback(callback func(*alerts.Alert)) {
-	if m.alertManager == nil || callback == nil {
-		return
-	}
-
-	// Wrap the existing callback to also call the AI callback
-	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
-		m.handleAlertFired(alert)
-
-		// Trigger AI analysis
-		go callback(alert)
-	})
-
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.alertTriggeredAICallback = callback
 	log.Info().Msg("Alert-triggered AI callback registered")
 }
 
@@ -8472,6 +8510,19 @@ func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 
 	if m.incidentStore != nil {
 		m.incidentStore.RecordAlertFired(alert)
+	}
+
+	// Trigger AI analysis if callback is configured
+	if m.alertTriggeredAICallback != nil {
+		// Run in goroutine to avoid blocking the monitor loop
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Msg("Panic in AI alert callback")
+				}
+			}()
+			m.alertTriggeredAICallback(alert)
+		}()
 	}
 }
 
@@ -8543,7 +8594,8 @@ func (m *Monitor) broadcastStateUpdate() {
 	frontendState := state.ToFrontend()
 	m.updateResourceStore(state)
 	frontendState.Resources = m.getResourcesForBroadcast()
-	hub.BroadcastState(frontendState)
+	// Use tenant-aware broadcast method
+	m.broadcastState(hub, frontendState)
 }
 
 // SetResourceStore sets the resource store for polling optimization.
@@ -8715,13 +8767,8 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 			}
 		}
 
-		// Convert platform data from json.RawMessage to map
-		if len(r.PlatformData) > 0 {
-			var platformMap map[string]any
-			if err := json.Unmarshal(r.PlatformData, &platformMap); err == nil {
-				input.PlatformData = platformMap
-			}
-		}
+		// Pass platform data directly as json.RawMessage
+		input.PlatformData = r.PlatformData
 
 		result[i] = models.ConvertResourceToFrontend(input)
 	}
