@@ -23,6 +23,7 @@ import (
 	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
@@ -101,6 +102,20 @@ func Run(ctx context.Context, version string) error {
 		log.Info().Msg("RBAC manager initialized")
 	}
 
+	// Run multi-tenant data migration only when the feature is explicitly enabled.
+	// This prevents any on-disk layout changes for default (single-tenant) users.
+	if api.IsMultiTenantEnabled() {
+		if err := config.RunMigrationIfNeeded(dataDir); err != nil {
+			log.Error().Err(err).Msg("Multi-tenant data migration failed")
+			// Continue anyway - migration failure shouldn't block startup
+		}
+	}
+
+	// Initialize tenant audit manager for per-tenant audit logging
+	tenantAuditManager := audit.NewTenantLoggerManager(dataDir, nil)
+	api.SetTenantAuditManager(tenantAuditManager)
+	log.Info().Msg("Tenant audit manager initialized")
+
 	log.Info().Msg("Starting Pulse monitoring server")
 
 	// Validate agent binaries are available for download
@@ -156,11 +171,39 @@ func Run(ctx context.Context, version string) error {
 		}()
 	}
 
-	// Set state getter for WebSocket hub
+	// Set state getter for WebSocket hub (legacy - for default org)
 	wsHub.SetStateGetter(func() interface{} {
 		state := reloadableMonitor.GetMonitor().GetState()
 		return state.ToFrontend()
 	})
+
+	// Set tenant-aware state getter for multi-tenant support
+	wsHub.SetStateGetterForTenant(func(orgID string) interface{} {
+		mtMonitor := reloadableMonitor.GetMultiTenantMonitor()
+		if mtMonitor == nil {
+			// Fall back to default monitor
+			state := reloadableMonitor.GetMonitor().GetState()
+			return state.ToFrontend()
+		}
+		monitor, err := mtMonitor.GetMonitor(orgID)
+		if err != nil || monitor == nil {
+			// Fall back to default monitor on error
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor, using default")
+			state := reloadableMonitor.GetMonitor().GetState()
+			return state.ToFrontend()
+		}
+		state := monitor.GetState()
+		return state.ToFrontend()
+	})
+
+	// Set org authorization checker for WebSocket connections
+	// This ensures clients can only subscribe to orgs they have access to
+	orgLoader := api.NewMultiTenantOrganizationLoader(mtPersistence)
+	wsHub.SetOrgAuthChecker(api.NewAuthorizationChecker(orgLoader))
+
+	// Set multi-tenant checker for WebSocket connections
+	// This ensures the feature flag and license are checked before allowing non-default org connections
+	wsHub.SetMultiTenantChecker(api.NewMultiTenantChecker())
 
 	// Wire up Prometheus metrics for alert lifecycle
 	alerts.SetMetricHooks(
@@ -193,6 +236,8 @@ func Run(ctx context.Context, version string) error {
 
 	// Inject resource store into monitor for WebSocket broadcasts
 	router.SetMonitor(reloadableMonitor.GetMonitor())
+	// Wire multi-tenant monitor to resource handlers for tenant-aware state
+	router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
 
 	// Start AI patrol service for background infrastructure monitoring
 	router.StartPatrol(ctx)
@@ -316,6 +361,9 @@ shutdown:
 	if configWatcher != nil {
 		configWatcher.Stop()
 	}
+
+	// Close tenant audit loggers
+	tenantAuditManager.Close()
 
 	log.Info().Msg("Server stopped")
 	return nil
