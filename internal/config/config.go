@@ -145,6 +145,7 @@ type Config struct {
 	AllowedOrigins             string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	HideLocalLogin             bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
 	DisableDockerUpdateActions bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"` // Hide Docker update buttons (read-only mode for containers)
+	MultiTenantEnabled         bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`          // Enable multi-tenant support
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
@@ -218,6 +219,69 @@ func CloneDiscoveryConfig(cfg DiscoveryConfig) DiscoveryConfig {
 		clone.IPBlocklist = append([]string(nil), cfg.IPBlocklist...)
 	}
 	return clone
+}
+
+// DeepCopy creates a deep copy of the Config struct.
+// This is important for tenant isolation to ensure each tenant
+// has independent config data that won't be shared.
+func (c *Config) DeepCopy() *Config {
+	if c == nil {
+		return nil
+	}
+
+	// Start with a shallow copy
+	clone := *c
+
+	// Deep copy PVEInstances slice
+	if len(c.PVEInstances) > 0 {
+		clone.PVEInstances = make([]PVEInstance, len(c.PVEInstances))
+		copy(clone.PVEInstances, c.PVEInstances)
+	}
+
+	// Deep copy PBSInstances slice
+	if len(c.PBSInstances) > 0 {
+		clone.PBSInstances = make([]PBSInstance, len(c.PBSInstances))
+		copy(clone.PBSInstances, c.PBSInstances)
+	}
+
+	// Deep copy PMGInstances slice
+	if len(c.PMGInstances) > 0 {
+		clone.PMGInstances = make([]PMGInstance, len(c.PMGInstances))
+		copy(clone.PMGInstances, c.PMGInstances)
+	}
+
+	// Deep copy APITokens slice
+	if len(c.APITokens) > 0 {
+		clone.APITokens = make([]APITokenRecord, len(c.APITokens))
+		for i, token := range c.APITokens {
+			clone.APITokens[i] = token.Clone()
+		}
+	}
+
+	// Deep copy SuppressedEnvMigrations slice
+	if len(c.SuppressedEnvMigrations) > 0 {
+		clone.SuppressedEnvMigrations = make([]string, len(c.SuppressedEnvMigrations))
+		copy(clone.SuppressedEnvMigrations, c.SuppressedEnvMigrations)
+	}
+
+	// Deep copy EnvOverrides map
+	if len(c.EnvOverrides) > 0 {
+		clone.EnvOverrides = make(map[string]bool, len(c.EnvOverrides))
+		for k, v := range c.EnvOverrides {
+			clone.EnvOverrides[k] = v
+		}
+	}
+
+	// Deep copy Discovery config
+	clone.Discovery = CloneDiscoveryConfig(c.Discovery)
+
+	// Deep copy OIDC config if present using the Clone method
+	// which properly deep copies all slices and maps
+	if c.OIDC != nil {
+		clone.OIDC = c.OIDC.Clone()
+	}
+
+	return &clone
 }
 
 // NormalizeDiscoveryConfig ensures a discovery config contains sane values and defaults.

@@ -42,6 +42,7 @@ type ConfigPersistence struct {
 	agentProfilesFile        string
 	agentAssignmentsFile     string
 	aiChatSessionsFile       string
+	orgFile                  string
 	crypto                   *crypto.CryptoManager
 	fs                       FileSystem
 
@@ -125,6 +126,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		agentProfilesFile:        filepath.Join(configDir, "agent_profiles.json"),
 		agentAssignmentsFile:     filepath.Join(configDir, "agent_profile_assignments.json"),
 		aiChatSessionsFile:       filepath.Join(configDir, "ai_chat_sessions.json"),
+		orgFile:                  filepath.Join(configDir, "org.json"),
 		crypto:                   cryptoMgr,
 		fs:                       defaultFileSystem{},
 	}
@@ -147,6 +149,45 @@ func (c *ConfigPersistence) DataDir() string {
 // GetConfigDir returns the configuration directory path (alias for DataDir to match interface expectations)
 func (c *ConfigPersistence) GetConfigDir() string {
 	return c.configDir
+}
+
+// LoadOrganization loads the organization metadata from org.json.
+func (c *ConfigPersistence) LoadOrganization() (*models.Organization, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := c.fs.ReadFile(c.orgFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("failed to read org file: %w", err)
+	}
+
+	var org models.Organization
+	if err := json.Unmarshal(data, &org); err != nil {
+		return nil, fmt.Errorf("failed to parse org file: %w", err)
+	}
+
+	return &org, nil
+}
+
+// SaveOrganization saves the organization metadata to org.json.
+func (c *ConfigPersistence) SaveOrganization(org *models.Organization) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	data, err := json.MarshalIndent(org, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to serialize org: %w", err)
+	}
+
+	if err := c.fs.WriteFile(c.orgFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to write org file: %w", err)
+	}
+
+	log.Debug().Str("org_id", org.ID).Msg("Saved organization metadata")
+	return nil
 }
 
 // EnsureConfigDir ensures the configuration directory exists
@@ -422,6 +463,26 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
 		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
 	}
+	if config.BackupDefaults.AlertOrphaned == nil {
+		alertOrphaned := true
+		config.BackupDefaults.AlertOrphaned = &alertOrphaned
+	}
+	if len(config.BackupDefaults.IgnoreVMIDs) > 0 {
+		seen := make(map[string]struct{}, len(config.BackupDefaults.IgnoreVMIDs))
+		normalized := make([]string, 0, len(config.BackupDefaults.IgnoreVMIDs))
+		for _, entry := range config.BackupDefaults.IgnoreVMIDs {
+			value := strings.TrimSpace(entry)
+			if value == "" {
+				continue
+			}
+			if _, exists := seen[value]; exists {
+				continue
+			}
+			seen[value] = struct{}{}
+			normalized = append(normalized, value)
+		}
+		config.BackupDefaults.IgnoreVMIDs = normalized
+	}
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 
 	data, err := json.Marshal(config)
@@ -446,6 +507,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	alertOrphaned := true
 	data, err := c.fs.ReadFile(c.alertFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -487,11 +549,13 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					CriticalSizeGiB: 0,
 				},
 				BackupDefaults: alerts.BackupAlertConfig{
-					Enabled:      false,
-					WarningDays:  7,
-					CriticalDays: 14,
-					FreshHours:   24,
-					StaleHours:   72,
+					Enabled:       false,
+					WarningDays:   7,
+					CriticalDays:  14,
+					FreshHours:    24,
+					StaleHours:    72,
+					AlertOrphaned: &alertOrphaned,
+					IgnoreVMIDs:   []string{},
 				},
 				Overrides: make(map[string]alerts.ThresholdConfig),
 			}, nil
@@ -633,6 +697,26 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	// Ensure stale threshold is at least as large as fresh threshold
 	if config.BackupDefaults.StaleHours < config.BackupDefaults.FreshHours {
 		config.BackupDefaults.StaleHours = config.BackupDefaults.FreshHours
+	}
+	if config.BackupDefaults.AlertOrphaned == nil {
+		alertOrphaned := true
+		config.BackupDefaults.AlertOrphaned = &alertOrphaned
+	}
+	if len(config.BackupDefaults.IgnoreVMIDs) > 0 {
+		seen := make(map[string]struct{}, len(config.BackupDefaults.IgnoreVMIDs))
+		normalized := make([]string, 0, len(config.BackupDefaults.IgnoreVMIDs))
+		for _, entry := range config.BackupDefaults.IgnoreVMIDs {
+			value := strings.TrimSpace(entry)
+			if value == "" {
+				continue
+			}
+			if _, exists := seen[value]; exists {
+				continue
+			}
+			seen[value] = struct{}{}
+			normalized = append(normalized, value)
+		}
+		config.BackupDefaults.IgnoreVMIDs = normalized
 	}
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
@@ -1691,7 +1775,11 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 	// Migration: Ensure patrol settings have sensible defaults for existing configs
 	// PatrolIntervalMinutes=0 means it was never set - use default
 	if settings.PatrolIntervalMinutes <= 0 {
-		settings.PatrolIntervalMinutes = 15
+		if !settings.PatrolEnabled || strings.EqualFold(settings.PatrolSchedulePreset, "disabled") {
+			settings.PatrolIntervalMinutes = 0
+		} else {
+			settings.PatrolIntervalMinutes = 360
+		}
 	}
 
 	migratedControlLevel := false
@@ -1751,6 +1839,13 @@ type AIFindingRecord struct {
 	UserNote        string `json:"user_note,omitempty"`
 	TimesRaised     int    `json:"times_raised"`
 	Suppressed      bool   `json:"suppressed"`
+
+	// Investigation fields - tracks autonomous AI investigation of findings
+	InvestigationSessionID string     `json:"investigation_session_id,omitempty"`
+	InvestigationStatus    string     `json:"investigation_status,omitempty"`
+	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts  int        `json:"investigation_attempts"`
 }
 
 // SaveAIFindings persists AI findings to disk
@@ -1763,7 +1858,7 @@ func (c *ConfigPersistence) SaveAIFindings(findings map[string]*AIFindingRecord)
 	}
 
 	data := AIFindingsData{
-		Version:   1,
+		Version:   2, // Bumped from 1: finding IDs now include issue key
 		LastSaved: time.Now(),
 		Findings:  findings,
 	}
@@ -1793,15 +1888,16 @@ func (c *ConfigPersistence) SetFileSystem(fs FileSystem) {
 
 // LoadAIFindings loads AI findings from disk
 func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
+	// Read file under read lock
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	data, err := c.fs.ReadFile(c.aiFindingsFile)
+	c.mu.RUnlock()
+
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return empty data if file doesn't exist
 			return &AIFindingsData{
-				Version:  1,
+				Version:  2,
 				Findings: make(map[string]*AIFindingRecord),
 			}, nil
 		}
@@ -1813,13 +1909,37 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		log.Error().Err(err).Str("file", c.aiFindingsFile).Msg("Failed to parse AI findings file")
 		// Return empty data on parse error rather than failing
 		return &AIFindingsData{
-			Version:  1,
+			Version:  2,
 			Findings: make(map[string]*AIFindingRecord),
 		}, nil
 	}
 
 	if findingsData.Findings == nil {
 		findingsData.Findings = make(map[string]*AIFindingRecord)
+	}
+
+	// Version 2 changed finding ID format to include issue key.
+	// Clear old findings since IDs are incompatible, and persist immediately.
+	if findingsData.Version < 2 {
+		oldCount := len(findingsData.Findings)
+		findingsData.Findings = make(map[string]*AIFindingRecord)
+		findingsData.Version = 2
+		findingsData.LastSaved = time.Now()
+
+		if oldCount > 0 {
+			log.Info().
+				Int("cleared_count", oldCount).
+				Msg("AI findings cleared due to schema upgrade (v1 -> v2)")
+		}
+
+		// Persist the migrated (empty) v2 file immediately to avoid re-migrating on restart
+		c.mu.Lock()
+		if jsonData, err := json.Marshal(findingsData); err == nil {
+			if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
+				log.Warn().Err(err).Msg("Failed to persist migrated AI findings file")
+			}
+		}
+		c.mu.Unlock()
 	}
 
 	log.Info().

@@ -66,6 +66,12 @@ type AIConfig struct {
 	// These control whether AI can take actions on infrastructure (start/stop VMs, containers, etc.)
 	ControlLevel    string   `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs or names that AI cannot control
+
+	// Patrol Autonomy settings - controls automatic investigation and remediation of findings
+	PatrolAutonomyLevel           string `json:"patrol_autonomy_level,omitempty"`            // "monitor", "approval", "full"
+	PatrolInvestigationBudget     int    `json:"patrol_investigation_budget,omitempty"`      // Max turns per investigation (default: 15)
+	PatrolInvestigationTimeoutSec int    `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
+	PatrolCriticalRequireApproval bool   `json:"patrol_critical_require_approval"`           // Critical findings always require approval (default: true)
 }
 
 // AIProvider constants
@@ -85,6 +91,25 @@ const (
 	ControlLevelControlled = "controlled"
 	// ControlLevelAutonomous - AI executes without approval (requires Pro license)
 	ControlLevelAutonomous = "autonomous"
+)
+
+// Patrol Autonomy Level constants
+const (
+	// PatrolAutonomyMonitor - Detect issues and create findings, no automatic investigation
+	PatrolAutonomyMonitor = "monitor"
+	// PatrolAutonomyApproval - Spawn Chat sessions to investigate, queue fixes for user approval
+	PatrolAutonomyApproval = "approval"
+	// PatrolAutonomyFull - Spawn Chat sessions to investigate, execute non-critical fixes automatically
+	PatrolAutonomyFull = "full"
+)
+
+// Default patrol investigation settings
+const (
+	DefaultPatrolInvestigationBudget     = 15  // Max turns (tool calls) per investigation
+	DefaultPatrolInvestigationTimeoutSec = 600 // 10 minutes
+	MaxConcurrentInvestigations          = 3   // Max parallel investigations
+	MaxInvestigationAttempts             = 3   // Max retry attempts per finding
+	InvestigationCooldownHours           = 1   // Hours before re-investigating same finding
 )
 
 // Default models per provider
@@ -541,4 +566,73 @@ func (c *AIConfig) GetProtectedGuests() []string {
 		return []string{}
 	}
 	return c.ProtectedGuests
+}
+
+// GetPatrolAutonomyLevel returns the patrol autonomy level, defaulting to "monitor" if not set
+func (c *AIConfig) GetPatrolAutonomyLevel() string {
+	if c.PatrolAutonomyLevel == "" {
+		return PatrolAutonomyMonitor
+	}
+	switch c.PatrolAutonomyLevel {
+	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyFull:
+		return c.PatrolAutonomyLevel
+	default:
+		return PatrolAutonomyMonitor
+	}
+}
+
+// GetPatrolInvestigationBudget returns the max turns per investigation
+func (c *AIConfig) GetPatrolInvestigationBudget() int {
+	if c.PatrolInvestigationBudget <= 0 {
+		return DefaultPatrolInvestigationBudget
+	}
+	// Clamp to reasonable range (5-30)
+	if c.PatrolInvestigationBudget < 5 {
+		return 5
+	}
+	if c.PatrolInvestigationBudget > 30 {
+		return 30
+	}
+	return c.PatrolInvestigationBudget
+}
+
+// GetPatrolInvestigationTimeout returns the investigation timeout as a duration
+func (c *AIConfig) GetPatrolInvestigationTimeout() time.Duration {
+	if c.PatrolInvestigationTimeoutSec <= 0 {
+		return time.Duration(DefaultPatrolInvestigationTimeoutSec) * time.Second
+	}
+	// Clamp to reasonable range (60-1800 seconds / 30 minutes)
+	if c.PatrolInvestigationTimeoutSec < 60 {
+		return 60 * time.Second
+	}
+	if c.PatrolInvestigationTimeoutSec > 1800 {
+		return 1800 * time.Second
+	}
+	return time.Duration(c.PatrolInvestigationTimeoutSec) * time.Second
+}
+
+// ShouldCriticalRequireApproval returns whether critical findings should always require approval
+// Defaults to true for safety
+func (c *AIConfig) ShouldCriticalRequireApproval() bool {
+	// This is a safety feature, default to true
+	// The JSON field uses the default Go behavior (false when not set),
+	// so we explicitly check if it was intended to be false
+	// For backwards compatibility, treat unset as true
+	return c.PatrolCriticalRequireApproval || c.PatrolAutonomyLevel == ""
+}
+
+// IsValidPatrolAutonomyLevel checks if a patrol autonomy level string is valid
+func IsValidPatrolAutonomyLevel(level string) bool {
+	switch level {
+	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyFull:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsPatrolAutonomyEnabled returns true if patrol has any autonomy beyond monitor mode
+func (c *AIConfig) IsPatrolAutonomyEnabled() bool {
+	level := c.GetPatrolAutonomyLevel()
+	return level != PatrolAutonomyMonitor
 }

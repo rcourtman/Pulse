@@ -228,6 +228,45 @@ curl -u admin:admin -H "X-Pulse-Org-ID: test-org" http://localhost:7655/api/stat
 
 ---
 
+## Rollout
+
+### Verification Status
+
+| Component | Status | Method | Notes |
+|-----------|--------|--------|-------|
+| **Feature Flag** | ✅ Verified | Unit Test | Flag disables/enables multi-tenant access correctly |
+| **Licensing** | ✅ Verified | Unit Test | Unlicensed access blocked with 402 Payment Required |
+| **Migration** | ✅ Verified | Unit Test | Legacy data moves to default org; symlinks created |
+| **Isolation** | ✅ Verified | Unit Test | API State, WebSockets, and Resources respect tenant context |
+| **Security** | ✅ Verified | Code Audit | API Tokens and Audit Logs enforce tenant binding |
+
+### Readiness Checklist
+
+- [ ] Enterprise license loaded for the orgs that will access multi-tenant features
+- [ ] `PULSE_MULTI_TENANT_ENABLED=true` configured in the runtime environment
+- [ ] Config migration has run on startup (verify tenant layout exists in data dir)
+- [ ] Org membership loader is available for session users
+- [ ] API tokens for non-default orgs are bound to the org(s)
+- [ ] Per-tenant audit logging is enabled (tenant audit DBs present and writable)
+- [ ] Tenant config loading uses per-org nodes and credentials (no shared secrets)
+
+### Rollout Steps
+
+1. Enable the feature flag in staging
+2. Confirm enterprise license activation for a test org
+3. Create a non-default org and bind a test API token to it
+4. Validate:
+   - `501`/`402` behavior for disabled/unlicensed org access
+   - Success for licensed access (HTTP + WebSocket)
+   - Data isolation across orgs
+5. Roll out to production with monitoring for 4xx/5xx spikes
+
+### Rollback
+
+Disable `PULSE_MULTI_TENANT_ENABLED` to revert non-default org access (default org unaffected).
+
+---
+
 ## Response Codes Reference
 
 | Code | Meaning | When |

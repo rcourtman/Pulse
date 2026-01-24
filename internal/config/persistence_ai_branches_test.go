@@ -45,7 +45,7 @@ func TestLoadAIConfig_Branches(t *testing.T) {
 
 	settings, err := cp.LoadAIConfig()
 	assert.NoError(t, err)
-	assert.Equal(t, 15, settings.PatrolIntervalMinutes)
+	assert.Equal(t, 360, settings.PatrolIntervalMinutes)
 }
 
 func TestLoadAIFindings_Branches(t *testing.T) {

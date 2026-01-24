@@ -61,6 +61,16 @@ type APITokenRecord struct {
 	CreatedAt  time.Time  `json:"createdAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
 	Scopes     []string   `json:"scopes,omitempty"`
+
+	// OrgID binds this token to a single organization.
+	// If set, the token can only access resources within this organization.
+	// Empty string means the token is not org-bound (legacy behavior with wildcard access).
+	OrgID string `json:"orgId,omitempty"`
+
+	// OrgIDs allows multi-org access for MSP tokens.
+	// If set, the token can access resources within any of these organizations.
+	// Takes precedence over OrgID if both are set.
+	OrgIDs []string `json:"orgIds,omitempty"`
 }
 
 // ensureScopes normalizes the scope slice, applying legacy defaults.
@@ -84,7 +94,62 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 		clone.LastUsedAt = &t
 	}
 	clone.ensureScopes()
+
+	// Deep copy OrgIDs slice
+	if len(r.OrgIDs) > 0 {
+		clone.OrgIDs = make([]string, len(r.OrgIDs))
+		copy(clone.OrgIDs, r.OrgIDs)
+	}
+
 	return clone
+}
+
+// CanAccessOrg checks if this token is authorized to access the specified organization.
+// Returns true if:
+// - Token has no org binding (legacy wildcard access)
+// - Token's OrgID matches the requested orgID
+// - Token's OrgIDs contains the requested orgID
+// - Requested orgID is "default" (backward compatibility)
+func (r *APITokenRecord) CanAccessOrg(orgID string) bool {
+	// Legacy tokens (no org binding) have wildcard access during migration period
+	if r.OrgID == "" && len(r.OrgIDs) == 0 {
+		return true
+	}
+
+	// Default org is always accessible for backward compatibility
+	if orgID == "default" {
+		return true
+	}
+
+	// Check multi-org binding first (takes precedence)
+	if len(r.OrgIDs) > 0 {
+		for _, id := range r.OrgIDs {
+			if id == orgID {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Check single-org binding
+	return r.OrgID == orgID
+}
+
+// IsLegacyToken returns true if this token has no org binding (wildcard access).
+func (r *APITokenRecord) IsLegacyToken() bool {
+	return r.OrgID == "" && len(r.OrgIDs) == 0
+}
+
+// GetBoundOrgs returns all organizations this token is bound to.
+// Returns nil for legacy tokens with wildcard access.
+func (r *APITokenRecord) GetBoundOrgs() []string {
+	if len(r.OrgIDs) > 0 {
+		return r.OrgIDs
+	}
+	if r.OrgID != "" {
+		return []string{r.OrgID}
+	}
+	return nil
 }
 
 // NewAPITokenRecord constructs a metadata record from the provided raw token.

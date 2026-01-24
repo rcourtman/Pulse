@@ -54,7 +54,9 @@ func (mtp *MultiTenantPersistence) GetPersistence(orgID string) (*ConfigPersiste
 	// New orgs use /data/orgs/<org-id>
 	var orgDir string
 	if orgID == "default" {
-		orgDir = filepath.Join(mtp.baseDataDir, "orgs", "default")
+		// IMPORTANT: Default org uses root data dir for backward compatibility
+		// This ensures existing users' configs (nodes.enc, ai.enc, etc.) continue to work
+		orgDir = mtp.baseDataDir
 	} else {
 		orgDir = filepath.Join(mtp.baseDataDir, "orgs", orgID)
 	}
