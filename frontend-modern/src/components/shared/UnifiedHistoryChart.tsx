@@ -3,6 +3,7 @@ import { Portal } from 'solid-js/web';
 import { AggregatedMetricPoint, ChartsAPI, HistoryTimeRange, ResourceType } from '@/api/charts';
 import { formatBytes } from '@/utils/format';
 import { hasFeature, loadLicenseStatus } from '@/stores/license';
+import { logger } from '@/utils/logger';
 
 interface UnifiedHistoryChartProps {
     resourceType: ResourceType;
@@ -201,7 +202,7 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         Object.entries(metricConfigs).forEach(([metricId, config]) => {
             const points = dataMap[metricId];
             if (!points || points.length === 0) {
-                console.log(`[UnifiedHistoryChart] No points for ${metricId}`);
+                logger.debug(`[UnifiedHistoryChart] No points for ${metricId}`);
                 return;
             }
 

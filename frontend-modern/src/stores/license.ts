@@ -44,11 +44,6 @@ export const isPro = createMemo(() => {
 });
 
 /**
- * @deprecated Use isPro() or hasFeature() instead. Kept for backwards compatibility.
- */
-export const isEnterprise = isPro;
-
-/**
  * Check if a specific feature is enabled by the current license.
  */
 export function hasFeature(feature: string): boolean {
