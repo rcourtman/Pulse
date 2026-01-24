@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -17,11 +16,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
-	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
-	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
-	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
@@ -55,6 +49,8 @@ type Config struct {
 	// Network configuration
 	ReportIP    string // IP address to report instead of auto-detected (for multi-NIC systems)
 	DisableCeph bool   // If true, disables local Ceph status polling
+
+	Collector SystemCollector // Optional: override default system information collector (for testing)
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -80,25 +76,10 @@ type Agent struct {
 	trimmedPulseURL string
 	reportBuffer    *buffer.Queue[agentshost.Report]
 	commandClient   *CommandClient
+	collector       SystemCollector
 }
 
 const defaultInterval = 30 * time.Second
-
-var readFile = os.ReadFile
-var netInterfaces = net.Interfaces
-
-var (
-	hostInfoWithContext   = gohost.InfoWithContext
-	hostUptimeWithContext = gohost.UptimeWithContext
-	hostmetricsCollect    = hostmetrics.Collect
-	sensorsCollectLocal   = sensors.CollectLocal
-	sensorsParse          = sensors.Parse
-	sensorsCollectPower   = sensors.CollectPower
-	mdadmCollectArrays    = mdadm.CollectArrays
-	cephCollect           = ceph.Collect
-	smartctlCollectLocal  = smartctl.CollectLocal
-	nowUTC                = func() time.Time { return time.Now().UTC() }
-)
 
 // New constructs a fully initialised host Agent.
 func New(cfg Config) (*Agent, error) {
@@ -135,7 +116,12 @@ func New(cfg Config) (*Agent, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	info, err := hostInfoWithContext(ctx)
+	collector := cfg.Collector
+	if collector == nil {
+		collector = &defaultCollector{}
+	}
+
+	info, err := collector.HostInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch host info: %w", err)
 	}
@@ -150,7 +136,7 @@ func New(cfg Config) (*Agent, error) {
 
 	displayName := hostname
 
-	machineID := GetReliableMachineID(info.HostID, logger)
+	machineID := GetReliableMachineID(collector, info.HostID, logger)
 
 	agentID := strings.TrimSpace(cfg.AgentID)
 	if agentID == "" {
@@ -245,6 +231,7 @@ func New(cfg Config) (*Agent, error) {
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
 		reportBuffer:    buffer.New[agentshost.Report](bufferCapacity),
+		collector:       collector,
 	}
 
 	// Create command client for AI command execution (only if enabled)
@@ -357,8 +344,8 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	collectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	uptime, _ := hostUptimeWithContext(collectCtx)
-	snapshot, err := hostmetricsCollect(collectCtx, a.cfg.DiskExclude)
+	uptime, _ := a.collector.HostUptime(collectCtx)
+	snapshot, err := a.collector.Metrics(collectCtx, a.cfg.DiskExclude)
 	if err != nil {
 		return agentshost.Report{}, fmt.Errorf("collect metrics: %w", err)
 	}
@@ -415,7 +402,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		RAID:      raidData,
 		Ceph:      cephData,
 		Tags:      append([]string(nil), a.cfg.Tags...),
-		Timestamp: nowUTC(),
+		Timestamp: a.collector.Now(),
 	}
 
 	return report, nil
@@ -480,9 +467,10 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 		// Server enabled commands, but we don't have a command client
 		// Start the command client
 		a.logger.Info().Msg("Server enabled command execution - starting command client")
-		a.commandClient = NewCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+		client := NewCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+		a.commandClient = client
 		go func() {
-			if err := a.commandClient.Run(context.Background()); err != nil && !errors.Is(err, context.Canceled) {
+			if err := client.Run(context.Background()); err != nil && !errors.Is(err, context.Canceled) {
 				a.logger.Error().Err(err).Msg("Command client stopped with error")
 			}
 		}()
@@ -511,19 +499,19 @@ func normalisePlatform(platform string) string {
 // Returns an empty Sensors struct if collection fails (best-effort).
 func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 	// Only collect on Linux for now (lm-sensors is Linux-specific)
-	if runtime.GOOS != "linux" {
+	if a.collector.GOOS() != "linux" {
 		return agentshost.Sensors{}
 	}
 
 	// Collect sensor JSON output
-	jsonOutput, err := sensorsCollectLocal(ctx)
+	jsonOutput, err := a.collector.SensorsLocal(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect sensor data (lm-sensors may not be installed)")
 		return agentshost.Sensors{}
 	}
 
 	// Parse the sensor output
-	tempData, err := sensorsParse(jsonOutput)
+	tempData, err := a.collector.SensorsParse(jsonOutput)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to parse sensor data")
 		return agentshost.Sensors{}
@@ -578,7 +566,7 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 	}
 
 	// Collect power consumption data (Intel RAPL, etc.)
-	if powerData, err := sensorsCollectPower(ctx); err == nil && powerData.Available {
+	if powerData, err := a.collector.SensorsPower(ctx); err == nil && powerData != nil && powerData.Available {
 		result.PowerWatts = make(map[string]float64)
 		if powerData.PackageWatts > 0 {
 			result.PowerWatts["cpu_package"] = powerData.PackageWatts
@@ -609,11 +597,11 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 // Returns an empty slice if collection fails (best-effort).
 func (a *Agent) collectRAIDArrays(ctx context.Context) []agentshost.RAIDArray {
 	// Only collect on Linux (mdadm is Linux-specific)
-	if runtime.GOOS != "linux" {
+	if a.collector.GOOS() != "linux" {
 		return nil
 	}
 
-	arrays, err := mdadmCollectArrays(ctx)
+	arrays, err := a.collector.RAIDArrays(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect RAID array data (mdadm may not be installed)")
 		return nil
@@ -635,11 +623,11 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 		return nil
 	}
 	// Only collect on Linux
-	if runtime.GOOS != "linux" {
+	if a.collector.GOOS() != "linux" {
 		return nil
 	}
 
-	status, err := cephCollect(ctx)
+	status, err := a.collector.CephStatus(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect Ceph status")
 		return nil
@@ -753,11 +741,11 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 // Returns nil if smartctl is not available or no disks are found.
 func (a *Agent) collectSMARTData(ctx context.Context) []agentshost.DiskSMART {
 	// Only collect on Linux (smartctl works on other platforms but disk paths differ)
-	if runtime.GOOS != "linux" {
+	if a.collector.GOOS() != "linux" {
 		return nil
 	}
 
-	smartData, err := smartctlCollectLocal(ctx, a.cfg.DiskExclude)
+	smartData, err := a.collector.SMARTLocal(ctx, a.cfg.DiskExclude)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect S.M.A.R.T. data (smartctl may not be installed)")
 		return nil
@@ -797,6 +785,7 @@ func (a *Agent) runProxmoxSetup(ctx context.Context) {
 	setup := NewProxmoxSetup(
 		a.logger,
 		a.httpClient,
+		a.collector,
 		a.trimmedPulseURL,
 		a.cfg.APIToken,
 		a.cfg.ProxmoxType,
@@ -838,9 +827,9 @@ func (a *Agent) runProxmoxSetup(ctx context.Context) {
 // isLXCContainer detects if we're running inside an LXC container.
 // LXC containers share the host's /sys/class/dmi/id/product_uuid, which causes
 // gopsutil to return identical HostIDs for all LXC containers on the same host.
-func isLXCContainer() bool {
+func isLXCContainer(c SystemCollector) bool {
 	// Check systemd-detect-virt if available
-	if data, err := readFile("/run/systemd/container"); err == nil {
+	if data, err := c.ReadFile("/run/systemd/container"); err == nil {
 		container := strings.TrimSpace(string(data))
 		if strings.Contains(container, "lxc") {
 			return true
@@ -848,14 +837,14 @@ func isLXCContainer() bool {
 	}
 
 	// Check /proc/1/environ for container=lxc
-	if data, err := readFile("/proc/1/environ"); err == nil {
+	if data, err := c.ReadFile("/proc/1/environ"); err == nil {
 		if strings.Contains(string(data), "container=lxc") {
 			return true
 		}
 	}
 
 	// Check /proc/1/cgroup for lxc markers
-	if data, err := readFile("/proc/1/cgroup"); err == nil {
+	if data, err := c.ReadFile("/proc/1/cgroup"); err == nil {
 		text := string(data)
 		if strings.Contains(text, "/lxc/") || strings.Contains(text, "lxc.payload") {
 			return true
@@ -872,7 +861,7 @@ func isLXCContainer() bool {
 // - Proxmox cluster nodes with identical hardware may have the same UUID
 // The /etc/machine-id file is guaranteed unique per installation.
 // GetReliableMachineID attempts to find a stable machine ID.
-func GetReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
+func GetReliableMachineID(c SystemCollector, gopsutilHostID string, logger zerolog.Logger) string {
 	gopsutilID := strings.TrimSpace(gopsutilHostID)
 
 	// On Linux, prefer /etc/machine-id when available.
@@ -880,8 +869,8 @@ func GetReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
 	// - LXC containers sharing host's DMI product UUID
 	// - Cloned VMs with identical hardware UUIDs
 	// - Proxmox cluster nodes with same hardware configuration
-	if runtime.GOOS == "linux" {
-		if data, err := readFile("/etc/machine-id"); err == nil {
+	if c.GOOS() == "linux" {
+		if data, err := c.ReadFile("/etc/machine-id"); err == nil {
 			machineID := strings.TrimSpace(string(data))
 			if machineID != "" && len(machineID) >= 8 {
 				// Format as UUID if it's a 32-char hex string (like machine-id typically is).
@@ -890,7 +879,7 @@ func GetReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
 						machineID[0:8], machineID[8:12], machineID[12:16],
 						machineID[16:20], machineID[20:32])
 				}
-				if isLXCContainer() {
+				if isLXCContainer(c) {
 					logger.Debug().
 						Str("machineID", machineID).
 						Msg("LXC container detected, using /etc/machine-id for unique identification")
@@ -903,7 +892,7 @@ func GetReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
 			}
 		}
 
-		if macID := getPrimaryMACIdentifier(); macID != "" {
+		if macID := getPrimaryMACIdentifier(c); macID != "" {
 			logger.Debug().
 				Str("machineID", macID).
 				Msg("Linux host missing usable /etc/machine-id, using MAC address for unique identification")
@@ -928,8 +917,8 @@ func isHexString(input string) bool {
 	return input != ""
 }
 
-func getPrimaryMACIdentifier() string {
-	interfaces, err := netInterfaces()
+func getPrimaryMACIdentifier(c SystemCollector) string {
+	interfaces, err := c.NetInterfaces()
 	if err != nil {
 		return ""
 	}

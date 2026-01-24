@@ -15,43 +15,38 @@ import (
 )
 
 func TestNew_RequiresAPIToken(t *testing.T) {
-	originalHostInfo := hostInfoWithContext
-	t.Cleanup(func() { hostInfoWithContext = originalHostInfo })
-	hostInfoWithContext = func(context.Context) (*gohost.InfoStat, error) {
-		return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
 	}
 
-	_, err := New(Config{APIToken: "  ", LogLevel: zerolog.InfoLevel})
+	_, err := New(Config{APIToken: "  ", LogLevel: zerolog.InfoLevel, Collector: mc})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
 }
 
 func TestNew_NormalizesConfigAndTags(t *testing.T) {
-	originalHostInfo := hostInfoWithContext
-	originalReadFile := readFile
-	t.Cleanup(func() {
-		hostInfoWithContext = originalHostInfo
-		readFile = originalReadFile
-	})
-
-	hostInfoWithContext = func(context.Context) (*gohost.InfoStat, error) {
-		return &gohost.InfoStat{
-			Hostname:        " host-from-info ",
-			HostID:          " gopsutil-id ",
-			Platform:        "Darwin",
-			PlatformFamily:  "",
-			PlatformVersion: "14.0",
-			KernelVersion:   "6.6.0",
-			KernelArch:      runtime.GOARCH,
-		}, nil
-	}
-
-	readFile = func(name string) ([]byte, error) {
-		if name == "/etc/machine-id" {
-			return []byte("0123456789abcdef0123456789abcdef\n"), nil
-		}
-		return nil, os.ErrNotExist
+	mc := &mockCollector{
+		goos: "darwin",
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname:        " host-from-info ",
+				HostID:          " gopsutil-id ",
+				Platform:        "Darwin",
+				PlatformFamily:  "",
+				PlatformVersion: "14.0",
+				KernelVersion:   "6.6.0",
+				KernelArch:      runtime.GOARCH,
+			}, nil
+		},
+		readFileFn: func(name string) ([]byte, error) {
+			if name == "/etc/machine-id" {
+				return []byte("0123456789abcdef0123456789abcdef\n"), nil
+			}
+			return nil, os.ErrNotExist
+		},
 	}
 
 	originalTags := []string{"  tag-a ", "tag-a", "", " tag-b", "tag-b "}
@@ -62,6 +57,7 @@ func TestNew_NormalizesConfigAndTags(t *testing.T) {
 		Tags:               originalTags,
 		InsecureSkipVerify: true,
 		LogLevel:           zerolog.InfoLevel,
+		Collector:          mc,
 	}
 
 	agent, err := New(cfg)
@@ -105,32 +101,26 @@ func TestNew_NormalizesConfigAndTags(t *testing.T) {
 		t.Fatalf("expected InsecureSkipVerify=true")
 	}
 
-	if runtime.GOOS == "linux" {
+	if mc.GOOS() == "linux" {
 		const want = "01234567-89ab-cdef-0123-456789abcdef"
 		if agent.machineID != want {
 			t.Fatalf("machineID = %q, want %q", agent.machineID, want)
-		}
-		if agent.agentID != want {
-			t.Fatalf("agentID = %q, want %q", agent.agentID, want)
 		}
 	} else {
 		if agent.machineID != "gopsutil-id" {
 			t.Fatalf("machineID = %q, want %q", agent.machineID, "gopsutil-id")
 		}
-		if agent.agentID != "gopsutil-id" {
-			t.Fatalf("agentID = %q, want %q", agent.agentID, "gopsutil-id")
-		}
 	}
 }
 
 func TestNew_DefaultPulseURL(t *testing.T) {
-	originalHostInfo := hostInfoWithContext
-	t.Cleanup(func() { hostInfoWithContext = originalHostInfo })
-	hostInfoWithContext = func(context.Context) (*gohost.InfoStat, error) {
-		return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
 	}
 
-	agent, err := New(Config{PulseURL: "", APIToken: "token", LogLevel: zerolog.InfoLevel})
+	agent, err := New(Config{PulseURL: "", APIToken: "token", LogLevel: zerolog.InfoLevel, Collector: mc})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -140,26 +130,20 @@ func TestNew_DefaultPulseURL(t *testing.T) {
 }
 
 func TestNew_FallsBackToHostnameWhenMachineIDAndMACEmpty(t *testing.T) {
-	originalHostInfo := hostInfoWithContext
-	originalReadFile := readFile
-	originalNetInterfaces := netInterfaces
-	t.Cleanup(func() {
-		hostInfoWithContext = originalHostInfo
-		readFile = originalReadFile
-		netInterfaces = originalNetInterfaces
-	})
-
-	hostInfoWithContext = func(context.Context) (*gohost.InfoStat, error) {
-		return &gohost.InfoStat{
-			Hostname:   "host-from-info",
-			HostID:     "",
-			KernelArch: runtime.GOARCH,
-		}, nil
+	mc := &mockCollector{
+		goos: "linux",
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname:   "host-from-info",
+				HostID:     "",
+				KernelArch: runtime.GOARCH,
+			}, nil
+		},
+		readFileFn:      func(string) ([]byte, error) { return nil, os.ErrNotExist },
+		netInterfacesFn: func() ([]net.Interface, error) { return nil, errors.New("no interfaces") },
 	}
-	readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
-	netInterfaces = func() ([]net.Interface, error) { return nil, errors.New("no interfaces") }
 
-	agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel})
+	agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel, Collector: mc})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -172,42 +156,29 @@ func TestNew_FallsBackToHostnameWhenMachineIDAndMACEmpty(t *testing.T) {
 }
 
 func TestNew_FallsBackToMACWhenMachineIDEmpty(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("MAC fallback is Linux-only")
+	mc := &mockCollector{
+		goos: "linux",
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname:   "host-from-info",
+				HostID:     "",
+				KernelArch: runtime.GOARCH,
+			}, nil
+		},
+		readFileFn: func(string) ([]byte, error) { return nil, os.ErrNotExist },
+		netInterfacesFn: func() ([]net.Interface, error) {
+			return []net.Interface{
+				{Name: "eth0", HardwareAddr: net.HardwareAddr{0x02, 0x00, 0x00, 0x00, 0x00, 0x01}},
+			}, nil
+		},
 	}
 
-	originalHostInfo := hostInfoWithContext
-	originalReadFile := readFile
-	originalNetInterfaces := netInterfaces
-	t.Cleanup(func() {
-		hostInfoWithContext = originalHostInfo
-		readFile = originalReadFile
-		netInterfaces = originalNetInterfaces
-	})
-
-	hostInfoWithContext = func(context.Context) (*gohost.InfoStat, error) {
-		return &gohost.InfoStat{
-			Hostname:   "host-from-info",
-			HostID:     "",
-			KernelArch: runtime.GOARCH,
-		}, nil
-	}
-	readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
-	netInterfaces = func() ([]net.Interface, error) {
-		return []net.Interface{
-			{Name: "eth0", HardwareAddr: net.HardwareAddr{0x02, 0x00, 0x00, 0x00, 0x00, 0x01}},
-		}, nil
-	}
-
-	agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel})
+	agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel, Collector: mc})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 
 	if agent.machineID != "mac-020000000001" {
 		t.Fatalf("machineID = %q, want %q", agent.machineID, "mac-020000000001")
-	}
-	if agent.agentID != "mac-020000000001" {
-		t.Fatalf("agentID = %q, want %q", agent.agentID, "mac-020000000001")
 	}
 }

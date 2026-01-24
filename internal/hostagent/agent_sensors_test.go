@@ -3,7 +3,6 @@ package hostagent
 import (
 	"context"
 	"errors"
-	"runtime"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
@@ -11,36 +10,28 @@ import (
 )
 
 func TestAgent_collectTemperatures_MapsKeys(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("temperature collection currently only runs on linux")
+	mc := &mockCollector{
+		goos:           "linux",
+		sensorsLocalFn: func(context.Context) (string, error) { return "{}", nil },
+		sensorsParseFn: func(string) (*sensors.TemperatureData, error) {
+			return &sensors.TemperatureData{
+				Available:  true,
+				CPUPackage: 55.5,
+				Cores: map[string]float64{
+					"Core 0": 44,
+					"Core 1": 45,
+				},
+				NVMe: map[string]float64{
+					"nvme0": 40,
+				},
+				GPU: map[string]float64{
+					"amdgpu-pci-0100": 60,
+				},
+			}, nil
+		},
 	}
 
-	originalCollect := sensorsCollectLocal
-	originalParse := sensorsParse
-	t.Cleanup(func() {
-		sensorsCollectLocal = originalCollect
-		sensorsParse = originalParse
-	})
-
-	sensorsCollectLocal = func(context.Context) (string, error) { return "{}", nil }
-	sensorsParse = func(string) (*sensors.TemperatureData, error) {
-		return &sensors.TemperatureData{
-			Available:  true,
-			CPUPackage: 55.5,
-			Cores: map[string]float64{
-				"Core 0": 44,
-				"Core 1": 45,
-			},
-			NVMe: map[string]float64{
-				"nvme0": 40,
-			},
-			GPU: map[string]float64{
-				"amdgpu-pci-0100": 60,
-			},
-		}, nil
-	}
-
-	a := &Agent{logger: zerolog.Nop()}
+	a := &Agent{logger: zerolog.Nop(), collector: mc}
 
 	got := a.collectTemperatures(context.Background())
 	want := map[string]float64{
@@ -65,32 +56,32 @@ func TestAgent_collectTemperatures_MapsKeys(t *testing.T) {
 }
 
 func TestAgent_collectTemperatures_BestEffortFailuresReturnEmpty(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("temperature collection currently only runs on linux")
-	}
+	mc := &mockCollector{goos: "linux"}
+	a := &Agent{logger: zerolog.Nop(), collector: mc}
 
-	originalCollect := sensorsCollectLocal
-	originalParse := sensorsParse
-	t.Cleanup(func() {
-		sensorsCollectLocal = originalCollect
-		sensorsParse = originalParse
-	})
-
-	a := &Agent{logger: zerolog.Nop()}
-
-	sensorsCollectLocal = func(context.Context) (string, error) { return "", errors.New("no sensors") }
+	mc.sensorsLocalFn = func(context.Context) (string, error) { return "", errors.New("no sensors") }
 	if got := a.collectTemperatures(context.Background()); len(got.TemperatureCelsius) != 0 {
 		t.Fatalf("expected empty sensors on collect error, got %#v", got.TemperatureCelsius)
 	}
 
-	sensorsCollectLocal = func(context.Context) (string, error) { return "{}", nil }
-	sensorsParse = func(string) (*sensors.TemperatureData, error) { return nil, errors.New("bad json") }
+	mc.sensorsLocalFn = func(context.Context) (string, error) { return "{}", nil }
+	mc.sensorsParseFn = func(string) (*sensors.TemperatureData, error) { return nil, errors.New("bad json") }
 	if got := a.collectTemperatures(context.Background()); len(got.TemperatureCelsius) != 0 {
 		t.Fatalf("expected empty sensors on parse error, got %#v", got.TemperatureCelsius)
 	}
 
-	sensorsParse = func(string) (*sensors.TemperatureData, error) { return &sensors.TemperatureData{Available: false}, nil }
+	mc.sensorsParseFn = func(string) (*sensors.TemperatureData, error) { return &sensors.TemperatureData{Available: false}, nil }
 	if got := a.collectTemperatures(context.Background()); len(got.TemperatureCelsius) != 0 {
 		t.Fatalf("expected empty sensors when unavailable, got %#v", got.TemperatureCelsius)
+	}
+}
+
+func TestAgent_collectTemperatures_SkipsNonLinux(t *testing.T) {
+	mc := &mockCollector{goos: "darwin"}
+	a := &Agent{logger: zerolog.Nop(), collector: mc}
+
+	got := a.collectTemperatures(context.Background())
+	if len(got.TemperatureCelsius) != 0 {
+		t.Fatalf("expected empty sensors on non-linux, got %#v", got.TemperatureCelsius)
 	}
 }

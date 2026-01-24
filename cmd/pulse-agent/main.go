@@ -132,7 +132,8 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			if lookupHostname == "" {
 				lookupHostname = strings.TrimSpace(info.Hostname)
 			}
-			machineID := hostagent.GetReliableMachineID(info.HostID, logger)
+			collector := hostagent.NewDefaultCollector()
+			machineID := hostagent.GetReliableMachineID(collector, info.HostID, logger)
 			cfg.AgentID = machineID
 			if cfg.AgentID == "" {
 				// Fallback to hostname

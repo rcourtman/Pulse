@@ -8,8 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -27,6 +25,7 @@ type ProxmoxSetup struct {
 	hostname           string
 	reportIP           string
 	insecureSkipVerify bool
+	collector          SystemCollector
 }
 
 // ProxmoxSetupResult contains the result of a successful Proxmox setup.
@@ -54,10 +53,11 @@ var (
 )
 
 // NewProxmoxSetup creates a new ProxmoxSetup instance.
-func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, pulseURL, apiToken, proxmoxType, hostname, reportIP string, insecure bool) *ProxmoxSetup {
+func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector SystemCollector, pulseURL, apiToken, proxmoxType, hostname, reportIP string, insecure bool) *ProxmoxSetup {
 	return &ProxmoxSetup{
 		logger:             logger,
 		httpClient:         httpClient,
+		collector:          collector,
 		pulseURL:           strings.TrimRight(pulseURL, "/"),
 		apiToken:           apiToken,
 		proxmoxType:        proxmoxType,
@@ -223,12 +223,12 @@ func (p *ProxmoxSetup) detectProxmoxTypes() []string {
 	var types []string
 
 	// Check for PVE
-	if _, err := lookPath("pvesh"); err == nil {
+	if _, err := p.collector.LookPath("pvesh"); err == nil {
 		types = append(types, "pve")
 	}
 
 	// Check for PBS
-	if _, err := lookPath("proxmox-backup-manager"); err == nil {
+	if _, err := p.collector.LookPath("proxmox-backup-manager"); err == nil {
 		types = append(types, "pbs")
 	}
 
@@ -248,19 +248,19 @@ func (p *ProxmoxSetup) setupToken(ctx context.Context, ptype string) (string, st
 // setupPVEToken creates a PVE monitoring user and token.
 func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (string, string, error) {
 	// Create user (ignore error if already exists)
-	_ = runCommand(ctx, "pveum", "user", "add", proxmoxUserPVE, "--comment", proxmoxComment)
+	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "user", "add", proxmoxUserPVE, "--comment", proxmoxComment)
 
 	// Add PVEAuditor role
-	if err := runCommand(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", "PVEAuditor"); err != nil {
+	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", "PVEAuditor"); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to add PVEAuditor role (may already exist)")
 	}
 
 	// Try to create PulseMonitor role with additional privileges
-	_ = runCommand(ctx, "pveum", "role", "add", "PulseMonitor", "-privs", "Sys.Audit,VM.Monitor,Datastore.Audit")
-	_ = runCommand(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", "PulseMonitor")
+	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "role", "add", "PulseMonitor", "-privs", "Sys.Audit,VM.Monitor,Datastore.Audit")
+	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", "PulseMonitor")
 
 	// Create token with privilege separation disabled
-	output, err := runCommandOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "0")
+	output, err := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "0")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create token: %w", err)
 	}
@@ -278,13 +278,13 @@ func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (str
 // setupPBSToken creates a PBS monitoring user and token.
 func (p *ProxmoxSetup) setupPBSToken(ctx context.Context, tokenName string) (string, string, error) {
 	// Create user (ignore error if already exists)
-	_ = runCommand(ctx, "proxmox-backup-manager", "user", "create", proxmoxUserPBS)
+	_, _ = p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "create", proxmoxUserPBS)
 
 	// Add Audit role
-	_ = runCommand(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", proxmoxUserPBS)
+	_, _ = p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", proxmoxUserPBS)
 
 	// Create token
-	output, err := runCommandOutput(ctx, "proxmox-backup-manager", "user", "generate-token", proxmoxUserPBS, tokenName)
+	output, err := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "generate-token", proxmoxUserPBS, tokenName)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create token: %w", err)
 	}
@@ -297,7 +297,7 @@ func (p *ProxmoxSetup) setupPBSToken(ctx context.Context, tokenName string) (str
 
 	// Add Audit role for the token itself
 	tokenID := fmt.Sprintf("%s!%s", proxmoxUserPBS, tokenName)
-	_ = runCommand(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", tokenID)
+	_, _ = p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", tokenID)
 
 	return tokenID, tokenValue, nil
 }
@@ -382,8 +382,8 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 	}
 
 	// Fallback: Get all IPs and select the best one based on heuristics
-	if out, err := exec.Command("hostname", "-I").Output(); err == nil {
-		ips := strings.Fields(string(out))
+	if out, err := p.collector.CommandCombinedOutput(context.Background(), "hostname", "-I"); err == nil {
+		ips := strings.Fields(out)
 		if len(ips) > 0 {
 			// Get the IP that the system hostname currently resolves to
 			hostnameIP := p.getIPForHostname()
@@ -432,7 +432,7 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 
 	// Create a UDP "connection" to determine local address (doesn't actually send data)
 	// We use a short timeout as this is just a routing table lookup.
-	conn, err := net.DialTimeout("udp", host, 500*time.Millisecond)
+	conn, err := p.collector.DialTimeout("udp", host, 500*time.Millisecond)
 	if err != nil {
 		p.logger.Debug().Err(err).Str("target", host).Msg("Could not determine local IP for Pulse connection (routing check failed)")
 		return ""
@@ -457,13 +457,13 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 func (p *ProxmoxSetup) getIPForHostname() string {
 	hostname := p.hostname
 	if hostname == "" {
-		hostname, _ = os.Hostname()
+		hostname, _ = p.collector.Hostname()
 	}
 	if hostname == "" {
 		return ""
 	}
 
-	ips, err := net.LookupIP(hostname)
+	ips, err := p.collector.LookupIP(hostname)
 	if err != nil {
 		p.logger.Debug().Err(err).Str("hostname", hostname).Msg("Could not resolve hostname IP")
 		return ""
@@ -619,7 +619,7 @@ func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype, hostURL, to
 // isAlreadyRegistered checks if we've already done Proxmox setup.
 // This uses the legacy single state file for backward compatibility.
 func (p *ProxmoxSetup) isAlreadyRegistered() bool {
-	_, err := os.Stat(stateFilePath)
+	_, err := p.collector.Stat(stateFilePath)
 	return err == nil
 }
 
@@ -627,12 +627,12 @@ func (p *ProxmoxSetup) isAlreadyRegistered() bool {
 func (p *ProxmoxSetup) isTypeRegistered(ptype string) bool {
 	// Check per-type state file first (new behavior)
 	stateFile := p.stateFileForType(ptype)
-	if _, err := os.Stat(stateFile); err == nil {
+	if _, err := p.collector.Stat(stateFile); err == nil {
 		return true
 	}
 
 	// Check legacy state file for backward compat
-	if _, err := os.Stat(stateFilePath); err == nil {
+	if _, err := p.collector.Stat(stateFilePath); err == nil {
 		// Legacy file exists. The old detection logic was:
 		// 1. If pvesh exists → registered "pve"
 		// 2. Else if proxmox-backup-manager exists → registered "pbs"
@@ -689,40 +689,25 @@ func (p *ProxmoxSetup) stateFileForType(ptype string) string {
 
 // markAsRegistered creates a state file to indicate setup is complete.
 func (p *ProxmoxSetup) markAsRegistered() {
-	if err := os.MkdirAll(stateFileDir, 0755); err != nil {
+	if err := p.collector.MkdirAll(stateFileDir, 0755); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to create state directory")
 		return
 	}
 
-	if err := os.WriteFile(stateFilePath, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
+	if err := p.collector.WriteFile(stateFilePath, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to write state file")
 	}
 }
 
 // markTypeAsRegistered creates a state file for a specific Proxmox type.
 func (p *ProxmoxSetup) markTypeAsRegistered(ptype string) {
-	if err := os.MkdirAll(stateFileDir, 0755); err != nil {
+	if err := p.collector.MkdirAll(stateFileDir, 0755); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to create state directory")
 		return
 	}
 
 	stateFile := p.stateFileForType(ptype)
-	if err := os.WriteFile(stateFile, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
+	if err := p.collector.WriteFile(stateFile, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
 		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to write type state file")
 	}
 }
-
-// runCommand executes a command and returns any error.
-var runCommand = func(ctx context.Context, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...)
-	return cmd.Run()
-}
-
-var runCommandOutput = func(ctx context.Context, name string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
-	output, err := cmd.CombinedOutput()
-	return string(output), err
-}
-
-// lookPath searches for an executable in the directories named by the PATH environment variable.
-var lookPath = exec.LookPath
