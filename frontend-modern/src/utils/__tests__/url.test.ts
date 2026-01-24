@@ -6,7 +6,6 @@ import {
     subscribeToKioskMode,
     getPulseBaseUrl,
     getPulseHostname,
-    getPulsePort,
     isPulseHttps,
     getPulseWebSocketUrl
 } from '../url';
@@ -97,10 +96,6 @@ describe('url utils', () => {
 
         it('getPulseHostname returns hostname', () => {
             expect(getPulseHostname()).toBe('localhost');
-        });
-
-        it('getPulsePort returns port', () => {
-            expect(getPulsePort()).toBe('3000');
         });
 
         it('isPulseHttps returns true for https', () => {

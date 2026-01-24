@@ -541,8 +541,8 @@ func (s *FindingsStore) Unsnooze(id string) bool {
 //
 // Behavior by reason:
 // - "not_an_issue": Permanent suppression (true false positive in detection logic)
-// - "expected_behavior": Acknowledged only (finding stays visible but marked as accepted)
-// - "will_fix_later": Acknowledged only (user will address it later)
+// - "expected_behavior": Acknowledged only (removed from active list, stays in dismissed history)
+// - "will_fix_later": Acknowledged only (removed from active list, stays in dismissed history)
 //
 // Rationale: Only true false positives ("not_an_issue") should be permanently suppressed.
 // For "expected_behavior" and "will_fix_later", the finding stays visible (transparent)
@@ -832,12 +832,14 @@ func (s *FindingsStore) ClearAll() int {
 	return count
 }
 
-// Cleanup removes old resolved findings
+// Cleanup removes old resolved findings (and trims stale dismissed history).
 func (s *FindingsStore) Cleanup(maxAge time.Duration) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cutoff := time.Now().Add(-maxAge)
+	now := time.Now()
+	cutoff := now.Add(-maxAge)
+	dismissedCutoff := now.Add(-30 * 24 * time.Hour)
 	removed := 0
 
 	for id, f := range s.findings {
@@ -848,9 +850,8 @@ func (s *FindingsStore) Cleanup(maxAge time.Duration) int {
 			shouldRemove = true
 		}
 
-		// Also remove old suppressed/dismissed findings (they're no longer relevant)
-		// These are findings the user marked as "fixed" or "not an issue" - after 24h they should disappear
-		if (f.Suppressed || f.DismissedReason != "") && f.LastSeenAt.Before(cutoff) {
+		// Trim stale dismissed findings, but retain suppressed ones for memory.
+		if f.DismissedReason != "" && !f.Suppressed && f.LastSeenAt.Before(dismissedCutoff) {
 			shouldRemove = true
 		}
 
@@ -881,11 +882,6 @@ func (s *FindingsStore) GetDismissedForContext() string {
 	var suppressed, dismissed, snoozed []string
 
 	for _, f := range s.findings {
-		// Skip very old findings (more than 30 days)
-		if time.Since(f.LastSeenAt) > 30*24*time.Hour {
-			continue
-		}
-
 		// Collect suppressed findings
 		if f.Suppressed {
 			note := ""
@@ -894,6 +890,11 @@ func (s *FindingsStore) GetDismissedForContext() string {
 			}
 			suppressed = append(suppressed,
 				fmt.Sprintf("- %s on %s: %s%s", f.Title, f.ResourceName, f.DismissedReason, note))
+			continue
+		}
+
+		// Skip very old findings (more than 30 days)
+		if time.Since(f.LastSeenAt) > 30*24*time.Hour {
 			continue
 		}
 

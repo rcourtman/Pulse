@@ -347,13 +347,3 @@ export const STANDARD_COLUMNS = {
     maxWidth: '48px',
   },
 } satisfies Record<string, ColumnConfig>;
-
-/**
- * Helper to create a column config from a standard column with overrides
- */
-export function createColumn<T>(
-  base: ColumnConfig,
-  overrides?: Partial<ColumnConfigWithRender<T>>
-): ColumnConfigWithRender<T> {
-  return { ...base, ...overrides };
-}

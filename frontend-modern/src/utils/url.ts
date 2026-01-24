@@ -117,17 +117,6 @@ export function getPulseHostname(): string {
   return origin?.hostname || 'localhost';
 }
 
-export function getPulsePort(): string {
-  const origin = getPulseOriginUrl();
-  if (!origin) {
-    return '7655';
-  }
-  if (origin.port) {
-    return origin.port;
-  }
-  return origin.protocol === 'https:' ? '443' : '80';
-}
-
 export function isPulseHttps(): boolean {
   const origin = getPulseOriginUrl();
   return origin?.protocol === 'https:';

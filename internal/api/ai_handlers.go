@@ -3663,6 +3663,11 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 		return
 	}
 
+	if req.Reason == "" {
+		http.Error(w, "reason is required", http.StatusBadRequest)
+		return
+	}
+
 	// Validate reason
 	validReasons := map[string]bool{
 		"not_an_issue":      true,
