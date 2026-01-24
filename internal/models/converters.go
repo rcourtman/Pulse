@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -948,7 +949,7 @@ type ResourceConvertInput struct {
 	LastSeenUnix int64
 	Alerts       []ResourceAlertInput
 	Identity     *ResourceIdentityInput
-	PlatformData map[string]any
+	PlatformData json.RawMessage
 }
 
 // ResourceMetricInput represents a metric value for resource conversion.

@@ -724,7 +724,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     <li>Creates monitoring user and API token automatically</li>
                                     <li>Registers the node with Pulse</li>
                                     <li>Enables temperature monitoring (no SSH required)</li>
-                                    <li>Enables AI features for managing VMs/containers</li>
+                                    <li>Enables Pulse Patrol automation for managing VMs/containers</li>
                                   </ul>
                                   <p class="text-blue-800 dark:text-blue-200 font-medium">
                                     Run this command on your Proxmox VE node:
@@ -797,7 +797,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               <Show when={formData().setupMode === 'auto'}>
                                 <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 mb-3 dark:border-amber-700 dark:bg-amber-900/20">
                                   <p class="text-xs text-amber-800 dark:text-amber-200">
-                                    <strong>Limited functionality:</strong> API-only mode does not include temperature monitoring or AI features.
+                                    <strong>Limited functionality:</strong> API-only mode does not include temperature monitoring or Pulse Patrol automation.
                                     For full functionality, use the Agent Install tab instead.
                                   </p>
                                 </div>
@@ -1307,7 +1307,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <ul class="text-xs text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
                                     <li>One-command setup (creates API user and token automatically)</li>
                                     <li>Built-in temperature monitoring (no SSH required)</li>
-                                    <li>Pulse features (execute commands via Pulse AI)</li>
+                                    <li>Pulse features (execute commands via Pulse Assistant)</li>
                                     <li>Automatic reconnection on network issues</li>
                                   </ul>
                                   <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">

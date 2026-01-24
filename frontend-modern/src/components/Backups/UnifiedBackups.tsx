@@ -1163,7 +1163,7 @@ const UnifiedBackups: Component = () => {
               </svg>
             }
             title="No backup sources configured"
-            description="Add a Proxmox VE or PBS node in the Settings tab to start monitoring backups."
+            description="Install the Pulse agent for extra capabilities (temperature monitoring and Pulse Patrol automation), or add a node via API token in Settings → Proxmox."
             actions={
               <button
                 type="button"

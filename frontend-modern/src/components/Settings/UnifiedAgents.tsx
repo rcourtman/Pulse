@@ -1,6 +1,8 @@
 import { Component, createSignal, Show, For, onMount, createEffect, createMemo } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
+import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { MonitoringAPI } from '@/api/monitoring';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '@/api/agentProfiles';
@@ -144,6 +146,7 @@ const buildCommandsByPlatform = (url: string): Record<
 
 export const UnifiedAgents: Component = () => {
     const { state } = useWebSocket();
+    const navigate = useNavigate();
 
     let hasLoggedSecurityStatusError = false;
 
@@ -476,7 +479,7 @@ export const UnifiedAgents: Component = () => {
             profile.description?.toLowerCase().includes('pulse ai') ||
             name.toLowerCase().startsWith('ai scope');
         return isAIManaged
-            ? { label: 'AI-managed', detail: name, category: 'ai-managed' as const }
+            ? { label: 'Patrol-managed', detail: name, category: 'ai-managed' as const }
             : { label: name, detail: 'Assigned profile', category: 'profile' as const };
     };
 
@@ -756,7 +759,7 @@ export const UnifiedAgents: Component = () => {
 
         try {
             await MonitoringAPI.updateHostAgentConfig(hostId, { commandsEnabled: enabled });
-            notificationStore.success(`AI command execution ${enabled ? 'enabled' : 'disabled'}. Syncing with agent...`);
+            notificationStore.success(`Pulse command execution ${enabled ? 'enabled' : 'disabled'}. Syncing with agent...`);
         } catch (err) {
             // On error, clear the pending state so toggle reverts
             setPendingCommandConfig(prev => {
@@ -814,6 +817,24 @@ export const UnifiedAgents: Component = () => {
                     <p class="text-sm text-gray-600 dark:text-gray-400">
                         Monitor server metrics (CPU, RAM, Disk) and Docker containers with a single agent.
                     </p>
+                </div>
+
+                <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                    <div class="flex items-start gap-3">
+                        <ProxmoxIcon class="w-5 h-5 text-orange-500 mt-0.5 shrink-0" />
+                        <div class="flex-1">
+                            <p class="text-sm">
+                                Proxmox nodes can be added here with the unified agent for extra capabilities like temperature monitoring and Pulse Patrol automation (auto-creates the API token and links the node).
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => navigate('/settings/proxmox')}
+                                class="mt-2 text-xs font-medium text-emerald-800 hover:text-emerald-900 dark:text-emerald-200 dark:hover:text-emerald-100 underline"
+                            >
+                                Prefer API-only? Use manual setup →
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="space-y-5">
@@ -962,11 +983,11 @@ export const UnifiedAgents: Component = () => {
                                         onChange={(e) => setEnableCommands(e.currentTarget.checked)}
                                         class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
                                     />
-                                    Enable Pulse command execution (for AI auto-fix)
+                                    Enable Pulse command execution (for Patrol auto-fix)
                                 </label>
                                 <Show when={enableCommands()}>
                                     <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
-                                        <span class="font-medium">Pulse commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse AI features.
+                                        <span class="font-medium">Pulse commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse Patrol features.
                                     </div>
                                 </Show>
                                 <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
@@ -1249,7 +1270,7 @@ export const UnifiedAgents: Component = () => {
                             <option value="all">All scopes</option>
                             <option value="default">Default</option>
                             <option value="profile">Profile assigned</option>
-                            <option value="ai-managed">AI-managed</option>
+                            <option value="ai-managed">Patrol-managed</option>
                         </select>
                     </div>
                     <div class="min-w-[220px] flex-1 space-y-1">
@@ -1446,8 +1467,8 @@ export const UnifiedAgents: Component = () => {
                                                                         title={isPending
                                                                             ? 'Syncing with agent...'
                                                                             : effectiveEnabled
-                                                                                ? 'AI command execution enabled'
-                                                                                : 'AI command execution disabled'
+                                                                                ? 'Pulse command execution enabled'
+                                                                                : 'Pulse command execution disabled'
                                                                         }
                                                                     >
                                                                         <span

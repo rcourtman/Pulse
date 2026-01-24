@@ -28,6 +28,7 @@ export interface UnifiedFinding {
   resourceName: string;
   resourceType: string;
   alertId?: string;
+  alertType?: string;
   isThreshold?: boolean;
   category: string;
   severity: 'critical' | 'warning' | 'info' | 'watch';

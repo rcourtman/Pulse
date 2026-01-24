@@ -1,5 +1,7 @@
 package models
 
+import "encoding/json"
+
 // Frontend-friendly type aliases with proper JSON tags
 // These extend the base types with additional computed fields
 
@@ -612,7 +614,7 @@ type ResourceFrontend struct {
 	Identity *ResourceIdentityFrontend `json:"identity,omitempty"`
 
 	// Platform-specific data (JSON blob)
-	PlatformData map[string]any `json:"platformData,omitempty"`
+	PlatformData json.RawMessage `json:"platformData,omitempty"`
 }
 
 // ResourceMetricFrontend represents a metric value for the frontend.

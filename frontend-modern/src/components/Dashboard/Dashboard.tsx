@@ -1006,7 +1006,7 @@ export function Dashboard(props: DashboardProps) {
               </svg>
             }
             title="No Proxmox VE nodes configured"
-            description="Add a Proxmox VE node in the Settings tab to start monitoring your infrastructure."
+            description="Install the Pulse agent for extra capabilities (temperature monitoring and Pulse Patrol automation), or add a node via API token in Settings → Proxmox."
             actions={
               <button
                 type="button"

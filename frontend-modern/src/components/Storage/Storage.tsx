@@ -754,7 +754,7 @@ const Storage: Component = () => {
               </svg>
             }
             title="No storage configured"
-            description="Add a Proxmox VE or PBS node in the Settings tab to start monitoring storage."
+            description="Install the Pulse agent for extra capabilities (temperature monitoring and Pulse Patrol automation), or add a node via API token in Settings → Proxmox."
             actions={
               <button
                 type="button"

@@ -167,13 +167,13 @@ func GetTierDisplayName(tier Tier) string {
 func GetFeatureDisplayName(feature string) string {
 	switch feature {
 	case FeatureAIPatrol:
-		return "AI Patrol (Background Health Checks)"
+		return "Pulse Patrol (Background Health Checks)"
 	case FeatureAIAlerts:
-		return "AI Alert Analysis"
+		return "Alert Analysis"
 	case FeatureAIAutoFix:
-		return "AI Auto-Fix"
+		return "Pulse Patrol Auto-Fix"
 	case FeatureKubernetesAI:
-		return "Kubernetes AI Analysis"
+		return "Kubernetes Analysis"
 	case FeatureUpdateAlerts:
 		return "Update Alerts (Container/Package Updates)"
 	case FeatureRBAC:

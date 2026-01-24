@@ -303,7 +303,7 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   },
   'system-ai': {
     title: 'Pulse Assistant',
-    description: 'Configure AI-powered infrastructure analysis and remediation suggestions.',
+    description: 'Configure Pulse Assistant and Patrol analysis and remediation suggestions.',
   },
   'system-pro': {
     title: 'Pulse Pro',
@@ -2440,14 +2440,17 @@ const Settings: Component<SettingsProps> = (props) => {
                     </svg>
                     <div class="flex-1">
                       <p class="text-sm text-blue-800 dark:text-blue-200">
-                        <strong>Recommended:</strong> Install the Pulse agent on your Proxmox nodes for automatic setup, temperature monitoring, and AI features.
+                        <strong>Recommended:</strong> Install the Pulse agent on your Proxmox nodes for extra capabilities like temperature monitoring and Pulse Patrol automation (it also auto-creates the API token and links the node).
+                      </p>
+                      <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">
+                        Prefer not to run an agent on PVE? Use the manual API token setup below.
                       </p>
                       <button
                         type="button"
                         onClick={() => navigate('/settings/agents')}
                         class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
                       >
-                        Go to Agents tab →
+                        Install agent →
                       </button>
                     </div>
                   </div>

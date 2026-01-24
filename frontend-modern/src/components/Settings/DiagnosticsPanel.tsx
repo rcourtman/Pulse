@@ -684,7 +684,7 @@ export const DiagnosticsPanel: Component = () => {
                                 </div>
                                 <div>
                                     <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Pulse Assistant</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Pulse AI Service</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Pulse Assistant Service</p>
                                 </div>
                                 <div class="ml-auto">
                                     <StatusBadge

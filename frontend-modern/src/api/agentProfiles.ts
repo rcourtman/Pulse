@@ -231,7 +231,7 @@ export class AgentProfilesAPI {
         if (!response.ok) {
             const text = await response.text();
             if (response.status === 503) {
-                throw new Error('AI service is not available. Please check AI settings.');
+                throw new Error('Pulse Assistant service is not available. Please check Pulse Assistant settings.');
             }
             throw new Error(text || `Failed to get suggestion: ${response.status}`);
         }

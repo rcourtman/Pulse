@@ -62,7 +62,7 @@ func TestLicenseHasFeature(t *testing.T) {
 
 	// Should have tier features
 	if !license.HasFeature(FeatureAIPatrol) {
-		t.Error("Pro license should have AI Patrol")
+		t.Error("Pro license should have Pulse Patrol")
 	}
 
 	// Should have explicit features
@@ -211,7 +211,7 @@ func TestServiceFeatureGating(t *testing.T) {
 
 	// Should now have Pro features
 	if !service.HasFeature(FeatureAIPatrol) {
-		t.Error("Should have AI Patrol with Pro license")
+		t.Error("Should have Pulse Patrol with Pro license")
 	}
 	if !service.IsValid() {
 		t.Error("Should be valid with active license")
@@ -356,8 +356,8 @@ func TestGetTierDisplayName(t *testing.T) {
 }
 
 func TestGetFeatureDisplayName(t *testing.T) {
-	if GetFeatureDisplayName(FeatureAIPatrol) != "AI Patrol (Background Health Checks)" {
-		t.Error("Wrong display name for AI Patrol")
+	if GetFeatureDisplayName(FeatureAIPatrol) != "Pulse Patrol (Background Health Checks)" {
+		t.Error("Wrong display name for Pulse Patrol")
 	}
 }
 

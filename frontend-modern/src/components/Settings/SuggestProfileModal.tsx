@@ -247,10 +247,10 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                         </div>
                         <div>
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                AI Profile Suggestion
+                                Pulse Assistant Profile Suggestion
                             </h3>
                             <p class="text-xs text-gray-500 dark:text-gray-400">
-                                Describe what you need, and AI will draft a profile
+                                Describe what you need, and Pulse Assistant will draft a profile
                             </p>
                         </div>
                     </div>

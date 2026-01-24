@@ -404,7 +404,7 @@ export const AISettings: Component = () => {
       }
     } catch (error) {
       logger.error('[AISettings] Failed to load settings:', error);
-      notificationStore.error('Failed to load AI settings');
+      notificationStore.error('Failed to load Pulse Assistant settings');
       setSettings(null);
       resetForm(null);
     } finally {
@@ -587,12 +587,12 @@ export const AISettings: Component = () => {
       const updated = await AIAPI.updateSettings(payload);
       setSettings(updated);
       resetForm(updated);
-      notificationStore.success('AI settings saved');
+      notificationStore.success('Pulse Assistant settings saved');
       // Notify other components (like AIChat) that settings changed so they can refresh models
       aiChatStore.notifySettingsChanged();
     } catch (error) {
       logger.error('[AISettings] Failed to save settings:', error);
-      const message = error instanceof Error ? error.message : 'Failed to save AI settings';
+      const message = error instanceof Error ? error.message : 'Failed to save Pulse Assistant settings';
       notificationStore.error(message);
     } finally {
       setSaving(false);
@@ -650,7 +650,7 @@ export const AISettings: Component = () => {
 
     let confirmMessage = `Clear ${PROVIDER_DISPLAY_NAMES[provider] || provider} credentials?`;
     if (isLastProvider) {
-      confirmMessage = `⚠️ This is your only configured provider! Clearing it will disable AI until you configure another provider. Continue?`;
+      confirmMessage = `⚠️ This is your only configured provider! Clearing it will disable Pulse Assistant until you configure another provider. Continue?`;
     } else if (modelUsesProvider) {
       confirmMessage = `Your current model uses ${PROVIDER_DISPLAY_NAMES[provider] || provider}. Clearing this will require selecting a different model. Continue?`;
     } else {
@@ -726,7 +726,7 @@ export const AISettings: Component = () => {
             </div>
             <SectionHeader
               title="Pulse Assistant"
-              description="Configure AI-powered infrastructure analysis"
+              description="Configure Pulse Assistant and Patrol analysis"
               size="sm"
               class="flex-1"
             />
@@ -757,7 +757,7 @@ export const AISettings: Component = () => {
                       // Revert on failure
                       setForm('enabled', !newValue);
                       logger.error('[AISettings] Failed to toggle AI:', error);
-                      const message = error instanceof Error ? error.message : 'Failed to update AI setting';
+                      const message = error instanceof Error ? error.message : 'Failed to update Pulse Assistant setting';
                       notificationStore.error(message);
                     }
                   }}
@@ -778,7 +778,7 @@ export const AISettings: Component = () => {
           <Show when={loading()}>
             <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
               <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-              Loading AI settings...
+              Loading Pulse Assistant settings...
             </div>
           </Show>
 
@@ -966,17 +966,17 @@ export const AISettings: Component = () => {
                 </Show>
               </div>
 
-              {/* AI Provider Configuration - Configure API keys for all providers */}
+              {/* Provider Configuration - Configure API keys for all providers */}
               <div class={`${formField} p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40`}>
                 <div class="mb-3">
                   <h4 class="font-medium text-gray-900 dark:text-white flex items-center gap-2">
                     <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
-                    AI Provider Configuration
+                    Provider Configuration
                   </h4>
                   <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                    Configure API keys for each AI provider you want to use. Models from all configured providers will appear in the model selectors.
+                    Configure API keys for each provider you want to use. Models from all configured providers will appear in the model selectors.
                   </p>
                 </div>
 
@@ -1469,7 +1469,7 @@ export const AISettings: Component = () => {
                       </Show>
                       <Show when={!autoFixLocked() && !form.patrolAutoFix && !autoFixAcknowledged()}>
                         <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
-                          ⚠️ AI will execute fixes without approval. Enable with caution.
+                          ⚠️ Pulse Patrol will execute fixes without approval. Enable with caution.
                         </p>
                       </Show>
                       <Show when={!autoFixLocked() && form.patrolAutoFix}>
@@ -1477,7 +1477,7 @@ export const AISettings: Component = () => {
                           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
-                          Auto-Fix is ON. AI will attempt automatic remediation.
+                          Auto-Fix is ON. Pulse Patrol will attempt automatic remediation.
                         </p>
                       </Show>
                     </div>
@@ -1524,7 +1524,7 @@ export const AISettings: Component = () => {
                 </Show>
               </div>
 
-              {/* AI Cost Controls - Compact */}
+              {/* Usage Cost Controls - Compact */}
               <div class="flex items-center gap-3 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
                 <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1610,19 +1610,19 @@ export const AISettings: Component = () => {
                     class="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
                     disabled={saving()}
                   >
-                    <option value="read_only">Read Only - AI can only observe</option>
-                    <option value="controlled">Controlled - AI executes with your approval</option>
-                    <option value="autonomous">Autonomous - AI executes without approval (Pro)</option>
+                    <option value="read_only">Read Only - Pulse Assistant can only observe</option>
+                    <option value="controlled">Controlled - Pulse Assistant executes with your approval</option>
+                    <option value="autonomous">Autonomous - Pulse Assistant executes without approval (Pro)</option>
                   </select>
                 </div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 ml-[7.5rem]">
-                  {form.controlLevel === 'read_only' && '🔒 AI can only query and observe - no commands or control actions'}
-                  {form.controlLevel === 'controlled' && '✅ AI can execute commands and control VMs/containers with your approval'}
-                  {form.controlLevel === 'autonomous' && '⚠️ AI executes all commands and control actions without asking'}
+                  {form.controlLevel === 'read_only' && '🔒 Pulse Assistant can only query and observe - no commands or control actions'}
+                  {form.controlLevel === 'controlled' && '✅ Pulse Assistant can execute commands and control VMs/containers with your approval'}
+                  {form.controlLevel === 'autonomous' && '⚠️ Pulse Assistant executes all commands and control actions without asking'}
                 </p>
                 <Show when={form.controlLevel === 'autonomous'}>
                   <div class="p-2 bg-amber-100/50 dark:bg-amber-900/30 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
-                    <strong>Legal Disclaimer:</strong> AI models can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" class="underline">Terms of Service</a>.
+                    <strong>Legal Disclaimer:</strong> Model-driven systems can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" class="underline">Terms of Service</a>.
                   </div>
                 </Show>
                 <Show when={form.controlLevel === 'autonomous' && autoFixLocked()}>
@@ -1653,7 +1653,7 @@ export const AISettings: Component = () => {
                         disabled={saving()}
                       />
                       <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                        Comma-separated VMIDs or names that AI cannot control
+                        Comma-separated VMIDs or names that Pulse Assistant cannot control
                       </p>
                     </div>
                   </div>
@@ -1686,7 +1686,7 @@ export const AISettings: Component = () => {
                 <Show when={showChatMaintenance()}>
                   <div class="px-3 py-3 bg-white dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
                     <p class="text-xs text-gray-500 dark:text-gray-400">
-                      Use this panel to summarize, inspect, or revert a specific chat session. It does not change your default AI settings.
+                      Use this panel to summarize, inspect, or revert a specific chat session. It does not change your default Pulse Assistant settings.
                     </p>
                     <div class="flex items-center justify-between">
                       <label class="text-xs font-medium text-gray-600 dark:text-gray-400">Session</label>
@@ -1790,7 +1790,7 @@ export const AISettings: Component = () => {
                   <span class="text-xs font-medium">
                     {settings()?.configured
                       ? `Ready • ${settings()?.configured_providers?.length || 0} provider${(settings()?.configured_providers?.length || 0) !== 1 ? 's' : ''} • ${availableModels().length} models`
-                      : 'Configure at least one AI provider above to enable AI features'}
+                      : 'Configure at least one provider above to enable Pulse Assistant features'}
                   </span>
                   <Show when={settings()?.configured && settings()?.model}>
                     <span class="text-xs opacity-75 ml-2">
@@ -2089,7 +2089,7 @@ export const AISettings: Component = () => {
                 disabled={setupSaving() || (setupProvider() !== 'ollama' && !setupApiKey().trim()) || (setupProvider() === 'ollama' && !setupOllamaUrl().trim())}
               >
                 {setupSaving() && <span class="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                Enable AI
+                Enable Pulse Assistant
               </button>
             </div>
           </div>

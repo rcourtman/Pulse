@@ -46,6 +46,7 @@ import SettingsIcon from 'lucide-solid/icons/settings';
 import NetworkIcon from 'lucide-solid/icons/network';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
+import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
 import { UpdateProgressModal } from './components/UpdateProgressModal';
@@ -53,6 +54,7 @@ import type { UpdateStatus } from './api/updates';
 import { AIChat } from './components/AI/Chat';
 import { AIStatusIndicator } from './components/AI/AIStatusIndicator';
 import { aiChatStore } from './stores/aiChat';
+import { getPatrolStatus } from './api/patrol';
 import { useResourcesAsLegacy } from './hooks/useResources';
 import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
 import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode } from './utils/url';
@@ -82,6 +84,9 @@ const HostsOverview = lazy(() =>
   import('./components/Hosts/HostsOverview').then((module) => ({
     default: module.HostsOverview,
   })),
+);
+const AIIntelligencePage = lazy(() =>
+  import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
 
 
@@ -962,6 +967,7 @@ function App() {
 
       <Route path="/servers" component={() => <Navigate href="/hosts" />} />
       <Route path="/alerts/*" component={AlertsPage} />
+      <Route path="/ai/*" component={AIIntelligencePage} />
       <Route path="/settings/*" component={SettingsRoute} />
     </Router>
   );
@@ -1037,6 +1043,17 @@ function AppLayout(props: {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Track patrol license status for Pro badge
+  const [patrolLicenseRequired, setPatrolLicenseRequired] = createSignal(false);
+  onMount(async () => {
+    try {
+      const status = await getPatrolStatus();
+      setPatrolLicenseRequired(status.license_required ?? false);
+    } catch {
+      // Ignore errors - default to not showing badge
+    }
+  });
+
   const readSeenPlatforms = (): Record<string, boolean> => {
     if (typeof window === 'undefined') return {};
     try {
@@ -1101,6 +1118,7 @@ function AppLayout(props: {
     if (path.startsWith('/hosts')) return 'hosts';
     if (path.startsWith('/servers')) return 'hosts'; // Legacy redirect
     if (path.startsWith('/alerts')) return 'alerts';
+    if (path.startsWith('/ai')) return 'ai';
     if (path.startsWith('/settings')) return 'settings';
     return 'proxmox';
   };
@@ -1223,11 +1241,11 @@ function AppLayout(props: {
       scopes.includes('*') || scopes.includes('settings:read');
 
     const tabs: Array<{
-      id: 'alerts' | 'settings';
+      id: 'alerts' | 'ai' | 'settings';
       label: string;
       route: string;
       tooltip: string;
-      badge: 'update' | null;
+      badge: 'update' | 'pro' | null;
       count: number | undefined;
       breakdown: { warning: number; critical: number } | undefined;
       icon: JSX.Element;
@@ -1241,6 +1259,16 @@ function AppLayout(props: {
           count: activeAlertCount,
           breakdown,
           icon: <BellIcon class="w-4 h-4 shrink-0" />,
+        },
+        {
+          id: 'ai',
+          label: 'Patrol',
+          route: '/ai',
+          tooltip: 'Pulse Patrol monitoring and analysis',
+          badge: patrolLicenseRequired() ? 'pro' : null,
+          count: undefined,
+          breakdown: undefined,
+          icon: <PulsePatrolLogo class="w-4 h-4 shrink-0" />,
         },
       ];
 
@@ -1482,6 +1510,11 @@ function AppLayout(props: {
                         <span class="ml-1 flex items-center">
                           <span class="sr-only">Update available</span>
                           <span aria-hidden="true" class="block h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                        </span>
+                      </Show>
+                      <Show when={tab.badge === 'pro'}>
+                        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 rounded">
+                          Pro
                         </span>
                       </Show>
                     </div>

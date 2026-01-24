@@ -18,9 +18,9 @@ export const FeaturesStep: Component<FeaturesStepProps> = (props) => {
     const features = [
         {
             id: 'ai',
-            name: 'Pulse AI',
+            name: 'Pulse Assistant',
             icon: '🤖',
-            desc: 'Intelligent monitoring assistant with auto-fix capabilities',
+            desc: 'Guided troubleshooting with Patrol automation and auto-fix capabilities',
             enabled: aiEnabled,
             setEnabled: setAiEnabled,
             badge: 'New in 5.0',
@@ -97,12 +97,12 @@ export const FeaturesStep: Component<FeaturesStepProps> = (props) => {
                     </button>
                 ))}
 
-                {/* AI info box */}
+                {/* Assistant info box */}
                 <div class="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-400/20 rounded-xl p-4">
                     <div class="flex items-start gap-3">
                         <div class="text-2xl">✨</div>
                         <div>
-                            <p class="text-white font-medium">Pulse AI Features</p>
+                            <p class="text-white font-medium">Pulse Assistant & Patrol Features</p>
                             <p class="text-white/60 text-sm mt-1">
                                 • Chat assistant for infrastructure questions<br />
                                 • Patrol mode for proactive monitoring<br />
@@ -110,7 +110,7 @@ export const FeaturesStep: Component<FeaturesStepProps> = (props) => {
                                 • Predictive failure detection
                             </p>
                             <p class="text-white/40 text-xs mt-2">
-                                Requires API key configuration in Settings → AI after setup
+                                Requires API key configuration in Settings → Pulse Assistant after setup
                             </p>
                         </div>
                     </div>

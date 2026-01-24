@@ -279,11 +279,11 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
       return;
     }
     if (!aiConfigured()) {
-      setAnalysisError('AI is not configured. Configure it in Settings -> AI.');
+      setAnalysisError('Pulse Assistant is not configured. Configure it in Settings → Pulse Assistant.');
       return;
     }
     if (!kubernetesAiEnabled()) {
-      setAnalysisError('Pulse Pro is required for Kubernetes AI analysis.');
+      setAnalysisError('Pulse Pro is required for Kubernetes analysis.');
       return;
     }
 
@@ -560,12 +560,12 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
               <div class="flex-1 min-w-[300px]">
                 <div class="flex items-center gap-2">
                   <div class="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                    Kubernetes AI Analysis
+                    Kubernetes Analysis
                     {/* Badge removed - feature soft-locked instead */}
                   </div>
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-                  Generate deep health insights and actionable remediation for your clusters using Pulse's advanced AI engine.
+                  Generate deep health insights and actionable remediation for your clusters using Pulse's advanced analysis engine.
                 </div>
               </div>
               <Show when={!licenseLoading() && !kubernetesAiEnabled()}>
@@ -584,7 +584,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
             <Show when={licenseLoading() || aiLoading()}>
               <div class="flex items-center gap-3 p-4 bg-blue-50/50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 animate-pulse">
                 <div class="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <span class="text-xs font-medium text-blue-700 dark:text-blue-300">Synchronizing AI & License...</span>
+                <span class="text-xs font-medium text-blue-700 dark:text-blue-300">Synchronizing Pulse Assistant & License...</span>
               </div>
             </Show>
 
@@ -599,7 +599,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                   </div>
                   <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Power up your Kubernetes Fleet</h4>
                   <p class="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
-                    Pulse Pro brings advanced AI-driven diagnostics to your Kubernetes clusters. Identify bottlenecks, security risks, and configuration drift in seconds.
+                    Pulse Pro brings advanced diagnostics to your Kubernetes clusters. Identify bottlenecks, security risks, and configuration drift in seconds.
                   </p>
                   <a
                     href={upgradeUrl()}
@@ -607,7 +607,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                     rel="noreferrer"
                     class="inline-flex items-center gap-2.5 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transform hover:scale-105 active:scale-95 transition-all shadow-lg font-bold text-sm"
                   >
-                    Unlock Kubernetes AI
+                    Unlock Kubernetes Insights
                     <ExternalLink class="w-4 h-4" />
                   </a>
                 </div>
@@ -646,7 +646,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
                 <Show when={!aiLoading() && !aiConfigured()}>
                   <div class="text-xs text-amber-600 dark:text-amber-400">
-                    AI is not configured. Configure it in Settings → AI.
+                    Pulse Assistant is not configured. Configure it in Settings → Pulse Assistant.
                   </div>
                 </Show>
 
