@@ -358,6 +358,9 @@ type BackupAlertConfig struct {
 	// Indicator thresholds for the dashboard (separate from alert thresholds)
 	FreshHours int `json:"freshHours"` // Backups newer than this show as green (default: 24)
 	StaleHours int `json:"staleHours"` // Backups older than FreshHours but newer than this show as amber (default: 72)
+	// Global backup alert filters
+	AlertOrphaned *bool    `json:"alertOrphaned,omitempty"` // Alert on backups that do not match a known guest (default: true)
+	IgnoreVMIDs   []string `json:"ignoreVMIDs,omitempty"`   // Skip alerts for matching VMIDs (supports prefix*)
 }
 
 // GuestLookup describes a guest identity used for snapshot/backup evaluations.
@@ -560,6 +563,7 @@ type dockerRestartRecord struct {
 // NewManager creates a new alert manager
 func NewManager() *Manager {
 	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
+	alertOrphaned := true
 	m := &Manager{
 		activeAlerts:          make(map[string]*Alert),
 		historyManager:        NewHistoryManager(alertsDir),
@@ -645,11 +649,13 @@ func NewManager() *Manager {
 				CriticalSizeGiB: 0,
 			},
 			BackupDefaults: BackupAlertConfig{
-				Enabled:      false,
-				WarningDays:  7,
-				CriticalDays: 14,
-				FreshHours:   24,
-				StaleHours:   72,
+				Enabled:       false,
+				WarningDays:   7,
+				CriticalDays:  14,
+				FreshHours:    24,
+				StaleHours:    72,
+				AlertOrphaned: &alertOrphaned,
+				IgnoreVMIDs:   []string{},
 			},
 			PBSDefaults: ThresholdConfig{
 				CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
@@ -1311,6 +1317,49 @@ func normalizeBackupDefaults(config *AlertConfig) {
 	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
 		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
 	}
+	if config.BackupDefaults.AlertOrphaned == nil {
+		alertOrphaned := true
+		config.BackupDefaults.AlertOrphaned = &alertOrphaned
+	}
+	if len(config.BackupDefaults.IgnoreVMIDs) > 0 {
+		seen := make(map[string]struct{}, len(config.BackupDefaults.IgnoreVMIDs))
+		normalized := make([]string, 0, len(config.BackupDefaults.IgnoreVMIDs))
+		for _, entry := range config.BackupDefaults.IgnoreVMIDs {
+			value := strings.TrimSpace(entry)
+			if value == "" {
+				continue
+			}
+			if _, exists := seen[value]; exists {
+				continue
+			}
+			seen[value] = struct{}{}
+			normalized = append(normalized, value)
+		}
+		config.BackupDefaults.IgnoreVMIDs = normalized
+	}
+}
+
+func backupIgnoreVMID(vmid string, ignoreList []string) bool {
+	if vmid == "" || len(ignoreList) == 0 {
+		return false
+	}
+	for _, entry := range ignoreList {
+		value := strings.TrimSpace(entry)
+		if value == "" {
+			continue
+		}
+		if strings.HasSuffix(value, "*") {
+			prefix := strings.TrimSuffix(value, "*")
+			if prefix != "" && strings.HasPrefix(vmid, prefix) {
+				return true
+			}
+			continue
+		}
+		if vmid == value {
+			return true
+		}
+	}
+	return false
 }
 
 // normalizeNodeDefaults ensures node threshold defaults exist
@@ -4100,6 +4149,20 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	m.activeAlerts[alertID] = alert
 	m.recentAlerts[alertID] = alert
 	m.historyManager.AddAlert(*alert)
+
+	// Trigger AI analysis callback unconditionally
+	if m.onAlertForAI != nil {
+		alertCopy := alert.Clone()
+		go func(a *Alert) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("Panic in AI alert callback")
+				}
+			}()
+			m.onAlertForAI(a)
+		}(alertCopy)
+	}
+
 	if !m.checkRateLimit(alertID) {
 		m.mu.Unlock()
 		log.Debug().
@@ -5171,6 +5234,11 @@ func (m *Manager) CheckBackups(
 	backupCfg := m.config.BackupDefaults
 	m.mu.RUnlock()
 
+	if backupCfg.AlertOrphaned == nil {
+		alertOrphaned := true
+		backupCfg.AlertOrphaned = &alertOrphaned
+	}
+
 	if !enabled || !backupCfg.Enabled {
 		m.clearBackupAlerts()
 		return
@@ -5183,6 +5251,7 @@ func (m *Manager) CheckBackups(
 
 	type backupRecord struct {
 		key          string
+		vmid         string
 		lookup       GuestLookup
 		fallbackName string
 		instance     string
@@ -5219,6 +5288,10 @@ func (m *Manager) CheckBackups(
 		}
 
 		key := BuildGuestKey(backup.Instance, backup.Node, backup.VMID)
+		vmid := ""
+		if backup.VMID > 0 {
+			vmid = strconv.Itoa(backup.VMID)
+		}
 		info := guestsByKey[key]
 		displayName := info.Name
 		if displayName == "" {
@@ -5227,6 +5300,7 @@ func (m *Manager) CheckBackups(
 
 		updateRecord(key, backupRecord{
 			key:          key,
+			vmid:         vmid,
 			lookup:       info,
 			fallbackName: displayName,
 			instance:     backup.Instance,
@@ -5247,6 +5321,7 @@ func (m *Manager) CheckBackups(
 			continue
 		}
 
+		vmid := backup.VMID
 		guests, exists := guestsByVMID[backup.VMID]
 		var info GuestLookup
 		var key string
@@ -5297,6 +5372,7 @@ func (m *Manager) CheckBackups(
 
 		updateRecord(key, backupRecord{
 			key:          key,
+			vmid:         vmid,
 			lookup:       info,
 			fallbackName: displayName,
 			instance:     instance,
@@ -5382,6 +5458,18 @@ func (m *Manager) CheckBackups(
 			}
 			if gh.Backup != nil {
 				currentBackupCfg = *gh.Backup
+			}
+		}
+
+		currentBackupCfg.AlertOrphaned = backupCfg.AlertOrphaned
+		currentBackupCfg.IgnoreVMIDs = backupCfg.IgnoreVMIDs
+
+		if backupIgnoreVMID(record.vmid, currentBackupCfg.IgnoreVMIDs) {
+			continue
+		}
+		if record.vmid != "" && record.lookup.ResourceID == "" {
+			if currentBackupCfg.AlertOrphaned != nil && !*currentBackupCfg.AlertOrphaned {
+				continue
 			}
 		}
 

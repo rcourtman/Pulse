@@ -32,7 +32,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
         e.stopPropagation();
         e.preventDefault();
         if (isLocked()) {
-            notificationStore.warning('Pulse Pro required to investigate alerts with AI.');
+            notificationStore.warning('Pulse Pro required to investigate alerts with Pulse Assistant.');
             return;
         }
 
@@ -117,7 +117,7 @@ Please:
           hover:border-purple-300 dark:hover:border-purple-600
           ${isLocked() ? 'opacity-60 cursor-not-allowed hover:from-purple-500/10 hover:to-blue-500/10' : ''}
           ${props.class || ''}`}
-                title={isLocked() ? 'Pulse Pro required to investigate alerts with AI' : 'Ask AI to investigate this alert'}
+                title={isLocked() ? 'Pulse Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
                 aria-disabled={isLocked()}
             >
                 <svg
@@ -155,7 +155,7 @@ Please:
           gap-1.5
           ${isLocked() ? 'opacity-60 cursor-not-allowed hover:from-purple-500/10 hover:to-blue-500/10' : ''}
           ${props.class || ''}`}
-                title={isLocked() ? 'Pulse Pro required to investigate alerts with AI' : 'Ask AI to investigate this alert'}
+                title={isLocked() ? 'Pulse Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
                 aria-disabled={isLocked()}
             >
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -166,7 +166,7 @@ Please:
                         d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
                     />
                 </svg>
-                <span class="text-xs font-medium">Ask AI</span>
+                <span class="text-xs font-medium">Ask Pulse Assistant</span>
             </button>
         );
     }
@@ -186,7 +186,7 @@ Please:
         gap-2
         ${isLocked() ? 'opacity-60 cursor-not-allowed hover:from-purple-500 hover:to-blue-500' : ''}
         ${props.class || ''}`}
-            title={isLocked() ? 'Pulse Pro required to investigate alerts with AI' : 'Ask AI to investigate this alert'}
+            title={isLocked() ? 'Pulse Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
             aria-disabled={isLocked()}
         >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -197,7 +197,7 @@ Please:
                     d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
                 />
             </svg>
-            <span>Investigate with AI</span>
+            <span>Investigate with Pulse Assistant</span>
             <Show when={isHovered()}>
                 <span class="text-xs opacity-80">→</span>
             </Show>

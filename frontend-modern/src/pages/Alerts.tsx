@@ -19,12 +19,10 @@ import { notificationStore } from '@/stores/notifications';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
-import { AIAPI } from '@/api/ai';
 import { LicenseAPI, type LicenseFeatureStatus } from '@/api/license';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, Incident, IncidentEvent, State, VM, Container, DockerHost, DockerContainer, Host } from '@/types/api';
-import type { RemediationRecord } from '@/types/aiIntelligence';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
@@ -33,10 +31,6 @@ import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
-import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, resolveFinding, clearAllFindings, getSuppressionRules, addSuppressionRule, deleteSuppressionRule, type Finding, type PatrolStatus, type PatrolRunRecord, type SuppressionRule, severityColors, formatTimestamp, categoryLabels } from '@/api/patrol';
-import { aiChatStore } from '@/stores/aiChat';
-import Sparkles from 'lucide-solid/icons/sparkles';
-import ExternalLink from 'lucide-solid/icons/external-link';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
 
@@ -125,7 +119,7 @@ const INCIDENT_EVENT_LABELS: Record<(typeof INCIDENT_EVENT_TYPES)[number], strin
   alert_acknowledged: 'Ack',
   alert_unacknowledged: 'Unack',
   alert_resolved: 'Resolved',
-  ai_analysis: 'AI',
+  ai_analysis: 'Patrol',
   command: 'Cmd',
   runbook: 'Runbook',
   note: 'Note',
@@ -590,6 +584,29 @@ export function Alerts() {
   const [showQuickTip, setShowQuickTip] = createSignal(
     localStorage.getItem('hideAlertsQuickTip') !== 'true',
   );
+
+  const [licenseFeatures, setLicenseFeatures] = createSignal<LicenseFeatureStatus | null>(null);
+  const [licenseLoading, setLicenseLoading] = createSignal(false);
+  const hasAIAlertsFeature = createMemo(() => {
+    const status = licenseFeatures();
+    if (!status) return true;
+    return Boolean(status.features?.['ai_alerts']);
+  });
+
+  onMount(() => {
+    void (async () => {
+      setLicenseLoading(true);
+      try {
+        const status = await LicenseAPI.getFeatures();
+        setLicenseFeatures(status);
+      } catch (err) {
+        logger.debug('Failed to load license status for AI alerts gating', err);
+        setLicenseFeatures(null);
+      } finally {
+        setLicenseLoading(false);
+      }
+    })();
+  });
 
   const dismissQuickTip = () => {
     setShowQuickTip(false);
@@ -1128,12 +1145,22 @@ export function Alerts() {
         const criticalDays = Math.max(safeCritical, warningDays);
         const freshHours = config.backupDefaults.freshHours ?? FACTORY_BACKUP_DEFAULTS.freshHours;
         const staleHours = config.backupDefaults.staleHours ?? FACTORY_BACKUP_DEFAULTS.staleHours;
+        const alertOrphaned = config.backupDefaults.alertOrphaned ?? FACTORY_BACKUP_DEFAULTS.alertOrphaned ?? true;
+        const ignoreVMIDs = Array.from(
+          new Set(
+            (config.backupDefaults.ignoreVMIDs ?? FACTORY_BACKUP_DEFAULTS.ignoreVMIDs ?? [])
+              .map((value) => value.trim())
+              .filter((value) => value.length > 0),
+          ),
+        );
         setBackupDefaults({
           enabled,
           warningDays,
           criticalDays,
           freshHours,
           staleHours,
+          alertOrphaned,
+          ignoreVMIDs,
         });
       } else {
         setBackupDefaults({ ...FACTORY_BACKUP_DEFAULTS });
@@ -1475,6 +1502,8 @@ export function Alerts() {
     criticalDays: 14,
     freshHours: 24,
     staleHours: 72,
+    alertOrphaned: true,
+    ignoreVMIDs: [],
   };
 
   // Threshold states - using trigger values for display
@@ -1847,6 +1876,10 @@ export function Alerts() {
                         criticalDays: finalBackupCritical,
                         freshHours: backupConfig.freshHours ?? 24,
                         staleHours: backupConfig.staleHours ?? 72,
+                        alertOrphaned: backupConfig.alertOrphaned ?? true,
+                        ignoreVMIDs: (backupConfig.ignoreVMIDs ?? [])
+                          .map((value) => value.trim())
+                          .filter((value) => value.length > 0),
                       },
                       pmgDefaults: pmgThresholds(),
                       // Use rawOverridesConfig which is already properly formatted with disabled flags
@@ -2075,6 +2108,8 @@ export function Alerts() {
                   showAcknowledged={showAcknowledged}
                   setShowAcknowledged={setShowAcknowledged}
                   alertsDisabled={areAlertsDisabled}
+                  hasAIAlertsFeature={hasAIAlertsFeature}
+                  licenseLoading={licenseLoading}
                 />
               </Show>
 
@@ -2208,7 +2243,10 @@ export function Alerts() {
               </Show>
 
               <Show when={activeTab() === 'history'}>
-                <HistoryTab />
+                <HistoryTab
+                  hasAIAlertsFeature={hasAIAlertsFeature}
+                  licenseLoading={licenseLoading}
+                />
               </Show>
             </div>
           </div>
@@ -2228,6 +2266,8 @@ function OverviewTab(props: {
   showAcknowledged: () => boolean;
   setShowAcknowledged: (value: boolean) => void;
   alertsDisabled: () => boolean;
+  hasAIAlertsFeature: () => boolean;
+  licenseLoading: () => boolean;
 }) {
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
@@ -2239,74 +2279,6 @@ function OverviewTab(props: {
   const [incidentEventFilters, setIncidentEventFilters] = createSignal<Set<string>>(
     new Set(INCIDENT_EVENT_TYPES),
   );
-
-  // AI Patrol findings state
-  const [aiFindings, setAiFindings] = createSignal<Finding[]>([]);
-  const [patrolStatus, setPatrolStatus] = createSignal<PatrolStatus | null>(null);
-  const [patrolRunHistory, setPatrolRunHistory] = createSignal<PatrolRunRecord[]>([]);
-  // Track findings user marked as "I Fixed It" - hidden until next patrol verifies
-  const [pendingFixFindings, setPendingFixFindings] = createSignal<Set<string>>(new Set());
-  // Map of all findings by ID (including resolved) for displaying patrol run details
-  const [allFindingsMap, setAllFindingsMap] = createSignal<Map<string, Finding>>(new Map());
-  const [lastKnownPatrolAt, setLastKnownPatrolAt] = createSignal<string | null>(null);
-  const [showRunHistory, setShowRunHistory] = createSignal(true); // Expanded by default - users on AI Insights want to see this
-  const [forcePatrolLoading, setForcePatrolLoading] = createSignal(false);
-  const [expandedRunId, setExpandedRunId] = createSignal<string | null>(null);
-  const [historyTimeFilter, setHistoryTimeFilter] = createSignal<'24h' | '7d' | 'all'>('all');
-  // Suppression rules management
-  const [suppressionRules, setSuppressionRules] = createSignal<SuppressionRule[]>([]);
-  const [showSuppressionRules, setShowSuppressionRules] = createSignal(false);
-  const [showAddRuleForm, setShowAddRuleForm] = createSignal(false);
-  const [newRuleResource, setNewRuleResource] = createSignal('');
-  const [newRuleCategory, setNewRuleCategory] = createSignal('');
-  const [newRuleDescription, setNewRuleDescription] = createSignal('');
-  const [licenseFeatures, setLicenseFeatures] = createSignal<LicenseFeatureStatus | null>(null);
-  const [licenseLoading, setLicenseLoading] = createSignal(false);
-  const [remediationsByFinding, setRemediationsByFinding] = createSignal<Record<string, RemediationRecord[]>>({});
-  const [remediationLoadingByFinding, setRemediationLoadingByFinding] = createSignal<Record<string, boolean>>({});
-  // Track which findings are expanded - lifted to parent to persist across API updates
-  const [expandedFindingIds, setExpandedFindingIds] = createSignal<Set<string>>(new Set());
-  const hasAIAlertsFeature = createMemo(() => {
-    const status = licenseFeatures();
-    if (!status) return true;
-    return Boolean(status.features?.['ai_alerts']);
-  });
-  const showAIAlertsUpgrade = createMemo(() => {
-    const status = licenseFeatures();
-    if (!status) return false;
-    return !status.features?.['ai_alerts'];
-  });
-  const aiAlertsUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulserelay.pro/');
-  // Live streaming state for running patrol
-  const [expandedLiveStream, setExpandedLiveStream] = createSignal(false);
-  // Track streaming blocks for sequential display (like AI chat)
-  interface StreamBlock {
-    type: 'phase' | 'content' | 'thinking';
-    text: string;
-    timestamp: number;
-  }
-  const [liveStreamBlocks, setLiveStreamBlocks] = createSignal<StreamBlock[]>([]);
-  const [currentThinking, setCurrentThinking] = createSignal('');
-  let liveStreamUnsubscribe: (() => void) | null = null;
-  const patrolRequiresLicense = createMemo(() => patrolStatus()?.license_required === true);
-  const patrolUpgradeURL = createMemo(() => patrolStatus()?.upgrade_url || 'https://pulserelay.pro/');
-  const patrolLicenseNote = createMemo(() => {
-    if (!patrolRequiresLicense()) return '';
-    const status = patrolStatus()?.license_status;
-    if (status === 'active') {
-      return 'Your license is active but does not include Pulse Patrol.';
-    }
-    if (status === 'expired') {
-      return 'Your license has expired. Renew to restore Pulse Patrol.';
-    }
-    if (status === 'none') {
-      return 'No Pulse Pro license is active.';
-    }
-    if (status === 'grace_period') {
-      return 'Your license is in the grace period.';
-    }
-    return 'Pulse Patrol insights require Pulse Pro.';
-  });
 
   const loadIncidentTimeline = async (alertId: string, startedAt?: string) => {
     setIncidentLoading((prev) => ({ ...prev, [alertId]: true }));
@@ -2360,238 +2332,6 @@ function OverviewTab(props: {
     }
   };
 
-  // Effect to manage live stream subscription when expanded
-  createEffect(() => {
-    const isExpanded = expandedLiveStream();
-    const isRunning = patrolStatus()?.running;
-
-    if (isExpanded && isRunning && !liveStreamUnsubscribe) {
-      // Subscribe to stream
-      liveStreamUnsubscribe = subscribeToPatrolStream(
-        (event) => {
-          if (event.type === 'start') {
-            // Clear previous content
-            setLiveStreamBlocks([]);
-            setCurrentThinking('');
-          } else if (event.type === 'thinking' && event.content) {
-            // Thinking events are separate blocks - just like AI chat
-            // Finalize any current content first
-            const current = currentThinking();
-            if (current.trim()) {
-              setLiveStreamBlocks(prev => [...prev, {
-                type: 'thinking',
-                text: current.trim(),
-                timestamp: Date.now()
-              }]);
-              setCurrentThinking('');
-            }
-            // Add the thinking chunk as a new block
-            setLiveStreamBlocks(prev => [...prev, {
-              type: 'thinking',
-              text: event.content!.trim(),
-              timestamp: Date.now()
-            }]);
-          } else if (event.type === 'content' && event.content) {
-            // Content streams into current block
-            setCurrentThinking(prev => prev + event.content);
-          } else if (event.type === 'complete') {
-            // Finalize current thinking block
-            const finalThinking = currentThinking();
-            if (finalThinking.trim()) {
-              setLiveStreamBlocks(prev => [...prev, {
-                type: 'thinking',
-                text: finalThinking.trim(),
-                timestamp: Date.now()
-              }]);
-              setCurrentThinking('');
-            }
-            // Mark as complete
-            setLiveStreamBlocks(prev => [...prev, {
-              type: 'phase',
-              text: 'Analysis complete',
-              timestamp: Date.now()
-            }]);
-            // Patrol completed, refresh data
-            fetchAiData();
-          }
-          // Ignore 'phase' events - they're internal
-        },
-        () => {
-          // Error - just log it
-          logger.error('Patrol stream error');
-        }
-      );
-    } else if ((!isExpanded || !isRunning) && liveStreamUnsubscribe) {
-      // Unsubscribe
-      liveStreamUnsubscribe();
-      liveStreamUnsubscribe = null;
-      if (!isRunning) {
-        setLiveStreamBlocks([]);
-        setCurrentThinking('');
-        setExpandedLiveStream(false);
-      }
-    }
-  });
-
-  // Cleanup on unmount
-  onCleanup(() => {
-    if (liveStreamUnsubscribe) {
-      liveStreamUnsubscribe();
-      liveStreamUnsubscribe = null;
-    }
-  });
-
-  const loadLicenseStatus = async () => {
-    setLicenseLoading(true);
-    try {
-      const status = await LicenseAPI.getFeatures();
-      setLicenseFeatures(status);
-    } catch (err) {
-      logger.debug('Failed to load license status for AI alerts gating', err);
-      setLicenseFeatures(null);
-    } finally {
-      setLicenseLoading(false);
-    }
-  };
-
-  onMount(() => {
-    void loadLicenseStatus();
-  });
-
-  // Fetch AI data - extracted for reuse
-  const fetchAiData = async () => {
-    try {
-      const [status, findings, runHistory, rules, findingsHistoryData] = await Promise.all([
-        getPatrolStatus(),
-        getFindings(),
-        getPatrolRunHistory(50), // Fetch more for filtering
-        getSuppressionRules().catch(() => []), // May not be available
-        getFindingsHistory().catch(() => []) // Includes resolved findings
-      ]);
-
-      // Check if a new patrol has completed - if so, clear pending fix findings
-      const newPatrolAt = status.last_patrol_at;
-      if (newPatrolAt && newPatrolAt !== lastKnownPatrolAt()) {
-        setLastKnownPatrolAt(newPatrolAt);
-        // Clear pending fixes - the patrol has now verified what's actually fixed
-        if (pendingFixFindings().size > 0) {
-          setPendingFixFindings(new Set<string>());
-        }
-      }
-
-      setPatrolStatus(status);
-      setAiFindings(findings || []);
-      setPatrolRunHistory(runHistory || []);
-      setSuppressionRules(rules || []);
-
-      // Build a map of all findings by ID for looking up resolved findings
-      const findingsMap = new Map<string, Finding>();
-      (findings || []).forEach(f => findingsMap.set(f.id, f));
-      (findingsHistoryData || []).forEach(f => {
-        if (!findingsMap.has(f.id)) {
-          findingsMap.set(f.id, f);
-        }
-      });
-      setAllFindingsMap(findingsMap);
-      // History is expanded by default now, no need for auto-expand logic
-    } catch (_e) {
-      // AI patrol may not be enabled - silently fail
-    }
-  };
-
-  const loadRemediationsForFinding = async (findingId: string) => {
-    setRemediationLoadingByFinding((prev) => ({ ...prev, [findingId]: true }));
-    try {
-      const response = await AIAPI.getRemediations({ findingId, limit: 3 });
-      setRemediationsByFinding((prev) => ({ ...prev, [findingId]: response.remediations || [] }));
-    } catch (err) {
-      logger.error('Failed to load remediation history', err);
-    } finally {
-      setRemediationLoadingByFinding((prev) => ({ ...prev, [findingId]: false }));
-    }
-  };
-
-  // Handle force patrol button click
-  const handleForcePatrol = async (deep: boolean = false) => {
-    setForcePatrolLoading(true);
-    try {
-      const result = await forcePatrol(deep);
-      if (!result.success) {
-        notificationStore.error(result.message || 'Failed to start patrol');
-        setForcePatrolLoading(false);
-        return;
-      }
-      notificationStore.success('Patrol started - results will appear shortly');
-      // Wait a bit for the patrol to start and potentially complete
-      setTimeout(() => {
-        fetchAiData();
-        setForcePatrolLoading(false);
-      }, 2000);
-    } catch (e) {
-      logger.error('Force patrol error:', e);
-      notificationStore.error('Failed to start patrol: ' + (e instanceof Error ? e.message : 'Unknown error'));
-      setForcePatrolLoading(false);
-    }
-  };
-
-  // Filter patrol history by time
-  const filteredPatrolHistory = createMemo(() => {
-    const history = patrolRunHistory();
-    const filter = historyTimeFilter();
-    if (filter === 'all') return history;
-
-    const now = Date.now();
-    const cutoffs = {
-      '24h': now - 24 * 60 * 60 * 1000,
-      '7d': now - 7 * 24 * 60 * 60 * 1000,
-    };
-    const cutoff = cutoffs[filter];
-    return history.filter(r => new Date(r.completed_at).getTime() > cutoff);
-  });
-
-  // Calculate next patrol time
-  const nextPatrolIn = createMemo(() => {
-    const status = patrolStatus();
-    if (!status) return null;
-
-    let nextPatrolTime: number;
-
-    // Use next_patrol_at from backend if available
-    if (status.next_patrol_at) {
-      nextPatrolTime = new Date(status.next_patrol_at).getTime();
-    } else if (status.last_patrol_at && status.interval_ms) {
-      // Calculate from last patrol + interval
-      const lastPatrol = new Date(status.last_patrol_at).getTime();
-      nextPatrolTime = lastPatrol + status.interval_ms;
-    } else {
-      return null;
-    }
-
-    const now = Date.now();
-    const remainingMs = nextPatrolTime - now;
-
-    if (remainingMs <= 0) return 'Soon';
-
-    const hours = Math.floor(remainingMs / 3600000);
-    const minutes = Math.floor((remainingMs % 3600000) / 60000);
-    const seconds = Math.floor((remainingMs % 60000) / 1000);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    }
-    return `${seconds}s`;
-  });
-
-  // Fetch AI findings on mount and every 30 seconds
-  onMount(() => {
-    fetchAiData();
-    const interval = setInterval(fetchAiData, 30000);
-    onCleanup(() => clearInterval(interval));
-  });
-
   // Get alert stats from actual active alerts
   const alertStats = createMemo(() => {
     // Access the store properly for reactivity
@@ -2626,19 +2366,6 @@ function OverviewTab(props: {
   );
 
   const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
-
-  // Sub-tab for switching between Pulse Insights and Active Alerts
-  type OverviewSubTab = 'ai-insights' | 'active-alerts';
-
-  // Read subtab from URL query parameter to allow deep linking
-  const location = useLocation();
-  const getInitialSubTab = (): OverviewSubTab => {
-    const params = new URLSearchParams(location.search);
-    const subtab = params.get('subtab');
-    if (subtab === 'ai-insights') return 'ai-insights';
-    return 'active-alerts';
-  };
-  const [overviewSubTab, setOverviewSubTab] = createSignal<OverviewSubTab>(getInitialSubTab());
 
   return (
     <div class="space-y-4 sm:space-y-6">
@@ -2721,1561 +2448,375 @@ function OverviewTab(props: {
         </Card>
       </div>
 
-      <div class="space-y-4 sm:space-y-6">
-
-        {/* Sub-tabs for AI Insights vs Active Alerts */}
-        {/* Show tabs when patrol is enabled OR when there are legacy findings to clear */}
-        <Show when={patrolStatus()?.enabled || aiFindings().length > 0}>
-          <div class="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700/50 pb-1">
-            <button
-              class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${overviewSubTab() === 'active-alerts'
-                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-b-0 border-gray-200 dark:border-gray-700'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                } ${props.alertsDisabled() ? 'pointer-events-none opacity-60 cursor-not-allowed' : ''}`}
-              onClick={() => setOverviewSubTab('active-alerts')}
-              aria-disabled={props.alertsDisabled()}
-              disabled={props.alertsDisabled()}
-            >
-              Active Alerts
-              <Show when={alertStats().active > 0}>
-                <span class="ml-2 px-1.5 py-0.5 text-xs font-medium rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
-                  {alertStats().active}
-                </span>
-              </Show>
-            </button>
-            <button
-              class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${overviewSubTab() === 'ai-insights'
-                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-b-0 border-gray-200 dark:border-gray-700'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                } ${props.alertsDisabled() ? 'pointer-events-none opacity-60 cursor-not-allowed' : ''}`}
-              onClick={() => setOverviewSubTab('ai-insights')}
-              aria-disabled={props.alertsDisabled()}
-              disabled={props.alertsDisabled()}
-            >
-              Pulse Insights
-              <Show when={aiFindings().length > 0}>
-                <span class="ml-2 px-1.5 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
-                  {aiFindings().length}
-                </span>
-              </Show>
-            </button>
-          </div>
-        </Show>
-
-        {/* AI Insights Section - show when AI tab selected and patrol enabled OR has findings to clear */}
-        <Show when={overviewSubTab() === 'ai-insights' && (patrolStatus()?.enabled || aiFindings().length > 0)}>
-          <div class="space-y-3 sm:space-y-4">
-            <div class="flex items-center justify-between mb-2">
-              <SectionHeader
-                title="Pulse Insights"
-                size="md"
-                class="mb-0"
-              />
-              <div class="flex items-center gap-2">
-                <Show when={aiFindings().length > 0}>
-                  <button
-                    class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700"
-                    onClick={async () => {
-                      if (confirm(`Clear all ${aiFindings().length} AI findings?\n\nThis will remove all current insights. New issues will be detected on the next patrol run.`)) {
-                        try {
-                          const result = await clearAllFindings();
-                          notificationStore.success(result.message || `Cleared ${result.cleared} findings`);
-                          fetchAiData();
-                        } catch (err) {
-                          logger.error('Failed to clear findings:', err);
-                          notificationStore.error('Failed to clear findings');
-                        }
-                      }
-                    }}
-                    title="Clear all Pulse insights"
-                  >
-                    <span class="flex items-center gap-1.5">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                      Clear All
-                    </span>
-                  </button>
-                </Show>
-                <button
-                  class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700 hover:bg-purple-200 dark:hover:bg-purple-900/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => handleForcePatrol(true)}
-                  disabled={forcePatrolLoading() || patrolStatus()?.running || patrolRequiresLicense()}
-                  title={patrolRequiresLicense()
-                    ? 'Pulse Pro required to run Pulse Patrol'
-                    : (patrolStatus()?.running ? 'Patrol in progress - see table below' : 'Run a patrol check now')}
-                >
-                  <span class="flex items-center gap-1.5">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Run Patrol
-                  </span>
-                </button>
+      {/* Active Alerts */}
+      <div>
+        <SectionHeader title="Active Alerts" size="md" class="mb-3" />
+        <Show
+          when={Object.keys(props.activeAlerts).length > 0}
+          fallback={
+            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+              <div class="flex justify-center mb-3">
+                <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+                </svg>
               </div>
+              <p class="text-sm">No active alerts</p>
+              <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
             </div>
-
-            <Show when={patrolRequiresLicense()}>
-              <div class="mb-4 relative overflow-hidden group">
-                <div class="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-orange-500/10 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                <div class="relative flex items-start gap-3 p-4 bg-white dark:bg-gray-800/50 border border-amber-200 dark:border-amber-900/50 rounded-xl shadow-lg backdrop-blur-sm">
-                  <div class="p-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg shadow-md">
-                    <Sparkles class="w-4 h-4 text-white" />
-                  </div>
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <p class="text-sm font-bold text-gray-900 dark:text-white">Pulse Pro Required</p>
-                      <span class="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded">Pulse Patrol</span>
-                    </div>
-                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
-                      {patrolLicenseNote() || 'Pulse Patrol insights require Pulse Pro.'}
-                    </p>
-                    <a
-                      class={`inline-flex items-center gap-1.5 mt-2.5 text-xs font-bold text-amber-600 dark:text-amber-400 transition-colors group/link ${props.alertsDisabled()
-                        ? 'pointer-events-none opacity-50 text-gray-400 dark:text-gray-500'
-                        : 'hover:text-amber-700 dark:hover:text-amber-300'
-                        }`}
-                      href={props.alertsDisabled() ? undefined : patrolUpgradeURL()}
-                      aria-disabled={props.alertsDisabled()}
-                      tabIndex={props.alertsDisabled() ? -1 : undefined}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Upgrade to Pro
-                      <ExternalLink class="w-3 h-3 transform group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </Show>
-
-
-
-
-            <Show when={patrolRequiresLicense()}>
-              <div class="space-y-2">
-                <div class="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
-                  <span>Preview findings (details locked)</span>
-                  <span>{aiFindings().length} detected</span>
-                </div>
-                <Show
-                  when={aiFindings().length > 0}
-                  fallback={
-                    <div class="text-sm text-gray-500 dark:text-gray-400 italic">
-                      No preview findings yet. Enable Patrol to generate a preview.
-                    </div>
-                  }
+          }
+        >
+          <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
+            <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
+              <Show when={alertStats().acknowledged > 0}>
+                <button
+                  onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
+                  class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                 >
-                  <For each={aiFindings().slice(0, 3)}>
-                    {(finding) => (
-                      <div class="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/40">
-                        <div class="flex items-center gap-2 px-3 pt-3">
-                          <span class="px-2 py-0.5 text-[10px] rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 capitalize">
-                            {finding.severity}
-                          </span>
-                          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {finding.title || 'Potential issue detected'}
-                          </span>
-                          <span class="ml-auto text-[10px] text-amber-600 dark:text-amber-300 uppercase tracking-wide">Locked</span>
-                        </div>
-                        <div class="relative px-3 pb-3 pt-2">
-                          <div class="blur-sm text-xs text-gray-600 dark:text-gray-400">
-                            {finding.description || 'Upgrade to view full analysis.'}
-                          </div>
-                          <div class="absolute inset-0 flex items-center justify-center">
-                            <a
-                              class={`text-[11px] font-medium text-amber-700 dark:text-amber-200 underline decoration-dotted ${props.alertsDisabled()
-                                ? 'pointer-events-none opacity-50 text-gray-400 dark:text-gray-500'
-                                : ''
-                                }`}
-                              href={props.alertsDisabled() ? undefined : patrolUpgradeURL()}
-                              aria-disabled={props.alertsDisabled()}
-                              tabIndex={props.alertsDisabled() ? -1 : undefined}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Upgrade to view details
-                            </a>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </For>
-                  <Show when={aiFindings().length > 3}>
-                    <div class="text-[11px] text-gray-500 dark:text-gray-400">
-                      +{aiFindings().length - 3} more findings hidden
-                    </div>
-                  </Show>
-                </Show>
-              </div>
-            </Show>
-            <Show when={!patrolRequiresLicense()}>
-              <div class="space-y-2 sm:space-y-3">
-                <Show
-                  when={aiFindings().length > 0}
-                  fallback={
-                    <div class="text-center py-4 sm:py-6 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                      <div class="flex justify-center mb-2">
-                        <svg class="w-10 h-10 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
-                        </svg>
-                      </div>
-                      <p class="text-sm font-medium text-green-700 dark:text-green-400">All Systems Healthy</p>
-                      <p class="text-xs text-green-600 dark:text-green-500 mt-1">Pulse Patrol found no issues to report</p>
-                    </div>
-                  }
-                >
-                  <For each={aiFindings().filter(f => !pendingFixFindings().has(f.id))}>
-                    {(finding) => {
-                      const colors = severityColors[finding.severity];
-                      const isExpanded = () => expandedFindingIds().has(finding.id);
-                      const toggleExpanded = () => {
-                        setExpandedFindingIds((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(finding.id)) {
-                            next.delete(finding.id);
-                          } else {
-                            next.add(finding.id);
-                            // Load remediations when expanding (if not already loaded)
-                            if (remediationsByFinding()[finding.id] === undefined && !remediationLoadingByFinding()[finding.id]) {
-                              void loadRemediationsForFinding(finding.id);
-                            }
-                          }
-                          return next;
+                  {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
+                </button>
+              </Show>
+              <Show when={alertStats().active > 0}>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={bulkAckProcessing()}
+                  onClick={async () => {
+                    if (bulkAckProcessing()) return;
+                    const pending = unacknowledgedAlerts();
+                    if (pending.length === 0) {
+                      return;
+                    }
+                    setBulkAckProcessing(true);
+                    try {
+                      const result = await AlertsAPI.bulkAcknowledge(pending.map((alert) => alert.id));
+                      const successes = result.results.filter((r) => r.success);
+                      const failures = result.results.filter((r) => !r.success);
+
+                      successes.forEach((res) => {
+                        props.updateAlert(res.alertId, {
+                          acknowledged: true,
+                          ackTime: new Date().toISOString(),
                         });
-                      };
-                      return (
-                        <div
-                          class="border rounded-lg transition-all"
-                          style={{
-                            'background-color': colors.bg,
-                            'border-color': colors.border,
-                          }}
-                        >
-                          {/* Compact header - always visible, clickable */}
-                          <div
-                            class="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 cursor-pointer hover:opacity-80"
-                            onClick={toggleExpanded}
+                      });
+
+                      if (successes.length > 0) {
+                        notificationStore.success(
+                          `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
+                        );
+                      }
+
+                      if (failures.length > 0) {
+                        notificationStore.error(
+                          `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
+                        );
+                      }
+                    } catch (error) {
+                      logger.error('Bulk acknowledge failed', error);
+                      notificationStore.error('Failed to acknowledge alerts');
+                    } finally {
+                      setBulkAckProcessing(false);
+                    }
+                  }}
+                >
+                  {bulkAckProcessing()
+                    ? 'Acknowledging…'
+                    : `Acknowledge all (${alertStats().active})`}
+                </button>
+              </Show>
+            </div>
+          </Show>
+          <div class="space-y-2">
+            <Show when={filteredAlerts().length === 0}>
+              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
+              </div>
+            </Show>
+            <For each={filteredAlerts()}>
+              {(alert) => (
+                <div
+                  class={`border rounded-lg p-3 sm:p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
+                    } ${alert.acknowledged
+                      ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'
+                      : alert.level === 'critical'
+                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
+                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
+                    }`}
+                >
+                  <div class="flex flex-col sm:flex-row sm:items-start">
+                    <div class="flex items-start flex-1">
+                      {/* Status icon */}
+                      <div
+                        class={`mr-3 mt-0.5 transition-all ${alert.acknowledged
+                          ? 'text-green-600 dark:text-green-400'
+                          : alert.level === 'critical'
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-yellow-600 dark:text-yellow-400'
+                          }`}
+                      >
+                        {alert.acknowledged ? (
+                          // Checkmark for acknowledged
+                          <svg
+                            class="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
                           >
-                            {/* Expand chevron */}
-                            <svg
-                              class={`w-4 h-4 text-gray-500 transition-transform flex-shrink-0 ${isExpanded() ? 'rotate-90' : ''}`}
-                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                            >
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                            </svg>
-                            {/* Severity badge */}
-                            <span
-                              class="px-2 py-0.5 text-xs rounded capitalize font-medium flex-shrink-0"
-                              style={{ 'background-color': colors.border, color: colors.text }}
-                            >
-                              {finding.severity}
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                        ) : (
+                          // Warning/Alert icon
+                          <svg
+                            class="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span
+                            class={`text-sm font-medium truncate ${alert.level === 'critical'
+                              ? 'text-red-700 dark:text-red-400'
+                              : 'text-yellow-700 dark:text-yellow-400'
+                              }`}
+                          >
+                            {alert.resourceName}
+                          </span>
+                          <span class="text-xs text-gray-600 dark:text-gray-400">
+                            ({alert.type})
+                          </span>
+                          <Show when={alert.node}>
+                            <span class="text-xs text-gray-500 dark:text-gray-500">
+                              on {alert.node}
                             </span>
-                            {/* Title (main info) */}
-                            <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate flex-1">
-                              {finding.title}
+                          </Show>
+                          <Show when={alert.acknowledged}>
+                            <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
+                              Acknowledged
                             </span>
-                            {/* Recurrence badge - show if raised multiple times */}
-                            <Show when={finding.times_raised > 1}>
-                              <span
-                                class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 flex-shrink-0"
-                                title={`This issue has been detected ${finding.times_raised} times`}
-                              >
-                                ×{finding.times_raised}
-                              </span>
-                            </Show>
-                            {/* Dismissed status badge */}
-                            <Show when={finding.dismissed_reason}>
-                              <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 flex-shrink-0">
-                                {finding.dismissed_reason === 'not_an_issue' && '✓ Dismissed'}
-                                {finding.dismissed_reason === 'expected_behavior' && '✓ Expected'}
-                                {finding.dismissed_reason === 'will_fix_later' && '⏱ Noted'}
-                              </span>
-                            </Show>
-                            {/* Suppressed badge */}
-                            <Show when={finding.suppressed}>
-                              <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex-shrink-0">
-                                🔇 Suppressed
-                              </span>
-                            </Show>
-                            {/* Alert-triggered badge - shows when finding came from alert-triggered analysis */}
-                            <Show when={finding.alert_id}>
-                              <span
-                                class="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex-shrink-0"
-                                title="This finding was discovered by alert-triggered analysis"
-                              >
-                                ⚡ Alert
-                              </span>
-                            </Show>
-                            {/* Resource name pill */}
-                            <span class="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex-shrink-0 hidden sm:inline">
-                              {finding.resource_name}
-                            </span>
-                            {/* AI badge */}
-                            <span
-                              class="inline-flex items-center justify-center w-5 h-5 rounded text-[9px] font-bold flex-shrink-0"
-                              style={{ 'background-color': colors.border, color: colors.text }}
-                            >
-                              AI
-                            </span>
-                          </div>
-
-                          {/* Expanded details */}
-                          <Show when={isExpanded()}>
-                            <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-1 border-t" style={{ 'border-color': colors.border }}>
-                              {/* Resource and category info */}
-                              <div class="flex flex-wrap items-center gap-2 mb-2">
-                                <span class="text-sm font-medium" style={{ color: colors.text }}>
-                                  {finding.resource_name}
-                                </span>
-                                <span class="text-xs text-gray-600 dark:text-gray-400">
-                                  ({finding.category})
-                                </span>
-                                <Show when={finding.node}>
-                                  <span class="text-xs text-gray-500 dark:text-gray-500">
-                                    on {finding.node}
-                                  </span>
-                                </Show>
-                              </div>
-
-                              {/* Description */}
-                              <p class="text-sm text-gray-600 dark:text-gray-400">
-                                {finding.description}
-                              </p>
-
-                              {/* Recommendation */}
-                              <Show when={finding.recommendation}>
-                                <p class="text-xs text-gray-500 dark:text-gray-500 mt-2 italic">
-                                  Suggested: {finding.recommendation}
-                                </p>
-                              </Show>
-
-                              {/* User note if present */}
-                              <Show when={finding.user_note}>
-                                <div class="mt-2 p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                                  <p class="text-xs text-blue-700 dark:text-blue-300">
-                                    <span class="font-medium">Your note:</span> {finding.user_note}
-                                  </p>
-                                </div>
-                              </Show>
-
-                              {/* Footer with time and actions */}
-                              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
-                                <p class="text-xs text-gray-500 dark:text-gray-500">
-                                  Detected: {formatTimestamp(finding.detected_at)}
-                                </p>
-                                <div class="flex items-center gap-2">
-                                  {/* Get Help with AI button */}
-                                  <button
-                                    class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50 flex items-center gap-1.5"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      aiChatStore.openWithPrompt(
-                                        `Help me fix this issue on ${finding.resource_name}: ${finding.title}\n\nDescription: ${finding.description}\n\nSuggested fix: ${finding.recommendation || 'None provided'}\n\nPlease guide me through applying this fix. When you've successfully fixed the issue, use the resolve_finding tool to mark it as resolved.`,
-                                        { findingId: finding.id }
-                                      );
-                                    }}
-                                  >
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                    </svg>
-                                    Get Help
-                                  </button>
-                                  {/* Runbook button removed - feature was removed */}
-
-                                  <button
-                                    class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 flex items-center gap-1.5"
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      // Immediately hide the finding locally
-                                      setPendingFixFindings(prev => {
-                                        const next = new Set(prev);
-                                        next.add(finding.id);
-                                        return next;
-                                      });
-                                      try {
-                                        await resolveFinding(finding.id);
-                                        notificationStore.success('✓ Fixed! Issue cleared from insights.');
-                                        fetchAiData();
-                                      } catch (_err) {
-                                        // Still keep it hidden locally since user said they fixed it
-                                        notificationStore.error('Failed to mark as fixed on server');
-                                      }
-                                    }}
-                                    title="Mark as fixed - the next patrol will verify"
-                                  >
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    I Fixed It
-                                  </button>
-                                  {/* Not an Issue dropdown - LLM memory system */}
-                                  <div class="relative group">
-                                    <button
-                                      class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-1.5"
-                                      onClick={(e) => e.stopPropagation()}
-                                      title="Dismiss this finding - AI won't re-raise it"
-                                    >
-                                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                      </svg>
-                                      Dismiss
-                                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                                      </svg>
-                                    </button>
-                                    {/* Dropdown menu - pt-2 creates visual gap while maintaining hover area */}
-                                    <div class="absolute right-0 top-full pt-1 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                                      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                                        <button
-                                          class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg transition-colors"
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            try {
-                                              await dismissFinding(finding.id, 'not_an_issue');
-                                              notificationStore.success('Dismissed - AI will not raise this again');
-                                              fetchAiData();
-                                            } catch (_err) {
-                                              notificationStore.error('Failed to dismiss finding');
-                                            }
-                                          }}
-                                        >
-                                          <span class="font-medium text-gray-700 dark:text-gray-300">Not an Issue</span>
-                                          <p class="text-gray-500 dark:text-gray-500 mt-0.5">This isn't actually a problem</p>
-                                        </button>
-                                        <button
-                                          class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            const note = prompt('Why is this expected? (optional - helps AI understand your environment)');
-                                            try {
-                                              await dismissFinding(finding.id, 'expected_behavior', note || undefined);
-                                              notificationStore.success('Dismissed - AI will not raise this again');
-                                              fetchAiData();
-                                            } catch (_err) {
-                                              notificationStore.error('Failed to dismiss finding');
-                                            }
-                                          }}
-                                        >
-                                          <span class="font-medium text-gray-700 dark:text-gray-300">Expected Behavior</span>
-                                          <p class="text-gray-500 dark:text-gray-500 mt-0.5">This is intentional/by design</p>
-                                        </button>
-                                        <button
-                                          class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            try {
-                                              await dismissFinding(finding.id, 'will_fix_later');
-                                              notificationStore.success('Acknowledged - AI will check again later');
-                                              fetchAiData();
-                                            } catch (_err) {
-                                              notificationStore.error('Failed to dismiss finding');
-                                            }
-                                          }}
-                                        >
-                                          <span class="font-medium text-gray-700 dark:text-gray-300">Will Fix Later</span>
-                                          <p class="text-gray-500 dark:text-gray-500 mt-0.5">I know about it, will address</p>
-                                        </button>
-                                        <div class="border-t border-gray-200 dark:border-gray-700">
-                                          <button
-                                            class="w-full px-3 py-2 text-left text-xs hover:bg-red-50 dark:hover:bg-red-900/30 rounded-b-lg transition-colors text-red-600 dark:text-red-400"
-                                            onClick={async (e) => {
-                                              e.stopPropagation();
-                                              if (confirm('Permanently suppress this type of finding for this resource?\n\nThe AI will never raise this issue again.')) {
-                                                try {
-                                                  await suppressFinding(finding.id);
-                                                  notificationStore.success('Suppressed - AI will never raise this again');
-                                                  fetchAiData();
-                                                } catch (_err) {
-                                                  notificationStore.error('Failed to suppress finding');
-                                                }
-                                              }
-                                            }}
-                                          >
-                                            <span class="font-medium">Never Alert Again</span>
-                                            <p class="text-red-500/80 dark:text-red-400/80 mt-0.5">Permanently suppress for this resource</p>
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Runbook Execution section removed - feature was removed */}
-
-
-
-                                {/* Fix Receipts section removed - was showing "No fixes logged" without runbooks */}
-
-                              </div>
-                            </div>
                           </Show>
                         </div>
-                      );
-                    }}
-                  </For>
-                </Show>
-              </div>
-            </Show>
-
-            <Show when={!patrolRequiresLicense()}>
-              {/* Suppression Rules - What's being ignored */}
-              <div class="mt-6">
-                <div class="flex items-center justify-between">
-                  <button
-                    class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                    onClick={() => setShowSuppressionRules(!showSuppressionRules())}
-                  >
-                    <svg
-                      class={`w-4 h-4 transition-transform ${showSuppressionRules() ? 'rotate-90' : ''}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                    🔇 Suppression Rules ({suppressionRules().length} active)
-                  </button>
-                  <button
-                    class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                    onClick={() => setShowAddRuleForm(!showAddRuleForm())}
-                  >
-                    + Add Rule
-                  </button>
-                </div>
-
-                {/* Add rule form */}
-                <Show when={showAddRuleForm()}>
-                  <div class="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <p class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-3">
-                      Add a suppression rule to prevent alerts
-                    </p>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                      <input
-                        type="text"
-                        class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                        placeholder="Resource ID (or leave empty for any)"
-                        value={newRuleResource()}
-                        onInput={(e) => setNewRuleResource(e.currentTarget.value)}
-                      />
-                      <select
-                        class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                        value={newRuleCategory()}
-                        onChange={(e) => setNewRuleCategory(e.currentTarget.value)}
-                      >
-                        <option value="">Any category</option>
-                        <option value="performance">Performance</option>
-                        <option value="capacity">Capacity</option>
-                        <option value="reliability">Reliability</option>
-                        <option value="backup">Backup</option>
-                        <option value="security">Security</option>
-                        <option value="general">General</option>
-                      </select>
-                      <input
-                        type="text"
-                        class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                        placeholder="Reason (e.g., 'Dev container runs hot')"
-                        value={newRuleDescription()}
-                        onInput={(e) => setNewRuleDescription(e.currentTarget.value)}
-                      />
+                        <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words">
+                          {alert.message}
+                        </p>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          Started: {new Date(alert.startTime).toLocaleString()}
+                        </p>
+                      </div>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
                       <button
-                        class="px-3 py-1.5 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-                        disabled={!newRuleDescription()}
-                        onClick={async () => {
+                        class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
+                          ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                          : 'bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
+                          }`}
+                        disabled={processingAlerts().has(alert.id)}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+
+                          // Prevent double-clicks
+                          if (processingAlerts().has(alert.id)) return;
+
+                          setProcessingAlerts((prev) => new Set(prev).add(alert.id));
+
+                          // Store current state to avoid race conditions
+                          const wasAcknowledged = alert.acknowledged;
+
                           try {
-                            await addSuppressionRule(
-                              newRuleResource(),
-                              newRuleResource() || 'Any resource',
-                              (newRuleCategory() as 'performance' | 'capacity' | 'reliability' | 'backup' | 'security' | 'general' | ''),
-                              newRuleDescription()
+                            if (wasAcknowledged) {
+                              // Call API first, only update local state if successful
+                              await AlertsAPI.unacknowledge(alert.id);
+                              // Only update local state after successful API call
+                              props.updateAlert(alert.id, {
+                                acknowledged: false,
+                                ackTime: undefined,
+                                ackUser: undefined,
+                              });
+                              notificationStore.success('Alert restored');
+                            } else {
+                              // Call API first, only update local state if successful
+                              await AlertsAPI.acknowledge(alert.id);
+                              // Only update local state after successful API call
+                              props.updateAlert(alert.id, {
+                                acknowledged: true,
+                                ackTime: new Date().toISOString(),
+                              });
+                              notificationStore.success('Alert acknowledged');
+                            }
+                          } catch (err) {
+                            logger.error(
+                              `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
+                              err,
                             );
-                            notificationStore.success('Suppression rule created');
-                            setShowAddRuleForm(false);
-                            setNewRuleResource('');
-                            setNewRuleCategory('');
-                            setNewRuleDescription('');
-                            fetchAiData();
-                          } catch (_err) {
-                            notificationStore.error('Failed to create rule');
+                            notificationStore.error(
+                              `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
+                            );
+                            // Don't update local state on error - let WebSocket keep the correct state
+                          } finally {
+                            // Keep button disabled for longer to prevent race conditions with WebSocket updates
+                            setTimeout(() => {
+                              setProcessingAlerts((prev) => {
+                                const next = new Set(prev);
+                                next.delete(alert.id);
+                                return next;
+                              });
+                            }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
                           }
                         }}
                       >
-                        Create Rule
+                        {processingAlerts().has(alert.id)
+                          ? 'Processing...'
+                          : alert.acknowledged
+                            ? 'Unacknowledge'
+                            : 'Acknowledge'}
                       </button>
                       <button
-                        class="px-3 py-1.5 text-sm font-medium rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                        onClick={() => setShowAddRuleForm(false)}
+                        class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        onClick={() => {
+                          void toggleIncidentTimeline(alert.id, alert.startTime);
+                        }}
                       >
-                        Cancel
+                        {expandedIncidents().has(alert.id) ? 'Hide Timeline' : 'Timeline'}
                       </button>
+                      <InvestigateAlertButton
+                        alert={alert}
+                        variant="text"
+                        size="sm"
+                        licenseLocked={!props.hasAIAlertsFeature() && !props.licenseLoading()}
+                      />
                     </div>
                   </div>
-                </Show>
-
-                {/* Rules list */}
-                <Show when={showSuppressionRules()}>
-                  <div class="mt-3 space-y-2">
-                    <Show when={suppressionRules().length === 0}>
-                      <p class="text-sm text-gray-500 dark:text-gray-500 italic">
-                        No suppression rules. Dismiss findings or add rules to prevent unwanted alerts.
-                      </p>
-                    </Show>
-                    <For each={suppressionRules()}>
-                      {(rule) => (
-                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                          <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 text-sm flex-wrap">
-                              <span class="font-medium text-gray-800 dark:text-gray-200">
-                                {rule.resource_name || rule.resource_id || 'Any resource'}
-                              </span>
-                              <Show when={rule.category}>
-                                <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                                  {categoryLabels[rule.category!] || rule.category}
-                                </span>
-                              </Show>
-                              <Show when={!rule.category}>
-                                <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                                  Any category
-                                </span>
-                              </Show>
-                              {/* Show dismissal type with appropriate styling */}
-                              <Show when={rule.created_from === 'finding'}>
-                                <span class="px-1.5 py-0.5 text-xs rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-                                  🔇 Suppressed
-                                </span>
-                              </Show>
-                              <Show when={rule.created_from === 'dismissed'}>
-                                <span class={`px-1.5 py-0.5 text-xs rounded ${rule.dismissed_reason === 'expected_behavior'
-                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                  : rule.dismissed_reason === 'will_fix_later'
-                                    ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                                  }`}>
-                                  {rule.dismissed_reason === 'expected_behavior' && '✓ Expected'}
-                                  {rule.dismissed_reason === 'will_fix_later' && '⏱ Noted'}
-                                  {rule.dismissed_reason === 'not_an_issue' && '✓ Not an Issue'}
-                                  {!rule.dismissed_reason && 'Dismissed'}
-                                </span>
-                              </Show>
-                              <Show when={rule.created_from === 'manual'}>
-                                <span class="px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                                  Manual
-                                </span>
-                              </Show>
-                            </div>
-                            <p class="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
-                              {rule.description || 'No description'}
-                            </p>
-                          </div>
-                          <button
-                            class="ml-3 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors flex-shrink-0"
-                            onClick={async () => {
-                              try {
-                                await deleteSuppressionRule(rule.id);
-                                notificationStore.success(rule.created_from === 'manual' ? 'Rule deleted' : 'Finding reactivated');
-                                fetchAiData();
-                              } catch (_err) {
-                                notificationStore.error('Failed to delete rule');
-                              }
-                            }}
-                            title={rule.created_from === 'manual' ? 'Delete this rule' : 'Reactivate this finding'}
-                          >
-                            {rule.created_from === 'manual' ? 'Delete' : 'Reactivate'}
-                          </button>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </Show>
-              </div>
-            </Show>
-
-            <Show when={!patrolRequiresLicense()}>
-              {/* Patrol Check History */}
-              <div class="mt-6">
-                <div class="flex items-center justify-between">
-                  <button
-                    class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                    onClick={() => setShowRunHistory(!showRunHistory())}
-                  >
-                    <svg
-                      class={`w-4 h-4 transition-transform ${showRunHistory() ? 'rotate-90' : ''}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                    Patrol Check History ({filteredPatrolHistory().length} runs)
-                    <Show when={patrolRunHistory().length > 0 && patrolRunHistory()[0].status !== 'healthy'}>
-                      <span class="ml-1 px-1.5 py-0.5 text-[10px] bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 rounded">Issues Found</span>
-                    </Show>
-                  </button>
-
-                  {/* Next Patrol Timer */}
-                  <Show when={nextPatrolIn()}>
-                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                      Next patrol in <span class="font-mono font-medium text-purple-600 dark:text-purple-400">{nextPatrolIn()}</span>
-                    </span>
-                  </Show>
-                </div>
-
-                <Show when={showRunHistory()}>
-                  <div class="mt-3">
-                    {/* Time Filter + Mini Health Chart */}
-                    <div class="flex flex-wrap items-center gap-3 mb-3">
-                      <div class="flex gap-1">
-                        <button
-                          class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === '24h' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                          onClick={() => setHistoryTimeFilter('24h')}
-                        >
-                          24h
-                        </button>
-                        <button
-                          class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === '7d' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                          onClick={() => setHistoryTimeFilter('7d')}
-                        >
-                          7d
-                        </button>
-                        <button
-                          class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === 'all' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                          onClick={() => setHistoryTimeFilter('all')}
-                        >
-                          All
-                        </button>
-                      </div>
-
-                      {/* Mini Health Chart */}
-                      <Show when={filteredPatrolHistory().length > 0}>
-                        <div class="flex items-center gap-0.5 h-4">
-                          <For each={filteredPatrolHistory().slice(0, 20).reverse()}>
-                            {(run) => (
-                              <div
-                                class={`w-1.5 h-full rounded-sm transition-all hover:opacity-75 ${run.status === 'healthy' ? 'bg-green-400 dark:bg-green-500' :
-                                  run.status === 'critical' || run.status === 'error' ? 'bg-red-400 dark:bg-red-500' :
-                                    'bg-yellow-400 dark:bg-yellow-500'
-                                  }`}
-                                title={`${formatTimestamp(run.completed_at)}: ${run.findings_summary}`}
-                              />
-                            )}
-                          </For>
-                          <span class="ml-1.5 text-[10px] text-gray-400">← newest</span>
-                        </div>
+                  <Show when={expandedIncidents().has(alert.id)}>
+                    <div class="mt-3 border-t border-gray-200 dark:border-gray-700 pt-3">
+                      <Show when={incidentLoading()[alert.id]}>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Loading timeline...</p>
                       </Show>
-                    </div>
-
-                    <Show
-                      when={filteredPatrolHistory().length > 0}
-                      fallback={
-                        <p class="text-sm text-gray-500 dark:text-gray-400 italic py-4">No patrol runs in selected time range.</p>
-                      }
-                    >
-                      <div class="border border-gray-200 dark:border-gray-700 rounded overflow-x-auto">
-                        <table class="w-full min-w-[380px] sm:min-w-[600px] text-[11px] sm:text-sm">
-                          <thead>
-                            <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                              <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-4"></th>
-                              <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-24 sm:w-32">When</th>
-                              <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Result</th>
-                              <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider w-16 sm:w-20">Resources</th>
-                              <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider w-16 sm:w-20">Duration</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {/* Show "Currently Running" row when patrol is in progress */}
-                            <Show when={patrolStatus()?.running}>
-                              <tr
-                                class="border-b border-gray-200 dark:border-gray-600 bg-purple-50 dark:bg-purple-900/20 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30"
-                                onClick={() => setExpandedLiveStream(!expandedLiveStream())}
-                              >
-                                <td class="p-1.5 px-2 text-purple-500">
-                                  <svg class={`w-3 h-3 transition-transform ${expandedLiveStream() ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </td>
-                                <td class="p-1.5 px-2 text-purple-600 dark:text-purple-400 font-mono whitespace-nowrap">
-                                  <div class="flex items-center gap-1.5">
-                                    <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                    </svg>
-                                    Now
-                                  </div>
-                                </td>
-                                <td class="p-1.5 px-2 text-center">
-                                  <span class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
-                                    Running
+                      <Show when={!incidentLoading()[alert.id]}>
+                        <Show when={incidentTimelines()[alert.id]}>
+                          {(timeline) => (
+                            <div class="space-y-3">
+                              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                                <span class="font-medium text-gray-700 dark:text-gray-200">Incident</span>
+                                <span>{timeline().status}</span>
+                                <Show when={timeline().acknowledged}>
+                                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                    acknowledged
                                   </span>
-                                </td>
-                                <td class="p-1.5 px-2 text-center" colspan="3">
-                                  <span class="text-xs text-purple-600 dark:text-purple-400">
-                                    {expandedLiveStream() ? 'Click to collapse' : 'Click to view live AI analysis'}
-                                  </span>
-                                </td>
-                              </tr>
-                              {/* Expanded Live Stream Row */}
-                              <Show when={expandedLiveStream()}>
-                                <tr class="bg-purple-50 dark:bg-purple-900/10 border-b border-gray-200 dark:border-gray-600">
-                                  <td colspan="5" class="p-3">
-                                    <div class="flex items-center justify-between mb-3">
-                                      <span class="text-[10px] text-purple-500 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
-                                        <svg class="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                        </svg>
-                                        Live AI Analysis
-                                      </span>
-                                      <span class="text-[9px] text-purple-400 dark:text-purple-500">
-                                        Streaming in real-time...
-                                      </span>
-                                    </div>
-                                    {/* Sequential blocks display - like AI chat */}
-                                    <div class="space-y-2 max-h-80 overflow-y-auto">
-                                      {/* Rendered blocks */}
-                                      <For each={liveStreamBlocks()}>
-                                        {(block) => (
-                                          <Show
-                                            when={block.type === 'phase'}
-                                            fallback={
-                                              /* Thinking block */
-                                              <div class="px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded-lg border-l-2 border-blue-400 whitespace-pre-wrap font-mono leading-relaxed">
-                                                {block.text.length > 800 ? block.text.substring(0, 800) + '...' : block.text}
-                                              </div>
-                                            }
-                                          >
-                                            {/* Phase marker */}
-                                            <div class="flex items-center gap-2 px-2 py-1">
-                                              <Show
-                                                when={block.text === 'Analysis complete'}
-                                                fallback={
-                                                  <svg class="w-3 h-3 animate-spin text-purple-500" viewBox="0 0 24 24" fill="none">
-                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                                  </svg>
-                                                }
-                                              >
-                                                <svg class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                                </svg>
-                                              </Show>
-                                              <span class="text-[10px] font-medium text-purple-600 dark:text-purple-400">
-                                                {block.text}
-                                              </span>
-                                            </div>
-                                          </Show>
-                                        )}
-                                      </For>
-                                      {/* Currently streaming content */}
-                                      <Show when={currentThinking()}>
-                                        <div class="px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded-lg border-l-2 border-blue-400 whitespace-pre-wrap font-mono leading-relaxed">
-                                          {currentThinking().length > 500 ? currentThinking().substring(0, 500) + '...' : currentThinking()}
-                                          <span class="inline-block w-1.5 h-3 bg-blue-500 ml-0.5 animate-pulse" />
-                                        </div>
-                                      </Show>
-                                      {/* Empty state */}
-                                      <Show when={liveStreamBlocks().length === 0 && !currentThinking()}>
-                                        <div class="flex items-center gap-2 px-2 py-3 text-xs text-gray-500 dark:text-gray-400">
-                                          <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                          </svg>
-                                          <span class="italic">Waiting for AI response...</span>
-                                        </div>
-                                      </Show>
-                                    </div>
-                                  </td>
-                                </tr>
-                              </Show>
-                            </Show>
-                            <For each={filteredPatrolHistory()}>
-                              {(run) => {
-                                const statusStyles = {
-                                  healthy: 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
-                                  issues_found: 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300',
-                                  critical: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
-                                  error: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
-                                };
-                                const statusStyle = statusStyles[run.status] || statusStyles.healthy;
-                                const hasDetails = run.finding_ids && run.finding_ids.length > 0;
-
+                                </Show>
+                                <Show when={timeline().openedAt}>
+                                  <span>opened {new Date(timeline().openedAt).toLocaleString()}</span>
+                                </Show>
+                                <Show when={timeline().closedAt}>
+                                  <span>closed {new Date(timeline().closedAt as string).toLocaleString()}</span>
+                                </Show>
+                              </div>
+                              {(() => {
+                                const events = timeline().events || [];
+                                const filteredEvents = filterIncidentEvents(events, incidentEventFilters());
                                 return (
                                   <>
-                                    <tr
-                                      class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${hasDetails ? 'cursor-pointer' : ''}`}
-                                      onClick={() => hasDetails && setExpandedRunId(expandedRunId() === run.id ? null : run.id)}
-                                    >
-                                      <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-gray-400">
-                                        <Show when={hasDetails}>
-                                          <svg class={`w-3 h-3 transition-transform ${expandedRunId() === run.id ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                          </svg>
-                                        </Show>
-                                      </td>
-                                      <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
-                                        {formatTimestamp(run.completed_at)}
-                                      </td>
-                                      <td class="p-1 sm:p-1.5 px-1 sm:px-2">
-                                        <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusStyle}`}>
-                                          {run.findings_summary}
-                                        </span>
-                                      </td>
-                                      <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-gray-700 dark:text-gray-300">
-                                        {run.resources_checked}
-                                      </td>
-                                      <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-gray-500 dark:text-gray-400 font-mono">
-                                        {(() => {
-                                          const totalSeconds = Math.round(run.duration_ms / 1000000000);
-                                          if (totalSeconds < 60) {
-                                            return `${totalSeconds}s`;
-                                          }
-                                          const minutes = Math.floor(totalSeconds / 60);
-                                          const seconds = totalSeconds % 60;
-                                          return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
-                                        })()}
-                                      </td>
-                                    </tr>
-                                    {/* Expanded Details Row */}
-                                    <Show when={expandedRunId() === run.id}>
-                                      <tr class="bg-gray-50 dark:bg-gray-800/50">
-                                        <td colspan="5" class="p-4">
-                                          {(() => {
-                                            const findingsMap = allFindingsMap();
-
-                                            // Categorize ALL findings from this run (not just warning+)
-                                            const criticalFindings: Finding[] = [];
-                                            const warningFindings: Finding[] = [];
-                                            const infoFindings: Finding[] = [];
-                                            const resolvedFindings: Finding[] = [];
-
-                                            (run.finding_ids || []).forEach(id => {
-                                              const finding = findingsMap.get(id);
-                                              if (finding) {
-                                                if (finding.resolved_at) {
-                                                  resolvedFindings.push(finding);
-                                                } else {
-                                                  switch (finding.severity) {
-                                                    case 'critical':
-                                                      criticalFindings.push(finding);
-                                                      break;
-                                                    case 'warning':
-                                                      warningFindings.push(finding);
-                                                      break;
-                                                    default:
-                                                      infoFindings.push(finding);
-                                                  }
-                                                }
-                                              }
-                                            });
-
-                                            const hasActionableFindings = criticalFindings.length > 0 || warningFindings.length > 0;
-                                            const hasAnyFindings = hasActionableFindings || infoFindings.length > 0 || resolvedFindings.length > 0;
-
-                                            return (
-                                              <div class="space-y-2.5">
-                                                {/* Resource Breakdown & Stats Row */}
-                                                <div class="flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                  <div class="flex items-center gap-1.5">
-                                                    <svg class="w-3.5 h-3.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-                                                    </svg>
-                                                    <span class="font-medium">{run.nodes_checked || 0}</span> nodes
-                                                  </div>
-                                                  <Show when={run.guests_checked > 0}>
-                                                    <div class="flex items-center gap-1.5">
-                                                      <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                                                      </svg>
-                                                      <span class="font-medium">{run.guests_checked}</span> VMs/CTs
-                                                    </div>
-                                                  </Show>
-                                                  <Show when={run.docker_checked > 0}>
-                                                    <div class="flex items-center gap-1.5">
-                                                      <svg class="w-3.5 h-3.5 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                                      </svg>
-                                                      <span class="font-medium">{run.docker_checked}</span> Docker
-                                                    </div>
-                                                  </Show>
-                                                  <Show when={run.storage_checked > 0}>
-                                                    <div class="flex items-center gap-1.5">
-                                                      <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                                                      </svg>
-                                                      <span class="font-medium">{run.storage_checked}</span> storage
-                                                    </div>
-                                                  </Show>
-                                                  <Show when={run.hosts_checked > 0}>
-                                                    <div class="flex items-center gap-1.5">
-                                                      <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                                      </svg>
-                                                      <span class="font-medium">{run.hosts_checked}</span> hosts
-                                                    </div>
-                                                  </Show>
-                                                  {/* Token usage for transparency */}
-                                                  <Show when={run.output_tokens}>
-                                                    <div class="flex items-center gap-1.5 ml-auto text-gray-400 dark:text-gray-500">
-                                                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                                      </svg>
-                                                      <span>{((run.input_tokens || 0) / 1000).toFixed(0)}k in / {((run.output_tokens || 0) / 1000).toFixed(1)}k out tokens</span>
-                                                    </div>
-                                                  </Show>
-                                                </div>
-
-                                                {/* Critical & Warning Findings - Always show prominently */}
-                                                <Show when={criticalFindings.length > 0 || warningFindings.length > 0}>
-                                                  <div class="space-y-1.5">
-                                                    <span class="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-500 uppercase tracking-wider font-bold">
-                                                      Findings Requiring Attention
-                                                    </span>
-                                                    <div class="space-y-1">
-                                                      <For each={[...criticalFindings, ...warningFindings]}>
-                                                        {(finding) => (
-                                                          <div class="flex items-start gap-2 text-xs p-1.5 sm:p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                                                            <span class={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${finding.severity === 'critical'
-                                                              ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                                              : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                                              }`}>
-                                                              {finding.severity}
-                                                            </span>
-                                                            <div class="flex-1 min-w-0">
-                                                              <div class="font-medium text-gray-800 dark:text-gray-200">{finding.title}</div>
-                                                              <div class="text-gray-500 dark:text-gray-400 mt-0.5">
-                                                                {finding.resource_name}
-                                                                <Show when={finding.description}>
-                                                                  <span class="mx-1">·</span>
-                                                                  <span class="text-gray-400 dark:text-gray-500">{finding.description.substring(0, 200)}{finding.description.length > 200 ? '...' : ''}</span>
-                                                                </Show>
-                                                              </div>
-                                                            </div>
-                                                          </div>
-                                                        )}
-                                                      </For>
-                                                    </div>
-                                                  </div>
-                                                </Show>
-
-                                                {/* Info/Watch Findings - Show with lower emphasis */}
-                                                <Show when={infoFindings.length > 0}>
-                                                  <div class="space-y-2">
-                                                    <span class="text-[10px] text-blue-600 dark:text-blue-400 uppercase tracking-wider font-medium flex items-center gap-1">
-                                                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                      </svg>
-                                                      Observations ({infoFindings.length})
-                                                    </span>
-                                                    <div class="space-y-1">
-                                                      <For each={infoFindings}>
-                                                        {(finding) => (
-                                                          <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 py-1">
-                                                            <span class="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
-                                                              {finding.severity}
-                                                            </span>
-                                                            <span>{finding.title}</span>
-                                                            <span class="text-gray-400 dark:text-gray-500">on {finding.resource_name}</span>
-                                                          </div>
-                                                        )}
-                                                      </For>
-                                                    </div>
-                                                  </div>
-                                                </Show>
-
-                                                {/* Resolved findings */}
-                                                <Show when={resolvedFindings.length > 0}>
-                                                  <div class="space-y-2">
-                                                    <span class="text-[10px] text-green-600 dark:text-green-400 uppercase tracking-wider font-medium flex items-center gap-1">
-                                                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                                      </svg>
-                                                      Resolved Since Last Patrol ({resolvedFindings.length})
-                                                    </span>
-                                                    <div class="space-y-1">
-                                                      <For each={resolvedFindings}>
-                                                        {(finding) => (
-                                                          <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 py-1">
-                                                            <span class="px-1.5 py-0.5 rounded text-[10px] bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400">
-                                                              ✓ fixed
-                                                            </span>
-                                                            <span class="line-through opacity-70">{finding.title}</span>
-                                                            <span class="opacity-50">on {finding.resource_name}</span>
-                                                          </div>
-                                                        )}
-                                                      </For>
-                                                    </div>
-                                                  </div>
-                                                </Show>
-
-                                                {/* No findings case - show AI summary */}
-                                                <Show when={!hasAnyFindings}>
-                                                  <div class="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                    </svg>
-                                                    <span class="font-medium">All clear!</span>
-                                                    <span class="text-gray-500 dark:text-gray-400">No issues detected in this patrol run.</span>
-                                                  </div>
-                                                </Show>
-
-                                                {/* AI Analysis Summary - Collapsible for long content */}
-                                                <Show when={run.ai_analysis}>
-                                                  {(() => {
-                                                    const [showFullAnalysis, setShowFullAnalysis] = createSignal(false);
-                                                    const analysis = run.ai_analysis || '';
-                                                    // Extract summary (first paragraph or first 300 chars)
-                                                    const summaryMatch = analysis.match(/^([^]*?)(?:\n\n|\[FINDING\]|$)/);
-                                                    const summary = summaryMatch ? summaryMatch[1].trim() : analysis.substring(0, 300);
-                                                    const hasMore = analysis.length > summary.length + 50;
-
-                                                    return (
-                                                      <div class="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
-                                                        <div class="flex items-center justify-between mb-2">
-                                                          <span class="text-[10px] text-purple-600 dark:text-purple-400 uppercase tracking-wider font-medium flex items-center gap-1">
-                                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                                            </svg>
-                                                            AI Analysis
-                                                          </span>
-                                                          <Show when={hasMore}>
-                                                            <button
-                                                              class="text-[10px] text-purple-600 dark:text-purple-400 hover:underline"
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setShowFullAnalysis(!showFullAnalysis());
-                                                              }}
-                                                            >
-                                                              {showFullAnalysis() ? 'Show less' : 'Show full analysis'}
-                                                            </button>
-                                                          </Show>
-                                                        </div>
-                                                        <div class={`text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap ${showFullAnalysis() ? 'max-h-96 overflow-y-auto' : ''}`}>
-                                                          {showFullAnalysis() ? analysis.replace(/\[FINDING\][\s\S]*?\[\/FINDING\]/g, '').trim() : summary}
-                                                          <Show when={hasMore && !showFullAnalysis()}>
-                                                            <span class="text-gray-400">...</span>
-                                                          </Show>
-                                                        </div>
-                                                      </div>
-                                                    );
-                                                  })()}
-                                                </Show>
+                                    <Show when={events.length > 0}>
+                                      <IncidentEventFilters
+                                        filters={incidentEventFilters}
+                                        setFilters={setIncidentEventFilters}
+                                      />
+                                    </Show>
+                                    <Show when={filteredEvents.length > 0}>
+                                      <div class="space-y-2">
+                                        <For each={filteredEvents}>
+                                          {(event) => (
+                                            <div class="rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-2">
+                                              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                                                <span class="font-medium text-gray-800 dark:text-gray-200">
+                                                  {event.summary}
+                                                </span>
+                                                <span>{new Date(event.timestamp).toLocaleString()}</span>
                                               </div>
-                                            );
-                                          })()}
-                                        </td>
-                                      </tr>
+                                              <Show when={event.details && (event.details as { note?: string }).note}>
+                                                <p class="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                  {(event.details as { note?: string }).note}
+                                                </p>
+                                              </Show>
+                                              <Show when={event.details && (event.details as { command?: string }).command}>
+                                                <p class="text-xs text-gray-700 dark:text-gray-300 mt-1 font-mono">
+                                                  {(event.details as { command?: string }).command}
+                                                </p>
+                                              </Show>
+                                              <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
+                                                <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                                  {(event.details as { output_excerpt?: string }).output_excerpt}
+                                                </p>
+                                              </Show>
+                                            </div>
+                                          )}
+                                        </For>
+                                      </div>
+                                    </Show>
+                                    <Show when={events.length > 0 && filteredEvents.length === 0}>
+                                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                                        No timeline events match the selected filters.
+                                      </p>
+                                    </Show>
+                                    <Show when={events.length === 0}>
+                                      <p class="text-xs text-gray-500 dark:text-gray-400">No timeline events yet.</p>
                                     </Show>
                                   </>
                                 );
-                              }}
-                            </For>
-                          </tbody>
-                        </table>
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
-              </div>
-            </Show>
-          </div>
-        </Show >
-
-        {/* Active Alerts - show when alerts tab selected OR when patrol is disabled AND no legacy findings (no sub-tabs) */}
-        < Show when={overviewSubTab() === 'active-alerts' || (!patrolStatus()?.enabled && aiFindings().length === 0)
-        }>
-          <div>
-            <SectionHeader title="Active Alerts" size="md" class="mb-3" />
-            <Show when={showAIAlertsUpgrade()}>
-              <div class="mb-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
-                <p class="font-medium">Pulse alert investigation requires Pulse Pro</p>
-                <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                  Upgrade to unlock one-click AI analysis for active alerts.
-                </p>
-                <a
-                  class={`inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 ${props.alertsDisabled()
-                    ? 'pointer-events-none opacity-50 text-gray-400 dark:text-gray-500'
-                    : 'hover:underline'
-                    }`}
-                  href={props.alertsDisabled() ? undefined : aiAlertsUpgradeURL()}
-                  aria-disabled={props.alertsDisabled()}
-                  tabIndex={props.alertsDisabled() ? -1 : undefined}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View Pulse Pro plans
-                </a>
-              </div>
-            </Show>
-            <Show
-              when={Object.keys(props.activeAlerts).length > 0}
-              fallback={
-                <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                  <div class="flex justify-center mb-3">
-                    <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
-                    </svg>
-                  </div>
-                  <p class="text-sm">No active alerts</p>
-                  <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
-                </div>
-              }
-            >
-              <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
-                <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
-                  <Show when={alertStats().acknowledged > 0}>
-                    <button
-                      onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
-                      class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                    >
-                      {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
-                    </button>
-                  </Show>
-                  <Show when={alertStats().active > 0}>
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
-                      disabled={bulkAckProcessing()}
-                      onClick={async () => {
-                        if (bulkAckProcessing()) return;
-                        const pending = unacknowledgedAlerts();
-                        if (pending.length === 0) {
-                          return;
-                        }
-                        setBulkAckProcessing(true);
-                        try {
-                          const result = await AlertsAPI.bulkAcknowledge(pending.map((alert) => alert.id));
-                          const successes = result.results.filter((r) => r.success);
-                          const failures = result.results.filter((r) => !r.success);
-
-                          successes.forEach((res) => {
-                            props.updateAlert(res.alertId, {
-                              acknowledged: true,
-                              ackTime: new Date().toISOString(),
-                            });
-                          });
-
-                          if (successes.length > 0) {
-                            notificationStore.success(
-                              `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
-                            );
-                          }
-
-                          if (failures.length > 0) {
-                            notificationStore.error(
-                              `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
-                            );
-                          }
-                        } catch (error) {
-                          logger.error('Bulk acknowledge failed', error);
-                          notificationStore.error('Failed to acknowledge alerts');
-                        } finally {
-                          setBulkAckProcessing(false);
-                        }
-                      }}
-                    >
-                      {bulkAckProcessing()
-                        ? 'Acknowledging…'
-                        : `Acknowledge all (${alertStats().active})`}
-                    </button>
-                  </Show>
-                </div>
-              </Show>
-              <div class="space-y-2">
-                <Show when={filteredAlerts().length === 0}>
-                  <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                    {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
-                  </div>
-                </Show>
-                <For each={filteredAlerts()}>
-                  {(alert) => (
-                    <div
-                      class={`border rounded-lg p-3 sm:p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
-                        } ${alert.acknowledged
-                          ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'
-                          : alert.level === 'critical'
-                            ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
-                            : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
-                        }`}
-                    >
-                      <div class="flex flex-col sm:flex-row sm:items-start">
-                        <div class="flex items-start flex-1">
-                          {/* Status icon */}
-                          <div
-                            class={`mr-3 mt-0.5 transition-all ${alert.acknowledged
-                              ? 'text-green-600 dark:text-green-400'
-                              : alert.level === 'critical'
-                                ? 'text-red-600 dark:text-red-400'
-                                : 'text-yellow-600 dark:text-yellow-400'
-                              }`}
-                          >
-                            {alert.acknowledged ? (
-                              // Checkmark for acknowledged
-                              <svg
-                                class="w-5 h-5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              })()}
+                              <div class="flex flex-col gap-2">
+                                <textarea
+                                  class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-2 text-xs text-gray-800 dark:text-gray-200"
+                                  rows={2}
+                                  placeholder="Add a note for this incident..."
+                                  value={incidentNoteDrafts()[alert.id] || ''}
+                                  onInput={(e) => {
+                                    const value = e.currentTarget.value;
+                                    setIncidentNoteDrafts((prev) => ({ ...prev, [alert.id]: value }));
+                                  }}
                                 />
-                              </svg>
-                            ) : (
-                              // Warning/Alert icon
-                              <svg
-                                class="w-5 h-5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                                />
-                              </svg>
-                            )}
-                          </div>
-                          <div class="flex-1 min-w-0">
-                            <div class="flex flex-wrap items-center gap-2">
-                              <span
-                                class={`text-sm font-medium truncate ${alert.level === 'critical'
-                                  ? 'text-red-700 dark:text-red-400'
-                                  : 'text-yellow-700 dark:text-yellow-400'
-                                  }`}
-                              >
-                                {alert.resourceName}
-                              </span>
-                              <span class="text-xs text-gray-600 dark:text-gray-400">
-                                ({alert.type})
-                              </span>
-                              <Show when={alert.node}>
-                                <span class="text-xs text-gray-500 dark:text-gray-500">
-                                  on {alert.node}
-                                </span>
-                              </Show>
-                              <Show when={alert.acknowledged}>
-                                <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
-                                  Acknowledged
-                                </span>
-                              </Show>
-                            </div>
-                            <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words">
-                              {alert.message}
-                            </p>
-                            <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                              Started: {new Date(alert.startTime).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
-                          <button
-                            class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
-                              ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                              : 'bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
-                              }`}
-                            disabled={processingAlerts().has(alert.id)}
-                            onClick={async (e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-
-                              // Prevent double-clicks
-                              if (processingAlerts().has(alert.id)) return;
-
-                              setProcessingAlerts((prev) => new Set(prev).add(alert.id));
-
-                              // Store current state to avoid race conditions
-                              const wasAcknowledged = alert.acknowledged;
-
-                              try {
-                                if (wasAcknowledged) {
-                                  // Call API first, only update local state if successful
-                                  await AlertsAPI.unacknowledge(alert.id);
-                                  // Only update local state after successful API call
-                                  props.updateAlert(alert.id, {
-                                    acknowledged: false,
-                                    ackTime: undefined,
-                                    ackUser: undefined,
-                                  });
-                                  notificationStore.success('Alert restored');
-                                } else {
-                                  // Call API first, only update local state if successful
-                                  await AlertsAPI.acknowledge(alert.id);
-                                  // Only update local state after successful API call
-                                  props.updateAlert(alert.id, {
-                                    acknowledged: true,
-                                    ackTime: new Date().toISOString(),
-                                  });
-                                  notificationStore.success('Alert acknowledged');
-                                }
-                              } catch (err) {
-                                logger.error(
-                                  `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
-                                  err,
-                                );
-                                notificationStore.error(
-                                  `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
-                                );
-                                // Don't update local state on error - let WebSocket keep the correct state
-                              } finally {
-                                // Keep button disabled for longer to prevent race conditions with WebSocket updates
-                                setTimeout(() => {
-                                  setProcessingAlerts((prev) => {
-                                    const next = new Set(prev);
-                                    next.delete(alert.id);
-                                    return next;
-                                  });
-                                }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
-                              }
-                            }}
-                          >
-                            {processingAlerts().has(alert.id)
-                              ? 'Processing...'
-                              : alert.acknowledged
-                                ? 'Unacknowledge'
-                                : 'Acknowledge'}
-                          </button>
-                          <button
-                            class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
-                            onClick={() => {
-                              void toggleIncidentTimeline(alert.id, alert.startTime);
-                            }}
-                          >
-                            {expandedIncidents().has(alert.id) ? 'Hide Timeline' : 'Timeline'}
-                          </button>
-                          <InvestigateAlertButton
-                            alert={alert}
-                            variant="text"
-                            size="sm"
-                            licenseLocked={!hasAIAlertsFeature() && !licenseLoading()}
-                          />
-                        </div>
-                      </div>
-                      <Show when={expandedIncidents().has(alert.id)}>
-                        <div class="mt-3 border-t border-gray-200 dark:border-gray-700 pt-3">
-                          <Show when={incidentLoading()[alert.id]}>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">Loading timeline...</p>
-                          </Show>
-                          <Show when={!incidentLoading()[alert.id]}>
-                            <Show when={incidentTimelines()[alert.id]}>
-                              {(timeline) => (
-                                <div class="space-y-3">
-                                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                    <span class="font-medium text-gray-700 dark:text-gray-200">Incident</span>
-                                    <span>{timeline().status}</span>
-                                    <Show when={timeline().acknowledged}>
-                                      <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                        acknowledged
-                                      </span>
-                                    </Show>
-                                    <Show when={timeline().openedAt}>
-                                      <span>opened {new Date(timeline().openedAt).toLocaleString()}</span>
-                                    </Show>
-                                    <Show when={timeline().closedAt}>
-                                      <span>closed {new Date(timeline().closedAt as string).toLocaleString()}</span>
-                                    </Show>
-                                  </div>
-                                  {(() => {
-                                    const events = timeline().events || [];
-                                    const filteredEvents = filterIncidentEvents(events, incidentEventFilters());
-                                    return (
-                                      <>
-                                        <Show when={events.length > 0}>
-                                          <IncidentEventFilters
-                                            filters={incidentEventFilters}
-                                            setFilters={setIncidentEventFilters}
-                                          />
-                                        </Show>
-                                        <Show when={filteredEvents.length > 0}>
-                                          <div class="space-y-2">
-                                            <For each={filteredEvents}>
-                                              {(event) => (
-                                                <div class="rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-2">
-                                                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                    <span class="font-medium text-gray-800 dark:text-gray-200">
-                                                      {event.summary}
-                                                    </span>
-                                                    <span>{new Date(event.timestamp).toLocaleString()}</span>
-                                                  </div>
-                                                  <Show when={event.details && (event.details as { note?: string }).note}>
-                                                    <p class="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                                                      {(event.details as { note?: string }).note}
-                                                    </p>
-                                                  </Show>
-                                                  <Show when={event.details && (event.details as { command?: string }).command}>
-                                                    <p class="text-xs text-gray-700 dark:text-gray-300 mt-1 font-mono">
-                                                      {(event.details as { command?: string }).command}
-                                                    </p>
-                                                  </Show>
-                                                  <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                                      {(event.details as { output_excerpt?: string }).output_excerpt}
-                                                    </p>
-                                                  </Show>
-                                                </div>
-                                              )}
-                                            </For>
-                                          </div>
-                                        </Show>
-                                        <Show when={events.length > 0 && filteredEvents.length === 0}>
-                                          <p class="text-xs text-gray-500 dark:text-gray-400">
-                                            No timeline events match the selected filters.
-                                          </p>
-                                        </Show>
-                                        <Show when={events.length === 0}>
-                                          <p class="text-xs text-gray-500 dark:text-gray-400">No timeline events yet.</p>
-                                        </Show>
-                                      </>
-                                    );
-                                  })()}
-                                  <div class="flex flex-col gap-2">
-                                    <textarea
-                                      class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-2 text-xs text-gray-800 dark:text-gray-200"
-                                      rows={2}
-                                      placeholder="Add a note for this incident..."
-                                      value={incidentNoteDrafts()[alert.id] || ''}
-                                      onInput={(e) => {
-                                        const value = e.currentTarget.value;
-                                        setIncidentNoteDrafts((prev) => ({ ...prev, [alert.id]: value }));
-                                      }}
-                                    />
-                                    <div class="flex justify-end">
-                                      <button
-                                        class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        disabled={incidentNoteSaving().has(alert.id) || !(incidentNoteDrafts()[alert.id] || '').trim()}
-                                        onClick={() => {
-                                          void saveIncidentNote(alert.id, alert.startTime);
-                                        }}
-                                      >
-                                        {incidentNoteSaving().has(alert.id) ? 'Saving...' : 'Save Note'}
-                                      </button>
-                                    </div>
-                                  </div>
+                                <div class="flex justify-end">
+                                  <button
+                                    class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={incidentNoteSaving().has(alert.id) || !(incidentNoteDrafts()[alert.id] || '').trim()}
+                                    onClick={() => {
+                                      void saveIncidentNote(alert.id, alert.startTime);
+                                    }}
+                                  >
+                                    {incidentNoteSaving().has(alert.id) ? 'Saving...' : 'Save Note'}
+                                  </button>
                                 </div>
-                              )}
-                            </Show>
-                            <Show when={!incidentTimelines()[alert.id]}>
-                              <p class="text-xs text-gray-500 dark:text-gray-400">No incident timeline available.</p>
-                            </Show>
-                          </Show>
-                        </div>
+                              </div>
+                            </div>
+                          )}
+                        </Show>
+                        <Show when={!incidentTimelines()[alert.id]}>
+                          <p class="text-xs text-gray-500 dark:text-gray-400">No incident timeline available.</p>
+                        </Show>
                       </Show>
                     </div>
-                  )}
-                </For>
-              </div>
-            </Show>
+                  </Show>
+                </div>
+              )}
+            </For>
           </div>
-        </Show >
+        </Show>
       </div>
-    </div >
+    </div>
   );
 }
 
@@ -5789,15 +4330,11 @@ function ScheduleTab(props: ScheduleTabProps) {
   );
 }
 // History Tab - Comprehensive alert table
-function HistoryTab() {
+function HistoryTab(props: {
+  hasAIAlertsFeature: () => boolean;
+  licenseLoading: () => boolean;
+}) {
   const { state, activeAlerts } = useWebSocket();
-  const [licenseFeatures, setLicenseFeatures] = createSignal<LicenseFeatureStatus | null>(null);
-  const [licenseLoading, setLicenseLoading] = createSignal(false);
-  const hasAIAlertsFeature = createMemo(() => {
-    const status = licenseFeatures();
-    if (!status) return true;
-    return Boolean(status.features?.['ai_alerts']);
-  });
 
   // Filter states with localStorage persistence
   const [timeFilter, setTimeFilter] = usePersistentSignal<'24h' | '7d' | '30d' | 'all'>(
@@ -5814,16 +4351,8 @@ function HistoryTab() {
       deserialize: (raw) => (raw === 'warning' || raw === 'critical' ? raw : 'all'),
     },
   );
-  const [sourceFilter, setSourceFilter] = usePersistentSignal<'all' | 'alerts' | 'ai'>(
-    'alertHistorySourceFilter',
-    'all',
-    {
-      deserialize: (raw) => (raw === 'alerts' || raw === 'ai' ? raw : 'all'),
-    },
-  );
   const [searchTerm, setSearchTerm] = createSignal('');
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
-  const [aiFindingsHistory, setAiFindingsHistory] = createSignal<Finding[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
   const [resourceIncidentPanel, setResourceIncidentPanel] = createSignal<{ resourceId: string; resourceName: string } | null>(null);
@@ -5848,18 +4377,7 @@ function HistoryTab() {
     'en-US';
 
   onMount(() => {
-    void (async () => {
-      setLicenseLoading(true);
-      try {
-        const status = await LicenseAPI.getFeatures();
-        setLicenseFeatures(status);
-      } catch (err) {
-        logger.debug('Failed to load license status for AI alerts gating', err);
-        setLicenseFeatures(null);
-      } finally {
-        setLicenseLoading(false);
-      }
-    })();
+    // History data fetching
   });
 
   const buildHistoryParams = (range: string) => {
@@ -5895,18 +4413,12 @@ function HistoryTab() {
     setLoading(true);
 
     try {
-      // Fetch both alert history and AI findings history in parallel
+      // Fetch alert history
       const params = buildHistoryParams(range);
-      const startTimeStr = params.startTime;
-
-      const [alertHistoryData, aiFindingsData] = await Promise.all([
-        AlertsAPI.getHistory(params),
-        getFindingsHistory(startTimeStr),
-      ]);
+      const alertHistoryData = await AlertsAPI.getHistory(params);
 
       if (requestId === fetchRequestId) {
         setAlertHistory(alertHistoryData);
-        setAiFindingsHistory(aiFindingsData);
       }
     } catch (err) {
       if (requestId === fetchRequestId) {
@@ -6175,100 +4687,59 @@ function HistoryTab() {
     autoResolved?: boolean;
   }
 
-  // Prepare all history items (alerts + AI findings) based on source filter
+  // Prepare all history items from alerts
   const allHistoryData = createMemo(() => {
     const items: HistoryItem[] = [];
-    const currentSource = sourceFilter();
 
-    // Add alerts if not filtering to AI only
-    if (currentSource === 'all' || currentSource === 'alerts') {
-      // Add active alerts
-      Object.values(activeAlerts || {}).forEach((alert) => {
-        items.push({
-          id: alert.id,
-          source: 'alert',
-          status: 'active',
-          startTime: alert.startTime,
-          duration: formatDuration(alert.startTime),
-          resourceName: alert.resourceName,
-          resourceType: getResourceType(alert.resourceName, alert.metadata),
-          resourceId: alert.resourceId,
-          node: alert.node,
-          severity: alert.level,
-          level: alert.level,
-          type: alert.type,
-          message: alert.message,
-          title: alert.type,
-          description: alert.message,
-          acknowledged: false,
-        });
+    // Add active alerts
+    Object.values(activeAlerts || {}).forEach((alert) => {
+      items.push({
+        id: alert.id,
+        source: 'alert',
+        status: 'active',
+        startTime: alert.startTime,
+        duration: formatDuration(alert.startTime),
+        resourceName: alert.resourceName,
+        resourceType: getResourceType(alert.resourceName, alert.metadata),
+        resourceId: alert.resourceId,
+        node: alert.node,
+        severity: alert.level,
+        level: alert.level,
+        type: alert.type,
+        message: alert.message,
+        title: alert.type,
+        description: alert.message,
+        acknowledged: false,
       });
+    });
 
-      // Create a set of active alert IDs for quick lookup
-      const activeAlertIds = new Set(Object.keys(activeAlerts || {}));
+    // Create a set of active alert IDs for quick lookup
+    const activeAlertIds = new Set(Object.keys(activeAlerts || {}));
 
-      // Add historical alerts
-      alertHistory().forEach((alert) => {
-        if (activeAlertIds.has(alert.id)) return;
+    // Add historical alerts
+    alertHistory().forEach((alert) => {
+      if (activeAlertIds.has(alert.id)) return;
 
-        items.push({
-          id: alert.id,
-          source: 'alert',
-          status: alert.acknowledged ? 'acknowledged' : 'resolved',
-          startTime: alert.startTime,
-          endTime: alert.lastSeen,
-          duration: formatDuration(alert.startTime, alert.lastSeen),
-          resourceName: alert.resourceName,
-          resourceType: getResourceType(alert.resourceName, alert.metadata),
-          resourceId: alert.resourceId,
-          node: alert.node,
-          severity: alert.level,
-          level: alert.level,
-          type: alert.type,
-          message: alert.message,
-          title: alert.type,
-          description: alert.message,
-          acknowledged: alert.acknowledged,
-        });
+      items.push({
+        id: alert.id,
+        source: 'alert',
+        status: alert.acknowledged ? 'acknowledged' : 'resolved',
+        startTime: alert.startTime,
+        endTime: alert.lastSeen,
+        duration: formatDuration(alert.startTime, alert.lastSeen),
+        resourceName: alert.resourceName,
+        resourceType: getResourceType(alert.resourceName, alert.metadata),
+        resourceId: alert.resourceId,
+        node: alert.node,
+        severity: alert.level,
+        level: alert.level,
+        type: alert.type,
+        message: alert.message,
+        title: alert.type,
+        description: alert.message,
+        acknowledged: alert.acknowledged,
       });
-    }
-
-    // Add AI findings if not filtering to alerts only
-    if (currentSource === 'all' || currentSource === 'ai') {
-      aiFindingsHistory().forEach((finding) => {
-        const isSnoozed = finding.snoozed_until && new Date(finding.snoozed_until) > new Date();
-
-        let status = 'active';
-        if (finding.resolved_at) {
-          status = finding.auto_resolved ? 'auto-resolved' : 'resolved';
-        } else if (isSnoozed) {
-          status = 'snoozed';
-        } else if (finding.acknowledged_at) {
-          status = 'acknowledged';
-        }
-
-        items.push({
-          id: finding.id,
-          source: 'ai',
-          status,
-          startTime: finding.detected_at,
-          endTime: finding.resolved_at,
-          duration: formatDuration(finding.detected_at, finding.resolved_at),
-          resourceName: finding.resource_name,
-          resourceType: finding.resource_type,
-          resourceId: finding.resource_id,
-          node: finding.node,
-          severity: finding.severity,
-          level: finding.severity, // Map severity to level for compatibility
-          type: `AI: ${finding.title}`, // Prefix with AI to distinguish
-          message: finding.description,
-          title: finding.title,
-          description: finding.description,
-          acknowledged: !!finding.acknowledged_at,
-          autoResolved: finding.auto_resolved,
-        });
-      });
-    }
+    });
 
     return items;
   });
@@ -6277,18 +4748,10 @@ function HistoryTab() {
   const severityAndSearchFilteredItems = createMemo(() => {
     let filtered = allHistoryData();
 
-    // Filter by severity (map AI severity to alert levels for consistent filtering)
+    // Filter by severity
     if (severityFilter() !== 'all') {
       const sevFilter = severityFilter();
-      filtered = filtered.filter((item) => {
-        // For alerts, use level; for AI findings, map severity
-        if (item.source === 'alert') {
-          return item.severity === sevFilter;
-        } else {
-          // AI findings: map warning->warning, critical->critical
-          return item.severity === sevFilter;
-        }
-      });
+      filtered = filtered.filter((item) => item.severity === sevFilter);
     }
 
     if (searchTerm()) {
@@ -6913,16 +5376,6 @@ function HistoryTab() {
           <option value="warning">Warning Only</option>
         </select>
 
-        <select
-          value={sourceFilter()}
-          onChange={(e) => setSourceFilter(e.currentTarget.value as 'all' | 'alerts' | 'ai')}
-          class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-        >
-          <option value="all">All Sources</option>
-          <option value="alerts">Alerts Only</option>
-          <option value="ai">Pulse Insights Only</option>
-        </select>
-
         <div class="w-full sm:flex-1 sm:max-w-xs">
           <input
             ref={searchInputRef}
@@ -7197,7 +5650,7 @@ function HistoryTab() {
                                     const aiCount = group.alerts.filter(a => a.source === 'ai').length;
                                     const parts = [];
                                     if (alertCount > 0) parts.push(`${alertCount} alert${alertCount === 1 ? '' : 's'}`);
-                                    if (aiCount > 0) parts.push(`${aiCount} AI insight${aiCount === 1 ? '' : 's'}`);
+                                    if (aiCount > 0) parts.push(`${aiCount} patrol insight${aiCount === 1 ? '' : 's'}`);
                                     return parts.join(', ') || `${group.alerts.length} item${group.alerts.length === 1 ? '' : 's'}`;
                                   })()}
                                 </span>
@@ -7231,7 +5684,7 @@ function HistoryTab() {
                                           : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
                                           }`}
                                       >
-                                        {alert.source === 'ai' ? 'AI' : 'Alert'}
+                                        {alert.source === 'ai' ? 'Patrol' : 'Alert'}
                                       </span>
                                     </td>
 
@@ -7248,7 +5701,7 @@ function HistoryTab() {
                                           : alert.resourceType === 'CT'
                                             ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                                             : alert.resourceType === 'Node'
-                                              ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                                              ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
                                               : alert.resourceType === 'Storage'
                                                 ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
                                                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
@@ -7347,7 +5800,7 @@ function HistoryTab() {
                                             }}
                                             variant="icon"
                                             size="sm"
-                                            licenseLocked={!hasAIAlertsFeature() && !licenseLoading()}
+                                            licenseLocked={!props.hasAIAlertsFeature() && !props.licenseLoading()}
                                           />
                                         </Show>
                                       </div>

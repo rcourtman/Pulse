@@ -109,6 +109,9 @@ export interface BackupAlertConfig {
   // Dashboard indicator thresholds (separate from alert thresholds)
   freshHours?: number; // Backups newer than this show as green (default: 24)
   staleHours?: number; // Backups older than freshHours but newer than this show as amber (default: 72)
+  // Global backup alert filters
+  alertOrphaned?: boolean; // Alert on backups that do not match a known guest (default: true)
+  ignoreVMIDs?: string[]; // Skip alerts for matching VMIDs (supports prefix*)
 }
 
 export type ActivationState = 'pending_review' | 'active' | 'snoozed';

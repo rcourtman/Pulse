@@ -1222,6 +1222,110 @@ func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
 	}
 }
 
+func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := false
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   3,
+		CriticalDays:  5,
+		AlertOrphaned: &alertOrphaned,
+		IgnoreVMIDs:   []string{},
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-200-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     200,
+			Time:     now.Add(-6 * 24 * time.Hour),
+		},
+	}
+
+	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-age-") {
+			t.Fatalf("expected orphaned backup to be skipped, found alert %s", id)
+		}
+	}
+}
+
+func TestCheckBackupsIgnoresVMIDs(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   1,
+		CriticalDays:  2,
+		AlertOrphaned: &alertOrphaned,
+		IgnoreVMIDs:   []string{"10*"},
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-101-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     101,
+			Time:     now.Add(-3 * 24 * time.Hour),
+		},
+		{
+			ID:       "inst-node-200-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     200,
+			Time:     now.Add(-3 * 24 * time.Hour),
+		},
+	}
+
+	keyIgnored := BuildGuestKey("inst", "node", 101)
+	keyAllowed := BuildGuestKey("inst", "node", 200)
+	guestsByKey := map[string]GuestLookup{
+		keyIgnored: {Name: "ignored-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 101},
+		keyAllowed: {Name: "allowed-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 200},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"101": {guestsByKey[keyIgnored]},
+		"200": {guestsByKey[keyAllowed]},
+	}
+
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	_, ignoredExists := m.activeAlerts["backup-age-"+sanitizeAlertKey(keyIgnored)]
+	_, allowedExists := m.activeAlerts["backup-age-"+sanitizeAlertKey(keyAllowed)]
+	m.mu.RUnlock()
+
+	if ignoredExists {
+		t.Fatalf("expected backup alert for ignored VMID to be suppressed")
+	}
+	if !allowedExists {
+		t.Fatalf("expected backup alert for non-ignored VMID")
+	}
+}
+
 func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 	m := newTestManager(t)
 

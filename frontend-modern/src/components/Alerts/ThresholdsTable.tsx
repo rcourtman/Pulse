@@ -463,6 +463,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const [guestTagBlacklistInput, setGuestTagBlacklistInput] = createSignal(
     props.guestTagBlacklist().join('\n'),
   );
+  const [backupIgnoreInput, setBackupIgnoreInput] = createSignal(
+    (props.backupDefaults().ignoreVMIDs ?? []).join('\n'),
+  );
 
   createEffect(() => {
     const remote = props.ignoredGuestPrefixes();
@@ -494,6 +497,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     if (!isSynced) setGuestTagBlacklistInput(remote.join('\n'));
   });
 
+  createEffect(() => {
+    const remote = props.backupDefaults().ignoreVMIDs ?? [];
+    const local = backupIgnoreInput();
+    const normalizedLocal = normalizeDockerIgnoredInput(local);
+    const isSynced =
+      remote.length === normalizedLocal.length &&
+      remote.every((val, i) => val === normalizedLocal[i]);
+    if (!isSynced) setBackupIgnoreInput(remote.join('\n'));
+  });
+
   const handleIgnoredGuestChange = (value: string) => {
     setIgnoredGuestInput(value);
     const normalized = normalizeDockerIgnoredInput(value);
@@ -513,6 +526,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const normalized = normalizeDockerIgnoredInput(value);
     props.setGuestTagBlacklist(normalized);
     props.setHasUnsavedChanges(true);
+  };
+
+  const handleBackupIgnoreChange = (value: string) => {
+    setBackupIgnoreInput(value);
+    const normalized = normalizeDockerIgnoredInput(value);
+    updateBackupDefaults((prev) => ({
+      ...prev,
+      ignoreVMIDs: normalized,
+    }));
   };
 
   // Set up keyboard shortcuts
@@ -1303,6 +1325,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       criticalDays: DEFAULT_BACKUP_CRITICAL,
       freshHours: DEFAULT_BACKUP_FRESH_HOURS,
       staleHours: DEFAULT_BACKUP_STALE_HOURS,
+      alertOrphaned: true,
+      ignoreVMIDs: [],
     };
 
   const sanitizeBackupConfig = (config: BackupAlertConfig): BackupAlertConfig => {
@@ -1310,6 +1334,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     let critical = Math.max(0, Math.round(config.criticalDays ?? 0));
     let fresh = Math.max(0, Math.round(config.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS));
     let stale = Math.max(0, Math.round(config.staleHours ?? DEFAULT_BACKUP_STALE_HOURS));
+    const alertOrphaned = config.alertOrphaned ?? true;
+    const ignoreVMIDs = Array.from(
+      new Set(
+        (config.ignoreVMIDs ?? [])
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0),
+      ),
+    );
 
     if (critical > 0 && warning > critical) {
       warning = critical;
@@ -1329,6 +1361,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       criticalDays: critical,
       freshHours: fresh,
       staleHours: stale,
+      alertOrphaned,
+      ignoreVMIDs,
     };
   };
 
@@ -1384,6 +1418,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const backupOverridesCount = createMemo(() => {
     const backupCurrent = props.backupDefaults();
     const backupFactory = backupFactoryConfig();
+    const currentIgnore = backupCurrent.ignoreVMIDs ?? [];
+    const factoryIgnore = backupFactory.ignoreVMIDs ?? [];
+    const ignoreDiff =
+      currentIgnore.length !== factoryIgnore.length ||
+      currentIgnore.some((value, index) => value !== factoryIgnore[index]);
     return backupCurrent.enabled !== backupFactory.enabled ||
       (backupCurrent.warningDays ?? DEFAULT_BACKUP_WARNING) !==
       (backupFactory.warningDays ?? DEFAULT_BACKUP_WARNING) ||
@@ -1392,7 +1431,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       (backupCurrent.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) !==
       (backupFactory.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) ||
       (backupCurrent.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) !==
-      (backupFactory.staleHours ?? DEFAULT_BACKUP_STALE_HOURS)
+      (backupFactory.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) ||
+      (backupCurrent.alertOrphaned ?? true) !== (backupFactory.alertOrphaned ?? true) ||
+      ignoreDiff
       ? 1
       : 0;
   });
@@ -3055,6 +3096,52 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     }
                   }}
                 />
+                <Card padding="md" tone="glass" class="mt-6">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Orphaned backups</h3>
+                      <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                        Alert when backups exist for VMIDs that are no longer in inventory.
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={props.backupDefaults().alertOrphaned ?? true}
+                      onToggle={() =>
+                        updateBackupDefaults((prev) => ({
+                          ...prev,
+                          alertOrphaned: !(prev.alertOrphaned ?? true),
+                        }))
+                      }
+                      label={<span class="text-sm font-medium text-gray-900 dark:text-gray-100">Alerts</span>}
+                      description={
+                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                          Toggle orphaned VM/CT backup alerts
+                        </span>
+                      }
+                      size="sm"
+                    />
+                  </div>
+                  <div class="mt-4">
+                    <label class="text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                      Ignore VMIDs
+                    </label>
+                    <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                      One per line. Use a trailing * to match a prefix (example: 10*).
+                    </p>
+                    <textarea
+                      value={backupIgnoreInput()}
+                      onInput={(event) => handleBackupIgnoreChange(event.currentTarget.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.stopPropagation();
+                        }
+                      }}
+                      rows={5}
+                      class="mt-3 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+                      placeholder="100\n200\n10*"
+                    />
+                  </div>
+                </Card>
               </div>
             </CollapsibleSection>
           </Show>
