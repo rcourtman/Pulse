@@ -79,22 +79,6 @@ export interface AllMetricsHistoryResponse {
     source?: 'store' | 'memory' | 'live';
 }
 
-export interface MetricsStoreStats {
-    enabled: boolean;
-    dbPath?: string;
-    dbSize?: number;
-    rawCount?: number;
-    minuteCount?: number;
-    hourlyCount?: number;
-    dailyCount?: number;
-    totalWrites?: number;
-    bufferSize?: number;
-    lastFlush?: string;
-    lastRollup?: string;
-    lastRetention?: string;
-    error?: string;
-}
-
 export type TimeRange = '5m' | '15m' | '30m' | '1h' | '4h' | '12h' | '24h' | '7d';
 
 export class ChartsAPI {
@@ -106,20 +90,6 @@ export class ChartsAPI {
      */
     static async getCharts(range: TimeRange = '1h'): Promise<ChartsResponse> {
         const url = `${this.baseUrl}/charts?range=${range}`;
-        return apiFetchJSON(url);
-    }
-
-    /**
-     * Fetch storage-specific chart data
-     * @param rangeMinutes Range in minutes (default: 60)
-     */
-    static async getStorageCharts(rangeMinutes: number = 60): Promise<Record<string, {
-        usage?: MetricPoint[];
-        used?: MetricPoint[];
-        total?: MetricPoint[];
-        avail?: MetricPoint[];
-    }>> {
-        const url = `${this.baseUrl}/storage/charts?range=${rangeMinutes}`;
         return apiFetchJSON(url);
     }
 
@@ -146,11 +116,4 @@ export class ChartsAPI {
         return apiFetchJSON(url);
     }
 
-    /**
-     * Fetch statistics about the persistent metrics store
-     */
-    static async getMetricsStoreStats(): Promise<MetricsStoreStats> {
-        const url = `${this.baseUrl}/metrics-store/stats`;
-        return apiFetchJSON(url);
-    }
 }
