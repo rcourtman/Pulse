@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -424,8 +425,15 @@ func slicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for i, v := range a {
-		if v != b[i] {
+	if len(a) <= 1 {
+		return true
+	}
+	aSorted := append([]string(nil), a...)
+	bSorted := append([]string(nil), b...)
+	sort.Strings(aSorted)
+	sort.Strings(bSorted)
+	for i := range aSorted {
+		if aSorted[i] != bSorted[i] {
 			return false
 		}
 	}

@@ -148,11 +148,21 @@ export function AIIntelligence() {
     setIsTogglingPatrol(true);
     const newValue = !patrolEnabledLocal();
     try {
-      await apiFetchJSON('/api/settings/ai', {
+      const data = await apiFetchJSON<AISettings>('/api/settings/ai', {
         method: 'PUT',
         body: JSON.stringify({ patrol_enabled: newValue }),
       });
-      setPatrolEnabledLocal(newValue);
+      if (typeof data?.patrol_enabled === 'boolean') {
+        setPatrolEnabledLocal(data.patrol_enabled);
+      } else {
+        setPatrolEnabledLocal(newValue);
+      }
+      if (typeof data?.patrol_interval_minutes === 'number') {
+        setPatrolInterval(data.patrol_interval_minutes);
+      }
+      if (refetchPatrolStatus) {
+        refetchPatrolStatus();
+      }
     } catch (err) {
       console.error('Failed to toggle patrol:', err);
     } finally {
@@ -231,7 +241,7 @@ export function AIIntelligence() {
   }
 
   // Fetch patrol status to check license
-  const [patrolStatus] = createResource<PatrolStatus | null>(async () => {
+  const [patrolStatus, { refetch: refetchPatrolStatus }] = createResource<PatrolStatus | null>(async () => {
     try {
       return await getPatrolStatus();
     } catch {
@@ -309,6 +319,7 @@ export function AIIntelligence() {
       await Promise.all([
         aiIntelligenceStore.loadFindings(),
         aiIntelligenceStore.loadCircuitBreakerStatus(),
+        refetchPatrolStatus(),
       ]);
     } finally {
       setIsRefreshing(false);
