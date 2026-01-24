@@ -10,11 +10,11 @@ import (
 // DEPRECATED: Use NewForModel or NewForProvider for multi-provider support
 func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("AI config is nil")
+		return nil, fmt.Errorf("Pulse Assistant config is nil")
 	}
 
 	if !cfg.Enabled {
-		return nil, fmt.Errorf("AI is not enabled")
+		return nil, fmt.Errorf("Pulse Assistant is not enabled")
 	}
 
 	// Try multi-provider format first (uses per-provider API keys)
@@ -76,7 +76,7 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 // NewForProvider creates a Provider for a specific provider using multi-provider credentials
 func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("AI config is nil")
+		return nil, fmt.Errorf("Pulse Assistant config is nil")
 	}
 
 	// Get the configured timeout

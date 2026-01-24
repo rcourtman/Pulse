@@ -196,12 +196,18 @@ func (a *AlertTriggeredAnalyzer) analyzeResource(alert *alerts.Alert, resourceKe
 			Dur("duration", duration).
 			Msg("Alert-triggered AI analysis completed with findings")
 
-		// Add findings to the patrol service's findings store
+		// Add findings to the patrol service's findings store and trigger investigations
 		if a.patrolService != nil && a.patrolService.findings != nil {
 			for _, finding := range findings {
 				// Link finding to the triggering alert
 				finding.AlertID = alert.ID
-				a.patrolService.findings.Add(finding)
+				isNew := a.patrolService.findings.Add(finding)
+
+				// Trigger AI investigation for new warning/critical findings
+				// This is the key connection: alert fires → rule-based finding → AI investigates
+				if isNew {
+					a.patrolService.MaybeInvestigateFinding(finding)
+				}
 			}
 		}
 	} else {
@@ -213,9 +219,9 @@ func (a *AlertTriggeredAnalyzer) analyzeResource(alert *alerts.Alert, resourceKe
 	}
 
 	if a.patrolService != nil && a.patrolService.aiService != nil {
-		summary := "Alert-triggered AI analysis completed"
+		summary := "Alert-triggered Patrol analysis completed"
 		if len(findings) > 0 {
-			summary = fmt.Sprintf("Alert-triggered AI analysis found %d findings", len(findings))
+			summary = fmt.Sprintf("Alert-triggered Patrol analysis found %d findings", len(findings))
 		}
 		a.patrolService.aiService.RecordIncidentAnalysis(alert.ID, summary, map[string]interface{}{
 			"findings": len(findings),

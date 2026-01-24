@@ -2,7 +2,7 @@
  * AIStatusIndicator - Subtle header component showing Pulse patrol health and anomalies
  * 
  * Design: Minimal presence when healthy, highlighted when issues or anomalies detected.
- * Clicking navigates to the Alerts page where Pulse Insights are displayed.
+ * Clicking navigates to Pulse Patrol.
  */
 
 import { createResource, Show, createMemo, onCleanup } from 'solid-js';
@@ -129,7 +129,7 @@ export function AIStatusIndicator() {
             return 'Pulse: All systems healthy';
         }
 
-        return `Pulse Intelligence: ${parts.join(' | ')}`;
+        return `Pulse Patrol: ${parts.join(' | ')}`;
     });
 
 
@@ -140,8 +140,7 @@ export function AIStatusIndicator() {
     });
 
     const handleClick = () => {
-        // Navigate to Alerts page with Pulse Insights subtab selected
-        navigate('/alerts?subtab=ai-insights');
+        navigate('/ai');
     };
 
     // Combined total for badge
@@ -194,4 +193,3 @@ export function AIStatusIndicator() {
 }
 
 export default AIStatusIndicator;
-

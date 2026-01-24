@@ -386,7 +386,7 @@ func TestIncidentStore_RecordAnalysis_CommandDetails(t *testing.T) {
 	if timeline == nil {
 		t.Fatalf("expected timeline")
 	}
-	if len(timeline.Events) == 0 || timeline.Events[0].Summary != "AI analysis completed" {
+	if len(timeline.Events) == 0 || timeline.Events[0].Summary != "Pulse Patrol analysis completed" {
 		t.Fatalf("expected default analysis summary")
 	}
 

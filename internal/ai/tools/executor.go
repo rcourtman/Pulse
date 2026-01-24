@@ -130,6 +130,12 @@ type ExecutorConfig struct {
 	FindingsManager     FindingsManager
 	AgentProfileManager AgentProfileManager
 
+	// Optional providers - intelligence
+	IncidentRecorderProvider IncidentRecorderProvider
+	EventCorrelatorProvider  EventCorrelatorProvider
+	TopologyProvider         TopologyProvider
+	KnowledgeStoreProvider   KnowledgeStoreProvider
+
 	// Control settings
 	ControlLevel    ControlLevel
 	ProtectedGuests []string // VMIDs that AI cannot control
@@ -160,6 +166,12 @@ type PulseToolExecutor struct {
 	findingsManager     FindingsManager
 	agentProfileManager AgentProfileManager
 
+	// Intelligence providers
+	incidentRecorderProvider IncidentRecorderProvider
+	eventCorrelatorProvider  EventCorrelatorProvider
+	topologyProvider         TopologyProvider
+	knowledgeStoreProvider   KnowledgeStoreProvider
+
 	// Control settings
 	controlLevel    ControlLevel
 	protectedGuests []string
@@ -176,24 +188,28 @@ type PulseToolExecutor struct {
 // NewPulseToolExecutor creates a new Pulse tool executor with the given configuration
 func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 	e := &PulseToolExecutor{
-		stateProvider:       cfg.StateProvider,
-		policy:              cfg.Policy,
-		agentServer:         cfg.AgentServer,
-		metricsHistory:      cfg.MetricsHistory,
-		baselineProvider:    cfg.BaselineProvider,
-		patternProvider:     cfg.PatternProvider,
-		alertProvider:       cfg.AlertProvider,
-		findingsProvider:    cfg.FindingsProvider,
-		backupProvider:      cfg.BackupProvider,
-		storageProvider:     cfg.StorageProvider,
-		diskHealthProvider:  cfg.DiskHealthProvider,
-		updatesProvider:     cfg.UpdatesProvider,
-		metadataUpdater:     cfg.MetadataUpdater,
-		findingsManager:     cfg.FindingsManager,
-		agentProfileManager: cfg.AgentProfileManager,
-		controlLevel:        cfg.ControlLevel,
-		protectedGuests:     cfg.ProtectedGuests,
-		registry:            NewToolRegistry(),
+		stateProvider:            cfg.StateProvider,
+		policy:                   cfg.Policy,
+		agentServer:              cfg.AgentServer,
+		metricsHistory:           cfg.MetricsHistory,
+		baselineProvider:         cfg.BaselineProvider,
+		patternProvider:          cfg.PatternProvider,
+		alertProvider:            cfg.AlertProvider,
+		findingsProvider:         cfg.FindingsProvider,
+		backupProvider:           cfg.BackupProvider,
+		storageProvider:          cfg.StorageProvider,
+		diskHealthProvider:       cfg.DiskHealthProvider,
+		updatesProvider:          cfg.UpdatesProvider,
+		metadataUpdater:          cfg.MetadataUpdater,
+		findingsManager:          cfg.FindingsManager,
+		agentProfileManager:      cfg.AgentProfileManager,
+		incidentRecorderProvider: cfg.IncidentRecorderProvider,
+		eventCorrelatorProvider:  cfg.EventCorrelatorProvider,
+		topologyProvider:         cfg.TopologyProvider,
+		knowledgeStoreProvider:   cfg.KnowledgeStoreProvider,
+		controlLevel:             cfg.ControlLevel,
+		protectedGuests:          cfg.ProtectedGuests,
+		registry:                 NewToolRegistry(),
 	}
 
 	// Register all tools
@@ -281,6 +297,26 @@ func (e *PulseToolExecutor) SetUpdatesProvider(provider UpdatesProvider) {
 	e.updatesProvider = provider
 }
 
+// SetIncidentRecorderProvider sets the incident recorder provider
+func (e *PulseToolExecutor) SetIncidentRecorderProvider(provider IncidentRecorderProvider) {
+	e.incidentRecorderProvider = provider
+}
+
+// SetEventCorrelatorProvider sets the event correlator provider
+func (e *PulseToolExecutor) SetEventCorrelatorProvider(provider EventCorrelatorProvider) {
+	e.eventCorrelatorProvider = provider
+}
+
+// SetTopologyProvider sets the topology provider for relationship graphs
+func (e *PulseToolExecutor) SetTopologyProvider(provider TopologyProvider) {
+	e.topologyProvider = provider
+}
+
+// SetKnowledgeStoreProvider sets the knowledge store provider for notes
+func (e *PulseToolExecutor) SetKnowledgeStoreProvider(provider KnowledgeStoreProvider) {
+	e.knowledgeStoreProvider = provider
+}
+
 // ListTools returns the list of available tools
 func (e *PulseToolExecutor) ListTools() []Tool {
 	tools := e.registry.ListTools(e.controlLevel)
@@ -333,6 +369,14 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 		return e.updatesProvider != nil
 	case "pulse_update_docker_container":
 		return e.updatesProvider != nil && e.stateProvider != nil
+	case "pulse_get_incident_window":
+		return e.incidentRecorderProvider != nil
+	case "pulse_correlate_events":
+		return e.eventCorrelatorProvider != nil
+	case "pulse_get_relationship_graph":
+		return e.topologyProvider != nil
+	case "pulse_remember", "pulse_recall":
+		return e.knowledgeStoreProvider != nil
 	default:
 		return e.stateProvider != nil
 	}
@@ -367,6 +411,9 @@ func (e *PulseToolExecutor) registerTools() {
 
 	// Profile tools - read operations always available
 	e.registerProfileTools()
+
+	// Intelligence tools (incident analysis, knowledge management)
+	e.registerIntelligenceTools()
 
 	// Control tools (conditional on control level)
 	e.registerControlTools()

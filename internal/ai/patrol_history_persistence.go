@@ -30,11 +30,15 @@ func (a *PatrolHistoryPersistenceAdapter) SavePatrolRunHistory(runs []PatrolRunR
 	// Convert from ai.PatrolRunRecord to config.PatrolRunRecord
 	records := make([]config.PatrolRunRecord, len(runs))
 	for i, r := range runs {
+		durationMs := r.DurationMs
+		if durationMs == 0 && r.Duration > 0 {
+			durationMs = int64(r.Duration / time.Millisecond)
+		}
 		records[i] = config.PatrolRunRecord{
 			ID:                r.ID,
 			StartedAt:         r.StartedAt,
 			CompletedAt:       r.CompletedAt,
-			DurationMs:        int64(r.Duration / time.Millisecond), // Convert nanoseconds to milliseconds
+			DurationMs:        durationMs,
 			Type:              r.Type,
 			ResourcesChecked:  r.ResourcesChecked,
 			NodesChecked:      r.NodesChecked,
@@ -75,6 +79,7 @@ func (a *PatrolHistoryPersistenceAdapter) LoadPatrolRunHistory() ([]PatrolRunRec
 			StartedAt:         r.StartedAt,
 			CompletedAt:       r.CompletedAt,
 			Duration:          time.Duration(r.DurationMs) * time.Millisecond, // Convert milliseconds to nanoseconds
+			DurationMs:        r.DurationMs,
 			Type:              r.Type,
 			ResourcesChecked:  r.ResourcesChecked,
 			NodesChecked:      r.NodesChecked,
@@ -157,6 +162,13 @@ func (s *PatrolRunHistoryStore) SetPersistence(p PatrolHistoryPersistence) error
 
 // Add adds a new patrol run to the history
 func (s *PatrolRunHistoryStore) Add(run PatrolRunRecord) {
+	if run.DurationMs == 0 && run.Duration > 0 {
+		run.DurationMs = run.Duration.Milliseconds()
+	}
+	if run.Duration == 0 && run.DurationMs > 0 {
+		run.Duration = time.Duration(run.DurationMs) * time.Millisecond
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

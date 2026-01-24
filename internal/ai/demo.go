@@ -402,7 +402,7 @@ EVIDENCE: PermitRootLogin yes found in config
 
 	case strings.Contains(promptLower, "hello") || strings.Contains(promptLower, "hi") || strings.Contains(promptLower, "help"):
 		response = "## Hello! 👋\n\n" +
-			"I'm the **Pulse AI Assistant**, here to help you manage your Proxmox infrastructure.\n\n" +
+			"I'm the **Pulse Assistant**, here to help you manage your Proxmox infrastructure.\n\n" +
 			"### What I Can Help With\n" +
 			"- **Troubleshooting**: Diagnose disk, memory, CPU, and network issues\n" +
 			"- **Backups**: Review backup status and configure schedules\n" +
@@ -412,23 +412,23 @@ EVIDENCE: PermitRootLogin yes found in config
 			"- \"Why is my disk filling up?\"\n" +
 			"- \"Help me fix the backup failure on vm-102\"\n" +
 			"- \"Check memory usage on pve1\"\n\n" +
-			"*Note: This is a demo instance - command execution is disabled, but you can see how the AI analysis works!*"
+			"*Note: This is a demo instance - command execution is disabled, but you can see how Pulse Assistant analysis works!*"
 
 	default:
 		response = "## Analysis\n\n" +
-			"I can help you with that! In a production environment with AI configured, I would:\n\n" +
+			"I can help you with that! In a production environment with Pulse Assistant configured, I would:\n\n" +
 			"1. **Analyze** the current state of your infrastructure\n" +
 			"2. **Identify** potential issues or optimization opportunities\n" +
 			"3. **Recommend** specific actions with commands you can run\n" +
 			"4. **Execute** approved commands directly on your nodes\n\n" +
 			"### This Demo Shows\n" +
-			"- How AI-powered analysis works in Pulse\n" +
+			"- How Pulse Assistant analysis works in Pulse\n" +
 			"- The types of insights and recommendations you'll receive\n" +
 			"- Command approvals with manual confirmation\n\n" +
-			"To enable full AI capabilities in your own Pulse installation:\n" +
-			"1. Go to **Settings → AI Settings**\n" +
+			"To enable full Pulse Assistant capabilities in your own Pulse installation:\n" +
+			"1. Go to **Settings → Pulse Assistant**\n" +
 			"2. Add your API key (Anthropic, OpenAI, DeepSeek, or Ollama)\n" +
-			"3. Enable AI features\n\n" +
+			"3. Enable Pulse Assistant features\n\n" +
 			"*Visit [pulserelay.pro](https://pulserelay.pro) to get Pulse Pro!*"
 	}
 

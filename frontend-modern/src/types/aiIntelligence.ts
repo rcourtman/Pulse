@@ -13,6 +13,8 @@ export interface FailurePattern {
 
 export interface FailurePrediction {
     resource_id: string;
+    resource_name?: string;
+    resource_type?: string;
     event_type: string;
     predicted_at: string;
     days_until: number;
@@ -274,4 +276,3 @@ export interface ResourceIntelligence {
     knowledge?: unknown;
     note_count: number;
 }
-

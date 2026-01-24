@@ -73,7 +73,7 @@ func TestGenerateDemoAIResponse(t *testing.T) {
 		{"memory", "memory pressure", "Memory Analysis"},
 		{"backup", "pbs backup status", "Backup Status Review"},
 		{"cpu", "cpu load is high", "CPU/Performance Analysis"},
-		{"hello", "hello there", "Pulse AI Assistant"},
+		{"hello", "hello there", "Pulse Assistant"},
 		{"default", "status report", "This Demo Shows"},
 	}
 

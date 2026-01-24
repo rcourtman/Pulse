@@ -73,7 +73,7 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	// Centralized control level check
 	if tool.RequireControl {
 		if e.controlLevel == ControlLevelReadOnly || e.controlLevel == "" {
-			return NewTextResult("Control tools are disabled. Enable them in Settings > AI > Control Level."), nil
+			return NewTextResult("Control tools are disabled. Enable them in Settings > Pulse Assistant > Control Level."), nil
 		}
 	}
 

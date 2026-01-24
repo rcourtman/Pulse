@@ -1,7 +1,7 @@
 import type { HelpContent } from './types';
 
 /**
- * Help content for AI-related features
+ * Help content for Pulse Assistant and Patrol features
  */
 export const aiHelpContent: HelpContent[] = [
   {
@@ -13,13 +13,13 @@ export const aiHelpContent: HelpContent[] = [
       '- OpenRouter: Access Claude, Llama, Mistral, and 100+ models through one API key\n' +
       '- vLLM / llama.cpp: Self-hosted local inference servers\n' +
       '- Azure OpenAI: Enterprise Azure deployments\n' +
-      '- Together AI, Anyscale, Fireworks: Alternative cloud providers\n\n' +
+      '- Together, Anyscale, Fireworks: Alternative cloud providers\n\n' +
       'Enter the provider\'s base URL and use their API key in the API Key field.',
     examples: [
       'https://openrouter.ai/api/v1 (OpenRouter)',
       'http://localhost:8000/v1 (vLLM local)',
       'https://your-resource.openai.azure.com (Azure)',
-      'https://api.together.xyz/v1 (Together AI)',
+      'https://api.together.xyz/v1 (Together)',
     ],
     addedInVersion: 'v4.5.0',
   },
@@ -27,7 +27,7 @@ export const aiHelpContent: HelpContent[] = [
     id: 'ai.ollama.baseUrl',
     title: 'Ollama Server URL',
     description:
-      'Connect to a local or remote Ollama instance for AI features.\n\n' +
+      'Connect to a local or remote Ollama instance for Pulse Assistant and Patrol features.\n\n' +
       'Ollama provides easy access to open-source models like Llama, Mistral, and CodeLlama ' +
       'without requiring cloud API keys.\n\n' +
       'Default: http://localhost:11434 (local Ollama installation)',
@@ -40,9 +40,9 @@ export const aiHelpContent: HelpContent[] = [
   },
   {
     id: 'ai.providers.overview',
-    title: 'AI Provider Configuration',
+    title: 'Provider Configuration',
     description:
-      'Configure one or more AI providers to enable intelligent features:\n\n' +
+      'Configure one or more providers to enable Pulse Assistant and Patrol features:\n\n' +
       '- Anomaly detection and pattern recognition\n' +
       '- Natural language infrastructure queries\n' +
       '- Automated troubleshooting suggestions\n' +

@@ -12,7 +12,7 @@ func TestNewFromConfig_NilConfig(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for nil config")
 	}
-	if err.Error() != "AI config is nil" {
+	if err.Error() != "Pulse Assistant config is nil" {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }
@@ -25,7 +25,7 @@ func TestNewFromConfig_DisabledAI(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for disabled AI")
 	}
-	if err.Error() != "AI is not enabled" {
+	if err.Error() != "Pulse Assistant is not enabled" {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }

@@ -382,7 +382,7 @@ export function useChat(options: UseChatOptions = {}) {
         return;
       }
       logger.error('[useChat] Chat failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to get AI response';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get Pulse Assistant response';
       notificationStore.error(errorMessage);
 
       setMessages((prev) =>

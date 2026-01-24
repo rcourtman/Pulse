@@ -163,7 +163,7 @@ func (p *PatrolService) RunPatrolWithResult(ctx context.Context) (*PatrolResult,
 
 	// Check service is available
 	if p.service == nil || !p.service.IsRunning() {
-		result.Error = fmt.Errorf("AI service not available")
+		result.Error = fmt.Errorf("Pulse Assistant service not available")
 		return result, result.Error
 	}
 
@@ -433,7 +433,8 @@ func (p *PatrolService) parseFindingBlock(block string) *PatrolFinding {
 	}
 }
 
-// generateFindingID creates a stable ID for a finding
+// generateFindingID creates a stable ID for a finding based on resource, category, and key.
+// All three components are included to ensure distinct issues on the same resource remain separate.
 func generateFindingID(resourceID, category, key string) string {
 	input := fmt.Sprintf("%s:%s:%s", resourceID, category, key)
 	hash := sha256.Sum256([]byte(input))
@@ -443,7 +444,7 @@ func generateFindingID(resourceID, category, key string) string {
 // CreatePatrolSession creates a dedicated session for patrol
 func (p *PatrolService) CreatePatrolSession(ctx context.Context) error {
 	if p.service == nil || !p.service.IsRunning() {
-		return fmt.Errorf("AI service not available")
+		return fmt.Errorf("Pulse Assistant service not available")
 	}
 
 	session, err := p.service.CreateSession(ctx)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
@@ -169,12 +170,20 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 
 	// Skip approval checks if pre-approved
 	if !preApproved && e.controlLevel == ControlLevelControlled {
-		targetType := "container"
-		if runOnHost {
-			targetType = "host"
+		// Auto-approve read-only commands when in autonomous mode (investigations)
+		// This allows AI to gather diagnostic data without user approval
+		if e.isAutonomous && safety.IsReadOnlyCommand(command) {
+			log.Debug().
+				Str("command", command).
+				Msg("Auto-approving read-only command for autonomous investigation")
+		} else {
+			targetType := "container"
+			if runOnHost {
+				targetType = "host"
+			}
+			approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Control level requires approval")
+			return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
 		}
-		approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Control level requires approval")
-		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
 	}
 	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
 		targetType := "container"
@@ -252,7 +261,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	vmidStr := fmt.Sprintf("%d", guest.VMID)
 	for _, protected := range e.protectedGuests {
 		if protected == vmidStr || protected == guest.Name {
-			return NewTextResult(fmt.Sprintf("Guest %s (VMID %d) is protected and cannot be controlled by AI.", guest.Name, guest.VMID)), nil
+			return NewTextResult(fmt.Sprintf("Guest %s (VMID %d) is protected and cannot be controlled by Pulse Assistant.", guest.Name, guest.VMID)), nil
 		}
 	}
 

@@ -17,6 +17,7 @@ func (s *stubAlertManager) GetActiveAlerts() []alerts.Alert { return s.active }
 func (s *stubAlertManager) GetRecentlyResolved() []models.ResolvedAlert {
 	return s.resolved
 }
+func (s *stubAlertManager) ClearAlert(alertID string) bool { return true }
 
 func TestAlertManagerAdapter_NilManager(t *testing.T) {
 	a := NewAlertManagerAdapter(nil)

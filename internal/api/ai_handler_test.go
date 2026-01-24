@@ -132,6 +132,16 @@ func (m *MockAIService) SetAgentProfileManager(manager chat.AgentProfileManager)
 }
 func (m *MockAIService) SetFindingsManager(manager chat.FindingsManager) { m.Called(manager) }
 func (m *MockAIService) SetMetadataUpdater(updater chat.MetadataUpdater) { m.Called(updater) }
+func (m *MockAIService) SetKnowledgeStoreProvider(provider chat.KnowledgeStoreProvider) {
+	m.Called(provider)
+}
+func (m *MockAIService) SetIncidentRecorderProvider(provider chat.IncidentRecorderProvider) {
+	m.Called(provider)
+}
+func (m *MockAIService) SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider) {
+	m.Called(provider)
+}
+func (m *MockAIService) SetTopologyProvider(provider chat.TopologyProvider) { m.Called(provider) }
 
 func (m *MockAIService) UpdateControlSettings(cfg *config.AIConfig) { m.Called(cfg) }
 func (m *MockAIService) GetBaseURL() string {

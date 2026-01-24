@@ -45,6 +45,12 @@ func (a *FindingsPersistenceAdapter) SaveFindings(findings map[string]*Finding) 
 			UserNote:        f.UserNote,
 			TimesRaised:     f.TimesRaised,
 			Suppressed:      f.Suppressed,
+			// Investigation fields
+			InvestigationSessionID: f.InvestigationSessionID,
+			InvestigationStatus:    f.InvestigationStatus,
+			InvestigationOutcome:   f.InvestigationOutcome,
+			LastInvestigatedAt:     f.LastInvestigatedAt,
+			InvestigationAttempts:  f.InvestigationAttempts,
 		}
 	}
 	return a.config.SaveAIFindings(records)
@@ -85,6 +91,12 @@ func (a *FindingsPersistenceAdapter) LoadFindings() (map[string]*Finding, error)
 			UserNote:        r.UserNote,
 			TimesRaised:     r.TimesRaised,
 			Suppressed:      r.Suppressed,
+			// Investigation fields
+			InvestigationSessionID: r.InvestigationSessionID,
+			InvestigationStatus:    r.InvestigationStatus,
+			InvestigationOutcome:   r.InvestigationOutcome,
+			LastInvestigatedAt:     r.LastInvestigatedAt,
+			InvestigationAttempts:  r.InvestigationAttempts,
 		}
 	}
 	return findings, nil

@@ -547,7 +547,7 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 	}
 
 	if e.findingsProvider == nil {
-		return NewTextResult("Patrol findings not available. AI Patrol may not be running."), nil
+		return NewTextResult("Patrol findings not available. Pulse Patrol may not be running."), nil
 	}
 
 	allActive := e.findingsProvider.GetActiveFindings()

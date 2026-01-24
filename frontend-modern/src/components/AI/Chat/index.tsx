@@ -36,6 +36,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [modelsError, setModelsError] = createSignal('');
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
+  const [controlLevel, setControlLevel] = createSignal<'read_only' | 'controlled' | 'autonomous'>('read_only');
+  const [showControlMenu, setShowControlMenu] = createSignal(false);
+  const [controlSaving, setControlSaving] = createSignal(false);
 
   const loadModelSelections = (): Record<string, string> => {
     try {
@@ -103,6 +106,40 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return match ? (match.name || match.id.split(':').pop() || match.id) : override;
   });
 
+  const normalizeControlLevel = (value?: string): 'read_only' | 'controlled' | 'autonomous' => {
+    if (value === 'controlled' || value === 'autonomous' || value === 'read_only') {
+      return value;
+    }
+    if (value === 'suggest') {
+      return 'controlled';
+    }
+    return 'read_only';
+  };
+
+  const labelForControlLevel = (level: 'read_only' | 'controlled' | 'autonomous') => {
+    switch (level) {
+      case 'autonomous':
+        return 'Autonomous';
+      case 'controlled':
+        return 'Approval';
+      case 'read_only':
+      default:
+        return 'Read-only';
+    }
+  };
+
+  const controlLabel = createMemo(() => labelForControlLevel(controlLevel()));
+
+  const controlTone = createMemo(() => {
+    switch (controlLevel()) {
+      case 'autonomous':
+        return 'border-red-200 text-red-700 bg-red-50 dark:border-red-800 dark:text-red-200 dark:bg-red-900/20';
+      case 'controlled':
+        return 'border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:bg-amber-900/20';
+      default:
+        return 'border-slate-200 text-slate-600 bg-white dark:border-slate-700 dark:text-slate-200 dark:bg-slate-800';
+    }
+  });
 
   const loadModels = async (notify = false) => {
     if (notify) {
@@ -138,10 +175,36 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const settings = await AIAPI.getSettings();
       const chatOverride = (settings.chat_model || '').trim();
       const fallback = chatOverride || (settings.model || '').trim();
+      const resolvedControl = normalizeControlLevel(settings.control_level || (settings.autonomous_mode ? 'autonomous' : undefined));
       setDefaultModel(fallback);
       setChatOverrideModel(chatOverride);
+      setControlLevel(resolvedControl);
     } catch (error) {
       logger.error('[AIChat] Failed to load AI settings:', error);
+    }
+  };
+
+  const updateControlLevel = async (nextLevel: 'read_only' | 'controlled' | 'autonomous') => {
+    if (controlSaving() || nextLevel === controlLevel()) {
+      setShowControlMenu(false);
+      return;
+    }
+    setControlSaving(true);
+    const previous = controlLevel();
+    try {
+      const updated = await AIAPI.updateSettings({ control_level: nextLevel });
+      const resolved = normalizeControlLevel(updated.control_level || nextLevel);
+      setControlLevel(resolved);
+      aiChatStore.notifySettingsChanged();
+      notificationStore.success(`Control mode set to ${labelForControlLevel(resolved)}`, 2000);
+    } catch (error) {
+      logger.error('[AIChat] Failed to update control level:', error);
+      setControlLevel(previous);
+      const message = error instanceof Error ? error.message : 'Failed to update control mode.';
+      notificationStore.error(message);
+    } finally {
+      setControlSaving(false);
+      setShowControlMenu(false);
     }
   };
 
@@ -226,6 +289,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       // Only close if click is outside dropdown containers
       if (!target.closest('[data-dropdown]')) {
         setShowSessions(false);
+        setShowControlMenu(false);
       }
     };
     document.addEventListener('click', handleClickOutside);
@@ -395,6 +459,51 @@ export const AIChat: Component<AIChatProps> = (props) => {
               onRefresh={() => loadModels(true)}
             />
 
+            {/* Control mode toggle */}
+            <div class="relative" data-dropdown>
+              <button
+                onClick={() => setShowControlMenu(!showControlMenu())}
+                class={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-lg border transition-colors ${controlTone()} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
+                title="Control mode"
+                disabled={controlSaving()}
+              >
+                <span class={`h-1.5 w-1.5 rounded-full ${controlLevel() === 'autonomous' ? 'bg-red-500' : controlLevel() === 'controlled' ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                <span>{controlLabel()}</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              <Show when={showControlMenu()}>
+                <div class="absolute right-0 mt-2 w-60 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-50 overflow-hidden">
+                  <div class="px-3 py-2 text-[11px] text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                    Control mode for this chat
+                  </div>
+                  <button
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${controlLevel() === 'read_only' ? 'bg-slate-50 dark:bg-slate-700/40' : ''}`}
+                    onClick={() => updateControlLevel('read_only')}
+                  >
+                    <div class="font-medium text-slate-800 dark:text-slate-200">Read-only</div>
+                    <div class="text-[11px] text-slate-500 dark:text-slate-400">No commands or control actions</div>
+                  </button>
+                  <button
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${controlLevel() === 'controlled' ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}
+                    onClick={() => updateControlLevel('controlled')}
+                  >
+                    <div class="font-medium text-slate-800 dark:text-slate-200">Approval</div>
+                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Ask before running commands</div>
+                  </button>
+                  <button
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${controlLevel() === 'autonomous' ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
+                    onClick={() => updateControlLevel('autonomous')}
+                  >
+                    <div class="font-medium text-slate-800 dark:text-slate-200">Autonomous</div>
+                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Executes without approval (Pro)</div>
+                  </button>
+                </div>
+              </Show>
+            </div>
+
             {/* Session picker */}
             <div class="relative" data-dropdown>
               <button
@@ -486,6 +595,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
             </button>
           </div>
         </div>
+
+        <Show when={controlLevel() === 'autonomous'}>
+          <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
+            <div class="flex items-center gap-2">
+              <span class="inline-flex h-2 w-2 rounded-full bg-red-500" />
+              <span class="font-medium">Autonomous mode active</span>
+              <span class="text-red-600 dark:text-red-300">Commands execute without approval.</span>
+            </div>
+            <button
+              onClick={() => updateControlLevel('controlled')}
+              class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-white/80 dark:bg-red-900/30 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-white dark:hover:bg-red-900/40"
+            >
+              Switch to Approval
+            </button>
+          </div>
+        </Show>
 
         {/* Messages */}
         <ChatMessages

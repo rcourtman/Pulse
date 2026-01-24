@@ -130,7 +130,7 @@ export const AICostDashboard: Component = () => {
       logger.error('[AICostDashboard] Failed to load cost summary:', err);
       // Only show notification on refresh failures, not initial load
       if (!isInitialLoad) {
-        notificationStore.error('Failed to refresh AI cost summary');
+        notificationStore.error('Failed to refresh Pulse Assistant usage summary');
       }
       const message =
         err instanceof Error && err.message ? err.message : 'Failed to load usage data';
@@ -180,18 +180,18 @@ export const AICostDashboard: Component = () => {
   });
 
   const resetHistory = async () => {
-    if (!confirm('Reset AI usage history? A backup will be created in the Pulse config directory.')) return;
+    if (!confirm('Reset Pulse Assistant usage history? A backup will be created in the Pulse config directory.')) return;
     try {
       const result = await AIAPI.resetCostHistory();
       if (result.backup_file) {
-        notificationStore.success(`AI usage history reset (backup: ${result.backup_file})`);
+        notificationStore.success(`Pulse Assistant usage history reset (backup: ${result.backup_file})`);
       } else {
-        notificationStore.success('AI usage history reset');
+        notificationStore.success('Pulse Assistant usage history reset');
       }
       await loadSummary(days());
     } catch (err) {
       logger.error('[AICostDashboard] Failed to reset AI cost history:', err);
-      notificationStore.error('Failed to reset AI usage history');
+      notificationStore.error('Failed to reset Pulse Assistant usage history');
     }
   };
 
@@ -212,7 +212,7 @@ export const AICostDashboard: Component = () => {
       URL.revokeObjectURL(url);
     } catch (err) {
       logger.error('[AICostDashboard] Failed to export cost history:', err);
-      notificationStore.error('Failed to export AI usage history');
+      notificationStore.error('Failed to export Pulse Assistant usage history');
     }
   };
 
@@ -407,7 +407,7 @@ export const AICostDashboard: Component = () => {
                     </Show>
                   </div>
                   <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                    Set in AI settings. Pro-rated for {days()}d:{' '}
+                    Set in Pulse Assistant settings. Pro-rated for {days()}d:{' '}
                     <Show when={budgetForRange() != null} fallback={<span>—</span>}>
                       {formatUSD(budgetForRange() ?? 0)}
                     </Show>

@@ -647,7 +647,7 @@ func (i *Intelligence) calculateOverallHealth(summary *IntelligenceSummary) Heal
 		health.Factors = append(health.Factors, HealthFactor{
 			Name:        "Knowledge learned",
 			Impact:      bonus / 100,
-			Description: fmt.Sprintf("AI has learned about %d resources", summary.Learning.ResourcesWithKnowledge),
+			Description: fmt.Sprintf("Pulse Patrol has learned about %d resources", summary.Learning.ResourcesWithKnowledge),
 			Category:    "learning",
 		})
 	}

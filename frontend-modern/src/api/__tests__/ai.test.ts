@@ -43,7 +43,7 @@ describe('AIAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/models');
   });
 
-  it('includes query parameters for cost and intelligence endpoints', async () => {
+  it('includes query parameters for cost endpoints', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as any);
     await AIAPI.getCostSummary();
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/cost/summary?days=30');
@@ -51,18 +51,6 @@ describe('AIAPI', () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as any);
     await AIAPI.getCostSummary(7);
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/cost/summary?days=7');
-
-    apiFetchJSONMock.mockResolvedValueOnce({} as any);
-    await AIAPI.getPatterns('vm:101');
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/intelligence/patterns?resource_id=vm%3A101');
-
-    apiFetchJSONMock.mockResolvedValueOnce({} as any);
-    await AIAPI.getRecentChanges(12);
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/intelligence/changes?hours=12');
-
-    apiFetchJSONMock.mockResolvedValueOnce({} as any);
-    await AIAPI.getRemediations({ resourceId: 'vm:101', hours: 72, limit: 5 });
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/intelligence/remediations?resource_id=vm%3A101&hours=72&limit=5');
   });
 
   it('sanitizes runCommand payload consistently', async () => {

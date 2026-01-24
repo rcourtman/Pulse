@@ -34,6 +34,14 @@ type ResourceBaseline struct {
 	Metrics      map[string]*MetricBaseline `json:"metrics"` // cpu, memory, disk
 }
 
+// AnomalyCallback is called when an anomaly is detected
+// resourceID: the resource with the anomaly
+// metric: the metric that's anomalous (cpu, memory, disk, etc)
+// severity: how severe the anomaly is
+// value: the current value
+// baseline: the expected baseline mean
+type AnomalyCallback func(resourceID, resourceType, metric string, severity AnomalySeverity, value, baseline float64)
+
 // Store manages baseline storage and learning
 type Store struct {
 	mu        sync.RWMutex
@@ -47,6 +55,9 @@ type Store struct {
 	// Persistence
 	dataDir     string
 	persistence Persistence
+
+	// Event-driven callbacks
+	onAnomaly AnomalyCallback // Called when an anomaly is detected
 }
 
 // Persistence interface for saving/loading baselines
@@ -102,6 +113,17 @@ func NewStore(cfg StoreConfig) *Store {
 	}
 
 	return s
+}
+
+// SetAnomalyCallback sets the callback function to be called when anomalies are detected.
+// This enables event-driven responses to anomalies, such as triggering targeted patrols.
+func (s *Store) SetAnomalyCallback(callback AnomalyCallback) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onAnomaly = callback
+	if callback != nil {
+		log.Info().Msg("Baseline store: Anomaly callback configured")
+	}
 }
 
 // MetricPoint represents a single metric value at a point in time
@@ -322,9 +344,35 @@ type AnomalyReport struct {
 	Description    string          `json:"description"`
 }
 
-// CheckResourceAnomalies checks multiple metrics for a resource and returns all anomalies
+// CheckResourceAnomalies checks multiple metrics for a resource and returns all anomalies.
+// This function also fires the anomaly callback for event-driven processing.
+// For read-only checks (e.g., API endpoints), use CheckResourceAnomaliesReadOnly instead.
 func (s *Store) CheckResourceAnomalies(resourceID string, metrics map[string]float64) []AnomalyReport {
+	return s.checkResourceAnomaliesInternal(resourceID, metrics, true)
+}
+
+// CheckResourceAnomaliesReadOnly checks multiple metrics for a resource and returns all anomalies.
+// Unlike CheckResourceAnomalies, this does NOT fire the anomaly callback, making it safe
+// for use in read-only contexts like API GET endpoints.
+func (s *Store) CheckResourceAnomaliesReadOnly(resourceID string, metrics map[string]float64) []AnomalyReport {
+	return s.checkResourceAnomaliesInternal(resourceID, metrics, false)
+}
+
+// checkResourceAnomaliesInternal is the internal implementation that optionally fires callbacks
+func (s *Store) checkResourceAnomaliesInternal(resourceID string, metrics map[string]float64, fireCallback bool) []AnomalyReport {
 	var anomalies []AnomalyReport
+
+	// Get resource type from baseline if available
+	s.mu.RLock()
+	resourceType := ""
+	if rb, exists := s.baselines[resourceID]; exists {
+		resourceType = rb.ResourceType
+	}
+	var onAnomaly AnomalyCallback
+	if fireCallback {
+		onAnomaly = s.onAnomaly
+	}
+	s.mu.RUnlock()
 
 	for metric, value := range metrics {
 		severity, zScore, baseline := s.CheckAnomaly(resourceID, metric, value)
@@ -388,8 +436,14 @@ func (s *Store) CheckResourceAnomalies(resourceID string, metrics map[string]flo
 				direction = "below"
 			}
 			report.Description = formatAnomalyDescription(metric, ratio, direction, severity)
+			report.ResourceType = resourceType
 
 			anomalies = append(anomalies, report)
+
+			// Trigger anomaly callback for event-driven processing
+			if onAnomaly != nil {
+				go onAnomaly(resourceID, resourceType, metric, severity, value, baseline.Mean)
+			}
 		}
 	}
 

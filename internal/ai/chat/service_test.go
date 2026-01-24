@@ -225,7 +225,7 @@ func TestService_Start_Failures(t *testing.T) {
 		s := &Service{cfg: nil}
 		err := s.Start(context.Background())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "AI config is nil")
+		assert.Contains(t, err.Error(), "Pulse Assistant config is nil")
 	})
 
 	t.Run("InvalidProvider", func(t *testing.T) {
@@ -386,12 +386,12 @@ func TestParseRunCommandDecision(t *testing.T) {
 		{
 			name:    "Bare true",
 			payload: "true",
-			want:    true,
+			wantErr: true,
 		},
 		{
 			name:    "Wrapped JSON",
 			payload: "Decision: {\"allow_run_command\": true}",
-			want:    true,
+			wantErr: true,
 		},
 		{
 			name:    "Invalid payload",
@@ -468,10 +468,13 @@ func TestService_ClassifyRunCommand(t *testing.T) {
 
 func TestService_FilterToolsForPrompt_ClassificationError(t *testing.T) {
 	service := NewService(Config{
-		AIConfig:    &config.AIConfig{ControlLevel: config.ControlLevelControlled},
-		AgentServer: &mockAgentServer{},
+		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
 	})
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_run_command"))
+	require.True(t, hasTool(service.executor.ListTools(), "pulse_control_guest"))
+	require.True(t, hasTool(service.executor.ListTools(), "pulse_control_docker"))
 
 	mockProvider := &MockProvider{}
 	mockProvider.On("Chat", mock.Anything, mock.Anything).
@@ -481,7 +484,22 @@ func TestService_FilterToolsForPrompt_ClassificationError(t *testing.T) {
 
 	filtered := service.filterToolsForPrompt(context.Background(), "run uptime")
 	assert.False(t, hasProviderTool(filtered, "pulse_run_command"))
+	assert.False(t, hasProviderTool(filtered, "pulse_control_guest"))
+	assert.False(t, hasProviderTool(filtered, "pulse_control_docker"))
 	mockProvider.AssertExpectations(t)
+}
+
+func TestService_FilterToolsForPrompt_AutonomousBypass(t *testing.T) {
+	service := NewService(Config{
+		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelAutonomous},
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
+	})
+
+	filtered := service.filterToolsForPrompt(context.Background(), "just fix it")
+	assert.True(t, hasProviderTool(filtered, "pulse_run_command"))
+	assert.True(t, hasProviderTool(filtered, "pulse_control_guest"))
+	assert.True(t, hasProviderTool(filtered, "pulse_control_docker"))
 }
 
 func TestService_Execute_NonStreaming(t *testing.T) {

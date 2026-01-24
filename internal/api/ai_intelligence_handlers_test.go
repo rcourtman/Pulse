@@ -59,7 +59,7 @@ func TestHandleGetPatterns_NoPatrolService(t *testing.T) {
 	if len(patterns) != 0 {
 		t.Fatalf("expected empty patterns, got %d", len(patterns))
 	}
-	if resp["message"] != "AI is not enabled" {
+	if resp["message"] != "Pulse Patrol is not enabled" {
 		t.Fatalf("unexpected message: %v", resp["message"])
 	}
 }
@@ -132,7 +132,7 @@ func TestHandleGetPredictions_NoPatrolService(t *testing.T) {
 	if len(predictions) != 0 {
 		t.Fatalf("expected empty predictions, got %d", len(predictions))
 	}
-	if resp["message"] != "AI is not enabled" {
+	if resp["message"] != "Pulse Patrol is not enabled" {
 		t.Fatalf("unexpected message: %v", resp["message"])
 	}
 }
@@ -201,7 +201,7 @@ func TestHandleGetCorrelations_NoPatrolService(t *testing.T) {
 	if len(correlations) != 0 {
 		t.Fatalf("expected empty correlations, got %d", len(correlations))
 	}
-	if resp["message"] != "AI is not enabled" {
+	if resp["message"] != "Pulse Patrol is not enabled" {
 		t.Fatalf("unexpected message: %v", resp["message"])
 	}
 }
@@ -269,7 +269,7 @@ func TestHandleGetRecentChanges_NoPatrolService(t *testing.T) {
 	if len(changes) != 0 {
 		t.Fatalf("expected empty changes, got %d", len(changes))
 	}
-	if resp["message"] != "AI is not enabled" {
+	if resp["message"] != "Pulse Patrol is not enabled" {
 		t.Fatalf("unexpected message: %v", resp["message"])
 	}
 }
@@ -314,7 +314,7 @@ func TestHandleGetRemediations_NoPatrolService(t *testing.T) {
 	if len(remediations) != 0 {
 		t.Fatalf("expected empty remediations, got %d", len(remediations))
 	}
-	if resp["message"] != "AI is not enabled" {
+	if resp["message"] != "Pulse Patrol is not enabled" {
 		t.Fatalf("unexpected message: %v", resp["message"])
 	}
 }
@@ -359,7 +359,7 @@ func TestHandleGetBaselines_NoPatrolService(t *testing.T) {
 	if len(baselines) != 0 {
 		t.Fatalf("expected empty baselines, got %d", len(baselines))
 	}
-	if resp["message"] != "AI is not enabled" {
+	if resp["message"] != "Pulse Patrol is not enabled" {
 		t.Fatalf("unexpected message: %v", resp["message"])
 	}
 }

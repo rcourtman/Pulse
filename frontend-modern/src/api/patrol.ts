@@ -1,10 +1,9 @@
 /**
- * AI Patrol API client
+ * Pulse Patrol API client
  * Provides access to background AI monitoring findings and status
  */
 
 import { apiFetchJSON } from '@/utils/apiClient';
-import { logger } from '@/utils/logger';
 
 export type FindingSeverity = 'info' | 'watch' | 'warning' | 'critical';
 export type FindingCategory = 'performance' | 'capacity' | 'reliability' | 'backup' | 'security' | 'general';
@@ -34,32 +33,61 @@ export interface Finding {
     user_note?: string;
     times_raised: number;
     suppressed: boolean;
+    // Investigation fields (Patrol Autonomy)
+    investigation_session_id?: string;
+    investigation_status?: InvestigationStatus;
+    investigation_outcome?: InvestigationOutcome;
+    last_investigated_at?: string;
+    investigation_attempts: number;
 }
 
-export interface RunbookInfo {
+export type InvestigationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
+export type InvestigationOutcome = 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix';
+export type PatrolAutonomyLevel = 'monitor' | 'approval' | 'full';
+
+export interface PatrolAutonomySettings {
+    autonomy_level: PatrolAutonomyLevel;
+    investigation_budget: number;      // Max turns per investigation (5-30)
+    investigation_timeout_sec: number; // Max seconds per investigation (60-600)
+    critical_require_approval: boolean; // Critical findings always require approval
+}
+
+export interface Investigation {
     id: string;
-    title: string;
-    description: string;
-    risk: 'low' | 'medium' | 'high';
-}
-
-export interface RunbookStepResult {
-    name: string;
-    command: string;
-    output: string;
-    success: boolean;
-}
-
-export interface RunbookExecutionResult {
-    runbook_id: string;
-    outcome: 'resolved' | 'partial' | 'failed' | 'unknown';
-    message: string;
-    steps: RunbookStepResult[];
-    verification?: RunbookStepResult;
-    resolved: boolean;
-    executed_at: string;
     finding_id: string;
-    finding_key?: string;
+    session_id: string;
+    status: InvestigationStatus;
+    started_at: string;
+    completed_at?: string;
+    turn_count: number;
+    outcome?: InvestigationOutcome;
+    summary?: string;
+    error?: string;
+    proposed_fix?: ProposedFix;
+    approval_id?: string;
+}
+
+export interface ProposedFix {
+    id: string;
+    description: string;
+    commands?: string[];
+    risk_level?: string;
+    destructive: boolean;
+    target_host?: string;
+    rationale?: string;
+}
+
+export interface InvestigationMessages {
+    investigation_id: string;
+    session_id: string;
+    messages: ChatMessage[];
+}
+
+export interface ChatMessage {
+    id: string;
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    timestamp: string;
 }
 
 export interface FindingsSummary {
@@ -83,88 +111,18 @@ export interface PatrolStatus {
     error_count: number;
     healthy: boolean;
     interval_ms: number; // Patrol interval in milliseconds
+    fixed_count: number; // Number of issues auto-fixed by Patrol
     license_required?: boolean;
     license_status?: LicenseStatus;
     upgrade_url?: string;
     summary: FindingsSummary;
 }
 
-export interface PatrolRunRecord {
-    id: string;
-    started_at: string;
-    completed_at: string;
-    duration_ms: number;
-    type: string; // Always 'patrol' now (kept for backwards compat with old records)
-    resources_checked: number;
-    // Breakdown by resource type
-    nodes_checked: number;
-    guests_checked: number;
-    docker_checked: number;
-    storage_checked: number;
-    hosts_checked: number;
-    pbs_checked: number;
-    // Findings from this run
-    new_findings: number;
-    existing_findings: number;
-    resolved_findings: number;
-    auto_fix_count?: number;
-    findings_summary: string;
-    finding_ids: string[];
-    error_count: number;
-    status: 'healthy' | 'issues_found' | 'critical' | 'error';
-    // AI Analysis details
-    ai_analysis?: string;    // The AI's raw response/analysis
-    input_tokens?: number;   // Tokens sent to AI
-    output_tokens?: number;  // Tokens received from AI
-}
-
 /**
- * Get the current AI patrol status
+ * Get the current Pulse Patrol status
  */
 export async function getPatrolStatus(): Promise<PatrolStatus> {
     return apiFetchJSON<PatrolStatus>('/api/ai/patrol/status');
-}
-
-/**
- * Get all active findings from the patrol service
- * Optionally filter by resource ID
- */
-export async function getFindings(resourceId?: string): Promise<Finding[]> {
-    const url = resourceId
-        ? `/api/ai/patrol/findings?resource_id=${encodeURIComponent(resourceId)}`
-        : '/api/ai/patrol/findings';
-
-    return apiFetchJSON<Finding[]>(url);
-}
-
-/**
- * Trigger an immediate patrol run
- */
-export async function forcePatrol(deep: boolean = false): Promise<{ success: boolean; message: string }> {
-    const url = deep ? '/api/ai/patrol/run?deep=true' : '/api/ai/patrol/run';
-    return apiFetchJSON(url, { method: 'POST' });
-}
-
-/**
- * Get AI findings history including resolved findings
- * @param startTime Optional ISO timestamp to filter findings from
- */
-export async function getFindingsHistory(startTime?: string): Promise<Finding[]> {
-    const url = startTime
-        ? `/api/ai/patrol/history?start_time=${encodeURIComponent(startTime)}`
-        : '/api/ai/patrol/history';
-    return apiFetchJSON<Finding[]>(url);
-}
-
-/**
- * Get the history of patrol check runs
- * @param limit Maximum number of records to return (default: 50, max: 100)
- */
-export async function getPatrolRunHistory(limit?: number): Promise<PatrolRunRecord[]> {
-    const url = limit
-        ? `/api/ai/patrol/runs?limit=${limit}`
-        : '/api/ai/patrol/runs';
-    return apiFetchJSON<PatrolRunRecord[]>(url);
 }
 
 /**
@@ -191,29 +149,6 @@ export async function snoozeFinding(findingId: string, durationHours: number): P
 }
 
 /**
- * Manually resolve a finding (mark as fixed)
- * @param findingId The ID of the finding to resolve
- */
-export async function resolveFinding(findingId: string): Promise<{ success: boolean; message: string }> {
-    return apiFetchJSON('/api/ai/patrol/resolve', {
-        method: 'POST',
-        body: JSON.stringify({ finding_id: findingId }),
-    });
-}
-
-export async function getRunbooksForFinding(findingId: string): Promise<RunbookInfo[]> {
-    const url = `/api/ai/runbooks?finding_id=${encodeURIComponent(findingId)}`;
-    return apiFetchJSON<RunbookInfo[]>(url);
-}
-
-export async function executeRunbook(findingId: string, runbookId: string): Promise<RunbookExecutionResult> {
-    return apiFetchJSON('/api/ai/runbooks/execute', {
-        method: 'POST',
-        body: JSON.stringify({ finding_id: findingId, runbook_id: runbookId }),
-    });
-}
-
-/**
  * Dismiss a finding with a reason (LLM memory feature)
  * The LLM will be told not to re-raise this issue in future patrols.
  * @param findingId The ID of the finding to dismiss
@@ -232,26 +167,22 @@ export async function dismissFinding(
 }
 
 /**
- * Permanently suppress a finding type (LLM memory feature)
- * The LLM will never re-raise this type of finding for this resource.
- * @param findingId The ID of the finding to suppress
+ * Approve and execute a proposed fix
+ * @param approvalId The approval ID from the investigation
  */
-export async function suppressFinding(findingId: string): Promise<{ success: boolean; message: string }> {
-    return apiFetchJSON('/api/ai/patrol/suppress', {
+export async function approveFix(approvalId: string): Promise<{ success: boolean; message: string; output?: string }> {
+    return apiFetchJSON(`/api/ai/approvals/${approvalId}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ finding_id: findingId }),
     });
 }
 
 /**
- * Clear all AI findings
- * Removes all accumulated findings from the store.
- * Useful for users who want to start fresh or who accumulated findings
- * before AI was properly configured.
+ * Deny/skip a proposed fix
+ * @param approvalId The approval ID from the investigation
  */
-export async function clearAllFindings(): Promise<{ success: boolean; cleared: number; message: string }> {
-    return apiFetchJSON('/api/ai/patrol/findings?confirm=true', {
-        method: 'DELETE',
+export async function denyFix(approvalId: string): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON(`/api/ai/approvals/${approvalId}/deny`, {
+        method: 'POST',
     });
 }
 
@@ -295,106 +226,87 @@ export function formatTimestamp(ts: string): string {
     return date.toLocaleDateString();
 }
 
+// =============================================================================
+// Patrol Autonomy APIs
+// =============================================================================
+
 /**
- * Event types from patrol stream
+ * Get current patrol autonomy settings
  */
-export interface PatrolStreamEvent {
-    type: 'start' | 'content' | 'thinking' | 'phase' | 'complete' | 'error';
-    content?: string;
-    phase?: string;
-    tokens?: number;
+export async function getPatrolAutonomySettings(): Promise<PatrolAutonomySettings> {
+    return apiFetchJSON<PatrolAutonomySettings>('/api/ai/patrol/autonomy');
 }
 
 /**
- * Subscribe to live patrol stream via SSE
- * Returns an unsubscribe function
+ * Update patrol autonomy settings
  */
-export function subscribeToPatrolStream(
-    onEvent: (event: PatrolStreamEvent) => void,
-    onError?: (error: Error) => void
-): () => void {
-    const eventSource = new EventSource('/api/ai/patrol/stream', { withCredentials: true });
-
-    eventSource.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data) as PatrolStreamEvent;
-            onEvent(data);
-        } catch (e) {
-            logger.error('Failed to parse patrol stream event:', e);
-        }
-    };
-
-    eventSource.onerror = () => {
-        if (onError) {
-            onError(new Error('Patrol stream connection error'));
-        }
-        eventSource.close();
-    };
-
-    // Return unsubscribe function
-    return () => {
-        eventSource.close();
-    };
-}
-
-// === Suppression Rules ===
-
-export interface SuppressionRule {
-    id: string;
-    resource_id?: string;   // Empty means "any resource"
-    resource_name?: string; // Human-readable name
-    category?: FindingCategory; // Empty means "any category"
-    description: string;    // User's reason
-    dismissed_reason?: 'not_an_issue' | 'expected_behavior' | 'will_fix_later'; // Why it was dismissed
-    created_at: string;
-    created_from: 'finding' | 'dismissed' | 'manual'; // 'finding' = suppressed, 'dismissed' = just dismissed
-    finding_id?: string;    // Original finding ID if created from dismissal
+export async function updatePatrolAutonomySettings(settings: PatrolAutonomySettings): Promise<{ success: boolean; settings: PatrolAutonomySettings }> {
+    return apiFetchJSON('/api/ai/patrol/autonomy', {
+        method: 'PUT',
+        body: JSON.stringify(settings),
+    });
 }
 
 /**
- * Get all suppression rules (both manual and from dismissed findings)
+ * Get investigation details for a finding
  */
-export async function getSuppressionRules(): Promise<SuppressionRule[]> {
-    return apiFetchJSON<SuppressionRule[]>('/api/ai/patrol/suppressions');
+export async function getInvestigation(findingId: string): Promise<Investigation> {
+    return apiFetchJSON<Investigation>(`/api/ai/findings/${encodeURIComponent(findingId)}/investigation`);
 }
 
 /**
- * Create a new manual suppression rule
- * @param resourceId Resource ID (empty for "any resource")
- * @param resourceName Human-readable name for display
- * @param category Category (empty for "any category")
- * @param description User's reason for the rule
+ * Get chat messages for an investigation
  */
-export async function addSuppressionRule(
-    resourceId: string,
-    resourceName: string,
-    category: FindingCategory | '',
-    description: string
-): Promise<{ success: boolean; message: string; rule: SuppressionRule }> {
-    return apiFetchJSON('/api/ai/patrol/suppressions', {
+export async function getInvestigationMessages(findingId: string): Promise<InvestigationMessages> {
+    return apiFetchJSON<InvestigationMessages>(`/api/ai/findings/${encodeURIComponent(findingId)}/investigation/messages`);
+}
+
+/**
+ * Trigger re-investigation of a finding
+ */
+export async function reinvestigateFinding(findingId: string): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON(`/api/ai/findings/${encodeURIComponent(findingId)}/reinvestigate`, {
         method: 'POST',
-        body: JSON.stringify({
-            resource_id: resourceId,
-            resource_name: resourceName,
-            category: category,
-            description: description,
-        }),
     });
 }
 
 /**
- * Delete a suppression rule
- * @param ruleId The ID of the rule to delete
+ * Investigation status labels for UI
  */
-export async function deleteSuppressionRule(ruleId: string): Promise<{ success: boolean; message: string }> {
-    return apiFetchJSON(`/api/ai/patrol/suppressions/${encodeURIComponent(ruleId)}`, {
-        method: 'DELETE',
-    });
-}
+export const investigationStatusLabels: Record<InvestigationStatus, string> = {
+    pending: 'Pending',
+    running: 'Investigating...',
+    completed: 'Completed',
+    failed: 'Failed',
+    needs_attention: 'Needs Attention',
+};
 
 /**
- * Get all dismissed/suppressed findings
+ * Investigation outcome labels for UI
  */
-export async function getDismissedFindings(): Promise<Finding[]> {
-    return apiFetchJSON<Finding[]>('/api/ai/patrol/dismissed');
-}
+export const investigationOutcomeLabels: Record<InvestigationOutcome, string> = {
+    resolved: 'Resolved',
+    fix_queued: 'Fix Queued',
+    fix_executed: 'Fix Executed',
+    fix_failed: 'Fix Failed',
+    needs_attention: 'Needs Attention',
+    cannot_fix: 'Cannot Auto-Fix',
+};
+
+/**
+ * Autonomy level labels for UI
+ */
+export const autonomyLevelLabels: Record<PatrolAutonomyLevel, { label: string; description: string }> = {
+    monitor: {
+        label: 'Monitor Only',
+        description: 'Detect issues and create findings. No automatic investigation.',
+    },
+    approval: {
+        label: 'Investigate with Approval',
+        description: 'Automatically investigate findings. Queue fixes for your approval.',
+    },
+    full: {
+        label: 'Full Autonomy',
+        description: 'Automatically investigate and apply non-critical fixes. Critical fixes still require approval.',
+    },
+};

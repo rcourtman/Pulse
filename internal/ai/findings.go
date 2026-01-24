@@ -34,6 +34,27 @@ const (
 	FindingCategoryGeneral     FindingCategory = "general"
 )
 
+// InvestigationStatus represents the current investigation state of a finding
+type InvestigationStatus string
+
+const (
+	InvestigationStatusPending        InvestigationStatus = "pending"         // Queued for investigation
+	InvestigationStatusRunning        InvestigationStatus = "running"         // Currently being investigated
+	InvestigationStatusCompleted      InvestigationStatus = "completed"       // Investigation finished
+	InvestigationStatusFailed         InvestigationStatus = "failed"          // Investigation errored out
+	InvestigationStatusNeedsAttention InvestigationStatus = "needs_attention" // Requires user input
+)
+
+// InvestigationOutcome represents the result of an investigation
+type InvestigationOutcome string
+
+const (
+	InvestigationOutcomeResolved       InvestigationOutcome = "resolved"        // Issue was automatically fixed
+	InvestigationOutcomeFixQueued      InvestigationOutcome = "fix_queued"      // Fix identified, awaiting approval
+	InvestigationOutcomeNeedsAttention InvestigationOutcome = "needs_attention" // Requires user intervention
+	InvestigationOutcomeCannotFix      InvestigationOutcome = "cannot_fix"      // AI determined it cannot fix this
+)
+
 // Finding represents an AI-discovered insight about infrastructure
 type Finding struct {
 	ID             string          `json:"id"`
@@ -64,6 +85,13 @@ type Finding struct {
 	UserNote        string `json:"user_note,omitempty"`        // Freeform user explanation, included in LLM context
 	TimesRaised     int    `json:"times_raised"`               // How many times this finding has been detected
 	Suppressed      bool   `json:"suppressed"`                 // Permanently suppress similar findings for this resource
+
+	// Investigation fields - tracks autonomous AI investigation of findings
+	InvestigationSessionID string     `json:"investigation_session_id,omitempty"` // Chat session ID if being investigated
+	InvestigationStatus    string     `json:"investigation_status,omitempty"`     // pending, running, completed, failed, needs_attention
+	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`    // resolved, fix_queued, needs_attention, cannot_fix
+	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`     // When last investigation completed
+	InvestigationAttempts  int        `json:"investigation_attempts"`             // Number of investigation attempts
 }
 
 // IsActive returns true if the finding is still active (not resolved, not snoozed, not suppressed, not dismissed)
@@ -85,6 +113,107 @@ func (f *Finding) IsSnoozed() bool {
 func (f *Finding) IsResolved() bool {
 	return f.ResolvedAt != nil
 }
+
+// ShouldInvestigate returns true if this finding should be automatically investigated
+// based on autonomy level, severity, and investigation history.
+// A finding will NOT be investigated if:
+// - Already being investigated (status = running)
+// - Investigated within the last hour (cooldown)
+// - Already attempted 3 times (max attempts)
+// - Severity is info/watch (not actionable)
+// - Already resolved/dismissed/suppressed
+func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
+	// Only investigate if autonomy is enabled (approval or full mode)
+	if autonomyLevel == "" || autonomyLevel == "monitor" {
+		return false
+	}
+
+	// Don't investigate already resolved/dismissed findings
+	if f.ResolvedAt != nil || f.Suppressed || f.DismissedReason != "" {
+		return false
+	}
+
+	// Don't investigate snoozed findings
+	if f.IsSnoozed() {
+		return false
+	}
+
+	// Only investigate warning and critical severity (info/watch are not actionable)
+	if f.Severity != FindingSeverityWarning && f.Severity != FindingSeverityCritical {
+		return false
+	}
+
+	// Don't re-investigate if already running
+	if f.InvestigationStatus == string(InvestigationStatusRunning) {
+		return false
+	}
+
+	// Don't re-investigate if at max attempts (3)
+	if f.InvestigationAttempts >= 3 {
+		return false
+	}
+
+	// Don't re-investigate within cooldown period (1 hour)
+	if f.LastInvestigatedAt != nil {
+		cooldownDuration := 1 * time.Hour
+		if time.Since(*f.LastInvestigatedAt) < cooldownDuration {
+			return false
+		}
+	}
+
+	return true
+}
+
+// IsBeingInvestigated returns true if an investigation is currently in progress
+func (f *Finding) IsBeingInvestigated() bool {
+	return f.InvestigationStatus == string(InvestigationStatusRunning)
+}
+
+// CanRetryInvestigation returns true if the finding can be re-investigated
+func (f *Finding) CanRetryInvestigation() bool {
+	// Can't retry if at max attempts
+	if f.InvestigationAttempts >= 3 {
+		return false
+	}
+	// Can't retry if still in cooldown
+	if f.LastInvestigatedAt != nil {
+		cooldownDuration := 1 * time.Hour
+		if time.Since(*f.LastInvestigatedAt) < cooldownDuration {
+			return false
+		}
+	}
+	// Can't retry if currently running
+	if f.InvestigationStatus == string(InvestigationStatusRunning) {
+		return false
+	}
+	return true
+}
+
+// Getter methods for investigation.AIFinding interface
+
+func (f *Finding) GetID() string                     { return f.ID }
+func (f *Finding) GetSeverity() string               { return string(f.Severity) }
+func (f *Finding) GetCategory() string               { return string(f.Category) }
+func (f *Finding) GetResourceID() string             { return f.ResourceID }
+func (f *Finding) GetResourceName() string           { return f.ResourceName }
+func (f *Finding) GetResourceType() string           { return f.ResourceType }
+func (f *Finding) GetTitle() string                  { return f.Title }
+func (f *Finding) GetDescription() string            { return f.Description }
+func (f *Finding) GetRecommendation() string         { return f.Recommendation }
+func (f *Finding) GetEvidence() string               { return f.Evidence }
+func (f *Finding) GetInvestigationSessionID() string { return f.InvestigationSessionID }
+func (f *Finding) GetInvestigationStatus() string    { return f.InvestigationStatus }
+func (f *Finding) GetInvestigationOutcome() string   { return f.InvestigationOutcome }
+func (f *Finding) GetLastInvestigatedAt() *time.Time { return f.LastInvestigatedAt }
+func (f *Finding) GetInvestigationAttempts() int     { return f.InvestigationAttempts }
+
+// Setter methods for investigation.AIFinding interface
+
+func (f *Finding) SetInvestigationSessionID(v string) { f.InvestigationSessionID = v }
+func (f *Finding) SetInvestigationStatus(v string)    { f.InvestigationStatus = v }
+func (f *Finding) SetInvestigationOutcome(v string)   { f.InvestigationOutcome = v }
+func (f *Finding) SetLastInvestigatedAt(v *time.Time) { f.LastInvestigatedAt = v }
+func (f *Finding) SetInvestigationAttempts(v int)     { f.InvestigationAttempts = v }
 
 // SuppressionRule represents a user-defined rule to suppress certain AI findings
 // Users can create these manually to prevent alerts before they happen
@@ -167,18 +296,17 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 }
 
 // scheduleSave schedules a debounced save operation
+// This method is lock-safe and can be called without holding the store lock.
 func (s *FindingsStore) scheduleSave() {
-	if s.persistence == nil {
-		return
-	}
-
-	// Already have a save pending
-	if s.savePending {
+	s.mu.Lock()
+	if s.persistence == nil || s.savePending {
+		s.mu.Unlock()
 		return
 	}
 
 	s.savePending = true
-	s.saveTimer = time.AfterFunc(s.saveDebounce, func() {
+	saveDebounce := s.saveDebounce
+	s.saveTimer = time.AfterFunc(saveDebounce, func() {
 		s.mu.Lock()
 		s.savePending = false
 		// Make a copy for saving, excluding demo findings
@@ -214,6 +342,7 @@ func (s *FindingsStore) scheduleSave() {
 			}
 		}
 	})
+	s.mu.Unlock()
 }
 
 // ForceSave immediately saves findings (useful for shutdown)
@@ -502,6 +631,42 @@ func (s *FindingsStore) SetUserNote(id, note string) bool {
 	return true
 }
 
+// UpdateInvestigationOutcome updates the investigation outcome on a finding
+func (s *FindingsStore) UpdateInvestigationOutcome(id, outcome string) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists {
+		s.mu.Unlock()
+		return false
+	}
+
+	f.InvestigationOutcome = outcome
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// UpdateInvestigation updates all investigation fields on a finding
+func (s *FindingsStore) UpdateInvestigation(id, sessionID, status, outcome string, lastInvestigatedAt *time.Time, attempts int) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists {
+		s.mu.Unlock()
+		return false
+	}
+
+	f.InvestigationSessionID = sessionID
+	f.InvestigationStatus = status
+	f.InvestigationOutcome = outcome
+	f.LastInvestigatedAt = lastInvestigatedAt
+	f.InvestigationAttempts = attempts
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
 // Suppress marks a finding type as permanently suppressed for a resource
 // Future findings with the same resource+category will be auto-dismissed
 func (s *FindingsStore) Suppress(id string) bool {
@@ -517,6 +682,9 @@ func (s *FindingsStore) Suppress(id string) bool {
 	f.DismissedReason = "suppressed"
 	now := time.Now()
 	f.AcknowledgedAt = &now
+
+	// Create a suppression rule to block future findings with same resource+category
+	s.addSuppressionRuleInternal(f.ResourceID, f.ResourceName, f.Category, "Suppressed via finding", "suppress")
 
 	s.mu.Unlock()
 	s.scheduleSave()
@@ -808,6 +976,13 @@ func (s *FindingsStore) AddSuppressionRule(resourceID, resourceName string, cate
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	rule := s.addSuppressionRuleInternal(resourceID, resourceName, category, description, "manual")
+	s.scheduleSave()
+	return rule
+}
+
+// addSuppressionRuleInternal creates a suppression rule without locking (caller must hold lock)
+func (s *FindingsStore) addSuppressionRuleInternal(resourceID, resourceName string, category FindingCategory, description, createdFrom string) *SuppressionRule {
 	// Generate ID based on resource+category
 	ruleID := fmt.Sprintf("rule_%s_%s_%d", resourceID, category, time.Now().UnixNano())
 	if resourceID == "" {
@@ -824,11 +999,10 @@ func (s *FindingsStore) AddSuppressionRule(resourceID, resourceName string, cate
 		Category:     category,
 		Description:  description,
 		CreatedAt:    time.Now(),
-		CreatedFrom:  "manual",
+		CreatedFrom:  createdFrom,
 	}
 
 	s.suppressionRules[ruleID] = rule
-	s.scheduleSave()
 	return rule
 }
 
@@ -939,4 +1113,298 @@ func (s *FindingsStore) MatchesSuppressionRule(resourceID string, category Findi
 		}
 	}
 	return false
+}
+
+// --- Semantic Deduplication ---
+
+// FindingCluster represents a group of semantically related findings
+type FindingCluster struct {
+	ID               string          `json:"id"`
+	PrimaryFindingID string          `json:"primary_finding_id"` // The "main" finding in the cluster
+	RelatedIDs       []string        `json:"related_ids"`        // Other findings in the cluster
+	CommonCategory   FindingCategory `json:"common_category"`
+	CommonResource   string          `json:"common_resource,omitempty"` // If all findings are for same resource
+	Summary          string          `json:"summary"`                   // Aggregated summary
+	HighestSeverity  FindingSeverity `json:"highest_severity"`
+	TotalCount       int             `json:"total_count"`
+}
+
+// SemanticSimilarity calculates similarity between two findings (0-1)
+func SemanticSimilarity(f1, f2 *Finding) float64 {
+	if f1 == nil || f2 == nil {
+		return 0
+	}
+
+	var similarity float64
+
+	// Same resource is a strong signal
+	if f1.ResourceID == f2.ResourceID {
+		similarity += 0.3
+	}
+
+	// Same category
+	if f1.Category == f2.Category {
+		similarity += 0.2
+	}
+
+	// Similar key (if set)
+	if f1.Key != "" && f1.Key == f2.Key {
+		similarity += 0.4
+	}
+
+	// Title keyword overlap
+	titleSim := keywordOverlap(f1.Title, f2.Title)
+	similarity += titleSim * 0.2
+
+	// Description keyword overlap
+	descSim := keywordOverlap(f1.Description, f2.Description)
+	similarity += descSim * 0.1
+
+	return minFloat(similarity, 1.0)
+}
+
+// keywordOverlap calculates the Jaccard similarity of keywords between two strings
+func keywordOverlap(s1, s2 string) float64 {
+	words1 := extractKeywords(s1)
+	words2 := extractKeywords(s2)
+
+	if len(words1) == 0 || len(words2) == 0 {
+		return 0
+	}
+
+	// Calculate intersection
+	intersection := 0
+	for word := range words1 {
+		if words2[word] {
+			intersection++
+		}
+	}
+
+	// Calculate union
+	union := len(words1)
+	for word := range words2 {
+		if !words1[word] {
+			union++
+		}
+	}
+
+	if union == 0 {
+		return 0
+	}
+
+	return float64(intersection) / float64(union)
+}
+
+// extractKeywords extracts significant keywords from a string
+func extractKeywords(s string) map[string]bool {
+	keywords := make(map[string]bool)
+
+	// Common stop words to ignore
+	stopWords := map[string]bool{
+		"the": true, "a": true, "an": true, "is": true, "are": true,
+		"was": true, "were": true, "be": true, "been": true, "being": true,
+		"have": true, "has": true, "had": true, "do": true, "does": true,
+		"did": true, "will": true, "would": true, "could": true, "should": true,
+		"may": true, "might": true, "must": true, "shall": true, "can": true,
+		"to": true, "of": true, "in": true, "for": true, "on": true, "with": true,
+		"at": true, "by": true, "from": true, "as": true, "into": true, "through": true,
+		"and": true, "or": true, "but": true, "if": true, "then": true, "than": true,
+		"this": true, "that": true, "these": true, "those": true, "it": true,
+	}
+
+	// Split into words and normalize
+	word := ""
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+			if c >= 'A' && c <= 'Z' {
+				c = c + 32 // lowercase
+			}
+			word += string(c)
+		} else {
+			if len(word) > 2 && !stopWords[word] {
+				keywords[word] = true
+			}
+			word = ""
+		}
+	}
+	if len(word) > 2 && !stopWords[word] {
+		keywords[word] = true
+	}
+
+	return keywords
+}
+
+// FindSimilarFindings finds findings similar to the given one
+func (s *FindingsStore) FindSimilarFindings(f *Finding, minSimilarity float64) []*Finding {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var similar []*Finding
+
+	for _, existing := range s.findings {
+		if existing.ID == f.ID {
+			continue
+		}
+		if !existing.IsActive() {
+			continue
+		}
+
+		similarity := SemanticSimilarity(f, existing)
+		if similarity >= minSimilarity {
+			copy := *existing
+			similar = append(similar, &copy)
+		}
+	}
+
+	return similar
+}
+
+// AddWithDeduplication adds a finding, merging with similar existing findings if found
+// Returns the finding ID (may be existing finding if merged) and whether it was new
+func (s *FindingsStore) AddWithDeduplication(f *Finding, minSimilarity float64) (string, bool) {
+	// First check for similar findings
+	similar := s.FindSimilarFindings(f, minSimilarity)
+
+	if len(similar) > 0 {
+		// Find the most similar one
+		var bestMatch *Finding
+		var bestSimilarity float64
+
+		for _, existing := range similar {
+			sim := SemanticSimilarity(f, existing)
+			if sim > bestSimilarity {
+				bestMatch = existing
+				bestSimilarity = sim
+			}
+		}
+
+		if bestMatch != nil {
+			// Merge with existing finding
+			s.mu.Lock()
+			if existing, ok := s.findings[bestMatch.ID]; ok {
+				existing.LastSeenAt = time.Now()
+				existing.TimesRaised++
+
+				// Update to higher severity if new finding has higher severity
+				severityOrder := map[FindingSeverity]int{
+					FindingSeverityInfo:     0,
+					FindingSeverityWatch:    1,
+					FindingSeverityWarning:  2,
+					FindingSeverityCritical: 3,
+				}
+				if severityOrder[f.Severity] > severityOrder[existing.Severity] {
+					existing.Severity = f.Severity
+				}
+
+				// Append evidence if different
+				if f.Evidence != "" && f.Evidence != existing.Evidence {
+					existing.Evidence = existing.Evidence + "\n---\n" + f.Evidence
+					// Truncate if too long
+					if len(existing.Evidence) > 5000 {
+						existing.Evidence = existing.Evidence[:5000] + "..."
+					}
+				}
+			}
+			s.mu.Unlock()
+			s.scheduleSave()
+			return bestMatch.ID, false
+		}
+	}
+
+	// No similar finding found, add as new
+	isNew := s.Add(f)
+	return f.ID, isNew
+}
+
+// GetFindingClusters groups active findings into clusters based on semantic similarity
+func (s *FindingsStore) GetFindingClusters(minSimilarity float64) []*FindingCluster {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Get all active findings
+	var activeFindings []*Finding
+	for _, f := range s.findings {
+		if f.IsActive() {
+			copy := *f
+			activeFindings = append(activeFindings, &copy)
+		}
+	}
+
+	if len(activeFindings) == 0 {
+		return nil
+	}
+
+	// Track which findings have been clustered
+	clustered := make(map[string]bool)
+	var clusters []*FindingCluster
+
+	// For each finding, find similar ones and create a cluster
+	for _, f := range activeFindings {
+		if clustered[f.ID] {
+			continue
+		}
+
+		cluster := &FindingCluster{
+			ID:               fmt.Sprintf("cluster-%s", f.ID[:8]),
+			PrimaryFindingID: f.ID,
+			RelatedIDs:       make([]string, 0),
+			CommonCategory:   f.Category,
+			CommonResource:   f.ResourceID,
+			HighestSeverity:  f.Severity,
+			TotalCount:       1,
+		}
+
+		clustered[f.ID] = true
+
+		// Find all similar findings
+		for _, other := range activeFindings {
+			if other.ID == f.ID || clustered[other.ID] {
+				continue
+			}
+
+			similarity := SemanticSimilarity(f, other)
+			if similarity >= minSimilarity {
+				cluster.RelatedIDs = append(cluster.RelatedIDs, other.ID)
+				cluster.TotalCount++
+				clustered[other.ID] = true
+
+				// Track if all are same resource
+				if other.ResourceID != f.ResourceID {
+					cluster.CommonResource = ""
+				}
+
+				// Track highest severity
+				severityOrder := map[FindingSeverity]int{
+					FindingSeverityInfo:     0,
+					FindingSeverityWatch:    1,
+					FindingSeverityWarning:  2,
+					FindingSeverityCritical: 3,
+				}
+				if severityOrder[other.Severity] > severityOrder[cluster.HighestSeverity] {
+					cluster.HighestSeverity = other.Severity
+				}
+			}
+		}
+
+		// Generate cluster summary
+		if cluster.TotalCount > 1 {
+			cluster.Summary = fmt.Sprintf("%d related %s findings", cluster.TotalCount, cluster.CommonCategory)
+			if cluster.CommonResource != "" {
+				cluster.Summary += " for " + cluster.CommonResource
+			}
+		} else {
+			cluster.Summary = f.Title
+		}
+
+		clusters = append(clusters, cluster)
+	}
+
+	return clusters
+}
+
+func minFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -259,7 +259,7 @@ func (s *IncidentStore) RecordAnalysis(alertID, summary string, details map[stri
 	}
 
 	if summary == "" {
-		summary = "AI analysis completed"
+		summary = "Pulse Patrol analysis completed"
 	}
 
 	s.addEventLocked(incident, IncidentEventAnalysis, summary, details)

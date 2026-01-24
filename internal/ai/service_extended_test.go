@@ -890,8 +890,8 @@ func TestService_TestConnection_Extended(t *testing.T) {
 
 	// 1. Not configured
 	err := svc.TestConnection(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "no AI provider configured") {
-		t.Errorf("Expected 'no AI provider configured' error, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "no provider configured") {
+		t.Errorf("Expected 'no provider configured' error, got: %v", err)
 	}
 
 	// 2. Mock provider fallback

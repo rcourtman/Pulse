@@ -54,6 +54,10 @@ type AIService interface {
 	SetUpdatesProvider(provider chat.MCPUpdatesProvider)
 	SetFindingsManager(manager chat.FindingsManager)
 	SetMetadataUpdater(updater chat.MetadataUpdater)
+	SetKnowledgeStoreProvider(provider chat.KnowledgeStoreProvider)
+	SetIncidentRecorderProvider(provider chat.IncidentRecorderProvider)
+	SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)
+	SetTopologyProvider(provider chat.TopologyProvider)
 	UpdateControlSettings(cfg *config.AIConfig)
 	GetBaseURL() string
 }
@@ -392,12 +396,12 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -506,13 +510,13 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 func (h *AIHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -530,13 +534,13 @@ func (h *AIHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
 func (h *AIHandler) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -554,13 +558,13 @@ func (h *AIHandler) HandleCreateSession(w http.ResponseWriter, r *http.Request) 
 func (h *AIHandler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, sessionID string) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -576,13 +580,13 @@ func (h *AIHandler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, 
 func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessionID string) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -600,13 +604,13 @@ func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessi
 func (h *AIHandler) HandleAbort(w http.ResponseWriter, r *http.Request, sessionID string) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -634,13 +638,13 @@ func (h *AIHandler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 func (h *AIHandler) HandleSummarize(w http.ResponseWriter, r *http.Request, sessionID string) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -659,13 +663,13 @@ func (h *AIHandler) HandleSummarize(w http.ResponseWriter, r *http.Request, sess
 func (h *AIHandler) HandleDiff(w http.ResponseWriter, r *http.Request, sessionID string) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -684,13 +688,13 @@ func (h *AIHandler) HandleDiff(w http.ResponseWriter, r *http.Request, sessionID
 func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID string) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -709,13 +713,13 @@ func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID
 func (h *AIHandler) HandleRevert(w http.ResponseWriter, r *http.Request, sessionID string) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -734,13 +738,13 @@ func (h *AIHandler) HandleRevert(w http.ResponseWriter, r *http.Request, session
 func (h *AIHandler) HandleUnrevert(w http.ResponseWriter, r *http.Request, sessionID string) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -766,7 +770,7 @@ type AnswerQuestionRequest struct {
 func (h *AIHandler) HandleAnswerQuestion(w http.ResponseWriter, r *http.Request, questionID string) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
-		http.Error(w, "AI is not running", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -792,7 +796,7 @@ func (h *AIHandler) HandleAnswerQuestion(w http.ResponseWriter, r *http.Request,
 
 	svc := h.GetService(ctx)
 	if svc == nil {
-		http.Error(w, "AI service not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
 		return
 	}
 

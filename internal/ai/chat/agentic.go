@@ -24,9 +24,10 @@ type AgenticLoop struct {
 	maxTurns     int
 
 	// State for ongoing executions
-	mu        sync.Mutex
-	aborted   map[string]bool                  // sessionID -> aborted
-	pendingQs map[string]chan []QuestionAnswer // questionID -> answer channel
+	mu             sync.Mutex
+	aborted        map[string]bool                  // sessionID -> aborted
+	pendingQs      map[string]chan []QuestionAnswer // questionID -> answer channel
+	autonomousMode bool                             // When true, don't wait for approvals (for investigations)
 }
 
 // NewAgenticLoop creates a new agentic loop
@@ -104,7 +105,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			Int("turn", turn).
 			Int("messages", len(providerMessages)).
 			Int("tools", len(tools)).
-			Msg("Agentic loop turn")
+			Str("session_id", sessionID).
+			Msg("[AgenticLoop] Starting turn")
 
 		// Build the request
 		req := providers.ChatRequest{
@@ -117,6 +119,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		var contentBuilder strings.Builder
 		var thinkingBuilder strings.Builder
 		var toolCalls []providers.ToolCall
+
+		log.Debug().
+			Str("session_id", sessionID).
+			Int("system_prompt_len", len(a.systemPrompt)).
+			Msg("[AgenticLoop] Calling provider.ChatStream")
 
 		err := a.provider.ChatStream(ctx, req, func(event providers.StreamEvent) {
 			switch event.Type {
@@ -166,7 +173,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 		})
 
+		log.Debug().
+			Str("session_id", sessionID).
+			Err(err).
+			Int("content_len", contentBuilder.Len()).
+			Int("tool_calls", len(toolCalls)).
+			Msg("[AgenticLoop] provider.ChatStream returned")
+
 		if err != nil {
+			log.Error().
+				Err(err).
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Provider error")
 			return resultMessages, fmt.Errorf("provider error: %w", err)
 		}
 
@@ -274,39 +292,55 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					})
 					callback(StreamEvent{Type: "approval_needed", Data: jsonData})
 
-					// Wait for approval decision (poll with timeout)
-					store := approval.GetStore()
-					if store != nil {
-						approvalCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-						decision, waitErr := waitForApprovalDecision(approvalCtx, store, approvalData.ApprovalID)
-						cancel()
+					// In autonomous mode (investigations), don't wait for approval.
+					// Instead, return with approval info so the orchestrator can queue it.
+					a.mu.Lock()
+					isAutonomous := a.autonomousMode
+					a.mu.Unlock()
 
-						if waitErr != nil {
-							resultText = fmt.Sprintf("Approval timeout or error: %v", waitErr)
-							isError = true
-						} else if decision.Status == approval.StatusApproved {
-							// Re-execute the tool with approval granted
-							// Add approval_id to input so tool knows this is pre-approved
-							inputWithApproval := make(map[string]interface{})
-							for k, v := range tc.Input {
-								inputWithApproval[k] = v
-							}
-							inputWithApproval["_approval_id"] = approvalData.ApprovalID
-							result, err = a.executor.ExecuteTool(ctx, tc.Name, inputWithApproval)
-							if err != nil {
-								resultText = fmt.Sprintf("Error after approval: %v", err)
+					if isAutonomous {
+						log.Debug().
+							Str("approval_id", approvalData.ApprovalID).
+							Str("command", approvalData.Command).
+							Msg("[AgenticLoop] Autonomous mode: returning approval request without waiting")
+						// Return special message indicating fix is queued for approval
+						resultText = fmt.Sprintf("FIX_QUEUED: This action requires user approval. The fix has been queued for review. Approval ID: %s, Command: %s", approvalData.ApprovalID, approvalData.Command)
+						isError = false
+					} else {
+						// Wait for approval decision (poll with timeout)
+						store := approval.GetStore()
+						if store != nil {
+							approvalCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+							decision, waitErr := waitForApprovalDecision(approvalCtx, store, approvalData.ApprovalID)
+							cancel()
+
+							if waitErr != nil {
+								resultText = fmt.Sprintf("Approval timeout or error: %v", waitErr)
 								isError = true
+							} else if decision.Status == approval.StatusApproved {
+								// Re-execute the tool with approval granted
+								// Add approval_id to input so tool knows this is pre-approved
+								inputWithApproval := make(map[string]interface{})
+								for k, v := range tc.Input {
+									inputWithApproval[k] = v
+								}
+								inputWithApproval["_approval_id"] = approvalData.ApprovalID
+								result, err = a.executor.ExecuteTool(ctx, tc.Name, inputWithApproval)
+								if err != nil {
+									resultText = fmt.Sprintf("Error after approval: %v", err)
+									isError = true
+								} else {
+									resultText = FormatToolResult(result)
+									isError = result.IsError
+								}
 							} else {
-								resultText = FormatToolResult(result)
-								isError = result.IsError
+								resultText = fmt.Sprintf("Command denied: %s", decision.DenyReason)
+								isError = false
 							}
 						} else {
-							resultText = fmt.Sprintf("Command denied: %s", decision.DenyReason)
-							isError = false
+							resultText = "Approval system not available"
+							isError = true
 						}
-					} else {
-						resultText = "Approval system not available"
-						isError = true
 					}
 				}
 			}
@@ -365,6 +399,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 func (a *AgenticLoop) Abort(sessionID string) {
 	a.mu.Lock()
 	a.aborted[sessionID] = true
+	a.mu.Unlock()
+}
+
+// SetAutonomousMode sets whether the loop is in autonomous mode (for investigations).
+// When enabled, approval requests don't block waiting for user input.
+func (a *AgenticLoop) SetAutonomousMode(enabled bool) {
+	a.mu.Lock()
+	a.autonomousMode = enabled
 	a.mu.Unlock()
 }
 

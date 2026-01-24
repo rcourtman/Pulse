@@ -12,9 +12,12 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	aicontext "github.com/rcourtman/pulse-go-rewrite/internal/ai/context"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
@@ -214,7 +217,8 @@ type PatrolRunRecord struct {
 	ID               string        `json:"id"`
 	StartedAt        time.Time     `json:"started_at"`
 	CompletedAt      time.Time     `json:"completed_at"`
-	Duration         time.Duration `json:"duration_ms"`
+	Duration         time.Duration `json:"-"`
+	DurationMs       int64         `json:"duration_ms"`
 	Type             string        `json:"type"` // Always "patrol" now (kept for backwards compat)
 	ResourcesChecked int           `json:"resources_checked"`
 	// Breakdown by resource type
@@ -243,10 +247,88 @@ type PatrolRunRecord struct {
 // MaxPatrolRunHistory is the maximum number of patrol runs to keep in history
 const MaxPatrolRunHistory = 100
 
-// ChatPatrolRunner interface allows delegating patrol to the AI chat service
-type ChatPatrolRunner interface {
-	RunPatrol(ctx context.Context) error
-	IsRunning() bool
+// LearningProvider provides learned preferences for patrol context
+type LearningProvider interface {
+	// FormatForContext returns learned preferences formatted for AI prompt injection
+	FormatForContext() string
+}
+
+// ProxmoxEventProvider provides recent Proxmox events for patrol context
+type ProxmoxEventProvider interface {
+	// FormatForPatrol formats recent events for AI patrol context
+	FormatForPatrol(duration time.Duration) string
+}
+
+// ForecastProvider provides trend forecasts for patrol context
+type ForecastProvider interface {
+	// FormatKeyForecasts returns formatted forecasts for resources with concerning trends
+	FormatKeyForecasts() string
+}
+
+// UnifiedFindingCallback is called when patrol creates a new finding
+// It allows the unified store to receive patrol findings in addition to alerts
+type UnifiedFindingCallback func(f *Finding) bool
+
+// InvestigationOrchestrator defines the interface for autonomous investigation of findings
+type InvestigationOrchestrator interface {
+	// InvestigateFinding starts an investigation for a finding
+	InvestigateFinding(ctx context.Context, finding *InvestigationFinding, autonomyLevel string) error
+	// GetInvestigationByFinding returns the latest investigation for a finding
+	GetInvestigationByFinding(findingID string) *InvestigationSession
+	// GetRunningCount returns the number of running investigations
+	GetRunningCount() int
+	// GetFixedCount returns the number of issues auto-fixed by Patrol
+	GetFixedCount() int
+	// CanStartInvestigation returns true if a new investigation can be started
+	CanStartInvestigation() bool
+	// ReinvestigateFinding triggers a re-investigation of a finding
+	ReinvestigateFinding(ctx context.Context, findingID, autonomyLevel string) error
+}
+
+// InvestigationFinding is the finding type expected by the orchestrator
+type InvestigationFinding struct {
+	ID                     string
+	Severity               string
+	Category               string
+	ResourceID             string
+	ResourceName           string
+	ResourceType           string
+	Title                  string
+	Description            string
+	Recommendation         string
+	Evidence               string
+	InvestigationSessionID string
+	InvestigationStatus    string
+	InvestigationOutcome   string
+	LastInvestigatedAt     *time.Time
+	InvestigationAttempts  int
+}
+
+// InvestigationSession represents the result of an investigation (minimal interface)
+type InvestigationSession struct {
+	ID          string            `json:"id"`
+	FindingID   string            `json:"finding_id"`
+	SessionID   string            `json:"session_id"`
+	Status      string            `json:"status"`
+	StartedAt   time.Time         `json:"started_at"`
+	CompletedAt *time.Time        `json:"completed_at,omitempty"`
+	TurnCount   int               `json:"turn_count"`
+	Outcome     string            `json:"outcome,omitempty"`
+	Summary     string            `json:"summary,omitempty"`
+	Error       string            `json:"error,omitempty"`
+	ProposedFix *InvestigationFix `json:"proposed_fix,omitempty"`
+	ApprovalID  string            `json:"approval_id,omitempty"`
+}
+
+// InvestigationFix represents a proposed remediation action
+type InvestigationFix struct {
+	ID          string   `json:"id"`
+	Description string   `json:"description"`
+	Commands    []string `json:"commands,omitempty"`
+	RiskLevel   string   `json:"risk_level,omitempty"`
+	Destructive bool     `json:"destructive"`
+	TargetHost  string   `json:"target_host,omitempty"`
+	Rationale   string   `json:"rationale,omitempty"`
 }
 
 // PatrolService runs background AI analysis of infrastructure
@@ -268,12 +350,28 @@ type PatrolService struct {
 	incidentStore       *memory.IncidentStore  // For incident timeline capture
 	alertResolver       AlertResolver          // For AI-based alert resolution
 
+	// New AI intelligence providers (Phase 6)
+	learningProvider     LearningProvider     // For learned preferences from user feedback
+	proxmoxEventProvider ProxmoxEventProvider // For recent Proxmox operations
+	forecastProvider     ForecastProvider     // For trend forecasts
+
+	// Event-driven patrol triggers (Phase 7)
+	triggerManager *TriggerManager // For event-driven patrol scheduling
+
 	// Unified intelligence facade - aggregates all subsystems for unified view
 	intelligence *Intelligence
 
-	// AI chat integration - when set and enabled, delegate patrol to the AI chat service
-	chatPatrol    ChatPatrolRunner
-	useChatPatrol bool // Whether to use AI chat for patrol
+	// Circuit breaker for resilient AI API calls
+	circuitBreaker *circuit.Breaker
+
+	// Remediation engine for generating fix plans from findings
+	remediationEngine *remediation.Engine
+
+	// Investigation orchestrator for autonomous investigation of findings
+	investigationOrchestrator InvestigationOrchestrator
+
+	// Unified findings callback - pushes findings to unified store
+	unifiedFindingCallback UnifiedFindingCallback
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds    PatrolThresholds
@@ -281,6 +379,7 @@ type PatrolService struct {
 
 	// Runtime state
 	running          bool
+	runInProgress    bool
 	stopCh           chan struct{}
 	configChanged    chan struct{} // Signal when config changes to reset ticker
 	lastPatrol       time.Time
@@ -290,6 +389,9 @@ type PatrolService struct {
 
 	// Patrol run history with persistence support
 	runHistoryStore *PatrolRunHistoryStore
+
+	// Ad-hoc trigger channel for event-driven patrols (alert driven)
+	adHocTrigger chan *alerts.Alert
 
 	// Live streaming support
 	streamMu          sync.RWMutex
@@ -318,6 +420,7 @@ func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolSe
 		runHistoryStore:   NewPatrolRunHistoryStore(MaxPatrolRunHistory),
 		streamSubscribers: make(map[chan PatrolStreamEvent]struct{}),
 		streamPhase:       "idle",
+		adHocTrigger:      make(chan *alerts.Alert, 10), // Buffer triggers
 	}
 }
 
@@ -351,14 +454,331 @@ func (p *PatrolService) GetAlertResolver() AlertResolver {
 	return p.alertResolver
 }
 
-// SetChatPatrol sets the chat-based patrol runner for delegation.
-// When enabled, patrol will be handled by the AI chat service.
-func (p *PatrolService) SetChatPatrol(runner ChatPatrolRunner, enabled bool) {
+// SetCircuitBreaker sets the circuit breaker for resilient AI API calls.
+// When set, AI calls during patrol will be protected by the circuit breaker.
+func (p *PatrolService) SetCircuitBreaker(breaker *circuit.Breaker) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.chatPatrol = runner
-	p.useChatPatrol = enabled
-	log.Info().Bool("enabled", enabled).Msg("AI chat patrol integration configured")
+	p.circuitBreaker = breaker
+	log.Info().Msg("Circuit breaker configured for patrol")
+}
+
+// SetRemediationEngine sets the remediation engine for generating fix plans from findings
+func (p *PatrolService) SetRemediationEngine(engine *remediation.Engine) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.remediationEngine = engine
+	log.Info().Msg("Remediation engine configured for patrol")
+}
+
+// GetRemediationEngine returns the remediation engine
+func (p *PatrolService) GetRemediationEngine() *remediation.Engine {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.remediationEngine
+}
+
+// SetInvestigationOrchestrator sets the investigation orchestrator for autonomous finding investigation
+func (p *PatrolService) SetInvestigationOrchestrator(orchestrator InvestigationOrchestrator) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.investigationOrchestrator = orchestrator
+	log.Info().Msg("Investigation orchestrator configured for patrol")
+}
+
+// GetInvestigationOrchestrator returns the investigation orchestrator
+func (p *PatrolService) GetInvestigationOrchestrator() InvestigationOrchestrator {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.investigationOrchestrator
+}
+
+// SetUnifiedFindingCallback sets the callback for pushing findings to the unified store
+// When set, it also syncs existing active findings to the unified store
+func (p *PatrolService) SetUnifiedFindingCallback(cb UnifiedFindingCallback) {
+	p.mu.Lock()
+	p.unifiedFindingCallback = cb
+	findings := p.findings
+	p.mu.Unlock()
+
+	// Sync existing active findings to unified store
+	if cb != nil && findings != nil {
+		activeFindings := findings.GetActive(FindingSeverityInfo)
+		synced := 0
+		for _, f := range activeFindings {
+			if cb(f) {
+				synced++
+			}
+		}
+		log.Info().
+			Int("synced", synced).
+			Int("total", len(activeFindings)).
+			Msg("Unified finding callback configured and existing findings synced")
+	} else {
+		log.Info().Msg("Unified finding callback configured for patrol")
+	}
+}
+
+// generateRemediationPlan creates a remediation plan for a finding if appropriate.
+// Only generates plans for critical/warning findings when a remediation engine is configured.
+func (p *PatrolService) generateRemediationPlan(finding *Finding) {
+	p.mu.RLock()
+	engine := p.remediationEngine
+	p.mu.RUnlock()
+
+	if engine == nil {
+		return
+	}
+
+	// Only generate plans for actionable findings
+	if finding.Severity != FindingSeverityCritical && finding.Severity != FindingSeverityWarning {
+		return
+	}
+
+	// Generate remediation steps based on finding category and resource type
+	steps := p.generateRemediationSteps(finding)
+	if len(steps) == 0 {
+		return
+	}
+
+	// Determine risk level based on finding severity and category
+	riskLevel := remediation.RiskLow
+	if finding.Severity == FindingSeverityWarning {
+		riskLevel = remediation.RiskMedium
+	}
+	if finding.Severity == FindingSeverityCritical {
+		riskLevel = remediation.RiskHigh
+	}
+	// Reliability issues involving restarts/reboots are higher risk
+	if finding.Category == FindingCategoryReliability {
+		title := strings.ToLower(finding.Title)
+		if strings.Contains(title, "restart") || strings.Contains(title, "reboot") || strings.Contains(title, "offline") {
+			if riskLevel < remediation.RiskHigh {
+				riskLevel = remediation.RiskHigh
+			}
+		} else if riskLevel < remediation.RiskMedium {
+			riskLevel = remediation.RiskMedium
+		}
+	}
+
+	// Create the remediation plan
+	plan := &remediation.RemediationPlan{
+		FindingID:   finding.ID,
+		ResourceID:  finding.ResourceID,
+		Title:       fmt.Sprintf("Fix: %s", finding.Title),
+		Description: finding.Description,
+		Category:    remediation.CategoryGuided, // All auto-generated plans require user approval
+		RiskLevel:   riskLevel,
+		Steps:       steps,
+		Rationale:   finding.Recommendation,
+	}
+
+	// Add warnings based on risk level
+	if riskLevel == remediation.RiskHigh {
+		plan.Warnings = append(plan.Warnings, "High risk: This action may cause service disruption. Review carefully and consider scheduling during maintenance window.")
+	} else if riskLevel == remediation.RiskMedium {
+		plan.Warnings = append(plan.Warnings, "Review steps carefully before execution")
+	}
+
+	if err := engine.CreatePlan(plan); err != nil {
+		log.Debug().
+			Err(err).
+			Str("finding_id", finding.ID).
+			Str("resource", finding.ResourceName).
+			Msg("AI Patrol: Failed to create remediation plan")
+		return
+	}
+
+	log.Info().
+		Str("plan_id", plan.ID).
+		Str("finding_id", finding.ID).
+		Str("resource", finding.ResourceName).
+		Int("steps", len(steps)).
+		Msg("AI Patrol: Remediation plan generated")
+}
+
+// generateRemediationSteps creates appropriate steps based on finding type
+func (p *PatrolService) generateRemediationSteps(finding *Finding) []remediation.RemediationStep {
+	var steps []remediation.RemediationStep
+
+	switch finding.Category {
+	case FindingCategoryPerformance:
+		steps = p.generatePerformanceSteps(finding)
+	case FindingCategoryCapacity:
+		steps = p.generateCapacitySteps(finding)
+	case FindingCategoryReliability:
+		steps = p.generateAvailabilitySteps(finding)
+	case FindingCategoryBackup:
+		steps = p.generateBackupSteps(finding)
+	case FindingCategorySecurity:
+		steps = p.generateSecuritySteps(finding)
+	case FindingCategoryGeneral:
+		steps = p.generateConfigurationSteps(finding)
+	default:
+		// Generic investigation steps for unknown categories
+		steps = []remediation.RemediationStep{
+			{Order: 1, Description: "Investigate the issue by reviewing current resource state"},
+			{Order: 2, Description: "Review recent changes that may have caused this issue"},
+			{Order: 3, Description: "Take appropriate corrective action based on findings"},
+		}
+	}
+
+	return steps
+}
+
+// generatePerformanceSteps creates steps for performance issues
+func (p *PatrolService) generatePerformanceSteps(finding *Finding) []remediation.RemediationStep {
+	title := strings.ToLower(finding.Title)
+
+	if strings.Contains(title, "cpu") {
+		return []remediation.RemediationStep{
+			{Order: 1, Description: "Identify processes consuming excessive CPU", Target: finding.ResourceID},
+			{Order: 2, Description: "Check if resource needs more CPU cores allocated"},
+			{Order: 3, Description: "Consider migrating to a less loaded host if VM/container"},
+			{Order: 4, Description: "Optimize or restart resource-hungry applications"},
+		}
+	}
+
+	if strings.Contains(title, "memory") || strings.Contains(title, "ram") {
+		return []remediation.RemediationStep{
+			{Order: 1, Description: "Identify processes consuming excessive memory", Target: finding.ResourceID},
+			{Order: 2, Description: "Check for memory leaks in running applications"},
+			{Order: 3, Description: "Consider increasing allocated memory"},
+			{Order: 4, Description: "Restart affected services to reclaim memory"},
+		}
+	}
+
+	if strings.Contains(title, "io") || strings.Contains(title, "disk") {
+		return []remediation.RemediationStep{
+			{Order: 1, Description: "Identify processes causing high disk I/O", Target: finding.ResourceID},
+			{Order: 2, Description: "Check for runaway log files or heavy writes"},
+			{Order: 3, Description: "Consider migrating to faster storage"},
+		}
+	}
+
+	// Generic performance steps
+	return []remediation.RemediationStep{
+		{Order: 1, Description: "Review current resource utilization metrics", Target: finding.ResourceID},
+		{Order: 2, Description: "Identify performance bottlenecks"},
+		{Order: 3, Description: "Optimize resource allocation or application configuration"},
+	}
+}
+
+// generateCapacitySteps creates steps for capacity issues
+func (p *PatrolService) generateCapacitySteps(finding *Finding) []remediation.RemediationStep {
+	title := strings.ToLower(finding.Title)
+
+	if strings.Contains(title, "disk") || strings.Contains(title, "storage") {
+		return []remediation.RemediationStep{
+			{Order: 1, Description: "Identify largest files and directories consuming space", Target: finding.ResourceID},
+			{Order: 2, Description: "Clean up temporary files, logs, and caches"},
+			{Order: 3, Description: "Remove unused packages and old kernels"},
+			{Order: 4, Description: "Consider expanding disk or adding additional storage"},
+		}
+	}
+
+	if strings.Contains(title, "memory") {
+		return []remediation.RemediationStep{
+			{Order: 1, Description: "Review memory allocation across workloads", Target: finding.ResourceID},
+			{Order: 2, Description: "Reduce memory allocation on over-provisioned VMs"},
+			{Order: 3, Description: "Add more physical memory to the host"},
+		}
+	}
+
+	// Generic capacity steps
+	return []remediation.RemediationStep{
+		{Order: 1, Description: "Review current capacity utilization", Target: finding.ResourceID},
+		{Order: 2, Description: "Identify growth trends and plan for expansion"},
+		{Order: 3, Description: "Clean up unused resources to free capacity"},
+	}
+}
+
+// generateAvailabilitySteps creates steps for availability issues
+func (p *PatrolService) generateAvailabilitySteps(finding *Finding) []remediation.RemediationStep {
+	title := strings.ToLower(finding.Title)
+
+	if strings.Contains(title, "offline") || strings.Contains(title, "down") {
+		return []remediation.RemediationStep{
+			{Order: 1, Description: "Verify network connectivity to the resource", Target: finding.ResourceID},
+			{Order: 2, Description: "Check host status if this is a VM/container"},
+			{Order: 3, Description: "Review system logs for crash or shutdown reasons"},
+			{Order: 4, Description: "Attempt to start or restart the resource"},
+		}
+	}
+
+	if strings.Contains(title, "restart") || strings.Contains(title, "reboot") {
+		return []remediation.RemediationStep{
+			{Order: 1, Description: "Review system logs for cause of restarts", Target: finding.ResourceID},
+			{Order: 2, Description: "Check for OOM kills or kernel panics"},
+			{Order: 3, Description: "Investigate application crashes"},
+			{Order: 4, Description: "Consider enabling watchdog or health checks"},
+		}
+	}
+
+	// Generic availability steps
+	return []remediation.RemediationStep{
+		{Order: 1, Description: "Verify resource health and connectivity", Target: finding.ResourceID},
+		{Order: 2, Description: "Review recent events and logs"},
+		{Order: 3, Description: "Take corrective action to restore availability"},
+	}
+}
+
+// generateBackupSteps creates steps for backup-related issues
+func (p *PatrolService) generateBackupSteps(finding *Finding) []remediation.RemediationStep {
+	title := strings.ToLower(finding.Title)
+
+	if strings.Contains(title, "missing") || strings.Contains(title, "no backup") {
+		return []remediation.RemediationStep{
+			{Order: 1, Description: "Verify backup job configuration exists", Target: finding.ResourceID},
+			{Order: 2, Description: "Check backup storage availability and capacity"},
+			{Order: 3, Description: "Create or enable backup schedule"},
+			{Order: 4, Description: "Run initial backup job"},
+		}
+	}
+
+	if strings.Contains(title, "failed") || strings.Contains(title, "error") {
+		return []remediation.RemediationStep{
+			{Order: 1, Description: "Review backup job logs for error details", Target: finding.ResourceID},
+			{Order: 2, Description: "Check backup storage connectivity and space"},
+			{Order: 3, Description: "Verify backup credentials and permissions"},
+			{Order: 4, Description: "Retry backup job after fixing issues"},
+		}
+	}
+
+	if strings.Contains(title, "old") || strings.Contains(title, "stale") || strings.Contains(title, "outdated") {
+		return []remediation.RemediationStep{
+			{Order: 1, Description: "Check why scheduled backups are not running", Target: finding.ResourceID},
+			{Order: 2, Description: "Review backup retention policy"},
+			{Order: 3, Description: "Trigger a new backup immediately"},
+		}
+	}
+
+	// Generic backup steps
+	return []remediation.RemediationStep{
+		{Order: 1, Description: "Review backup configuration and schedule", Target: finding.ResourceID},
+		{Order: 2, Description: "Verify backup storage health"},
+		{Order: 3, Description: "Ensure backup jobs are running successfully"},
+	}
+}
+
+// generateConfigurationSteps creates steps for configuration issues
+func (p *PatrolService) generateConfigurationSteps(finding *Finding) []remediation.RemediationStep {
+	return []remediation.RemediationStep{
+		{Order: 1, Description: "Review current configuration settings", Target: finding.ResourceID},
+		{Order: 2, Description: "Compare against recommended best practices"},
+		{Order: 3, Description: "Apply configuration changes as needed"},
+		{Order: 4, Description: "Verify changes don't impact dependent services"},
+	}
+}
+
+// generateSecuritySteps creates steps for security issues
+func (p *PatrolService) generateSecuritySteps(finding *Finding) []remediation.RemediationStep {
+	return []remediation.RemediationStep{
+		{Order: 1, Description: "Assess the security impact and urgency", Target: finding.ResourceID},
+		{Order: 2, Description: "Review access logs for suspicious activity"},
+		{Order: 3, Description: "Apply security patches or configuration fixes"},
+		{Order: 4, Description: "Verify remediation and update security policies"},
+	}
 }
 
 // SetConfig updates the patrol configuration
@@ -468,6 +888,13 @@ func (p *PatrolService) SetKnowledgeStore(store *knowledge.Store) {
 	p.knowledgeStore = store
 }
 
+// GetKnowledgeStore returns the knowledge store for external wiring
+func (p *PatrolService) GetKnowledgeStore() *knowledge.Store {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.knowledgeStore
+}
+
 // SetMetricsHistoryProvider sets the metrics history provider for enriched context
 // This enables the patrol service to compute trends and predictions based on historical data
 func (p *PatrolService) SetMetricsHistoryProvider(provider MetricsHistoryProvider) {
@@ -553,6 +980,284 @@ func (p *PatrolService) GetCorrelationDetector() *CorrelationDetector {
 	return p.correlationDetector
 }
 
+// SetLearningProvider sets the learning provider for user feedback context
+func (p *PatrolService) SetLearningProvider(provider LearningProvider) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.learningProvider = provider
+	log.Info().Msg("AI Patrol: Learning provider set for user preference context")
+}
+
+// SetProxmoxEventProvider sets the Proxmox event provider for operations context
+func (p *PatrolService) SetProxmoxEventProvider(provider ProxmoxEventProvider) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.proxmoxEventProvider = provider
+	log.Info().Msg("AI Patrol: Proxmox event provider set for operations context")
+}
+
+// SetForecastProvider sets the forecast provider for trend predictions
+func (p *PatrolService) SetForecastProvider(provider ForecastProvider) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.forecastProvider = provider
+	log.Info().Msg("AI Patrol: Forecast provider set for trend predictions")
+}
+
+// SetTriggerManager sets the event-driven trigger manager for patrol scheduling.
+// When set, the trigger manager handles event-driven patrol execution alongside
+// the scheduled patrol loop.
+func (p *PatrolService) SetTriggerManager(tm *TriggerManager) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.triggerManager = tm
+	if tm != nil {
+		log.Info().Msg("AI Patrol: Trigger manager set for event-driven patrol")
+	}
+}
+
+// GetTriggerManager returns the trigger manager
+func (p *PatrolService) GetTriggerManager() *TriggerManager {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.triggerManager
+}
+
+// TriggerScopedPatrol runs a targeted patrol for specific resources.
+// This is called by the TriggerManager for event-driven patrols.
+// When ResourceIDs or ResourceTypes are specified in the scope, only those resources
+// are analyzed, reducing token usage and providing faster, more focused analysis.
+func (p *PatrolService) TriggerScopedPatrol(ctx context.Context, scope PatrolScope) {
+	p.mu.RLock()
+	cfg := p.config
+	p.mu.RUnlock()
+
+	if !cfg.Enabled {
+		log.Debug().Msg("AI Patrol: Scoped patrol skipped - patrol disabled")
+		return
+	}
+
+	// Log the scoped patrol
+	log.Info().
+		Str("reason", string(scope.Reason)).
+		Strs("resources", scope.ResourceIDs).
+		Strs("types", scope.ResourceTypes).
+		Str("depth", scope.Depth.String()).
+		Str("context", scope.Context).
+		Msg("AI Patrol: Running scoped patrol")
+
+	// If no specific resources or types are specified, run full patrol
+	if len(scope.ResourceIDs) == 0 && len(scope.ResourceTypes) == 0 {
+		p.runPatrol(ctx)
+		return
+	}
+
+	// Run scoped patrol with filtered resources
+	p.runScopedPatrol(ctx, scope)
+}
+
+// runScopedPatrol runs a patrol on a filtered subset of resources.
+// This provides token-efficient analysis for event-driven patrols.
+func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) {
+	p.mu.RLock()
+	cfg := p.config
+	breaker := p.circuitBreaker
+	p.mu.RUnlock()
+
+	if !cfg.Enabled {
+		return
+	}
+
+	if !p.tryStartRun("scoped") {
+		return
+	}
+	defer p.endRun()
+
+	// Check if circuit breaker allows LLM calls
+	llmAllowed := breaker == nil || breaker.Allow()
+	if !llmAllowed {
+		log.Warn().Msg("AI Patrol: Circuit breaker is open for scoped patrol, running heuristics only")
+	}
+
+	start := time.Now()
+
+	// Get current state
+	if p.stateProvider == nil {
+		log.Warn().Msg("AI Patrol: No state provider available for scoped patrol")
+		return
+	}
+
+	fullState := p.stateProvider.GetState()
+
+	// Filter state based on scope
+	filteredState := p.filterStateByScope(fullState, scope)
+
+	// Count filtered resources
+	resourceCount := len(filteredState.Nodes) + len(filteredState.VMs) + len(filteredState.Containers) +
+		len(filteredState.DockerHosts) + len(filteredState.Storage) + len(filteredState.PBSInstances) +
+		len(filteredState.Hosts) + len(filteredState.KubernetesClusters)
+
+	if resourceCount == 0 {
+		log.Debug().
+			Strs("requested_ids", scope.ResourceIDs).
+			Strs("requested_types", scope.ResourceTypes).
+			Msg("AI Patrol: No resources matched scope filter")
+		return
+	}
+
+	log.Debug().
+		Int("resource_count", resourceCount).
+		Str("reason", string(scope.Reason)).
+		Msg("AI Patrol: Running scoped analysis")
+
+	// Determine if we can run LLM analysis
+	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
+	hasPatrolFeature := aiServiceEnabled && p.aiService.HasLicenseFeature(FeatureAIPatrol)
+	canRunLLM := hasPatrolFeature && llmAllowed
+
+	if !canRunLLM {
+		reason := "requires Pulse Pro license for LLM analysis"
+		if !aiServiceEnabled {
+			reason = "Pulse Assistant service not configured - configure a provider in Settings > Pulse Assistant"
+		} else if !llmAllowed {
+			reason = "circuit breaker is open"
+		}
+		log.Debug().Str("reason", reason).Msg("AI Patrol: Running scoped heuristic analysis only")
+		// Run heuristics on filtered state only
+		for _, f := range p.runHeuristicAnalysis(filteredState) {
+			isNew := p.findings.Add(f)
+			if isNew && (f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical) {
+				log.Info().
+					Str("finding_id", f.ID).
+					Str("severity", string(f.Severity)).
+					Str("resource", f.ResourceName).
+					Str("title", f.Title).
+					Msg("AI Patrol (scoped): New finding")
+				p.generateRemediationPlan(f)
+			}
+			// Push to unified store if active
+			if p.unifiedFindingCallback != nil {
+				if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
+					p.unifiedFindingCallback(stored)
+				}
+			}
+		}
+	} else {
+		// Run AI analysis on filtered state
+		aiResult, aiErr := p.runAIAnalysis(ctx, filteredState)
+		if aiErr != nil {
+			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed")
+		} else if aiResult != nil {
+			for _, f := range aiResult.Findings {
+				isNew := p.findings.Add(f)
+				if isNew && (f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical) {
+					log.Info().
+						Str("finding_id", f.ID).
+						Str("severity", string(f.Severity)).
+						Str("resource", f.ResourceName).
+						Str("title", f.Title).
+						Msg("AI Patrol (scoped): New finding")
+					if !(f.Key == "ai-patrol-error" || f.ResourceID == "ai-service") {
+						p.generateRemediationPlan(f)
+					}
+				}
+				// Push to unified store if active
+				if p.unifiedFindingCallback != nil {
+					if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
+						p.unifiedFindingCallback(stored)
+					}
+				}
+			}
+		}
+	}
+
+	duration := time.Since(start)
+	log.Info().
+		Dur("duration", duration).
+		Int("resources", resourceCount).
+		Str("reason", string(scope.Reason)).
+		Msg("AI Patrol: Scoped patrol complete")
+}
+
+// filterStateByScope filters a StateSnapshot to only include resources matching the scope.
+func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope PatrolScope) models.StateSnapshot {
+	// Build lookup sets for efficient matching
+	resourceIDSet := make(map[string]bool)
+	for _, id := range scope.ResourceIDs {
+		resourceIDSet[id] = true
+	}
+
+	typeSet := make(map[string]bool)
+	for _, t := range scope.ResourceTypes {
+		trimmed := strings.TrimSpace(t)
+		if trimmed == "" {
+			continue
+		}
+		typeSet[strings.ToLower(trimmed)] = true
+	}
+
+	// Helper to check if a resource matches the scope
+	matchesScope := func(id, resourceType string) bool {
+		hasIDs := len(resourceIDSet) > 0
+		hasTypes := len(typeSet) > 0
+		idMatch := !hasIDs || resourceIDSet[id]
+		typeMatch := !hasTypes || typeSet[strings.ToLower(resourceType)]
+		return idMatch && typeMatch
+	}
+
+	filtered := models.StateSnapshot{
+		LastUpdate:       state.LastUpdate,
+		ConnectionHealth: state.ConnectionHealth,
+		Stats:            state.Stats,
+		ActiveAlerts:     state.ActiveAlerts,
+		RecentlyResolved: state.RecentlyResolved,
+	}
+
+	// Filter each resource type
+	for _, n := range state.Nodes {
+		if matchesScope(n.ID, "node") {
+			filtered.Nodes = append(filtered.Nodes, n)
+		}
+	}
+	for _, vm := range state.VMs {
+		if matchesScope(vm.ID, "vm") {
+			filtered.VMs = append(filtered.VMs, vm)
+		}
+	}
+	for _, c := range state.Containers {
+		if matchesScope(c.ID, "container") || matchesScope(c.ID, "lxc") {
+			filtered.Containers = append(filtered.Containers, c)
+		}
+	}
+	for _, d := range state.DockerHosts {
+		if matchesScope(d.ID, "docker") {
+			filtered.DockerHosts = append(filtered.DockerHosts, d)
+		}
+	}
+	for _, s := range state.Storage {
+		if matchesScope(s.ID, "storage") {
+			filtered.Storage = append(filtered.Storage, s)
+		}
+	}
+	for _, pbs := range state.PBSInstances {
+		if matchesScope(pbs.ID, "pbs") {
+			filtered.PBSInstances = append(filtered.PBSInstances, pbs)
+		}
+	}
+	for _, h := range state.Hosts {
+		if matchesScope(h.ID, "host") {
+			filtered.Hosts = append(filtered.Hosts, h)
+		}
+	}
+	for _, k := range state.KubernetesClusters {
+		if matchesScope(k.ID, "kubernetes") || matchesScope(k.ID, "k8s") {
+			filtered.KubernetesClusters = append(filtered.KubernetesClusters, k)
+		}
+	}
+
+	return filtered
+}
+
 // GetChangeDetector returns the change detector
 func (p *PatrolService) GetChangeDetector() *ChangeDetector {
 	p.mu.RLock()
@@ -612,10 +1317,7 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 	intervalMs := int64(interval / time.Millisecond)
 
 	// "Running" means an analysis is currently in progress, not just the service loop
-	// Check streamPhase to determine if we're actively analyzing
-	p.streamMu.RLock()
-	analysisInProgress := p.streamPhase == "analyzing"
-	p.streamMu.RUnlock()
+	analysisInProgress := p.runInProgress
 
 	status := PatrolStatus{
 		Running:          analysisInProgress,
@@ -631,8 +1333,8 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 		status.LastPatrolAt = &p.lastPatrol
 	}
 
-	// Calculate next patrol time if we have interval and last patrol time
-	if interval > 0 && !p.lastPatrol.IsZero() {
+	// Calculate next patrol time only when patrol is enabled
+	if p.config.Enabled && interval > 0 && !p.lastPatrol.IsZero() {
 		next := p.lastPatrol.Add(interval)
 		status.NextPatrolAt = &next
 	}
@@ -806,6 +1508,11 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 		case <-ticker.C:
 			p.runPatrol(ctx)
 
+		case alert := <-p.adHocTrigger:
+			// Run immediate targeted patrol for this alert
+			log.Info().Str("alert_id", alert.ID).Msg("Patrol triggered by alert")
+			p.runTargetedPatrol(ctx, alert)
+
 		case <-configCh:
 			// Config changed - reset ticker with new interval
 			p.mu.RLock()
@@ -833,41 +1540,23 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 func (p *PatrolService) runPatrol(ctx context.Context) {
 	p.mu.RLock()
 	cfg := p.config
-	chatPatrol := p.chatPatrol
-	useChatPatrol := p.useChatPatrol
+	breaker := p.circuitBreaker
 	p.mu.RUnlock()
 
 	if !cfg.Enabled {
 		return
 	}
 
-	// Delegate to AI chat patrol if configured
-	if useChatPatrol && chatPatrol != nil {
-		log.Info().Msg("AI Patrol: Delegating to AI chat patrol")
-		if err := chatPatrol.RunPatrol(ctx); err != nil {
-			log.Error().Err(err).Msg("AI Patrol: AI chat patrol failed")
-		}
-
-		// AI-resolve findings after chat patrol completes
-		// The AI uses MCP tools to query current state and decide what's resolved
-		resolvedCount := p.aiResolveFindings(ctx)
-		if resolvedCount > 0 {
-			log.Info().Int("resolved_count", resolvedCount).Msg("AI Patrol: AI resolved findings after investigation")
-		}
-
-		// Clean up old resolved findings
-		cleaned := p.findings.Cleanup(24 * time.Hour)
-		if cleaned > 0 {
-			log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
-		}
-
+	if !p.tryStartRun("full") {
 		return
 	}
+	defer p.endRun()
 
-	// Check if AI service is enabled
-	if p.aiService == nil || !p.aiService.IsEnabled() {
-		log.Debug().Msg("AI Patrol: AI service not enabled, skipping patrol")
-		return
+	// Check if circuit breaker allows LLM calls
+	// We still run heuristics and basic analysis even when breaker is open
+	llmAllowed := breaker == nil || breaker.Allow()
+	if !llmAllowed {
+		log.Warn().Msg("AI Patrol: Circuit breaker is open, running heuristics only (no LLM calls)")
 	}
 
 	start := time.Now()
@@ -917,13 +1606,34 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 				Str("resource", f.ResourceName).
 				Str("title", f.Title).
 				Msg("AI Patrol: New finding")
+
+			// Generate remediation plan for actionable findings
+			// Skip internal error findings (not actionable by users)
+			// Using negated OR: generate only when NEITHER condition matches
+			if !(f.Key == "ai-patrol-error" || f.ResourceID == "ai-service") {
+				p.generateRemediationPlan(f)
+			}
 		} else {
 			runStats.existingFindings++
 		}
+
+		// Push to unified store only if finding is active (not suppressed/dismissed)
+		// This ensures last_seen, severity, times_raised stay in sync for active findings
+		// but doesn't resurface findings the user has dismissed
+		if p.unifiedFindingCallback != nil {
+			if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
+				p.unifiedFindingCallback(stored)
+			}
+		}
+
 		// Only track warning+ severity finding IDs in the run record
 		if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
 			runStats.findingIDs = append(runStats.findingIDs, f.ID)
 		}
+
+		// Trigger autonomous investigation if enabled and finding warrants it
+		p.MaybeInvestigateFinding(f)
+
 		return isNew
 	}
 
@@ -939,10 +1649,20 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.hostsChecked +
 		runStats.kubernetesChecked
 
-	hasPatrolFeature := p.aiService == nil || p.aiService.HasLicenseFeature(FeatureAIPatrol)
-	// Check license before running LLM analysis (Pro feature)
-	if !hasPatrolFeature {
-		log.Debug().Msg("AI Patrol: Running heuristic analysis only - requires Pulse Pro license for LLM analysis")
+	// Determine if we can run LLM analysis (requires AI service + license + circuit breaker not open)
+	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
+	hasPatrolFeature := aiServiceEnabled && p.aiService.HasLicenseFeature(FeatureAIPatrol)
+	canRunLLM := hasPatrolFeature && llmAllowed
+
+	// Check if we can run LLM analysis (Pro feature + circuit breaker allows)
+	if !canRunLLM {
+		reason := "requires Pulse Pro license for LLM analysis"
+		if !aiServiceEnabled {
+			reason = "Pulse Assistant service not configured - configure a provider in Settings > Pulse Assistant"
+		} else if !llmAllowed {
+			reason = "circuit breaker is open"
+		}
+		log.Debug().Str("reason", reason).Msg("AI Patrol: Running heuristic analysis only")
 		for _, f := range p.runHeuristicAnalysis(state) {
 			trackFinding(f)
 		}
@@ -958,21 +1678,21 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 			errMsg := aiErr.Error()
 			var title, description, recommendation string
 			if strings.Contains(errMsg, "Insufficient Balance") || strings.Contains(errMsg, "402") {
-				title = "AI Patrol: Insufficient API credits"
-				description = "The AI patrol cannot analyze your infrastructure because your AI provider account has insufficient credits."
-				recommendation = "Add credits to your AI provider account (DeepSeek, OpenAI, etc.) or switch to a different provider in AI Settings."
+				title = "Pulse Patrol: Insufficient API credits"
+				description = "Pulse Patrol cannot analyze your infrastructure because your provider account has insufficient credits."
+				recommendation = "Add credits to your provider account (DeepSeek, OpenAI, etc.) or switch to a different provider in Pulse Assistant settings."
 			} else if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "Unauthorized") {
-				title = "AI Patrol: Invalid API key"
-				description = "The AI patrol cannot analyze your infrastructure because the API key is invalid or expired."
-				recommendation = "Check your API key in AI Settings and verify it is correct."
+				title = "Pulse Patrol: Invalid API key"
+				description = "Pulse Patrol cannot analyze your infrastructure because the API key is invalid or expired."
+				recommendation = "Check your API key in Pulse Assistant settings and verify it is correct."
 			} else if strings.Contains(errMsg, "rate limit") || strings.Contains(errMsg, "429") {
-				title = "AI Patrol: Rate limited"
-				description = "The AI patrol is being rate limited by your AI provider. Analysis will be retried on the next patrol run."
+				title = "Pulse Patrol: Rate limited"
+				description = "Pulse Patrol is being rate limited by your provider. Analysis will be retried on the next patrol run."
 				recommendation = "Wait for the rate limit to reset, or consider upgrading your API plan for higher limits."
 			} else {
-				title = "AI Patrol: Analysis failed"
-				description = fmt.Sprintf("The AI patrol encountered an error while analyzing your infrastructure: %s", errMsg)
-				recommendation = "Check your AI settings and API key. If the problem persists, check the logs for more details."
+				title = "Pulse Patrol: Analysis failed"
+				description = fmt.Sprintf("Pulse Patrol encountered an error while analyzing your infrastructure: %s", errMsg)
+				recommendation = "Check your Pulse Assistant settings and API key. If the problem persists, check the logs for more details."
 			}
 
 			errorFinding := &Finding{
@@ -981,7 +1701,7 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 				Severity:       "warning",
 				Category:       "reliability",
 				ResourceID:     "ai-service",
-				ResourceName:   "AI Patrol Service",
+				ResourceName:   "Pulse Patrol Service",
 				ResourceType:   "service",
 				Title:          title,
 				Description:    description,
@@ -991,6 +1711,12 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 				LastSeenAt:     time.Now(),
 			}
 			trackFinding(errorFinding)
+
+			// Fall back to heuristic analysis so we still surface local issues
+			log.Debug().Msg("AI Patrol: Falling back to heuristic analysis after LLM error")
+			for _, f := range p.runHeuristicAnalysis(state) {
+				trackFinding(f)
+			}
 		} else if aiResult != nil {
 			runStats.aiAnalysis = aiResult
 			for _, f := range aiResult.Findings {
@@ -1012,24 +1738,22 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 
 	// AI-resolve findings: the AI uses tools to query current state and decides what's resolved
 	// This is TRUE AI-powered resolution - we provide context, AI provides intelligence
+	// Only run AI resolution if AI service is enabled AND circuit breaker allows
 	var resolvedCount int
-	if hasPatrolFeature {
+	if aiServiceEnabled && llmAllowed && hasPatrolFeature {
 		resolvedCount = p.aiResolveFindings(ctx)
+	}
 
-		// Cleanup old resolved findings (only when licensed to modify AI findings)
-		cleaned := p.findings.Cleanup(24 * time.Hour)
-		if cleaned > 0 {
-			log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
-		}
-	} else {
-		// Without patrol feature, still do basic AI resolution but only for heuristic findings
-		// The AI will naturally focus on active findings regardless
-		resolvedCount = p.aiResolveFindings(ctx)
+	// Cleanup old resolved findings (always runs, doesn't require LLM)
+	cleaned := p.findings.Cleanup(24 * time.Hour)
+	if cleaned > 0 {
+		log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
 	}
 	resolvedCount += runbookResolved
 
 	// AI-based alert review: check active alerts against current state and auto-resolve fixed issues
-	alertsResolved := p.reviewAndResolveAlerts(ctx, state)
+	// Pass llmAllowed so it knows whether AI calls are allowed (heuristics always run)
+	alertsResolved := p.reviewAndResolveAlerts(ctx, state, llmAllowed)
 	if alertsResolved > 0 {
 		log.Info().Int("alerts_resolved", alertsResolved).Msg("AI Patrol: Auto-resolved alerts where issues are fixed")
 	}
@@ -1075,6 +1799,7 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		StartedAt:         start,
 		CompletedAt:       completedAt,
 		Duration:          duration,
+		DurationMs:        duration.Milliseconds(),
 		Type:              patrolType,
 		ResourcesChecked:  runStats.resourceCount,
 		NodesChecked:      runStats.nodesChecked,
@@ -1115,6 +1840,16 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	p.errorCount = runStats.errors
 	p.mu.Unlock()
 
+	// Record circuit breaker result only if we actually attempted LLM calls
+	// canRunLLM is true only when AI is enabled, licensed, AND breaker allowed
+	if breaker != nil && canRunLLM {
+		if runStats.errors > 0 {
+			breaker.RecordFailure(fmt.Errorf("patrol completed with %d errors", runStats.errors))
+		} else {
+			breaker.RecordSuccess()
+		}
+	}
+
 	// Add to history store (handles persistence automatically)
 	p.runHistoryStore.Add(runRecord)
 
@@ -1141,12 +1876,11 @@ func joinParts(parts []string) string {
 	if len(parts) == 2 {
 		return parts[0] + " and " + parts[1]
 	}
-	return fmt.Sprintf("%s, and %s",
-		fmt.Sprintf("%s", parts[0:len(parts)-1]),
-		parts[len(parts)-1])
+	return strings.Join(parts[:len(parts)-1], ", ") + ", and " + parts[len(parts)-1]
 }
 
-// generateFindingID creates a stable ID for a finding based on resource and issue
+// generateFindingID creates a stable ID for a finding based on resource, category, and issue.
+// All three components are included to ensure distinct issues on the same resource remain separate.
 func generateFindingID(resourceID, category, issue string) string {
 	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s", resourceID, category, issue)))
 	return fmt.Sprintf("%x", hash[:8])
@@ -1678,7 +2412,7 @@ func (p *PatrolService) aiResolveFindings(ctx context.Context) int {
 	aiService := p.aiService
 	p.mu.RUnlock()
 
-	if aiService == nil || !aiService.IsEnabled() {
+	if aiService == nil || !aiService.IsEnabled() || !aiService.HasLicenseFeature(FeatureAIPatrol) {
 		return 0
 	}
 
@@ -1855,7 +2589,7 @@ func (p *PatrolService) parseAndResolveFindings(response string, findings []*Fin
 // reviewAndResolveAlerts uses AI to review active alerts and resolve those where the issue is fixed.
 // This is the core of autonomous alert management - the AI looks at each alert, checks current state,
 // and determines if the underlying issue has been resolved.
-func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models.StateSnapshot) int {
+func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models.StateSnapshot, llmAllowed bool) int {
 	p.mu.RLock()
 	resolver := p.alertResolver
 	aiService := p.aiService
@@ -1891,8 +2625,14 @@ func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models
 
 	resolvedCount := 0
 
+	// Pass nil for aiService if LLM is not allowed (forces heuristics-only)
+	aiSvc := aiService
+	if !llmAllowed {
+		aiSvc = nil
+	}
+
 	for _, alert := range alertsToReview {
-		shouldResolve, reason := p.shouldResolveAlert(ctx, alert, state, aiService)
+		shouldResolve, reason := p.shouldResolveAlert(ctx, alert, state, aiSvc)
 		if shouldResolve {
 			if resolver.ResolveAlert(alert.ID) {
 				resolvedCount++
@@ -2088,7 +2828,7 @@ Respond with ONLY one of:
 		if reason == "" {
 			reason = strings.TrimSpace(strings.TrimPrefix(strings.ToUpper(response), "RESOLVE:"))
 		}
-		return true, "AI: " + reason
+		return true, "Patrol: " + reason
 	}
 
 	return false, ""
@@ -2913,7 +3653,7 @@ func cleanThinkingTokens(content string) string {
 // runAIAnalysis uses the LLM to analyze infrastructure and identify issues
 func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSnapshot) (*AIAnalysisResult, error) {
 	if p.aiService == nil {
-		return nil, fmt.Errorf("AI service not available")
+		return nil, fmt.Errorf("Pulse Patrol service not available")
 	}
 
 	// Build enriched infrastructure context with trends and predictions
@@ -3582,6 +4322,43 @@ Only report NEW issues or issues where the severity has clearly escalated.`)
 		contextAdditions.WriteString("\nIMPORTANT: Use incident memory to avoid repeating known issues and to build on successful past investigations.")
 	}
 
+	// Get new AI intelligence context (Phase 6)
+	p.mu.RLock()
+	learningProvider := p.learningProvider
+	proxmoxProvider := p.proxmoxEventProvider
+	forecastProvider := p.forecastProvider
+	p.mu.RUnlock()
+
+	// Append learned preferences from user feedback
+	if learningProvider != nil {
+		learningContext := learningProvider.FormatForContext()
+		if learningContext != "" {
+			contextAdditions.WriteString("\n\n## LEARNED PREFERENCES\n")
+			contextAdditions.WriteString(learningContext)
+			contextAdditions.WriteString("\nIMPORTANT: These preferences are learned from user feedback. Respect them when prioritizing and reporting issues.")
+		}
+	}
+
+	// Append recent Proxmox operations
+	if proxmoxProvider != nil {
+		proxmoxContext := proxmoxProvider.FormatForPatrol(30 * time.Minute)
+		if proxmoxContext != "" {
+			contextAdditions.WriteString("\n\n## RECENT PROXMOX OPERATIONS (last 30 min)\n")
+			contextAdditions.WriteString(proxmoxContext)
+			contextAdditions.WriteString("\nIMPORTANT: Consider these recent operations when analyzing resource behavior. Migrations, backups, and snapshots can explain transient performance changes.")
+		}
+	}
+
+	// Append key forecasts for resources with concerning trends
+	if forecastProvider != nil {
+		forecastContext := forecastProvider.FormatKeyForecasts()
+		if forecastContext != "" {
+			contextAdditions.WriteString("\n\n## TREND FORECASTS\n")
+			contextAdditions.WriteString(forecastContext)
+			contextAdditions.WriteString("\nIMPORTANT: Use these forecasts to provide proactive warnings about resources approaching capacity.")
+		}
+	}
+
 	if contextAdditions.Len() > 0 {
 		return basePrompt + contextAdditions.String()
 	}
@@ -3893,9 +4670,8 @@ func (p *PatrolService) parseFindingBlock(block string) *Finding {
 		cat = FindingCategoryPerformance
 	}
 
-	// Generate stable ID from resource, category, and KEY
-	// We use the normalized key to ensure uniqueness between different findings on the same resource
-	// (e.g. high-cpu vs high-memory) while maintaining stability checks
+	// Generate stable ID from resource and category to collapse duplicate findings
+	// across patrol runs, while preserving the normalized key for issue type context.
 	normalizedKey := normalizeFindingKey(key)
 	if normalizedKey == "" {
 		// Fallback to title-based key if LLM didn't provide one
@@ -3972,4 +4748,150 @@ func formatBytesInt64(b int64) string {
 		return "0 B"
 	}
 	return formatBytes(uint64(b))
+}
+
+// TriggerPatrolForAlert triggers an immediate patrol for a specific alert
+func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
+	if alert == nil {
+		return
+	}
+
+	p.mu.RLock()
+	triggerManager := p.triggerManager
+	p.mu.RUnlock()
+
+	if triggerManager != nil {
+		scope := PatrolScope{
+			ResourceIDs: []string{alert.ResourceID},
+			Depth:       PatrolDepthQuick,
+			Reason:      TriggerReasonAlertFired,
+			Context:     "Alert: " + alert.Type,
+			Priority:    80,
+			AlertID:     alert.ID,
+		}
+		if triggerManager.TriggerPatrol(scope) {
+			log.Debug().Str("alert_id", alert.ID).Msg("Queued alert-triggered patrol via trigger manager")
+		} else {
+			log.Warn().Str("alert_id", alert.ID).Msg("Alert-triggered patrol rejected by trigger manager")
+		}
+		return
+	}
+
+	// Non-blocking send
+	select {
+	case p.adHocTrigger <- alert:
+		log.Debug().Str("alert_id", alert.ID).Msg("Queued ad-hoc patrol trigger")
+	default:
+		log.Warn().Str("alert_id", alert.ID).Msg("Patrol trigger queue full, dropping trigger")
+	}
+}
+
+func (p *PatrolService) tryStartRun(kind string) bool {
+	p.mu.Lock()
+	if p.runInProgress {
+		p.mu.Unlock()
+		log.Debug().Str("kind", kind).Msg("AI Patrol: Run already in progress, skipping")
+		return false
+	}
+	p.runInProgress = true
+	p.mu.Unlock()
+	return true
+}
+
+func (p *PatrolService) endRun() {
+	p.mu.Lock()
+	p.runInProgress = false
+	p.mu.Unlock()
+}
+
+// runTargetedPatrol executes a focused patrol for a specific alert
+func (p *PatrolService) runTargetedPatrol(ctx context.Context, alert *alerts.Alert) {
+	log.Info().
+		Str("alert_id", alert.ID).
+		Str("resource_id", alert.ResourceID).
+		Msg("Running targeted AI patrol for alert")
+
+	scope := PatrolScope{
+		ResourceIDs: []string{alert.ResourceID},
+		Depth:       PatrolDepthQuick,
+		Reason:      TriggerReasonAlertFired,
+		Context:     "Alert: " + alert.Type,
+		Priority:    80,
+		AlertID:     alert.ID,
+	}
+	p.TriggerScopedPatrol(ctx, scope)
+}
+
+// MaybeInvestigateFinding checks if a finding should be investigated and triggers investigation if so
+// This is called both during scheduled patrol runs and when alert-triggered findings are created
+func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
+	p.mu.RLock()
+	orchestrator := p.investigationOrchestrator
+	aiService := p.aiService
+	p.mu.RUnlock()
+
+	// No orchestrator configured
+	if orchestrator == nil {
+		return
+	}
+
+	// Get autonomy level from AI config
+	if aiService == nil {
+		return
+	}
+	cfg := aiService.GetConfig()
+	if cfg == nil {
+		return
+	}
+	autonomyLevel := cfg.GetPatrolAutonomyLevel()
+
+	// Check if finding should be investigated
+	if !f.ShouldInvestigate(autonomyLevel) {
+		return
+	}
+
+	// Check if we can start another investigation (concurrency limit)
+	if !orchestrator.CanStartInvestigation() {
+		log.Debug().
+			Str("finding_id", f.ID).
+			Msg("Cannot start investigation: max concurrent investigations reached")
+		return
+	}
+
+	// Convert Finding to InvestigationFinding
+	invFinding := &InvestigationFinding{
+		ID:                     f.ID,
+		Severity:               string(f.Severity),
+		Category:               string(f.Category),
+		ResourceID:             f.ResourceID,
+		ResourceName:           f.ResourceName,
+		ResourceType:           f.ResourceType,
+		Title:                  f.Title,
+		Description:            f.Description,
+		Recommendation:         f.Recommendation,
+		Evidence:               f.Evidence,
+		InvestigationSessionID: f.InvestigationSessionID,
+		InvestigationStatus:    f.InvestigationStatus,
+		InvestigationOutcome:   f.InvestigationOutcome,
+		LastInvestigatedAt:     f.LastInvestigatedAt,
+		InvestigationAttempts:  f.InvestigationAttempts,
+	}
+
+	// Trigger investigation in background
+	go func() {
+		ctx := context.Background()
+		if err := orchestrator.InvestigateFinding(ctx, invFinding, autonomyLevel); err != nil {
+			log.Error().
+				Err(err).
+				Str("finding_id", f.ID).
+				Msg("Failed to start investigation")
+		}
+	}()
+
+	log.Info().
+		Str("finding_id", f.ID).
+		Str("severity", string(f.Severity)).
+		Str("resource", f.ResourceName).
+		Str("autonomy_level", autonomyLevel).
+		Msg("Triggered autonomous investigation for finding")
 }

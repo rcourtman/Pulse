@@ -64,6 +64,43 @@ type AgentServer interface {
 	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
 }
 
+// ChatServiceProvider defines the interface for accessing chat functionality
+// This is used by the investigation orchestrator to run investigations
+type ChatServiceProvider interface {
+	CreateSession(ctx context.Context) (*ChatSession, error)
+	ExecuteStream(ctx context.Context, req ChatExecuteRequest, callback ChatStreamCallback) error
+	GetMessages(ctx context.Context, sessionID string) ([]ChatMessage, error)
+	DeleteSession(ctx context.Context, sessionID string) error
+}
+
+// ChatSession represents a chat session (minimal interface for investigations)
+type ChatSession struct {
+	ID string `json:"id"`
+}
+
+// ChatExecuteRequest represents a chat execution request
+type ChatExecuteRequest struct {
+	Prompt    string `json:"prompt"`
+	SessionID string `json:"session_id,omitempty"`
+}
+
+// ChatStreamCallback is called for each streaming event
+type ChatStreamCallback func(event ChatStreamEvent)
+
+// ChatStreamEvent represents a streaming event
+type ChatStreamEvent struct {
+	Type string `json:"type"`
+	Data []byte `json:"data,omitempty"`
+}
+
+// ChatMessage represents a chat message
+type ChatMessage struct {
+	ID        string    `json:"id"`
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
 // Service orchestrates AI interactions
 type Service struct {
 	mu               sync.RWMutex
@@ -80,6 +117,7 @@ type Service struct {
 	patrolService    *PatrolService        // Background AI monitoring service
 	metadataProvider MetadataProvider      // Enables AI to update resource URLs
 	incidentStore    *memory.IncidentStore // Incident timelines for alert memory
+	chatService      ChatServiceProvider   // Chat service for investigation orchestrator
 
 	// Alert-triggered analysis - token-efficient real-time AI insights
 	alertTriggeredAnalyzer *AlertTriggeredAnalyzer
@@ -156,7 +194,7 @@ func (s *Service) acquireExecutionSlot(ctx context.Context, useCase string) (fun
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-time.After(5 * time.Second):
-		return nil, fmt.Errorf("AI is busy - too many concurrent requests")
+		return nil, fmt.Errorf("Pulse Assistant is busy - too many concurrent requests")
 	}
 }
 
@@ -181,7 +219,7 @@ func (s *Service) enforceBudget(useCase string) error {
 		if normalized == "" {
 			normalized = "chat"
 		}
-		return fmt.Errorf("AI cost budget exceeded (%.2f/%.2f USD over %d days) - disable AI or raise budget to continue",
+		return fmt.Errorf("Pulse Assistant cost budget exceeded (%.2f/%.2f USD over %d days) - disable Pulse Assistant or raise budget to continue",
 			summary.Totals.EstimatedUSD, cfg.CostBudgetUSD30d, summary.EffectiveDays)
 	}
 
@@ -224,6 +262,20 @@ func (s *Service) GetPatrolService() *PatrolService {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.patrolService
+}
+
+// SetChatService sets the chat service for investigation orchestrator
+func (s *Service) SetChatService(cs ChatServiceProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.chatService = cs
+}
+
+// GetChatService returns the chat service for investigation orchestrator
+func (s *Service) GetChatService() ChatServiceProvider {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.chatService
 }
 
 // GetRemediationLog returns the remediation log from the patrol service
@@ -855,7 +907,7 @@ func (s *Service) LoadConfig() error {
 
 	cfg, err := s.persistence.LoadAIConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load AI config: %w", err)
+		return fmt.Errorf("failed to load Pulse Assistant config: %w", err)
 	}
 
 	s.cfg = cfg
@@ -972,7 +1024,7 @@ func (s *Service) QuickAnalysis(ctx context.Context, prompt string) (string, err
 	s.mu.RUnlock()
 
 	if provider == nil {
-		return "", fmt.Errorf("AI is not enabled or configured")
+		return "", fmt.Errorf("Pulse Assistant is not enabled or configured")
 	}
 
 	// Use a fast model for quick analysis if available
@@ -997,11 +1049,11 @@ func (s *Service) QuickAnalysis(ctx context.Context, prompt string) (string, err
 		Model:    model,
 	})
 	if err != nil {
-		return "", fmt.Errorf("AI analysis failed: %w", err)
+		return "", fmt.Errorf("Pulse Assistant analysis failed: %w", err)
 	}
 
 	if resp.Content == "" {
-		return "", fmt.Errorf("AI returned empty response")
+		return "", fmt.Errorf("Pulse Assistant returned empty response")
 	}
 
 	return resp.Content, nil
@@ -1255,7 +1307,7 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResp
 		if IsDemoMode() {
 			return GenerateDemoAIResponse(req.Prompt), nil
 		}
-		return nil, fmt.Errorf("AI is not enabled or configured")
+		return nil, fmt.Errorf("Pulse Assistant is not enabled or configured")
 	}
 
 	// Build the system prompt
@@ -1330,7 +1382,7 @@ Always execute the commands rather than telling the user how to do it.`
 			Tools:     tools,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("AI request failed: %w", err)
+			return nil, fmt.Errorf("Pulse Assistant request failed: %w", err)
 		}
 
 		if costStore != nil {
@@ -1455,7 +1507,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		if IsDemoMode() {
 			return GenerateDemoAIStream(req.Prompt, callback)
 		}
-		return nil, fmt.Errorf("AI is not enabled or configured")
+		return nil, fmt.Errorf("Pulse Assistant is not enabled or configured")
 	}
 
 	// Build the system prompt
@@ -1563,7 +1615,7 @@ Always execute the commands rather than telling the user how to do it.`
 		if err != nil {
 			log.Error().Err(err).Int("iteration", iteration).Msg("AI provider call failed")
 			callback(StreamEvent{Type: "error", Data: err.Error()})
-			return nil, fmt.Errorf("AI request failed: %w", err)
+			return nil, fmt.Errorf("Pulse Assistant request failed: %w", err)
 		}
 
 		if costStore != nil {
@@ -2520,7 +2572,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			return execution.Output, execution
 		}
 
-		execution.Output = fmt.Sprintf("Finding resolved! The AI Insight has been marked as fixed.\nID: %s\nResolution: %s", findingID, resolutionNote)
+		execution.Output = fmt.Sprintf("Finding resolved! The Patrol finding has been marked as fixed.\nID: %s\nResolution: %s", findingID, resolutionNote)
 		execution.Success = true
 		return execution.Output, execution
 
@@ -2572,7 +2624,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		// Format a helpful response based on reason
 		var resultMsg string
 		if reason == "will_fix_later" {
-			resultMsg = fmt.Sprintf("Finding dismissed as '%s'. The AI will continue to monitor this issue.\nID: %s\nNote: %s", reason, findingID, note)
+			resultMsg = fmt.Sprintf("Finding dismissed as '%s'. Pulse Patrol will continue to monitor this issue.\nID: %s\nNote: %s", reason, findingID, note)
 		} else {
 			resultMsg = fmt.Sprintf("Finding dismissed as '%s' and suppression rule created. Similar findings for this resource will not be raised again.\nID: %s\nNote: %s", reason, findingID, note)
 		}
@@ -3321,6 +3373,11 @@ func formatContextKey(key string) string {
 // buildUserAnnotationsContext gathers all user annotations from guests and docker containers
 // These provide infrastructure context that the AI should know about for any query
 func (s *Service) buildUserAnnotationsContext() string {
+	// Return empty if persistence is not available
+	if s.persistence == nil {
+		return ""
+	}
+
 	var annotations []string
 
 	// Load guest metadata
@@ -3399,12 +3456,12 @@ func (s *Service) TestConnection(ctx context.Context) error {
 		var err error
 		cfg, err = s.persistence.LoadAIConfig()
 		if err != nil {
-			return fmt.Errorf("failed to load AI config: %w", err)
+			return fmt.Errorf("failed to load Pulse Assistant config: %w", err)
 		}
 	}
 
 	if cfg == nil || !cfg.IsConfigured() {
-		return fmt.Errorf("no AI provider configured")
+		return fmt.Errorf("no provider configured")
 	}
 
 	// Try to create a provider for the current default model
@@ -3435,10 +3492,10 @@ func (s *Service) ListModels(ctx context.Context) ([]providers.ModelInfo, error)
 func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInfo, bool, error) {
 	cfg, err := s.persistence.LoadAIConfig()
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to load AI config: %w", err)
+		return nil, false, fmt.Errorf("failed to load Pulse Assistant config: %w", err)
 	}
 	if cfg == nil {
-		return nil, false, fmt.Errorf("AI not configured")
+		return nil, false, fmt.Errorf("Pulse Assistant not configured")
 	}
 
 	cacheKey := buildModelsCacheKey(cfg)
