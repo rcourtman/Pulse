@@ -124,21 +124,6 @@ const (
 	DefaultGeminiBaseURL    = "https://generativelanguage.googleapis.com/v1beta"
 )
 
-// ModelInfo represents information about an available model
-// Deprecated: Use providers.ModelInfo instead - models are now fetched dynamically from APIs
-type ModelInfo struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	IsDefault   bool   `json:"is_default,omitempty"`
-}
-
-// GetAvailableModels is deprecated - models are now fetched dynamically from provider APIs
-// This returns nil; use the /api/ai/models endpoint instead which queries the actual API
-func GetAvailableModels(provider string) []ModelInfo {
-	return nil
-}
-
 // NewDefaultAIConfig returns an AIConfig with sensible defaults
 func NewDefaultAIConfig() *AIConfig {
 	return &AIConfig{

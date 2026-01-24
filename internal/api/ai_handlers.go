@@ -789,13 +789,13 @@ type AISettingsResponse struct {
 	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
 	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset   string             `json:"patrol_schedule_preset"`   // DEPRECATED: legacy preset
-	PatrolIntervalMinutes  int                `json:"patrol_interval_minutes"`  // Patrol interval in minutes (0 = disabled)
-	PatrolEnabled          bool               `json:"patrol_enabled"`           // true if patrol is enabled
-	PatrolAutoFix          bool               `json:"patrol_auto_fix"`          // true if patrol can auto-fix issues
-	AlertTriggeredAnalysis bool               `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
-	UseProactiveThresholds bool               `json:"use_proactive_thresholds"` // true if patrol warns before thresholds (false = use exact thresholds)
-	AvailableModels        []config.ModelInfo `json:"available_models"`         // List of models for current provider
+	PatrolSchedulePreset   string                `json:"patrol_schedule_preset"`   // DEPRECATED: legacy preset
+	PatrolIntervalMinutes  int                   `json:"patrol_interval_minutes"`  // Patrol interval in minutes (0 = disabled)
+	PatrolEnabled          bool                  `json:"patrol_enabled"`           // true if patrol is enabled
+	PatrolAutoFix          bool                  `json:"patrol_auto_fix"`          // true if patrol can auto-fix issues
+	AlertTriggeredAnalysis bool                  `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
+	UseProactiveThresholds bool                  `json:"use_proactive_thresholds"` // true if patrol warns before thresholds (false = use exact thresholds)
+	AvailableModels        []providers.ModelInfo `json:"available_models"`         // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
 	AnthropicConfigured bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
 	OpenAIConfigured    bool     `json:"openai_configured"`         // true if OpenAI API key is set

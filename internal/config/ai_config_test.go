@@ -837,14 +837,6 @@ func TestAIConfig_IsAlertTriggeredAnalysisEnabled(t *testing.T) {
 	})
 }
 
-func TestGetAvailableModels(t *testing.T) {
-	// This function is deprecated and should return nil
-	result := GetAvailableModels(AIProviderAnthropic)
-	if result != nil {
-		t.Error("GetAvailableModels should return nil (deprecated)")
-	}
-}
-
 func TestNewDefaultAIConfig(t *testing.T) {
 	config := NewDefaultAIConfig()
 
