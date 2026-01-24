@@ -502,6 +502,7 @@ type Manager struct {
 	onAcknowledged   func(alert *Alert, user string)
 	onUnacknowledged func(alert *Alert, user string)
 	onEscalate       func(alert *Alert, level int)
+	onAlertForAI     func(alert *Alert) // AI analysis callback - bypasses notification suppression
 	escalationStop   chan struct{}
 	alertRateLimit   map[string][]time.Time // Track alert times for rate limiting
 	// New fields for deduplication and suppression
@@ -537,6 +538,9 @@ type Manager struct {
 	hostAgentHostnames map[string]struct{} // Normalized hostnames (lowercase)
 	// License checking for Pro-only alert features
 	hasProFeature func(feature string) bool
+
+	// Cached timezone for quiet hours
+	quietHoursLoc *time.Location
 }
 
 type ackRecord struct {
@@ -756,6 +760,17 @@ func (m *Manager) SetAlertCallback(cb func(alert *Alert)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onAlert = cb
+}
+
+// SetAlertForAICallback sets a callback for AI analysis when alerts are created.
+// Unlike SetAlertCallback, this callback is invoked unconditionally - it bypasses
+// activation state, quiet hours, and other notification suppression checks.
+// This allows AI to analyze alerts even when the user hasn't finished setup.
+func (m *Manager) SetAlertForAICallback(cb func(alert *Alert)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onAlertForAI = cb
+	log.Info().Msg("Alert-for-AI callback registered (bypasses notification suppression)")
 }
 
 // SetResolvedCallback sets the callback for resolved alerts
@@ -1087,6 +1102,18 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 
 	m.config = config
 	normalizeOverrides(m.config.Overrides)
+
+	// Update cached quiet hours location
+	if m.config.Schedule.QuietHours.Enabled && m.config.Schedule.QuietHours.Timezone != "" {
+		loc, err := time.LoadLocation(m.config.Schedule.QuietHours.Timezone)
+		if err == nil {
+			m.quietHoursLoc = loc
+		} else {
+			m.quietHoursLoc = time.Local
+		}
+	} else {
+		m.quietHoursLoc = time.Local
+	}
 
 	if !m.config.SnapshotDefaults.Enabled {
 		m.clearSnapshotAlertsForInstanceLocked("")
@@ -2008,11 +2035,17 @@ func (m *Manager) isInQuietHours() bool {
 		return false
 	}
 
-	// Load timezone
-	loc, err := time.LoadLocation(m.config.Schedule.QuietHours.Timezone)
-	if err != nil {
-		log.Warn().Err(err).Str("timezone", m.config.Schedule.QuietHours.Timezone).Msg("Failed to load timezone, using local time")
-		loc = time.Local
+	// Use cached location if available
+	loc := m.quietHoursLoc
+	if loc == nil {
+		// Fallback to loading if not cached yet (shouldn't happen with UpdateConfig)
+		var err error
+		loc, err = time.LoadLocation(m.config.Schedule.QuietHours.Timezone)
+		if err != nil {
+			log.Warn().Err(err).Str("timezone", m.config.Schedule.QuietHours.Timezone).Msg("Failed to load timezone, using local time")
+			loc = time.Local
+		}
+		m.quietHoursLoc = loc
 	}
 
 	now := time.Now().In(loc)
@@ -3175,6 +3208,15 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 	m.activeAlerts[alertID] = alert
 	m.recentAlerts[alertID] = alert
 	m.historyManager.AddAlert(*alert)
+	if !m.checkRateLimit(alertID) {
+		m.mu.Unlock()
+		log.Debug().
+			Str("alertID", alertID).
+			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+			Msg("Host offline alert suppressed due to rate limit")
+		return
+	}
+
 	m.dispatchAlert(alert, false)
 	m.mu.Unlock()
 
@@ -4058,6 +4100,15 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	m.activeAlerts[alertID] = alert
 	m.recentAlerts[alertID] = alert
 	m.historyManager.AddAlert(*alert)
+	if !m.checkRateLimit(alertID) {
+		m.mu.Unlock()
+		log.Debug().
+			Str("alertID", alertID).
+			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+			Msg("Docker host offline alert suppressed due to rate limit")
+		return
+	}
+
 	m.dispatchAlert(alert, false)
 	m.mu.Unlock()
 
@@ -6045,6 +6096,19 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Int("activeAlerts", len(m.activeAlerts)).
 				Msg("Alert triggered")
 
+			// Trigger AI analysis callback unconditionally (bypasses notification suppression)
+			if m.onAlertForAI != nil {
+				alertCopy := alert.Clone()
+				go func(a *Alert) {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("Panic in AI alert callback")
+						}
+					}()
+					m.onAlertForAI(a)
+				}(alertCopy)
+			}
+
 			// Check rate limit (but don't remove alert from tracking)
 			if !m.checkRateLimit(alertID) {
 				log.Debug().
@@ -6536,8 +6600,8 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 
 	// Check if alert already exists
 	if _, exists := m.activeAlerts[alertID]; exists {
-		// Alert already exists, just update time
-		m.activeAlerts[alertID].StartTime = time.Now()
+		// Alert already exists, just update last seen time
+		m.activeAlerts[alertID].LastSeen = time.Now()
 		return
 	}
 
@@ -6588,6 +6652,14 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 	m.historyManager.AddAlert(*alert)
 
 	// Send notification after confirmation
+	if !m.checkRateLimit(alertID) {
+		log.Debug().
+			Str("alertID", alertID).
+			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+			Msg("Node offline alert suppressed due to rate limit")
+		return
+	}
+
 	m.dispatchAlert(alert, false)
 
 	// Log the critical event
@@ -6707,6 +6779,14 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 		Int("confirmations", m.offlineConfirmations[pbs.ID]).
 		Msg("PBS instance is offline")
 
+	if !m.checkRateLimit(alertID) {
+		log.Debug().
+			Str("alertID", alertID).
+			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+			Msg("PBS offline alert suppressed due to rate limit")
+		return
+	}
+
 	m.dispatchAlert(alert, true)
 }
 
@@ -6816,6 +6896,14 @@ func (m *Manager) checkPMGOffline(pmg models.PMGInstance) {
 		Str("host", pmg.Host).
 		Int("confirmations", m.offlineConfirmations[pmg.ID]).
 		Msg("PMG instance is offline")
+
+	if !m.checkRateLimit(alertID) {
+		log.Debug().
+			Str("alertID", alertID).
+			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+			Msg("PMG offline alert suppressed due to rate limit")
+		return
+	}
 
 	m.dispatchAlert(alert, true)
 }
@@ -7924,6 +8012,14 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 		Int("confirmations", m.offlineConfirmations[storage.ID]).
 		Msg("Storage is offline/unavailable")
 
+	if !m.checkRateLimit(alertID) {
+		log.Debug().
+			Str("alertID", alertID).
+			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+			Msg("Storage offline alert suppressed due to rate limit")
+		return
+	}
+
 	m.dispatchAlert(alert, true)
 }
 
@@ -8141,6 +8237,17 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	now := time.Now()
 	var autoAcked []*Alert
 
+	lastSeenTooOld := func(alert *Alert, cutoff time.Duration) bool {
+		if alert == nil {
+			return true
+		}
+		lastSeen := alert.LastSeen
+		if lastSeen.IsZero() {
+			lastSeen = alert.StartTime
+		}
+		return now.Sub(lastSeen) > cutoff
+	}
+
 	// Auto-acknowledge old alerts if configured
 	if m.config.AutoAcknowledgeAfterHours > 0 {
 		autoAckThreshold := time.Duration(m.config.AutoAcknowledgeAfterHours) * time.Hour
@@ -8167,7 +8274,9 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	if m.config.MaxAcknowledgedAgeDays > 0 {
 		acknowledgedTTL := time.Duration(m.config.MaxAcknowledgedAgeDays) * 24 * time.Hour
 		for id, alert := range m.activeAlerts {
-			if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > acknowledgedTTL {
+			if alert.Acknowledged && alert.AckTime != nil &&
+				now.Sub(*alert.AckTime) > acknowledgedTTL &&
+				lastSeenTooOld(alert, acknowledgedTTL) {
 				log.Info().
 					Str("alertID", id).
 					Dur("age", now.Sub(*alert.AckTime)).
@@ -8193,7 +8302,9 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 
 	// Original cleanup for acknowledged alerts (fallback if TTL not configured)
 	for id, alert := range m.activeAlerts {
-		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > maxAge {
+		if alert.Acknowledged && alert.AckTime != nil &&
+			now.Sub(*alert.AckTime) > maxAge &&
+			lastSeenTooOld(alert, maxAge) {
 			m.removeActiveAlertNoLock(id)
 		}
 	}

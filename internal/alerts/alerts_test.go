@@ -7250,7 +7250,7 @@ func TestCheckNodeOffline(t *testing.T) {
 		}
 	})
 
-	t.Run("existing alert updates StartTime", func(t *testing.T) {
+	t.Run("existing alert updates LastSeen", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		oldTime := time.Now().Add(-1 * time.Hour)
@@ -7258,6 +7258,7 @@ func TestCheckNodeOffline(t *testing.T) {
 		m.activeAlerts["node-offline-node1"] = &Alert{
 			ID:        "node-offline-node1",
 			StartTime: oldTime,
+			LastSeen:  oldTime,
 		}
 		m.mu.Unlock()
 
@@ -7271,8 +7272,11 @@ func TestCheckNodeOffline(t *testing.T) {
 		if alert == nil {
 			t.Fatal("expected alert to exist")
 		}
-		if !alert.StartTime.After(oldTime) {
-			t.Error("expected StartTime to be updated")
+		if !alert.LastSeen.After(oldTime) {
+			t.Error("expected LastSeen to be updated")
+		}
+		if !alert.StartTime.Equal(oldTime) {
+			t.Error("expected StartTime to remain unchanged")
 		}
 	})
 
@@ -8959,6 +8963,33 @@ func TestCleanup(t *testing.T) {
 
 		if exists {
 			t.Error("expected acknowledged alert to be removed by maxAge fallback")
+		}
+	})
+
+	t.Run("keeps acknowledged alerts that are still active", func(t *testing.T) {
+		// t.Parallel()
+		m := newTestManager(t)
+
+		oldAckTime := time.Now().Add(-2 * time.Hour)
+		recentSeen := time.Now().Add(-5 * time.Minute)
+		m.mu.Lock()
+		m.activeAlerts["ack-active"] = &Alert{
+			ID:           "ack-active",
+			Acknowledged: true,
+			AckTime:      &oldAckTime,
+			LastSeen:     recentSeen,
+			StartTime:    recentSeen,
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["ack-active"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Error("expected acknowledged active alert to remain")
 		}
 	})
 
