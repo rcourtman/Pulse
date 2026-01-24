@@ -238,6 +238,88 @@ func TestPatrolService_GetStatus(t *testing.T) {
 	}
 }
 
+func TestPatrolService_filterStateByScope_DockerContainer(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{
+				ID:       "host-1",
+				Hostname: "docker-1",
+				Containers: []models.DockerContainer{
+					{ID: "c1", Name: "web"},
+					{ID: "c2", Name: "db"},
+				},
+			},
+		},
+	}
+	scope := PatrolScope{
+		ResourceIDs:   []string{"c1"},
+		ResourceTypes: []string{"docker_container"},
+	}
+
+	filtered := ps.filterStateByScope(state, scope)
+
+	if len(filtered.DockerHosts) != 1 {
+		t.Fatalf("expected 1 docker host, got %d", len(filtered.DockerHosts))
+	}
+	if len(filtered.DockerHosts[0].Containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(filtered.DockerHosts[0].Containers))
+	}
+	if filtered.DockerHosts[0].Containers[0].ID != "c1" {
+		t.Fatalf("expected container c1, got %s", filtered.DockerHosts[0].Containers[0].ID)
+	}
+}
+
+func TestPatrolService_filterStateByScope_KubernetesClusterType(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{ID: "k1", Name: "cluster-1"},
+		},
+	}
+	scope := PatrolScope{
+		ResourceIDs:   []string{"k1"},
+		ResourceTypes: []string{"kubernetes_cluster"},
+	}
+
+	filtered := ps.filterStateByScope(state, scope)
+
+	if len(filtered.KubernetesClusters) != 1 {
+		t.Fatalf("expected 1 kubernetes cluster, got %d", len(filtered.KubernetesClusters))
+	}
+	if filtered.KubernetesClusters[0].ID != "k1" {
+		t.Fatalf("expected cluster k1, got %s", filtered.KubernetesClusters[0].ID)
+	}
+}
+
+func TestPatrolService_filterStateByScope_PBSDatastoreType(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{
+			{
+				ID:   "pbs1",
+				Name: "pbs-main",
+				Datastores: []models.PBSDatastore{
+					{Name: "ds1"},
+				},
+			},
+		},
+	}
+	scope := PatrolScope{
+		ResourceIDs:   []string{"pbs1:ds1"},
+		ResourceTypes: []string{"pbs_datastore"},
+	}
+
+	filtered := ps.filterStateByScope(state, scope)
+
+	if len(filtered.PBSInstances) != 1 {
+		t.Fatalf("expected 1 PBS instance, got %d", len(filtered.PBSInstances))
+	}
+	if filtered.PBSInstances[0].ID != "pbs1" {
+		t.Fatalf("expected PBS instance pbs1, got %s", filtered.PBSInstances[0].ID)
+	}
+}
+
 func TestPatrolService_GetStatus_WithFindings(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 

@@ -527,15 +527,14 @@ func (s *Service) StartPatrol(ctx context.Context) {
 		// The patrol service itself should check HasLicenseFeature before LLM calls
 	}
 
-	// Configure patrol from AI config
-	patrolCfg := PatrolConfig{
-		Enabled:        true,
-		Interval:       cfg.GetPatrolInterval(),
-		AnalyzeNodes:   cfg.PatrolAnalyzeNodes,
-		AnalyzeGuests:  cfg.PatrolAnalyzeGuests,
-		AnalyzeDocker:  cfg.PatrolAnalyzeDocker,
-		AnalyzeStorage: cfg.PatrolAnalyzeStorage,
-	}
+	// Configure patrol from AI config (preserve defaults for resource types not in AI config)
+	patrolCfg := DefaultPatrolConfig()
+	patrolCfg.Enabled = true
+	patrolCfg.Interval = cfg.GetPatrolInterval()
+	patrolCfg.AnalyzeNodes = cfg.PatrolAnalyzeNodes
+	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
+	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker
+	patrolCfg.AnalyzeStorage = cfg.PatrolAnalyzeStorage
 	patrol.SetConfig(patrolCfg)
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
 	patrol.Start(ctx)
@@ -590,15 +589,14 @@ func (s *Service) ReconfigurePatrol() {
 		return
 	}
 
-	// Update patrol configuration
-	patrolCfg := PatrolConfig{
-		Enabled:        cfg.IsPatrolEnabled(),
-		Interval:       cfg.GetPatrolInterval(),
-		AnalyzeNodes:   cfg.PatrolAnalyzeNodes,
-		AnalyzeGuests:  cfg.PatrolAnalyzeGuests,
-		AnalyzeDocker:  cfg.PatrolAnalyzeDocker,
-		AnalyzeStorage: cfg.PatrolAnalyzeStorage,
-	}
+	// Update patrol configuration (preserve defaults for resource types not in AI config)
+	patrolCfg := DefaultPatrolConfig()
+	patrolCfg.Enabled = cfg.IsPatrolEnabled()
+	patrolCfg.Interval = cfg.GetPatrolInterval()
+	patrolCfg.AnalyzeNodes = cfg.PatrolAnalyzeNodes
+	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
+	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker
+	patrolCfg.AnalyzeStorage = cfg.PatrolAnalyzeStorage
 	patrol.SetConfig(patrolCfg)
 
 	// Update proactive threshold mode

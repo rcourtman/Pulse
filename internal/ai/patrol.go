@@ -1165,9 +1165,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		// Run AI analysis on filtered state
 		aiResult, aiErr := p.runAIAnalysis(ctx, filteredState)
 		if aiErr != nil {
-			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed")
-		} else if aiResult != nil {
-			for _, f := range aiResult.Findings {
+			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed, running heuristics as safety net")
+			for _, f := range p.runHeuristicAnalysis(filteredState) {
 				isNew := p.findings.Add(f)
 				if isNew && (f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical) {
 					log.Info().
@@ -1176,14 +1175,55 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 						Str("resource", f.ResourceName).
 						Str("title", f.Title).
 						Msg("AI Patrol (scoped): New finding")
-					if !(f.Key == "ai-patrol-error" || f.ResourceID == "ai-service") {
-						p.generateRemediationPlan(f)
-					}
+					p.generateRemediationPlan(f)
 				}
 				// Push to unified store if active
 				if p.unifiedFindingCallback != nil {
 					if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
 						p.unifiedFindingCallback(stored)
+					}
+				}
+			}
+		} else if aiResult != nil {
+			if len(aiResult.Findings) == 0 {
+				log.Warn().Msg("AI Patrol (scoped): LLM response contained no parseable findings, running heuristics as safety net")
+				for _, f := range p.runHeuristicAnalysis(filteredState) {
+					isNew := p.findings.Add(f)
+					if isNew && (f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical) {
+						log.Info().
+							Str("finding_id", f.ID).
+							Str("severity", string(f.Severity)).
+							Str("resource", f.ResourceName).
+							Str("title", f.Title).
+							Msg("AI Patrol (scoped): New finding")
+						p.generateRemediationPlan(f)
+					}
+					// Push to unified store if active
+					if p.unifiedFindingCallback != nil {
+						if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
+							p.unifiedFindingCallback(stored)
+						}
+					}
+				}
+			} else {
+				for _, f := range aiResult.Findings {
+					isNew := p.findings.Add(f)
+					if isNew && (f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical) {
+						log.Info().
+							Str("finding_id", f.ID).
+							Str("severity", string(f.Severity)).
+							Str("resource", f.ResourceName).
+							Str("title", f.Title).
+							Msg("AI Patrol (scoped): New finding")
+						if !(f.Key == "ai-patrol-error" || f.ResourceID == "ai-service") {
+							p.generateRemediationPlan(f)
+						}
+					}
+					// Push to unified store if active
+					if p.unifiedFindingCallback != nil {
+						if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
+							p.unifiedFindingCallback(stored)
+						}
 					}
 				}
 			}
@@ -1203,25 +1243,80 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 	// Build lookup sets for efficient matching
 	resourceIDSet := make(map[string]bool)
 	for _, id := range scope.ResourceIDs {
-		resourceIDSet[id] = true
-	}
-
-	typeSet := make(map[string]bool)
-	for _, t := range scope.ResourceTypes {
-		trimmed := strings.TrimSpace(t)
+		trimmed := strings.TrimSpace(id)
 		if trimmed == "" {
 			continue
 		}
-		typeSet[strings.ToLower(trimmed)] = true
+		resourceIDSet[trimmed] = true
 	}
 
-	// Helper to check if a resource matches the scope
-	matchesScope := func(id, resourceType string) bool {
-		hasIDs := len(resourceIDSet) > 0
-		hasTypes := len(typeSet) > 0
-		idMatch := !hasIDs || resourceIDSet[id]
-		typeMatch := !hasTypes || typeSet[strings.ToLower(resourceType)]
-		return idMatch && typeMatch
+	typeSet := make(map[string]bool)
+	addScopeType := func(t string) {
+		trimmed := strings.TrimSpace(strings.ToLower(t))
+		if trimmed == "" {
+			return
+		}
+		typeSet[trimmed] = true
+		switch trimmed {
+		case "docker", "docker_host", "docker_container":
+			typeSet["docker"] = true
+			typeSet["docker_host"] = true
+			typeSet["docker_container"] = true
+		case "k8s", "kubernetes", "kubernetes_cluster":
+			typeSet["k8s"] = true
+			typeSet["kubernetes"] = true
+			typeSet["kubernetes_cluster"] = true
+		case "lxc", "container":
+			typeSet["lxc"] = true
+			typeSet["container"] = true
+		case "vm", "qemu":
+			typeSet["vm"] = true
+			typeSet["qemu"] = true
+		case "host", "host_raid", "host_sensor":
+			typeSet["host"] = true
+			typeSet["host_raid"] = true
+			typeSet["host_sensor"] = true
+		case "pbs", "pbs_datastore", "pbs_job":
+			typeSet["pbs"] = true
+			typeSet["pbs_datastore"] = true
+			typeSet["pbs_job"] = true
+		}
+	}
+	for _, t := range scope.ResourceTypes {
+		addScopeType(t)
+	}
+
+	hasIDs := len(resourceIDSet) > 0
+	hasTypes := len(typeSet) > 0
+
+	matchesType := func(candidates ...string) bool {
+		if !hasTypes {
+			return true
+		}
+		for _, candidate := range candidates {
+			if candidate == "" {
+				continue
+			}
+			if typeSet[strings.ToLower(candidate)] {
+				return true
+			}
+		}
+		return false
+	}
+
+	matchesID := func(candidates ...string) bool {
+		if !hasIDs {
+			return true
+		}
+		for _, candidate := range candidates {
+			if candidate == "" {
+				continue
+			}
+			if resourceIDSet[candidate] {
+				return true
+			}
+		}
+		return false
 	}
 
 	filtered := models.StateSnapshot{
@@ -1234,42 +1329,117 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 
 	// Filter each resource type
 	for _, n := range state.Nodes {
-		if matchesScope(n.ID, "node") {
+		if matchesType("node") && matchesID(n.ID, n.Name) {
 			filtered.Nodes = append(filtered.Nodes, n)
 		}
 	}
 	for _, vm := range state.VMs {
-		if matchesScope(vm.ID, "vm") {
+		if matchesType("vm", "qemu") && matchesID(vm.ID, vm.Name) {
 			filtered.VMs = append(filtered.VMs, vm)
 		}
 	}
 	for _, c := range state.Containers {
-		if matchesScope(c.ID, "container") || matchesScope(c.ID, "lxc") {
+		if matchesType("container", "lxc") && matchesID(c.ID, c.Name) {
 			filtered.Containers = append(filtered.Containers, c)
 		}
 	}
 	for _, d := range state.DockerHosts {
-		if matchesScope(d.ID, "docker") {
+		if !matchesType("docker", "docker_host", "docker_container") {
+			continue
+		}
+
+		hostName := d.CustomDisplayName
+		if hostName == "" {
+			hostName = d.DisplayName
+		}
+		if hostName == "" {
+			hostName = d.Hostname
+		}
+
+		hostMatches := matchesID(d.ID, hostName, d.Hostname, d.DisplayName, d.CustomDisplayName)
+		if !hasIDs {
 			filtered.DockerHosts = append(filtered.DockerHosts, d)
+			continue
+		}
+
+		var matchedContainers []models.DockerContainer
+		for _, c := range d.Containers {
+			if matchesID(c.ID, c.Name) {
+				matchedContainers = append(matchedContainers, c)
+			}
+		}
+
+		if hostMatches {
+			filtered.DockerHosts = append(filtered.DockerHosts, d)
+			continue
+		}
+		if len(matchedContainers) > 0 {
+			hostCopy := d
+			hostCopy.Containers = matchedContainers
+			filtered.DockerHosts = append(filtered.DockerHosts, hostCopy)
 		}
 	}
 	for _, s := range state.Storage {
-		if matchesScope(s.ID, "storage") {
+		if matchesType("storage") && matchesID(s.ID, s.Name) {
 			filtered.Storage = append(filtered.Storage, s)
 		}
 	}
 	for _, pbs := range state.PBSInstances {
-		if matchesScope(pbs.ID, "pbs") {
+		if !matchesType("pbs", "pbs_datastore", "pbs_job") {
+			continue
+		}
+
+		pbsName := pbs.Name
+		if pbsName == "" {
+			pbsName = pbs.Host
+		}
+		pbsMatches := matchesID(pbs.ID, pbs.Name, pbsName, pbs.Host)
+		if !hasIDs {
+			filtered.PBSInstances = append(filtered.PBSInstances, pbs)
+			continue
+		}
+		if !pbsMatches {
+			for _, ds := range pbs.Datastores {
+				if matchesID(pbs.ID+":"+ds.Name, ds.Name) {
+					pbsMatches = true
+					break
+				}
+			}
+		}
+		if !pbsMatches {
+			for _, job := range pbs.BackupJobs {
+				if matchesID(pbs.ID+":job:"+job.ID, job.ID) {
+					pbsMatches = true
+					break
+				}
+			}
+		}
+		if !pbsMatches {
+			for _, job := range pbs.VerifyJobs {
+				if matchesID(pbs.ID+":verify:"+job.ID, job.ID) {
+					pbsMatches = true
+					break
+				}
+			}
+		}
+		if pbsMatches {
 			filtered.PBSInstances = append(filtered.PBSInstances, pbs)
 		}
 	}
 	for _, h := range state.Hosts {
-		if matchesScope(h.ID, "host") {
+		if matchesType("host", "host_raid", "host_sensor") && matchesID(h.ID, h.DisplayName, h.Hostname) {
 			filtered.Hosts = append(filtered.Hosts, h)
 		}
 	}
 	for _, k := range state.KubernetesClusters {
-		if matchesScope(k.ID, "kubernetes") || matchesScope(k.ID, "k8s") {
+		clusterName := k.CustomDisplayName
+		if clusterName == "" {
+			clusterName = k.DisplayName
+		}
+		if clusterName == "" {
+			clusterName = k.Name
+		}
+		if matchesType("kubernetes", "k8s", "kubernetes_cluster") && matchesID(k.ID, clusterName) {
 			filtered.KubernetesClusters = append(filtered.KubernetesClusters, k)
 		}
 	}
@@ -1752,8 +1922,15 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 			}
 		} else if aiResult != nil {
 			runStats.aiAnalysis = aiResult
-			for _, f := range aiResult.Findings {
-				trackFinding(f)
+			if len(aiResult.Findings) == 0 {
+				log.Warn().Msg("AI Patrol: LLM response contained no parseable findings, running heuristics as safety net")
+				for _, f := range p.runHeuristicAnalysis(state) {
+					trackFinding(f)
+				}
+			} else {
+				for _, f := range aiResult.Findings {
+					trackFinding(f)
+				}
 			}
 		}
 	}

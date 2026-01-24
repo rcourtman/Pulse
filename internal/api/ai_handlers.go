@@ -3297,20 +3297,15 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Check for deep=true query parameter
+	// Check for deep=true query parameter (kept for backwards compatibility)
 	deep := r.URL.Query().Get("deep") == "true"
 
 	// Trigger patrol asynchronously
 	patrol.ForcePatrol(r.Context(), deep)
 
-	patrolType := "quick"
-	if deep {
-		patrolType = "deep"
-	}
-
 	response := map[string]interface{}{
 		"success": true,
-		"message": fmt.Sprintf("Triggered %s patrol run", patrolType),
+		"message": "Triggered patrol run",
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
