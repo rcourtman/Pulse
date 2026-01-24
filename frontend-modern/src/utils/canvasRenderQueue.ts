@@ -51,19 +51,3 @@ export function scheduleSparkline(draw: () => void): () => void {
   };
 }
 
-/**
- * Get render queue stats for debugging
- */
-export function getRenderQueueStats() {
-  return {
-    pendingCount: pending.size,
-    rafScheduled: rafId !== null,
-  };
-}
-
-if (import.meta.env.DEV) {
-  // Expose for debugging in dev mode
-  (window as any).__canvasRenderQueue = {
-    getStats: getRenderQueueStats,
-  };
-}

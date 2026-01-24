@@ -166,66 +166,6 @@ export async function dismissFinding(
     });
 }
 
-/**
- * Approve and execute a proposed fix
- * @param approvalId The approval ID from the investigation
- */
-export async function approveFix(approvalId: string): Promise<{ success: boolean; message: string; output?: string }> {
-    return apiFetchJSON(`/api/ai/approvals/${approvalId}/approve`, {
-        method: 'POST',
-    });
-}
-
-/**
- * Deny/skip a proposed fix
- * @param approvalId The approval ID from the investigation
- */
-export async function denyFix(approvalId: string): Promise<{ success: boolean; message: string }> {
-    return apiFetchJSON(`/api/ai/approvals/${approvalId}/deny`, {
-        method: 'POST',
-    });
-}
-
-/**
- * Severity color mapping for UI
- */
-export const severityColors: Record<FindingSeverity, { bg: string; text: string; border: string }> = {
-    critical: { bg: 'rgba(220, 38, 38, 0.15)', text: '#ef4444', border: 'rgba(220, 38, 38, 0.3)' },
-    warning: { bg: 'rgba(234, 179, 8, 0.15)', text: '#eab308', border: 'rgba(234, 179, 8, 0.3)' },
-    watch: { bg: 'rgba(59, 130, 246, 0.15)', text: '#3b82f6', border: 'rgba(59, 130, 246, 0.3)' },
-    info: { bg: 'rgba(107, 114, 128, 0.15)', text: '#9ca3af', border: 'rgba(107, 114, 128, 0.3)' },
-};
-
-/**
- * Category labels for UI
- */
-export const categoryLabels: Record<FindingCategory, string> = {
-    performance: 'Performance',
-    capacity: 'Capacity',
-    reliability: 'Reliability',
-    backup: 'Backup',
-    security: 'Security',
-    general: 'General',
-};
-
-/**
- * Format a timestamp for display
- */
-export function formatTimestamp(ts: string): string {
-    const date = new Date(ts);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
-}
-
 // =============================================================================
 // Patrol Autonomy APIs
 // =============================================================================
@@ -271,6 +211,52 @@ export async function reinvestigateFinding(findingId: string): Promise<{ success
 }
 
 /**
+ * Approve and execute a proposed fix
+ */
+export async function approveFix(approvalId: string): Promise<{ success: boolean; message: string; output?: string }> {
+    return apiFetchJSON(`/api/ai/approvals/${approvalId}/approve`, {
+        method: 'POST',
+    });
+}
+
+/**
+ * Deny/skip a proposed fix
+ */
+export async function denyFix(approvalId: string): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON(`/api/ai/approvals/${approvalId}/deny`, {
+        method: 'POST',
+    });
+}
+
+/**
+ * Severity color mapping for UI
+ */
+export const severityColors: Record<FindingSeverity, { bg: string; text: string; border: string }> = {
+    critical: { bg: 'rgba(220, 38, 38, 0.15)', text: '#ef4444', border: 'rgba(220, 38, 38, 0.3)' },
+    warning: { bg: 'rgba(234, 179, 8, 0.15)', text: '#eab308', border: 'rgba(234, 179, 8, 0.3)' },
+    watch: { bg: 'rgba(59, 130, 246, 0.15)', text: '#3b82f6', border: 'rgba(59, 130, 246, 0.3)' },
+    info: { bg: 'rgba(107, 114, 128, 0.15)', text: '#9ca3af', border: 'rgba(107, 114, 128, 0.3)' },
+};
+
+/**
+ * Format a timestamp for display
+ */
+export function formatTimestamp(ts: string): string {
+    const date = new Date(ts);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+}
+
+/**
  * Investigation status labels for UI
  */
 export const investigationStatusLabels: Record<InvestigationStatus, string> = {
@@ -291,22 +277,4 @@ export const investigationOutcomeLabels: Record<InvestigationOutcome, string> = 
     fix_failed: 'Fix Failed',
     needs_attention: 'Needs Attention',
     cannot_fix: 'Cannot Auto-Fix',
-};
-
-/**
- * Autonomy level labels for UI
- */
-export const autonomyLevelLabels: Record<PatrolAutonomyLevel, { label: string; description: string }> = {
-    monitor: {
-        label: 'Monitor Only',
-        description: 'Detect issues and create findings. No automatic investigation.',
-    },
-    approval: {
-        label: 'Investigate with Approval',
-        description: 'Automatically investigate findings. Queue fixes for your approval.',
-    },
-    full: {
-        label: 'Full Autonomy',
-        description: 'Automatically investigate and apply non-critical fixes. Critical fixes still require approval.',
-    },
 };

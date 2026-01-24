@@ -141,21 +141,3 @@ export function useBreakpoint(): UseBreakpointReturn {
   };
 }
 
-/**
- * Get the Tailwind CSS class for hiding an element below a given breakpoint
- */
-export function getVisibilityClass(priority: ColumnPriority, display: 'flex' | 'block' | 'table-cell' | 'grid' | 'inline' = 'flex'): string {
-  const bp = PRIORITY_BREAKPOINTS[priority];
-  if (bp === 'xs') {
-    // Always visible, no hiding class needed
-    return display;
-  }
-  return `hidden ${bp}:${display}`;
-}
-
-/**
- * Get the minimum width for a priority level
- */
-export function getPriorityMinWidth(priority: ColumnPriority): number {
-  return BREAKPOINTS[PRIORITY_BREAKPOINTS[priority]];
-}

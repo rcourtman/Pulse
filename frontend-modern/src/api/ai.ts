@@ -16,59 +16,6 @@ import type {
   LearningStatusResponse,
 } from '@/types/aiIntelligence';
 
-const toNumber = (value: unknown, fallback = 0) => {
-  if (typeof value === 'number' && !Number.isNaN(value)) return value;
-  if (typeof value === 'string') {
-    const num = Number(value);
-    if (!Number.isNaN(num)) return num;
-  }
-  return fallback;
-};
-
-const normalizeForecastResponse = (data: any): ForecastResponse => {
-  const raw = data?.forecast ?? data;
-  if (!raw) {
-    throw new Error('No forecast data available');
-  }
-
-  const trendDirection = typeof raw.trend === 'string' ? raw.trend : raw.trend?.direction;
-  const trend =
-    trendDirection === 'increasing' || trendDirection === 'decreasing' || trendDirection === 'stable'
-      ? trendDirection
-      : 'stable';
-
-  const currentValue = toNumber(raw.current_value ?? raw.currentValue, 0);
-  const predictedValue = toNumber(raw.predicted_value ?? raw.predictedValue, currentValue);
-  const startTime = Date.now();
-  const endTime = raw.predicted_at ? new Date(raw.predicted_at).getTime() : startTime;
-  const points = 12;
-  const stepMs = points > 1 ? (endTime - startTime) / (points - 1) : 0;
-  const confidence = Math.min(Math.max(toNumber(raw.confidence, 0), 0), 1);
-  const baseSpread = Math.max(Math.abs(predictedValue - currentValue) * (1 - confidence + 0.15), Math.abs(currentValue) * 0.05);
-
-  const predictions: ForecastPrediction[] = [];
-  for (let i = 0; i < points; i += 1) {
-    const ratio = points > 1 ? i / (points - 1) : 1;
-    const value = currentValue + (predictedValue - currentValue) * ratio;
-    const spread = baseSpread * (0.6 + ratio * 0.8);
-    predictions.push({
-      timestamp: new Date(startTime + stepMs * i).toISOString(),
-      value,
-      lower_bound: Math.max(0, value - spread),
-      upper_bound: value + spread,
-    });
-  }
-
-  return {
-    resource_id: raw.resource_id ?? raw.resourceId ?? '',
-    metric: raw.metric ?? '',
-    predictions,
-    confidence,
-    trend,
-    message: raw.description ?? raw.message,
-  };
-};
-
 export class AIAPI {
   private static baseUrl = '/api';
 
@@ -541,33 +488,6 @@ export class AIAPI {
     };
   }
 
-  // ============================================
-  // Phase 7: Event-Driven Intelligence API
-  // ============================================
-
-  // Get forecast for a metric
-  static async getForecast(options: { resourceId: string; metric: string; horizonHours?: number }): Promise<ForecastResponse> {
-    const params = new URLSearchParams();
-    params.set('resource_id', options.resourceId);
-    params.set('metric', options.metric);
-    if (options.horizonHours) params.set('horizon_hours', String(options.horizonHours));
-    const data = await apiFetchJSON(`${this.baseUrl}/ai/forecast?${params.toString()}`);
-    return normalizeForecastResponse(data);
-  }
-
-  // Get forecast overview for all resources sorted by urgency
-  static async getForecastOverview(params: {
-    metric: string;
-    horizonHours?: number;
-    threshold?: number;
-  }): Promise<ForecastOverviewResponse> {
-    const urlParams = new URLSearchParams();
-    urlParams.set('metric', params.metric);
-    if (params.horizonHours) urlParams.set('horizon_hours', String(params.horizonHours));
-    if (params.threshold) urlParams.set('threshold', String(params.threshold));
-    return apiFetchJSON(`${this.baseUrl}/ai/forecasts/overview?${urlParams.toString()}`) as Promise<ForecastOverviewResponse>;
-  }
-
   // Remediation plans
   static async getRemediationPlans(): Promise<RemediationPlansResponse> {
     const data = await apiFetchJSON(`${this.baseUrl}/ai/remediation/plans`) as { plans?: RemediationPlan[]; executions?: unknown[] };
@@ -656,42 +576,6 @@ export interface UnifiedFindingsResponse {
   findings: UnifiedFindingRecord[];
   count?: number;
   active_count?: number;
-}
-
-export interface ForecastResponse {
-  resource_id: string;
-  metric: string;
-  predictions: ForecastPrediction[];
-  confidence: number;
-  trend: 'increasing' | 'decreasing' | 'stable';
-  message?: string;
-}
-
-export interface ForecastPrediction {
-  timestamp: string;
-  value: number;
-  lower_bound: number;
-  upper_bound: number;
-}
-
-export interface ForecastOverviewItem {
-  resource_id: string;
-  resource_name: string;
-  resource_type: 'node' | 'vm' | 'lxc';
-  metric: string;
-  current_value: number;
-  predicted_value: number;
-  time_to_threshold: number | null;  // seconds, null if won't breach
-  confidence: number;
-  trend: 'increasing' | 'decreasing' | 'stable' | 'volatile';
-}
-
-export interface ForecastOverviewResponse {
-  forecasts: ForecastOverviewItem[];
-  metric: string;
-  threshold: number;
-  horizon_hours: number;
-  error?: string;
 }
 
 export interface RemediationPlansResponse {
