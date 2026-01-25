@@ -58,6 +58,7 @@ type AIService interface {
 	SetIncidentRecorderProvider(provider chat.IncidentRecorderProvider)
 	SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)
 	SetTopologyProvider(provider chat.TopologyProvider)
+	SetDiscoveryProvider(provider chat.MCPDiscoveryProvider)
 	UpdateControlSettings(cfg *config.AIConfig)
 	GetBaseURL() string
 }

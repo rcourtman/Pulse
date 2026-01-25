@@ -37,6 +37,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
+	"github.com/rcourtman/pulse-go-rewrite/internal/aidiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
@@ -67,6 +68,7 @@ type Router struct {
 	systemSettingsHandler     *SystemSettingsHandler
 	aiSettingsHandler         *AISettingsHandler
 	aiHandler                 *AIHandler // AI chat handler
+	aiDiscoveryHandlers       *AIDiscoveryHandlers
 	resourceHandlers          *ResourceHandlers
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
@@ -1267,6 +1269,11 @@ func (r *Router) setupRoutes() {
 
 	// AI chat handler
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
+
+	// AI-powered infrastructure discovery handlers
+	// Note: The actual service is wired up later via SetAIDiscoveryService
+	r.aiDiscoveryHandlers = NewAIDiscoveryHandlers(nil)
+
 	// Wire license checker for Pro feature gating (AI Patrol, Alert Analysis, Auto-Fix)
 	r.aiSettingsHandler.SetLicenseHandlers(r.licenseHandlers)
 	// Wire model change callback to restart AI chat service when model is changed
@@ -1412,6 +1419,8 @@ func (r *Router) setupRoutes() {
 			r.aiSettingsHandler.HandleGetInvestigation(w, req)
 		case strings.HasSuffix(path, "/reinvestigate"):
 			r.aiSettingsHandler.HandleReinvestigateFinding(w, req)
+		case strings.HasSuffix(path, "/reapprove"):
+			r.aiSettingsHandler.HandleReapproveInvestigationFix(w, req)
 		default:
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
@@ -1492,6 +1501,47 @@ func (r *Router) setupRoutes() {
 
 	// AI question endpoints
 	r.mux.HandleFunc("/api/ai/question/", RequireAuth(r.config, r.routeQuestions))
+
+	// AI-powered infrastructure discovery endpoints
+	r.mux.HandleFunc("/api/aidiscovery", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.aiDiscoveryHandlers.HandleListDiscoveries)))
+	r.mux.HandleFunc("/api/aidiscovery/status", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.aiDiscoveryHandlers.HandleGetStatus)))
+	r.mux.HandleFunc("/api/aidiscovery/type/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.aiDiscoveryHandlers.HandleListByType)))
+	r.mux.HandleFunc("/api/aidiscovery/host/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.aiDiscoveryHandlers.HandleListByHost)))
+	r.mux.HandleFunc("/api/aidiscovery/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		path := req.URL.Path
+		switch req.Method {
+		case http.MethodGet:
+			if !ensureScope(w, req, config.ScopeMonitoringRead) {
+				return
+			}
+			if strings.HasSuffix(path, "/progress") {
+				r.aiDiscoveryHandlers.HandleGetProgress(w, req)
+			} else {
+				r.aiDiscoveryHandlers.HandleGetDiscovery(w, req)
+			}
+		case http.MethodPost:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			r.aiDiscoveryHandlers.HandleTriggerDiscovery(w, req)
+		case http.MethodPut:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			if strings.HasSuffix(path, "/notes") {
+				r.aiDiscoveryHandlers.HandleUpdateNotes(w, req)
+			} else {
+				http.Error(w, "Not found", http.StatusNotFound)
+			}
+		case http.MethodDelete:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			r.aiDiscoveryHandlers.HandleDeleteDiscovery(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
@@ -1873,6 +1923,13 @@ func (r *Router) SetConfig(cfg *config.Config) {
 	}
 }
 
+// SetAIDiscoveryService sets the AI discovery service for the router.
+func (r *Router) SetAIDiscoveryService(svc *aidiscovery.Service) {
+	if r.aiDiscoveryHandlers != nil {
+		r.aiDiscoveryHandlers.SetService(svc)
+	}
+}
+
 // StartPatrol starts the AI patrol service for background infrastructure monitoring
 func (r *Router) StartPatrol(ctx context.Context) {
 	if r.aiSettingsHandler != nil {
@@ -2085,6 +2142,16 @@ func (r *Router) StartPatrol(ctx context.Context) {
 
 		// Finally start the actual patrol loop
 		r.aiSettingsHandler.StartPatrol(ctx)
+
+		// Wire up AI discovery service to the handlers
+		// This enables the /api/aidiscovery endpoints to trigger discovery scans
+		aiService := r.aiSettingsHandler.GetAIService(ctx)
+		if aiService != nil {
+			if discoveryService := aiService.GetAIDiscoveryService(); discoveryService != nil {
+				r.SetAIDiscoveryService(discoveryService)
+				log.Info().Msg("AI Discovery: Service wired to API handlers")
+			}
+		}
 	}
 }
 
@@ -2551,6 +2618,19 @@ func (r *Router) wireAIChatProviders() {
 				if knowledgeStore := patrolSvc.GetKnowledgeStore(); knowledgeStore != nil {
 					service.SetKnowledgeStoreProvider(&knowledgeStoreProviderWrapper{store: knowledgeStore})
 					log.Debug().Msg("AI chat: Knowledge store provider wired")
+				}
+			}
+		}
+	}
+
+	// Wire discovery provider for AI-powered infrastructure discovery (pulse_get_discovery, pulse_list_discoveries)
+	if r.aiSettingsHandler != nil {
+		if aiSvc := r.aiSettingsHandler.GetAIService(context.Background()); aiSvc != nil {
+			if discoverySvc := aiSvc.GetAIDiscoveryService(); discoverySvc != nil {
+				adapter := aidiscovery.NewToolsAdapter(discoverySvc)
+				if adapter != nil {
+					service.SetDiscoveryProvider(tools.NewDiscoveryMCPAdapter(adapter))
+					log.Debug().Msg("AI chat: Discovery provider wired")
 				}
 			}
 		}

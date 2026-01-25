@@ -44,7 +44,13 @@ func (g *Guardrails) IsDestructiveAction(command string) bool {
 // RequiresApproval determines if an action requires user approval
 // based on finding severity, autonomy level, and whether the command is destructive
 func (g *Guardrails) RequiresApproval(findingSeverity, autonomyLevel, command string, criticalRequireApproval bool) bool {
-	// Destructive actions ALWAYS require approval
+	// Autonomous mode - user explicitly opted into full autonomy, no approvals needed
+	// This is like "auto-accept" mode in Claude Code - user accepts all risk
+	if autonomyLevel == "autonomous" {
+		return false
+	}
+
+	// Destructive actions ALWAYS require approval (except in autonomous mode above)
 	if g.IsDestructiveAction(command) {
 		return true
 	}

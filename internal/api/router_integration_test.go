@@ -90,6 +90,13 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 	srv := httptest.NewServer(router.Handler())
 	t.Cleanup(func() {
 		srv.Close()
+		if monitor != nil {
+			monitor.StopDiscoveryService()
+			monitor.Stop()
+		}
+		if hub != nil {
+			hub.Stop()
+		}
 		mock.SetEnabled(false)
 	})
 

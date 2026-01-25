@@ -16,14 +16,15 @@ const (
 // This is stored in ai.enc (encrypted) in the config directory
 type AIConfig struct {
 	Enabled        bool   `json:"enabled"`
-	Provider       string `json:"provider"`               // DEPRECATED: legacy single provider field, kept for migration
-	APIKey         string `json:"api_key"`                // DEPRECATED: legacy single API key, kept for migration
-	Model          string `json:"model"`                  // Currently selected default model (format: "provider:model-name")
-	ChatModel      string `json:"chat_model,omitempty"`   // Model for interactive chat (defaults to Model)
-	PatrolModel    string `json:"patrol_model,omitempty"` // Model for background patrol (defaults to Model, can be cheaper)
-	BaseURL        string `json:"base_url"`               // DEPRECATED: legacy base URL, kept for migration
-	AutonomousMode bool   `json:"autonomous_mode"`        // when true, AI executes commands without approval
-	CustomContext  string `json:"custom_context"`         // user-provided context about their infrastructure
+	Provider       string `json:"provider"`                  // DEPRECATED: legacy single provider field, kept for migration
+	APIKey         string `json:"api_key"`                   // DEPRECATED: legacy single API key, kept for migration
+	Model          string `json:"model"`                     // Currently selected default model (format: "provider:model-name")
+	ChatModel      string `json:"chat_model,omitempty"`      // Model for interactive chat (defaults to Model)
+	PatrolModel    string `json:"patrol_model,omitempty"`    // Model for background patrol (defaults to Model, can be cheaper)
+	DiscoveryModel string `json:"discovery_model,omitempty"` // Model for infrastructure discovery (defaults to cheapest available, e.g., haiku)
+	BaseURL        string `json:"base_url"`                  // DEPRECATED: legacy base URL, kept for migration
+	AutonomousMode bool   `json:"autonomous_mode"`           // when true, AI executes commands without approval
+	CustomContext  string `json:"custom_context"`            // user-provided context about their infrastructure
 
 	// Multi-provider credentials - each provider can be configured independently
 	AnthropicAPIKey string `json:"anthropic_api_key,omitempty"` // Anthropic API key
@@ -72,6 +73,10 @@ type AIConfig struct {
 	PatrolInvestigationBudget     int    `json:"patrol_investigation_budget,omitempty"`      // Max turns per investigation (default: 15)
 	PatrolInvestigationTimeoutSec int    `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
 	PatrolCriticalRequireApproval bool   `json:"patrol_critical_require_approval"`           // Critical findings always require approval (default: true)
+
+	// AI Discovery settings - controls automatic infrastructure discovery
+	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // Enable AI-powered infrastructure discovery
+	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between automatic re-scans (0 = manual only, default: 0)
 }
 
 // AIProvider constants
@@ -101,6 +106,9 @@ const (
 	PatrolAutonomyApproval = "approval"
 	// PatrolAutonomyFull - Spawn Chat sessions to investigate, execute non-critical fixes automatically
 	PatrolAutonomyFull = "full"
+	// PatrolAutonomyAutonomous - Full autonomy, execute ALL fixes including destructive ones without approval
+	// User accepts full risk - similar to "auto-accept" mode in Claude Code
+	PatrolAutonomyAutonomous = "autonomous"
 )
 
 // Default patrol investigation settings
@@ -393,6 +401,16 @@ func (c *AIConfig) GetPatrolModel() string {
 	return c.GetModel()
 }
 
+// GetDiscoveryModel returns the model for infrastructure discovery
+// Falls back to the main model since discovery needs to use the same provider
+func (c *AIConfig) GetDiscoveryModel() string {
+	if c.DiscoveryModel != "" {
+		return c.DiscoveryModel
+	}
+	// Fall back to the main model to ensure we use the same provider
+	return c.GetModel()
+}
+
 // GetAutoFixModel returns the model for automatic remediation actions
 // Falls back to PatrolModel, then to the main Model if AutoFixModel is not set
 // Auto-fix may warrant a more capable model since it takes actions
@@ -559,7 +577,7 @@ func (c *AIConfig) GetPatrolAutonomyLevel() string {
 		return PatrolAutonomyMonitor
 	}
 	switch c.PatrolAutonomyLevel {
-	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyFull:
+	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyFull, PatrolAutonomyAutonomous:
 		return c.PatrolAutonomyLevel
 	default:
 		return PatrolAutonomyMonitor
@@ -609,7 +627,7 @@ func (c *AIConfig) ShouldCriticalRequireApproval() bool {
 // IsValidPatrolAutonomyLevel checks if a patrol autonomy level string is valid
 func IsValidPatrolAutonomyLevel(level string) bool {
 	switch level {
-	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyFull:
+	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyFull, PatrolAutonomyAutonomous:
 		return true
 	default:
 		return false
@@ -620,4 +638,18 @@ func IsValidPatrolAutonomyLevel(level string) bool {
 func (c *AIConfig) IsPatrolAutonomyEnabled() bool {
 	level := c.GetPatrolAutonomyLevel()
 	return level != PatrolAutonomyMonitor
+}
+
+// IsDiscoveryEnabled returns whether AI-powered infrastructure discovery is enabled
+func (c *AIConfig) IsDiscoveryEnabled() bool {
+	return c.DiscoveryEnabled
+}
+
+// GetDiscoveryInterval returns the interval between automatic discovery scans
+// Returns 0 if discovery is manual-only
+func (c *AIConfig) GetDiscoveryInterval() time.Duration {
+	if c.DiscoveryIntervalHours <= 0 {
+		return 0 // Manual only
+	}
+	return time.Duration(c.DiscoveryIntervalHours) * time.Hour
 }

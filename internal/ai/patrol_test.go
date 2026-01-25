@@ -746,6 +746,33 @@ EVIDENCE: Usage: 90%
 	}
 }
 
+func TestPatrolService_ParseFindingBlock_BackupCategory(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	block := `
+SEVERITY: warning
+CATEGORY: backup
+RESOURCE: vm-101
+RESOURCE_TYPE: vm
+TITLE: Backup stale
+DESCRIPTION: No backup in 48 hours
+RECOMMENDATION: Check backup jobs
+EVIDENCE: Last backup: 2 days ago
+`
+
+	finding := ps.parseFindingBlock(block)
+
+	if finding == nil {
+		t.Fatal("Expected non-nil finding")
+	}
+	if finding.Category != FindingCategoryBackup {
+		t.Errorf("Expected category backup, got %v", finding.Category)
+	}
+	if finding.Title != "Backup stale" {
+		t.Errorf("Expected title 'Backup stale', got '%s'", finding.Title)
+	}
+}
+
 func TestPatrolService_ParseFindingBlock_MissingRequiredFields(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
@@ -969,7 +996,7 @@ func TestJoinParts(t *testing.T) {
 		{[]string{}, ""},
 		{[]string{"one"}, "one"},
 		{[]string{"one", "two"}, "one and two"},
-		{[]string{"one", "two", "three"}, "[one two], and three"},
+		{[]string{"one", "two", "three"}, "one, two, and three"},
 	}
 
 	for _, tt := range tests {

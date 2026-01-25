@@ -102,6 +102,11 @@ type Approval struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// InfrastructureContextProvider provides discovered infrastructure context for investigations
+type InfrastructureContextProvider interface {
+	GetInfrastructureContext() string
+}
+
 // Orchestrator manages the investigation lifecycle
 type Orchestrator struct {
 	mu sync.RWMutex
@@ -113,6 +118,9 @@ type Orchestrator struct {
 	approvalStore   ApprovalStore
 	guardrails      *Guardrails
 	config          InvestigationConfig
+
+	// Infrastructure context provider for CLI access information
+	infraContextProvider InfrastructureContextProvider
 
 	// Track running investigations
 	runningCount int
@@ -149,6 +157,15 @@ func (o *Orchestrator) SetCommandExecutor(executor CommandExecutor) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.commandExecutor = executor
+}
+
+// SetInfrastructureContextProvider sets the provider for discovered infrastructure context
+// This enables investigations to know where services run (Docker, systemd, native)
+// and propose correct CLI commands for remediation
+func (o *Orchestrator) SetInfrastructureContextProvider(provider InfrastructureContextProvider) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.infraContextProvider = provider
 }
 
 // GetConfig returns the current configuration
@@ -240,11 +257,32 @@ func (o *Orchestrator) InvestigateFinding(ctx context.Context, finding *Finding,
 
 // buildInvestigationPrompt creates the investigation prompt for a finding
 func (o *Orchestrator) buildInvestigationPrompt(finding *Finding) string {
+	// Get infrastructure context if available
+	var infraContext string
+	o.mu.RLock()
+	if o.infraContextProvider != nil {
+		infraContext = o.infraContextProvider.GetInfrastructureContext()
+	}
+	o.mu.RUnlock()
+
+	// Build infrastructure context section
+	var infraSection string
+	if infraContext != "" {
+		infraSection = fmt.Sprintf(`
+%s
+**IMPORTANT**: When proposing commands, use the CLI access method shown above.
+- If a service runs in Docker, use 'docker exec <container> <command>' instead of direct commands
+- Example: For PBS in Docker, use 'docker exec pbs proxmox-backup-manager gc pbs-delly' not 'proxmox-backup-manager gc pbs-delly'
+- This ensures commands execute in the correct environment where the service actually runs.
+
+`, infraContext)
+	}
+
 	return fmt.Sprintf(`You are investigating a finding from Pulse Patrol. Your goal is to:
 1. Understand the issue using available tools
 2. Determine if it can be automatically fixed
 3. If fixable, propose a specific remediation command
-
+%s
 ## Finding Details
 - **Title**: %s
 - **Severity**: %s
@@ -288,6 +326,7 @@ Remember:
 - Only propose commands you're confident will help
 - Never propose destructive commands (they'll be blocked anyway)
 - Focus on the specific resource mentioned in the finding`,
+		infraSection,
 		finding.Title,
 		finding.Severity,
 		finding.Category,

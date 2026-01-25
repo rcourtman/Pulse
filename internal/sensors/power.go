@@ -34,7 +34,7 @@ type PowerData struct {
 
 // raplBasePath is the base path for Intel RAPL (Running Average Power Limit) readings.
 // RAPL provides energy counters that we sample to calculate power.
-const raplBasePath = "/sys/class/powercap/intel-rapl"
+var raplBasePath = "/sys/class/powercap/intel-rapl"
 
 // sampleInterval is the time between energy counter readings.
 // Shorter intervals are less accurate; longer intervals add latency.
@@ -204,7 +204,7 @@ func readStringFile(path string) (string, error) {
 }
 
 // hwmonBasePath is the base path for hwmon devices (used by AMD energy driver).
-const hwmonBasePath = "/sys/class/hwmon"
+var hwmonBasePath = "/sys/class/hwmon"
 
 // collectAMDEnergy reads power data from AMD energy driver via hwmon.
 // The amd_energy module exposes energy counters similar to Intel RAPL.

@@ -168,22 +168,20 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		}
 	}
 
-	// Skip approval checks if pre-approved
-	if !preApproved && e.controlLevel == ControlLevelControlled {
-		// Auto-approve read-only commands when in autonomous mode (investigations)
-		// This allows AI to gather diagnostic data without user approval
-		if e.isAutonomous && safety.IsReadOnlyCommand(command) {
-			log.Debug().
-				Str("command", command).
-				Msg("Auto-approving read-only command for autonomous investigation")
-		} else {
-			targetType := "container"
-			if runOnHost {
-				targetType = "host"
-			}
-			approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Control level requires approval")
-			return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
+	// Skip approval checks if pre-approved or in autonomous mode
+	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
+		targetType := "container"
+		if runOnHost {
+			targetType = "host"
 		}
+		approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Control level requires approval")
+		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
+	}
+	if e.isAutonomous {
+		log.Debug().
+			Str("command", command).
+			Bool("read_only", safety.IsReadOnlyCommand(command)).
+			Msg("Auto-approving command for autonomous investigation")
 	}
 	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
 		targetType := "container"

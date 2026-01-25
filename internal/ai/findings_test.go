@@ -367,6 +367,54 @@ func TestFindingsStore_Cleanup(t *testing.T) {
 	}
 }
 
+func TestFindingsStore_SuppressedPersistsInContextAndCleanup(t *testing.T) {
+	store := NewFindingsStore()
+	old := time.Now().Add(-60 * 24 * time.Hour)
+
+	store.findings["suppressed"] = &Finding{
+		ID:              "suppressed",
+		Title:           "Suppressed Finding",
+		ResourceName:    "host-1",
+		Suppressed:      true,
+		DismissedReason: "not_an_issue",
+		LastSeenAt:      old,
+	}
+
+	removed := store.Cleanup(24 * time.Hour)
+	if removed != 0 {
+		t.Errorf("Expected 0 findings removed, got %d", removed)
+	}
+	if store.Get("suppressed") == nil {
+		t.Error("suppressed finding should NOT have been removed")
+	}
+
+	ctx := store.GetDismissedForContext()
+	if !strings.Contains(ctx, "Suppressed Finding") {
+		t.Error("expected suppressed finding to remain in context")
+	}
+}
+
+func TestFindingsStore_Cleanup_RemovesOldDismissed(t *testing.T) {
+	store := NewFindingsStore()
+	old := time.Now().Add(-31 * 24 * time.Hour)
+
+	store.findings["dismissed"] = &Finding{
+		ID:              "dismissed",
+		Title:           "Dismissed Finding",
+		ResourceName:    "host-2",
+		DismissedReason: "expected_behavior",
+		LastSeenAt:      old,
+	}
+
+	removed := store.Cleanup(24 * time.Hour)
+	if removed != 1 {
+		t.Errorf("Expected 1 finding removed, got %d", removed)
+	}
+	if store.Get("dismissed") != nil {
+		t.Error("dismissed finding should have been removed")
+	}
+}
+
 func TestFindingsStore_GetDismissedForContext(t *testing.T) {
 	store := NewFindingsStore()
 

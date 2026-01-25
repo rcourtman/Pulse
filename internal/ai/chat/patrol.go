@@ -407,7 +407,7 @@ func (p *PatrolService) parseFindingBlock(block string) *PatrolFinding {
 		severity = "info"
 	}
 
-	validCategories := map[string]bool{"performance": true, "reliability": true, "security": true, "capacity": true, "configuration": true}
+	validCategories := map[string]bool{"performance": true, "reliability": true, "security": true, "capacity": true, "backup": true, "configuration": true}
 	if !validCategories[category] {
 		category = "configuration"
 	}

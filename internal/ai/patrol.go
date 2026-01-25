@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
+	"github.com/rcourtman/pulse-go-rewrite/internal/aidiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
@@ -341,6 +342,7 @@ type PatrolService struct {
 	config              PatrolConfig
 	findings            *FindingsStore
 	knowledgeStore      *knowledge.Store       // For per-resource notes in patrol context
+	discoveryStore      *aidiscovery.Store     // For AI-discovered infrastructure context
 	metricsHistory      MetricsHistoryProvider // For trend analysis and predictions
 	baselineStore       *baseline.Store        // For anomaly detection via learned baselines
 	changeDetector      *ChangeDetector        // For tracking infrastructure changes
@@ -893,6 +895,22 @@ func (p *PatrolService) GetKnowledgeStore() *knowledge.Store {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.knowledgeStore
+}
+
+// SetDiscoveryStore sets the AI discovery store for infrastructure context
+// This enables the patrol service to include discovered service info in prompts
+func (p *PatrolService) SetDiscoveryStore(store *aidiscovery.Store) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.discoveryStore = store
+	log.Info().Msg("AI Patrol: Discovery store set for infrastructure context")
+}
+
+// GetDiscoveryStore returns the discovery store for external access
+func (p *PatrolService) GetDiscoveryStore() *aidiscovery.Store {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.discoveryStore
 }
 
 // SetMetricsHistoryProvider sets the metrics history provider for enriched context
@@ -3218,7 +3236,11 @@ func (p *PatrolService) GetFindingsHistory(startTime *time.Time) []*Finding {
 // The deep parameter is kept for API backwards compatibility but is ignored
 // Uses context.Background() since this runs async after the HTTP response
 func (p *PatrolService) ForcePatrol(ctx context.Context, deep bool) {
-	go p.runPatrol(context.Background())
+	runCtx := context.Background()
+	if ctx != nil {
+		runCtx = context.WithoutCancel(ctx)
+	}
+	go p.runPatrol(runCtx)
 }
 
 // analyzePBSInstance checks a PBS backup server for issues
@@ -4471,16 +4493,26 @@ func (p *PatrolService) buildPatrolPrompt(summary string) string {
 
 	// Get resource notes from knowledge store (per-resource user notes)
 	var knowledgeContext string
+	var infraContext string
 	var incidentContext string
+	var discoveryContext string
 	p.mu.RLock()
 	knowledgeStore := p.knowledgeStore
 	incidentStore := p.incidentStore
+	discoveryStore := p.discoveryStore
 	p.mu.RUnlock()
 	if knowledgeStore != nil {
 		knowledgeContext = knowledgeStore.FormatAllForContext()
+		infraContext = knowledgeStore.GetInfrastructureContext()
 	}
 	if incidentStore != nil {
 		incidentContext = incidentStore.FormatForPatrol(8)
+	}
+	// Get AI discovery context (deep-scanned service info)
+	if discoveryStore != nil {
+		if discoveries, err := discoveryStore.List(); err == nil && len(discoveries) > 0 {
+			discoveryContext = aidiscovery.FormatForAIContext(discoveries)
+		}
 	}
 
 	basePrompt := fmt.Sprintf(`Please perform a comprehensive analysis of the following infrastructure and identify any issues, potential problems, or optimization opportunities.
@@ -4510,6 +4542,24 @@ If everything looks healthy with stable trends, say so briefly.`, summary)
 		contextAdditions.WriteString("\n\n")
 		contextAdditions.WriteString(knowledgeContext)
 		contextAdditions.WriteString("\nIMPORTANT: Consider the user's saved notes above when analyzing. If a user has noted that a resource behaves a certain way (e.g., 'runs hot for transcoding'), do not flag it as an issue.\n")
+	}
+
+	// Append infrastructure discovery context (auto-discovered apps and services)
+	if infraContext != "" {
+		contextAdditions.WriteString("\n\n")
+		contextAdditions.WriteString(infraContext)
+		contextAdditions.WriteString(`
+IMPORTANT: When proposing remediation commands, use the CLI access method shown above.
+- If a service runs in Docker, use 'docker exec <container> <command>' instead of direct commands
+- Example: For PBS in Docker, use 'docker exec pbs proxmox-backup-manager gc pbs-delly' not 'proxmox-backup-manager gc pbs-delly'
+- This ensures commands execute in the correct environment where the service actually runs.
+`)
+	}
+
+	// Append deep AI discovery context (service details, versions, config paths, ports)
+	if discoveryContext != "" {
+		contextAdditions.WriteString("\n\n")
+		contextAdditions.WriteString(discoveryContext)
 	}
 
 	// Append user feedback context (dismissed/snoozed findings)
@@ -4874,6 +4924,8 @@ func (p *PatrolService) parseFindingBlock(block string) *Finding {
 		cat = FindingCategorySecurity
 	case "capacity":
 		cat = FindingCategoryCapacity
+	case "backup":
+		cat = FindingCategoryBackup
 	case "configuration":
 		cat = FindingCategoryGeneral // Configuration maps to General
 	default:

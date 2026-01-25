@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -819,4 +821,88 @@ func TestHandleStatus_NoService(t *testing.T) {
 	var resp map[string]interface{}
 	json.NewDecoder(w.Body).Decode(&resp)
 	assert.False(t, resp["running"].(bool))
+}
+
+func TestGetService_MultiTenantInitAndCache(t *testing.T) {
+	oldNewService := newChatService
+	defer func() { newChatService = oldNewService }()
+
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	h := NewAIHandler(mtp, nil, nil)
+
+	mockSvc := new(MockAIService)
+	mockSvc.On("Start", mock.Anything).Return(nil).Once()
+
+	var gotCfg chat.Config
+	newChatService = func(cfg chat.Config) AIService {
+		gotCfg = cfg
+		return mockSvc
+	}
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+	svc := h.GetService(ctx)
+	assert.Same(t, mockSvc, svc)
+
+	expectedDir := filepath.Join(tempDir, "orgs", "acme")
+	assert.Equal(t, expectedDir, gotCfg.DataDir)
+	assert.NotNil(t, gotCfg.AIConfig)
+
+	// Second call should return cached service without re-starting
+	svc = h.GetService(ctx)
+	assert.Same(t, mockSvc, svc)
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRemoveTenantService(t *testing.T) {
+	h := NewAIHandler(nil, nil, nil)
+	mockSvc := new(MockAIService)
+	mockSvc.On("Stop", mock.Anything).Return(assert.AnError).Once()
+	h.services["acme"] = mockSvc
+
+	err := h.RemoveTenantService(context.Background(), "acme")
+	assert.NoError(t, err)
+	_, exists := h.services["acme"]
+	assert.False(t, exists)
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRemoveTenantService_DefaultNoop(t *testing.T) {
+	h := NewAIHandler(nil, nil, nil)
+	mockSvc := new(MockAIService)
+	h.services["default"] = mockSvc
+
+	err := h.RemoveTenantService(context.Background(), "default")
+	assert.NoError(t, err)
+	_, exists := h.services["default"]
+	assert.True(t, exists)
+}
+
+func TestGetConfig_DefaultFallback(t *testing.T) {
+	cfg := &config.Config{APIToken: "token"}
+	h := newTestAIHandler(cfg, nil, nil)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+
+	result := h.getConfig(ctx)
+	assert.Same(t, cfg, result)
+}
+
+func TestGetDataDirDefault(t *testing.T) {
+	h := newTestAIHandler(nil, nil, nil)
+	assert.Equal(t, "data", h.getDataDir(nil, ""))
+	assert.Equal(t, "custom", h.getDataDir(nil, "custom"))
+}
+
+func TestSetMultiTenantPointers(t *testing.T) {
+	h := NewAIHandler(nil, nil, nil)
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := &monitoring.MultiTenantMonitor{}
+
+	h.SetMultiTenantPersistence(mtp)
+	h.SetMultiTenantMonitor(mtm)
+
+	assert.Same(t, mtp, h.mtPersistence)
+	assert.Same(t, mtm, h.mtMonitor)
 }

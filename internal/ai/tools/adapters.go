@@ -735,3 +735,221 @@ func trimContainerName(name string) string {
 	}
 	return name
 }
+
+// ========== Discovery Provider Adapter ==========
+
+// DiscoverySource provides access to AI-powered infrastructure discovery data
+type DiscoverySource interface {
+	GetDiscovery(id string) (DiscoverySourceData, error)
+	GetDiscoveryByResource(resourceType, hostID, resourceID string) (DiscoverySourceData, error)
+	ListDiscoveries() ([]DiscoverySourceData, error)
+	ListDiscoveriesByType(resourceType string) ([]DiscoverySourceData, error)
+	ListDiscoveriesByHost(hostID string) ([]DiscoverySourceData, error)
+	FormatForAIContext(discoveries []DiscoverySourceData) string
+}
+
+// DiscoverySourceData represents discovery data from the source
+type DiscoverySourceData struct {
+	ID             string
+	ResourceType   string
+	ResourceID     string
+	HostID         string
+	Hostname       string
+	ServiceType    string
+	ServiceName    string
+	ServiceVersion string
+	Category       string
+	CLIAccess      string
+	Facts          []DiscoverySourceFact
+	ConfigPaths    []string
+	DataPaths      []string
+	UserNotes      string
+	Confidence     float64
+	AIReasoning    string
+	DiscoveredAt   time.Time
+	UpdatedAt      time.Time
+}
+
+// DiscoverySourceFact represents a fact from the source
+type DiscoverySourceFact struct {
+	Category string
+	Key      string
+	Value    string
+	Source   string
+}
+
+// DiscoveryMCPAdapter adapts aidiscovery.Service to MCP DiscoveryProvider interface
+type DiscoveryMCPAdapter struct {
+	source DiscoverySource
+}
+
+// NewDiscoveryMCPAdapter creates a new adapter for discovery data
+func NewDiscoveryMCPAdapter(source DiscoverySource) *DiscoveryMCPAdapter {
+	if source == nil {
+		return nil
+	}
+	return &DiscoveryMCPAdapter{source: source}
+}
+
+// GetDiscovery implements tools.DiscoveryProvider
+func (a *DiscoveryMCPAdapter) GetDiscovery(id string) (*ResourceDiscoveryInfo, error) {
+	if a.source == nil {
+		return nil, fmt.Errorf("discovery source not available")
+	}
+
+	data, err := a.source.GetDiscovery(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return a.convertToInfo(data), nil
+}
+
+// GetDiscoveryByResource implements tools.DiscoveryProvider
+func (a *DiscoveryMCPAdapter) GetDiscoveryByResource(resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error) {
+	if a.source == nil {
+		return nil, fmt.Errorf("discovery source not available")
+	}
+
+	data, err := a.source.GetDiscoveryByResource(resourceType, hostID, resourceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return a.convertToInfo(data), nil
+}
+
+// ListDiscoveries implements tools.DiscoveryProvider
+func (a *DiscoveryMCPAdapter) ListDiscoveries() ([]*ResourceDiscoveryInfo, error) {
+	if a.source == nil {
+		return nil, fmt.Errorf("discovery source not available")
+	}
+
+	dataList, err := a.source.ListDiscoveries()
+	if err != nil {
+		return nil, err
+	}
+
+	return a.convertList(dataList), nil
+}
+
+// ListDiscoveriesByType implements tools.DiscoveryProvider
+func (a *DiscoveryMCPAdapter) ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error) {
+	if a.source == nil {
+		return nil, fmt.Errorf("discovery source not available")
+	}
+
+	dataList, err := a.source.ListDiscoveriesByType(resourceType)
+	if err != nil {
+		return nil, err
+	}
+
+	return a.convertList(dataList), nil
+}
+
+// ListDiscoveriesByHost implements tools.DiscoveryProvider
+func (a *DiscoveryMCPAdapter) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscoveryInfo, error) {
+	if a.source == nil {
+		return nil, fmt.Errorf("discovery source not available")
+	}
+
+	dataList, err := a.source.ListDiscoveriesByHost(hostID)
+	if err != nil {
+		return nil, err
+	}
+
+	return a.convertList(dataList), nil
+}
+
+// FormatForAIContext implements tools.DiscoveryProvider
+func (a *DiscoveryMCPAdapter) FormatForAIContext(discoveries []*ResourceDiscoveryInfo) string {
+	if a.source == nil {
+		return ""
+	}
+
+	// Convert back to source data format
+	sourceData := make([]DiscoverySourceData, 0, len(discoveries))
+	for _, d := range discoveries {
+		if d == nil {
+			continue
+		}
+		facts := make([]DiscoverySourceFact, 0, len(d.Facts))
+		for _, f := range d.Facts {
+			facts = append(facts, DiscoverySourceFact{
+				Category: f.Category,
+				Key:      f.Key,
+				Value:    f.Value,
+				Source:   f.Source,
+			})
+		}
+		sourceData = append(sourceData, DiscoverySourceData{
+			ID:             d.ID,
+			ResourceType:   d.ResourceType,
+			ResourceID:     d.ResourceID,
+			HostID:         d.HostID,
+			Hostname:       d.Hostname,
+			ServiceType:    d.ServiceType,
+			ServiceName:    d.ServiceName,
+			ServiceVersion: d.ServiceVersion,
+			Category:       d.Category,
+			CLIAccess:      d.CLIAccess,
+			Facts:          facts,
+			ConfigPaths:    d.ConfigPaths,
+			DataPaths:      d.DataPaths,
+			UserNotes:      d.UserNotes,
+			Confidence:     d.Confidence,
+			AIReasoning:    d.AIReasoning,
+			DiscoveredAt:   d.DiscoveredAt,
+			UpdatedAt:      d.UpdatedAt,
+		})
+	}
+
+	return a.source.FormatForAIContext(sourceData)
+}
+
+func (a *DiscoveryMCPAdapter) convertToInfo(data DiscoverySourceData) *ResourceDiscoveryInfo {
+	if data.ID == "" {
+		return nil
+	}
+
+	facts := make([]DiscoveryFact, 0, len(data.Facts))
+	for _, f := range data.Facts {
+		facts = append(facts, DiscoveryFact{
+			Category: f.Category,
+			Key:      f.Key,
+			Value:    f.Value,
+			Source:   f.Source,
+		})
+	}
+
+	return &ResourceDiscoveryInfo{
+		ID:             data.ID,
+		ResourceType:   data.ResourceType,
+		ResourceID:     data.ResourceID,
+		HostID:         data.HostID,
+		Hostname:       data.Hostname,
+		ServiceType:    data.ServiceType,
+		ServiceName:    data.ServiceName,
+		ServiceVersion: data.ServiceVersion,
+		Category:       data.Category,
+		CLIAccess:      data.CLIAccess,
+		Facts:          facts,
+		ConfigPaths:    data.ConfigPaths,
+		DataPaths:      data.DataPaths,
+		UserNotes:      data.UserNotes,
+		Confidence:     data.Confidence,
+		AIReasoning:    data.AIReasoning,
+		DiscoveredAt:   data.DiscoveredAt,
+		UpdatedAt:      data.UpdatedAt,
+	}
+}
+
+func (a *DiscoveryMCPAdapter) convertList(dataList []DiscoverySourceData) []*ResourceDiscoveryInfo {
+	result := make([]*ResourceDiscoveryInfo, 0, len(dataList))
+	for _, data := range dataList {
+		if info := a.convertToInfo(data); info != nil {
+			result = append(result, info)
+		}
+	}
+	return result
+}

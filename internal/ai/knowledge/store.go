@@ -14,6 +14,17 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Category constants for note categorization
+const (
+	CategoryCredential = "credential"
+	CategoryService    = "service"
+	CategoryPath       = "path"
+	CategoryConfig     = "config"
+	CategoryLearning   = "learning"
+	CategoryHistory    = "history"
+	CategoryInfra      = "infrastructure" // Auto-discovered infrastructure facts
+)
+
 // Note represents a single piece of learned information
 type Note struct {
 	ID        string    `json:"id"`
@@ -279,14 +290,15 @@ func (s *Store) FormatForContext(guestID string) string {
 	result = fmt.Sprintf("\n## Previously Learned Information about %s\n", knowledge.GuestName)
 	result += "**If relevant to the current task, use this saved information directly instead of rediscovering it.**\n"
 
-	categoryOrder := []string{"credential", "service", "path", "config", "learning", "history"}
+	categoryOrder := []string{"credential", "service", "path", "config", "learning", "history", "infrastructure"}
 	categoryNames := map[string]string{
-		"credential": "Credentials",
-		"service":    "Services",
-		"path":       "Important Paths",
-		"config":     "Configuration",
-		"learning":   "Learnings",
-		"history":    "Session History",
+		"credential":     "Credentials",
+		"service":        "Services",
+		"path":           "Important Paths",
+		"config":         "Configuration",
+		"learning":       "Learnings",
+		"history":        "Session History",
+		"infrastructure": "Discovered Infrastructure",
 	}
 
 	for _, cat := range categoryOrder {
@@ -437,7 +449,7 @@ func (s *Store) FormatAllForContext() string {
 		var guestSection string
 		guestSection = fmt.Sprintf("\n### %s (%s)", guestName, knowledge.GuestType)
 
-		categoryOrder := []string{"credential", "service", "path", "config", "learning"}
+		categoryOrder := []string{"credential", "service", "path", "config", "learning", "infrastructure"}
 		for _, cat := range categoryOrder {
 			notes, ok := byCategory[cat]
 			if !ok || len(notes) == 0 {
@@ -491,4 +503,57 @@ finalize:
 	result += strings.Join(sections, "\n")
 
 	return result
+}
+
+// GetInfrastructureContext returns all discovered infrastructure formatted for AI context.
+// This is specifically used by Patrol and investigations to understand where services run
+// and how to interact with them (e.g., knowing PBS runs in Docker so commands need docker exec).
+func (s *Store) GetInfrastructureContext() string {
+	guests, err := s.ListGuests()
+	if err != nil || len(guests) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\n## Discovered Infrastructure\n")
+	sb.WriteString("The following services have been auto-discovered on your infrastructure.\n")
+	sb.WriteString("Use this information to propose correct commands (e.g., use 'docker exec' for containerized services).\n\n")
+
+	hasNotes := false
+	for _, guestID := range guests {
+		knowledge, err := s.GetKnowledge(guestID)
+		if err != nil {
+			continue
+		}
+
+		// Filter for infrastructure notes only
+		var infraNotes []Note
+		for _, note := range knowledge.Notes {
+			if note.Category == CategoryInfra {
+				infraNotes = append(infraNotes, note)
+			}
+		}
+
+		if len(infraNotes) == 0 {
+			continue
+		}
+
+		hasNotes = true
+		guestName := knowledge.GuestName
+		if guestName == "" {
+			guestName = guestID
+		}
+
+		sb.WriteString(fmt.Sprintf("### %s\n", guestName))
+		for _, note := range infraNotes {
+			sb.WriteString(fmt.Sprintf("- %s: %s\n", note.Title, note.Content))
+		}
+		sb.WriteString("\n")
+	}
+
+	if !hasNotes {
+		return ""
+	}
+
+	return sb.String()
 }

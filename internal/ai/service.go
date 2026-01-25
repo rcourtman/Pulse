@@ -23,7 +23,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/aidiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/infradiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
@@ -119,6 +121,15 @@ type Service struct {
 	incidentStore    *memory.IncidentStore // Incident timelines for alert memory
 	chatService      ChatServiceProvider   // Chat service for investigation orchestrator
 
+	// Infrastructure discovery service - detects apps running on hosts
+	infraDiscoveryService *infradiscovery.Service
+
+	// AI-powered deep discovery store - detailed service analysis with commands
+	aiDiscoveryStore *aidiscovery.Store
+
+	// AI-powered deep discovery service - runs commands and AI analysis
+	aiDiscoveryService *aidiscovery.Service
+
 	// Alert-triggered analysis - token-efficient real-time AI insights
 	alertTriggeredAnalyzer *AlertTriggeredAnalyzer
 
@@ -147,6 +158,7 @@ type modelsCache struct {
 func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) *Service {
 	// Initialize knowledge store
 	var knowledgeStore *knowledge.Store
+	var aiDiscoveryStore *aidiscovery.Store
 	costStore := cost.NewStore(cost.DefaultMaxDays)
 	if persistence != nil {
 		var err error
@@ -157,14 +169,20 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 		if err := costStore.SetPersistence(NewCostPersistenceAdapter(persistence)); err != nil {
 			log.Warn().Err(err).Msg("Failed to initialize AI usage cost store")
 		}
+		// Initialize AI discovery store for deep infrastructure discovery
+		aiDiscoveryStore, err = aidiscovery.NewStore(persistence.DataDir())
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize AI discovery store")
+		}
 	}
 
 	return &Service{
-		persistence:    persistence,
-		agentServer:    agentServer,
-		policy:         agentexec.DefaultPolicy(),
-		knowledgeStore: knowledgeStore,
-		costStore:      costStore,
+		persistence:      persistence,
+		agentServer:      agentServer,
+		policy:           agentexec.DefaultPolicy(),
+		knowledgeStore:   knowledgeStore,
+		aiDiscoveryStore: aiDiscoveryStore,
+		costStore:        costStore,
 		limits: executionLimits{
 			chatSlots:   make(chan struct{}, 4),
 			patrolSlots: make(chan struct{}, 1),
@@ -241,6 +259,65 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		}
 		if s.incidentStore != nil {
 			s.patrolService.SetIncidentStore(s.incidentStore)
+		}
+		// Connect AI discovery store for deep infrastructure context
+		if s.aiDiscoveryStore != nil {
+			s.patrolService.SetDiscoveryStore(s.aiDiscoveryStore)
+		}
+	}
+
+	// Initialize infrastructure discovery service if not already done
+	// This uses AI to detect applications running in Docker containers
+	// and saves discoveries to the knowledge store for Patrol to use when proposing commands
+	if s.infraDiscoveryService == nil && sp != nil && s.knowledgeStore != nil {
+		s.infraDiscoveryService = infradiscovery.NewService(
+			sp,
+			s.knowledgeStore,
+			infradiscovery.DefaultConfig(),
+		)
+		// Wire the AI service as the analyzer (implements infradiscovery.AIAnalyzer)
+		s.infraDiscoveryService.SetAIAnalyzer(s)
+		s.infraDiscoveryService.Start(context.Background())
+		log.Info().Msg("AI-powered infrastructure discovery service started")
+	}
+
+	// Initialize AI-powered deep discovery service if not already done
+	// This runs read-only commands on resources and uses AI to understand services
+	if s.aiDiscoveryService == nil && sp != nil && s.aiDiscoveryStore != nil {
+		// Create command executor adapter (wraps agentexec.Server)
+		var cmdExecutor aidiscovery.CommandExecutor
+		if agentSrv, ok := s.agentServer.(*agentexec.Server); ok {
+			cmdExecutor = newDiscoveryCommandAdapter(agentSrv)
+		}
+
+		// Create state adapter
+		stateAdapter := newDiscoveryStateAdapter(sp)
+
+		// Create deep scanner
+		scanner := aidiscovery.NewDeepScanner(cmdExecutor)
+
+		// Create the discovery service with config-driven settings
+		discoveryCfg := aidiscovery.DefaultConfig()
+		if s.cfg != nil {
+			discoveryCfg.Interval = s.cfg.GetDiscoveryInterval()
+		}
+
+		s.aiDiscoveryService = aidiscovery.NewService(
+			s.aiDiscoveryStore,
+			scanner,
+			stateAdapter,
+			discoveryCfg,
+		)
+		s.aiDiscoveryService.SetAIAnalyzer(s)
+
+		// Start background discovery if enabled and interval is set
+		if s.cfg != nil && s.cfg.IsDiscoveryEnabled() && s.cfg.GetDiscoveryInterval() > 0 {
+			s.aiDiscoveryService.Start(context.Background())
+			log.Info().
+				Dur("interval", s.cfg.GetDiscoveryInterval()).
+				Msg("AI-powered deep discovery service started with automatic scanning")
+		} else {
+			log.Info().Msg("AI-powered deep discovery service initialized (manual mode)")
 		}
 	}
 
@@ -435,6 +512,59 @@ func (s *Service) SetIncidentStore(store *memory.IncidentStore) {
 
 	if s.patrolService != nil {
 		s.patrolService.SetIncidentStore(store)
+	}
+}
+
+// SetAIDiscoveryStore sets the AI discovery store for infrastructure context
+func (s *Service) SetAIDiscoveryStore(store *aidiscovery.Store) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.aiDiscoveryStore = store
+
+	if s.patrolService != nil {
+		s.patrolService.SetDiscoveryStore(store)
+	}
+	log.Info().Msg("AI Service: AI discovery store set for infrastructure context")
+}
+
+// GetAIDiscoveryStore returns the AI discovery store
+func (s *Service) GetAIDiscoveryStore() *aidiscovery.Store {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.aiDiscoveryStore
+}
+
+// GetAIDiscoveryService returns the AI discovery service for triggering scans
+func (s *Service) GetAIDiscoveryService() *aidiscovery.Service {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.aiDiscoveryService
+}
+
+// updateDiscoverySettings updates the discovery service based on config changes
+// Note: caller must NOT hold s.mu lock
+func (s *Service) updateDiscoverySettings(cfg *config.AIConfig) {
+	if s.aiDiscoveryService == nil || cfg == nil {
+		return
+	}
+
+	enabled := cfg.IsDiscoveryEnabled()
+	interval := cfg.GetDiscoveryInterval()
+
+	if enabled && interval > 0 {
+		// Update interval and ensure service is running
+		s.aiDiscoveryService.SetInterval(interval)
+		s.aiDiscoveryService.Start(context.Background())
+		log.Info().
+			Bool("enabled", enabled).
+			Dur("interval", interval).
+			Msg("Discovery service updated: automatic scanning enabled")
+	} else {
+		// Stop background scanning (manual mode)
+		s.aiDiscoveryService.Stop()
+		log.Info().
+			Bool("enabled", enabled).
+			Msg("Discovery service updated: manual mode (background scanning stopped)")
 	}
 }
 
@@ -997,6 +1127,9 @@ func (s *Service) LoadConfig() error {
 		Str("control_level", cfg.GetControlLevel()).
 		Bool("autonomous", cfg.IsAutonomous()).
 		Msg("AI service initialized")
+
+	// Update discovery service settings based on config
+	s.updateDiscoverySettings(cfg)
 
 	return nil
 }
@@ -2670,6 +2803,67 @@ func (s *Service) DeleteGuestNote(guestID, noteID string) error {
 		return fmt.Errorf("knowledge store not available")
 	}
 	return s.knowledgeStore.DeleteNote(guestID, noteID)
+}
+
+// GetKnowledgeStore returns the knowledge store for external use
+// This is used by components like the investigation orchestrator to get
+// infrastructure context for proposing correct CLI commands
+func (s *Service) GetKnowledgeStore() *knowledge.Store {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.knowledgeStore
+}
+
+// AnalyzeForDiscovery implements the infradiscovery.AIAnalyzer interface.
+// It sends a prompt to the AI using the discovery model (optimized for cost).
+func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	s.mu.RLock()
+	provider := s.provider
+	cfg := s.cfg
+	costStore := s.costStore
+	s.mu.RUnlock()
+
+	if provider == nil {
+		return "", fmt.Errorf("AI provider not configured")
+	}
+
+	if cfg == nil || !cfg.Enabled {
+		return "", fmt.Errorf("AI is not enabled")
+	}
+
+	// Get the discovery model (defaults to cheap/fast model)
+	model := cfg.GetDiscoveryModel()
+
+	// Build simple message for discovery (no tools needed)
+	messages := []providers.Message{
+		{
+			Role:    "user",
+			Content: prompt,
+		},
+	}
+
+	// Make the API call
+	resp, err := provider.Chat(ctx, providers.ChatRequest{
+		Messages:  messages,
+		Model:     model,
+		MaxTokens: 4096, // Discovery responses need room for detailed JSON
+	})
+	if err != nil {
+		return "", fmt.Errorf("discovery analysis failed: %w", err)
+	}
+
+	// Track cost if cost store is available
+	if costStore != nil {
+		costStore.Record(cost.UsageEvent{
+			Provider:     provider.Name(),
+			RequestModel: model,
+			UseCase:      "discovery",
+			InputTokens:  resp.InputTokens,
+			OutputTokens: resp.OutputTokens,
+		})
+	}
+
+	return resp.Content, nil
 }
 
 // fetchURL fetches content from a URL with size limits and timeout

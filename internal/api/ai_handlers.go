@@ -30,6 +30,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
+	"github.com/rcourtman/pulse-go-rewrite/internal/aidiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
@@ -83,6 +84,9 @@ type AISettingsHandler struct {
 	chatHandler         *AIHandler                      // Chat service handler for investigations
 	investigationStores map[string]*investigation.Store // Investigation stores per org
 	investigationMu     sync.RWMutex
+
+	// AI Discovery store for deep infrastructure discovery
+	aiDiscoveryStore *aidiscovery.Store
 }
 
 // NewAISettingsHandler creates a new AI settings handler
@@ -188,6 +192,9 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	}
 	if h.correlationDetector != nil {
 		svc.SetCorrelationDetector(h.correlationDetector)
+	}
+	if h.aiDiscoveryStore != nil {
+		svc.SetAIDiscoveryStore(h.aiDiscoveryStore)
 	}
 
 	// Set license checker if handler available
@@ -527,6 +534,26 @@ func (h *AISettingsHandler) GetUnifiedStore() *unified.UnifiedStore {
 	return h.unifiedStore
 }
 
+// SetAIDiscoveryStore sets the AI discovery store for deep infrastructure discovery
+func (h *AISettingsHandler) SetAIDiscoveryStore(store *aidiscovery.Store) {
+	h.aiDiscoveryStore = store
+	// Also set on legacy service if it exists
+	if h.legacyAIService != nil {
+		h.legacyAIService.SetAIDiscoveryStore(store)
+	}
+	// Set on all existing tenant services
+	h.aiServicesMu.RLock()
+	defer h.aiServicesMu.RUnlock()
+	for _, svc := range h.aiServices {
+		svc.SetAIDiscoveryStore(store)
+	}
+}
+
+// GetAIDiscoveryStore returns the AI discovery store
+func (h *AISettingsHandler) GetAIDiscoveryStore() *aidiscovery.Store {
+	return h.aiDiscoveryStore
+}
+
 // SetAlertBridge sets the alert bridge
 func (h *AISettingsHandler) SetAlertBridge(bridge *unified.AlertBridge) {
 	h.alertBridge = bridge
@@ -739,6 +766,13 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	// The chatAdapter implements both ChatService and CommandExecutor interfaces
 	orchestrator.SetCommandExecutor(chatAdapter)
 
+	// Set infrastructure context provider for CLI access information
+	// This enables investigations to know where services run (Docker, systemd, native)
+	// and propose correct commands (e.g., 'docker exec pbs proxmox-backup-manager ...')
+	if knowledgeStore := svc.GetKnowledgeStore(); knowledgeStore != nil {
+		orchestrator.SetInfrastructureContextProvider(knowledgeStore)
+	}
+
 	// Create adapter to bridge investigation.Orchestrator to ai.InvestigationOrchestrator interface
 	adapter := ai.NewInvestigationOrchestratorAdapter(orchestrator)
 
@@ -812,6 +846,9 @@ type AISettingsResponse struct {
 	// Infrastructure control settings
 	ControlLevel    string   `json:"control_level"`              // "read_only", "controlled", "autonomous"
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control
+	// AI Discovery settings
+	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if AI discovery is enabled
+	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
@@ -854,6 +891,9 @@ type AISettingsUpdateRequest struct {
 	// Infrastructure control settings
 	ControlLevel    *string  `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control (nil = don't update, empty = clear)
+	// AI Discovery settings
+	DiscoveryEnabled       *bool `json:"discovery_enabled,omitempty"`        // Enable AI discovery
+	DiscoveryIntervalHours *int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
 }
 
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
@@ -908,18 +948,20 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		UseProactiveThresholds: settings.UseProactiveThresholds,
 		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
-		AnthropicConfigured:   settings.HasProvider(config.AIProviderAnthropic),
-		OpenAIConfigured:      settings.HasProvider(config.AIProviderOpenAI),
-		DeepSeekConfigured:    settings.HasProvider(config.AIProviderDeepSeek),
-		GeminiConfigured:      settings.HasProvider(config.AIProviderGemini),
-		OllamaConfigured:      settings.HasProvider(config.AIProviderOllama),
-		OllamaBaseURL:         settings.GetBaseURLForProvider(config.AIProviderOllama),
-		OpenAIBaseURL:         settings.OpenAIBaseURL,
-		ConfiguredProviders:   settings.GetConfiguredProviders(),
-		CostBudgetUSD30d:      settings.CostBudgetUSD30d,
-		RequestTimeoutSeconds: settings.RequestTimeoutSeconds,
-		ControlLevel:          settings.GetControlLevel(),
-		ProtectedGuests:       settings.GetProtectedGuests(),
+		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
+		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
+		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
+		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
+		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
+		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
+		OpenAIBaseURL:          settings.OpenAIBaseURL,
+		ConfiguredProviders:    settings.GetConfiguredProviders(),
+		CostBudgetUSD30d:       settings.CostBudgetUSD30d,
+		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
+		ControlLevel:           settings.GetControlLevel(),
+		ProtectedGuests:        settings.GetProtectedGuests(),
+		DiscoveryEnabled:       settings.IsDiscoveryEnabled(),
+		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -1269,6 +1311,18 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.ProtectedGuests = req.ProtectedGuests
 	}
 
+	// Handle discovery settings
+	if req.DiscoveryEnabled != nil {
+		settings.DiscoveryEnabled = *req.DiscoveryEnabled
+	}
+	if req.DiscoveryIntervalHours != nil {
+		if *req.DiscoveryIntervalHours < 0 {
+			http.Error(w, "discovery_interval_hours cannot be negative", http.StatusBadRequest)
+			return
+		}
+		settings.DiscoveryIntervalHours = *req.DiscoveryIntervalHours
+	}
+
 	// Save settings
 	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save AI settings")
@@ -1342,17 +1396,19 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		UseProactiveThresholds: settings.UseProactiveThresholds,
 		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
-		AnthropicConfigured:   settings.HasProvider(config.AIProviderAnthropic),
-		OpenAIConfigured:      settings.HasProvider(config.AIProviderOpenAI),
-		DeepSeekConfigured:    settings.HasProvider(config.AIProviderDeepSeek),
-		GeminiConfigured:      settings.HasProvider(config.AIProviderGemini),
-		OllamaConfigured:      settings.HasProvider(config.AIProviderOllama),
-		OllamaBaseURL:         settings.GetBaseURLForProvider(config.AIProviderOllama),
-		OpenAIBaseURL:         settings.OpenAIBaseURL,
-		ConfiguredProviders:   settings.GetConfiguredProviders(),
-		RequestTimeoutSeconds: settings.RequestTimeoutSeconds,
-		ControlLevel:          settings.GetControlLevel(),
-		ProtectedGuests:       settings.GetProtectedGuests(),
+		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
+		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
+		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
+		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
+		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
+		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
+		OpenAIBaseURL:          settings.OpenAIBaseURL,
+		ConfiguredProviders:    settings.GetConfiguredProviders(),
+		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
+		ControlLevel:           settings.GetControlLevel(),
+		ProtectedGuests:        settings.GetProtectedGuests(),
+		DiscoveryEnabled:       settings.DiscoveryEnabled,
+		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -5210,7 +5266,7 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 	// Validate autonomy level
 	if !config.IsValidPatrolAutonomyLevel(req.AutonomyLevel) {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_autonomy_level",
-			fmt.Sprintf("Invalid autonomy level: %s. Must be 'monitor', 'approval', or 'full'", req.AutonomyLevel), nil)
+			fmt.Sprintf("Invalid autonomy level: %s. Must be 'monitor', 'approval', 'full', or 'autonomous'", req.AutonomyLevel), nil)
 		return
 	}
 
@@ -5247,6 +5303,13 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 	if err := h.getPersistence(r.Context()).SaveAIConfig(*cfg); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save Pulse Assistant config", nil)
 		return
+	}
+
+	// Reload config to update in-memory state
+	if err := aiService.LoadConfig(); err != nil {
+		// Log but don't fail - config was saved successfully
+		LogAuditEvent("patrol_autonomy_reload_warning", "", "", r.URL.Path, false,
+			fmt.Sprintf("Config saved but failed to reload: %v", err))
 	}
 
 	// Log audit event
@@ -5299,6 +5362,90 @@ func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *htt
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(investigation)
+}
+
+// HandleReapproveInvestigationFix creates a new approval from an investigation's proposed fix (POST /api/ai/findings/{id}/reapprove)
+// This is useful when the original approval has expired but the user still wants to execute the fix.
+func (h *AISettingsHandler) HandleReapproveInvestigationFix(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check license
+	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix) {
+		writeErrorResponse(w, http.StatusForbidden, "license_required", "Pulse Patrol Auto-Fix feature requires Pro license", nil)
+		return
+	}
+
+	// Extract finding ID from path
+	findingID := strings.TrimPrefix(r.URL.Path, "/api/ai/findings/")
+	findingID = strings.TrimSuffix(findingID, "/reapprove")
+	if findingID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Finding ID is required", nil)
+		return
+	}
+
+	aiService := h.GetAIService(r.Context())
+	patrol := aiService.GetPatrolService()
+	if patrol == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)
+		return
+	}
+
+	// Get investigation from orchestrator
+	orchestrator := patrol.GetInvestigationOrchestrator()
+	if orchestrator == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Investigation orchestrator not initialized", nil)
+		return
+	}
+
+	inv := orchestrator.GetInvestigationByFinding(findingID)
+	if inv == nil {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
+		return
+	}
+
+	// Check if investigation has a proposed fix
+	if inv.ProposedFix == nil || len(inv.ProposedFix.Commands) == 0 {
+		writeErrorResponse(w, http.StatusBadRequest, "no_fix", "Investigation has no proposed fix", nil)
+		return
+	}
+
+	// Check approval store
+	store := approval.GetStore()
+	if store == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		return
+	}
+
+	// Create new approval request
+	req := &approval.ApprovalRequest{
+		ToolID:     "investigation_fix",
+		Command:    inv.ProposedFix.Commands[0],
+		TargetType: "investigation",
+		TargetID:   findingID,
+		TargetName: inv.ProposedFix.Description,
+		Context:    fmt.Sprintf("Re-approval of fix from investigation: %s", inv.ProposedFix.Description),
+		RiskLevel:  approval.AssessRiskLevel(inv.ProposedFix.Commands[0], "investigation"),
+	}
+
+	if err := store.CreateApproval(req); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "create_failed", "Failed to create approval: "+err.Error(), nil)
+		return
+	}
+
+	log.Info().
+		Str("finding_id", findingID).
+		Str("approval_id", req.ID).
+		Str("command", truncateForLog(req.Command, 100)).
+		Msg("Re-created approval for investigation fix")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"approval_id": req.ID,
+		"message":     "Approval created. You can now approve and execute the fix.",
+	})
 }
 
 // HandleGetInvestigationMessages returns chat messages for an investigation (GET /api/ai/findings/{id}/investigation/messages)

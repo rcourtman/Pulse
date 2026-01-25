@@ -822,12 +822,11 @@ func (s *FindingsStore) GetAll(startTime *time.Time) []*Finding {
 // Returns the number of findings removed
 func (s *FindingsStore) ClearAll() int {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	count := len(s.findings)
 	s.findings = make(map[string]*Finding)
 	s.byResource = make(map[string][]string)
 	s.activeCounts = make(map[FindingSeverity]int)
+	s.mu.Unlock()
 	s.scheduleSave()
 	return count
 }
@@ -975,9 +974,8 @@ func (s FindingsSummary) IsHealthy() bool {
 // AddSuppressionRule creates a new user-defined suppression rule
 func (s *FindingsStore) AddSuppressionRule(resourceID, resourceName string, category FindingCategory, description string) *SuppressionRule {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	rule := s.addSuppressionRuleInternal(resourceID, resourceName, category, description, "manual")
+	s.mu.Unlock()
 	s.scheduleSave()
 	return rule
 }
@@ -1053,11 +1051,11 @@ func (s *FindingsStore) GetSuppressionRules() []*SuppressionRule {
 // DeleteSuppressionRule removes a suppression rule
 func (s *FindingsStore) DeleteSuppressionRule(ruleID string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	// Check if it's an explicit rule
 	if _, exists := s.suppressionRules[ruleID]; exists {
 		delete(s.suppressionRules, ruleID)
+		s.mu.Unlock()
 		s.scheduleSave()
 		return true
 	}
@@ -1075,11 +1073,13 @@ func (s *FindingsStore) DeleteSuppressionRule(ruleID string) bool {
 			if !wasActive && f.IsActive() {
 				s.activeCounts[f.Severity]++
 			}
+			s.mu.Unlock()
 			s.scheduleSave()
 			return true
 		}
 	}
 
+	s.mu.Unlock()
 	return false
 }
 

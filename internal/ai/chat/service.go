@@ -51,6 +51,7 @@ type (
 	EventCorrelatorProvider   = tools.EventCorrelatorProvider
 	TopologyProvider          = tools.TopologyProvider
 	KnowledgeStoreProvider    = tools.KnowledgeStoreProvider
+	MCPDiscoveryProvider      = tools.DiscoveryProvider
 )
 
 // Config holds service configuration
@@ -587,6 +588,14 @@ func (s *Service) SetKnowledgeStoreProvider(provider KnowledgeStoreProvider) {
 	defer s.mu.Unlock()
 	if s.executor != nil {
 		s.executor.SetKnowledgeStoreProvider(provider)
+	}
+}
+
+func (s *Service) SetDiscoveryProvider(provider MCPDiscoveryProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.executor != nil {
+		s.executor.SetDiscoveryProvider(provider)
 	}
 }
 

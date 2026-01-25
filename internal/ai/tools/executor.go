@@ -93,6 +93,46 @@ type UpdatesProvider interface {
 	IsUpdateActionsEnabled() bool
 }
 
+// DiscoveryProvider provides AI-powered infrastructure discovery
+type DiscoveryProvider interface {
+	GetDiscovery(id string) (*ResourceDiscoveryInfo, error)
+	GetDiscoveryByResource(resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error)
+	ListDiscoveries() ([]*ResourceDiscoveryInfo, error)
+	ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error)
+	ListDiscoveriesByHost(hostID string) ([]*ResourceDiscoveryInfo, error)
+	FormatForAIContext(discoveries []*ResourceDiscoveryInfo) string
+}
+
+// ResourceDiscoveryInfo represents discovered information about a resource
+type ResourceDiscoveryInfo struct {
+	ID             string          `json:"id"`
+	ResourceType   string          `json:"resource_type"`
+	ResourceID     string          `json:"resource_id"`
+	HostID         string          `json:"host_id"`
+	Hostname       string          `json:"hostname"`
+	ServiceType    string          `json:"service_type"`
+	ServiceName    string          `json:"service_name"`
+	ServiceVersion string          `json:"service_version"`
+	Category       string          `json:"category"`
+	CLIAccess      string          `json:"cli_access"`
+	Facts          []DiscoveryFact `json:"facts"`
+	ConfigPaths    []string        `json:"config_paths"`
+	DataPaths      []string        `json:"data_paths"`
+	UserNotes      string          `json:"user_notes,omitempty"`
+	Confidence     float64         `json:"confidence"`
+	AIReasoning    string          `json:"ai_reasoning,omitempty"`
+	DiscoveredAt   time.Time       `json:"discovered_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+}
+
+// DiscoveryFact represents a discovered fact about a resource
+type DiscoveryFact struct {
+	Category string `json:"category"`
+	Key      string `json:"key"`
+	Value    string `json:"value"`
+	Source   string `json:"source,omitempty"`
+}
+
 // ControlLevel represents the AI's permission level for infrastructure control
 type ControlLevel string
 
@@ -136,6 +176,9 @@ type ExecutorConfig struct {
 	TopologyProvider         TopologyProvider
 	KnowledgeStoreProvider   KnowledgeStoreProvider
 
+	// Optional providers - discovery
+	DiscoveryProvider DiscoveryProvider
+
 	// Control settings
 	ControlLevel    ControlLevel
 	ProtectedGuests []string // VMIDs that AI cannot control
@@ -172,6 +215,9 @@ type PulseToolExecutor struct {
 	topologyProvider         TopologyProvider
 	knowledgeStoreProvider   KnowledgeStoreProvider
 
+	// Discovery provider
+	discoveryProvider DiscoveryProvider
+
 	// Control settings
 	controlLevel    ControlLevel
 	protectedGuests []string
@@ -207,6 +253,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		eventCorrelatorProvider:  cfg.EventCorrelatorProvider,
 		topologyProvider:         cfg.TopologyProvider,
 		knowledgeStoreProvider:   cfg.KnowledgeStoreProvider,
+		discoveryProvider:        cfg.DiscoveryProvider,
 		controlLevel:             cfg.ControlLevel,
 		protectedGuests:          cfg.ProtectedGuests,
 		registry:                 NewToolRegistry(),
@@ -317,6 +364,11 @@ func (e *PulseToolExecutor) SetKnowledgeStoreProvider(provider KnowledgeStorePro
 	e.knowledgeStoreProvider = provider
 }
 
+// SetDiscoveryProvider sets the discovery provider for AI-powered discovery
+func (e *PulseToolExecutor) SetDiscoveryProvider(provider DiscoveryProvider) {
+	e.discoveryProvider = provider
+}
+
 // ListTools returns the list of available tools
 func (e *PulseToolExecutor) ListTools() []Tool {
 	tools := e.registry.ListTools(e.controlLevel)
@@ -377,6 +429,8 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 		return e.topologyProvider != nil
 	case "pulse_remember", "pulse_recall":
 		return e.knowledgeStoreProvider != nil
+	case "pulse_get_discovery", "pulse_list_discoveries":
+		return e.discoveryProvider != nil
 	default:
 		return e.stateProvider != nil
 	}
@@ -414,6 +468,9 @@ func (e *PulseToolExecutor) registerTools() {
 
 	// Intelligence tools (incident analysis, knowledge management)
 	e.registerIntelligenceTools()
+
+	// Discovery tools (AI-powered infrastructure discovery)
+	e.registerDiscoveryTools()
 
 	// Control tools (conditional on control level)
 	e.registerControlTools()

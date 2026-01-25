@@ -118,6 +118,29 @@ EVIDENCE: None
 	}
 }
 
+func TestPatrolService_ParseFindings_BackupCategory(t *testing.T) {
+	service := NewPatrolService(nil)
+
+	response := `
+[FINDING]
+KEY: backup-stale
+SEVERITY: warning
+CATEGORY: backup
+RESOURCE: vm-101
+RESOURCE_TYPE: vm
+TITLE: Backup stale
+DESCRIPTION: No backup in 48 hours
+RECOMMENDATION: Check backup jobs
+EVIDENCE: Last backup: 2 days ago
+[/FINDING]
+`
+
+	findings := service.parseFindings(response)
+	require.Len(t, findings, 1)
+	assert.Equal(t, "backup", findings[0].Category)
+	assert.Equal(t, "Backup stale", findings[0].Title)
+}
+
 // MockFindingsStore
 type MockFindingsStore struct {
 	mock.Mock
