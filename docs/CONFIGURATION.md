@@ -327,11 +327,13 @@ TLS_CERT_FILE=/etc/pulse/cert.pem
 TLS_KEY_FILE=/etc/pulse/key.pem
 
 # Docker
-docker run -e HTTPS_ENABLED=true \
+docker run --init -e HTTPS_ENABLED=true \
   -v /path/to/certs:/certs \
   -e TLS_CERT_FILE=/certs/cert.pem \
   -e TLS_KEY_FILE=/certs/key.pem ...
 ```
+
+> **Important (Docker with HTTPS)**: Always use `--init` (or `init: true` in docker-compose) when enabling HTTPS. The Alpine-based healthcheck uses busybox `wget`, which spawns `ssl_client` subprocesses. Without an init process to reap them, these become zombie processes over time.
 
 ---
 

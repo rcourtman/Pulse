@@ -1437,6 +1437,8 @@ if command -v systemctl >/dev/null 2>&1; then
         EXEC_ARGS="$EXEC_ARGS --enable-host=false"
     fi
     if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker"; fi
+    # Pass explicit false when Docker was explicitly disabled (prevents auto-detection)
+    if [[ "$ENABLE_DOCKER" == "false" && "$DOCKER_EXPLICIT" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker=false"; fi
     if [[ "$ENABLE_KUBERNETES" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-kubernetes"; fi
     if [[ -n "$KUBECONFIG_PATH" ]]; then EXEC_ARGS="$EXEC_ARGS --kubeconfig ${KUBECONFIG_PATH}"; fi
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
