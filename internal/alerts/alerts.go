@@ -916,6 +916,11 @@ func (m *Manager) checkFlappingLocked(alertID string) bool {
 			validHistory = append(validHistory, t)
 		}
 	}
+	// Limit to max 10 entries to prevent unbounded growth
+	const maxFlappingHistory = 10
+	if len(validHistory) > maxFlappingHistory {
+		validHistory = validHistory[len(validHistory)-maxFlappingHistory:]
+	}
 	m.flappingHistory[alertID] = validHistory
 
 	// Check if we've exceeded the threshold
@@ -5361,13 +5366,13 @@ func (m *Manager) CheckBackups(
 				key = fmt.Sprintf("pbs:%s:%s:%s", backup.Instance, backup.BackupType, backup.VMID)
 				displayName = fmt.Sprintf("VMID %s", backup.VMID)
 				instance = fmt.Sprintf("PBS:%s", backup.Instance)
-				node = backup.Datastore
+				node = "Unknown"
 			}
 		} else {
 			key = fmt.Sprintf("pbs:%s:%s:%s", backup.Instance, backup.BackupType, backup.VMID)
 			displayName = fmt.Sprintf("VMID %s", backup.VMID)
 			instance = fmt.Sprintf("PBS:%s", backup.Instance)
-			node = backup.Datastore
+			node = "Unknown"
 		}
 
 		updateRecord(key, backupRecord{
@@ -7574,6 +7579,11 @@ func (m *Manager) checkPMGQuarantineBacklog(pmg models.PMGInstance, defaults PMG
 			validSnapshots = append(validSnapshots, snap)
 		}
 	}
+	// Limit to max 48 samples to prevent unbounded growth
+	const maxQuarantineSnapshots = 48
+	if len(validSnapshots) > maxQuarantineSnapshots {
+		validSnapshots = validSnapshots[len(validSnapshots)-maxQuarantineSnapshots:]
+	}
 	m.pmgQuarantineHistory[pmg.ID] = validSnapshots
 	m.mu.Unlock()
 
@@ -9362,6 +9372,14 @@ func (m *Manager) cleanupStaleMaps() {
 		if record != nil && now.Sub(record.lastChecked) > staleThreshold {
 			delete(m.dockerRestartTracking, containerID)
 			delete(m.dockerLastExitCode, containerID)
+			cleaned++
+		}
+	}
+
+	// Clean up Docker update tracking for stale entries
+	for containerID, firstSeen := range m.dockerUpdateFirstSeen {
+		if now.Sub(firstSeen) > staleThreshold {
+			delete(m.dockerUpdateFirstSeen, containerID)
 			cleaned++
 		}
 	}

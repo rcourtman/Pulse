@@ -180,6 +180,13 @@ export const ResourceCard: Component<ResourceCardProps> = (props) => {
                                 </span>
                             </Show>
 
+                            {/* Node badge for storage resources */}
+                            <Show when={props.resource.type === 'storage' && props.resource.node}>
+                                <span class="flex-shrink-0 px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                    {props.resource.node}
+                                </span>
+                            </Show>
+
                             {/* Custom badge */}
                             <Show when={hasCustomSettings()}>
                                 <span class="flex-shrink-0 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">

@@ -1182,6 +1182,11 @@ export function ResourceTable(props: ResourceTableProps) {
                                             {resource.clusterName}
                                           </span>
                                         </Show>
+                                        <Show when={resource.type === 'storage' && resource.node}>
+                                          <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                            {resource.node}
+                                          </span>
+                                        </Show>
                                       </div>
                                     </Show>
                                     <Show when={resource.subtitle}>

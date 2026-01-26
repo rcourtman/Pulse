@@ -2832,6 +2832,95 @@ func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 	}
 }
 
+// cleanupTrackingMaps removes stale entries from various tracking maps to prevent unbounded memory growth.
+// This cleans up auth tracking, polling timestamps, and circuit breaker state for resources
+// that haven't been accessed in over 24 hours.
+func (m *Monitor) cleanupTrackingMaps(now time.Time) {
+	const staleThreshold = 24 * time.Hour
+	cutoff := now.Add(-staleThreshold)
+	cleaned := 0
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Clean up auth tracking maps - entries older than 24 hours
+	for nodeID, ts := range m.lastAuthAttempt {
+		if ts.Before(cutoff) {
+			delete(m.lastAuthAttempt, nodeID)
+			delete(m.authFailures, nodeID)
+			cleaned++
+		}
+	}
+
+	// Clean up last cluster check timestamps
+	for instanceID, ts := range m.lastClusterCheck {
+		if ts.Before(cutoff) {
+			delete(m.lastClusterCheck, instanceID)
+			cleaned++
+		}
+	}
+
+	// Clean up last physical disk poll timestamps
+	for instanceID, ts := range m.lastPhysicalDiskPoll {
+		if ts.Before(cutoff) {
+			delete(m.lastPhysicalDiskPoll, instanceID)
+			cleaned++
+		}
+	}
+
+	// Clean up last PVE backup poll timestamps
+	for instanceID, ts := range m.lastPVEBackupPoll {
+		if ts.Before(cutoff) {
+			delete(m.lastPVEBackupPoll, instanceID)
+			cleaned++
+		}
+	}
+
+	// Clean up last PBS backup poll timestamps
+	for instanceID, ts := range m.lastPBSBackupPoll {
+		if ts.Before(cutoff) {
+			delete(m.lastPBSBackupPoll, instanceID)
+			cleaned++
+		}
+	}
+
+	// Clean up circuit breakers for keys not in active clients
+	// Build set of active keys from pveClients and pbsClients
+	activeKeys := make(map[string]struct{})
+	for key := range m.pveClients {
+		activeKeys[key] = struct{}{}
+	}
+	for key := range m.pbsClients {
+		activeKeys[key] = struct{}{}
+	}
+	for key := range m.pmgClients {
+		activeKeys[key] = struct{}{}
+	}
+
+	// Only clean up circuit breakers for inactive keys that have been idle
+	// for longer than the stale threshold
+	for key, breaker := range m.circuitBreakers {
+		if _, active := activeKeys[key]; !active {
+			// Key is not in active clients - check if breaker is stale
+			if breaker != nil {
+				_, _, _, _, lastTransition := breaker.stateDetails()
+				if now.Sub(lastTransition) > staleThreshold {
+					delete(m.circuitBreakers, key)
+					delete(m.failureCounts, key)
+					delete(m.lastOutcome, key)
+					cleaned++
+				}
+			}
+		}
+	}
+
+	if cleaned > 0 {
+		log.Debug().
+			Int("entriesCleaned", cleaned).
+			Msg("Cleaned stale entries from monitor tracking maps")
+	}
+}
+
 // cleanupDiagnosticSnapshots removes stale diagnostic snapshots.
 // Snapshots older than 1 hour are removed to prevent unbounded growth
 // when nodes/VMs are deleted or reconfigured.
@@ -4320,6 +4409,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			m.cleanupGuestMetadataCache(now)
 			m.cleanupDiagnosticSnapshots(now)
 			m.cleanupRRDCache(now)
+			m.cleanupTrackingMaps(now)
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
 				go m.checkMockAlerts()
