@@ -116,48 +116,13 @@ export function AIIntelligence() {
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
   const [showRunAnalysis, setShowRunAnalysis] = createSignal(false);
-  const _scopeContext = createMemo(() => splitScopeContext(selectedRun()?.scope_context));
-  const _runTokenUsage = createMemo(() => formatTokenUsage(selectedRun()));
-  const selectedRunFindings = createMemo(() => {
-    aiIntelligenceStore.findingsSignal();
-    const run = selectedRun();
-    if (!run || !run.finding_ids || run.finding_ids.length === 0) {
-      return [];
-    }
-    const idSet = new Set(run.finding_ids);
-    return aiIntelligenceStore.findings.filter((finding) => idSet.has(finding.id));
-  });
-  const _scopeDrift = createMemo(() => {
-    const run = selectedRun();
-    if (!run) return null;
-    const scopeIds = run.scope_resource_ids ?? [];
-    const scopeTypes = run.scope_resource_types ?? [];
-    if (scopeIds.length === 0 && scopeTypes.length === 0) {
-      return null;
-    }
-    const findings = selectedRunFindings();
-    if (findings.length === 0) {
-      return null;
-    }
-    const hasIdScope = scopeIds.length > 0;
-    const hasTypeScope = scopeTypes.length > 0;
-    const outOfScope = findings.filter((finding) => {
-      const idMatch = hasIdScope ? scopeIds.includes(finding.resourceId) : false;
-      const typeMatch = hasTypeScope ? scopeTypes.includes(finding.resourceType) : false;
-      return !(idMatch || typeMatch);
-    });
-    if (outOfScope.length === 0) {
-      return null;
-    }
-    const examples = outOfScope
-      .map((finding) => finding.resourceName || finding.resourceId)
-      .filter(Boolean)
-      .slice(0, 3);
-    return {
-      count: outOfScope.length,
-      examples,
-    };
-  });
+  // TODO: Wire up scope context and token usage display in patrol run details
+  // const scopeContext = createMemo(() => splitScopeContext(selectedRun()?.scope_context));
+  // const runTokenUsage = createMemo(() => formatTokenUsage(selectedRun()));
+  // TODO: Wire up selected run findings display
+  // const selectedRunFindings = createMemo(() => { ... });
+  // TODO: Wire up scope drift detection in patrol run details
+  // const scopeDrift = createMemo(() => { ... });
 
   const scheduleOptions = createMemo(() => {
     const current = patrolInterval();
@@ -341,33 +306,9 @@ export function AIIntelligence() {
     return '';
   }
 
-  function splitScopeContext(context?: string): { base: string; discovery: string } {
-    if (!context) {
-      return { base: '', discovery: '' };
-    }
-    const parts = context.split(' | ').map(part => part.trim()).filter(Boolean);
-    let discovery = '';
-    const baseParts: string[] = [];
-    for (const part of parts) {
-      if (!discovery && part.toLowerCase().startsWith('discovery:')) {
-        discovery = part.replace(/^discovery:\s*/i, '').trim();
-      } else {
-        baseParts.push(part);
-      }
-    }
-    return {
-      base: baseParts.join(' | ').trim(),
-      discovery,
-    };
-  }
-
-  function formatTokenUsage(run?: PatrolRunRecord | null): string {
-    if (!run) return '';
-    const input = run.input_tokens || 0;
-    const output = run.output_tokens || 0;
-    if (!input && !output) return '';
-    return `${input} in / ${output} out`;
-  }
+  // TODO: Uncomment when patrol run detail panel is wired up
+  // function splitScopeContext(context?: string) { ... }
+  // function formatTokenUsage(run?: PatrolRunRecord | null) { ... }
 
   function formatDurationMs(ms?: number): string {
     if (!ms || ms <= 0) return '';
