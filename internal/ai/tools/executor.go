@@ -80,6 +80,16 @@ type StorageProvider interface {
 	GetCephClusters() []models.CephCluster
 }
 
+// StorageConfigProvider provides storage configuration data.
+type StorageConfigProvider interface {
+	GetStorageConfig(instance string) ([]StorageConfigSummary, error)
+}
+
+// GuestConfigProvider provides guest configuration data (VM/LXC).
+type GuestConfigProvider interface {
+	GetGuestConfig(guestType, instance, node string, vmid int) (map[string]interface{}, error)
+}
+
 // DiskHealthProvider provides disk health information from host agents
 type DiskHealthProvider interface {
 	GetHosts() []models.Host
@@ -101,36 +111,148 @@ type DiscoveryProvider interface {
 	ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error)
 	ListDiscoveriesByHost(hostID string) ([]*ResourceDiscoveryInfo, error)
 	FormatForAIContext(discoveries []*ResourceDiscoveryInfo) string
+	// TriggerDiscovery initiates discovery for a resource and returns the result
+	TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error)
 }
+
+// ResolvedResourceInfo contains the minimal information needed for tool validation.
+// This is an interface to avoid import cycles with the chat package.
+type ResolvedResourceInfo interface {
+	GetResourceID() string
+	GetResourceType() string
+	GetTargetHost() string
+	GetAgentID() string
+	GetAdapter() string
+	GetVMID() int
+	GetNode() string
+	GetAllowedActions() []string
+	// New structured identity methods
+	GetProviderUID() string
+	GetKind() string
+	GetAliases() []string
+}
+
+// ResourceRegistration contains all fields needed to register a discovered resource.
+// This structured approach replaces the long parameter list for clarity.
+type ResourceRegistration struct {
+	// Identity
+	Kind        string   // Resource type: "node", "vm", "lxc", "docker_container", etc.
+	ProviderUID string   // Stable provider ID (container ID, VMID, pod UID)
+	Name        string   // Primary display name
+	Aliases     []string // Additional names that resolve to this resource
+
+	// Scope
+	HostUID    string
+	HostName   string
+	ParentUID  string
+	ParentKind string
+	ClusterUID string
+	Namespace  string
+
+	// Legacy fields (for backwards compatibility)
+	VMID          int
+	Node          string
+	LocationChain []string
+
+	// Executor paths
+	Executors []ExecutorRegistration
+}
+
+// ExecutorRegistration describes how an executor can reach a resource.
+type ExecutorRegistration struct {
+	ExecutorID string
+	Adapter    string
+	Actions    []string
+	Priority   int
+}
+
+// ResolvedContextProvider provides session-scoped resource resolution.
+// Query and discovery tools add resources; action tools validate against them.
+// This interface is implemented by the chat package's ResolvedContext.
+type ResolvedContextProvider interface {
+	// AddResolvedResource adds a resource that was found via query/discovery.
+	// Uses the new structured registration format.
+	AddResolvedResource(reg ResourceRegistration)
+
+	// GetResolvedResourceByID retrieves a resource by its canonical ID (kind:provider_uid)
+	GetResolvedResourceByID(resourceID string) (ResolvedResourceInfo, bool)
+
+	// GetResolvedResourceByAlias retrieves a resource by any of its aliases
+	GetResolvedResourceByAlias(alias string) (ResolvedResourceInfo, bool)
+
+	// ValidateResourceForAction checks if a resource can perform an action
+	// Returns the resource if valid, error if not found or action not allowed
+	ValidateResourceForAction(resourceID, action string) (ResolvedResourceInfo, error)
+
+	// HasAnyResources returns true if at least one resource has been discovered
+	HasAnyResources() bool
+
+	// WasRecentlyAccessed checks if a resource was accessed within the given time window.
+	// Used for routing validation to distinguish "this turn" from "session-wide" context.
+	WasRecentlyAccessed(resourceID string, window time.Duration) bool
+
+	// GetRecentlyAccessedResources returns resource IDs accessed within the given time window.
+	GetRecentlyAccessedResources(window time.Duration) []string
+
+	// MarkExplicitAccess marks a resource as recently accessed, indicating user intent.
+	// Call this for single-resource operations (get, explicit select) but NOT for bulk
+	// operations (list, search) to avoid poisoning routing validation.
+	MarkExplicitAccess(resourceID string)
+}
+
+// RecentAccessWindow is the time window used to determine "recently referenced" resources.
+// Resources accessed within this window are considered to be from the current turn/exchange.
+const RecentAccessWindow = 30 * time.Second
 
 // ResourceDiscoveryInfo represents discovered information about a resource
 type ResourceDiscoveryInfo struct {
-	ID             string          `json:"id"`
-	ResourceType   string          `json:"resource_type"`
-	ResourceID     string          `json:"resource_id"`
-	HostID         string          `json:"host_id"`
-	Hostname       string          `json:"hostname"`
-	ServiceType    string          `json:"service_type"`
-	ServiceName    string          `json:"service_name"`
-	ServiceVersion string          `json:"service_version"`
-	Category       string          `json:"category"`
-	CLIAccess      string          `json:"cli_access"`
-	Facts          []DiscoveryFact `json:"facts"`
-	ConfigPaths    []string        `json:"config_paths"`
-	DataPaths      []string        `json:"data_paths"`
-	UserNotes      string          `json:"user_notes,omitempty"`
-	Confidence     float64         `json:"confidence"`
-	AIReasoning    string          `json:"ai_reasoning,omitempty"`
-	DiscoveredAt   time.Time       `json:"discovered_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	ID             string              `json:"id"`
+	ResourceType   string              `json:"resource_type"`
+	ResourceID     string              `json:"resource_id"`
+	HostID         string              `json:"host_id"`
+	Hostname       string              `json:"hostname"`
+	ServiceType    string              `json:"service_type"`
+	ServiceName    string              `json:"service_name"`
+	ServiceVersion string              `json:"service_version"`
+	Category       string              `json:"category"`
+	CLIAccess      string              `json:"cli_access"`
+	Facts          []DiscoveryFact     `json:"facts"`
+	ConfigPaths    []string            `json:"config_paths"`
+	DataPaths      []string            `json:"data_paths"`
+	LogPaths       []string            `json:"log_paths,omitempty"` // Log file paths or commands (e.g., journalctl)
+	Ports          []DiscoveryPortInfo `json:"ports"`
+	BindMounts     []DiscoveryMount    `json:"bind_mounts,omitempty"` // For Docker: host->container path mappings
+	UserNotes      string              `json:"user_notes,omitempty"`
+	Confidence     float64             `json:"confidence"`
+	AIReasoning    string              `json:"ai_reasoning,omitempty"`
+	DiscoveredAt   time.Time           `json:"discovered_at"`
+	UpdatedAt      time.Time           `json:"updated_at"`
+}
+
+// DiscoveryPortInfo represents a listening port discovered on a resource
+type DiscoveryPortInfo struct {
+	Port     int    `json:"port"`
+	Protocol string `json:"protocol"`
+	Process  string `json:"process,omitempty"`
+	Address  string `json:"address,omitempty"`
+}
+
+// DiscoveryMount represents a bind mount (host path -> container path)
+type DiscoveryMount struct {
+	ContainerName string `json:"container_name,omitempty"` // Docker container name (for Docker inside LXC/VM)
+	Source        string `json:"source"`                   // Host path (where to actually write files)
+	Destination   string `json:"destination"`              // Container path (what the service sees)
+	Type          string `json:"type,omitempty"`           // Mount type: bind, volume, tmpfs
+	ReadOnly      bool   `json:"read_only,omitempty"`
 }
 
 // DiscoveryFact represents a discovered fact about a resource
 type DiscoveryFact struct {
-	Category string `json:"category"`
-	Key      string `json:"key"`
-	Value    string `json:"value"`
-	Source   string `json:"source,omitempty"`
+	Category   string  `json:"category"`
+	Key        string  `json:"key"`
+	Value      string  `json:"value"`
+	Source     string  `json:"source,omitempty"`
+	Confidence float64 `json:"confidence,omitempty"` // 0-1 confidence for this fact
 }
 
 // ControlLevel represents the AI's permission level for infrastructure control
@@ -160,10 +282,12 @@ type ExecutorConfig struct {
 	FindingsProvider FindingsProvider
 
 	// Optional providers - infrastructure
-	BackupProvider     BackupProvider
-	StorageProvider    StorageProvider
-	DiskHealthProvider DiskHealthProvider
-	UpdatesProvider    UpdatesProvider
+	BackupProvider        BackupProvider
+	StorageProvider       StorageProvider
+	StorageConfigProvider StorageConfigProvider
+	GuestConfigProvider   GuestConfigProvider
+	DiskHealthProvider    DiskHealthProvider
+	UpdatesProvider       UpdatesProvider
 
 	// Optional providers - management
 	MetadataUpdater     MetadataUpdater
@@ -199,10 +323,12 @@ type PulseToolExecutor struct {
 	findingsProvider FindingsProvider
 
 	// Infrastructure context providers
-	backupProvider     BackupProvider
-	storageProvider    StorageProvider
-	diskHealthProvider DiskHealthProvider
-	updatesProvider    UpdatesProvider
+	backupProvider        BackupProvider
+	storageProvider       StorageProvider
+	storageConfigProvider StorageConfigProvider
+	guestConfigProvider   GuestConfigProvider
+	diskHealthProvider    DiskHealthProvider
+	updatesProvider       UpdatesProvider
 
 	// Management providers
 	metadataUpdater     MetadataUpdater
@@ -227,8 +353,32 @@ type PulseToolExecutor struct {
 	targetID     string
 	isAutonomous bool
 
+	// Session-scoped resolved context for resource validation
+	// This is set per-session by the agentic loop before tool execution
+	resolvedContext ResolvedContextProvider
+
+	// Telemetry callback for recording metrics
+	// This is optional - if nil, no telemetry is recorded
+	telemetryCallback TelemetryCallback
+
 	// Tool registry
 	registry *ToolRegistry
+}
+
+// TelemetryCallback is called when the executor needs to record telemetry.
+// This allows the chat layer to handle metrics without import cycles.
+type TelemetryCallback interface {
+	// RecordStrictResolutionBlock records when strict resolution blocks an action
+	RecordStrictResolutionBlock(tool, action string)
+	// RecordAutoRecoveryAttempt records an auto-recovery attempt
+	RecordAutoRecoveryAttempt(errorCode, tool string)
+	// RecordAutoRecoverySuccess records a successful auto-recovery
+	RecordAutoRecoverySuccess(errorCode, tool string)
+	// RecordRoutingMismatchBlock records when routing validation blocks an operation
+	// that targeted a parent host when a child resource was recently referenced.
+	// targetKind: "node" (the kind being targeted)
+	// childKind: "lxc", "vm", "docker_container" (the kind of the more specific resource)
+	RecordRoutingMismatchBlock(tool, targetKind, childKind string)
 }
 
 // NewPulseToolExecutor creates a new Pulse tool executor with the given configuration
@@ -244,6 +394,8 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		findingsProvider:         cfg.FindingsProvider,
 		backupProvider:           cfg.BackupProvider,
 		storageProvider:          cfg.StorageProvider,
+		storageConfigProvider:    cfg.StorageConfigProvider,
+		guestConfigProvider:      cfg.GuestConfigProvider,
 		diskHealthProvider:       cfg.DiskHealthProvider,
 		updatesProvider:          cfg.UpdatesProvider,
 		metadataUpdater:          cfg.MetadataUpdater,
@@ -329,6 +481,16 @@ func (e *PulseToolExecutor) SetStorageProvider(provider StorageProvider) {
 	e.storageProvider = provider
 }
 
+// SetStorageConfigProvider sets the storage config provider
+func (e *PulseToolExecutor) SetStorageConfigProvider(provider StorageConfigProvider) {
+	e.storageConfigProvider = provider
+}
+
+// SetGuestConfigProvider sets the guest config provider
+func (e *PulseToolExecutor) SetGuestConfigProvider(provider GuestConfigProvider) {
+	e.guestConfigProvider = provider
+}
+
 // SetDiskHealthProvider sets the disk health provider
 func (e *PulseToolExecutor) SetDiskHealthProvider(provider DiskHealthProvider) {
 	e.diskHealthProvider = provider
@@ -364,9 +526,25 @@ func (e *PulseToolExecutor) SetKnowledgeStoreProvider(provider KnowledgeStorePro
 	e.knowledgeStoreProvider = provider
 }
 
-// SetDiscoveryProvider sets the discovery provider for AI-powered discovery
+// SetDiscoveryProvider sets the discovery provider for infrastructure discovery
 func (e *PulseToolExecutor) SetDiscoveryProvider(provider DiscoveryProvider) {
 	e.discoveryProvider = provider
+}
+
+// SetResolvedContext sets the session-scoped resolved context for resource validation.
+// This should be called by the agentic loop before executing tools for a session.
+func (e *PulseToolExecutor) SetResolvedContext(ctx ResolvedContextProvider) {
+	e.resolvedContext = ctx
+}
+
+// SetTelemetryCallback sets the telemetry callback for recording metrics
+func (e *PulseToolExecutor) SetTelemetryCallback(cb TelemetryCallback) {
+	e.telemetryCallback = cb
+}
+
+// GetResolvedContext returns the current resolved context (may be nil)
+func (e *PulseToolExecutor) GetResolvedContext() ResolvedContextProvider {
+	return e.resolvedContext
 }
 
 // ListTools returns the list of available tools
@@ -387,50 +565,31 @@ func (e *PulseToolExecutor) ListTools() []Tool {
 
 func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	switch name {
-	case "pulse_get_capabilities", "pulse_get_url_content", "pulse_get_agent_scope":
-		return true
-	case "pulse_run_command":
+	// Consolidated tools - check based on primary requirements
+	case "pulse_query":
+		return e.stateProvider != nil
+	case "pulse_metrics":
+		return e.stateProvider != nil || e.metricsHistory != nil || e.baselineProvider != nil || e.patternProvider != nil
+	case "pulse_storage":
+		return e.stateProvider != nil || e.storageProvider != nil || e.backupProvider != nil || e.storageConfigProvider != nil || e.diskHealthProvider != nil
+	case "pulse_docker":
+		return e.stateProvider != nil || e.updatesProvider != nil
+	case "pulse_kubernetes":
+		return e.stateProvider != nil
+	case "pulse_alerts":
+		return e.alertProvider != nil || e.findingsProvider != nil || e.findingsManager != nil || e.stateProvider != nil
+	case "pulse_read":
 		return e.agentServer != nil
-	case "pulse_control_guest", "pulse_control_docker":
+	case "pulse_control":
 		return e.agentServer != nil && e.stateProvider != nil
-	case "pulse_set_agent_scope":
-		return e.agentProfileManager != nil
-	case "pulse_set_resource_url":
-		return e.metadataUpdater != nil
-	case "pulse_get_metrics":
-		return e.metricsHistory != nil
-	case "pulse_get_baselines":
-		return e.baselineProvider != nil
-	case "pulse_get_patterns":
-		return e.patternProvider != nil
-	case "pulse_list_alerts":
-		return e.alertProvider != nil
-	case "pulse_list_findings":
-		return e.findingsProvider != nil
-	case "pulse_resolve_finding", "pulse_dismiss_finding":
-		return e.findingsManager != nil
-	case "pulse_list_backups":
-		return e.backupProvider != nil
-	case "pulse_list_storage":
-		return e.storageProvider != nil
-	case "pulse_get_disk_health":
-		return e.diskHealthProvider != nil || e.storageProvider != nil
-	case "pulse_get_host_raid_status", "pulse_get_host_ceph_details":
-		return e.diskHealthProvider != nil
-	case "pulse_list_docker_updates", "pulse_check_docker_updates":
-		return e.updatesProvider != nil
-	case "pulse_update_docker_container":
-		return e.updatesProvider != nil && e.stateProvider != nil
-	case "pulse_get_incident_window":
-		return e.incidentRecorderProvider != nil
-	case "pulse_correlate_events":
-		return e.eventCorrelatorProvider != nil
-	case "pulse_get_relationship_graph":
-		return e.topologyProvider != nil
-	case "pulse_remember", "pulse_recall":
-		return e.knowledgeStoreProvider != nil
-	case "pulse_get_discovery", "pulse_list_discoveries":
+	case "pulse_file_edit":
+		return e.agentServer != nil
+	case "pulse_discovery":
 		return e.discoveryProvider != nil
+	case "pulse_knowledge":
+		return e.knowledgeStoreProvider != nil || e.incidentRecorderProvider != nil || e.eventCorrelatorProvider != nil || e.topologyProvider != nil
+	case "pulse_pmg":
+		return e.stateProvider != nil
 	default:
 		return e.stateProvider != nil
 	}
@@ -448,30 +607,44 @@ func (e *PulseToolExecutor) ExecuteTool(ctx context.Context, name string, args m
 
 // registerTools registers all available tools
 func (e *PulseToolExecutor) registerTools() {
-	// Query tools (always available)
+	// Consolidated tools (49 tools -> 10 tools)
+	// See plan at /Users/rcourtman/.claude/plans/atomic-wobbling-rose.md
+
+	// pulse_query - search, get, config, topology, list, health
 	e.registerQueryTools()
 
-	// Kubernetes tools (always available)
+	// pulse_metrics - performance, temperatures, network, diskio, disks, baselines, patterns
+	e.registerMetricsTools()
+
+	// pulse_storage - pools, config, backups, snapshots, ceph, replication, pbs_jobs, raid, disk_health, resource_disks
+	e.registerStorageTools()
+
+	// pulse_docker - control, updates, check_updates, update, services, tasks, swarm
+	e.registerDockerTools()
+
+	// pulse_kubernetes - clusters, nodes, pods, deployments
 	e.registerKubernetesTools()
 
-	// Patrol context tools (always available)
-	e.registerPatrolTools()
+	// pulse_alerts - list, findings, resolved, resolve, dismiss
+	e.registerAlertsTools()
 
-	// Infrastructure tools (always available)
-	e.registerInfrastructureTools()
+	// pulse_read - read-only operations (exec, file, find, tail, logs)
+	// This is ALWAYS classified as ToolKindRead and never triggers VERIFYING
+	e.registerReadTools()
 
-	// PMG (Mail Gateway) tools (always available)
-	e.registerPMGTools()
+	// pulse_control - guest control, run commands (requires control permission)
+	// NOTE: For read-only command execution, use pulse_read instead
+	e.registerControlToolsConsolidated()
 
-	// Profile tools - read operations always available
-	e.registerProfileTools()
+	// pulse_file_edit - read, append, write files (requires control permission)
+	e.registerFileTools()
 
-	// Intelligence tools (incident analysis, knowledge management)
-	e.registerIntelligenceTools()
+	// pulse_discovery - get, list discoveries
+	e.registerDiscoveryToolsConsolidated()
 
-	// Discovery tools (AI-powered infrastructure discovery)
-	e.registerDiscoveryTools()
+	// pulse_knowledge - remember, recall, incidents, correlate, relationships
+	e.registerKnowledgeTools()
 
-	// Control tools (conditional on control level)
-	e.registerControlTools()
+	// pulse_pmg - status, mail_stats, queues, spam
+	e.registerPMGToolsConsolidated()
 }

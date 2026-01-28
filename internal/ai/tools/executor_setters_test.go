@@ -28,6 +28,12 @@ func (s *stubAgentProfileManager) GetAgentScope(ctx context.Context, agentID str
 	return &AgentScope{AgentID: agentID}, nil
 }
 
+type stubStorageConfigProvider struct{}
+
+func (s *stubStorageConfigProvider) GetStorageConfig(instance string) ([]StorageConfigSummary, error) {
+	return nil, nil
+}
+
 func TestPulseToolExecutor_Setters(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
 
@@ -78,6 +84,10 @@ func TestPulseToolExecutor_Setters(t *testing.T) {
 	exec.SetStorageProvider(storageProvider)
 	assert.Equal(t, storageProvider, exec.storageProvider)
 
+	storageConfigProvider := &stubStorageConfigProvider{}
+	exec.SetStorageConfigProvider(storageConfigProvider)
+	assert.Equal(t, storageConfigProvider, exec.storageConfigProvider)
+
 	diskHealthProvider := &mockDiskHealthProvider{}
 	exec.SetDiskHealthProvider(diskHealthProvider)
 	assert.Equal(t, diskHealthProvider, exec.diskHealthProvider)
@@ -94,23 +104,31 @@ func TestPulseToolExecutor_Setters(t *testing.T) {
 func TestPulseToolExecutor_ListTools(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
 	tools := exec.ListTools()
-	assert.True(t, containsTool(tools, "pulse_get_capabilities"))
-	assert.False(t, containsTool(tools, "pulse_get_topology"))
+	// pulse_query requires state provider, so it should not be available without one
+	assert.False(t, containsTool(tools, "pulse_query"))
 
 	execWithState := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{}})
 	stateTools := execWithState.ListTools()
-	assert.True(t, containsTool(stateTools, "pulse_get_topology"))
+	// With state provider, pulse_query should be available
+	assert.True(t, containsTool(stateTools, "pulse_query"))
 }
 
 func TestPulseToolExecutor_IsToolAvailable(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
-	assert.False(t, exec.isToolAvailable("pulse_get_metrics"))
-	assert.False(t, exec.isToolAvailable("pulse_set_agent_scope"))
+	// pulse_metrics requires metrics provider or state provider
+	assert.False(t, exec.isToolAvailable("pulse_metrics"))
+	// pulse_query requires state provider
+	assert.False(t, exec.isToolAvailable("pulse_query"))
 
-	exec.SetMetricsHistory(&mockMetricsHistoryProvider{})
-	exec.SetAgentProfileManager(&stubAgentProfileManager{})
-	assert.True(t, exec.isToolAvailable("pulse_get_metrics"))
-	assert.True(t, exec.isToolAvailable("pulse_set_agent_scope"))
+	// Create new executor with state provider and metrics history
+	execWithProviders := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider:  &mockStateProvider{},
+		MetricsHistory: &mockMetricsHistoryProvider{},
+	})
+	// Now pulse_metrics should be available with metrics history
+	assert.True(t, execWithProviders.isToolAvailable("pulse_metrics"))
+	// And pulse_query should be available with state provider
+	assert.True(t, execWithProviders.isToolAvailable("pulse_query"))
 }
 
 func TestToolRegistry_ListTools(t *testing.T) {

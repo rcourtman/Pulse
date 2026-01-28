@@ -34,7 +34,10 @@ func TestPulseToolExecutor_ExecuteListBackups(t *testing.T) {
 	backupProv.On("GetBackups").Return(expectedBackups)
 	backupProv.On("GetPBSInstances").Return([]models.PBSInstance{})
 
-	result, err := exec.ExecuteTool(context.Background(), "pulse_list_backups", map[string]interface{}{})
+	// Use consolidated pulse_storage tool with type: "backups"
+	result, err := exec.ExecuteTool(context.Background(), "pulse_storage", map[string]interface{}{
+		"type": "backups",
+	})
 	assert.NoError(t, err)
 	assert.False(t, result.IsError)
 }
@@ -66,7 +69,9 @@ func TestPulseToolExecutor_ExecuteControlGuest(t *testing.T) {
 		ExitCode: 0,
 	}, nil)
 
-	result, err := exec.ExecuteTool(context.Background(), "pulse_control_guest", map[string]interface{}{
+	// Use consolidated pulse_control tool with type: "guest"
+	result, err := exec.ExecuteTool(context.Background(), "pulse_control", map[string]interface{}{
+		"type":     "guest",
 		"guest_id": "100",
 		"action":   "stop",
 	})
@@ -107,9 +112,11 @@ func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
 		ExitCode: 0,
 	}, nil)
 
-	result, err := exec.ExecuteTool(context.Background(), "pulse_control_docker", map[string]interface{}{
+	// Use consolidated pulse_docker tool with action: "control"
+	result, err := exec.ExecuteTool(context.Background(), "pulse_docker", map[string]interface{}{
+		"action":    "control",
 		"container": "nginx",
-		"action":    "restart",
+		"operation": "restart",
 	})
 	assert.NoError(t, err)
 	assert.Contains(t, result.Content[0].Text, "Successfully executed 'docker restart'")

@@ -206,6 +206,82 @@ type PromptMessage struct {
 	Content Content `json:"content"`
 }
 
+// ToolResponse is a consistent envelope for tool results.
+// All tool results should use this structure for predictable parsing.
+type ToolResponse struct {
+	OK    bool                   `json:"ok"`              // true if tool succeeded
+	Data  interface{}            `json:"data,omitempty"`  // result data if ok=true
+	Error *ToolError             `json:"error,omitempty"` // error details if ok=false
+	Meta  map[string]interface{} `json:"meta,omitempty"`  // optional metadata
+}
+
+// ToolError provides consistent error structure for tool failures.
+// Use Blocked=true for policy/validation blocks, Failed=true for runtime errors.
+type ToolError struct {
+	Code      string                 `json:"code"`                // Error code (e.g., "STRICT_RESOLUTION", "NOT_FOUND")
+	Message   string                 `json:"message"`             // Human-readable message
+	Blocked   bool                   `json:"blocked,omitempty"`   // True if blocked by policy/validation
+	Failed    bool                   `json:"failed,omitempty"`    // True if runtime failure
+	Retryable bool                   `json:"retryable,omitempty"` // True if auto-retry might succeed
+	Details   map[string]interface{} `json:"details,omitempty"`   // Additional context
+}
+
+// Common error codes
+const (
+	ErrCodeStrictResolution = "STRICT_RESOLUTION"
+	ErrCodeNotFound         = "NOT_FOUND"
+	ErrCodeActionNotAllowed = "ACTION_NOT_ALLOWED"
+	ErrCodePolicyBlocked    = "POLICY_BLOCKED"
+	ErrCodeApprovalRequired = "APPROVAL_REQUIRED"
+	ErrCodeInvalidInput     = "INVALID_INPUT"
+	ErrCodeExecutionFailed  = "EXECUTION_FAILED"
+	ErrCodeNoAgent          = "NO_AGENT"
+)
+
+// NewToolSuccess creates a successful tool response
+func NewToolSuccess(data interface{}) ToolResponse {
+	return ToolResponse{
+		OK:   true,
+		Data: data,
+	}
+}
+
+// NewToolSuccessWithMeta creates a successful tool response with metadata
+func NewToolSuccessWithMeta(data interface{}, meta map[string]interface{}) ToolResponse {
+	return ToolResponse{
+		OK:   true,
+		Data: data,
+		Meta: meta,
+	}
+}
+
+// NewToolBlockedError creates a policy/validation blocked error
+func NewToolBlockedError(code, message string, details map[string]interface{}) ToolResponse {
+	return ToolResponse{
+		OK: false,
+		Error: &ToolError{
+			Code:    code,
+			Message: message,
+			Blocked: true,
+			Details: details,
+		},
+	}
+}
+
+// NewToolFailedError creates a runtime failure error
+func NewToolFailedError(code, message string, retryable bool, details map[string]interface{}) ToolResponse {
+	return ToolResponse{
+		OK: false,
+		Error: &ToolError{
+			Code:      code,
+			Message:   message,
+			Failed:    true,
+			Retryable: retryable,
+			Details:   details,
+		},
+	}
+}
+
 // Helper functions
 
 // NewTextContent creates a text content object
@@ -242,5 +318,18 @@ func NewJSONResult(data interface{}) CallToolResult {
 	return CallToolResult{
 		Content: []Content{NewTextContent(string(b))},
 		IsError: false,
+	}
+}
+
+// NewToolResponseResult creates a CallToolResult from a ToolResponse
+// This provides the consistent envelope while maintaining MCP protocol compatibility
+func NewToolResponseResult(resp ToolResponse) CallToolResult {
+	b, err := json.Marshal(resp)
+	if err != nil {
+		return NewErrorResult(err)
+	}
+	return CallToolResult{
+		Content: []Content{NewTextContent(string(b))},
+		IsError: !resp.OK,
 	}
 }

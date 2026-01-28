@@ -21,17 +21,11 @@ func (e *PulseToolExecutor) registerControlTools() {
 			Name: "pulse_run_command",
 			Description: `Execute a shell command on infrastructure via a connected agent.
 
-Returns: Command output (stdout/stderr) and exit code. Exit code 0 = success.
+This tool has built-in user approval - just call it directly when requested.
+Prefer query tools first. If multiple agents exist and target is unclear, ask which host.
 
-Use when: User explicitly asks to run a command, or monitoring data is insufficient for a targeted diagnosis.
-
-Prefer: Pulse monitoring tools (pulse_list_infrastructure, pulse_search_resources, pulse_get_topology, pulse_list_alerts, pulse_get_metrics) before running commands.
-
-Scope: Target a single host/agent. If multiple agents are connected and target_host is unclear, ask the user to choose.
-
-Do NOT use for: Checking if something is running (use pulse_get_topology), or starting/stopping VMs/containers (use pulse_control_guest or pulse_control_docker).
-
-Note: Commands run on the HOST, not inside VMs/containers. To run inside an LXC, use: pct exec <vmid> -- <command>`,
+Routing: target_host can be a Proxmox host (delly), an LXC name (homepage-docker), or a VM name.
+Commands targeting LXCs/VMs are automatically routed through the Proxmox host agent.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -60,17 +54,12 @@ Note: Commands run on the HOST, not inside VMs/containers. To run inside an LXC,
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name: "pulse_control_guest",
-			Description: `Start, stop, or restart Proxmox VMs and LXC containers.
+			Description: `Start, stop, restart, or delete Proxmox VMs and LXC containers.
 
-Returns: Success message with VM/container name, or error if failed.
-
-Use when: User asks to start, stop, restart, or shutdown a VM or LXC container.
-
-Prefer: Use pulse_get_topology or pulse_search_resources to confirm the guest and node before control actions.
-
-Do NOT use for: Docker containers (use pulse_control_docker), or checking status (use pulse_get_topology).
-
-Note: These are LXC containers managed by Proxmox, NOT Docker containers. Uses 'pct' commands internally.`,
+This tool has built-in user approval - just call it directly when requested.
+Use pulse_search_resources to find the guest first if needed.
+For Docker containers, use pulse_control_docker instead.
+Delete requires the guest to be stopped first.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -80,8 +69,8 @@ Note: These are LXC containers managed by Proxmox, NOT Docker containers. Uses '
 					},
 					"action": {
 						Type:        "string",
-						Description: "start, stop (immediate), shutdown (graceful), or restart",
-						Enum:        []string{"start", "stop", "shutdown", "restart"},
+						Description: "start, stop (immediate), shutdown (graceful), restart, or delete (permanent removal - guest must be stopped first)",
+						Enum:        []string{"start", "stop", "shutdown", "restart", "delete"},
 					},
 					"force": {
 						Type:        "boolean",
@@ -147,6 +136,32 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		return NewErrorResult(fmt.Errorf("command is required")), nil
 	}
 
+	// Validate resource is in resolved context
+	// Uses command risk classification: read-only commands bypass strict mode
+	// With PULSE_STRICT_RESOLUTION=true, write commands are blocked on undiscovered resources
+	if targetHost != "" {
+		validation := e.validateResolvedResourceForExec(targetHost, command, true)
+		if validation.IsBlocked() {
+			// Hard validation failure - return consistent error envelope
+			return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
+		}
+		if validation.ErrorMsg != "" {
+			// Soft validation - log warning but allow operation
+			log.Warn().
+				Str("target", targetHost).
+				Str("command", command).
+				Str("validation_error", validation.ErrorMsg).
+				Msg("[Control] Target resource not in resolved context - may indicate model hallucination")
+		}
+
+		// Validate routing context - block if targeting a Proxmox host when child resources exist
+		// This prevents accidentally executing commands on the host when user meant to target an LXC/VM
+		routingResult := e.validateRoutingContext(targetHost)
+		if routingResult.IsBlocked() {
+			return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
+		}
+	}
+
 	// Note: Control level read_only check is now centralized in registry.Execute()
 
 	// Check if this is a pre-approved execution (agentic loop re-executing after user approval)
@@ -197,20 +212,35 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
-	agentID := e.findAgentForCommand(runOnHost, targetHost)
-	if agentID == "" {
+	// Resolve target to the correct agent and routing info (with full provenance)
+	// If targetHost is an LXC/VM name, this routes to the Proxmox host agent
+	// with the correct TargetType and TargetID for pct exec / qm guest exec
+	routing := e.resolveTargetForCommandFull(targetHost)
+	if routing.AgentID == "" {
+		if targetHost != "" {
+			if routing.TargetType == "container" || routing.TargetType == "vm" {
+				return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", targetHost, routing.TargetType)), nil
+			}
+			return NewErrorResult(fmt.Errorf("no agent available for target '%s'. Specify a valid hostname with a connected agent.", targetHost)), nil
+		}
 		return NewErrorResult(fmt.Errorf("no agent available for target")), nil
 	}
 
-	targetType := "container"
-	if runOnHost {
-		targetType = "host"
-	}
+	log.Debug().
+		Str("target_host", targetHost).
+		Str("agent_id", routing.AgentID).
+		Str("agent_host", routing.AgentHostname).
+		Str("resolved_kind", routing.ResolvedKind).
+		Str("resolved_node", routing.ResolvedNode).
+		Str("transport", routing.Transport).
+		Str("target_type", routing.TargetType).
+		Str("target_id", routing.TargetID).
+		Msg("[pulse_control] Routing command execution")
 
-	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: targetType,
-		TargetID:   e.targetID,
+		TargetType: routing.TargetType,
+		TargetID:   routing.TargetID,
 	})
 	if err != nil {
 		return NewErrorResult(err), nil
@@ -224,11 +254,12 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
 	}
 
-	// Success - include guidance to prevent unnecessary verification
+	// Success - always show output explicitly to prevent LLM hallucination
+	// When output is empty, we must be explicit about it so the LLM doesn't fabricate results
 	if output == "" {
-		return NewTextResult("✓ Command completed successfully (exit code 0). No verification needed."), nil
+		return NewTextResult("Command completed successfully (exit code 0).\n\nOutput:\n(no output)"), nil
 	}
-	return NewTextResult(fmt.Sprintf("✓ Command completed successfully (exit code 0). No verification needed.\n%s", output)), nil
+	return NewTextResult(fmt.Sprintf("Command completed successfully (exit code 0).\n\nOutput:\n%s", output)), nil
 }
 
 func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -243,9 +274,25 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		return NewErrorResult(fmt.Errorf("action is required")), nil
 	}
 
-	validActions := map[string]bool{"start": true, "stop": true, "shutdown": true, "restart": true}
+	validActions := map[string]bool{"start": true, "stop": true, "shutdown": true, "restart": true, "delete": true}
 	if !validActions[action] {
-		return NewErrorResult(fmt.Errorf("invalid action: %s. Use start, stop, shutdown, or restart", action)), nil
+		return NewErrorResult(fmt.Errorf("invalid action: %s. Use start, stop, shutdown, restart, or delete", action)), nil
+	}
+
+	// Validate resource is in resolved context
+	// With PULSE_STRICT_RESOLUTION=true, this blocks execution on undiscovered resources
+	validation := e.validateResolvedResource(guestID, action, true)
+	if validation.IsBlocked() {
+		// Hard validation failure - return consistent error envelope
+		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
+	}
+	if validation.ErrorMsg != "" {
+		// Soft validation - log warning but allow operation
+		log.Warn().
+			Str("guest_id", guestID).
+			Str("action", action).
+			Str("validation_error", validation.ErrorMsg).
+			Msg("[ControlGuest] Guest not in resolved context - may indicate model hallucination")
 	}
 
 	// Note: Control level read_only check is now centralized in registry.Execute()
@@ -269,6 +316,11 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		cmdTool = "qm"
 	}
 
+	// For delete action, verify guest is stopped first
+	if action == "delete" && guest.Status != "stopped" {
+		return NewTextResult(fmt.Sprintf("Cannot delete %s (VMID %d) - it is currently %s. Stop it first, then try deleting again.", guest.Name, guest.VMID, guest.Status)), nil
+	}
+
 	var command string
 	switch action {
 	case "start":
@@ -279,6 +331,9 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		command = fmt.Sprintf("%s shutdown %d", cmdTool, guest.VMID)
 	case "restart":
 		command = fmt.Sprintf("%s reboot %d", cmdTool, guest.VMID)
+	case "delete":
+		// Delete uses 'destroy' subcommand with --purge to also remove associated storage
+		command = fmt.Sprintf("%s destroy %d --purge", cmdTool, guest.VMID)
 	}
 
 	if force && action == "stop" {
@@ -355,6 +410,23 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 		return NewErrorResult(fmt.Errorf("invalid action: %s. Use start, stop, or restart", action)), nil
 	}
 
+	// Validate resource is in resolved context
+	// With PULSE_STRICT_RESOLUTION=true, this blocks execution on undiscovered resources
+	validation := e.validateResolvedResource(containerName, action, true)
+	if validation.IsBlocked() {
+		// Hard validation failure - return consistent error envelope
+		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
+	}
+	if validation.ErrorMsg != "" {
+		// Soft validation - log warning but allow operation
+		log.Warn().
+			Str("container", containerName).
+			Str("action", action).
+			Str("host", hostName).
+			Str("validation_error", validation.ErrorMsg).
+			Msg("[ControlDocker] Container not in resolved context - may indicate model hallucination")
+	}
+
 	// Note: Control level read_only check is now centralized in registry.Execute()
 
 	// Check if this is a pre-approved execution (agentic loop re-executing after user approval)
@@ -392,15 +464,30 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
-	agentID := e.findAgentForDockerHost(dockerHost)
-	if agentID == "" {
+	// Resolve the Docker host to the correct agent and routing info (with full provenance)
+	routing := e.resolveDockerHostRoutingFull(dockerHost)
+	if routing.AgentID == "" {
+		if routing.TargetType == "container" || routing.TargetType == "vm" {
+			return NewTextResult(fmt.Sprintf("Docker host '%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", dockerHost.Hostname, routing.TargetType)), nil
+		}
 		return NewTextResult(fmt.Sprintf("No agent available on Docker host '%s'. Install Pulse Unified Agent on the host to enable control.", dockerHost.Hostname)), nil
 	}
 
-	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+	log.Debug().
+		Str("docker_host", dockerHost.Hostname).
+		Str("agent_id", routing.AgentID).
+		Str("agent_host", routing.AgentHostname).
+		Str("resolved_kind", routing.ResolvedKind).
+		Str("resolved_node", routing.ResolvedNode).
+		Str("transport", routing.Transport).
+		Str("target_type", routing.TargetType).
+		Str("target_id", routing.TargetID).
+		Msg("[pulse_control docker] Routing docker command execution")
+
+	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: "host",
-		TargetID:   "",
+		TargetType: routing.TargetType,
+		TargetID:   routing.TargetID,
 	})
 	if err != nil {
 		return NewErrorResult(err), nil
@@ -420,29 +507,194 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 
 // Helper methods for control tools
 
-func (e *PulseToolExecutor) findAgentForCommand(runOnHost bool, targetHost string) string {
+// CommandRoutingResult contains full routing information for command execution.
+// This provides the provenance needed to verify where commands actually run.
+type CommandRoutingResult struct {
+	// Routing info for agent
+	AgentID    string // The agent that will execute the command
+	TargetType string // "host", "container", or "vm"
+	TargetID   string // VMID for LXC/VM, empty for host
+
+	// Provenance info
+	AgentHostname string // Hostname of the agent
+	ResolvedKind  string // What kind of resource we resolved to: "node", "lxc", "vm", "docker", "host"
+	ResolvedNode  string // Proxmox node name (if applicable)
+	Transport     string // How command will be executed: "direct", "pct_exec", "qm_guest_exec"
+}
+
+// resolveTargetForCommandFull resolves a target_host to full routing info including provenance.
+// Use this for write operations where you need to verify execution context.
+//
+// CRITICAL ORDERING: Topology resolution (state.ResolveResource) happens FIRST.
+// Agent hostname matching is a FALLBACK only when the state doesn't know the resource.
+// This prevents the "hostname collision" bug where an agent with hostname matching an LXC name
+// causes commands to execute on the node instead of inside the LXC via pct exec.
+func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) CommandRoutingResult {
+	result := CommandRoutingResult{
+		TargetType: "host",
+		Transport:  "direct",
+	}
+
 	if e.agentServer == nil {
-		return ""
+		return result
 	}
 
 	agents := e.agentServer.GetConnectedAgents()
 	if len(agents) == 0 {
-		return ""
+		return result
 	}
 
-	if targetHost != "" {
-		for _, agent := range agents {
-			if agent.Hostname == targetHost || agent.AgentID == targetHost {
-				return agent.AgentID
+	if targetHost == "" {
+		// No target_host specified - require exactly one agent or fail
+		if len(agents) > 1 {
+			return result
+		}
+		result.AgentID = agents[0].AgentID
+		result.AgentHostname = agents[0].Hostname
+		result.ResolvedKind = "host"
+		return result
+	}
+
+	// STEP 1: Consult topology (state) FIRST — this is authoritative.
+	// If the state knows about this resource, use topology-based routing.
+	// This prevents hostname collisions from masquerading as host targets.
+	if e.stateProvider != nil {
+		state := e.stateProvider.GetState()
+		loc := state.ResolveResource(targetHost)
+
+		if loc.Found {
+			// Route based on resource type
+			switch loc.ResourceType {
+			case "node":
+				// Direct Proxmox node
+				nodeAgentID := e.findAgentForNode(loc.Node)
+				result.AgentID = nodeAgentID
+				result.ResolvedKind = "node"
+				result.ResolvedNode = loc.Node
+				for _, agent := range agents {
+					if agent.AgentID == nodeAgentID {
+						result.AgentHostname = agent.Hostname
+						break
+					}
+				}
+				return result
+
+			case "lxc":
+				// LXC container - route through Proxmox node agent via pct exec
+				nodeAgentID := e.findAgentForNode(loc.Node)
+				result.ResolvedKind = "lxc"
+				result.ResolvedNode = loc.Node
+				result.TargetType = "container"
+				result.TargetID = fmt.Sprintf("%d", loc.VMID)
+				result.Transport = "pct_exec"
+				if nodeAgentID != "" {
+					result.AgentID = nodeAgentID
+					for _, agent := range agents {
+						if agent.AgentID == nodeAgentID {
+							result.AgentHostname = agent.Hostname
+							break
+						}
+					}
+				}
+				return result
+
+			case "vm":
+				// VM - route through Proxmox node agent via qm guest exec
+				nodeAgentID := e.findAgentForNode(loc.Node)
+				result.ResolvedKind = "vm"
+				result.ResolvedNode = loc.Node
+				result.TargetType = "vm"
+				result.TargetID = fmt.Sprintf("%d", loc.VMID)
+				result.Transport = "qm_guest_exec"
+				if nodeAgentID != "" {
+					result.AgentID = nodeAgentID
+					for _, agent := range agents {
+						if agent.AgentID == nodeAgentID {
+							result.AgentHostname = agent.Hostname
+							break
+						}
+					}
+				}
+				return result
+
+			case "docker", "dockerhost":
+				// Docker container or Docker host
+				result.ResolvedKind = loc.ResourceType
+				result.ResolvedNode = loc.Node
+
+				if loc.DockerHostType == "lxc" {
+					nodeAgentID := e.findAgentForNode(loc.Node)
+					result.TargetType = "container"
+					result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
+					result.Transport = "pct_exec"
+					if nodeAgentID != "" {
+						result.AgentID = nodeAgentID
+						for _, agent := range agents {
+							if agent.AgentID == nodeAgentID {
+								result.AgentHostname = agent.Hostname
+								break
+							}
+						}
+					}
+					return result
+				}
+				if loc.DockerHostType == "vm" {
+					nodeAgentID := e.findAgentForNode(loc.Node)
+					result.TargetType = "vm"
+					result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
+					result.Transport = "qm_guest_exec"
+					if nodeAgentID != "" {
+						result.AgentID = nodeAgentID
+						for _, agent := range agents {
+							if agent.AgentID == nodeAgentID {
+								result.AgentHostname = agent.Hostname
+								break
+							}
+						}
+					}
+					return result
+				}
+				// Standalone Docker host - find agent directly
+				for _, agent := range agents {
+					if agent.Hostname == loc.TargetHost || agent.AgentID == loc.TargetHost {
+						result.AgentID = agent.AgentID
+						result.AgentHostname = agent.Hostname
+						return result
+					}
+				}
 			}
 		}
 	}
 
-	if targetHost == "" && len(agents) > 1 {
-		return ""
+	// STEP 2: FALLBACK — agent hostname match.
+	// Only used when the state doesn't know about this resource at all.
+	// This handles standalone hosts without Proxmox topology.
+	for _, agent := range agents {
+		if agent.Hostname == targetHost || agent.AgentID == targetHost {
+			result.AgentID = agent.AgentID
+			result.AgentHostname = agent.Hostname
+			result.ResolvedKind = "host"
+			return result
+		}
 	}
 
-	return agents[0].AgentID
+	return result
+}
+
+// resolveTargetForCommand resolves a target_host to the correct agent and routing info.
+// Uses the authoritative ResolveResource function from models.StateSnapshot.
+// Returns: agentID, targetType ("host", "container", or "vm"), targetID (vmid for LXC/VM)
+//
+// CRITICAL ORDERING: Same as resolveTargetForCommandFull — topology first, agent fallback second.
+func (e *PulseToolExecutor) resolveTargetForCommand(targetHost string) (agentID string, targetType string, targetID string) {
+	// Delegate to the full resolver and extract the triple
+	r := e.resolveTargetForCommandFull(targetHost)
+	return r.AgentID, r.TargetType, r.TargetID
+}
+
+func (e *PulseToolExecutor) findAgentForCommand(runOnHost bool, targetHost string) string {
+	agentID, _, _ := e.resolveTargetForCommand(targetHost)
+	return agentID
 }
 
 func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
@@ -625,6 +877,96 @@ func (e *PulseToolExecutor) getAgentHostnameForDockerHost(dockerHost *models.Doc
 
 	// Fall back to the docker host's hostname
 	return dockerHost.Hostname
+}
+
+// resolveDockerHostRoutingFull resolves a Docker host to the correct agent and routing info
+// with full provenance metadata. If the Docker host is actually an LXC or VM, it routes
+// through the Proxmox host agent with the correct TargetType and TargetID so commands
+// are executed inside the guest.
+func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.DockerHost) CommandRoutingResult {
+	result := CommandRoutingResult{
+		TargetType: "host",
+		Transport:  "direct",
+	}
+
+	if e.agentServer == nil {
+		return result
+	}
+
+	// STEP 1: Check topology — is the Docker host actually an LXC or VM?
+	if e.stateProvider != nil {
+		state := e.stateProvider.GetState()
+
+		// Check LXCs
+		for _, ct := range state.Containers {
+			if ct.Name == dockerHost.Hostname {
+				result.ResolvedKind = "lxc"
+				result.ResolvedNode = ct.Node
+				result.TargetType = "container"
+				result.TargetID = fmt.Sprintf("%d", ct.VMID)
+				result.Transport = "pct_exec"
+				nodeAgentID := e.findAgentForNode(ct.Node)
+				if nodeAgentID != "" {
+					result.AgentID = nodeAgentID
+					result.AgentHostname = ct.Node
+					log.Debug().
+						Str("docker_host", dockerHost.Hostname).
+						Str("node", ct.Node).
+						Int("vmid", ct.VMID).
+						Str("agent", nodeAgentID).
+						Str("transport", result.Transport).
+						Msg("Resolved Docker host as LXC, routing through Proxmox agent")
+				}
+				return result
+			}
+		}
+
+		// Check VMs
+		for _, vm := range state.VMs {
+			if vm.Name == dockerHost.Hostname {
+				result.ResolvedKind = "vm"
+				result.ResolvedNode = vm.Node
+				result.TargetType = "vm"
+				result.TargetID = fmt.Sprintf("%d", vm.VMID)
+				result.Transport = "qm_guest_exec"
+				nodeAgentID := e.findAgentForNode(vm.Node)
+				if nodeAgentID != "" {
+					result.AgentID = nodeAgentID
+					result.AgentHostname = vm.Node
+					log.Debug().
+						Str("docker_host", dockerHost.Hostname).
+						Str("node", vm.Node).
+						Int("vmid", vm.VMID).
+						Str("agent", nodeAgentID).
+						Str("transport", result.Transport).
+						Msg("Resolved Docker host as VM, routing through Proxmox agent")
+				}
+				return result
+			}
+		}
+	}
+
+	// STEP 2: Docker host is not an LXC/VM — use direct agent routing
+	agentID := e.findAgentForDockerHost(dockerHost)
+	result.AgentID = agentID
+	result.ResolvedKind = "dockerhost"
+	if agentID != "" {
+		// Try to get agent hostname
+		agents := e.agentServer.GetConnectedAgents()
+		for _, a := range agents {
+			if a.AgentID == agentID {
+				result.AgentHostname = a.Hostname
+				break
+			}
+		}
+	}
+	return result
+}
+
+// resolveDockerHostRouting delegates to resolveDockerHostRoutingFull for backwards compatibility.
+func (e *PulseToolExecutor) resolveDockerHostRouting(dockerHost *models.DockerHost) (agentID string, targetType string, targetID string) {
+	r := e.resolveDockerHostRoutingFull(dockerHost)
+	return r.AgentID, r.TargetType, r.TargetID
 }
 
 // createApprovalRecord creates an approval record in the store and returns the approval ID.

@@ -20,7 +20,10 @@ func TestExecuteGetDiskHealth(t *testing.T) {
 	}
 	diskHealthProv.On("GetHosts").Return(expectedHosts)
 
-	result, err := exec.ExecuteTool(context.Background(), "pulse_get_disk_health", map[string]interface{}{})
+	// Use consolidated pulse_storage tool with type: "disk_health"
+	result, err := exec.ExecuteTool(context.Background(), "pulse_storage", map[string]interface{}{
+		"type": "disk_health",
+	})
 	assert.NoError(t, err)
 	assert.False(t, result.IsError)
 }
@@ -41,7 +44,10 @@ func TestExecuteGetTemperatures(t *testing.T) {
 	}
 	stateProv.On("GetState").Return(state)
 
-	result, err := exec.ExecuteTool(context.Background(), "pulse_get_temperatures", map[string]interface{}{})
+	// Use consolidated pulse_metrics tool with type: "temperatures"
+	result, err := exec.ExecuteTool(context.Background(), "pulse_metrics", map[string]interface{}{
+		"type": "temperatures",
+	})
 	assert.NoError(t, err)
 	assert.False(t, result.IsError)
 }

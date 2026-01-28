@@ -3,79 +3,11 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"net"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
-
-func TestExecuteGetCapabilities(t *testing.T) {
-	executor := NewPulseToolExecutor(ExecutorConfig{
-		StateProvider: &mockStateProvider{},
-		AgentServer: &mockAgentServer{
-			agents: []agentexec.ConnectedAgent{
-				{Hostname: "host1", Version: "1.0", Platform: "linux"},
-			},
-		},
-		MetricsHistory:   &mockMetricsHistoryProvider{},
-		BaselineProvider: &BaselineMCPAdapter{},
-		PatternProvider:  &PatternMCPAdapter{},
-		AlertProvider:    &mockAlertProvider{},
-		FindingsProvider: &mockFindingsProvider{},
-		ControlLevel:     ControlLevelControlled,
-		ProtectedGuests:  []string{"100"},
-	})
-
-	result, err := executor.executeGetCapabilities(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var response CapabilitiesResponse
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if response.ControlLevel != string(ControlLevelControlled) || response.ConnectedAgents != 1 {
-		t.Fatalf("unexpected response: %+v", response)
-	}
-	if !response.Features.Control || !response.Features.MetricsHistory {
-		t.Fatalf("unexpected features: %+v", response.Features)
-	}
-}
-
-func TestExecuteGetURLContent(t *testing.T) {
-	t.Setenv("PULSE_AI_ALLOW_LOOPBACK", "true")
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Test", "ok")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("hello"))
-	}))
-	defer server.Close()
-
-	executor := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{}})
-
-	if result, _ := executor.executeGetURLContent(context.Background(), map[string]interface{}{}); !result.IsError {
-		t.Fatal("expected error when url missing")
-	}
-
-	result, err := executor.executeGetURLContent(context.Background(), map[string]interface{}{
-		"url": server.URL,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	var response URLFetchResponse
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if response.StatusCode != http.StatusOK || response.Headers["X-Test"] != "ok" {
-		t.Fatalf("unexpected response: %+v", response)
-	}
-}
 
 func TestExecuteListInfrastructureAndTopology(t *testing.T) {
 	state := models.StateSnapshot{
@@ -261,34 +193,7 @@ func TestExecuteSearchResources_Errors(t *testing.T) {
 	}
 }
 
-func TestExecuteSetResourceURLAndGetResource(t *testing.T) {
-	executor := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{}})
-
-	if result, _ := executor.executeSetResourceURL(context.Background(), map[string]interface{}{}); !result.IsError {
-		t.Fatal("expected error when resource_type missing")
-	}
-
-	updater := &fakeMetadataUpdater{}
-	executor.metadataUpdater = updater
-	result, err := executor.executeSetResourceURL(context.Background(), map[string]interface{}{
-		"resource_type": "guest",
-		"resource_id":   "100",
-		"url":           "http://example",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(updater.resourceArgs) != 3 || updater.resourceArgs[2] != "http://example" {
-		t.Fatalf("unexpected updater args: %+v", updater.resourceArgs)
-	}
-	var setResp map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &setResp); err != nil {
-		t.Fatalf("decode set response: %v", err)
-	}
-	if setResp["action"] != "set" {
-		t.Fatalf("unexpected set response: %+v", setResp)
-	}
-
+func TestExecuteGetResource(t *testing.T) {
 	state := models.StateSnapshot{
 		VMs:        []models.VM{{ID: "vm1", VMID: 100, Name: "vm1", Status: "running", Node: "node1"}},
 		Containers: []models.Container{{ID: "ct1", VMID: 200, Name: "ct1", Status: "running", Node: "node1"}},
@@ -302,7 +207,9 @@ func TestExecuteSetResourceURLAndGetResource(t *testing.T) {
 			}},
 		}},
 	}
-	executor.stateProvider = &mockStateProvider{state: state}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+	})
 
 	resource, _ := executor.executeGetResource(context.Background(), map[string]interface{}{
 		"resource_type": "vm",
@@ -379,32 +286,6 @@ func TestExecuteGetResource_DockerDetails(t *testing.T) {
 	}
 }
 
-func TestExecuteSetResourceURL_ClearAndMissingUpdater(t *testing.T) {
-	executor := NewPulseToolExecutor(ExecutorConfig{})
-	result, _ := executor.executeSetResourceURL(context.Background(), map[string]interface{}{
-		"resource_type": "vm",
-		"resource_id":   "100",
-	})
-	if result.Content[0].Text != "Metadata updater not available." {
-		t.Fatalf("unexpected response: %s", result.Content[0].Text)
-	}
-
-	updater := &fakeMetadataUpdater{}
-	executor.metadataUpdater = updater
-	result, _ = executor.executeSetResourceURL(context.Background(), map[string]interface{}{
-		"resource_type": "vm",
-		"resource_id":   "100",
-		"url":           "",
-	})
-	var resp map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp["action"] != "cleared" {
-		t.Fatalf("unexpected response: %+v", resp)
-	}
-}
-
 func TestIntArg(t *testing.T) {
 	if got := intArg(map[string]interface{}{}, "limit", 10); got != 10 {
 		t.Fatalf("unexpected default: %d", got)
@@ -412,95 +293,6 @@ func TestIntArg(t *testing.T) {
 	if got := intArg(map[string]interface{}{"limit": float64(5)}, "limit", 10); got != 5 {
 		t.Fatalf("unexpected value: %d", got)
 	}
-}
-
-func TestParseAndValidateFetchURL(t *testing.T) {
-	t.Run("Empty", func(t *testing.T) {
-		if _, err := parseAndValidateFetchURL(context.Background(), ""); err == nil {
-			t.Fatal("expected error for empty URL")
-		}
-	})
-
-	t.Run("InvalidURL", func(t *testing.T) {
-		if _, err := parseAndValidateFetchURL(context.Background(), "http://%"); err == nil {
-			t.Fatal("expected error for invalid URL")
-		}
-	})
-
-	t.Run("NotAbsolute", func(t *testing.T) {
-		if _, err := parseAndValidateFetchURL(context.Background(), "example.com"); err == nil {
-			t.Fatal("expected error for relative URL")
-		}
-	})
-
-	t.Run("BadScheme", func(t *testing.T) {
-		if _, err := parseAndValidateFetchURL(context.Background(), "ftp://example.com"); err == nil {
-			t.Fatal("expected error for scheme")
-		}
-	})
-
-	t.Run("Credentials", func(t *testing.T) {
-		if _, err := parseAndValidateFetchURL(context.Background(), "http://user:pass@example.com"); err == nil {
-			t.Fatal("expected error for credentials")
-		}
-	})
-
-	t.Run("Fragment", func(t *testing.T) {
-		if _, err := parseAndValidateFetchURL(context.Background(), "https://example.com/#frag"); err == nil {
-			t.Fatal("expected error for fragment")
-		}
-	})
-
-	t.Run("MissingHost", func(t *testing.T) {
-		if _, err := parseAndValidateFetchURL(context.Background(), "http:///"); err == nil {
-			t.Fatal("expected error for missing host")
-		}
-	})
-
-	t.Run("BlockedHost", func(t *testing.T) {
-		if _, err := parseAndValidateFetchURL(context.Background(), "http://localhost"); err == nil {
-			t.Fatal("expected error for blocked host")
-		}
-	})
-
-	t.Run("BlockedIP", func(t *testing.T) {
-		if _, err := parseAndValidateFetchURL(context.Background(), "http://127.0.0.1"); err == nil {
-			t.Fatal("expected error for blocked IP")
-		}
-	})
-
-	t.Run("AllowLoopback", func(t *testing.T) {
-		t.Setenv("PULSE_AI_ALLOW_LOOPBACK", "true")
-		parsed, err := parseAndValidateFetchURL(context.Background(), "http://127.0.0.1:8080")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if parsed.Hostname() != "127.0.0.1" {
-			t.Fatalf("unexpected host: %s", parsed.Hostname())
-		}
-	})
-}
-
-func TestIsBlockedFetchIP(t *testing.T) {
-	if !isBlockedFetchIP(nil) {
-		t.Fatal("expected nil IP to be blocked")
-	}
-	if !isBlockedFetchIP(net.ParseIP("0.0.0.0")) {
-		t.Fatal("expected unspecified IP to be blocked")
-	}
-	if !isBlockedFetchIP(net.ParseIP("169.254.1.1")) {
-		t.Fatal("expected link-local IP to be blocked")
-	}
-	if isBlockedFetchIP(net.ParseIP("8.8.8.8")) {
-		t.Fatal("expected global IP to be allowed")
-	}
-
-	t.Run("LoopbackAllowed", func(t *testing.T) {
-		t.Setenv("PULSE_AI_ALLOW_LOOPBACK", "true")
-		if isBlockedFetchIP(net.ParseIP("127.0.0.1")) {
-			t.Fatal("expected loopback IP to be allowed")
-		}
-	})
 }
 
 func TestExecuteListInfrastructurePaginationAndDockerFilter(t *testing.T) {
@@ -643,22 +435,5 @@ func TestExecuteGetResource_MissingArgs(t *testing.T) {
 	})
 	if !result.IsError {
 		t.Fatal("expected error for missing resource_id")
-	}
-}
-
-func TestExecuteGetURLContent_InvalidURL(t *testing.T) {
-	executor := NewPulseToolExecutor(ExecutorConfig{})
-	result, err := executor.executeGetURLContent(context.Background(), map[string]interface{}{
-		"url": "ftp://example.com",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	var response URLFetchResponse
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if response.Error == "" {
-		t.Fatalf("expected error response: %+v", response)
 	}
 }

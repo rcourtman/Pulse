@@ -147,14 +147,16 @@ type ResourceSearchResponse struct {
 
 // ResourceMatch is a compact match result for pulse_search_resources
 type ResourceMatch struct {
-	Type   string `json:"type"` // "node", "vm", "container", "docker", "docker_host"
-	ID     string `json:"id,omitempty"`
-	Name   string `json:"name"`
-	Status string `json:"status,omitempty"`
-	Node   string `json:"node,omitempty"`
-	Host   string `json:"host,omitempty"`
-	VMID   int    `json:"vmid,omitempty"`
-	Image  string `json:"image,omitempty"`
+	Type           string `json:"type"` // "node", "vm", "container", "docker", "docker_host"
+	ID             string `json:"id,omitempty"`
+	Name           string `json:"name"`
+	Status         string `json:"status,omitempty"`
+	Node           string `json:"node,omitempty"`           // Proxmox node this resource is on
+	NodeHasAgent   bool   `json:"node_has_agent,omitempty"` // True if the Proxmox node has a connected agent
+	Host           string `json:"host,omitempty"`           // Docker host for docker containers
+	VMID           int    `json:"vmid,omitempty"`
+	Image          string `json:"image,omitempty"`
+	AgentConnected bool   `json:"agent_connected,omitempty"` // True if this specific resource has a connected agent
 }
 
 // NodeSummary is a summarized node for list responses
@@ -324,6 +326,35 @@ type ResourceResponse struct {
 	UpdateAvailable bool              `json:"update_available,omitempty"`
 }
 
+// GuestConfigResponse is returned by pulse_get_guest_config.
+type GuestConfigResponse struct {
+	GuestType string             `json:"guest_type"`
+	VMID      int                `json:"vmid"`
+	Name      string             `json:"name,omitempty"`
+	Node      string             `json:"node,omitempty"`
+	Instance  string             `json:"instance,omitempty"`
+	Hostname  string             `json:"hostname,omitempty"`
+	OSType    string             `json:"os_type,omitempty"`
+	Onboot    *bool              `json:"onboot,omitempty"`
+	RootFS    string             `json:"rootfs,omitempty"`
+	Mounts    []GuestMountConfig `json:"mounts,omitempty"`
+	Disks     []GuestDiskConfig  `json:"disks,omitempty"`
+	Raw       map[string]string  `json:"raw,omitempty"`
+}
+
+// GuestMountConfig summarizes a container mount.
+type GuestMountConfig struct {
+	Key        string `json:"key"`
+	Source     string `json:"source"`
+	Mountpoint string `json:"mountpoint,omitempty"`
+}
+
+// GuestDiskConfig summarizes a VM disk definition.
+type GuestDiskConfig struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 // ResourceCPU describes CPU usage
 type ResourceCPU struct {
 	Percent float64 `json:"percent"`
@@ -476,12 +507,37 @@ type StorageResponse struct {
 	Pagination   *PaginationInfo      `json:"pagination,omitempty"`
 }
 
+// StorageConfigResponse is returned by pulse_get_storage_config
+type StorageConfigResponse struct {
+	Storages []StorageConfigSummary `json:"storages,omitempty"`
+}
+
+// StorageConfigSummary is a summarized storage config entry
+type StorageConfigSummary struct {
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Instance string   `json:"instance,omitempty"`
+	Type     string   `json:"type,omitempty"`
+	Content  string   `json:"content,omitempty"`
+	Nodes    []string `json:"nodes,omitempty"`
+	Path     string   `json:"path,omitempty"`
+	Shared   bool     `json:"shared"`
+	Enabled  bool     `json:"enabled"`
+	Active   bool     `json:"active"`
+}
+
 // StoragePoolSummary is a summarized storage pool
 type StoragePoolSummary struct {
 	ID           string          `json:"id"`
 	Name         string          `json:"name"`
+	Node         string          `json:"node,omitempty"`
+	Instance     string          `json:"instance,omitempty"`
+	Nodes        []string        `json:"nodes,omitempty"`
 	Type         string          `json:"type"`
 	Status       string          `json:"status"`
+	Enabled      bool            `json:"enabled"`
+	Active       bool            `json:"active"`
+	Path         string          `json:"path,omitempty"`
 	UsagePercent float64         `json:"usage_percent"`
 	UsedGB       float64         `json:"used_gb"`
 	TotalGB      float64         `json:"total_gb"`

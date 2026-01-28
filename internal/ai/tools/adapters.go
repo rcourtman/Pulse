@@ -1,11 +1,15 @@
 package tools
 
 import (
+	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 // StateGetter provides access to the current infrastructure state
@@ -86,6 +90,128 @@ func (a *StorageMCPAdapter) GetCephClusters() []models.CephCluster {
 	}
 	state := a.stateGetter.GetState()
 	return state.CephClusters
+}
+
+// StorageConfigSource provides storage configuration data with context.
+type StorageConfigSource interface {
+	GetStorageConfig(ctx context.Context, instance string) (map[string][]proxmox.Storage, error)
+}
+
+// StorageConfigMCPAdapter adapts monitoring storage config access to MCP StorageConfigProvider interface.
+type StorageConfigMCPAdapter struct {
+	source  StorageConfigSource
+	timeout time.Duration
+}
+
+// NewStorageConfigMCPAdapter creates a new adapter for storage config data.
+func NewStorageConfigMCPAdapter(source StorageConfigSource) *StorageConfigMCPAdapter {
+	if source == nil {
+		return nil
+	}
+	return &StorageConfigMCPAdapter{
+		source:  source,
+		timeout: 5 * time.Second,
+	}
+}
+
+// GetStorageConfig implements mcp.StorageConfigProvider.
+func (a *StorageConfigMCPAdapter) GetStorageConfig(instance string) ([]StorageConfigSummary, error) {
+	if a == nil || a.source == nil {
+		return nil, fmt.Errorf("storage config source not available")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), a.timeout)
+	defer cancel()
+
+	storageByInstance, err := a.source.GetStorageConfig(ctx, instance)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]StorageConfigSummary, 0)
+	seen := make(map[string]bool)
+	for inst, storages := range storageByInstance {
+		for _, storage := range storages {
+			key := inst + ":" + storage.Storage
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			entry := StorageConfigSummary{
+				ID:       storage.Storage,
+				Name:     storage.Storage,
+				Instance: inst,
+				Type:     storage.Type,
+				Content:  storage.Content,
+				Nodes:    parseStorageConfigNodes(storage.Nodes),
+				Path:     storage.Path,
+				Shared:   storage.Shared == 1,
+				Enabled:  storage.Enabled == 1,
+				Active:   storage.Active == 1,
+			}
+			result = append(result, entry)
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Instance != result[j].Instance {
+			return result[i].Instance < result[j].Instance
+		}
+		return result[i].ID < result[j].ID
+	})
+
+	return result, nil
+}
+
+func parseStorageConfigNodes(nodes string) []string {
+	nodes = strings.TrimSpace(nodes)
+	if nodes == "" {
+		return nil
+	}
+	parts := strings.Split(nodes, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		node := strings.TrimSpace(part)
+		if node == "" {
+			continue
+		}
+		result = append(result, node)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// GuestConfigSource provides guest configuration data with context.
+type GuestConfigSource interface {
+	GetGuestConfig(ctx context.Context, guestType, instance, node string, vmid int) (map[string]interface{}, error)
+}
+
+// GuestConfigMCPAdapter adapts monitoring config access to MCP GuestConfigProvider interface.
+type GuestConfigMCPAdapter struct {
+	source  GuestConfigSource
+	timeout time.Duration
+}
+
+// NewGuestConfigMCPAdapter creates a new adapter for guest config data.
+func NewGuestConfigMCPAdapter(source GuestConfigSource) *GuestConfigMCPAdapter {
+	if source == nil {
+		return nil
+	}
+	return &GuestConfigMCPAdapter{
+		source:  source,
+		timeout: 5 * time.Second,
+	}
+}
+
+// GetGuestConfig implements mcp.GuestConfigProvider.
+func (a *GuestConfigMCPAdapter) GetGuestConfig(guestType, instance, node string, vmid int) (map[string]interface{}, error) {
+	if a == nil || a.source == nil {
+		return nil, fmt.Errorf("guest config source not available")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), a.timeout)
+	defer cancel()
+	return a.source.GetGuestConfig(ctx, guestType, instance, node, vmid)
 }
 
 // BackupMCPAdapter adapts the monitor state to MCP BackupProvider interface
@@ -746,6 +872,8 @@ type DiscoverySource interface {
 	ListDiscoveriesByType(resourceType string) ([]DiscoverySourceData, error)
 	ListDiscoveriesByHost(hostID string) ([]DiscoverySourceData, error)
 	FormatForAIContext(discoveries []DiscoverySourceData) string
+	// TriggerDiscovery initiates discovery for a resource, returning discovered data
+	TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (DiscoverySourceData, error)
 }
 
 // DiscoverySourceData represents discovery data from the source
@@ -763,6 +891,9 @@ type DiscoverySourceData struct {
 	Facts          []DiscoverySourceFact
 	ConfigPaths    []string
 	DataPaths      []string
+	LogPaths       []string
+	Ports          []DiscoverySourcePort
+	DockerMounts   []DiscoverySourceDockerMount // Docker bind mounts (for LXCs/VMs running Docker)
 	UserNotes      string
 	Confidence     float64
 	AIReasoning    string
@@ -770,15 +901,33 @@ type DiscoverySourceData struct {
 	UpdatedAt      time.Time
 }
 
-// DiscoverySourceFact represents a fact from the source
-type DiscoverySourceFact struct {
-	Category string
-	Key      string
-	Value    string
-	Source   string
+// DiscoverySourceDockerMount represents a Docker bind mount from the source
+type DiscoverySourceDockerMount struct {
+	ContainerName string // Docker container name
+	Source        string // Host path (where to actually write files)
+	Destination   string // Container path (what the service sees)
+	Type          string // Mount type: bind, volume, tmpfs
+	ReadOnly      bool   // Whether mount is read-only
 }
 
-// DiscoveryMCPAdapter adapts aidiscovery.Service to MCP DiscoveryProvider interface
+// DiscoverySourcePort represents a port from the source
+type DiscoverySourcePort struct {
+	Port     int
+	Protocol string
+	Process  string
+	Address  string
+}
+
+// DiscoverySourceFact represents a fact from the source
+type DiscoverySourceFact struct {
+	Category   string
+	Key        string
+	Value      string
+	Source     string
+	Confidence float64 // 0-1 confidence for this fact
+}
+
+// DiscoveryMCPAdapter adapts servicediscovery.Service to MCP DiscoveryProvider interface
 type DiscoveryMCPAdapter struct {
 	source DiscoverySource
 }
@@ -876,10 +1025,30 @@ func (a *DiscoveryMCPAdapter) FormatForAIContext(discoveries []*ResourceDiscover
 		facts := make([]DiscoverySourceFact, 0, len(d.Facts))
 		for _, f := range d.Facts {
 			facts = append(facts, DiscoverySourceFact{
-				Category: f.Category,
-				Key:      f.Key,
-				Value:    f.Value,
-				Source:   f.Source,
+				Category:   f.Category,
+				Key:        f.Key,
+				Value:      f.Value,
+				Source:     f.Source,
+				Confidence: f.Confidence,
+			})
+		}
+		ports := make([]DiscoverySourcePort, 0, len(d.Ports))
+		for _, p := range d.Ports {
+			ports = append(ports, DiscoverySourcePort{
+				Port:     p.Port,
+				Protocol: p.Protocol,
+				Process:  p.Process,
+				Address:  p.Address,
+			})
+		}
+		dockerMounts := make([]DiscoverySourceDockerMount, 0, len(d.BindMounts))
+		for _, m := range d.BindMounts {
+			dockerMounts = append(dockerMounts, DiscoverySourceDockerMount{
+				ContainerName: m.ContainerName,
+				Source:        m.Source,
+				Destination:   m.Destination,
+				Type:          m.Type,
+				ReadOnly:      m.ReadOnly,
 			})
 		}
 		sourceData = append(sourceData, DiscoverySourceData{
@@ -896,6 +1065,8 @@ func (a *DiscoveryMCPAdapter) FormatForAIContext(discoveries []*ResourceDiscover
 			Facts:          facts,
 			ConfigPaths:    d.ConfigPaths,
 			DataPaths:      d.DataPaths,
+			Ports:          ports,
+			DockerMounts:   dockerMounts,
 			UserNotes:      d.UserNotes,
 			Confidence:     d.Confidence,
 			AIReasoning:    d.AIReasoning,
@@ -907,6 +1078,20 @@ func (a *DiscoveryMCPAdapter) FormatForAIContext(discoveries []*ResourceDiscover
 	return a.source.FormatForAIContext(sourceData)
 }
 
+// TriggerDiscovery implements tools.DiscoveryProvider
+func (a *DiscoveryMCPAdapter) TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error) {
+	if a.source == nil {
+		return nil, fmt.Errorf("discovery source not available")
+	}
+
+	data, err := a.source.TriggerDiscovery(ctx, resourceType, hostID, resourceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return a.convertToInfo(data), nil
+}
+
 func (a *DiscoveryMCPAdapter) convertToInfo(data DiscoverySourceData) *ResourceDiscoveryInfo {
 	if data.ID == "" {
 		return nil
@@ -915,10 +1100,33 @@ func (a *DiscoveryMCPAdapter) convertToInfo(data DiscoverySourceData) *ResourceD
 	facts := make([]DiscoveryFact, 0, len(data.Facts))
 	for _, f := range data.Facts {
 		facts = append(facts, DiscoveryFact{
-			Category: f.Category,
-			Key:      f.Key,
-			Value:    f.Value,
-			Source:   f.Source,
+			Category:   f.Category,
+			Key:        f.Key,
+			Value:      f.Value,
+			Source:     f.Source,
+			Confidence: f.Confidence,
+		})
+	}
+
+	ports := make([]DiscoveryPortInfo, 0, len(data.Ports))
+	for _, p := range data.Ports {
+		ports = append(ports, DiscoveryPortInfo{
+			Port:     p.Port,
+			Protocol: p.Protocol,
+			Process:  p.Process,
+			Address:  p.Address,
+		})
+	}
+
+	// Convert DockerMounts to BindMounts
+	bindMounts := make([]DiscoveryMount, 0, len(data.DockerMounts))
+	for _, m := range data.DockerMounts {
+		bindMounts = append(bindMounts, DiscoveryMount{
+			ContainerName: m.ContainerName,
+			Source:        m.Source,
+			Destination:   m.Destination,
+			Type:          m.Type,
+			ReadOnly:      m.ReadOnly,
 		})
 	}
 
@@ -936,6 +1144,9 @@ func (a *DiscoveryMCPAdapter) convertToInfo(data DiscoverySourceData) *ResourceD
 		Facts:          facts,
 		ConfigPaths:    data.ConfigPaths,
 		DataPaths:      data.DataPaths,
+		LogPaths:       data.LogPaths,
+		Ports:          ports,
+		BindMounts:     bindMounts,
 		UserNotes:      data.UserNotes,
 		Confidence:     data.Confidence,
 		AIReasoning:    data.AIReasoning,

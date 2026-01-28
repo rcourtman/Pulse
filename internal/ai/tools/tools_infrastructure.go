@@ -65,6 +65,35 @@ func (e *PulseToolExecutor) registerInfrastructureTools() {
 
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
+			Name: "pulse_get_storage_config",
+			Description: `Get Proxmox storage configuration (cluster storage.cfg), including nodes, path, and enabled/active flags.
+
+Use when: You need to confirm if a storage pool is configured for specific nodes or if it is disabled.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"storage_id": {
+						Type:        "string",
+						Description: "Optional: filter by storage ID (e.g. 'local-lvm')",
+					},
+					"instance": {
+						Type:        "string",
+						Description: "Optional: filter by Proxmox instance or cluster name",
+					},
+					"node": {
+						Type:        "string",
+						Description: "Optional: filter to storages that include this node",
+					},
+				},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeGetStorageConfig(ctx, args)
+		},
+	})
+
+	e.registry.Register(RegisteredTool{
+		Definition: Tool{
 			Name:        "pulse_get_disk_health",
 			Description: "Get disk health information including SMART data, RAID array status, and Ceph cluster health from host agents.",
 			InputSchema: InputSchema{
@@ -814,8 +843,14 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 		pool := StoragePoolSummary{
 			ID:           s.ID,
 			Name:         s.Name,
+			Node:         s.Node,
+			Instance:     s.Instance,
+			Nodes:        s.Nodes,
 			Type:         s.Type,
 			Status:       s.Status,
+			Enabled:      s.Enabled,
+			Active:       s.Active,
+			Path:         s.Path,
 			UsagePercent: s.Usage * 100,
 			UsedGB:       float64(s.Used) / (1024 * 1024 * 1024),
 			TotalGB:      float64(s.Total) / (1024 * 1024 * 1024),
@@ -865,6 +900,54 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 	}
 
 	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) executeGetStorageConfig(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	storageID, _ := args["storage_id"].(string)
+	instance, _ := args["instance"].(string)
+	node, _ := args["node"].(string)
+
+	storageID = strings.TrimSpace(storageID)
+	instance = strings.TrimSpace(instance)
+	node = strings.TrimSpace(node)
+
+	if e.storageConfigProvider == nil {
+		return NewTextResult("Storage configuration not available."), nil
+	}
+
+	configs, err := e.storageConfigProvider.GetStorageConfig(instance)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	response := StorageConfigResponse{}
+	for _, cfg := range configs {
+		if storageID != "" && !strings.EqualFold(cfg.ID, storageID) && !strings.EqualFold(cfg.Name, storageID) {
+			continue
+		}
+		if instance != "" && !strings.EqualFold(cfg.Instance, instance) {
+			continue
+		}
+		if node != "" && !storageConfigHasNode(cfg.Nodes, node) {
+			continue
+		}
+		response.Storages = append(response.Storages, cfg)
+	}
+
+	if response.Storages == nil {
+		response.Storages = []StorageConfigSummary{}
+	}
+
+	return NewJSONResult(response), nil
+}
+
+func storageConfigHasNode(nodes []string, node string) bool {
+	for _, n := range nodes {
+		if strings.EqualFold(strings.TrimSpace(n), node) {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string]interface{}) (CallToolResult, error) {
