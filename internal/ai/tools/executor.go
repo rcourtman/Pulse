@@ -68,6 +68,46 @@ type FindingsProvider interface {
 	GetDismissedFindings() []Finding
 }
 
+// PatrolFindingCreator is set on the executor during a patrol run to allow
+// patrol-specific tools (patrol_report_finding, patrol_resolve_finding,
+// patrol_get_findings) to create, resolve, and query findings.
+// Outside of a patrol run this is nil, and the tools return a clear error.
+type PatrolFindingCreator interface {
+	CreateFinding(input PatrolFindingInput) (findingID string, isNew bool, err error)
+	ResolveFinding(findingID, reason string) error
+	GetActiveFindings(resourceID, minSeverity string) []PatrolFindingInfo
+}
+
+// PatrolFindingInput contains the structured parameters the LLM passes
+// to the patrol_report_finding tool.
+type PatrolFindingInput struct {
+	Key            string `json:"key"`
+	Severity       string `json:"severity"`
+	Category       string `json:"category"`
+	ResourceID     string `json:"resource_id"`
+	ResourceName   string `json:"resource_name"`
+	ResourceType   string `json:"resource_type"`
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	Recommendation string `json:"recommendation,omitempty"`
+	Evidence       string `json:"evidence,omitempty"`
+}
+
+// PatrolFindingInfo is a lightweight view of a finding returned by
+// PatrolFindingCreator.GetActiveFindings.
+type PatrolFindingInfo struct {
+	ID           string `json:"id"`
+	Key          string `json:"key,omitempty"`
+	Severity     string `json:"severity"`
+	Category     string `json:"category"`
+	ResourceID   string `json:"resource_id"`
+	ResourceName string `json:"resource_name"`
+	ResourceType string `json:"resource_type"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	DetectedAt   string `json:"detected_at"`
+}
+
 // BackupProvider provides backup information
 type BackupProvider interface {
 	GetBackups() models.Backups
@@ -361,6 +401,10 @@ type PulseToolExecutor struct {
 	// This is optional - if nil, no telemetry is recorded
 	telemetryCallback TelemetryCallback
 
+	// Patrol finding creator — set only during a patrol run, nil otherwise.
+	// Enables patrol_report_finding, patrol_resolve_finding, patrol_get_findings tools.
+	patrolFindingCreator PatrolFindingCreator
+
 	// Tool registry
 	registry *ToolRegistry
 }
@@ -542,6 +586,17 @@ func (e *PulseToolExecutor) SetTelemetryCallback(cb TelemetryCallback) {
 	e.telemetryCallback = cb
 }
 
+// SetPatrolFindingCreator sets (or clears) the patrol finding creator.
+// This must be set before a patrol run and cleared after.
+func (e *PulseToolExecutor) SetPatrolFindingCreator(creator PatrolFindingCreator) {
+	e.patrolFindingCreator = creator
+}
+
+// GetPatrolFindingCreator returns the current patrol finding creator (may be nil).
+func (e *PulseToolExecutor) GetPatrolFindingCreator() PatrolFindingCreator {
+	return e.patrolFindingCreator
+}
+
 // GetResolvedContext returns the current resolved context (may be nil)
 func (e *PulseToolExecutor) GetResolvedContext() ResolvedContextProvider {
 	return e.resolvedContext
@@ -590,6 +645,9 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 		return e.knowledgeStoreProvider != nil || e.incidentRecorderProvider != nil || e.eventCorrelatorProvider != nil || e.topologyProvider != nil
 	case "pulse_pmg":
 		return e.stateProvider != nil
+	case "patrol_report_finding", "patrol_resolve_finding", "patrol_get_findings":
+		// Always available when registered; handler checks patrolFindingCreator at runtime
+		return e.patrolFindingCreator != nil
 	default:
 		return e.stateProvider != nil
 	}
@@ -646,4 +704,8 @@ func (e *PulseToolExecutor) registerTools() {
 
 	// pulse_pmg - status, mail_stats, queues, spam
 	e.registerPMGTools()
+
+	// patrol_report_finding, patrol_resolve_finding, patrol_get_findings
+	// These are always registered but only functional when patrolFindingCreator is set.
+	e.registerPatrolTools()
 }
