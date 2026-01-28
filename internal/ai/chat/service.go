@@ -798,6 +798,14 @@ func (s *Service) GetBaseURL() string {
 	return ""
 }
 
+// GetExecutor returns the underlying tool executor so callers (e.g. patrol)
+// can set session-scoped state like the PatrolFindingCreator before executing.
+func (s *Service) GetExecutor() *tools.PulseToolExecutor {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.executor
+}
+
 // Provider setter methods
 
 func (s *Service) SetAlertProvider(provider MCPAlertProvider) {
