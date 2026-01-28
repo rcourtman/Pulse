@@ -9,6 +9,7 @@ import (
 
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
+	"github.com/rs/zerolog/log"
 	gocpu "github.com/shirou/gopsutil/v4/cpu"
 	godisk "github.com/shirou/gopsutil/v4/disk"
 	goload "github.com/shirou/gopsutil/v4/load"
@@ -108,8 +109,10 @@ func collectCPUUsage(ctx context.Context) (float64, error) {
 func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 	partitions, err := diskPartitions(ctx, true)
 	if err != nil {
+		log.Debug().Err(err).Msg("disk: failed to list partitions")
 		return nil
 	}
+	log.Debug().Int("count", len(partitions)).Msg("disk: discovered partitions")
 
 	disks := make([]agentshost.Disk, 0, len(partitions))
 	seen := make(map[string]struct{}, len(partitions))
@@ -137,21 +140,26 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 
 		usage, err := diskUsage(ctx, part.Mountpoint)
 		if err != nil {
+			log.Debug().Err(err).Str("mount", part.Mountpoint).Str("device", part.Device).Str("fstype", part.Fstype).Msg("disk: failed to get usage")
 			continue
 		}
 		if usage.Total == 0 {
+			log.Debug().Str("mount", part.Mountpoint).Str("device", part.Device).Str("fstype", part.Fstype).Msg("disk: skipping partition with zero total")
 			continue
 		}
 
 		if strings.EqualFold(part.Fstype, "zfs") || strings.EqualFold(part.Fstype, "fuse.zfs") {
 			pool := zfsPoolFromDevice(part.Device)
 			if pool == "" {
+				log.Debug().Str("device", part.Device).Str("mount", part.Mountpoint).Msg("disk: zfs partition with empty pool name, skipping")
 				continue
 			}
 			if fsfilters.ShouldIgnoreReadOnlyFilesystem(part.Fstype, usage.Total, usage.Used) {
+				log.Debug().Str("pool", pool).Str("mount", part.Mountpoint).Msg("disk: zfs read-only filesystem, skipping")
 				continue
 			}
 
+			log.Debug().Str("pool", pool).Str("dataset", part.Device).Str("mount", part.Mountpoint).Uint64("total", usage.Total).Uint64("used", usage.Used).Msg("disk: collected zfs dataset")
 			zfsDatasets = append(zfsDatasets, zfsDatasetUsage{
 				Pool:       pool,
 				Dataset:    part.Device,
@@ -204,7 +212,9 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 		})
 	}
 
-	disks = append(disks, summarizeZFSPools(ctx, zfsDatasets)...)
+	zfsDisks := summarizeZFSPools(ctx, zfsDatasets)
+	log.Debug().Int("zfsDatasets", len(zfsDatasets)).Int("zfsDisks", len(zfsDisks)).Int("regularDisks", len(disks)).Msg("disk: collection summary")
+	disks = append(disks, zfsDisks...)
 
 	sort.Slice(disks, func(i, j int) bool { return disks[i].Mountpoint < disks[j].Mountpoint })
 	return disks

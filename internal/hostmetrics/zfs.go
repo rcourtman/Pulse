@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rs/zerolog/log"
 )
 
 // zpoolStats represents capacity data reported by `zpool list`.
@@ -35,21 +36,30 @@ var queryZpoolStats = fetchZpoolStats
 
 func summarizeZFSPools(ctx context.Context, datasets []zfsDatasetUsage) []agentshost.Disk {
 	if len(datasets) == 0 {
+		log.Debug().Msg("zfs: no datasets to summarize")
 		return nil
 	}
 
 	pools := uniqueZFSPools(datasets)
 	if len(pools) == 0 {
+		log.Debug().Msg("zfs: no unique pools found from datasets")
 		return nil
 	}
+	log.Debug().Int("datasetCount", len(datasets)).Strs("pools", pools).Msg("zfs: summarizing pools")
 
 	bestDatasets := bestZFSPoolDatasets(datasets)
 	mountpoints := bestZFSMountpoints(datasets)
+	for pool, ds := range bestDatasets {
+		log.Debug().Str("pool", pool).Str("dataset", ds.Dataset).Str("mount", ds.Mountpoint).Uint64("total", ds.Total).Uint64("used", ds.Used).Msg("zfs: best dataset for pool")
+	}
+
 	stats, err := queryZpoolStats(ctx, pools)
 	if err == nil && len(stats) > 0 {
+		log.Debug().Int("zpoolStatsCount", len(stats)).Msg("zfs: using zpool stats")
 		return disksFromZpoolStats(pools, stats, mountpoints, bestDatasets)
 	}
 
+	log.Debug().Err(err).Msg("zfs: zpool stats unavailable, using fallback")
 	return fallbackZFSDisks(bestDatasets, mountpoints)
 }
 
@@ -69,6 +79,7 @@ func disksFromZpoolStats(
 		}
 
 		ds := bestDatasets[pool]
+		log.Debug().Str("pool", pool).Bool("hasZpoolStats", ok).Uint64("zpoolSize", stat.Size).Uint64("zpoolAlloc", stat.Alloc).Uint64("zpoolFree", stat.Free).Uint64("dsTotal", ds.Total).Uint64("dsUsed", ds.Used).Str("mount", mp).Msg("zfs: processing pool")
 
 		if ok && stat.Size > 0 {
 			// For RAIDZ/mirror pools, zpool SIZE is raw capacity (sum of all disks),
@@ -81,12 +92,16 @@ func disksFromZpoolStats(
 			usedBytes := stat.Alloc
 			freeBytes := stat.Free
 			if ds.Total > 0 && ds.Total < stat.Size {
+				log.Debug().Str("pool", pool).Uint64("dsTotal", ds.Total).Uint64("zpoolSize", stat.Size).Msg("zfs: using dataset stats (ds.Total < zpool.Size)")
 				totalBytes = ds.Total
 				usedBytes = ds.Used
 				freeBytes = ds.Free
+			} else {
+				log.Debug().Str("pool", pool).Uint64("dsTotal", ds.Total).Uint64("zpoolSize", stat.Size).Msg("zfs: using zpool stats (ds.Total >= zpool.Size or ds.Total == 0)")
 			}
 
 			usage := clampPercent(calculatePercent(totalBytes, usedBytes))
+			log.Debug().Str("pool", pool).Int64("totalBytes", int64(totalBytes)).Int64("usedBytes", int64(usedBytes)).Int64("freeBytes", int64(freeBytes)).Float64("usage", usage).Msg("zfs: emitting disk entry")
 			disks = append(disks, agentshost.Disk{
 				Device:     pool,
 				Mountpoint: mp,
@@ -102,6 +117,7 @@ func disksFromZpoolStats(
 
 		if ds.Total > 0 {
 			usage := clampPercent(calculatePercent(ds.Total, ds.Used))
+			log.Debug().Str("pool", pool).Int64("totalBytes", int64(ds.Total)).Int64("usedBytes", int64(ds.Used)).Float64("usage", usage).Msg("zfs: emitting disk entry from dataset only (no zpool stats)")
 			disks = append(disks, agentshost.Disk{
 				Device:     pool,
 				Mountpoint: mp,
@@ -112,6 +128,8 @@ func disksFromZpoolStats(
 				FreeBytes:  int64(ds.Free),
 				Usage:      usage,
 			})
+		} else {
+			log.Debug().Str("pool", pool).Msg("zfs: skipping pool with no zpool stats and zero dataset total")
 		}
 	}
 
@@ -119,6 +137,7 @@ func disksFromZpoolStats(
 }
 
 func fallbackZFSDisks(bestDatasets map[string]zfsDatasetUsage, mountpoints map[string]string) []agentshost.Disk {
+	log.Debug().Int("poolCount", len(bestDatasets)).Msg("zfs: fallback disk generation")
 	if len(bestDatasets) == 0 {
 		return nil
 	}
@@ -175,6 +194,7 @@ var commonZpoolPaths = []string{
 func findZpool() (string, error) {
 	// First, try the standard PATH lookup
 	if path, err := exec.LookPath("zpool"); err == nil {
+		log.Debug().Str("path", path).Msg("zfs: found zpool via PATH")
 		return path, nil
 	}
 
@@ -183,10 +203,12 @@ func findZpool() (string, error) {
 	// might run with a restricted PATH that doesn't include /usr/sbin
 	for _, path := range commonZpoolPaths {
 		if _, err := os.Stat(path); err == nil {
+			log.Debug().Str("path", path).Msg("zfs: found zpool at hardcoded path")
 			return path, nil
 		}
 	}
 
+	log.Debug().Msg("zfs: zpool binary not found in PATH or common locations")
 	return "", fmt.Errorf("zpool binary not found in PATH or common locations")
 }
 
@@ -204,10 +226,13 @@ func fetchZpoolStats(ctx context.Context, pools []string) (map[string]zpoolStats
 	args = append(args, pools...)
 
 	cmd := exec.CommandContext(ctx, path, args...)
+	log.Debug().Str("cmd", cmd.String()).Msg("zfs: executing zpool list")
 	output, err := cmd.Output()
 	if err != nil {
+		log.Debug().Err(err).Str("cmd", cmd.String()).Msg("zfs: zpool list failed")
 		return nil, err
 	}
+	log.Debug().Int("outputBytes", len(output)).Msg("zfs: zpool list succeeded")
 
 	return parseZpoolList(output)
 }
