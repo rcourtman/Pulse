@@ -7,9 +7,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.MaxTurns == 0 || cfg.Timeout == 0 || cfg.MaxConcurrent == 0 {
 		t.Fatalf("expected non-zero defaults")
 	}
-	if !cfg.CriticalRequireApproval {
-		t.Fatalf("expected critical approval default")
-	}
 }
 
 func TestIsDestructiveAndHelpers(t *testing.T) {

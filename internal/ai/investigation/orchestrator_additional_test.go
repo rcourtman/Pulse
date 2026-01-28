@@ -33,6 +33,10 @@ func (s *stubChatService) DeleteSession(ctx context.Context, sessionID string) e
 	return nil
 }
 
+func (s *stubChatService) ListAvailableTools(ctx context.Context, prompt string) []string {
+	return nil
+}
+
 func (s *stubChatService) SetAutonomousMode(enabled bool) {}
 
 type stubCommandExecutor struct {

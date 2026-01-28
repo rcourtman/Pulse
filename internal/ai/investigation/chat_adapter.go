@@ -104,6 +104,14 @@ func (a *ChatServiceAdapter) DeleteSession(ctx context.Context, sessionID string
 	return a.service.DeleteSession(ctx, sessionID)
 }
 
+// ListAvailableTools returns tool names available for the given prompt.
+func (a *ChatServiceAdapter) ListAvailableTools(ctx context.Context, prompt string) []string {
+	if a.service == nil {
+		return nil
+	}
+	return a.service.ListAvailableTools(ctx, prompt)
+}
+
 // IsRunning checks if the chat service is running
 func (a *ChatServiceAdapter) IsRunning() bool {
 	return a.service != nil && a.service.IsRunning()

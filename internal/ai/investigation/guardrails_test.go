@@ -22,28 +22,39 @@ func TestGuardrails_DestructiveAndCustomPatterns(t *testing.T) {
 
 func TestGuardrails_RequiresApproval(t *testing.T) {
 	g := NewGuardrails()
-	if !g.RequiresApproval("warning", "approval", "echo ok", true) {
+
+	// Approval mode: everything needs approval
+	if !g.RequiresApproval("warning", "approval", "echo ok") {
 		t.Fatalf("expected approval mode to require approval")
 	}
-	if !g.RequiresApproval("critical", "full", "echo ok", true) {
-		t.Fatalf("expected critical to require approval")
+
+	// Assisted mode: warnings auto-fix, critical needs approval
+	if g.RequiresApproval("warning", "assisted", "echo ok") {
+		t.Fatalf("expected assisted mode warning to skip approval")
 	}
-	if g.RequiresApproval("warning", "full", "echo ok", true) {
-		t.Fatalf("expected full autonomy warning to skip approval")
-	}
-	if !g.RequiresApproval("warning", "controlled", "echo ok", true) {
-		t.Fatalf("expected default to require approval")
+	if !g.RequiresApproval("critical", "assisted", "echo ok") {
+		t.Fatalf("expected assisted mode critical to require approval")
 	}
 
-	// Autonomous mode bypasses ALL approvals
-	if g.RequiresApproval("warning", "autonomous", "echo ok", true) {
-		t.Fatalf("expected autonomous mode to skip approval for safe commands")
+	// Full mode: everything auto-fixes (user accepts risk)
+	if g.RequiresApproval("warning", "full", "echo ok") {
+		t.Fatalf("expected full mode to skip approval for warnings")
 	}
-	if g.RequiresApproval("critical", "autonomous", "echo ok", true) {
-		t.Fatalf("expected autonomous mode to skip approval for critical findings")
+	if g.RequiresApproval("critical", "full", "echo ok") {
+		t.Fatalf("expected full mode to skip approval for critical")
 	}
-	if g.RequiresApproval("critical", "autonomous", "rm -rf /tmp/test", true) {
-		t.Fatalf("expected autonomous mode to skip approval even for destructive commands")
+	if g.RequiresApproval("critical", "full", "rm -rf /tmp/test") {
+		t.Fatalf("expected full mode to skip approval even for destructive commands")
+	}
+
+	// Unknown/default mode: requires approval
+	if !g.RequiresApproval("warning", "unknown", "echo ok") {
+		t.Fatalf("expected unknown mode to require approval")
+	}
+
+	// Destructive commands require approval in all modes except full
+	if !g.RequiresApproval("warning", "assisted", "rm -rf /tmp/test") {
+		t.Fatalf("expected destructive command to require approval in assisted mode")
 	}
 }
 

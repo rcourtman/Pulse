@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ type ChatService interface {
 	ExecuteStream(ctx context.Context, req ExecuteRequest, callback StreamCallback) error
 	GetMessages(ctx context.Context, sessionID string) ([]Message, error)
 	DeleteSession(ctx context.Context, sessionID string) error
+	ListAvailableTools(ctx context.Context, prompt string) []string
 	SetAutonomousMode(enabled bool)
 }
 
@@ -107,6 +109,12 @@ type InfrastructureContextProvider interface {
 	GetInfrastructureContext() string
 }
 
+// AutonomyLevelProvider provides the current autonomy level (for re-checking before fix execution)
+type AutonomyLevelProvider interface {
+	GetCurrentAutonomyLevel() string
+	IsFullModeUnlocked() bool
+}
+
 // Orchestrator manages the investigation lifecycle
 type Orchestrator struct {
 	mu sync.RWMutex
@@ -121,6 +129,9 @@ type Orchestrator struct {
 
 	// Infrastructure context provider for CLI access information
 	infraContextProvider InfrastructureContextProvider
+
+	// Autonomy level provider for re-checking before fix execution
+	autonomyProvider AutonomyLevelProvider
 
 	// Track running investigations
 	runningCount int
@@ -166,6 +177,14 @@ func (o *Orchestrator) SetInfrastructureContextProvider(provider InfrastructureC
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.infraContextProvider = provider
+}
+
+// SetAutonomyLevelProvider sets the provider for fetching current autonomy level
+// This enables re-checking autonomy level before fix execution
+func (o *Orchestrator) SetAutonomyLevelProvider(provider AutonomyLevelProvider) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.autonomyProvider = provider
 }
 
 // GetConfig returns the current configuration
@@ -227,6 +246,12 @@ func (o *Orchestrator) InvestigateFinding(ctx context.Context, finding *Finding,
 	// Build the investigation prompt
 	prompt := o.buildInvestigationPrompt(finding)
 
+	toolsAvailable := o.chatService.ListAvailableTools(ctx, prompt)
+	if len(toolsAvailable) > 0 {
+		investigation.ToolsAvailable = toolsAvailable
+		o.store.Update(investigation)
+	}
+
 	log.Info().
 		Str("finding_id", finding.ID).
 		Str("session_id", session.ID).
@@ -278,10 +303,22 @@ func (o *Orchestrator) buildInvestigationPrompt(finding *Finding) string {
 `, infraContext)
 	}
 
+	// Add targeted guidance to reduce ambiguous fixes
+	var extraGuidance string
+	if strings.EqualFold(finding.ResourceType, "storage") {
+		extraGuidance = `
+## Storage Verification
+- Confirm the storage is actually required by the affected workload before proposing a fix.
+- Verify storage scope (node membership) and guest mounts or data paths using available tools.
+- If dependency cannot be confirmed, respond with NEEDS_ATTENTION and state what evidence is missing.
+`
+	}
+
 	return fmt.Sprintf(`You are investigating a finding from Pulse Patrol. Your goal is to:
 1. Understand the issue using available tools
 2. Determine if it can be automatically fixed
 3. If fixable, propose a specific remediation command
+%s
 %s
 ## Finding Details
 - **Title**: %s
@@ -327,6 +364,7 @@ Remember:
 - Never propose destructive commands (they'll be blocked anyway)
 - Focus on the specific resource mentioned in the finding`,
 		infraSection,
+		extraGuidance,
 		finding.Title,
 		finding.Severity,
 		finding.Category,
@@ -365,6 +403,10 @@ func (o *Orchestrator) executeWithLimits(ctx context.Context, investigation *Inv
 
 	var lastContent string
 	var streamErr error
+	var toolsUsed []string
+	var evidenceIDs []string
+	toolsUsedSet := make(map[string]bool)
+	evidenceSet := make(map[string]bool)
 
 	// Execute the prompt
 	req := ExecuteRequest{
@@ -386,7 +428,36 @@ func (o *Orchestrator) executeWithLimits(ctx context.Context, investigation *Inv
 			if err := json.Unmarshal(event.Data, &data); err == nil {
 				lastContent += data.Text
 			}
+		case "tool_start":
+			var data struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}
+			if err := json.Unmarshal(event.Data, &data); err == nil {
+				if data.Name != "" && !toolsUsedSet[data.Name] {
+					toolsUsedSet[data.Name] = true
+					toolsUsed = append(toolsUsed, data.Name)
+				}
+				if data.ID != "" && !evidenceSet[data.ID] {
+					evidenceSet[data.ID] = true
+					evidenceIDs = append(evidenceIDs, data.ID)
+				}
+			}
 		case "tool_end":
+			var data struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}
+			if err := json.Unmarshal(event.Data, &data); err == nil {
+				if data.Name != "" && !toolsUsedSet[data.Name] {
+					toolsUsedSet[data.Name] = true
+					toolsUsed = append(toolsUsed, data.Name)
+				}
+				if data.ID != "" && !evidenceSet[data.ID] {
+					evidenceSet[data.ID] = true
+					evidenceIDs = append(evidenceIDs, data.ID)
+				}
+			}
 			// Each tool call counts as a turn
 			turnCount++
 			o.store.IncrementTurnCount(investigation.ID)
@@ -410,14 +481,22 @@ func (o *Orchestrator) executeWithLimits(ctx context.Context, investigation *Inv
 	})
 
 	if err != nil {
+		investigation.ToolsUsed = toolsUsed
+		investigation.EvidenceIDs = evidenceIDs
+		o.store.Update(investigation)
 		return err
 	}
 	if streamErr != nil {
+		investigation.ToolsUsed = toolsUsed
+		investigation.EvidenceIDs = evidenceIDs
+		o.store.Update(investigation)
 		return streamErr
 	}
 
 	// Store the summary
 	investigation.Summary = lastContent
+	investigation.ToolsUsed = toolsUsed
+	investigation.EvidenceIDs = evidenceIDs
 	o.store.Update(investigation)
 
 	return nil
@@ -434,12 +513,22 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 	finding.LastInvestigatedAt = &now
 
 	if fix != nil {
-		// Check if fix requires approval
+		// Re-check current autonomy level before deciding on fix execution
+		// This handles cases where user changed autonomy during investigation
+		currentLevel := autonomyLevel
+		if o.autonomyProvider != nil {
+			currentLevel = o.autonomyProvider.GetCurrentAutonomyLevel()
+			// Also check if full mode is still unlocked
+			if currentLevel == "full" && !o.autonomyProvider.IsFullModeUnlocked() {
+				currentLevel = "assisted" // Downgrade if full mode was locked
+			}
+		}
+
+		// Check if fix requires approval based on current autonomy level
 		requiresApproval := o.guardrails.RequiresApproval(
 			finding.Severity,
-			autonomyLevel,
+			currentLevel,
 			fix.Commands[0],
-			o.config.CriticalRequireApproval,
 		)
 
 		fix.RiskLevel = o.guardrails.ClassifyRisk(fix.Commands[0])

@@ -34,6 +34,9 @@ func (m *MockChatService) GetMessages(ctx context.Context, sessionID string) ([]
 func (m *MockChatService) DeleteSession(ctx context.Context, sessionID string) error {
 	return nil
 }
+func (m *MockChatService) ListAvailableTools(ctx context.Context, prompt string) []string {
+	return nil
+}
 func (m *MockChatService) SetAutonomousMode(enabled bool) {}
 
 type MockFindingsStore struct {

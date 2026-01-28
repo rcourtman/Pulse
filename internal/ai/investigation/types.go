@@ -7,18 +7,21 @@ import (
 
 // InvestigationSession represents an AI investigation of a finding
 type InvestigationSession struct {
-	ID          string     `json:"id"`
-	FindingID   string     `json:"finding_id"`
-	SessionID   string     `json:"session_id"` // Chat session ID
-	Status      Status     `json:"status"`
-	StartedAt   time.Time  `json:"started_at"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
-	TurnCount   int        `json:"turn_count"`        // Number of agentic turns used
-	Outcome     Outcome    `json:"outcome,omitempty"` // Result of investigation
-	ProposedFix *Fix       `json:"proposed_fix,omitempty"`
-	ApprovalID  string     `json:"approval_id,omitempty"` // If fix is queued for approval
-	Summary     string     `json:"summary,omitempty"`     // AI-generated summary
-	Error       string     `json:"error,omitempty"`       // Error message if failed
+	ID             string     `json:"id"`
+	FindingID      string     `json:"finding_id"`
+	SessionID      string     `json:"session_id"` // Chat session ID
+	Status         Status     `json:"status"`
+	StartedAt      time.Time  `json:"started_at"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+	TurnCount      int        `json:"turn_count"`        // Number of agentic turns used
+	Outcome        Outcome    `json:"outcome,omitempty"` // Result of investigation
+	ProposedFix    *Fix       `json:"proposed_fix,omitempty"`
+	ApprovalID     string     `json:"approval_id,omitempty"` // If fix is queued for approval
+	ToolsAvailable []string   `json:"tools_available,omitempty"`
+	ToolsUsed      []string   `json:"tools_used,omitempty"`
+	EvidenceIDs    []string   `json:"evidence_ids,omitempty"`
+	Summary        string     `json:"summary,omitempty"` // AI-generated summary
+	Error          string     `json:"error,omitempty"`   // Error message if failed
 }
 
 // Status represents the current state of an investigation
@@ -99,23 +102,21 @@ var DestructivePatterns = []string{
 
 // InvestigationConfig holds configuration for investigations
 type InvestigationConfig struct {
-	MaxTurns                int           // Maximum agentic turns per investigation
-	Timeout                 time.Duration // Maximum duration per investigation
-	MaxConcurrent           int           // Maximum concurrent investigations
-	MaxAttemptsPerFinding   int           // Maximum investigation attempts per finding
-	CooldownDuration        time.Duration // Cooldown before re-investigating
-	CriticalRequireApproval bool          // Critical findings always require approval
+	MaxTurns              int           // Maximum agentic turns per investigation
+	Timeout               time.Duration // Maximum duration per investigation
+	MaxConcurrent         int           // Maximum concurrent investigations
+	MaxAttemptsPerFinding int           // Maximum investigation attempts per finding
+	CooldownDuration      time.Duration // Cooldown before re-investigating
 }
 
 // DefaultConfig returns the default investigation configuration
 func DefaultConfig() InvestigationConfig {
 	return InvestigationConfig{
-		MaxTurns:                15,
-		Timeout:                 5 * time.Minute,
-		MaxConcurrent:           3,
-		MaxAttemptsPerFinding:   3,
-		CooldownDuration:        1 * time.Hour,
-		CriticalRequireApproval: true,
+		MaxTurns:              15,
+		Timeout:               5 * time.Minute,
+		MaxConcurrent:         3,
+		MaxAttemptsPerFinding: 3,
+		CooldownDuration:      1 * time.Hour,
 	}
 }
 

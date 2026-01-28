@@ -43,14 +43,13 @@ func (g *Guardrails) IsDestructiveAction(command string) bool {
 
 // RequiresApproval determines if an action requires user approval
 // based on finding severity, autonomy level, and whether the command is destructive
-func (g *Guardrails) RequiresApproval(findingSeverity, autonomyLevel, command string, criticalRequireApproval bool) bool {
-	// Autonomous mode - user explicitly opted into full autonomy, no approvals needed
-	// This is like "auto-accept" mode in Claude Code - user accepts all risk
-	if autonomyLevel == "autonomous" {
+func (g *Guardrails) RequiresApproval(findingSeverity, autonomyLevel, command string) bool {
+	// Full mode - user explicitly opted into full autonomy, no approvals needed
+	if autonomyLevel == "full" {
 		return false
 	}
 
-	// Destructive actions ALWAYS require approval (except in autonomous mode above)
+	// Destructive actions ALWAYS require approval (except in full mode above)
 	if g.IsDestructiveAction(command) {
 		return true
 	}
@@ -60,17 +59,15 @@ func (g *Guardrails) RequiresApproval(findingSeverity, autonomyLevel, command st
 		return true
 	}
 
-	// Critical findings require approval if configured (default: true)
-	if findingSeverity == "critical" && criticalRequireApproval {
-		return true
+	// In assisted mode: auto-fix warnings, critical needs approval
+	if autonomyLevel == "assisted" {
+		if findingSeverity == "warning" {
+			return false
+		}
+		return true // critical findings need approval
 	}
 
-	// In full autonomy mode, non-destructive warning fixes can proceed
-	if autonomyLevel == "full" && findingSeverity == "warning" {
-		return false
-	}
-
-	// Default to requiring approval
+	// Default to requiring approval (covers monitor mode and unknown levels)
 	return true
 }
 
