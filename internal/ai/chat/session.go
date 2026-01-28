@@ -18,6 +18,16 @@ import (
 type SessionStore struct {
 	mu      sync.RWMutex
 	dataDir string
+
+	// resolvedContexts holds per-session resolved resource contexts (in-memory only)
+	// These are NOT persisted - resources should be re-resolved after restart
+	// because infrastructure state may have changed
+	resolvedContexts map[string]*ResolvedContext
+
+	// sessionFSMs holds per-session workflow state machines (in-memory only)
+	// These track the RESOLVING -> READING -> WRITING -> VERIFYING workflow
+	// to ensure structural guarantees (must discover before write, verify after write)
+	sessionFSMs map[string]*SessionFSM
 }
 
 // sessionData is the on-disk format for a session
@@ -37,7 +47,9 @@ func NewSessionStore(dataDir string) (*SessionStore, error) {
 	}
 
 	return &SessionStore{
-		dataDir: sessionsDir,
+		dataDir:          sessionsDir,
+		resolvedContexts: make(map[string]*ResolvedContext),
+		sessionFSMs:      make(map[string]*SessionFSM),
 	}, nil
 }
 
@@ -142,6 +154,10 @@ func (s *SessionStore) Delete(id string) error {
 		}
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
+
+	// Also clean up resolved context and FSM
+	delete(s.resolvedContexts, id)
+	delete(s.sessionFSMs, id)
 
 	return nil
 }
@@ -305,4 +321,141 @@ func (s *SessionStore) EnsureSession(id string) (*Session, error) {
 	}
 
 	return session, nil
+}
+
+// GetResolvedContext returns the resolved context for a session, creating one if needed
+func (s *SessionStore) GetResolvedContext(sessionID string) *ResolvedContext {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ctx, ok := s.resolvedContexts[sessionID]
+	if !ok {
+		ctx = NewResolvedContext(sessionID)
+		s.resolvedContexts[sessionID] = ctx
+	}
+	return ctx
+}
+
+// GetSessionFSM returns the workflow FSM for a session, creating one if needed
+func (s *SessionStore) GetSessionFSM(sessionID string) *SessionFSM {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	fsm, ok := s.sessionFSMs[sessionID]
+	if !ok {
+		fsm = NewSessionFSM()
+		s.sessionFSMs[sessionID] = fsm
+	}
+	return fsm
+}
+
+// ResetSessionFSM resets the FSM for a session (e.g., after context clear)
+func (s *SessionStore) ResetSessionFSM(sessionID string, keepProgress bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	fsm, ok := s.sessionFSMs[sessionID]
+	if ok {
+		if keepProgress {
+			fsm.ResetKeepProgress()
+		} else {
+			fsm.Reset()
+		}
+	}
+}
+
+// AddResolvedResource adds a resolved resource to a session's context
+func (s *SessionStore) AddResolvedResource(sessionID, name string, res *ResolvedResource) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ctx, ok := s.resolvedContexts[sessionID]
+	if !ok {
+		ctx = NewResolvedContext(sessionID)
+		s.resolvedContexts[sessionID] = ctx
+	}
+	ctx.AddResource(name, res)
+
+	log.Debug().
+		Str("session_id", sessionID).
+		Str("name", name).
+		Str("resource_id", res.ResourceID).
+		Str("resource_type", res.ResourceType).
+		Str("target_host", res.TargetHost).
+		Msg("[SessionStore] Added resolved resource to context")
+}
+
+// ValidateResourceForAction validates that a resource can perform an action
+// Returns the resolved resource if valid, error if not
+func (s *SessionStore) ValidateResourceForAction(sessionID, resourceID, action string) (*ResolvedResource, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ctx, ok := s.resolvedContexts[sessionID]
+	if !ok {
+		return nil, &ResourceNotResolvedError{ResourceID: resourceID}
+	}
+
+	if err := ctx.ValidateAction(resourceID, action); err != nil {
+		return nil, err
+	}
+
+	res, _ := ctx.GetResourceByID(resourceID)
+	return res, nil
+}
+
+// ClearResolvedContext removes the resolved context for a session
+func (s *SessionStore) ClearResolvedContext(sessionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.resolvedContexts, sessionID)
+}
+
+// ClearSessionState clears both resolved context and FSM coherently.
+// This is the preferred method when clearing session state.
+// - keepPinned=false: Full reset (RESOLVING state, no resources)
+// - keepPinned=true: Keep pinned resources, FSM stays in READING if resources exist
+func (s *SessionStore) ClearSessionState(sessionID string, keepPinned bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Clear resolved context
+	ctx, hasCtx := s.resolvedContexts[sessionID]
+	if hasCtx {
+		ctx.Clear(keepPinned)
+	}
+
+	// Reset FSM coherently with context state
+	fsm, hasFSM := s.sessionFSMs[sessionID]
+	if hasFSM {
+		if !keepPinned {
+			// Full reset: back to RESOLVING (must discover again)
+			fsm.Reset()
+		} else if hasCtx && ctx.HasAnyResources() {
+			// Pinned resources remain: keep progress (stay in READING if possible)
+			fsm.ResetKeepProgress()
+		} else {
+			// keepPinned=true but no resources left: must rediscover
+			fsm.Reset()
+		}
+	}
+
+	log.Debug().
+		Str("session_id", sessionID).
+		Bool("keep_pinned", keepPinned).
+		Bool("has_resources", hasCtx && ctx.HasAnyResources()).
+		Str("fsm_state", func() string {
+			if hasFSM {
+				return string(fsm.State)
+			}
+			return "none"
+		}()).
+		Msg("[SessionStore] Cleared session state")
+}
+
+// cleanupResolvedContext is called when a session is deleted to also remove its context
+func (s *SessionStore) cleanupResolvedContext(sessionID string) {
+	// Note: caller must NOT hold the lock (or use a separate lock for contexts)
+	delete(s.resolvedContexts, sessionID)
 }
