@@ -66,27 +66,27 @@ These are the **structural guarantees** that the system must maintain. They are 
 ### Invariant 1: Discovery Before Action
 An action tool **cannot** operate on a resource that wasn't first discovered via `pulse_query` or `pulse_discovery`. This prevents the model from fabricating resource IDs.
 
-**Enforcement:** `validateResolvedResource()` in `tools/tools_query.go:282`
+**Enforcement:** `validateResolvedResource()` in `tools/tools_query.go`
 
 ### Invariant 2: Verification After Write
 After any write operation, the model **must** perform a read/status check before providing a final answer. This catches hallucinated success.
 
-**Enforcement:** FSM `StateVerifying` in `chat/fsm.go:24`, gate in `chat/agentic.go:295`
+**Enforcement:** FSM `StateVerifying` in `chat/fsm.go`, gate in `chat/agentic.go:CanFinalAnswer()`
 
 ### Invariant 3: Consistent Error Envelopes
 All tool responses use the `ToolResponse` envelope structure. Errors include structured codes (`STRICT_RESOLUTION`, `FSM_BLOCKED`) that enable auto-recovery.
 
-**Enforcement:** `tools/protocol.go:209-283`
+**Enforcement:** `ToolResponse` / `ToolError` types and helper functions in `tools/protocol.go`
 
 ### Invariant 4: Phantom Detection
 If the model claims to have executed an action but produced no tool calls, the response is replaced with a safe failure message.
 
-**Enforcement:** `hasPhantomExecution()` in `chat/agentic.go:708`
+**Enforcement:** `hasPhantomExecution()` in `chat/agentic.go`
 
 ### Invariant 5: Session-Scoped Truth
 Resolved resources are **session-scoped** and **in-memory only**. They are never persisted because infrastructure state may change between sessions.
 
-**Enforcement:** `ResolvedContext` not serialized, rebuilt each session in `chat/session.go:25`
+**Enforcement:** `ResolvedContext` not serialized, rebuilt each session in `chat/session.go`
 
 ### Invariant 6: Read/Write Tool Separation
 
@@ -103,16 +103,24 @@ Write operations → pulse_control  → ToolKindWrite → enters VERIFYING
 **Tool Classification:**
 | Tool | Classification | Purpose |
 |------|---------------|---------|
+| `pulse_query`, `pulse_discovery` | **ToolKindResolve** | Resource discovery and query |
 | `pulse_read` | **ToolKindRead** | Read-only operations: exec, file, find, tail, logs |
+| `pulse_metrics` | **ToolKindRead** | Performance metrics |
+| `pulse_storage` | **ToolKindRead** | Storage information |
+| `pulse_kubernetes` | **ToolKindRead** | Kubernetes cluster info |
+| `pulse_pmg` | **ToolKindRead** | Proxmox Mail Gateway stats |
 | `pulse_control` | **ToolKindWrite** | Write operations: guest control, service management |
 | `pulse_file_edit action=read` | ToolKindRead | File reading |
 | `pulse_file_edit action=write/append` | ToolKindWrite | File modification |
+| `pulse_alerts` (action-dependent) | resolve/dismiss → **Write**; others → Read | Alert management |
+| `pulse_docker` (action-dependent) | control/update → **Write**; others → Read | Docker operations |
+| `pulse_knowledge` (action-dependent) | remember/note/save → **Write**; others → Read | Knowledge persistence |
 
 **Enforcement Points:**
 - Tool registration: `tools/tools_read.go` (read-only tool)
-- FSM classification: `chat/fsm.go:343-346` (`pulse_read` → `ToolKindRead`)
-- Read-only enforcement: `tools/tools_read.go:139-161` (uses `ClassifyExecutionIntent`)
-- Intent classification: `tools/tools_query.go:255-298` (`ClassifyExecutionIntent` function)
+- FSM classification: `classifyToolByName()` in `chat/fsm.go` (`pulse_read` → `ToolKindRead`)
+- Read-only enforcement: `tools/tools_read.go` (uses `ClassifyExecutionIntent`)
+- Intent classification: `ClassifyExecutionIntent()` in `tools/tools_query.go`
 - Regression test: `chat/fsm_test.go:TestFSM_RegressionJellyfinLogsScenario`
 
 **ExecutionIntent Classification:**
@@ -316,7 +324,7 @@ Examples:
 
 ## 3. Tool Protocol
 
-All tools return a consistent `ToolResponse` envelope defined in `tools/protocol.go:209`.
+All tools return a consistent `ToolResponse` envelope defined in `tools/protocol.go`.
 
 ### Response Structure
 
@@ -338,7 +346,7 @@ type ToolError struct {
 }
 ```
 
-### Error Codes (tools/protocol.go:229)
+### Error Codes (tools/protocol.go)
 
 | Code | Meaning | Auto-Recoverable |
 |------|---------|------------------|
@@ -371,14 +379,14 @@ Strict resolution prevents the model from operating on fabricated or hallucinate
 export PULSE_STRICT_RESOLUTION=true
 ```
 
-### Behavior (tools/tools_query.go:59-63)
+### Behavior (tools/tools_query.go)
 
 When enabled (`PULSE_STRICT_RESOLUTION=true`):
 - **Write actions** (`start`, `stop`, `restart`, `delete`, `exec`, `write`, `append`) are blocked if the resource wasn't discovered first
 - **Read actions** are allowed if the session has any resolved context (scoped bypass)
 - **Error response** includes `auto_recoverable: true` to signal the model can self-correct
 
-### Error Type (tools/tools_query.go:16-43)
+### Error Type (tools/tools_query.go)
 
 ```go
 type ErrStrictResolution struct {
@@ -402,7 +410,7 @@ func (e *ErrStrictResolution) ToToolResponse() ToolResponse {
 }
 ```
 
-### Validation Flow (tools/tools_query.go:282-383)
+### Validation Flow (tools/tools_query.go:validateResolvedResource)
 
 ```go
 func (e *PulseToolExecutor) validateResolvedResource(resourceName, action string, skipIfNoContext bool) ValidationResult {
@@ -437,7 +445,7 @@ func (e *PulseToolExecutor) validateResolvedResource(resourceName, action string
 
 ## 5. ResolvedContext
 
-`ResolvedContext` is the **session-scoped source of truth** for discovered resources. It's defined in `chat/types.go:296-332`.
+`ResolvedContext` is the **session-scoped source of truth** for discovered resources. It's defined in `chat/types.go`.
 
 ### Design Principles
 
@@ -446,7 +454,7 @@ func (e *PulseToolExecutor) validateResolvedResource(resourceName, action string
 3. **In-memory only:** Infrastructure state may change
 4. **Multi-indexed:** By name, ID, and aliases
 
-### Structure (chat/types.go:307-332)
+### Structure (chat/types.go)
 
 ```go
 type ResolvedContext struct {
@@ -469,7 +477,7 @@ type ResolvedContext struct {
 | Max Entries | 500 | LRU eviction when exceeded |
 | Pinning | - | Protect primary targets from eviction |
 
-### Resource Registration Interface (tools/executor.go:136-159)
+### Resource Registration Interface (tools/executor.go)
 
 ```go
 type ResourceRegistration struct {
@@ -485,7 +493,7 @@ type ResourceRegistration struct {
 }
 ```
 
-### Coherent Reset (chat/session.go:415-455)
+### Coherent Reset (chat/session.go:ClearSessionState)
 
 When clearing session state, both FSM and ResolvedContext must be reset together:
 
@@ -509,7 +517,7 @@ func (s *SessionStore) ClearSessionState(sessionID string, keepPinned bool) {
 
 ## 6. Command Risk Classification
 
-Command risk classification (tools/tools_query.go:81-214) determines how shell commands are treated by strict resolution.
+Command risk classification (`classifyCommandRisk()` in `tools/tools_query.go`) determines how shell commands are treated by strict resolution.
 
 ### Risk Levels
 
@@ -526,33 +534,33 @@ const (
 
 The classifier evaluates commands in 4 phases:
 
-**Phase 1: Shell Metacharacters** (lines 99-125)
+**Phase 1: Shell Metacharacters**
 - `sudo` → HighWrite
 - `>`, `>>`, `tee`, `2>` → HighWrite (output redirection)
 - `;`, `&&`, `||` → MediumWrite (command chaining)
 - `$(...)`, backticks → MediumWrite (command substitution)
 
-**Phase 2: High-Risk Patterns** (lines 129-153)
+**Phase 2: High-Risk Patterns**
 - `rm`, `shutdown`, `reboot`, `poweroff`
 - `systemctl restart/stop/start`
 - Package managers: `apt`, `yum`, `dnf`, `pacman`
 - Dangerous docker commands: `docker rm`, `docker kill`
 - System modification: `chmod`, `chown`, `iptables`
 
-**Phase 3: Medium-Risk Patterns** (lines 156-182)
+**Phase 3: Medium-Risk Patterns**
 - File operations: `mv`, `cp`, `touch`, `mkdir`
 - In-place editing: `sed -i`
 - Archive extraction: `tar -x`, `unzip`
 - Curl with mutation: `-X POST`, `-X DELETE`, `--data`
 
-**Phase 4: Read-Only Patterns** (lines 185-213)
+**Phase 4: Read-Only Patterns**
 - File inspection: `cat`, `head`, `tail`, `less`, `grep`
 - System status: `ps`, `top`, `free`, `df`, `du`
 - Docker read: `docker ps`, `docker logs`, `docker inspect`
 - Network diagnostics: `ping`, `netstat`, `ss`, `ip addr`
 - Systemd status: `systemctl status`, `systemctl is-active`
 
-### Strict Mode Behavior (tools/tools_query.go:395-443)
+### Strict Mode Behavior (tools/tools_query.go:validateResolvedResourceForExec)
 
 ```go
 func (e *PulseToolExecutor) validateResolvedResourceForExec(resourceName, command string, ...) {
@@ -578,7 +586,7 @@ func (e *PulseToolExecutor) validateResolvedResourceForExec(resourceName, comman
 
 The session workflow FSM (chat/fsm.go) enforces structural guarantees about discovery and verification.
 
-### States (chat/fsm.go:14-26)
+### States (chat/fsm.go)
 
 ```
 ┌─────────────┐     resolve/read     ┌─────────────┐
@@ -586,23 +594,29 @@ The session workflow FSM (chat/fsm.go) enforces structural guarantees about disc
 │ (initial)   │                      │             │
 └─────────────┘                      └──────┬──────┘
       ▲                                     │
-      │ Reset()                        write│
+      │ Reset()                        write│success
       │                                     ▼
       │              ┌─────────────┐  ┌─────────────┐
       └──────────────│   (done)    │◀─│  VERIFYING  │
-                     └─────────────┘  └─────────────┘
-                           ▲                │
-                           │   read         │
-                           └────────────────┘
+                     └─────────────┘  └──────┬──────┘
+                           ▲                 │
+                           │   read          │
+                           └─────────────────┘
+
+      ┌─────────────┐
+      │   WRITING   │  (defined, transitional — all tools allowed;
+      │             │   not currently assigned by any transition)
+      └─────────────┘
 ```
 
 | State | Description | Allowed Operations |
 |-------|-------------|-------------------|
 | `RESOLVING` | Initial state, no validated target | Resolve, Read |
 | `READING` | Resources discovered, ready for actions | Resolve, Read, Write |
-| `VERIFYING` | Write performed, must verify | Resolve, Read |
+| `WRITING` | Transitional state (defined but not actively assigned by transitions) | Resolve, Read, Write |
+| `VERIFYING` | Write performed, must verify before next write or final answer | Resolve, Read |
 
-### Tool Classification (chat/fsm.go:28-53)
+### Tool Classification (chat/fsm.go)
 
 ```go
 const (
@@ -612,42 +626,79 @@ const (
 )
 ```
 
-### Classification Function (chat/fsm.go:297-415)
+### Classification Function (chat/fsm.go:classifyToolByName)
 
 `ClassifyToolCall(toolName string, args map[string]interface{}) ToolKind` is the **single source of truth** for tool classification:
 
 ```go
 func classifyToolByName(toolName string, args map[string]interface{}) ToolKind {
+    action, _ := args["action"].(string)
+    actionLower := strings.ToLower(action)
+
     switch toolName {
-    // Resolve tools
+    // === Query/Discovery tools (Resolve) ===
     case "pulse_query", "pulse_discovery":
         return ToolKindResolve
 
-    // Read tools
+    // === Read-only tools (Read) ===
     case "pulse_metrics", "pulse_storage", "pulse_kubernetes", "pulse_pmg":
         return ToolKindRead
 
-    // Write tools
+    case "pulse_read":
+        return ToolKindRead // ALWAYS read-only, enforced at tool layer
+
+    // === Control tools (Write) ===
     case "pulse_control", "pulse_run_command":
         return ToolKindWrite
 
-    // Tools with action-dependent classification
+    // === Action-dependent tools ===
     case "pulse_alerts":
-        switch args["action"] {
+        switch actionLower {
         case "resolve", "dismiss":
             return ToolKindWrite
         default:
             return ToolKindRead
         }
+
     case "pulse_docker":
-        switch args["action"] {
-        case "control", "update":
+        switch actionLower {
+        case "control", "update", "check_updates", "trigger_update":
             return ToolKindWrite
         default:
             return ToolKindRead
         }
-    // ...
+
+    case "pulse_knowledge":
+        switch actionLower {
+        case "remember", "note", "save":
+            return ToolKindWrite
+        default:
+            return ToolKindRead
+        }
+
+    case "pulse_file_edit":
+        switch actionLower {
+        case "read":
+            return ToolKindRead
+        case "write", "append":
+            return ToolKindWrite
+        default:
+            return ToolKindRead
+        }
+
+    // === Legacy tool names (backwards compatibility) ===
+    case "pulse_control_guest", "pulse_control_docker":
+        return ToolKindWrite
+    case "pulse_search_resources", "pulse_get_resource", "pulse_get_topology",
+        "pulse_list_infrastructure", "pulse_get_connection_health":
+        return ToolKindResolve
+    case "pulse_get_docker_logs", "pulse_get_performance_metrics",
+        "pulse_get_temperatures", "pulse_get_baselines", "pulse_get_patterns":
+        return ToolKindRead
     }
+
+    // Fallback: check action/operation parameter for write/read intent
+    // ...
 
     // Default to WRITE for unknown tools (security-safe)
     return ToolKindWrite
@@ -670,7 +721,7 @@ func (fsm *SessionFSM) OnToolSuccess(kind ToolKind, toolName string)
 func (fsm *SessionFSM) CompleteVerification()
 ```
 
-### Recovery Tracking (chat/fsm.go:103-133)
+### Recovery Tracking (chat/fsm.go)
 
 The FSM tracks pending recoveries for metrics correlation:
 
@@ -696,7 +747,7 @@ func (fsm *SessionFSM) CheckRecoverySuccess(tool string) *PendingRecovery
 
 The agentic loop (chat/agentic.go) orchestrates LLM calls and enforces the FSM gates.
 
-### Enforcement Gate 1: Tool Execution (chat/agentic.go:396-460)
+### Enforcement Gate 1: Tool Execution (chat/agentic.go)
 
 Before executing any tool:
 
@@ -723,7 +774,7 @@ if fsm != nil {
 }
 ```
 
-### Enforcement Gate 2: Final Answer (chat/agentic.go:295-343)
+### Enforcement Gate 2: Final Answer (chat/agentic.go)
 
 Before allowing the model to respond without tool calls:
 
@@ -747,7 +798,7 @@ if len(toolCalls) == 0 {
 }
 ```
 
-### Phantom Detection (chat/agentic.go:696-777)
+### Phantom Detection (chat/agentic.go:hasPhantomExecution)
 
 Detects when the model claims execution without tool calls:
 
@@ -778,7 +829,7 @@ func hasPhantomExecution(content string) bool {
 }
 ```
 
-### State Transition After Success (chat/agentic.go:610-631)
+### State Transition After Success (chat/agentic.go)
 
 ```go
 if fsm != nil && !isError {
@@ -811,37 +862,37 @@ Prometheus counters (chat/metrics.go) provide operational visibility and regress
 
 ### Recording Points
 
-**FSM Tool Block** (agentic.go:408):
+**FSM Tool Block** (agentic.go — Gate 1):
 ```go
 metrics.RecordFSMToolBlock(fsm.State, tc.Name, toolKind)
 ```
 
-**FSM Final Block** (agentic.go:311):
+**FSM Final Block** (agentic.go — Gate 2):
 ```go
 metrics.RecordFSMFinalBlock(fsm.State)
 ```
 
-**Strict Resolution Block** (tools_query.go:291, 362):
+**Strict Resolution Block** (tools_query.go — validateResolvedResource):
 ```go
 e.telemetryCallback.RecordStrictResolutionBlock("validateResolvedResource", action)
 ```
 
-**Phantom Detection** (agentic.go:356):
+**Phantom Detection** (agentic.go — phantom check):
 ```go
 metrics.RecordPhantomDetected(providerName, modelName)
 ```
 
-**Auto-Recovery Attempt** (agentic.go:421, metrics.go:202):
+**Auto-Recovery Attempt** (agentic.go — recovery tracking):
 ```go
 metrics.RecordAutoRecoveryAttempt("FSM_BLOCKED", tc.Name)
 ```
 
-**Auto-Recovery Success** (agentic.go:629):
+**Auto-Recovery Success** (agentic.go — OnToolSuccess):
 ```go
 metrics.RecordAutoRecoverySuccess(pr.ErrorCode, pr.Tool)
 ```
 
-### Label Sanitization (chat/metrics.go:17-26)
+### Label Sanitization (chat/metrics.go:sanitizeLabel)
 
 All labels are sanitized to prevent cardinality explosion:
 
@@ -887,7 +938,7 @@ if validation.IsBlocked() {
 }
 ```
 
-**Location:** `tools/tools_control.go:267-271`, `tools/tools_file.go:188-191`, `tools/tools_file.go:276-279`
+**Location:** `tools/tools_control.go`, `tools/tools_file.go` (validation checks in action handlers)
 
 ### DO NOT: Remove FSM Gates from Agentic Loop
 
@@ -903,7 +954,7 @@ if fsm != nil {
 }
 ```
 
-**Location:** `chat/agentic.go:396-461` (Gate 1), `chat/agentic.go:295-343` (Gate 2)
+**Location:** `chat/agentic.go` — Gate 1 (tool execution) and Gate 2 (final answer)
 
 ### DO NOT: Change Unknown Tool Default to Read
 
@@ -915,7 +966,7 @@ return ToolKindRead  ← NO!
 return ToolKindWrite
 ```
 
-**Location:** `chat/fsm.go:412-414`
+**Location:** `classifyToolByName()` default case in `chat/fsm.go`
 
 ### DO NOT: Persist ResolvedContext
 
@@ -927,7 +978,7 @@ json.Marshal(resolvedContext)  ← NO!
 resolvedContexts map[string]*ResolvedContext  // Not persisted
 ```
 
-**Location:** `chat/session.go:23-30`, `chat/types.go:315`
+**Location:** `chat/session.go` (SessionStore), `chat/types.go` (ResolvedContext)
 
 ### DO NOT: Reset FSM Without Context
 
@@ -939,7 +990,7 @@ fsm.Reset()
 s.ClearSessionState(sessionID, keepPinned)  // Handles both
 ```
 
-**Location:** `chat/session.go:415-455`
+**Location:** `ClearSessionState()` in `chat/session.go`
 
 ### DO NOT: Remove Phantom Detection
 
@@ -954,7 +1005,7 @@ if hasPhantomExecution(assistantMsg.Content) {
 }
 ```
 
-**Location:** `chat/agentic.go:348-374`
+**Location:** `hasPhantomExecution()` check in `chat/agentic.go`
 
 ### DO NOT: Route Read Operations Through Write Tools
 
@@ -970,7 +1021,7 @@ pulse_read action="exec" command="grep logs"  ← Stays in READING
 
 **Why:** `pulse_control` is classified as `ToolKindWrite` regardless of what command it runs. Running `grep` through `pulse_control` triggers VERIFYING state, blocking subsequent commands. Using `pulse_read` keeps the FSM in READING state where unlimited reads are allowed.
 
-**Location:** `tools/tools_read.go` (read-only tool), `chat/fsm.go:343-346` (classification)
+**Location:** `tools/tools_read.go` (read-only tool), `classifyToolByName()` in `chat/fsm.go` (classification)
 
 ### DO NOT: Target Parent Host When Child Resources Exist
 
@@ -1103,7 +1154,7 @@ Use this checklist when modifying FSM, tools, or the agentic loop.
 ### When Adding/Changing Tools
 
 - [ ] Tool returns `ToolResponse` envelope (use `NewToolSuccess`, `NewToolBlockedError`, etc.)
-- [ ] Tool is explicitly classified in `ClassifyToolCall()` (`chat/fsm.go:297-420`)
+- [ ] Tool is explicitly classified in `classifyToolByName()` (`chat/fsm.go`)
   - Unknown tools default to `ToolKindWrite` (security-safe)
 - [ ] Read operations use `pulse_read` or are classified `ToolKindRead`
 - [ ] Write operations are blocked in RESOLVING and require strict resolution
@@ -1178,8 +1229,74 @@ If file operations have no effect:
 | `chat/metrics.go` | Prometheus telemetry |
 | `tools/protocol.go` | ToolResponse envelope |
 | `tools/executor.go` | PulseToolExecutor and interfaces |
+| `tools/registry.go` | Tool registry (registration, lookup, execution dispatch) |
+| `tools/adapters.go` | MCP adapters bridging internal data to tool interfaces |
+| `tools/types.go` | Tool-layer interfaces (AgentProfileManager, AgentScope) |
 | `tools/tools_query.go` | Query tools, strict resolution, and routing validation |
 | `tools/tools_read.go` | Read-only operations (exec, file, find, tail, logs) |
-| `tools/tools_control.go` | Control tool handlers |
+| `tools/tools_control.go` | Control tool handlers (legacy) |
 | `tools/tools_control_consolidated.go` | Consolidated pulse_control (write-only) |
 | `tools/tools_file.go` | File editing tools with routing validation |
+| `tools/tools_alerts.go` | Alert management (pulse_alerts) |
+| `tools/tools_docker.go` | Docker operations (pulse_docker) |
+| `tools/tools_metrics.go` | Performance metrics (pulse_metrics) |
+| `tools/tools_storage.go` | Storage information (pulse_storage) |
+| `tools/tools_kubernetes.go` | Kubernetes cluster info (pulse_kubernetes) |
+| `tools/tools_knowledge.go` | Knowledge persistence (pulse_knowledge) |
+| `tools/tools_pmg_consolidated.go` | Proxmox Mail Gateway (pulse_pmg) |
+| `tools/tools_discovery_consolidated.go` | Consolidated pulse_discovery |
+| `tools/tools_infrastructure.go` | Infrastructure tools (backups, disks, temps, etc.) |
+| `tools/tools_intelligence.go` | Correlation, incident windows, relationships |
+| `tools/tools_patrol.go` | Baselines, patterns, findings, alerts |
+| `tools/tools_profiles.go` | Agent scope/profile management |
+| `memory/` | Session memory subsystem |
+| `investigation/` | Investigation workflow support |
+| `knowledge/` | Knowledge base and recall |
+| `cost/` | Token/cost tracking |
+| `safety/` | Safety checks and guardrails |
+| `correlation/` | Event correlation engine |
+| `patterns/` | Pattern detection |
+| `baseline/` | Baseline metrics |
+| `forecast/` | Forecasting subsystem |
+
+---
+
+## Appendix D: Tool Inventory
+
+The assistant exposes 50+ tools across several categories. This appendix groups them by FSM classification.
+
+### Resolve Tools (ToolKindResolve)
+
+| Consolidated Tool | Legacy Equivalents | Purpose |
+|---|---|---|
+| `pulse_query` | `pulse_search_resources`, `pulse_get_resource`, `pulse_get_topology`, `pulse_list_infrastructure`, `pulse_get_connection_health` | Resource search, get, config, topology, list, health |
+| `pulse_discovery` | `pulse_get_discovery`, `pulse_list_discoveries` | Infrastructure discovery |
+
+### Read-Only Tools (ToolKindRead)
+
+| Tool | Source File | Purpose |
+|---|---|---|
+| `pulse_read` | `tools_read.go` | Exec, file read, find, tail, logs (enforced read-only at tool layer) |
+| `pulse_metrics` | `tools_metrics.go` | Performance metrics queries |
+| `pulse_storage` | `tools_storage.go` | Storage pool/volume information |
+| `pulse_kubernetes` | `tools_kubernetes.go` | Kubernetes cluster information |
+| `pulse_pmg` | `tools_pmg_consolidated.go` | Proxmox Mail Gateway status, queues, spam stats |
+| Legacy patrol tools | `tools_patrol.go` | `pulse_get_metrics`, `pulse_get_baselines`, `pulse_get_patterns`, `pulse_list_alerts`, `pulse_list_findings`, etc. |
+| Legacy infrastructure tools | `tools_infrastructure.go` | `pulse_list_backups`, `pulse_get_temperatures`, `pulse_get_ceph_status`, `pulse_get_network_stats`, etc. (25+ read-only tools) |
+| Legacy intelligence tools | `tools_intelligence.go` | `pulse_get_incident_window`, `pulse_correlate_events`, `pulse_recall`, etc. |
+
+### Write Tools (ToolKindWrite)
+
+| Tool | Source File | Purpose |
+|---|---|---|
+| `pulse_control` | `tools_control_consolidated.go` | Guest control, run command (always Write) |
+| `pulse_run_command` | `tools_control.go` | Legacy command execution (Write) |
+
+### Action-Dependent Tools
+
+| Tool | Write Actions | Read Actions (default) | Source File |
+|---|---|---|---|
+| `pulse_alerts` | `resolve`, `dismiss` | all others | `tools_alerts.go` |
+| `pulse_docker` | `control`, `update`, `check_updates`, `trigger_update` | `services`, `tasks`, `swarm`, `list`, etc. | `tools_docker.go` |
+| `pulse_knowledge` | `remember`, `note`, `save` | `recall`, others | `tools_knowledge.go` |
+| `pulse_file_edit` | `write`, `append` | `read` (default) | `tools_file.go` |
