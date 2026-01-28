@@ -43,13 +43,13 @@ export interface Finding {
 
 export type InvestigationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
 export type InvestigationOutcome = 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix';
-export type PatrolAutonomyLevel = 'monitor' | 'approval' | 'full';
+export type PatrolAutonomyLevel = 'monitor' | 'approval' | 'assisted' | 'full';
 
 export interface PatrolAutonomySettings {
     autonomy_level: PatrolAutonomyLevel;
+    full_mode_unlocked: boolean;       // User has acknowledged Full mode risks
     investigation_budget: number;      // Max turns per investigation (5-30)
     investigation_timeout_sec: number; // Max seconds per investigation (60-600)
-    critical_require_approval: boolean; // Critical findings always require approval
 }
 
 export interface Investigation {
@@ -61,6 +61,9 @@ export interface Investigation {
     completed_at?: string;
     turn_count: number;
     outcome?: InvestigationOutcome;
+    tools_available?: string[];
+    tools_used?: string[];
+    evidence_ids?: string[];
     summary?: string;
     error?: string;
     proposed_fix?: ProposedFix;
@@ -112,6 +115,8 @@ export interface PatrolStatus {
     healthy: boolean;
     interval_ms: number; // Patrol interval in milliseconds
     fixed_count: number; // Number of issues auto-fixed by Patrol
+    blocked_reason?: string;
+    blocked_at?: string;
     license_required?: boolean;
     license_status?: LicenseStatus;
     upgrade_url?: string;
@@ -278,3 +283,61 @@ export const investigationOutcomeLabels: Record<InvestigationOutcome, string> = 
     needs_attention: 'Needs Attention',
     cannot_fix: 'Cannot Auto-Fix',
 };
+
+// =============================================================================
+// Patrol Run History APIs
+// =============================================================================
+
+export type PatrolRunStatus = 'healthy' | 'issues_found' | 'critical' | 'error';
+
+export interface PatrolRunRecord {
+    id: string;
+    started_at: string;
+    completed_at: string;
+    duration_ms: number;
+    type: string;
+    trigger_reason?: string;
+    scope_resource_ids?: string[];
+    scope_resource_types?: string[];
+    scope_depth?: string;
+    scope_context?: string;
+    alert_id?: string;
+    finding_id?: string;
+    resources_checked: number;
+    nodes_checked: number;
+    guests_checked: number;
+    docker_checked: number;
+    storage_checked: number;
+    hosts_checked: number;
+    pbs_checked: number;
+    kubernetes_checked: number;
+    new_findings: number;
+    existing_findings: number;
+    resolved_findings: number;
+    auto_fix_count: number;
+    findings_summary: string;
+    finding_ids: string[];
+    error_count: number;
+    status: PatrolRunStatus;
+    ai_analysis?: string;
+    input_tokens?: number;
+    output_tokens?: number;
+}
+
+/**
+ * Get patrol run history
+ * @param limit Maximum number of runs to return (default: 30)
+ */
+export async function getPatrolRunHistory(limit: number = 30): Promise<PatrolRunRecord[]> {
+    const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?limit=${limit}`);
+    return runs || [];
+}
+
+/**
+ * Trigger a manual patrol run
+ */
+export async function triggerPatrolRun(): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON('/api/ai/patrol/run', {
+        method: 'POST',
+    });
+}

@@ -1,12 +1,14 @@
 import { Component, Show, createSignal, onMount, onCleanup, For, createMemo, createEffect } from 'solid-js';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession } from '@/api/aiChat';
+import { MonitoringAPI } from '@/api/monitoring';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
+import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import type { PendingApproval, PendingQuestion, ModelInfo } from './types';
 
 const MODEL_LEGACY_STORAGE_KEY = 'pulse:ai_chat_model';
@@ -39,6 +41,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [controlLevel, setControlLevel] = createSignal<'read_only' | 'controlled' | 'autonomous'>('read_only');
   const [showControlMenu, setShowControlMenu] = createSignal(false);
   const [controlSaving, setControlSaving] = createSignal(false);
+  const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
+  const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
+
+  // @ mention autocomplete state
+  const [mentionActive, setMentionActive] = createSignal(false);
+  const [mentionQuery, setMentionQuery] = createSignal('');
+  const [mentionStartIndex, setMentionStartIndex] = createSignal(0);
+  const [mentionResources, setMentionResources] = createSignal<MentionResource[]>([]);
+  let textareaRef: HTMLTextAreaElement | undefined;
 
   const loadModelSelections = (): Record<string, string> => {
     try {
@@ -179,6 +190,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       setDefaultModel(fallback);
       setChatOverrideModel(chatOverride);
       setControlLevel(resolvedControl);
+      setDiscoveryEnabled(settings.discovery_enabled ?? false);
     } catch (error) {
       logger.error('[AIChat] Failed to load AI settings:', error);
     }
@@ -291,9 +303,89 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setShowSessions(false);
         setShowControlMenu(false);
       }
+      // Close mention autocomplete when clicking outside
+      if (!target.closest('[data-mention-autocomplete]') && !target.closest('textarea')) {
+        setMentionActive(false);
+      }
     };
     document.addEventListener('click', handleClickOutside);
     onCleanup(() => document.removeEventListener('click', handleClickOutside));
+  });
+
+  // Fetch resources for @ mention autocomplete
+  onMount(async () => {
+    try {
+      const state = await MonitoringAPI.getState();
+      const resources: MentionResource[] = [];
+
+      // Add VMs
+      for (const vm of state.vms || []) {
+        resources.push({
+          id: `vm:${vm.node}:${vm.vmid}`,
+          name: vm.name,
+          type: 'vm',
+          status: vm.status,
+          node: vm.node,
+        });
+      }
+
+      // Add LXC containers
+      for (const container of state.containers || []) {
+        resources.push({
+          id: `lxc:${container.node}:${container.vmid}`,
+          name: container.name,
+          type: 'container',
+          status: container.status,
+          node: container.node,
+        });
+      }
+
+      // Add Docker hosts
+      for (const host of state.dockerHosts || []) {
+        resources.push({
+          id: `host:${host.id}`,
+          name: host.displayName || host.hostname || host.id,
+          type: 'host',
+          status: host.status || 'online',
+        });
+        // Add Docker containers
+        for (const container of host.containers || []) {
+          resources.push({
+            id: `docker:${host.id}:${container.id}`,
+            name: container.name,
+            type: 'docker',
+            status: container.state,
+            node: host.hostname || host.id,
+          });
+        }
+      }
+
+      // Add nodes
+      for (const node of state.nodes || []) {
+        resources.push({
+          id: `node:${node.instance}:${node.name}`,
+          name: node.name,
+          type: 'node',
+          status: node.status,
+        });
+      }
+
+      // Add standalone host agents
+      for (const host of state.hosts || []) {
+        resources.push({
+          id: `host:${host.id}`,
+          name: host.displayName || host.hostname,
+          type: 'host',
+          status: host.status,
+        });
+      }
+
+      setMentionResources(resources);
+      console.log('[AIChat] Loaded', resources.length, 'resources for @ mention autocomplete');
+    } catch (error) {
+      logger.error('[AIChat] Failed to fetch resources for autocomplete:', error);
+      console.error('[AIChat] Failed to fetch resources:', error);
+    }
   });
 
   // Handle submit
@@ -303,10 +395,72 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!prompt) return;
     chat.sendMessage(prompt);
     setInput('');
+    setMentionActive(false);
   };
 
-  // Handle key down - submit when not loading
+  // Handle input change with @ mention detection
+  const handleInputChange = (e: InputEvent & { currentTarget: HTMLTextAreaElement }) => {
+    const value = e.currentTarget.value;
+    setInput(value);
+
+    const cursorPos = e.currentTarget.selectionStart || 0;
+    const textBeforeCursor = value.slice(0, cursorPos);
+
+    // Find the last @ before cursor
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex !== -1) {
+      // Check if @ is at start or preceded by whitespace
+      const charBefore = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
+      if (charBefore === ' ' || charBefore === '\n' || lastAtIndex === 0) {
+        const query = textBeforeCursor.slice(lastAtIndex + 1);
+        // Only activate if query doesn't contain spaces (still typing the mention)
+        if (!query.includes(' ')) {
+          setMentionActive(true);
+          setMentionQuery(query);
+          setMentionStartIndex(lastAtIndex);
+          return;
+        }
+      }
+    }
+
+    setMentionActive(false);
+  };
+
+  // Handle mention selection
+  const handleMentionSelect = (resource: MentionResource) => {
+    const currentInput = input();
+    const startIndex = mentionStartIndex();
+    const cursorPos = textareaRef?.selectionStart || currentInput.length;
+
+    // Replace @query with the resource name
+    const before = currentInput.slice(0, startIndex);
+    const after = currentInput.slice(cursorPos);
+    const newValue = `${before}@${resource.name} ${after}`;
+
+    setInput(newValue);
+    setMentionActive(false);
+
+    // Focus textarea and set cursor position after the inserted name
+    setTimeout(() => {
+      if (textareaRef) {
+        textareaRef.focus();
+        const newCursorPos = startIndex + resource.name.length + 2; // +2 for @ and space
+        textareaRef.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  // Handle key down - submit when not loading, but let autocomplete handle keys when active
   const handleKeyDown = (e: KeyboardEvent) => {
+    // Let mention autocomplete handle navigation keys
+    if (mentionActive()) {
+      if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+        // These are handled by MentionAutocomplete component
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -612,6 +766,30 @@ export const AIChat: Component<AIChatProps> = (props) => {
           </div>
         </Show>
 
+        {/* Discovery hint - show when discovery is disabled */}
+        <Show when={discoveryEnabled() === false && !discoveryHintDismissed()}>
+          <div class="px-4 py-2 border-b border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 flex items-center justify-between gap-3 text-[11px] text-cyan-700 dark:text-cyan-200">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>
+                <span class="font-medium">Discovery is off.</span>
+                {' '}Enable it in Settings for more accurate answers about your infrastructure.
+              </span>
+            </div>
+            <button
+              onClick={() => setDiscoveryHintDismissed(true)}
+              class="p-1 rounded hover:bg-cyan-100 dark:hover:bg-cyan-800/50 text-cyan-500 dark:text-cyan-400"
+              title="Dismiss"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </Show>
+
         {/* Messages */}
         <ChatMessages
           messages={chat.messages()}
@@ -673,15 +851,28 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
         {/* Input */}
         <div class="border-t border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900">
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="flex gap-2">
-            <textarea
-              value={input()}
-              onInput={(e) => setInput(e.currentTarget.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about your infrastructure..."
-              rows={2}
-              class="flex-1 px-4 py-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-            />
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="flex gap-2 relative">
+            <div class="flex-1 relative">
+              <textarea
+                ref={textareaRef}
+                value={input()}
+                onInput={handleInputChange}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask about your infrastructure... (type @ to mention a resource)"
+                rows={2}
+                class="w-full px-4 py-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              />
+              <div data-mention-autocomplete>
+                <MentionAutocomplete
+                  query={mentionQuery()}
+                  resources={mentionResources()}
+                  position={{ top: 60, left: 0 }}
+                  onSelect={handleMentionSelect}
+                  onClose={() => setMentionActive(false)}
+                  visible={mentionActive()}
+                />
+              </div>
+            </div>
             <div class="flex gap-1.5 self-end">
               <Show
                 when={!chat.isLoading()}
@@ -714,7 +905,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-2 text-center">
             {chat.isLoading()
               ? 'Generating... click Stop to interrupt'
-              : 'Press Enter to send · Shift+Enter for new line'}
+              : 'Press Enter to send · Shift+Enter for new line · Type @ to mention a resource'}
           </p>
         </div>
       </Show>

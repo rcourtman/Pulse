@@ -73,6 +73,16 @@ export function AIStatusIndicator() {
         return !hasAnomalies() && (counts.medium > 0 || counts.low > 0);
     });
 
+    const isBlocked = createMemo(() => {
+        const s = status();
+        return !!s?.blocked_reason;
+    });
+
+    const hasErrors = createMemo(() => {
+        const s = status();
+        return (s?.error_count ?? 0) > 0;
+    });
+
     const totalFindings = createMemo(() => {
         const s = status();
         if (!s) return 0;
@@ -85,6 +95,7 @@ export function AIStatusIndicator() {
         // Patrol status
         const s = status();
         if (s?.enabled && s?.running) {
+            if (s.error_count && s.error_count > 0) parts.push(`${s.error_count} patrol errors`);
             if (s.summary.critical > 0) parts.push(`${s.summary.critical} critical findings`);
             if (s.summary.warning > 0) parts.push(`${s.summary.warning} warnings`);
             if (s.summary.watch > 0) parts.push(`${s.summary.watch} watching`);
@@ -110,6 +121,9 @@ export function AIStatusIndicator() {
         }
 
         if (parts.length === 0) {
+            if (s?.blocked_reason) {
+                return `Pulse Patrol paused: ${s.blocked_reason}`;
+            }
             if (!s?.enabled) {
                 // Show baseline info even when patrol disabled
                 if (resourceCount > 0) {
@@ -134,7 +148,8 @@ export function AIStatusIndicator() {
 
 
     const statusClass = createMemo(() => {
-        if (hasIssues() || hasAnomalies()) return 'ai-status--issues';
+        if (hasIssues() || hasAnomalies() || hasErrors()) return 'ai-status--issues';
+        if (isBlocked()) return 'ai-status--watch';
         if (hasWatch() || hasMildAnomalies()) return 'ai-status--watch';
         return 'ai-status--healthy';
     });

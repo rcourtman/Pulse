@@ -4,6 +4,8 @@ import { formatBytes, formatUptime } from '@/utils/format';
 import { DiskList } from './DiskList';
 import { UnifiedHistoryChart } from '../shared/UnifiedHistoryChart';
 import { HistoryTimeRange, ResourceType } from '@/api/charts';
+import { DiscoveryTab } from '../Discovery/DiscoveryTab';
+import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 
 type Guest = VM | Container;
 
@@ -95,7 +97,12 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
         return { type, id };
     };
 
-    const [activeTab, setActiveTab] = createSignal<'overview' | 'history'>('overview');
+    const [activeTab, setActiveTab] = createSignal<'overview' | 'history' | 'discovery'>('overview');
+
+    // Get discovery resource type for the guest
+    const discoveryResourceType = (): DiscoveryResourceType => {
+        return isVM(props.guest) ? 'vm' : 'lxc';
+    };
     const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>('24h');
 
     return (
@@ -123,6 +130,18 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 >
                     History
                     {activeTab() === 'history' && (
+                        <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
+                    )}
+                </button>
+                <button
+                    onClick={() => setActiveTab('discovery')}
+                    class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'discovery'
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                        }`}
+                >
+                    Discovery
+                    {activeTab() === 'discovery' && (
                         <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
                     )}
                 </button>
@@ -340,6 +359,15 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                         hideSelector={true}
                     />
                 </div>
+            </Show>
+
+            <Show when={activeTab() === 'discovery'}>
+                <DiscoveryTab
+                    resourceType={discoveryResourceType()}
+                    hostId={props.guest.node}
+                    resourceId={String(props.guest.vmid)}
+                    hostname={props.guest.name}
+                />
             </Show>
         </div>
     );

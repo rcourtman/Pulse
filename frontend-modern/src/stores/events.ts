@@ -1,4 +1,5 @@
 // Event bus for cross-component communication
+import type { DiscoveryProgress } from '../types/discovery';
 
 // Event types
 export type EventType =
@@ -6,6 +7,7 @@ export type EventType =
   | 'refresh_nodes'
   | 'discovery_updated'
   | 'discovery_status'
+  | 'ai_discovery_progress'
   | 'theme_changed'
   | 'websocket_reconnected';
 
@@ -51,6 +53,7 @@ export type EventDataMap = {
   refresh_nodes: void;
   discovery_updated: DiscoveryUpdatedData;
   discovery_status: DiscoveryStatusData;
+  ai_discovery_progress: DiscoveryProgress;
   theme_changed: string; // 'light' or 'dark'
   websocket_reconnected: void; // Emitted when WebSocket successfully reconnects
 };

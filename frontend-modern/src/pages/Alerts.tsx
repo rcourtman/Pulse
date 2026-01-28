@@ -2269,6 +2269,7 @@ function OverviewTab(props: {
   hasAIAlertsFeature: () => boolean;
   licenseLoading: () => boolean;
 }) {
+  const location = useLocation();
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
   const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>({});
@@ -2279,6 +2280,7 @@ function OverviewTab(props: {
   const [incidentEventFilters, setIncidentEventFilters] = createSignal<Set<string>>(
     new Set(INCIDENT_EVENT_TYPES),
   );
+  const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
 
   const loadIncidentTimeline = async (alertId: string, startedAt?: string) => {
     setIncidentLoading((prev) => ({ ...prev, [alertId]: true }));
@@ -2366,6 +2368,30 @@ function OverviewTab(props: {
   );
 
   const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
+
+  const scrollToAlertHash = () => {
+    const hash = location.hash;
+    if (!hash || !hash.startsWith('#alert-')) {
+      setLastHashScrolled(null);
+      return;
+    }
+    if (hash === lastHashScrolled()) {
+      return;
+    }
+    const target = document.getElementById(hash.slice(1));
+    if (!target) {
+      return;
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setLastHashScrolled(hash);
+  };
+
+  createEffect(() => {
+    location.hash;
+    filteredAlerts().length;
+    props.showAcknowledged();
+    requestAnimationFrame(scrollToAlertHash);
+  });
 
   return (
     <div class="space-y-4 sm:space-y-6">
@@ -2535,6 +2561,7 @@ function OverviewTab(props: {
             <For each={filteredAlerts()}>
               {(alert) => (
                 <div
+                  id={`alert-${alert.id}`}
                   class={`border rounded-lg p-3 sm:p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
                     } ${alert.acknowledged
                       ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'

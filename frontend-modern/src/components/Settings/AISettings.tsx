@@ -136,6 +136,7 @@ export const AISettings: Component = () => {
   // UI state for collapsible sections - START COLLAPSED for compact view
   const [showAdvancedModels, setShowAdvancedModels] = createSignal(false);
   const [showPatrolSettings, setShowPatrolSettings] = createSignal(false);
+  const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);
 
   const [showChatMaintenance, setShowChatMaintenance] = createSignal(false);
 
@@ -167,6 +168,9 @@ export const AISettings: Component = () => {
     // Infrastructure control settings
     controlLevel: 'read_only' as ControlLevel,
     protectedGuests: '' as string, // Comma-separated VMIDs/names
+    // Discovery settings
+    discoveryEnabled: false,
+    discoveryIntervalHours: 0, // 0 = manual only
   });
 
   const resetForm = (data: AISettingsType | null) => {
@@ -196,6 +200,8 @@ export const AISettings: Component = () => {
         requestTimeoutSeconds: 300,
         controlLevel: 'read_only',
         protectedGuests: '',
+        discoveryEnabled: false,
+        discoveryIntervalHours: 0,
       });
       return;
     }
@@ -228,6 +234,8 @@ export const AISettings: Component = () => {
       requestTimeoutSeconds: data.request_timeout_seconds ?? 300,
       controlLevel: normalizeControlLevel(data.control_level),
       protectedGuests: Array.isArray(data.protected_guests) ? data.protected_guests.join(', ') : '',
+      discoveryEnabled: data.discovery_enabled ?? false,
+      discoveryIntervalHours: data.discovery_interval_hours ?? 0,
     });
 
     // Auto-expand providers that are configured
@@ -265,8 +273,10 @@ export const AISettings: Component = () => {
       const sessions = await AIChatAPI.listSessions();
       setChatSessions(sessions);
       const current = selectedSessionId();
-      if (!current || !sessions.some((session) => session.id === current)) {
-        setSelectedSessionId(sessions[0]?.id || '');
+      if (!Array.isArray(sessions) || sessions.length === 0) {
+        setSelectedSessionId('');
+      } else if (!current || !sessions.some((session) => session.id === current)) {
+        setSelectedSessionId(sessions[0].id);
       }
     } catch (error) {
       logger.error('[AISettings] Failed to load chat sessions:', error);
@@ -582,6 +592,14 @@ export const AISettings: Component = () => {
         newProtected.some((g: string, i: number) => g !== currentProtected[i]);
       if (protectedChanged) {
         payload.protected_guests = newProtected;
+      }
+
+      // Discovery settings
+      if (form.discoveryEnabled !== (settings()?.discovery_enabled ?? false)) {
+        payload.discovery_enabled = form.discoveryEnabled;
+      }
+      if (form.discoveryIntervalHours !== (settings()?.discovery_interval_hours ?? 0)) {
+        payload.discovery_interval_hours = form.discoveryIntervalHours;
       }
 
       const updated = await AIAPI.updateSettings(payload);
@@ -1520,6 +1538,81 @@ export const AISettings: Component = () => {
                         </Show>
                       </div>
                     </Show>
+                  </div>
+                </Show>
+              </div>
+
+              {/* Discovery Settings - Collapsible */}
+              <div class="rounded-lg border border-cyan-200 dark:border-cyan-800 overflow-hidden">
+                <button
+                  type="button"
+                  class="w-full px-3 py-2 flex items-center justify-between bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-colors text-left"
+                  onClick={() => setShowDiscoverySettings(!showDiscoverySettings())}
+                >
+                  <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Discovery Settings</span>
+                    {/* Summary badges */}
+                    <Show when={form.discoveryEnabled}>
+                      <span class="px-1.5 py-0.5 text-[10px] font-medium bg-cyan-100 dark:bg-cyan-800 text-cyan-700 dark:text-cyan-300 rounded">
+                        {form.discoveryIntervalHours > 0 ? `${form.discoveryIntervalHours}h` : 'Manual'}
+                      </span>
+                    </Show>
+                    <Show when={!form.discoveryEnabled}>
+                      <span class="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded">Off</span>
+                    </Show>
+                  </div>
+                  <svg class={`w-4 h-4 text-gray-500 transition-transform ${showDiscoverySettings() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <Show when={showDiscoverySettings()}>
+                  <div class="px-3 py-3 bg-white dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                    {/* Discovery Enabled Toggle */}
+                    <div class="flex items-center justify-between gap-2">
+                      <label class="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                        Enable Discovery
+                        <HelpIcon inline={{ title: "What is Discovery?", description: "Discovery scans your VMs, containers, and Docker hosts to identify what services are running (databases, web servers, etc.), their versions, and how to access them. This information helps Pulse AI give you accurate troubleshooting commands and understand your infrastructure." }} size="xs" />
+                      </label>
+                      <Toggle
+                        checked={form.discoveryEnabled}
+                        onChange={(event) => setForm('discoveryEnabled', event.currentTarget.checked)}
+                        disabled={saving()}
+                      />
+                    </div>
+
+                    {/* Discovery Interval - Only when enabled */}
+                    <Show when={form.discoveryEnabled}>
+                      <div class="flex flex-col gap-1">
+                        <div class="flex items-center gap-3">
+                          <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-32 flex-shrink-0">Scan Interval</label>
+                          <select
+                            class="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                            value={form.discoveryIntervalHours}
+                            onChange={(e) => setForm('discoveryIntervalHours', parseInt(e.currentTarget.value, 10))}
+                            disabled={saving()}
+                          >
+                            <option value={0}>Manual only</option>
+                            <option value={6}>Every 6 hours</option>
+                            <option value={12}>Every 12 hours</option>
+                            <option value={24}>Every 24 hours</option>
+                            <option value={48}>Every 2 days</option>
+                            <option value={168}>Every 7 days</option>
+                          </select>
+                        </div>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 ml-32 pl-3">
+                          {form.discoveryIntervalHours === 0
+                            ? 'Discovery runs only when you click "Update Discovery" on a resource'
+                            : 'Discovery will automatically re-scan resources at this interval'}
+                        </p>
+                      </div>
+                    </Show>
+
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400">
+                      💡 Without Discovery, Pulse AI won't know what's running where. With it enabled, AI can suggest correct commands like "docker exec mydb psql..." instead of generic advice.
+                    </p>
                   </div>
                 </Show>
               </div>

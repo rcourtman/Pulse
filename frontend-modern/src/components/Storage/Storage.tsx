@@ -8,6 +8,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { StorageFilter } from './StorageFilter';
+import { StorageConfigPanel } from './StorageConfigPanel';
 import { DiskList } from './DiskList';
 import { ZFSHealthMap } from './ZFSHealthMap';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
@@ -624,6 +625,9 @@ const Storage: Component = () => {
           searchInputRef={(el) => (searchInputRef = el)}
           columnVisibility={columnVisibility}
         />
+        <Show when={connected()}>
+          <StorageConfigPanel nodeFilter={selectedNode()} searchTerm={searchTerm()} />
+        </Show>
       </Show>
 
       {/* Show simple search for disks */}

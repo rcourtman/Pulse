@@ -245,17 +245,17 @@ export class AIAPI {
     return apiFetchJSON(`${this.baseUrl}/ai/remediation/plan?plan_id=${planId}`) as Promise<RemediationPlan>;
   }
 
-  static async approveRemediationPlan(planId: string): Promise<{ success: boolean }> {
+  static async approveRemediationPlan(planId: string): Promise<{ success: boolean; execution?: { id: string } }> {
     return apiFetchJSON(`${this.baseUrl}/ai/remediation/approve`, {
       method: 'POST',
       body: JSON.stringify({ plan_id: planId }),
-    }) as Promise<{ success: boolean }>;
+    }) as Promise<{ success: boolean; execution?: { id: string } }>;
   }
 
-  static async executeRemediationPlan(planId: string): Promise<RemediationExecutionResult> {
+  static async executeRemediationPlan(executionId: string): Promise<RemediationExecutionResult> {
     return apiFetchJSON(`${this.baseUrl}/ai/remediation/execute`, {
       method: 'POST',
-      body: JSON.stringify({ plan_id: planId }),
+      body: JSON.stringify({ execution_id: executionId }),
     }) as Promise<RemediationExecutionResult>;
   }
 
@@ -269,6 +269,47 @@ export class AIAPI {
   // Circuit breaker status
   static async getCircuitBreakerStatus(): Promise<CircuitBreakerStatus> {
     return apiFetchJSON(`${this.baseUrl}/ai/circuit/status`) as Promise<CircuitBreakerStatus>;
+  }
+
+  // ============================================
+  // Investigation Fix Approvals
+  // ============================================
+
+  // Get pending approval requests (investigation fixes waiting for user approval)
+  static async getPendingApprovals(): Promise<ApprovalRequest[]> {
+    const response = await apiFetchJSON(`${this.baseUrl}/ai/approvals`) as { approvals: ApprovalRequest[] };
+    return response.approvals || [];
+  }
+
+  // Approve and execute an investigation fix
+  static async approveInvestigationFix(approvalId: string): Promise<ApprovalExecutionResult> {
+    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${approvalId}/approve`, {
+      method: 'POST',
+    }) as Promise<ApprovalExecutionResult>;
+  }
+
+  // Deny an investigation fix
+  static async denyInvestigationFix(approvalId: string, reason?: string): Promise<ApprovalRequest> {
+    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${approvalId}/deny`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || 'User declined' }),
+    }) as Promise<ApprovalRequest>;
+  }
+
+  // Get investigation details for a finding (includes proposed fix)
+  static async getInvestigation(findingId: string): Promise<InvestigationSession | null> {
+    try {
+      return await apiFetchJSON(`${this.baseUrl}/ai/findings/${findingId}/investigation`) as InvestigationSession;
+    } catch {
+      return null;
+    }
+  }
+
+  // Re-create an approval for an investigation fix (when original approval expired)
+  static async reapproveInvestigationFix(findingId: string): Promise<{ approval_id: string; message: string }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/findings/${findingId}/reapprove`, {
+      method: 'POST',
+    }) as Promise<{ approval_id: string; message: string }>;
   }
 }
 
@@ -343,12 +384,41 @@ export interface RemediationStep {
   risk_level: 'low' | 'medium' | 'high';
 }
 
+export interface StepResult {
+  step: number;
+  success: boolean;
+  output?: string;
+  error?: string;
+  duration_ms: number;
+  run_at: string;
+}
+
+export interface RemediationExecution {
+  id: string;
+  plan_id: string;
+  status: 'pending' | 'approved' | 'running' | 'completed' | 'failed' | 'rolled_back';
+  approved_by?: string;
+  approved_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  current_step: number;
+  step_results?: StepResult[];
+  error?: string;
+  rollback_error?: string;
+}
+
+// Legacy type for backwards compatibility
 export interface RemediationExecutionResult {
   execution_id: string;
   plan_id: string;
   status: 'success' | 'failed' | 'partial';
   steps_completed: number;
   error?: string;
+  // Full execution details from backend
+  id?: string;
+  step_results?: StepResult[];
+  started_at?: string;
+  completed_at?: string;
 }
 
 export interface CircuitBreakerStatus {
@@ -357,4 +427,75 @@ export interface CircuitBreakerStatus {
   consecutive_failures: number;
   total_successes: number;
   total_failures: number;
+}
+
+// ============================================
+// Investigation Fix Approval Types
+// ============================================
+
+export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface ApprovalRequest {
+  id: string;
+  executionId?: string;
+  toolId: string;  // "investigation_fix" for patrol findings
+  command: string;
+  targetType: string;
+  targetId: string;
+  targetName: string;
+  context: string;
+  riskLevel: RiskLevel;
+  status: ApprovalStatus;
+  requestedAt: string;
+  expiresAt: string;
+  decidedAt?: string;
+  decidedBy?: string;
+  denyReason?: string;
+}
+
+export interface ApprovalExecutionResult {
+  approved: boolean;
+  executed: boolean;
+  success: boolean;
+  output: string;
+  exit_code: number;
+  error?: string;
+  finding_id: string;
+  message: string;
+}
+
+// ============================================
+// Investigation Session Types
+// ============================================
+
+export type InvestigationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
+export type InvestigationOutcome = 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix';
+
+export interface ProposedFix {
+  id: string;
+  description: string;
+  commands?: string[];
+  risk_level?: 'low' | 'medium' | 'high' | 'critical';
+  destructive: boolean;
+  target_host?: string;
+  rationale?: string;
+}
+
+export interface InvestigationSession {
+  id: string;
+  finding_id: string;
+  session_id: string;
+  status: InvestigationStatus;
+  started_at: string;
+  completed_at?: string;
+  turn_count: number;
+  outcome?: InvestigationOutcome;
+  tools_available?: string[];
+  tools_used?: string[];
+  evidence_ids?: string[];
+  proposed_fix?: ProposedFix;
+  approval_id?: string;
+  summary?: string;
+  error?: string;
 }

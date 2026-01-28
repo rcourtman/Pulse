@@ -23,6 +23,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     if (name === 'get_patterns' || name === 'pulse_get_patterns') return 'patterns';
     if (name === 'get_disk_health' || name === 'pulse_get_disk_health') return 'disks';
     if (name === 'get_storage' || name === 'pulse_get_storage') return 'storage';
+    if (name === 'pulse_get_storage_config') return 'storage cfg';
     if (name === 'get_resource_details' || name === 'pulse_get_resource_details') return 'resource';
     if (name.includes('finding')) return 'finding';
     return name.replace(/^pulse_/, '').replace(/_/g, ' ').substring(0, 12);

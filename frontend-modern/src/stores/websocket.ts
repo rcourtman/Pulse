@@ -813,6 +813,9 @@ export function createWebSocketStore(url: string) {
             scanning: false,
             timestamp: message.data?.timestamp,
           });
+        } else if ((message as {type: string}).type === 'ai_discovery_progress') {
+          // AI-powered discovery progress update
+          eventBus.emit('ai_discovery_progress', (message as {data: unknown}).data as import('../types/discovery').DiscoveryProgress);
         } else if (message.type === 'settingsUpdate') {
           // Settings have been updated (e.g., theme change)
           if (message.data?.theme) {

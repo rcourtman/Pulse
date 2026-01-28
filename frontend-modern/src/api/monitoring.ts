@@ -1,4 +1,4 @@
-import type { State, Performance, Stats, DockerHostCommand, HostLookupResponse } from '@/types/api';
+import type { State, Performance, Stats, DockerHostCommand, HostLookupResponse, StorageConfigEntry } from '@/types/api';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 
 export class MonitoringAPI {
@@ -19,6 +19,21 @@ export class MonitoringAPI {
   static async exportDiagnostics(): Promise<Blob> {
     const response = await apiFetch(`${this.baseUrl}/diagnostics/export`);
     return response.blob();
+  }
+
+  static async getStorageConfig(params?: {
+    instance?: string;
+    node?: string;
+    storageId?: string;
+  }): Promise<StorageConfigEntry[]> {
+    const query = new URLSearchParams();
+    if (params?.instance) query.set('instance', params.instance);
+    if (params?.node) query.set('node', params.node);
+    if (params?.storageId) query.set('storage_id', params.storageId);
+    const qs = query.toString();
+    const url = `${this.baseUrl}/storage/config${qs ? `?${qs}` : ''}`;
+    const resp = await apiFetchJSON(url) as { storages?: StorageConfigEntry[] };
+    return resp?.storages ?? [];
   }
 
   static async deleteDockerHost(
@@ -692,4 +707,3 @@ export interface UpdateDockerContainerResponse {
   message?: string;
   note?: string;
 }
-

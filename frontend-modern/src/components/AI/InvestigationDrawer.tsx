@@ -66,6 +66,20 @@ export const InvestigationDrawer: Component<InvestigationDrawerProps> = (props) 
   const [reinvestigating, setReinvestigating] = createSignal(false);
   const [approvingFix, setApprovingFix] = createSignal(false);
   const [denyingFix, setDenyingFix] = createSignal(false);
+  const toolsAvailable = () => investigation()?.tools_available ?? [];
+  const toolsUsed = () => investigation()?.tools_used ?? [];
+  const evidenceIDs = () => investigation()?.evidence_ids ?? [];
+
+  const handleCopyEvidence = async () => {
+    if (!evidenceIDs().length) return;
+    const payload = evidenceIDs().join('\n');
+    try {
+      await navigator.clipboard.writeText(payload);
+      notificationStore.success('Evidence IDs copied');
+    } catch (_err) {
+      notificationStore.error('Failed to copy evidence IDs');
+    }
+  };
 
   // Load investigation data when drawer opens
   createEffect(async () => {
@@ -301,6 +315,61 @@ export const InvestigationDrawer: Component<InvestigationDrawerProps> = (props) 
                 <div class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap bg-gray-50 dark:bg-gray-800/50 rounded p-3">
                   {investigation()!.summary}
                 </div>
+              </div>
+            </Show>
+
+            {/* Tools & Evidence */}
+            <Show when={toolsUsed().length || toolsAvailable().length || evidenceIDs().length}>
+              <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Tools & Evidence</h4>
+
+                <Show when={toolsUsed().length}>
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Tools used</div>
+                  <div class="flex flex-wrap gap-1 mb-3">
+                    <For each={toolsUsed()}>
+                      {(tool) => (
+                        <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-medium">
+                          {tool}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+
+                <Show when={toolsAvailable().length}>
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Tools available</div>
+                  <div class="flex flex-wrap gap-1 mb-3 max-h-20 overflow-y-auto">
+                    <For each={toolsAvailable()}>
+                      {(tool) => (
+                        <span class="px-1.5 py-0.5 rounded bg-gray-50 text-gray-600 dark:bg-gray-800/70 dark:text-gray-300 text-[10px]">
+                          {tool}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+
+                <Show when={evidenceIDs().length}>
+                  <div class="flex items-center justify-between mb-1">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Evidence IDs</div>
+                    <button
+                      type="button"
+                      onClick={handleCopyEvidence}
+                      class="text-[10px] px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div class="flex flex-wrap gap-1">
+                    <For each={evidenceIDs()}>
+                      {(id) => (
+                        <span class="px-1.5 py-0.5 rounded bg-gray-900 text-green-300 text-[10px] font-mono">
+                          {id}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </Show>
               </div>
             </Show>
 
