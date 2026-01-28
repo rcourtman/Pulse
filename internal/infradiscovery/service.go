@@ -1,4 +1,4 @@
-// Package infradiscovery provides AI-powered infrastructure discovery for detecting
+// Package infradiscovery provides infrastructure discovery for detecting
 // applications and services running on monitored hosts. It uses LLM analysis to
 // identify services from Docker containers, enabling AI systems like Patrol to
 // understand where services run and propose correct remediation commands.
@@ -70,8 +70,8 @@ type PortInfo struct {
 	Protocol      string `json:"protocol,omitempty"`
 }
 
-// AIDiscoveryResult represents the AI's analysis of a container.
-type AIDiscoveryResult struct {
+// DiscoveryResult represents the AI's analysis of a container.
+type DiscoveryResult struct {
 	ServiceType string  `json:"service_type"` // e.g., "postgres", "pbs", "nginx", "unknown"
 	ServiceName string  `json:"service_name"` // Human-readable name
 	Category    string  `json:"category"`     // backup, database, web, monitoring, etc.
@@ -80,7 +80,7 @@ type AIDiscoveryResult struct {
 	Reasoning   string  `json:"reasoning"`    // Why the AI made this determination
 }
 
-// Service manages AI-powered infrastructure discovery.
+// Service manages infrastructure discovery.
 type Service struct {
 	stateProvider  StateProvider
 	knowledgeStore *knowledge.Store
@@ -94,7 +94,7 @@ type Service struct {
 
 	// Cache to avoid re-analyzing the same containers
 	// Key: image name, Value: analysis result
-	analysisCache   map[string]*AIDiscoveryResult
+	analysisCache   map[string]*DiscoveryResult
 	cacheMu         sync.RWMutex
 	cacheExpiry     time.Duration
 	lastCacheUpdate time.Time
@@ -114,7 +114,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// NewService creates a new AI-powered infrastructure discovery service.
+// NewService creates a new infrastructure discovery service.
 func NewService(stateProvider StateProvider, knowledgeStore *knowledge.Store, cfg Config) *Service {
 	if cfg.Interval == 0 {
 		cfg.Interval = 5 * time.Minute
@@ -130,12 +130,12 @@ func NewService(stateProvider StateProvider, knowledgeStore *knowledge.Store, cf
 		cacheExpiry:    cfg.CacheExpiry,
 		stopCh:         make(chan struct{}),
 		discoveries:    make([]DiscoveredApp, 0),
-		analysisCache:  make(map[string]*AIDiscoveryResult),
+		analysisCache:  make(map[string]*DiscoveryResult),
 	}
 }
 
 // SetAIAnalyzer sets the AI analyzer for discovery.
-// This must be called before Start() for AI-powered discovery to work.
+// This must be called before Start() for discovery to work.
 func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -154,7 +154,7 @@ func (s *Service) Start(ctx context.Context) {
 
 	log.Info().
 		Dur("interval", s.interval).
-		Msg("Starting AI-powered infrastructure discovery service")
+		Msg("Starting infrastructure discovery service")
 
 	// Run immediately on startup
 	go func() {
@@ -285,7 +285,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 	cacheValid := time.Since(s.lastCacheUpdate) < s.cacheExpiry
 	s.cacheMu.RUnlock()
 
-	var result *AIDiscoveryResult
+	var result *DiscoveryResult
 
 	if found && cacheValid {
 		result = cached
@@ -459,7 +459,7 @@ Respond with ONLY the JSON, no other text.`, string(infoJSON))
 }
 
 // parseAIResponse parses the AI's JSON response.
-func (s *Service) parseAIResponse(response string) *AIDiscoveryResult {
+func (s *Service) parseAIResponse(response string) *DiscoveryResult {
 	// Try to extract JSON from the response
 	response = strings.TrimSpace(response)
 
@@ -487,7 +487,7 @@ func (s *Service) parseAIResponse(response string) *AIDiscoveryResult {
 		response = response[start : end+1]
 	}
 
-	var result AIDiscoveryResult
+	var result DiscoveryResult
 	if err := json.Unmarshal([]byte(response), &result); err != nil {
 		log.Debug().
 			Err(err).
@@ -581,7 +581,7 @@ func (s *Service) ForceRefresh(ctx context.Context) {
 func (s *Service) ClearCache() {
 	s.cacheMu.Lock()
 	defer s.cacheMu.Unlock()
-	s.analysisCache = make(map[string]*AIDiscoveryResult)
+	s.analysisCache = make(map[string]*DiscoveryResult)
 	s.lastCacheUpdate = time.Time{}
 }
 

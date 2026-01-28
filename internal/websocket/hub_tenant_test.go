@@ -83,6 +83,8 @@ func TestHub_Setters_Coverage(t *testing.T) {
 func TestHub_DispatchToTenantClients(t *testing.T) {
 	// This tests the internal logic of iterating clients
 	hub := NewHub(nil)
+	go hub.Run()
+	defer hub.Stop()
 
 	// Create a mock client
 	client := &Client{
@@ -93,11 +95,9 @@ func TestHub_DispatchToTenantClients(t *testing.T) {
 	}
 
 	// Manually register (simulating register channel)
-	hub.clients[client] = true
 	hub.register <- client
 
 	// Allow registration to process
-	go hub.Run()
 	time.Sleep(50 * time.Millisecond)
 
 	// Now broadcast to org1 (internal method)

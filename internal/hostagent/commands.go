@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -16,6 +18,10 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
+
+// safeTargetIDPattern validates target IDs to prevent shell injection.
+// Allows alphanumeric, dash, underscore, period (no colons or special chars).
+var safeTargetIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 var execCommandContext = exec.CommandContext
 
@@ -387,13 +393,39 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 }
 
 func wrapCommand(payload executeCommandPayload) string {
-	if payload.TargetType == "container" && payload.TargetID != "" {
-		return fmt.Sprintf("pct exec %s -- %s", payload.TargetID, payload.Command)
+	// Only validate TargetID when it will be interpolated into the command
+	// (container and vm types). Host type doesn't use TargetID in the command.
+	needsTargetID := (payload.TargetType == "container" || payload.TargetType == "vm") && payload.TargetID != ""
+
+	if needsTargetID {
+		// Validate TargetID to prevent shell injection - defense in depth
+		if !safeTargetIDPattern.MatchString(payload.TargetID) {
+			// Return a command that fails with non-zero exit and error message
+			return "sh -c 'echo \"Error: invalid target ID\" >&2; exit 1'"
+		}
+
+		// Wrap command in sh -c so shell metacharacters (pipes, redirects, globs)
+		// are processed inside the container/VM, not on the Proxmox host.
+		// Without this, "pct exec 141 -- grep pattern /var/log/*.log" would
+		// expand the glob on the host (where /var/log/*.log doesn't exist).
+		quotedCmd := shellQuote(payload.Command)
+
+		if payload.TargetType == "container" {
+			return fmt.Sprintf("pct exec %s -- sh -c %s", payload.TargetID, quotedCmd)
+		}
+		if payload.TargetType == "vm" {
+			return fmt.Sprintf("qm guest exec %s -- sh -c %s", payload.TargetID, quotedCmd)
+		}
 	}
-	if payload.TargetType == "vm" && payload.TargetID != "" {
-		return fmt.Sprintf("qm guest exec %s -- %s", payload.TargetID, payload.Command)
-	}
+
 	return payload.Command
+}
+
+// shellQuote safely quotes a string for use as a shell argument.
+// Uses single quotes and escapes any embedded single quotes.
+func shellQuote(s string) string {
+	escaped := strings.ReplaceAll(s, "'", "'\"'\"'")
+	return "'" + escaped + "'"
 }
 
 func (c *CommandClient) executeCommand(ctx context.Context, payload executeCommandPayload) commandResultPayload {
@@ -418,6 +450,8 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 		cmd = execCommandContext(cmdCtx, "cmd", "/C", command)
 	} else {
 		cmd = execCommandContext(cmdCtx, "sh", "-c", command)
+		// Ensure PATH includes common binary locations for docker, kubectl, etc.
+		cmd.Env = append(os.Environ(), "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:"+os.Getenv("PATH"))
 	}
 
 	var stdout, stderr bytes.Buffer

@@ -64,7 +64,7 @@ func TestParseAIResponse(t *testing.T) {
 	tests := []struct {
 		name     string
 		response string
-		want     *AIDiscoveryResult
+		want     *DiscoveryResult
 	}{
 		{
 			name: "valid JSON",
@@ -76,7 +76,7 @@ func TestParseAIResponse(t *testing.T) {
 				"confidence": 0.95,
 				"reasoning": "Image name contains postgres"
 			}`,
-			want: &AIDiscoveryResult{
+			want: &DiscoveryResult{
 				ServiceType: "postgres",
 				ServiceName: "PostgreSQL",
 				Category:    "database",
@@ -88,7 +88,7 @@ func TestParseAIResponse(t *testing.T) {
 		{
 			name:     "JSON in markdown code block",
 			response: "```json\n{\"service_type\": \"redis\", \"service_name\": \"Redis\", \"category\": \"cache\", \"cli_command\": \"docker exec {container} redis-cli\", \"confidence\": 0.9, \"reasoning\": \"Redis image\"}\n```",
-			want: &AIDiscoveryResult{
+			want: &DiscoveryResult{
 				ServiceType: "redis",
 				ServiceName: "Redis",
 				Category:    "cache",
@@ -107,7 +107,7 @@ func TestParseAIResponse(t *testing.T) {
 			response: `Here's my analysis:
 			{"service_type": "nginx", "service_name": "Nginx", "category": "web", "cli_command": "", "confidence": 0.85, "reasoning": "Web server"}
 			That's my answer.`,
-			want: &AIDiscoveryResult{
+			want: &DiscoveryResult{
 				ServiceType: "nginx",
 				ServiceName: "Nginx",
 				Category:    "web",

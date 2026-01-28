@@ -297,6 +297,22 @@ func (c *Config) ValidateAPIToken(rawToken string) (*APITokenRecord, bool) {
 	return nil, false
 }
 
+// IsValidAPIToken checks if a token is valid without mutating any metadata.
+// Use this for read-only checks like admin verification where you don't need
+// to update LastUsedAt or get the full record. Safe to call under RLock.
+func (c *Config) IsValidAPIToken(rawToken string) bool {
+	if rawToken == "" {
+		return false
+	}
+
+	for _, record := range c.APITokens {
+		if auth.CompareAPIToken(rawToken, record.Hash) {
+			return true
+		}
+	}
+	return false
+}
+
 // UpsertAPIToken inserts or replaces a record by ID.
 func (c *Config) UpsertAPIToken(record APITokenRecord) {
 	record.ensureScopes()

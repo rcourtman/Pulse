@@ -1959,12 +1959,19 @@ type PatrolRunHistoryData struct {
 
 // PatrolRunRecord represents a single patrol check run
 type PatrolRunRecord struct {
-	ID               string    `json:"id"`
-	StartedAt        time.Time `json:"started_at"`
-	CompletedAt      time.Time `json:"completed_at"`
-	DurationMs       int64     `json:"duration_ms"`
-	Type             string    `json:"type"` // "quick" or "deep"
-	ResourcesChecked int       `json:"resources_checked"`
+	ID                 string    `json:"id"`
+	StartedAt          time.Time `json:"started_at"`
+	CompletedAt        time.Time `json:"completed_at"`
+	DurationMs         int64     `json:"duration_ms"`
+	Type               string    `json:"type"` // "quick" or "deep"
+	TriggerReason      string    `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs   []string  `json:"scope_resource_ids,omitempty"`
+	ScopeResourceTypes []string  `json:"scope_resource_types,omitempty"`
+	ScopeDepth         string    `json:"scope_depth,omitempty"`
+	ScopeContext       string    `json:"scope_context,omitempty"`
+	AlertID            string    `json:"alert_id,omitempty"`
+	FindingID          string    `json:"finding_id,omitempty"`
+	ResourcesChecked   int       `json:"resources_checked"`
 	// Breakdown by resource type
 	NodesChecked      int `json:"nodes_checked"`
 	GuestsChecked     int `json:"guests_checked"`

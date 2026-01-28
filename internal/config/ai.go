@@ -69,13 +69,13 @@ type AIConfig struct {
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs or names that AI cannot control
 
 	// Patrol Autonomy settings - controls automatic investigation and remediation of findings
-	PatrolAutonomyLevel           string `json:"patrol_autonomy_level,omitempty"`            // "monitor", "approval", "full"
+	PatrolAutonomyLevel           string `json:"patrol_autonomy_level,omitempty"`            // "monitor", "approval", "assisted", "full"
+	PatrolFullModeUnlocked        bool   `json:"patrol_full_mode_unlocked"`                  // User has acknowledged Full mode risks (required to use "full")
 	PatrolInvestigationBudget     int    `json:"patrol_investigation_budget,omitempty"`      // Max turns per investigation (default: 15)
 	PatrolInvestigationTimeoutSec int    `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
-	PatrolCriticalRequireApproval bool   `json:"patrol_critical_require_approval"`           // Critical findings always require approval (default: true)
 
-	// AI Discovery settings - controls automatic infrastructure discovery
-	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // Enable AI-powered infrastructure discovery
+	// Discovery settings - controls automatic infrastructure discovery
+	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // Enable infrastructure discovery
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between automatic re-scans (0 = manual only, default: 0)
 }
 
@@ -102,13 +102,12 @@ const (
 const (
 	// PatrolAutonomyMonitor - Detect issues and create findings, no automatic investigation
 	PatrolAutonomyMonitor = "monitor"
-	// PatrolAutonomyApproval - Spawn Chat sessions to investigate, queue fixes for user approval
+	// PatrolAutonomyApproval - Spawn Chat sessions to investigate, queue ALL fixes for user approval
 	PatrolAutonomyApproval = "approval"
-	// PatrolAutonomyFull - Spawn Chat sessions to investigate, execute non-critical fixes automatically
+	// PatrolAutonomyAssisted - Auto-fix warnings, critical findings still need approval
+	PatrolAutonomyAssisted = "assisted"
+	// PatrolAutonomyFull - Full autonomy, auto-fix everything including critical (user accepts risk)
 	PatrolAutonomyFull = "full"
-	// PatrolAutonomyAutonomous - Full autonomy, execute ALL fixes including destructive ones without approval
-	// User accepts full risk - similar to "auto-accept" mode in Claude Code
-	PatrolAutonomyAutonomous = "autonomous"
 )
 
 // Default patrol investigation settings
@@ -577,8 +576,11 @@ func (c *AIConfig) GetPatrolAutonomyLevel() string {
 		return PatrolAutonomyMonitor
 	}
 	switch c.PatrolAutonomyLevel {
-	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyFull, PatrolAutonomyAutonomous:
+	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyAssisted, PatrolAutonomyFull:
 		return c.PatrolAutonomyLevel
+	// Migration: treat old "autonomous" as new "full"
+	case "autonomous":
+		return PatrolAutonomyFull
 	default:
 		return PatrolAutonomyMonitor
 	}
@@ -614,20 +616,10 @@ func (c *AIConfig) GetPatrolInvestigationTimeout() time.Duration {
 	return time.Duration(c.PatrolInvestigationTimeoutSec) * time.Second
 }
 
-// ShouldCriticalRequireApproval returns whether critical findings should always require approval
-// Defaults to true for safety
-func (c *AIConfig) ShouldCriticalRequireApproval() bool {
-	// This is a safety feature, default to true
-	// The JSON field uses the default Go behavior (false when not set),
-	// so we explicitly check if it was intended to be false
-	// For backwards compatibility, treat unset as true
-	return c.PatrolCriticalRequireApproval || c.PatrolAutonomyLevel == ""
-}
-
 // IsValidPatrolAutonomyLevel checks if a patrol autonomy level string is valid
 func IsValidPatrolAutonomyLevel(level string) bool {
 	switch level {
-	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyFull, PatrolAutonomyAutonomous:
+	case PatrolAutonomyMonitor, PatrolAutonomyApproval, PatrolAutonomyAssisted, PatrolAutonomyFull:
 		return true
 	default:
 		return false

@@ -23,22 +23,24 @@ func TestWrapCommand_TargetWrapping(t *testing.T) {
 			want: "echo ok",
 		},
 		{
-			name: "container wraps with pct",
+			name: "container wraps with pct and sh -c",
 			payload: executeCommandPayload{
 				Command:    "echo ok",
 				TargetType: "container",
 				TargetID:   "101",
 			},
-			want: "pct exec 101 -- echo ok",
+			// Commands are wrapped in sh -c so shell metacharacters are processed inside the container
+			want: "pct exec 101 -- sh -c 'echo ok'",
 		},
 		{
-			name: "vm wraps with qm guest exec",
+			name: "vm wraps with qm guest exec and sh -c",
 			payload: executeCommandPayload{
 				Command:    "echo ok",
 				TargetType: "vm",
 				TargetID:   "900",
 			},
-			want: "qm guest exec 900 -- echo ok",
+			// Commands are wrapped in sh -c so shell metacharacters are processed inside the VM
+			want: "qm guest exec 900 -- sh -c 'echo ok'",
 		},
 		{
 			name: "missing target id does not wrap",

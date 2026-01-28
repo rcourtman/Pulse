@@ -1410,6 +1410,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 					Instance: storageInstanceName,
 					Type:     storage.Type,
 					Status:   "available",
+					Path:     storage.Path,
 					Total:    int64(storage.Total),
 					Used:     int64(storage.Used),
 					Free:     int64(storage.Available),
@@ -1418,6 +1419,15 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 					Shared:   shared,
 					Enabled:  storage.Enabled == 1,
 					Active:   storage.Active == 1,
+				}
+
+				if hasClusterConfig {
+					if nodes := parseClusterStorageNodes(clusterConfig.Nodes); len(nodes) > 0 {
+						modelStorage.Nodes = nodes
+					}
+					if modelStorage.Path == "" && clusterConfig.Path != "" {
+						modelStorage.Path = clusterConfig.Path
+					}
 				}
 
 				// If this is ZFS storage, attach pool status information
@@ -2477,4 +2487,36 @@ func (m *Monitor) pollPVENode(
 	}
 
 	return modelNode, effectiveStatus, nil
+}
+
+func parseClusterStorageNodes(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == ';' || r == ' ' || r == '\t' || r == '\n'
+	})
+	if len(parts) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(parts))
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if _, exists := seen[part]; exists {
+			continue
+		}
+		seen[part] = struct{}{}
+		result = append(result, part)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }

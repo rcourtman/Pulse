@@ -52,12 +52,24 @@ func TestAIConfig_PatrolSettings(t *testing.T) {
 		t.Fatalf("patrol autonomy should be disabled by default")
 	}
 
+	// Test all valid levels
+	cfg.PatrolAutonomyLevel = PatrolAutonomyAssisted
+	if got := cfg.GetPatrolAutonomyLevel(); got != PatrolAutonomyAssisted {
+		t.Fatalf("patrol autonomy = %q, want assisted", got)
+	}
+
 	cfg.PatrolAutonomyLevel = PatrolAutonomyFull
 	if got := cfg.GetPatrolAutonomyLevel(); got != PatrolAutonomyFull {
-		t.Fatalf("patrol autonomy = %q", got)
+		t.Fatalf("patrol autonomy = %q, want full", got)
 	}
 	if !cfg.IsPatrolAutonomyEnabled() {
 		t.Fatalf("patrol autonomy should be enabled for full mode")
+	}
+
+	// Test migration: old "autonomous" maps to new "full"
+	cfg.PatrolAutonomyLevel = "autonomous"
+	if got := cfg.GetPatrolAutonomyLevel(); got != PatrolAutonomyFull {
+		t.Fatalf("patrol autonomy = %q, want full (migrated from autonomous)", got)
 	}
 
 	cfg.PatrolAutonomyLevel = "invalid"
@@ -94,17 +106,6 @@ func TestAIConfig_PatrolSettings(t *testing.T) {
 	if got := cfg.GetPatrolInvestigationTimeout(); got.Seconds() != 120 {
 		t.Fatalf("timeout should be 120s, got %s", got)
 	}
-
-	cfg.PatrolAutonomyLevel = ""
-	cfg.PatrolCriticalRequireApproval = false
-	if !cfg.ShouldCriticalRequireApproval() {
-		t.Fatalf("critical approval should default to true when level unset")
-	}
-
-	cfg.PatrolAutonomyLevel = PatrolAutonomyMonitor
-	if cfg.ShouldCriticalRequireApproval() {
-		t.Fatalf("critical approval should be false when explicitly disabled")
-	}
 }
 
 func TestAIConfig_ProtectedGuestsAndValidation(t *testing.T) {
@@ -130,5 +131,11 @@ func TestAIConfig_ProtectedGuestsAndValidation(t *testing.T) {
 	}
 	if !IsValidPatrolAutonomyLevel(PatrolAutonomyApproval) {
 		t.Fatalf("expected patrol approval to be valid")
+	}
+	if !IsValidPatrolAutonomyLevel(PatrolAutonomyAssisted) {
+		t.Fatalf("expected patrol assisted to be valid")
+	}
+	if !IsValidPatrolAutonomyLevel(PatrolAutonomyFull) {
+		t.Fatalf("expected patrol full to be valid")
 	}
 }

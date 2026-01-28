@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,4 +128,111 @@ func TestCommandClient_Run(t *testing.T) {
 	// Terminate
 	cancel()
 	time.Sleep(100 * time.Millisecond)
+}
+
+func TestWrapCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload executeCommandPayload
+		wantCmd string
+		checkFn func(string) bool
+	}{
+		{
+			name: "HostCommandPassedThrough",
+			payload: executeCommandPayload{
+				Command:    "ls -la",
+				TargetType: "host",
+				TargetID:   "",
+			},
+			wantCmd: "ls -la",
+		},
+		{
+			name: "LXCCommandWrappedInShC",
+			payload: executeCommandPayload{
+				Command:    "grep pattern /var/log/*.log",
+				TargetType: "container",
+				TargetID:   "141",
+			},
+			checkFn: func(cmd string) bool {
+				// Should be: pct exec 141 -- sh -c 'grep pattern /var/log/*.log'
+				return strings.HasPrefix(cmd, "pct exec 141 -- sh -c '") &&
+					strings.Contains(cmd, "grep pattern /var/log/*.log")
+			},
+		},
+		{
+			name: "VMCommandWrappedInShC",
+			payload: executeCommandPayload{
+				Command:    "cat /etc/hostname",
+				TargetType: "vm",
+				TargetID:   "100",
+			},
+			checkFn: func(cmd string) bool {
+				// Should be: qm guest exec 100 -- sh -c 'cat /etc/hostname'
+				return strings.HasPrefix(cmd, "qm guest exec 100 -- sh -c '") &&
+					strings.Contains(cmd, "cat /etc/hostname")
+			},
+		},
+		{
+			name: "LXCCommandWithSingleQuotes",
+			payload: executeCommandPayload{
+				Command:    "echo \"it's working\"",
+				TargetType: "container",
+				TargetID:   "141",
+			},
+			checkFn: func(cmd string) bool {
+				// Single quotes should be escaped: it's -> it'"'"'s
+				return strings.HasPrefix(cmd, "pct exec 141 -- sh -c '") &&
+					strings.Contains(cmd, `it'"'"'s`)
+			},
+		},
+		{
+			name: "LXCCommandWithPipeline",
+			payload: executeCommandPayload{
+				Command:    "echo 'test' | base64 -d > /tmp/file",
+				TargetType: "container",
+				TargetID:   "108",
+			},
+			checkFn: func(cmd string) bool {
+				// Pipeline should be wrapped so it runs inside LXC
+				return strings.HasPrefix(cmd, "pct exec 108 -- sh -c '") &&
+					strings.Contains(cmd, "| base64 -d > /tmp/file")
+			},
+		},
+		{
+			name: "InvalidTargetIDReturnsError",
+			payload: executeCommandPayload{
+				Command:    "ls",
+				TargetType: "container",
+				TargetID:   "141; rm -rf /", // injection attempt
+			},
+			checkFn: func(cmd string) bool {
+				return strings.Contains(cmd, "invalid target ID")
+			},
+		},
+		{
+			name: "EmptyTargetIDPassedThrough",
+			payload: executeCommandPayload{
+				Command:    "ls",
+				TargetType: "container",
+				TargetID:   "",
+			},
+			wantCmd: "ls", // No wrapping when TargetID is empty
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wrapCommand(tt.payload)
+			if tt.wantCmd != "" {
+				if got != tt.wantCmd {
+					t.Errorf("wrapCommand() = %q, want %q", got, tt.wantCmd)
+				}
+			}
+			if tt.checkFn != nil {
+				if !tt.checkFn(got) {
+					t.Errorf("wrapCommand() = %q, check failed", got)
+				}
+			}
+		})
+	}
 }
