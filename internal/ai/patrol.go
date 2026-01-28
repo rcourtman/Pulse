@@ -17,9 +17,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
-	"github.com/rcourtman/pulse-go-rewrite/internal/aidiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rs/zerolog/log"
 )
 
@@ -211,17 +211,26 @@ type PatrolStatus struct {
 	ErrorCount       int           `json:"error_count"`
 	Healthy          bool          `json:"healthy"`
 	IntervalMs       int64         `json:"interval_ms"` // Patrol interval in milliseconds
+	BlockedReason    string        `json:"blocked_reason,omitempty"`
+	BlockedAt        *time.Time    `json:"blocked_at,omitempty"`
 }
 
 // PatrolRunRecord represents a single patrol check run
 type PatrolRunRecord struct {
-	ID               string        `json:"id"`
-	StartedAt        time.Time     `json:"started_at"`
-	CompletedAt      time.Time     `json:"completed_at"`
-	Duration         time.Duration `json:"-"`
-	DurationMs       int64         `json:"duration_ms"`
-	Type             string        `json:"type"` // Always "patrol" now (kept for backwards compat)
-	ResourcesChecked int           `json:"resources_checked"`
+	ID                 string        `json:"id"`
+	StartedAt          time.Time     `json:"started_at"`
+	CompletedAt        time.Time     `json:"completed_at"`
+	Duration           time.Duration `json:"-"`
+	DurationMs         int64         `json:"duration_ms"`
+	Type               string        `json:"type"` // Always "patrol" now (kept for backwards compat)
+	TriggerReason      string        `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs   []string      `json:"scope_resource_ids,omitempty"`
+	ScopeResourceTypes []string      `json:"scope_resource_types,omitempty"`
+	ScopeDepth         string        `json:"scope_depth,omitempty"`
+	ScopeContext       string        `json:"scope_context,omitempty"`
+	AlertID            string        `json:"alert_id,omitempty"`
+	FindingID          string        `json:"finding_id,omitempty"`
+	ResourcesChecked   int           `json:"resources_checked"`
 	// Breakdown by resource type
 	NodesChecked      int `json:"nodes_checked"`
 	GuestsChecked     int `json:"guests_checked"`
@@ -307,18 +316,21 @@ type InvestigationFinding struct {
 
 // InvestigationSession represents the result of an investigation (minimal interface)
 type InvestigationSession struct {
-	ID          string            `json:"id"`
-	FindingID   string            `json:"finding_id"`
-	SessionID   string            `json:"session_id"`
-	Status      string            `json:"status"`
-	StartedAt   time.Time         `json:"started_at"`
-	CompletedAt *time.Time        `json:"completed_at,omitempty"`
-	TurnCount   int               `json:"turn_count"`
-	Outcome     string            `json:"outcome,omitempty"`
-	Summary     string            `json:"summary,omitempty"`
-	Error       string            `json:"error,omitempty"`
-	ProposedFix *InvestigationFix `json:"proposed_fix,omitempty"`
-	ApprovalID  string            `json:"approval_id,omitempty"`
+	ID             string            `json:"id"`
+	FindingID      string            `json:"finding_id"`
+	SessionID      string            `json:"session_id"`
+	Status         string            `json:"status"`
+	StartedAt      time.Time         `json:"started_at"`
+	CompletedAt    *time.Time        `json:"completed_at,omitempty"`
+	TurnCount      int               `json:"turn_count"`
+	Outcome        string            `json:"outcome,omitempty"`
+	ToolsAvailable []string          `json:"tools_available,omitempty"`
+	ToolsUsed      []string          `json:"tools_used,omitempty"`
+	EvidenceIDs    []string          `json:"evidence_ids,omitempty"`
+	Summary        string            `json:"summary,omitempty"`
+	Error          string            `json:"error,omitempty"`
+	ProposedFix    *InvestigationFix `json:"proposed_fix,omitempty"`
+	ApprovalID     string            `json:"approval_id,omitempty"`
 }
 
 // InvestigationFix represents a proposed remediation action
@@ -341,16 +353,16 @@ type PatrolService struct {
 	thresholdProvider   ThresholdProvider
 	config              PatrolConfig
 	findings            *FindingsStore
-	knowledgeStore      *knowledge.Store       // For per-resource notes in patrol context
-	discoveryStore      *aidiscovery.Store     // For AI-discovered infrastructure context
-	metricsHistory      MetricsHistoryProvider // For trend analysis and predictions
-	baselineStore       *baseline.Store        // For anomaly detection via learned baselines
-	changeDetector      *ChangeDetector        // For tracking infrastructure changes
-	remediationLog      *RemediationLog        // For tracking remediation actions
-	patternDetector     *PatternDetector       // For failure prediction from historical patterns
-	correlationDetector *CorrelationDetector   // For multi-resource correlation
-	incidentStore       *memory.IncidentStore  // For incident timeline capture
-	alertResolver       AlertResolver          // For AI-based alert resolution
+	knowledgeStore      *knowledge.Store        // For per-resource notes in patrol context
+	discoveryStore      *servicediscovery.Store // For AI-discovered infrastructure context
+	metricsHistory      MetricsHistoryProvider  // For trend analysis and predictions
+	baselineStore       *baseline.Store         // For anomaly detection via learned baselines
+	changeDetector      *ChangeDetector         // For tracking infrastructure changes
+	remediationLog      *RemediationLog         // For tracking remediation actions
+	patternDetector     *PatternDetector        // For failure prediction from historical patterns
+	correlationDetector *CorrelationDetector    // For multi-resource correlation
+	incidentStore       *memory.IncidentStore   // For incident timeline capture
+	alertResolver       AlertResolver           // For AI-based alert resolution
 
 	// New AI intelligence providers (Phase 6)
 	learningProvider     LearningProvider     // For learned preferences from user feedback
@@ -374,20 +386,24 @@ type PatrolService struct {
 
 	// Unified findings callback - pushes findings to unified store
 	unifiedFindingCallback UnifiedFindingCallback
+	// Unified resolver callback - marks findings resolved in unified store
+	unifiedFindingResolver func(findingID string)
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds    PatrolThresholds
 	proactiveMode bool // When true, warn before thresholds; when false, use exact thresholds
 
 	// Runtime state
-	running          bool
-	runInProgress    bool
-	stopCh           chan struct{}
-	configChanged    chan struct{} // Signal when config changes to reset ticker
-	lastPatrol       time.Time
-	lastDuration     time.Duration
-	resourcesChecked int
-	errorCount       int
+	running           bool
+	runInProgress     bool
+	stopCh            chan struct{}
+	configChanged     chan struct{} // Signal when config changes to reset ticker
+	lastPatrol        time.Time
+	lastDuration      time.Duration
+	resourcesChecked  int
+	errorCount        int
+	lastBlockedReason string
+	lastBlockedAt     time.Time
 
 	// Patrol run history with persistence support
 	runHistoryStore *PatrolRunHistoryStore
@@ -519,6 +535,71 @@ func (p *PatrolService) SetUnifiedFindingCallback(cb UnifiedFindingCallback) {
 	} else {
 		log.Info().Msg("Unified finding callback configured for patrol")
 	}
+}
+
+// SetUnifiedFindingResolver sets the callback for marking findings resolved in the unified store.
+func (p *PatrolService) SetUnifiedFindingResolver(cb func(findingID string)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.unifiedFindingResolver = cb
+	if cb != nil {
+		log.Info().Msg("Unified finding resolver configured for patrol")
+	}
+}
+
+// recordFinding stores a finding, syncs it to the unified store, and triggers follow-up actions.
+func (p *PatrolService) recordFinding(f *Finding) bool {
+	if p == nil || p.findings == nil || f == nil {
+		return false
+	}
+
+	isNew := p.findings.Add(f)
+	stored := p.findings.Get(f.ID)
+	if stored == nil {
+		return false
+	}
+
+	if isNew {
+		log.Info().
+			Str("finding_id", stored.ID).
+			Str("severity", string(stored.Severity)).
+			Str("resource", stored.ResourceName).
+			Str("title", stored.Title).
+			Msg("AI Patrol: New finding")
+
+		// Generate remediation plan for actionable findings
+		// Skip internal error findings (not actionable by users)
+		if !(stored.Key == "ai-patrol-error" || stored.ResourceID == "ai-service") {
+			p.generateRemediationPlan(stored)
+		}
+	}
+
+	// Push to unified store only if finding is active (not suppressed/dismissed)
+	if p.unifiedFindingCallback != nil && stored.IsActive() {
+		p.unifiedFindingCallback(stored)
+	}
+
+	// Trigger autonomous investigation if enabled and finding warrants it
+	p.MaybeInvestigateFinding(stored)
+
+	return isNew
+}
+
+func (p *PatrolService) setBlockedReason(reason string) {
+	if reason == "" {
+		return
+	}
+	p.mu.Lock()
+	p.lastBlockedReason = reason
+	p.lastBlockedAt = time.Now()
+	p.mu.Unlock()
+}
+
+func (p *PatrolService) clearBlockedReason() {
+	p.mu.Lock()
+	p.lastBlockedReason = ""
+	p.lastBlockedAt = time.Time{}
+	p.mu.Unlock()
 }
 
 // generateRemediationPlan creates a remediation plan for a finding if appropriate.
@@ -897,9 +978,9 @@ func (p *PatrolService) GetKnowledgeStore() *knowledge.Store {
 	return p.knowledgeStore
 }
 
-// SetDiscoveryStore sets the AI discovery store for infrastructure context
+// SetDiscoveryStore sets the discovery store for infrastructure context
 // This enables the patrol service to include discovered service info in prompts
-func (p *PatrolService) SetDiscoveryStore(store *aidiscovery.Store) {
+func (p *PatrolService) SetDiscoveryStore(store *servicediscovery.Store) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.discoveryStore = store
@@ -907,7 +988,7 @@ func (p *PatrolService) SetDiscoveryStore(store *aidiscovery.Store) {
 }
 
 // GetDiscoveryStore returns the discovery store for external access
-func (p *PatrolService) GetDiscoveryStore() *aidiscovery.Store {
+func (p *PatrolService) GetDiscoveryStore() *servicediscovery.Store {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.discoveryStore
@@ -1055,6 +1136,34 @@ func (p *PatrolService) TriggerScopedPatrol(ctx context.Context, scope PatrolSco
 		return
 	}
 
+	// Filter out empty resource IDs to prevent accidentally matching all resources
+	filteredIDs := make([]string, 0, len(scope.ResourceIDs))
+	for _, id := range scope.ResourceIDs {
+		if trimmed := strings.TrimSpace(id); trimmed != "" {
+			filteredIDs = append(filteredIDs, trimmed)
+		}
+	}
+	scope.ResourceIDs = filteredIDs
+
+	// Filter out empty resource types
+	filteredTypes := make([]string, 0, len(scope.ResourceTypes))
+	for _, t := range scope.ResourceTypes {
+		if trimmed := strings.TrimSpace(t); trimmed != "" {
+			filteredTypes = append(filteredTypes, trimmed)
+		}
+	}
+	scope.ResourceTypes = filteredTypes
+
+	// If no valid scope after filtering, skip - scheduled patrols provide full coverage
+	if len(scope.ResourceIDs) == 0 && len(scope.ResourceTypes) == 0 {
+		log.Debug().
+			Str("reason", string(scope.Reason)).
+			Msg("AI Patrol: Scoped patrol skipped - no valid resource IDs or types after filtering")
+		return
+	}
+
+	scope = p.addDiscoveryScopeHint(scope)
+
 	// Log the scoped patrol
 	log.Info().
 		Str("reason", string(scope.Reason)).
@@ -1064,14 +1173,66 @@ func (p *PatrolService) TriggerScopedPatrol(ctx context.Context, scope PatrolSco
 		Str("context", scope.Context).
 		Msg("AI Patrol: Running scoped patrol")
 
-	// If no specific resources or types are specified, run full patrol
-	if len(scope.ResourceIDs) == 0 && len(scope.ResourceTypes) == 0 {
-		p.runPatrol(ctx)
-		return
-	}
-
 	// Run scoped patrol with filtered resources
 	p.runScopedPatrol(ctx, scope)
+}
+
+func (p *PatrolService) addDiscoveryScopeHint(scope PatrolScope) PatrolScope {
+	if len(scope.ResourceIDs) == 0 {
+		return scope
+	}
+
+	if strings.Contains(strings.ToLower(scope.Context), "discovery:") {
+		return scope
+	}
+
+	p.mu.RLock()
+	discoveryStore := p.discoveryStore
+	p.mu.RUnlock()
+
+	if discoveryStore == nil {
+		return scope
+	}
+
+	discoveries, err := discoveryStore.List()
+	if err != nil || len(discoveries) == 0 {
+		if err != nil {
+			log.Debug().Err(err).Msg("AI Patrol: Failed to load discovery data for scope hints")
+		}
+		return scope
+	}
+
+	filtered := servicediscovery.FilterDiscoveriesByResourceIDs(discoveries, scope.ResourceIDs)
+	hint := servicediscovery.FormatScopeHint(filtered)
+	if hint == "" {
+		return scope
+	}
+	if strings.Contains(scope.Context, hint) {
+		return scope
+	}
+
+	const maxScopeContextLen = 240
+	if scope.Context == "" {
+		scope.Context = truncateScopeContext(hint, maxScopeContextLen)
+		return scope
+	}
+	if len(scope.Context) >= maxScopeContextLen {
+		return scope
+	}
+
+	scope.Context = truncateScopeContext(scope.Context+" | "+hint, maxScopeContextLen)
+
+	return scope
+}
+
+func truncateScopeContext(value string, max int) string {
+	if max <= 0 || len(value) <= max {
+		return value
+	}
+	if max <= 3 {
+		return value[:max]
+	}
+	return value[:max-3] + "..."
 }
 
 // runScopedPatrol runs a patrol on a filtered subset of resources.
@@ -1091,13 +1252,28 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	}
 	defer p.endRun()
 
-	// Check if circuit breaker allows LLM calls
+	// Check if circuit breaker allows LLM calls.
 	llmAllowed := breaker == nil || breaker.Allow()
 	if !llmAllowed {
-		log.Warn().Msg("AI Patrol: Circuit breaker is open for scoped patrol, running heuristics only")
+		log.Warn().Msg("AI Patrol: Circuit breaker is open for scoped patrol (LLM calls blocked)")
 	}
 
 	start := time.Now()
+	var runStats struct {
+		resourceCount     int
+		nodesChecked      int
+		guestsChecked     int
+		dockerChecked     int
+		storageChecked    int
+		hostsChecked      int
+		pbsChecked        int
+		kubernetesChecked int
+		newFindings       int
+		existingFindings  int
+		findingIDs        []string
+		errors            int
+		aiAnalysis        *AIAnalysisResult
+	}
 
 	// Get current state
 	if p.stateProvider == nil {
@@ -1147,6 +1323,44 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		Str("reason", string(scope.Reason)).
 		Msg("AI Patrol: Running scoped analysis")
 
+	// Track run statistics
+	if cfg.AnalyzeNodes {
+		runStats.nodesChecked = len(filteredState.Nodes)
+	}
+	if cfg.AnalyzeGuests {
+		runStats.guestsChecked = len(filteredState.VMs) + len(filteredState.Containers)
+	}
+	if cfg.AnalyzeDocker {
+		runStats.dockerChecked = len(filteredState.DockerHosts)
+	}
+	if cfg.AnalyzeStorage {
+		runStats.storageChecked = len(filteredState.Storage)
+	}
+	if cfg.AnalyzePBS {
+		runStats.pbsChecked = len(filteredState.PBSInstances)
+	}
+	if cfg.AnalyzeHosts {
+		runStats.hostsChecked = len(filteredState.Hosts)
+	}
+	if cfg.AnalyzeKubernetes {
+		runStats.kubernetesChecked = len(filteredState.KubernetesClusters)
+	}
+	runStats.resourceCount = resourceCount
+
+	trackFinding := func(f *Finding) {
+		isNew := p.recordFinding(f)
+		if isNew {
+			if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
+				runStats.newFindings++
+			}
+		} else {
+			runStats.existingFindings++
+		}
+		if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
+			runStats.findingIDs = append(runStats.findingIDs, f.ID)
+		}
+	}
+
 	// Determine if we can run LLM analysis
 	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
 	hasPatrolFeature := aiServiceEnabled && p.aiService.HasLicenseFeature(FeatureAIPatrol)
@@ -1159,96 +1373,106 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		} else if !llmAllowed {
 			reason = "circuit breaker is open"
 		}
-		log.Debug().Str("reason", reason).Msg("AI Patrol: Running scoped heuristic analysis only")
-		// Run heuristics on filtered state only
-		for _, f := range p.runHeuristicAnalysis(filteredState) {
-			isNew := p.findings.Add(f)
-			if isNew && (f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical) {
-				log.Info().
-					Str("finding_id", f.ID).
-					Str("severity", string(f.Severity)).
-					Str("resource", f.ResourceName).
-					Str("title", f.Title).
-					Msg("AI Patrol (scoped): New finding")
-				p.generateRemediationPlan(f)
-			}
-			// Push to unified store if active
-			if p.unifiedFindingCallback != nil {
-				if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
-					p.unifiedFindingCallback(stored)
-				}
-			}
-		}
+		p.setBlockedReason(reason)
+		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping scoped run - AI unavailable")
+		return
 	} else {
+		p.clearBlockedReason()
 		// Run AI analysis on filtered state
-		aiResult, aiErr := p.runAIAnalysis(ctx, filteredState)
+		aiResult, aiErr := p.runScopedAIAnalysis(ctx, filteredState, scope)
 		if aiErr != nil {
-			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed, running heuristics as safety net")
-			for _, f := range p.runHeuristicAnalysis(filteredState) {
-				isNew := p.findings.Add(f)
-				if isNew && (f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical) {
-					log.Info().
-						Str("finding_id", f.ID).
-						Str("severity", string(f.Severity)).
-						Str("resource", f.ResourceName).
-						Str("title", f.Title).
-						Msg("AI Patrol (scoped): New finding")
-					p.generateRemediationPlan(f)
-				}
-				// Push to unified store if active
-				if p.unifiedFindingCallback != nil {
-					if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
-						p.unifiedFindingCallback(stored)
-					}
-				}
-			}
+			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed")
+			runStats.errors++
 		} else if aiResult != nil {
+			runStats.aiAnalysis = aiResult
 			if len(aiResult.Findings) == 0 {
-				log.Warn().Msg("AI Patrol (scoped): LLM response contained no parseable findings, running heuristics as safety net")
-				for _, f := range p.runHeuristicAnalysis(filteredState) {
-					isNew := p.findings.Add(f)
-					if isNew && (f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical) {
-						log.Info().
-							Str("finding_id", f.ID).
-							Str("severity", string(f.Severity)).
-							Str("resource", f.ResourceName).
-							Str("title", f.Title).
-							Msg("AI Patrol (scoped): New finding")
-						p.generateRemediationPlan(f)
-					}
-					// Push to unified store if active
-					if p.unifiedFindingCallback != nil {
-						if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
-							p.unifiedFindingCallback(stored)
-						}
-					}
-				}
+				log.Warn().Msg("AI Patrol (scoped): LLM response contained no parseable findings")
 			} else {
 				for _, f := range aiResult.Findings {
-					isNew := p.findings.Add(f)
-					if isNew && (f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical) {
-						log.Info().
-							Str("finding_id", f.ID).
-							Str("severity", string(f.Severity)).
-							Str("resource", f.ResourceName).
-							Str("title", f.Title).
-							Msg("AI Patrol (scoped): New finding")
-						if !(f.Key == "ai-patrol-error" || f.ResourceID == "ai-service") {
-							p.generateRemediationPlan(f)
-						}
-					}
-					// Push to unified store if active
-					if p.unifiedFindingCallback != nil {
-						if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
-							p.unifiedFindingCallback(stored)
-						}
-					}
+					trackFinding(f)
 				}
 			}
 		}
 	}
 
 	duration := time.Since(start)
+	completedAt := time.Now()
+
+	// Build findings summary string
+	summary := p.findings.GetSummary()
+	var findingsSummaryStr string
+	var status string
+	totalActive := summary.Critical + summary.Warning
+	if totalActive == 0 {
+		findingsSummaryStr = "All healthy"
+		status = "healthy"
+	} else {
+		parts := []string{}
+		if summary.Critical > 0 {
+			parts = append(parts, fmt.Sprintf("%d critical", summary.Critical))
+		}
+		if summary.Warning > 0 {
+			parts = append(parts, fmt.Sprintf("%d warning", summary.Warning))
+		}
+		findingsSummaryStr = fmt.Sprintf("%s", joinParts(parts))
+		if summary.Critical > 0 {
+			status = "critical"
+		} else {
+			status = "issues_found"
+		}
+	}
+	if runStats.errors > 0 {
+		status = "error"
+		if findingsSummaryStr == "All healthy" {
+			findingsSummaryStr = fmt.Sprintf("Analysis incomplete (%d errors)", runStats.errors)
+		}
+	}
+
+	runRecord := PatrolRunRecord{
+		ID:                 fmt.Sprintf("%d", start.UnixNano()),
+		StartedAt:          start,
+		CompletedAt:        completedAt,
+		Duration:           duration,
+		DurationMs:         duration.Milliseconds(),
+		Type:               "scoped",
+		TriggerReason:      string(scope.Reason),
+		ScopeResourceIDs:   scope.ResourceIDs,
+		ScopeResourceTypes: scope.ResourceTypes,
+		ScopeDepth:         scope.Depth.String(),
+		ScopeContext:       scope.Context,
+		AlertID:            scope.AlertID,
+		FindingID:          scope.FindingID,
+		ResourcesChecked:   runStats.resourceCount,
+		NodesChecked:       runStats.nodesChecked,
+		GuestsChecked:      runStats.guestsChecked,
+		DockerChecked:      runStats.dockerChecked,
+		StorageChecked:     runStats.storageChecked,
+		HostsChecked:       runStats.hostsChecked,
+		PBSChecked:         runStats.pbsChecked,
+		KubernetesChecked:  runStats.kubernetesChecked,
+		NewFindings:        runStats.newFindings,
+		ExistingFindings:   runStats.existingFindings,
+		FindingsSummary:    findingsSummaryStr,
+		FindingIDs:         runStats.findingIDs,
+		ErrorCount:         runStats.errors,
+		Status:             status,
+	}
+
+	if runStats.aiAnalysis != nil {
+		runRecord.AIAnalysis = runStats.aiAnalysis.Response
+		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
+		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
+	}
+
+	p.mu.Lock()
+	p.lastPatrol = completedAt
+	p.lastDuration = duration
+	p.resourcesChecked = runStats.resourceCount
+	p.errorCount = runStats.errors
+	p.mu.Unlock()
+
+	p.runHistoryStore.Add(runRecord)
+
 	log.Info().
 		Dur("duration", duration).
 		Int("resources", resourceCount).
@@ -1534,10 +1758,14 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 		FindingsCount:    len(p.findings.GetActive(FindingSeverityInfo)),
 		ErrorCount:       p.errorCount,
 		IntervalMs:       intervalMs,
+		BlockedReason:    p.lastBlockedReason,
 	}
 
 	if !p.lastPatrol.IsZero() {
 		status.LastPatrolAt = &p.lastPatrol
+	}
+	if !p.lastBlockedAt.IsZero() {
+		status.BlockedAt = &p.lastBlockedAt
 	}
 
 	// Calculate next patrol time only when patrol is enabled
@@ -1574,9 +1802,16 @@ func (p *PatrolService) SubscribeToStream() chan PatrolStreamEvent {
 // UnsubscribeFromStream removes a subscriber
 func (p *PatrolService) UnsubscribeFromStream(ch chan PatrolStreamEvent) {
 	p.streamMu.Lock()
+	_, exists := p.streamSubscribers[ch]
 	delete(p.streamSubscribers, ch)
 	p.streamMu.Unlock()
-	close(ch)
+
+	// Only close if we actually removed it from the map
+	// (broadcast may have already removed and closed it)
+	if exists {
+		defer func() { recover() }() // Safety net for race with broadcast cleanup
+		close(ch)
+	}
 }
 
 // broadcast sends an event to all subscribers
@@ -1694,7 +1929,7 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 		}
 
 		if !skipInitial {
-			p.runPatrol(ctx)
+			p.runPatrolWithTrigger(ctx, TriggerReasonStartup, nil)
 		}
 	case <-p.stopCh:
 		return
@@ -1713,7 +1948,7 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			p.runPatrol(ctx)
+			p.runPatrolWithTrigger(ctx, TriggerReasonScheduled, nil)
 
 		case alert := <-p.adHocTrigger:
 			// Run immediate targeted patrol for this alert
@@ -1743,8 +1978,13 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 	}
 }
 
-// runPatrol executes a patrol run
+// runPatrol executes a scheduled patrol run
 func (p *PatrolService) runPatrol(ctx context.Context) {
+	p.runPatrolWithTrigger(ctx, TriggerReasonScheduled, nil)
+}
+
+// runPatrolWithTrigger executes a patrol run with trigger context
+func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger TriggerReason, scope *PatrolScope) {
 	p.mu.RLock()
 	cfg := p.config
 	breaker := p.circuitBreaker
@@ -1759,11 +1999,10 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	}
 	defer p.endRun()
 
-	// Check if circuit breaker allows LLM calls
-	// We still run heuristics and basic analysis even when breaker is open
+	// Check if circuit breaker allows LLM calls.
 	llmAllowed := breaker == nil || breaker.Allow()
 	if !llmAllowed {
-		log.Warn().Msg("AI Patrol: Circuit breaker is open, running heuristics only (no LLM calls)")
+		log.Warn().Msg("AI Patrol: Circuit breaker is open (LLM calls blocked)")
 	}
 
 	start := time.Now()
@@ -1800,46 +2039,21 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	// Helper to track findings
 	// Note: Only warning+ severity findings count toward newFindings since watch/info are filtered from UI
 	trackFinding := func(f *Finding) bool {
-		isNew := p.findings.Add(f)
+		isNew := p.recordFinding(f)
 		if isNew {
 			// Only count warning+ findings as "new" for user-facing stats
 			if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
 				runStats.newFindings++
 				newFindings = append(newFindings, f)
 			}
-			log.Info().
-				Str("finding_id", f.ID).
-				Str("severity", string(f.Severity)).
-				Str("resource", f.ResourceName).
-				Str("title", f.Title).
-				Msg("AI Patrol: New finding")
-
-			// Generate remediation plan for actionable findings
-			// Skip internal error findings (not actionable by users)
-			// Using negated OR: generate only when NEITHER condition matches
-			if !(f.Key == "ai-patrol-error" || f.ResourceID == "ai-service") {
-				p.generateRemediationPlan(f)
-			}
 		} else {
 			runStats.existingFindings++
-		}
-
-		// Push to unified store only if finding is active (not suppressed/dismissed)
-		// This ensures last_seen, severity, times_raised stay in sync for active findings
-		// but doesn't resurface findings the user has dismissed
-		if p.unifiedFindingCallback != nil {
-			if stored := p.findings.Get(f.ID); stored != nil && stored.IsActive() {
-				p.unifiedFindingCallback(stored)
-			}
 		}
 
 		// Only track warning+ severity finding IDs in the run record
 		if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
 			runStats.findingIDs = append(runStats.findingIDs, f.ID)
 		}
-
-		// Trigger autonomous investigation if enabled and finding warrants it
-		p.MaybeInvestigateFinding(f)
 
 		return isNew
 	}
@@ -1875,7 +2089,7 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	hasPatrolFeature := aiServiceEnabled && p.aiService.HasLicenseFeature(FeatureAIPatrol)
 	canRunLLM := hasPatrolFeature && llmAllowed
 
-	// Check if we can run LLM analysis (Pro feature + circuit breaker allows)
+	// Check if we can run LLM analysis (AI-only patrol)
 	if !canRunLLM {
 		reason := "requires Pulse Pro license for LLM analysis"
 		if !aiServiceEnabled {
@@ -1883,11 +2097,11 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		} else if !llmAllowed {
 			reason = "circuit breaker is open"
 		}
-		log.Debug().Str("reason", reason).Msg("AI Patrol: Running heuristic analysis only")
-		for _, f := range p.runHeuristicAnalysis(state) {
-			trackFinding(f)
-		}
+		p.setBlockedReason(reason)
+		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping run - AI unavailable")
+		return
 	} else {
+		p.clearBlockedReason()
 		// Run AI analysis using the LLM - this is the ONLY analysis method for Pro users
 		// The LLM analyzes the infrastructure and identifies issues
 		aiResult, aiErr := p.runAIAnalysis(ctx, state)
@@ -1932,19 +2146,10 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 				LastSeenAt:     time.Now(),
 			}
 			trackFinding(errorFinding)
-
-			// Fall back to heuristic analysis so we still surface local issues
-			log.Debug().Msg("AI Patrol: Falling back to heuristic analysis after LLM error")
-			for _, f := range p.runHeuristicAnalysis(state) {
-				trackFinding(f)
-			}
 		} else if aiResult != nil {
 			runStats.aiAnalysis = aiResult
 			if len(aiResult.Findings) == 0 {
-				log.Warn().Msg("AI Patrol: LLM response contained no parseable findings, running heuristics as safety net")
-				for _, f := range p.runHeuristicAnalysis(state) {
-					trackFinding(f)
-				}
+				log.Warn().Msg("AI Patrol: LLM response contained no parseable findings")
 			} else {
 				for _, f := range aiResult.Findings {
 					trackFinding(f)
@@ -1980,7 +2185,7 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	resolvedCount += runbookResolved
 
 	// AI-based alert review: check active alerts against current state and auto-resolve fixed issues
-	// Pass llmAllowed so it knows whether AI calls are allowed (heuristics always run)
+	// Pass llmAllowed so it knows whether AI calls are allowed.
 	alertsResolved := p.reviewAndResolveAlerts(ctx, state, llmAllowed)
 	if alertsResolved > 0 {
 		log.Info().Int("alerts_resolved", alertsResolved).Msg("AI Patrol: Auto-resolved alerts where issues are fixed")
@@ -2029,6 +2234,7 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		Duration:          duration,
 		DurationMs:        duration.Milliseconds(),
 		Type:              patrolType,
+		TriggerReason:     string(trigger),
 		ResourcesChecked:  runStats.resourceCount,
 		NodesChecked:      runStats.nodesChecked,
 		GuestsChecked:     runStats.guestsChecked,
@@ -2045,6 +2251,15 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		FindingIDs:        runStats.findingIDs,
 		ErrorCount:        runStats.errors,
 		Status:            status,
+	}
+
+	if scope != nil {
+		runRecord.ScopeResourceIDs = scope.ResourceIDs
+		runRecord.ScopeResourceTypes = scope.ResourceTypes
+		runRecord.ScopeDepth = scope.Depth.String()
+		runRecord.ScopeContext = scope.Context
+		runRecord.AlertID = scope.AlertID
+		runRecord.FindingID = scope.FindingID
 	}
 
 	// Add AI analysis details if available
@@ -2795,12 +3010,19 @@ func (p *PatrolService) parseAndResolveFindings(response string, findings []*Fin
 		findingMap[f.ID] = f
 	}
 
+	p.mu.RLock()
+	resolveUnified := p.unifiedFindingResolver
+	p.mu.RUnlock()
+
 	// Resolve the findings the AI indicated
 	resolvedCount := 0
 	for _, item := range parsed.Resolve {
 		if f, exists := findingMap[item.ID]; exists {
 			if p.findings.Resolve(f.ID, true) {
 				resolvedCount++
+				if resolveUnified != nil {
+					resolveUnified(f.ID)
+				}
 				log.Info().
 					Str("finding_id", f.ID).
 					Str("resource", f.ResourceName).
@@ -2853,7 +3075,7 @@ func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models
 
 	resolvedCount := 0
 
-	// Pass nil for aiService if LLM is not allowed (forces heuristics-only)
+	// Pass nil for aiService if LLM is not allowed (use heuristic checks only).
 	aiSvc := aiService
 	if !llmAllowed {
 		aiSvc = nil
@@ -3142,6 +3364,13 @@ func (p *PatrolService) ResolveFinding(findingID string, resolutionNote string) 
 		return fmt.Errorf("failed to resolve finding: %s", findingID)
 	}
 
+	p.mu.RLock()
+	resolveUnified := p.unifiedFindingResolver
+	p.mu.RUnlock()
+	if resolveUnified != nil {
+		resolveUnified(findingID)
+	}
+
 	log.Info().
 		Str("finding_id", findingID).
 		Str("resolution_note", resolutionNote).
@@ -3240,7 +3469,7 @@ func (p *PatrolService) ForcePatrol(ctx context.Context, deep bool) {
 	if ctx != nil {
 		runCtx = context.WithoutCancel(ctx)
 	}
-	go p.runPatrol(runCtx)
+	go p.runPatrolWithTrigger(runCtx, TriggerReasonManual, nil)
 }
 
 // analyzePBSInstance checks a PBS backup server for issues
@@ -3882,12 +4111,8 @@ func cleanThinkingTokens(content string) string {
 	return strings.TrimSpace(content)
 }
 
-// runAIAnalysis uses the LLM to analyze infrastructure and identify issues
+// runAIAnalysis uses the LLM to analyze infrastructure and identify issues.
 func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSnapshot) (*AIAnalysisResult, error) {
-	if p.aiService == nil {
-		return nil, fmt.Errorf("Pulse Patrol service not available")
-	}
-
 	// Build enriched infrastructure context with trends and predictions
 	// Falls back to basic summary if metrics history is not available
 	summary := p.buildEnrichedContext(state)
@@ -3896,6 +4121,27 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	}
 
 	prompt := p.buildPatrolPrompt(summary)
+	return p.runAIAnalysisWithPrompt(ctx, state, prompt)
+}
+
+// runScopedAIAnalysis uses the LLM to analyze a scoped subset of resources.
+func (p *PatrolService) runScopedAIAnalysis(ctx context.Context, state models.StateSnapshot, scope PatrolScope) (*AIAnalysisResult, error) {
+	summary := p.buildEnrichedContext(state)
+	if summary == "" {
+		return nil, nil
+	}
+
+	prompt := p.buildPatrolPromptForScope(summary, scope)
+	return p.runAIAnalysisWithPrompt(ctx, state, prompt)
+}
+
+func (p *PatrolService) runAIAnalysisWithPrompt(ctx context.Context, state models.StateSnapshot, prompt string) (*AIAnalysisResult, error) {
+	if p.aiService == nil {
+		return nil, fmt.Errorf("Pulse Patrol service not available")
+	}
+	if strings.TrimSpace(prompt) == "" {
+		return nil, nil
+	}
 
 	log.Debug().Msg("AI Patrol: Sending infrastructure to LLM for analysis")
 
@@ -4485,9 +4731,9 @@ func convertToContextMetricsMap(metricsMap map[string][]MetricPoint) map[string]
 	return result
 }
 
-// buildPatrolPrompt creates the prompt for AI analysis
-// Includes user feedback context to prevent re-raising dismissed findings
-func (p *PatrolService) buildPatrolPrompt(summary string) string {
+// buildPatrolPromptWithResources creates the prompt for AI analysis.
+// Includes user feedback context to prevent re-raising dismissed findings.
+func (p *PatrolService) buildPatrolPromptWithResources(summary string, resourceIDs []string) string {
 	// Get user feedback context (dismissed/snoozed findings)
 	feedbackContext := p.findings.GetDismissedForContext()
 
@@ -4495,24 +4741,26 @@ func (p *PatrolService) buildPatrolPrompt(summary string) string {
 	var knowledgeContext string
 	var infraContext string
 	var incidentContext string
-	var discoveryContext string
 	p.mu.RLock()
 	knowledgeStore := p.knowledgeStore
 	incidentStore := p.incidentStore
-	discoveryStore := p.discoveryStore
 	p.mu.RUnlock()
 	if knowledgeStore != nil {
-		knowledgeContext = knowledgeStore.FormatAllForContext()
-		infraContext = knowledgeStore.GetInfrastructureContext()
+		if len(resourceIDs) > 0 {
+			knowledgeContext = knowledgeStore.FormatForContextForResources(resourceIDs)
+		} else {
+			knowledgeContext = knowledgeStore.FormatAllForContext()
+		}
+		// GetInfrastructureContext now includes discovery via the discoveryContextProvider,
+		// so we don't need to call servicediscovery.FormatForAIContext separately
+		if len(resourceIDs) > 0 {
+			infraContext = knowledgeStore.GetInfrastructureContextForResources(resourceIDs)
+		} else {
+			infraContext = knowledgeStore.GetInfrastructureContext()
+		}
 	}
 	if incidentStore != nil {
 		incidentContext = incidentStore.FormatForPatrol(8)
-	}
-	// Get AI discovery context (deep-scanned service info)
-	if discoveryStore != nil {
-		if discoveries, err := discoveryStore.List(); err == nil && len(discoveries) > 0 {
-			discoveryContext = aidiscovery.FormatForAIContext(discoveries)
-		}
 	}
 
 	basePrompt := fmt.Sprintf(`Please perform a comprehensive analysis of the following infrastructure and identify any issues, potential problems, or optimization opportunities.
@@ -4554,12 +4802,6 @@ IMPORTANT: When proposing remediation commands, use the CLI access method shown 
 - Example: For PBS in Docker, use 'docker exec pbs proxmox-backup-manager gc pbs-delly' not 'proxmox-backup-manager gc pbs-delly'
 - This ensures commands execute in the correct environment where the service actually runs.
 `)
-	}
-
-	// Append deep AI discovery context (service details, versions, config paths, ports)
-	if discoveryContext != "" {
-		contextAdditions.WriteString("\n\n")
-		contextAdditions.WriteString(discoveryContext)
 	}
 
 	// Append user feedback context (dismissed/snoozed findings)
@@ -4624,6 +4866,40 @@ Only report NEW issues or issues where the severity has clearly escalated.`)
 	}
 
 	return basePrompt
+}
+
+// buildPatrolPrompt creates the prompt for AI analysis using full discovery context.
+func (p *PatrolService) buildPatrolPrompt(summary string) string {
+	return p.buildPatrolPromptWithResources(summary, nil)
+}
+
+// buildPatrolPromptForScope creates the prompt for AI analysis scoped to specific resources.
+func (p *PatrolService) buildPatrolPromptForScope(summary string, scope PatrolScope) string {
+	prompt := p.buildPatrolPromptWithResources(summary, scope.ResourceIDs)
+
+	var scopeContext strings.Builder
+	scopeContext.WriteString("This patrol run is scoped. Focus ONLY on the resources and context below unless you detect a direct dependency.\n")
+	if scope.Reason != "" {
+		scopeContext.WriteString(fmt.Sprintf("- Trigger: %s\n", scope.Reason))
+	}
+	if scope.Context != "" {
+		scopeContext.WriteString(fmt.Sprintf("- Trigger context: %s\n", scope.Context))
+	}
+	if len(scope.ResourceIDs) > 0 {
+		scopeContext.WriteString(fmt.Sprintf("- Resource IDs: %s\n", strings.Join(scope.ResourceIDs, ", ")))
+	}
+	if len(scope.ResourceTypes) > 0 {
+		scopeContext.WriteString(fmt.Sprintf("- Resource types: %s\n", strings.Join(scope.ResourceTypes, ", ")))
+	}
+	if scope.AlertID != "" {
+		scopeContext.WriteString(fmt.Sprintf("- Alert ID: %s\n", scope.AlertID))
+	}
+	if scope.FindingID != "" {
+		scopeContext.WriteString(fmt.Sprintf("- Finding ID: %s\n", scope.FindingID))
+	}
+	scopeContext.WriteString(fmt.Sprintf("- Depth: %s\n", scope.Depth.String()))
+
+	return prompt + "\n\n## PATROL SCOPE\n" + scopeContext.String()
 }
 
 // recordEvent records an event in the correlation detector if it's significant
@@ -5022,15 +5298,10 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 	triggerManager := p.triggerManager
 	p.mu.RUnlock()
 
+	resourceType := inferResourceType(alert.Type, alert.Metadata)
+
 	if triggerManager != nil {
-		scope := PatrolScope{
-			ResourceIDs: []string{alert.ResourceID},
-			Depth:       PatrolDepthQuick,
-			Reason:      TriggerReasonAlertFired,
-			Context:     "Alert: " + alert.Type,
-			Priority:    80,
-			AlertID:     alert.ID,
-		}
+		scope := AlertTriggeredPatrolScope(alert.ID, alert.ResourceID, resourceType, alert.Type)
 		if triggerManager.TriggerPatrol(scope) {
 			log.Debug().Str("alert_id", alert.ID).Msg("Queued alert-triggered patrol via trigger manager")
 		} else {
@@ -5073,14 +5344,8 @@ func (p *PatrolService) runTargetedPatrol(ctx context.Context, alert *alerts.Ale
 		Str("resource_id", alert.ResourceID).
 		Msg("Running targeted AI patrol for alert")
 
-	scope := PatrolScope{
-		ResourceIDs: []string{alert.ResourceID},
-		Depth:       PatrolDepthQuick,
-		Reason:      TriggerReasonAlertFired,
-		Context:     "Alert: " + alert.Type,
-		Priority:    80,
-		AlertID:     alert.ID,
-	}
+	resourceType := inferResourceType(alert.Type, alert.Metadata)
+	scope := AlertTriggeredPatrolScope(alert.ID, alert.ResourceID, resourceType, alert.Type)
 	p.TriggerScopedPatrol(ctx, scope)
 }
 

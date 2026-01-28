@@ -196,18 +196,12 @@ func (a *AlertTriggeredAnalyzer) analyzeResource(alert *alerts.Alert, resourceKe
 			Dur("duration", duration).
 			Msg("Alert-triggered AI analysis completed with findings")
 
-		// Add findings to the patrol service's findings store and trigger investigations
-		if a.patrolService != nil && a.patrolService.findings != nil {
+		// Add findings through the patrol pipeline to keep behavior consistent
+		if a.patrolService != nil {
 			for _, finding := range findings {
 				// Link finding to the triggering alert
 				finding.AlertID = alert.ID
-				isNew := a.patrolService.findings.Add(finding)
-
-				// Trigger AI investigation for new warning/critical findings
-				// This is the key connection: alert fires → rule-based finding → AI investigates
-				if isNew {
-					a.patrolService.MaybeInvestigateFinding(finding)
-				}
+				a.patrolService.recordFinding(finding)
 			}
 		}
 	} else {

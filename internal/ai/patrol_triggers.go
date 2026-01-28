@@ -425,8 +425,11 @@ func slicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	if len(a) <= 1 {
+	if len(a) == 0 {
 		return true
+	}
+	if len(a) == 1 {
+		return a[0] == b[0]
 	}
 	aSorted := append([]string(nil), a...)
 	bSorted := append([]string(nil), b...)

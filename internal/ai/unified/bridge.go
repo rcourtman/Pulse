@@ -43,7 +43,7 @@ type AlertProvider interface {
 }
 
 // PatrolTriggerFunc is called to trigger a mini-patrol for a resource
-type PatrolTriggerFunc func(resourceID, reason string)
+type PatrolTriggerFunc func(resourceID, resourceType, reason, alertType string)
 
 // AIEnhancementFunc is called to request AI enhancement of a finding
 type AIEnhancementFunc func(findingID string) error
@@ -200,7 +200,7 @@ func (b *AlertBridge) handleNewAlert(alert AlertAdapter) {
 
 		// Trigger mini-patrol for the resource
 		if triggerPatrol && patrolFn != nil {
-			go patrolFn(finding.ResourceID, "alert_fired")
+			go patrolFn(finding.ResourceID, finding.ResourceType, "alert_fired", finding.AlertType)
 		}
 
 		// Schedule AI enhancement
@@ -236,7 +236,7 @@ func (b *AlertBridge) handleAlertResolved(alertID string) {
 
 		// Trigger verification patrol
 		if triggerPatrol && patrolFn != nil && finding != nil {
-			go patrolFn(finding.ResourceID, "alert_cleared")
+			go patrolFn(finding.ResourceID, finding.ResourceType, "alert_cleared", finding.AlertType)
 		}
 	}
 }

@@ -4,11 +4,11 @@ import (
 	"context"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
-	"github.com/rcourtman/pulse-go-rewrite/internal/aidiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 )
 
-// discoveryCommandAdapter adapts agentexec.Server to aidiscovery.CommandExecutor
+// discoveryCommandAdapter adapts agentexec.Server to servicediscovery.CommandExecutor
 type discoveryCommandAdapter struct {
 	server *agentexec.Server
 }
@@ -18,10 +18,10 @@ func newDiscoveryCommandAdapter(server *agentexec.Server) *discoveryCommandAdapt
 	return &discoveryCommandAdapter{server: server}
 }
 
-// ExecuteCommand implements aidiscovery.CommandExecutor
-func (a *discoveryCommandAdapter) ExecuteCommand(ctx context.Context, agentID string, cmd aidiscovery.ExecuteCommandPayload) (*aidiscovery.CommandResultPayload, error) {
+// ExecuteCommand implements servicediscovery.CommandExecutor
+func (a *discoveryCommandAdapter) ExecuteCommand(ctx context.Context, agentID string, cmd servicediscovery.ExecuteCommandPayload) (*servicediscovery.CommandResultPayload, error) {
 	if a.server == nil {
-		return &aidiscovery.CommandResultPayload{
+		return &servicediscovery.CommandResultPayload{
 			RequestID: cmd.RequestID,
 			Success:   false,
 			Error:     "agent server not available",
@@ -39,7 +39,7 @@ func (a *discoveryCommandAdapter) ExecuteCommand(ctx context.Context, agentID st
 
 	result, err := a.server.ExecuteCommand(ctx, agentID, execCmd)
 	if err != nil {
-		return &aidiscovery.CommandResultPayload{
+		return &servicediscovery.CommandResultPayload{
 			RequestID: cmd.RequestID,
 			Success:   false,
 			Error:     err.Error(),
@@ -47,7 +47,7 @@ func (a *discoveryCommandAdapter) ExecuteCommand(ctx context.Context, agentID st
 	}
 
 	// Convert result back
-	return &aidiscovery.CommandResultPayload{
+	return &servicediscovery.CommandResultPayload{
 		RequestID: result.RequestID,
 		Success:   result.Success,
 		Stdout:    result.Stdout,
@@ -58,16 +58,16 @@ func (a *discoveryCommandAdapter) ExecuteCommand(ctx context.Context, agentID st
 	}, nil
 }
 
-// GetConnectedAgents implements aidiscovery.CommandExecutor
-func (a *discoveryCommandAdapter) GetConnectedAgents() []aidiscovery.ConnectedAgent {
+// GetConnectedAgents implements servicediscovery.CommandExecutor
+func (a *discoveryCommandAdapter) GetConnectedAgents() []servicediscovery.ConnectedAgent {
 	if a.server == nil {
 		return nil
 	}
 
 	agents := a.server.GetConnectedAgents()
-	result := make([]aidiscovery.ConnectedAgent, len(agents))
+	result := make([]servicediscovery.ConnectedAgent, len(agents))
 	for i, agent := range agents {
-		result[i] = aidiscovery.ConnectedAgent{
+		result[i] = servicediscovery.ConnectedAgent{
 			AgentID:     agent.AgentID,
 			Hostname:    agent.Hostname,
 			Version:     agent.Version,
@@ -79,7 +79,7 @@ func (a *discoveryCommandAdapter) GetConnectedAgents() []aidiscovery.ConnectedAg
 	return result
 }
 
-// IsAgentConnected implements aidiscovery.CommandExecutor
+// IsAgentConnected implements servicediscovery.CommandExecutor
 func (a *discoveryCommandAdapter) IsAgentConnected(agentID string) bool {
 	if a.server == nil {
 		return false
@@ -92,7 +92,7 @@ func (a *discoveryCommandAdapter) IsAgentConnected(agentID string) bool {
 	return false
 }
 
-// discoveryStateAdapter adapts StateProvider to aidiscovery.StateProvider
+// discoveryStateAdapter adapts StateProvider to servicediscovery.StateProvider
 type discoveryStateAdapter struct {
 	provider StateProvider
 }
@@ -102,18 +102,18 @@ func newDiscoveryStateAdapter(provider StateProvider) *discoveryStateAdapter {
 	return &discoveryStateAdapter{provider: provider}
 }
 
-// GetState implements aidiscovery.StateProvider
-func (a *discoveryStateAdapter) GetState() aidiscovery.StateSnapshot {
+// GetState implements servicediscovery.StateProvider
+func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 	if a.provider == nil {
-		return aidiscovery.StateSnapshot{}
+		return servicediscovery.StateSnapshot{}
 	}
 
 	state := a.provider.GetState()
 
 	// Convert VMs
-	vms := make([]aidiscovery.VM, len(state.VMs))
+	vms := make([]servicediscovery.VM, len(state.VMs))
 	for i, vm := range state.VMs {
-		vms[i] = aidiscovery.VM{
+		vms[i] = servicediscovery.VM{
 			VMID:     vm.VMID,
 			Name:     vm.Name,
 			Node:     vm.Node,
@@ -123,9 +123,9 @@ func (a *discoveryStateAdapter) GetState() aidiscovery.StateSnapshot {
 	}
 
 	// Convert Containers
-	containers := make([]aidiscovery.Container, len(state.Containers))
+	containers := make([]servicediscovery.Container, len(state.Containers))
 	for i, c := range state.Containers {
-		containers[i] = aidiscovery.Container{
+		containers[i] = servicediscovery.Container{
 			VMID:     c.VMID,
 			Name:     c.Name,
 			Node:     c.Node,
@@ -135,26 +135,26 @@ func (a *discoveryStateAdapter) GetState() aidiscovery.StateSnapshot {
 	}
 
 	// Convert Docker hosts
-	dockerHosts := make([]aidiscovery.DockerHost, len(state.DockerHosts))
+	dockerHosts := make([]servicediscovery.DockerHost, len(state.DockerHosts))
 	for i, dh := range state.DockerHosts {
-		containers := make([]aidiscovery.DockerContainer, len(dh.Containers))
+		containers := make([]servicediscovery.DockerContainer, len(dh.Containers))
 		for j, dc := range dh.Containers {
-			ports := make([]aidiscovery.DockerPort, len(dc.Ports))
+			ports := make([]servicediscovery.DockerPort, len(dc.Ports))
 			for k, p := range dc.Ports {
-				ports[k] = aidiscovery.DockerPort{
+				ports[k] = servicediscovery.DockerPort{
 					PublicPort:  p.PublicPort,
 					PrivatePort: p.PrivatePort,
 					Protocol:    p.Protocol,
 				}
 			}
-			mounts := make([]aidiscovery.DockerMount, len(dc.Mounts))
+			mounts := make([]servicediscovery.DockerMount, len(dc.Mounts))
 			for k, m := range dc.Mounts {
-				mounts[k] = aidiscovery.DockerMount{
+				mounts[k] = servicediscovery.DockerMount{
 					Source:      m.Source,
 					Destination: m.Destination,
 				}
 			}
-			containers[j] = aidiscovery.DockerContainer{
+			containers[j] = servicediscovery.DockerContainer{
 				ID:     dc.ID,
 				Name:   dc.Name,
 				Image:  dc.Image,
@@ -164,14 +164,14 @@ func (a *discoveryStateAdapter) GetState() aidiscovery.StateSnapshot {
 				Mounts: mounts,
 			}
 		}
-		dockerHosts[i] = aidiscovery.DockerHost{
+		dockerHosts[i] = servicediscovery.DockerHost{
 			AgentID:    dh.AgentID,
 			Hostname:   dh.Hostname,
 			Containers: containers,
 		}
 	}
 
-	return aidiscovery.StateSnapshot{
+	return servicediscovery.StateSnapshot{
 		VMs:         vms,
 		Containers:  containers,
 		DockerHosts: dockerHosts,

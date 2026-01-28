@@ -23,11 +23,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
-	"github.com/rcourtman/pulse-go-rewrite/internal/aidiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/infradiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 	"github.com/rs/zerolog/log"
 )
@@ -125,10 +125,10 @@ type Service struct {
 	infraDiscoveryService *infradiscovery.Service
 
 	// AI-powered deep discovery store - detailed service analysis with commands
-	aiDiscoveryStore *aidiscovery.Store
+	discoveryStore *servicediscovery.Store
 
 	// AI-powered deep discovery service - runs commands and AI analysis
-	aiDiscoveryService *aidiscovery.Service
+	discoveryService *servicediscovery.Service
 
 	// Alert-triggered analysis - token-efficient real-time AI insights
 	alertTriggeredAnalyzer *AlertTriggeredAnalyzer
@@ -158,7 +158,7 @@ type modelsCache struct {
 func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) *Service {
 	// Initialize knowledge store
 	var knowledgeStore *knowledge.Store
-	var aiDiscoveryStore *aidiscovery.Store
+	var discoveryStore *servicediscovery.Store
 	costStore := cost.NewStore(cost.DefaultMaxDays)
 	if persistence != nil {
 		var err error
@@ -169,20 +169,20 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 		if err := costStore.SetPersistence(NewCostPersistenceAdapter(persistence)); err != nil {
 			log.Warn().Err(err).Msg("Failed to initialize AI usage cost store")
 		}
-		// Initialize AI discovery store for deep infrastructure discovery
-		aiDiscoveryStore, err = aidiscovery.NewStore(persistence.DataDir())
+		// Initialize discovery store for deep infrastructure discovery
+		discoveryStore, err = servicediscovery.NewStore(persistence.DataDir())
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize AI discovery store")
+			log.Warn().Err(err).Msg("Failed to initialize discovery store")
 		}
 	}
 
 	return &Service{
-		persistence:      persistence,
-		agentServer:      agentServer,
-		policy:           agentexec.DefaultPolicy(),
-		knowledgeStore:   knowledgeStore,
-		aiDiscoveryStore: aiDiscoveryStore,
-		costStore:        costStore,
+		persistence:    persistence,
+		agentServer:    agentServer,
+		policy:         agentexec.DefaultPolicy(),
+		knowledgeStore: knowledgeStore,
+		discoveryStore: discoveryStore,
+		costStore:      costStore,
 		limits: executionLimits{
 			chatSlots:   make(chan struct{}, 4),
 			patrolSlots: make(chan struct{}, 1),
@@ -260,9 +260,9 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		if s.incidentStore != nil {
 			s.patrolService.SetIncidentStore(s.incidentStore)
 		}
-		// Connect AI discovery store for deep infrastructure context
-		if s.aiDiscoveryStore != nil {
-			s.patrolService.SetDiscoveryStore(s.aiDiscoveryStore)
+		// Connect discovery store for deep infrastructure context
+		if s.discoveryStore != nil {
+			s.patrolService.SetDiscoveryStore(s.discoveryStore)
 		}
 	}
 
@@ -283,9 +283,9 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 
 	// Initialize AI-powered deep discovery service if not already done
 	// This runs read-only commands on resources and uses AI to understand services
-	if s.aiDiscoveryService == nil && sp != nil && s.aiDiscoveryStore != nil {
+	if s.discoveryService == nil && sp != nil && s.discoveryStore != nil {
 		// Create command executor adapter (wraps agentexec.Server)
-		var cmdExecutor aidiscovery.CommandExecutor
+		var cmdExecutor servicediscovery.CommandExecutor
 		if agentSrv, ok := s.agentServer.(*agentexec.Server); ok {
 			cmdExecutor = newDiscoveryCommandAdapter(agentSrv)
 		}
@@ -294,25 +294,25 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		stateAdapter := newDiscoveryStateAdapter(sp)
 
 		// Create deep scanner
-		scanner := aidiscovery.NewDeepScanner(cmdExecutor)
+		scanner := servicediscovery.NewDeepScanner(cmdExecutor)
 
 		// Create the discovery service with config-driven settings
-		discoveryCfg := aidiscovery.DefaultConfig()
+		discoveryCfg := servicediscovery.DefaultConfig()
 		if s.cfg != nil {
 			discoveryCfg.Interval = s.cfg.GetDiscoveryInterval()
 		}
 
-		s.aiDiscoveryService = aidiscovery.NewService(
-			s.aiDiscoveryStore,
+		s.discoveryService = servicediscovery.NewService(
+			s.discoveryStore,
 			scanner,
 			stateAdapter,
 			discoveryCfg,
 		)
-		s.aiDiscoveryService.SetAIAnalyzer(s)
+		s.discoveryService.SetAIAnalyzer(s)
 
 		// Start background discovery if enabled and interval is set
 		if s.cfg != nil && s.cfg.IsDiscoveryEnabled() && s.cfg.GetDiscoveryInterval() > 0 {
-			s.aiDiscoveryService.Start(context.Background())
+			s.discoveryService.Start(context.Background())
 			log.Info().
 				Dur("interval", s.cfg.GetDiscoveryInterval()).
 				Msg("AI-powered deep discovery service started with automatic scanning")
@@ -515,36 +515,36 @@ func (s *Service) SetIncidentStore(store *memory.IncidentStore) {
 	}
 }
 
-// SetAIDiscoveryStore sets the AI discovery store for infrastructure context
-func (s *Service) SetAIDiscoveryStore(store *aidiscovery.Store) {
+// SetDiscoveryStore sets the discovery store for infrastructure context
+func (s *Service) SetDiscoveryStore(store *servicediscovery.Store) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.aiDiscoveryStore = store
+	s.discoveryStore = store
 
 	if s.patrolService != nil {
 		s.patrolService.SetDiscoveryStore(store)
 	}
-	log.Info().Msg("AI Service: AI discovery store set for infrastructure context")
+	log.Info().Msg("AI Service: Discovery store set for infrastructure context")
 }
 
-// GetAIDiscoveryStore returns the AI discovery store
-func (s *Service) GetAIDiscoveryStore() *aidiscovery.Store {
+// GetDiscoveryStore returns the discovery store
+func (s *Service) GetDiscoveryStore() *servicediscovery.Store {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.aiDiscoveryStore
+	return s.discoveryStore
 }
 
-// GetAIDiscoveryService returns the AI discovery service for triggering scans
-func (s *Service) GetAIDiscoveryService() *aidiscovery.Service {
+// GetDiscoveryService returns the discovery service for triggering scans
+func (s *Service) GetDiscoveryService() *servicediscovery.Service {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.aiDiscoveryService
+	return s.discoveryService
 }
 
 // updateDiscoverySettings updates the discovery service based on config changes
 // Note: caller must NOT hold s.mu lock
 func (s *Service) updateDiscoverySettings(cfg *config.AIConfig) {
-	if s.aiDiscoveryService == nil || cfg == nil {
+	if s.discoveryService == nil || cfg == nil {
 		return
 	}
 
@@ -553,15 +553,15 @@ func (s *Service) updateDiscoverySettings(cfg *config.AIConfig) {
 
 	if enabled && interval > 0 {
 		// Update interval and ensure service is running
-		s.aiDiscoveryService.SetInterval(interval)
-		s.aiDiscoveryService.Start(context.Background())
+		s.discoveryService.SetInterval(interval)
+		s.discoveryService.Start(context.Background())
 		log.Info().
 			Bool("enabled", enabled).
 			Dur("interval", interval).
 			Msg("Discovery service updated: automatic scanning enabled")
 	} else {
 		// Stop background scanning (manual mode)
-		s.aiDiscoveryService.Stop()
+		s.discoveryService.Stop()
 		log.Info().
 			Bool("enabled", enabled).
 			Msg("Discovery service updated: manual mode (background scanning stopped)")
@@ -3211,144 +3211,45 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 
 // buildSystemPrompt creates the system prompt based on the request context
 func (s *Service) buildSystemPrompt(req ExecuteRequest) string {
-	prompt := `You are Pulse's diagnostic assistant - a built-in tool for investigating Proxmox, Docker, and Kubernetes homelab issues.
+	prompt := `You are Pulse's diagnostic assistant for Proxmox, Docker, and Kubernetes homelabs.
 
-## Response Style
-- Be DIRECT and CONCISE. No greetings, no "I'll help you", no "Let me check"
-- Report findings, not process. Don't narrate what you're doing
-- NO emojis, NO markdown tables, NO excessive formatting
-- Use simple lists only when showing multiple items
-- Final response should be 2-4 sentences summarizing findings and any actions taken
-- When you perform cleanup/fixes, report: what was done + the result (e.g., "Freed 6GB. Disk now at 81%.")
-
-## When Investigating
-- Execute commands silently in the background
-- Only show the conclusion, not every command run
-- If something fails, briefly state what and why
-
-## Command Approval System
-Pulse has a command approval policy that protects against accidental damage:
-- **Safe commands** (read-only: ls, df, cat, ps, etc.) execute immediately
-- **Potentially destructive commands** (rm, service restart, apt install, etc.) require approval unless autonomous mode is enabled
-- **Blocked commands** are never executed
-- When approval is required, the user will see the command and can approve or reject it
-
-When you need to run a potentially destructive command:
-1. Execute it normally - Pulse will handle the approval flow
-2. If a command is blocked or needs approval, you'll get feedback
-3. Continue with other work while waiting for approval, or explain what the command will do
-
-Do NOT say things like:
-- "I need your permission to..."
-- "Would you like me to run...?"
-- "This is destructive, are you sure?"
-
-Instead, just execute the command. Pulse's approval system will handle user confirmation for risky operations.
-
-## Response Format
-BAD: "I'll check that for you. Let me run some commands..."
-GOOD: State findings directly.
-
-BAD: "Would you like me to run rm -rf...?"
-GOOD: Execute the command. User will approve/reject via Pulse.
-
-BAD: Tables, headers, bullet-heavy summaries
-GOOD: Plain prose, 2-4 sentences.
-
-## ACTION BIAS - AVOID INVESTIGATION LOOPS
-When the user asks you to DO something (install, fix, update, configure), ACT IMMEDIATELY:
-- Don't extensively investigate before acting. Run 1-2 diagnostic commands max, then DO the thing.
-- Don't explain what you're about to do - just do it.
-- If the command needs approval, Pulse will queue it. You don't need to ask separately.
-- If the first approach fails, try the next most obvious approach. Don't stop to report.
-- Complete the task END TO END. If asked to "install and run X", you're not done until X is running.
-
-INVESTIGATION ANTI-PATTERNS TO AVOID:
-- Running 10+ diagnostic commands before taking action
-- Explaining each step before doing it
-- Stopping to report partial progress
-- Asking "would you like me to proceed?" (Pulse handles approval automatically)
-- Checking version, checking config, checking service, checking ports, checking this, checking that... JUST ACT.
-
-GOOD PATTERN for "install X and make sure it's running":
-1. Download/install X (1 command)
-2. Start X (1 command)  
-3. Verify X is running (1 command)
-4. Report: "Installed X vN.N. Service is running on port NNNN."
-
-BAD PATTERN:
-1. Check current version... 2. Check if installed... 3. Check service status... 4. Check config file... 
-5. Check another config... 6. Try to enable something... 7. Check if it worked... 8. Read a script...
-9. Check yet another file... [user: "do it"] 10. Still investigating... [user: "DO IT"]
-
-
-## Using Context Data
-Pulse provides real metrics in "Current Metrics and State". Use this data directly - don't ask users to check things you already know.
+## Command Approval
+Pulse has a built-in approval system:
+- Safe commands (read-only: ls, df, cat, ps) execute immediately
+- Destructive commands (rm, service restart, apt install) require user approval
+- Blocked commands are never executed
+Execute commands normally - Pulse handles the approval flow automatically.
 
 ## Command Execution
 - run_on_host=true: Run on PVE/Docker host (pct, qm, vzdump, docker commands)
 - run_on_host=false: Run inside the container/VM
-- target_host: ALWAYS set this when using run_on_host=true! Use the node/hostname from target context
-- Execute commands to investigate, don't just explain what commands to run
-
-## CRITICAL: Command Routing with target_host
-When running commands that require a specific host (pct, qm, docker, vzdump), you MUST specify target_host to route correctly.
+- target_host: Required when using run_on_host=true - use the node name from context
 
 Example for LXC 106 on node 'minipc':
-- To run 'df -h' inside the container: run_command(command="df -h", run_on_host=false)
-- To run 'pct exec 106 -- df -h' on the host: run_command(command="pct exec 106 -- df -h", run_on_host=true, target_host="minipc")
+- Inside container: run_command(command="df -h", run_on_host=false)
+- On host: run_command(command="pct exec 106 -- df -h", run_on_host=true, target_host="minipc")
 
-Always check the target's context for the 'node' or 'PVE Node' field and pass it as target_host.
-If you don't specify target_host when run_on_host=true, the command may route to the wrong host!
+If you get "Configuration file does not exist" - wrong host, check target_host.
 
-Rules:
-1. Look at the target context for 'node', 'guest_node', or 'PVE Node' field
-2. When running pct/qm commands: set run_on_host=true AND target_host=<node>
-3. When running commands inside the guest: just set run_on_host=false (no target_host needed)
-4. Error "Configuration file does not exist" means wrong host - check target_host
+## LXC Management
+Pulse manages LXC containers agentlessly - there is no Pulse process inside containers.
+- run_on_host=false: Pulse routes commands into the LXC via the PVE host
+- run_on_host=true + target_host: Runs pct/qm commands on the PVE host directly
 
-## Infrastructure Architecture - LXC Management
-Pulse manages LXC containers agentlessly from the PVE host.
-- DO NOT check for a Pulse agent process or service inside an LXC. It does not exist.
-- Use run_command with run_on_host=false to execute commands inside the LXC. Pulse handles the routing.
-- For pct commands, always use run_on_host=true and set target_host to the container's node.
+## URL Discovery
+When finding web URLs for resources:
+1. Check listening ports: ss -tlnp | grep LISTEN
+2. Get IP: hostname -I | awk '{print $1}'
+3. Test with fetch_url to verify
+4. Save with set_resource_url tool
 
-## URL Discovery Feature
-When asked to find the web URL for a guest/container/host, or when you discover a web service:
+resource_id format: {instance}:{node}:{vmid} (colons, not dashes)
+Example: "delly:minipc:201" for VMID 201 on node minipc in instance delly
 
-1. **Inspect for web servers**: Check for listening ports (ss -tlnp), running services (nginx, apache, node, etc.)
-2. **Get the IP address**: Use 'hostname -I' or 'ip addr' to find the IP
-3. **Test the URL**: Use fetch_url to verify the service is responding
-4. **Save the URL**: Use set_resource_url tool to save it to Pulse
-
-Common discovery commands:
-- Check listening ports: ss -tlnp | grep LISTEN
-- Check nginx: systemctl status nginx && grep -r 'listen' /etc/nginx/
-- Check running processes: ps aux | grep -E 'node|python|java|nginx|apache|httpd'
-- Get IP: hostname -I | awk '{print $1}'
-
-**CRITICAL: resource_id format for set_resource_url**
-The resource_id MUST be in the canonical format: {instance}:{node}:{vmid} (uses COLONS, not dashes)
-- Example for VMID 201 on node "minipc" in instance "delly": resource_id = "delly:minipc:201"
-- Example for VMID 101 on node "delly" in instance "delly": resource_id = "delly:delly:101"
-- The instance name is typically the cluster name for PVE clusters
-- Always check which NODE the guest is on (visible in the target_host or context)
-
-When working across multiple nodes, use the correct instance:node:vmid format for each guest.
-
-## Installing/Updating Pulse Itself
-If asked to install or update Pulse itself, use the official install script. DO NOT investigate configs/services first.
-Quick install/update command (x86_64 Linux):
-` + "`" + `curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash` + "`" + `
-
-To install a specific version: 
-` + "`" + `curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version vX.Y.Z` + "`" + `
-
-After install, enable and start the service:
-` + "`" + `systemctl enable pulse && systemctl start pulse` + "`" + `
-
-The latest version can be found at: https://api.github.com/repos/rcourtman/Pulse/releases/latest
-This is a 3-command job. Don't over-investigate.`
+## Installing/Updating Pulse
+curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+After: systemctl enable pulse && systemctl start pulse
+Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`
 
 	// Add custom context from AI settings (user's infrastructure description)
 	s.mu.RLock()

@@ -49,17 +49,20 @@ func (a *InvestigationOrchestratorAdapter) GetInvestigationByFinding(findingID s
 
 	// Convert to ai package's InvestigationSession type
 	session := &InvestigationSession{
-		ID:          inv.ID,
-		FindingID:   inv.FindingID,
-		SessionID:   inv.SessionID,
-		Status:      string(inv.Status),
-		StartedAt:   inv.StartedAt,
-		CompletedAt: inv.CompletedAt,
-		TurnCount:   inv.TurnCount,
-		Outcome:     string(inv.Outcome),
-		Summary:     inv.Summary,
-		Error:       inv.Error,
-		ApprovalID:  inv.ApprovalID,
+		ID:             inv.ID,
+		FindingID:      inv.FindingID,
+		SessionID:      inv.SessionID,
+		Status:         string(inv.Status),
+		StartedAt:      inv.StartedAt,
+		CompletedAt:    inv.CompletedAt,
+		TurnCount:      inv.TurnCount,
+		Outcome:        string(inv.Outcome),
+		ToolsAvailable: inv.ToolsAvailable,
+		ToolsUsed:      inv.ToolsUsed,
+		EvidenceIDs:    inv.EvidenceIDs,
+		Summary:        inv.Summary,
+		Error:          inv.Error,
+		ApprovalID:     inv.ApprovalID,
 	}
 
 	if inv.ProposedFix != nil {

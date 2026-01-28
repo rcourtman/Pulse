@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -120,6 +121,63 @@ func TestStore_SaveNote_UpdateExisting(t *testing.T) {
 
 	if knowledge.Notes[0].Content != "PostgreSQL 15" {
 		t.Errorf("Expected updated content 'PostgreSQL 15', got '%s'", knowledge.Notes[0].Content)
+	}
+}
+
+func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "knowledge-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	// Seed knowledge for multiple resources
+	if err := store.SaveNote("vm-100", "web-server", "vm", "config", "DB", "Postgres"); err != nil {
+		t.Fatalf("Failed to save note: %v", err)
+	}
+	if err := store.SaveNote("qemu/200", "app", "vm", "service", "API", "FastAPI"); err != nil {
+		t.Fatalf("Failed to save note: %v", err)
+	}
+	if err := store.SaveNote("host:alpha", "alpha", "host", "service", "Agent", "v1"); err != nil {
+		t.Fatalf("Failed to save note: %v", err)
+	}
+	if err := store.SaveNote("docker:host1/container1", "container1", "docker", "service", "Web", "Nginx"); err != nil {
+		t.Fatalf("Failed to save note: %v", err)
+	}
+
+	// Scope to a single VM by qemu resource ID
+	scoped := store.FormatForContextForResources([]string{"qemu/100"})
+	if scoped == "" {
+		t.Fatalf("Expected scoped context, got empty")
+	}
+	if !strings.Contains(scoped, "web-server") {
+		t.Fatalf("Expected vm-100 notes in scoped context")
+	}
+	if strings.Contains(scoped, "app") {
+		t.Fatalf("Did not expect qemu/200 notes in scoped context")
+	}
+
+	// Scope to docker resource ID
+	scoped = store.FormatForContextForResources([]string{"docker:host1/container1"})
+	if !strings.Contains(scoped, "container1") {
+		t.Fatalf("Expected docker container notes in scoped context")
+	}
+	if strings.Contains(scoped, "web-server") {
+		t.Fatalf("Did not expect vm-100 notes in docker scoped context")
+	}
+
+	// Scope to host resource ID
+	scoped = store.FormatForContextForResources([]string{"host:alpha"})
+	if !strings.Contains(scoped, "alpha") {
+		t.Fatalf("Expected host notes in scoped context")
+	}
+	if strings.Contains(scoped, "container1") {
+		t.Fatalf("Did not expect docker notes in host scoped context")
 	}
 }
 

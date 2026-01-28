@@ -32,7 +32,7 @@ func TestQuickSetup(t *testing.T) {
 
 func TestSetupWithPatrol(t *testing.T) {
 	manager := alerts.NewManager()
-	result, err := SetupWithPatrol(manager, t.TempDir(), func(resourceID, reason string) {})
+	result, err := SetupWithPatrol(manager, t.TempDir(), func(resourceID, resourceType, reason, alertType string) {})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

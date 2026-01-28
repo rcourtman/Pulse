@@ -148,10 +148,9 @@ func TestPatrolService_Setters_Coverage(t *testing.T) {
 	}
 }
 
-// TestPatrol_RunHeuristicAnalysis_Coverage tests logic branches in heuristic analysis
-func TestPatrol_RunHeuristicAnalysis_Coverage(t *testing.T) {
-	// Heuristic analysis relies on state and thresholds.
-	// We can set thresholds low to trigger heuristics without AI.
+// TestPatrol_RunPatrol_AIRequired verifies patrol skips analysis when AI is unavailable.
+func TestPatrol_RunPatrol_AIRequired(t *testing.T) {
+	// Populate state with high-usage resources to prove heuristics are not used.
 
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
@@ -170,7 +169,7 @@ func TestPatrol_RunHeuristicAnalysis_Coverage(t *testing.T) {
 
 	ps := NewPatrolService(nil, stateProvider)
 
-	// Set low thresholds to ensure triggers
+	// Set low thresholds that would trigger heuristic findings if they still ran.
 	provider := &mockThresholdProvider{
 		nodeCPU:    50,
 		nodeMemory: 50,
@@ -179,18 +178,6 @@ func TestPatrol_RunHeuristicAnalysis_Coverage(t *testing.T) {
 		storage:    50,
 	}
 	ps.SetThresholdProvider(provider)
-
-	// runHeuristics is private, but called by runPatrol.
-	// However, without AI service, runPatrol might skip or return early?
-	// check runPatrol implementation:
-	// if p.aiService == nil ... skipping patrol
-
-	// So we typically need AI service for part of it.
-	// But `Start()` checks AI enabled.
-	// Let's create an AI service that is enabled but mock provider returns error or dummy,
-	// to see if heuristics run BEFORE AI?
-	// Looking at patrol.go (not visible fully), typically heuristics might run as part of analysis.
-	// Generally, heuristic findings are added to `findings`.
 
 	// If runPatrol requires AI service, we provide one.
 	svc := NewService(nil, nil)
@@ -212,7 +199,7 @@ func TestPatrol_RunHeuristicAnalysis_Coverage(t *testing.T) {
 	// Link them
 	ps.aiService = svc
 
-	// Disable AI patrol feature to force heuristic analysis
+	// Disable AI patrol feature to force patrol to block (AI-only).
 	licenseChecker := &mockLicenseStore{
 		features: map[string]bool{
 			"ai_patrol": false, // explicitly false
@@ -225,15 +212,17 @@ func TestPatrol_RunHeuristicAnalysis_Coverage(t *testing.T) {
 	ctx := context.Background()
 	ps.runPatrol(ctx)
 
-	// Check if heuristics generated findings
-	// With low thresholds and high usage in state, we expect findings
+	// No findings should be generated when AI is unavailable.
 	findings := ps.GetFindings().GetActive(FindingSeverityWarning)
-	// We expect at least one finding (CPU, Memory, or Storage)
-	if len(findings) == 0 {
-		// Try Info severity (maybe watch/heuristic produces lower severity?)
-		findings = ps.GetFindings().GetActive(FindingSeverityInfo)
-		if len(findings) == 0 {
-			t.Error("Expected findings from heuristic analysis")
-		}
+	if len(findings) > 0 {
+		t.Errorf("Expected no findings when AI patrol is unavailable, got %d", len(findings))
+	}
+
+	status := ps.GetStatus()
+	if status.BlockedReason == "" {
+		t.Error("Expected patrol to report a blocked reason when AI patrol is unavailable")
+	}
+	if status.BlockedAt == nil {
+		t.Error("Expected patrol to report blocked_at when AI patrol is unavailable")
 	}
 }

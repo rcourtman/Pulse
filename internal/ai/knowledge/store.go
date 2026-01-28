@@ -46,10 +46,12 @@ type GuestKnowledge struct {
 
 // Store manages persistent knowledge storage with encryption
 type Store struct {
-	dataDir string
-	mu      sync.RWMutex
-	cache   map[string]*GuestKnowledge
-	crypto  *crypto.CryptoManager
+	dataDir                              string
+	mu                                   sync.RWMutex
+	cache                                map[string]*GuestKnowledge
+	crypto                               *crypto.CryptoManager
+	discoveryContextProvider             func() string
+	discoveryContextProviderForResources func(resourceIDs []string) string
 }
 
 var newCryptoManagerAt = crypto.NewCryptoManagerAt
@@ -505,10 +507,316 @@ finalize:
 	return result
 }
 
+// FormatForContextForResources returns a summary of saved knowledge scoped to specific resources.
+// This avoids dumping global notes into targeted patrol runs.
+func (s *Store) FormatForContextForResources(resourceIDs []string) string {
+	if len(resourceIDs) == 0 {
+		return ""
+	}
+
+	const maxGuests = 10
+	const maxBytes = 8000
+
+	guests, err := s.ListGuests()
+	if err != nil || len(guests) == 0 {
+		return ""
+	}
+
+	resourceTokens := buildResourceIDTokenSet(resourceIDs)
+	if len(resourceTokens) == 0 {
+		return ""
+	}
+
+	// Load only matching guests with notes and sort by most recently updated
+	type guestWithTime struct {
+		id        string
+		knowledge *GuestKnowledge
+	}
+	var guestsWithNotes []guestWithTime
+
+	for _, guestID := range guests {
+		if !matchesResourceTokens(guestID, resourceTokens) {
+			continue
+		}
+		knowledge, err := s.GetKnowledge(guestID)
+		if err != nil || len(knowledge.Notes) == 0 {
+			continue
+		}
+		guestsWithNotes = append(guestsWithNotes, guestWithTime{id: guestID, knowledge: knowledge})
+	}
+
+	if len(guestsWithNotes) == 0 {
+		return ""
+	}
+
+	// Sort by UpdatedAt descending (most recent first)
+	for i := 0; i < len(guestsWithNotes)-1; i++ {
+		for j := i + 1; j < len(guestsWithNotes); j++ {
+			if guestsWithNotes[j].knowledge.UpdatedAt.After(guestsWithNotes[i].knowledge.UpdatedAt) {
+				guestsWithNotes[i], guestsWithNotes[j] = guestsWithNotes[j], guestsWithNotes[i]
+			}
+		}
+	}
+
+	totalGuests := len(guestsWithNotes)
+	totalNotes := 0
+	for _, g := range guestsWithNotes {
+		totalNotes += len(g.knowledge.Notes)
+	}
+
+	// Limit to maxGuests
+	truncatedGuests := false
+	if len(guestsWithNotes) > maxGuests {
+		guestsWithNotes = guestsWithNotes[:maxGuests]
+		truncatedGuests = true
+	}
+
+	var sections []string
+	includedNotes := 0
+	currentBytes := 0
+
+	for _, g := range guestsWithNotes {
+		knowledge := g.knowledge
+
+		guestName := knowledge.GuestName
+		if guestName == "" {
+			guestName = g.id
+		}
+
+		byCategory := make(map[string][]Note)
+		for _, note := range knowledge.Notes {
+			byCategory[note.Category] = append(byCategory[note.Category], note)
+		}
+
+		guestSection := fmt.Sprintf("\n### %s (%s)", guestName, knowledge.GuestType)
+
+		categoryOrder := []string{"credential", "service", "path", "config", "learning", "infrastructure"}
+		for _, cat := range categoryOrder {
+			notes, ok := byCategory[cat]
+			if !ok || len(notes) == 0 {
+				continue
+			}
+			for _, note := range notes {
+				content := note.Content
+				if cat == "credential" && len(content) > 6 {
+					content = content[:2] + "****" + content[len(content)-2:]
+				}
+				noteLine := fmt.Sprintf("\n- **%s**: %s", note.Title, content)
+
+				if currentBytes+len(guestSection)+len(noteLine) > maxBytes {
+					if includedNotes > 0 {
+						log.Warn().
+							Int("total_notes", totalNotes).
+							Int("included_notes", includedNotes).
+							Int("total_guests", totalGuests).
+							Int("max_bytes", maxBytes).
+							Msg("Knowledge context truncated to prevent bloat - consider cleaning up old notes")
+					}
+					goto finalize
+				}
+				guestSection += noteLine
+				includedNotes++
+			}
+		}
+
+		currentBytes += len(guestSection)
+		sections = append(sections, guestSection)
+	}
+
+finalize:
+	if len(sections) == 0 {
+		return ""
+	}
+
+	var header string
+	if truncatedGuests || includedNotes < totalNotes {
+		header = fmt.Sprintf("\n\n## Saved Knowledge (%d/%d notes from %d/%d guests, most recent)\n",
+			includedNotes, totalNotes, len(sections), totalGuests)
+	} else {
+		header = fmt.Sprintf("\n\n## Saved Knowledge (%d notes across %d guests)\n", totalNotes, len(sections))
+	}
+	result := header
+	result += "This is information learned from previous sessions. Use it to avoid rediscovery.\n"
+	result += strings.Join(sections, "\n")
+
+	return result
+}
+
+// SetDiscoveryContextProvider sets the function that provides discovery context.
+// This allows the knowledge store to include deep-scanned infrastructure info
+// (service versions, CLI access, config paths, ports) in the context for investigations.
+func (s *Store) SetDiscoveryContextProvider(provider func() string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.discoveryContextProvider = provider
+}
+
+// SetDiscoveryContextProviderForResources sets the provider for scoped discovery context.
+// This allows Patrol to request discovery context for specific resources.
+func (s *Store) SetDiscoveryContextProviderForResources(provider func(resourceIDs []string) string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.discoveryContextProviderForResources = provider
+}
+
 // GetInfrastructureContext returns all discovered infrastructure formatted for AI context.
 // This is specifically used by Patrol and investigations to understand where services run
 // and how to interact with them (e.g., knowing PBS runs in Docker so commands need docker exec).
+//
+// It combines two sources:
+// 1. Discovery data (deep-scanned service details, versions, CLI access, ports)
+// 2. Legacy knowledge notes (for backward compatibility)
 func (s *Store) GetInfrastructureContext() string {
+	s.mu.RLock()
+	discoveryProvider := s.discoveryContextProvider
+	s.mu.RUnlock()
+
+	var sb strings.Builder
+
+	// First, include discovery context (the rich, deep-scanned data)
+	if discoveryProvider != nil {
+		if discoveryContext := discoveryProvider(); discoveryContext != "" {
+			sb.WriteString(discoveryContext)
+		}
+	}
+
+	// Then, include legacy knowledge notes (for backward compatibility)
+	legacyContext := s.getLegacyInfrastructureContext()
+	if legacyContext != "" {
+		// Only add if we don't already have discovery context
+		// (discovery is more comprehensive and replaces legacy notes)
+		if sb.Len() == 0 {
+			sb.WriteString(legacyContext)
+		}
+	}
+
+	return sb.String()
+}
+
+// GetInfrastructureContextForResources returns discovery context scoped to specific resources.
+// If no scoped provider is configured, it returns an empty string to avoid over-broad context.
+func (s *Store) GetInfrastructureContextForResources(resourceIDs []string) string {
+	if len(resourceIDs) == 0 {
+		return s.GetInfrastructureContext()
+	}
+
+	s.mu.RLock()
+	provider := s.discoveryContextProviderForResources
+	s.mu.RUnlock()
+
+	if provider == nil {
+		return ""
+	}
+
+	return provider(resourceIDs)
+}
+
+func buildResourceIDTokenSet(resourceIDs []string) map[string]struct{} {
+	tokens := make(map[string]struct{})
+	for _, id := range resourceIDs {
+		addResourceIDTokens(tokens, id)
+	}
+	return tokens
+}
+
+func addResourceIDTokens(tokens map[string]struct{}, resourceID string) {
+	trimmed := strings.TrimSpace(resourceID)
+	if trimmed == "" {
+		return
+	}
+
+	addToken(tokens, trimmed)
+
+	if last := lastSegment(trimmed, '/'); last != "" {
+		addToken(tokens, last)
+	}
+	if last := lastSegment(trimmed, ':'); last != "" {
+		addToken(tokens, last)
+	}
+
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "vm-") {
+		addToken(tokens, trimmed[3:])
+	}
+	if strings.HasPrefix(lower, "ct-") {
+		addToken(tokens, trimmed[3:])
+	}
+	if strings.HasPrefix(lower, "lxc-") {
+		addToken(tokens, trimmed[4:])
+	}
+
+	if strings.Contains(lower, "qemu/") || strings.Contains(lower, "lxc/") || strings.HasPrefix(lower, "vm-") || strings.HasPrefix(lower, "ct-") {
+		if digits := trailingDigits(trimmed); digits != "" {
+			addToken(tokens, digits)
+		}
+	}
+
+	if strings.Contains(trimmed, ":") {
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) == 2 {
+			rest := parts[1]
+			if slash := strings.Index(rest, "/"); slash >= 0 {
+				host := strings.TrimSpace(rest[:slash])
+				container := strings.TrimSpace(rest[slash+1:])
+				addToken(tokens, host)
+				addToken(tokens, container)
+			}
+		}
+	}
+}
+
+func matchesResourceTokens(guestID string, tokens map[string]struct{}) bool {
+	if guestID == "" || len(tokens) == 0 {
+		return false
+	}
+	guestTokens := buildResourceIDTokenSet([]string{guestID})
+	for token := range guestTokens {
+		if _, ok := tokens[token]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func addToken(tokens map[string]struct{}, value string) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return
+	}
+	tokens[strings.ToLower(trimmed)] = struct{}{}
+}
+
+func lastSegment(value string, sep byte) string {
+	if value == "" {
+		return ""
+	}
+	idx := strings.LastIndexByte(value, sep)
+	if idx == -1 || idx+1 >= len(value) {
+		return ""
+	}
+	return value[idx+1:]
+}
+
+func trailingDigits(value string) string {
+	if value == "" {
+		return ""
+	}
+	i := len(value)
+	for i > 0 {
+		c := value[i-1]
+		if c < '0' || c > '9' {
+			break
+		}
+		i--
+	}
+	if i == len(value) {
+		return ""
+	}
+	return value[i:]
+}
+
+// getLegacyInfrastructureContext returns infrastructure context from legacy knowledge notes.
+func (s *Store) getLegacyInfrastructureContext() string {
 	guests, err := s.ListGuests()
 	if err != nil || len(guests) == 0 {
 		return ""
