@@ -34,7 +34,7 @@ func TestPulseToolExecutor_ExecuteListBackups(t *testing.T) {
 	backupProv.On("GetBackups").Return(expectedBackups)
 	backupProv.On("GetPBSInstances").Return([]models.PBSInstance{})
 
-	// Use consolidated pulse_storage tool with type: "backups"
+	// Use pulse_storage tool with type: "backups"
 	result, err := exec.ExecuteTool(context.Background(), "pulse_storage", map[string]interface{}{
 		"type": "backups",
 	})
@@ -69,7 +69,7 @@ func TestPulseToolExecutor_ExecuteControlGuest(t *testing.T) {
 		ExitCode: 0,
 	}, nil)
 
-	// Use consolidated pulse_control tool with type: "guest"
+	// Use pulse_control tool with type: "guest"
 	result, err := exec.ExecuteTool(context.Background(), "pulse_control", map[string]interface{}{
 		"type":     "guest",
 		"guest_id": "100",
@@ -112,7 +112,7 @@ func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
 		ExitCode: 0,
 	}, nil)
 
-	// Use consolidated pulse_docker tool with action: "control"
+	// Use pulse_docker tool with action: "control"
 	result, err := exec.ExecuteTool(context.Background(), "pulse_docker", map[string]interface{}{
 		"action":    "control",
 		"container": "nginx",

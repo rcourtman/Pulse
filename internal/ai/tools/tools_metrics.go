@@ -2,10 +2,14 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
+	"time"
 )
 
-// registerMetricsTools registers the consolidated pulse_metrics tool
+// registerMetricsTools registers the pulse_metrics tool
 func (e *PulseToolExecutor) registerMetricsTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
@@ -86,7 +90,6 @@ Examples:
 }
 
 // executeMetrics routes to the appropriate metrics handler based on type
-// All handler functions are implemented in tools_patrol.go and tools_infrastructure.go
 func (e *PulseToolExecutor) executeMetrics(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	metricType, _ := args["type"].(string)
 	switch metricType {
@@ -107,4 +110,533 @@ func (e *PulseToolExecutor) executeMetrics(ctx context.Context, args map[string]
 	default:
 		return NewErrorResult(fmt.Errorf("unknown type: %s. Use: performance, temperatures, network, diskio, disks, baselines, patterns", metricType)), nil
 	}
+}
+
+func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	period, _ := args["period"].(string)
+	resourceID, _ := args["resource_id"].(string)
+	resourceType, _ := args["resource_type"].(string)
+	limit := intArg(args, "limit", 100)
+	offset := intArg(args, "offset", 0)
+	if limit <= 0 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	if resourceType != "" {
+		validTypes := map[string]bool{"vm": true, "container": true, "node": true}
+		if !validTypes[resourceType] {
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, container, or node", resourceType)), nil
+		}
+	}
+
+	if e.metricsHistory == nil {
+		return NewTextResult("Metrics history not available. The system may still be collecting data."), nil
+	}
+
+	var duration time.Duration
+	switch period {
+	case "24h":
+		duration = 24 * time.Hour
+	case "7d":
+		duration = 7 * 24 * time.Hour
+	default:
+		duration = 24 * time.Hour
+		period = "24h"
+	}
+
+	response := MetricsResponse{
+		Period: period,
+	}
+
+	if resourceID != "" {
+		response.ResourceID = resourceID
+		metrics, err := e.metricsHistory.GetResourceMetrics(resourceID, duration)
+		if err != nil {
+			return NewErrorResult(err), nil
+		}
+		response.Points = metrics
+		return NewJSONResult(response), nil
+	}
+
+	summary, err := e.metricsHistory.GetAllMetricsSummary(duration)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	keys := make([]string, 0, len(summary))
+	for id, metric := range summary {
+		if resourceType != "" && strings.ToLower(metric.ResourceType) != resourceType {
+			continue
+		}
+		keys = append(keys, id)
+	}
+	sort.Strings(keys)
+
+	filtered := make(map[string]ResourceMetricsSummary)
+	total := 0
+	for _, id := range keys {
+		if total < offset {
+			total++
+			continue
+		}
+		if len(filtered) >= limit {
+			total++
+			continue
+		}
+		filtered[id] = summary[id]
+		total++
+	}
+
+	if filtered == nil {
+		filtered = map[string]ResourceMetricsSummary{}
+	}
+
+	response.Summary = filtered
+	if offset > 0 || total > limit {
+		response.Pagination = &PaginationInfo{
+			Total:  total,
+			Limit:  limit,
+			Offset: offset,
+		}
+	}
+
+	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) executeGetBaselines(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	resourceID, _ := args["resource_id"].(string)
+	resourceType, _ := args["resource_type"].(string)
+	limit := intArg(args, "limit", 100)
+	offset := intArg(args, "offset", 0)
+	if limit <= 0 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	if resourceType != "" {
+		validTypes := map[string]bool{"vm": true, "container": true, "node": true}
+		if !validTypes[resourceType] {
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, container, or node", resourceType)), nil
+		}
+	}
+
+	if e.baselineProvider == nil {
+		return NewTextResult("Baseline data not available. The system needs time to learn normal behavior patterns."), nil
+	}
+
+	response := BaselinesResponse{
+		Baselines: make(map[string]map[string]*MetricBaseline),
+	}
+
+	if resourceID != "" {
+		response.ResourceID = resourceID
+		cpuBaseline := e.baselineProvider.GetBaseline(resourceID, "cpu")
+		memBaseline := e.baselineProvider.GetBaseline(resourceID, "memory")
+
+		if cpuBaseline != nil || memBaseline != nil {
+			response.Baselines[resourceID] = make(map[string]*MetricBaseline)
+			if cpuBaseline != nil {
+				response.Baselines[resourceID]["cpu"] = cpuBaseline
+			}
+			if memBaseline != nil {
+				response.Baselines[resourceID]["memory"] = memBaseline
+			}
+		}
+		return NewJSONResult(response), nil
+	}
+
+	baselines := e.baselineProvider.GetAllBaselines()
+	keys := make([]string, 0, len(baselines))
+	var typeIndex map[string]string
+	if resourceType != "" {
+		if e.stateProvider == nil {
+			return NewErrorResult(fmt.Errorf("state provider not available")), nil
+		}
+		state := e.stateProvider.GetState()
+		typeIndex = make(map[string]string)
+		for _, vm := range state.VMs {
+			typeIndex[fmt.Sprintf("%d", vm.VMID)] = "vm"
+		}
+		for _, ct := range state.Containers {
+			typeIndex[fmt.Sprintf("%d", ct.VMID)] = "container"
+		}
+		for _, node := range state.Nodes {
+			typeIndex[node.ID] = "node"
+		}
+	}
+
+	for id := range baselines {
+		if resourceType != "" {
+			if t, ok := typeIndex[id]; !ok || t != resourceType {
+				continue
+			}
+		}
+		keys = append(keys, id)
+	}
+	sort.Strings(keys)
+
+	filtered := make(map[string]map[string]*MetricBaseline)
+	total := 0
+	for _, id := range keys {
+		if total < offset {
+			total++
+			continue
+		}
+		if len(filtered) >= limit {
+			total++
+			continue
+		}
+		filtered[id] = baselines[id]
+		total++
+	}
+
+	if filtered == nil {
+		filtered = map[string]map[string]*MetricBaseline{}
+	}
+
+	response.Baselines = filtered
+	if offset > 0 || total > limit {
+		response.Pagination = &PaginationInfo{
+			Total:  total,
+			Limit:  limit,
+			Offset: offset,
+		}
+	}
+
+	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) executeGetPatterns(_ context.Context, _ map[string]interface{}) (CallToolResult, error) {
+	if e.patternProvider == nil {
+		return NewTextResult("Pattern detection not available. The system needs more historical data."), nil
+	}
+
+	response := PatternsResponse{
+		Patterns:    e.patternProvider.GetPatterns(),
+		Predictions: e.patternProvider.GetPredictions(),
+	}
+
+	// Ensure non-nil slices for clean JSON
+	if response.Patterns == nil {
+		response.Patterns = []Pattern{}
+	}
+	if response.Predictions == nil {
+		response.Predictions = []Prediction{}
+	}
+
+	return NewJSONResult(response), nil
+}
+
+// ========== Temperature, Network, DiskIO, Physical Disks ==========
+
+func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	hostFilter, _ := args["host"].(string)
+
+	state := e.stateProvider.GetState()
+
+	type HostTemps struct {
+		Hostname    string             `json:"hostname"`
+		Platform    string             `json:"platform,omitempty"`
+		CPU         map[string]float64 `json:"cpu_temps,omitempty"`
+		Disks       map[string]float64 `json:"disk_temps,omitempty"`
+		Fans        map[string]float64 `json:"fan_rpm,omitempty"`
+		Other       map[string]float64 `json:"other_temps,omitempty"`
+		LastUpdated string             `json:"last_updated,omitempty"`
+	}
+
+	var results []HostTemps
+
+	for _, host := range state.Hosts {
+		if hostFilter != "" && host.Hostname != hostFilter {
+			continue
+		}
+
+		if len(host.Sensors.TemperatureCelsius) == 0 && len(host.Sensors.FanRPM) == 0 {
+			continue
+		}
+
+		temps := HostTemps{
+			Hostname: host.Hostname,
+			Platform: host.Platform,
+			CPU:      make(map[string]float64),
+			Disks:    make(map[string]float64),
+			Fans:     make(map[string]float64),
+			Other:    make(map[string]float64),
+		}
+
+		// Categorize temperatures
+		for name, value := range host.Sensors.TemperatureCelsius {
+			switch {
+			case containsAny(name, "cpu", "core", "package"):
+				temps.CPU[name] = value
+			case containsAny(name, "nvme", "ssd", "hdd", "disk"):
+				temps.Disks[name] = value
+			default:
+				temps.Other[name] = value
+			}
+		}
+
+		// Add fan data
+		for name, value := range host.Sensors.FanRPM {
+			temps.Fans[name] = value
+		}
+
+		// Add additional sensors to Other
+		for name, value := range host.Sensors.Additional {
+			if _, exists := temps.CPU[name]; !exists {
+				if _, exists := temps.Disks[name]; !exists {
+					temps.Other[name] = value
+				}
+			}
+		}
+
+		results = append(results, temps)
+	}
+
+	if len(results) == 0 {
+		if hostFilter != "" {
+			return NewTextResult(fmt.Sprintf("No temperature data available for host '%s'. The host may not have a Pulse agent installed or sensors may not be available.", hostFilter)), nil
+		}
+		return NewTextResult("No temperature data available. Ensure Pulse unified agents are installed on hosts and lm-sensors is available."), nil
+	}
+
+	output, _ := json.MarshalIndent(results, "", "  ")
+	return NewTextResult(string(output)), nil
+}
+
+func (e *PulseToolExecutor) executeGetNetworkStats(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewTextResult("State provider not available."), nil
+	}
+
+	hostFilter, _ := args["host"].(string)
+
+	state := e.stateProvider.GetState()
+
+	var hosts []HostNetworkStatsSummary
+
+	for _, host := range state.Hosts {
+		if hostFilter != "" && host.Hostname != hostFilter {
+			continue
+		}
+
+		if len(host.NetworkInterfaces) == 0 {
+			continue
+		}
+
+		var interfaces []NetworkInterfaceSummary
+		for _, iface := range host.NetworkInterfaces {
+			interfaces = append(interfaces, NetworkInterfaceSummary{
+				Name:      iface.Name,
+				MAC:       iface.MAC,
+				Addresses: iface.Addresses,
+				RXBytes:   iface.RXBytes,
+				TXBytes:   iface.TXBytes,
+				SpeedMbps: iface.SpeedMbps,
+			})
+		}
+
+		hosts = append(hosts, HostNetworkStatsSummary{
+			Hostname:   host.Hostname,
+			Interfaces: interfaces,
+		})
+	}
+
+	// Also check Docker hosts for network stats
+	for _, dockerHost := range state.DockerHosts {
+		if hostFilter != "" && dockerHost.Hostname != hostFilter {
+			continue
+		}
+
+		if len(dockerHost.NetworkInterfaces) == 0 {
+			continue
+		}
+
+		// Check if we already have this host
+		found := false
+		for _, h := range hosts {
+			if h.Hostname == dockerHost.Hostname {
+				found = true
+				break
+			}
+		}
+		if found {
+			continue
+		}
+
+		var interfaces []NetworkInterfaceSummary
+		for _, iface := range dockerHost.NetworkInterfaces {
+			interfaces = append(interfaces, NetworkInterfaceSummary{
+				Name:      iface.Name,
+				MAC:       iface.MAC,
+				Addresses: iface.Addresses,
+				RXBytes:   iface.RXBytes,
+				TXBytes:   iface.TXBytes,
+				SpeedMbps: iface.SpeedMbps,
+			})
+		}
+
+		hosts = append(hosts, HostNetworkStatsSummary{
+			Hostname:   dockerHost.Hostname,
+			Interfaces: interfaces,
+		})
+	}
+
+	if len(hosts) == 0 {
+		if hostFilter != "" {
+			return NewTextResult(fmt.Sprintf("No network statistics available for host '%s'.", hostFilter)), nil
+		}
+		return NewTextResult("No network statistics available. Ensure Pulse agents are reporting network data."), nil
+	}
+
+	response := NetworkStatsResponse{
+		Hosts: hosts,
+		Total: len(hosts),
+	}
+
+	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) executeGetDiskIOStats(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewTextResult("State provider not available."), nil
+	}
+
+	hostFilter, _ := args["host"].(string)
+
+	state := e.stateProvider.GetState()
+
+	var hosts []HostDiskIOStatsSummary
+
+	for _, host := range state.Hosts {
+		if hostFilter != "" && host.Hostname != hostFilter {
+			continue
+		}
+
+		if len(host.DiskIO) == 0 {
+			continue
+		}
+
+		var devices []DiskIODeviceSummary
+		for _, dio := range host.DiskIO {
+			devices = append(devices, DiskIODeviceSummary{
+				Device:     dio.Device,
+				ReadBytes:  dio.ReadBytes,
+				WriteBytes: dio.WriteBytes,
+				ReadOps:    dio.ReadOps,
+				WriteOps:   dio.WriteOps,
+				IOTimeMs:   dio.IOTime,
+			})
+		}
+
+		hosts = append(hosts, HostDiskIOStatsSummary{
+			Hostname: host.Hostname,
+			Devices:  devices,
+		})
+	}
+
+	if len(hosts) == 0 {
+		if hostFilter != "" {
+			return NewTextResult(fmt.Sprintf("No disk I/O statistics available for host '%s'.", hostFilter)), nil
+		}
+		return NewTextResult("No disk I/O statistics available. Ensure Pulse agents are reporting disk I/O data."), nil
+	}
+
+	response := DiskIOStatsResponse{
+		Hosts: hosts,
+		Total: len(hosts),
+	}
+
+	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) executeListPhysicalDisks(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewTextResult("State provider not available."), nil
+	}
+
+	instanceFilter, _ := args["instance"].(string)
+	nodeFilter, _ := args["node"].(string)
+	healthFilter, _ := args["health"].(string)
+	typeFilter, _ := args["type"].(string)
+	limit := intArg(args, "limit", 100)
+
+	state := e.stateProvider.GetState()
+
+	if len(state.PhysicalDisks) == 0 {
+		return NewTextResult("No physical disk data available. Physical disk information is collected from Proxmox nodes."), nil
+	}
+
+	var disks []PhysicalDiskSummary
+	totalCount := 0
+
+	for _, disk := range state.PhysicalDisks {
+		// Apply filters
+		if instanceFilter != "" && disk.Instance != instanceFilter {
+			continue
+		}
+		if nodeFilter != "" && disk.Node != nodeFilter {
+			continue
+		}
+		if healthFilter != "" && !strings.EqualFold(disk.Health, healthFilter) {
+			continue
+		}
+		if typeFilter != "" && !strings.EqualFold(disk.Type, typeFilter) {
+			continue
+		}
+
+		totalCount++
+
+		if len(disks) >= limit {
+			continue
+		}
+
+		summary := PhysicalDiskSummary{
+			ID:          disk.ID,
+			Node:        disk.Node,
+			Instance:    disk.Instance,
+			DevPath:     disk.DevPath,
+			Model:       disk.Model,
+			Serial:      disk.Serial,
+			WWN:         disk.WWN,
+			Type:        disk.Type,
+			SizeBytes:   disk.Size,
+			Health:      disk.Health,
+			Used:        disk.Used,
+			LastChecked: disk.LastChecked,
+		}
+
+		// Only include optional fields if they have meaningful values
+		if disk.Wearout >= 0 {
+			wearout := disk.Wearout
+			summary.Wearout = &wearout
+		}
+		if disk.Temperature > 0 {
+			temp := disk.Temperature
+			summary.Temperature = &temp
+		}
+		if disk.RPM > 0 {
+			rpm := disk.RPM
+			summary.RPM = &rpm
+		}
+
+		disks = append(disks, summary)
+	}
+
+	if disks == nil {
+		disks = []PhysicalDiskSummary{}
+	}
+
+	response := PhysicalDisksResponse{
+		Disks:    disks,
+		Total:    len(state.PhysicalDisks),
+		Filtered: totalCount,
+	}
+
+	return NewJSONResult(response), nil
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-// registerKubernetesTools registers the consolidated pulse_kubernetes tool
+// registerKubernetesTools registers the pulse_kubernetes tool
 func (e *PulseToolExecutor) registerKubernetesTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{

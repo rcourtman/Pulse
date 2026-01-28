@@ -565,7 +565,7 @@ func (e *PulseToolExecutor) ListTools() []Tool {
 
 func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	switch name {
-	// Consolidated tools - check based on primary requirements
+	// Check tool availability based on primary requirements
 	case "pulse_query":
 		return e.stateProvider != nil
 	case "pulse_metrics":
@@ -607,8 +607,7 @@ func (e *PulseToolExecutor) ExecuteTool(ctx context.Context, name string, args m
 
 // registerTools registers all available tools
 func (e *PulseToolExecutor) registerTools() {
-	// Consolidated tools (49 tools -> 10 tools)
-	// See plan at /Users/rcourtman/.claude/plans/atomic-wobbling-rose.md
+	// All tools registered below (12 tools total)
 
 	// pulse_query - search, get, config, topology, list, health
 	e.registerQueryTools()
@@ -634,17 +633,17 @@ func (e *PulseToolExecutor) registerTools() {
 
 	// pulse_control - guest control, run commands (requires control permission)
 	// NOTE: For read-only command execution, use pulse_read instead
-	e.registerControlToolsConsolidated()
+	e.registerControlTools()
 
 	// pulse_file_edit - read, append, write files (requires control permission)
 	e.registerFileTools()
 
 	// pulse_discovery - get, list discoveries
-	e.registerDiscoveryToolsConsolidated()
+	e.registerDiscoveryTools()
 
 	// pulse_knowledge - remember, recall, incidents, correlate, relationships
 	e.registerKnowledgeTools()
 
 	// pulse_pmg - status, mail_stats, queues, spam
-	e.registerPMGToolsConsolidated()
+	e.registerPMGTools()
 }

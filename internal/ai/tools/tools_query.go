@@ -1017,6 +1017,8 @@ func isReadOnlyByConstruction(cmdLower string) bool {
 		"wget -q", "wget --spider",
 		"docker ps", "docker logs", "docker inspect", "docker stats", "docker images", "docker info",
 		"systemctl status", "systemctl is-active", "systemctl is-enabled", "systemctl list", "systemctl show",
+		"pct list", "pct status",
+		"qm list", "qm status",
 		"ip addr", "ip route", "ip link",
 		// Kubectl read-only commands
 		"kubectl get", "kubectl describe", "kubectl logs", "kubectl top", "kubectl cluster-info",
@@ -1096,12 +1098,14 @@ func matchesWritePatterns(cmdLower string) string {
 		"echo ": "output (may redirect)", "printf ": "output (may redirect)",
 		"wget -O": "file download", "wget --output": "file download",
 		"tar -x": "archive extraction", "tar x": "archive extraction", "unzip ": "archive extraction", "gunzip ": "archive extraction",
-		"ln ": "link creation", "link ": "link creation",
 	}
 	for pattern, reason := range mediumRiskPatterns {
 		if strings.Contains(cmdLower, pattern) {
 			return reason
 		}
+	}
+	if containsCommandToken(cmdLower, "ln") || containsCommandToken(cmdLower, "link") {
+		return "link creation"
 	}
 
 	// Curl with mutation verbs
@@ -1115,6 +1119,21 @@ func matchesWritePatterns(cmdLower string) string {
 	}
 
 	return ""
+}
+
+func containsCommandToken(cmdLower, token string) bool {
+	for _, field := range strings.Fields(cmdLower) {
+		if field == token {
+			return true
+		}
+		if strings.HasPrefix(field, "/") || strings.HasPrefix(field, "./") ||
+			strings.HasPrefix(field, "../") || strings.HasPrefix(field, "~/") {
+			if strings.HasSuffix(field, "/"+token) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // hasShellChainingOutsideQuotes checks if a command contains shell chaining operators
@@ -1801,7 +1820,7 @@ func logRoutingMismatchDebug(targetHost string, childKinds, childIDs []string) {
 		Msg("[RoutingValidation] Blocked operation targeting parent node when child recently referenced")
 }
 
-// registerQueryTools registers the consolidated pulse_query tool
+// registerQueryTools registers the pulse_query tool
 func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
@@ -3138,6 +3157,43 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		}
 
 		e.registerResolvedResource(reg)
+	}
+
+	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) executeGetConnectionHealth(_ context.Context, _ map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil {
+		return NewTextResult("State provider not available."), nil
+	}
+
+	state := e.stateProvider.GetState()
+
+	if len(state.ConnectionHealth) == 0 {
+		return NewTextResult("No connection health data available."), nil
+	}
+
+	var connections []ConnectionStatus
+	connected := 0
+	disconnected := 0
+
+	for instanceID, isConnected := range state.ConnectionHealth {
+		connections = append(connections, ConnectionStatus{
+			InstanceID: instanceID,
+			Connected:  isConnected,
+		})
+		if isConnected {
+			connected++
+		} else {
+			disconnected++
+		}
+	}
+
+	response := ConnectionHealthResponse{
+		Connections:  connections,
+		Total:        len(connections),
+		Connected:    connected,
+		Disconnected: disconnected,
 	}
 
 	return NewJSONResult(response), nil

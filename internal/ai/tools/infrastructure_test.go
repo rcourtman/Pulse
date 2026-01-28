@@ -20,7 +20,7 @@ func TestExecuteGetDiskHealth(t *testing.T) {
 	}
 	diskHealthProv.On("GetHosts").Return(expectedHosts)
 
-	// Use consolidated pulse_storage tool with type: "disk_health"
+	// Use pulse_storage tool with type: "disk_health"
 	result, err := exec.ExecuteTool(context.Background(), "pulse_storage", map[string]interface{}{
 		"type": "disk_health",
 	})
@@ -44,7 +44,7 @@ func TestExecuteGetTemperatures(t *testing.T) {
 	}
 	stateProv.On("GetState").Return(state)
 
-	// Use consolidated pulse_metrics tool with type: "temperatures"
+	// Use pulse_metrics tool with type: "temperatures"
 	result, err := exec.ExecuteTool(context.Background(), "pulse_metrics", map[string]interface{}{
 		"type": "temperatures",
 	})

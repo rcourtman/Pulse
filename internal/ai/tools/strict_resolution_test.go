@@ -1489,6 +1489,8 @@ func TestExecutionIntent_ReadOnlyPipeChains(t *testing.T) {
 		"journalctl -u nginx | grep failed",
 		"ls -la /opt | grep -v total",
 		"find /var/log -name '*.log' 2>/dev/null | head -20",
+		"ss -tuln | grep -E '3000|9090|9100|22|25'",
+		"netstat -tuln | grep -E '3000|9090|9100|22|25'",
 	}
 
 	for _, cmd := range allowedPipeChains {

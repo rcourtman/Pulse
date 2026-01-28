@@ -150,44 +150,6 @@ func TestExecuteListPBSJobs(t *testing.T) {
 	assert.Equal(t, "job1", resp.Jobs[0].ID)
 }
 
-func TestExecuteGetClusterStatus(t *testing.T) {
-	ctx := context.Background()
-	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
-
-	result, err := exec.executeGetClusterStatus(ctx, map[string]interface{}{})
-	require.NoError(t, err)
-	assert.Equal(t, "No Proxmox nodes found.", result.Content[0].Text)
-
-	state := models.StateSnapshot{
-		Nodes: []models.Node{
-			{
-				Name:            "node1",
-				Status:          "online",
-				IsClusterMember: true,
-				ClusterName:     "cluster1",
-				Instance:        "pve1",
-			},
-			{
-				Name:            "node2",
-				Status:          "offline",
-				IsClusterMember: true,
-				ClusterName:     "cluster1",
-				Instance:        "pve1",
-			},
-		},
-	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
-
-	result, err = exec.executeGetClusterStatus(ctx, map[string]interface{}{})
-	require.NoError(t, err)
-
-	var resp ClusterStatusResponse
-	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
-	require.Len(t, resp.Clusters, 1)
-	assert.Equal(t, "cluster1", resp.Clusters[0].ClusterName)
-	assert.False(t, resp.Clusters[0].QuorumOK)
-}
-
 func TestExecuteGetConnectionHealth(t *testing.T) {
 	ctx := context.Background()
 	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
@@ -347,36 +309,6 @@ func TestExecuteGetResourceDisks(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 	require.Len(t, resp.Resources, 1)
 	assert.Equal(t, "vm1", resp.Resources[0].ID)
-}
-
-func TestExecuteListRecentTasks(t *testing.T) {
-	ctx := context.Background()
-	now := time.Now()
-	state := models.StateSnapshot{
-		PVEBackups: models.PVEBackups{
-			BackupTasks: []models.BackupTask{
-				{
-					ID:        "task1",
-					Node:      "node1",
-					Instance:  "pve1",
-					Type:      "backup",
-					Status:    "ok",
-					StartTime: now,
-				},
-			},
-		},
-	}
-
-	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
-	result, err := exec.executeListRecentTasks(ctx, map[string]interface{}{
-		"type": "backup",
-	})
-	require.NoError(t, err)
-
-	var resp RecentTasksResponse
-	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
-	require.Len(t, resp.Tasks, 1)
-	assert.Equal(t, "task1", resp.Tasks[0].ID)
 }
 
 func TestExecuteListBackupTasks(t *testing.T) {
