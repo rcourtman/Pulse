@@ -67,10 +67,11 @@ type AgentServer interface {
 }
 
 // ChatServiceProvider defines the interface for accessing chat functionality
-// This is used by the investigation orchestrator to run investigations
+// This is used by the investigation orchestrator and patrol to run AI executions
 type ChatServiceProvider interface {
 	CreateSession(ctx context.Context) (*ChatSession, error)
 	ExecuteStream(ctx context.Context, req ChatExecuteRequest, callback ChatStreamCallback) error
+	ExecutePatrolStream(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error)
 	GetMessages(ctx context.Context, sessionID string) ([]ChatMessage, error)
 	DeleteSession(ctx context.Context, sessionID string) error
 }
@@ -101,6 +102,21 @@ type ChatMessage struct {
 	Role      string    `json:"role"`
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
+}
+
+// PatrolExecuteRequest represents a patrol execution request via the chat service
+type PatrolExecuteRequest struct {
+	Prompt       string `json:"prompt"`
+	SystemPrompt string `json:"system_prompt"`
+	SessionID    string `json:"session_id,omitempty"`
+	UseCase      string `json:"use_case"` // "patrol" — for model selection
+}
+
+// PatrolStreamResponse contains the results of a patrol execution via the chat service
+type PatrolStreamResponse struct {
+	Content      string `json:"content"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
 }
 
 // Service orchestrates AI interactions

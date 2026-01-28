@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/adapters"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
@@ -2490,6 +2491,9 @@ func (r *Router) StartAIChat(ctx context.Context) {
 	// Wire up MCP tool providers so AI can access real data
 	r.wireAIChatProviders()
 
+	// Wire chat service to AI service for patrol and investigation
+	r.wireChatServiceToAI()
+
 	// Wire up investigation orchestrator now that chat service is ready
 	// This must happen after Start() because the orchestrator needs the chat service
 	if r.aiSettingsHandler != nil {
@@ -2508,6 +2512,35 @@ func (r *Router) StartAIChat(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// wireChatServiceToAI wires the chat service adapter to the AI service,
+// enabling patrol and investigation to use the chat service's execution path
+// (50+ MCP tools, FSM safety, sessions) instead of the legacy 3-tool path.
+func (r *Router) wireChatServiceToAI() {
+	if r.aiHandler == nil || r.aiSettingsHandler == nil {
+		return
+	}
+
+	ctx := context.Background()
+	chatSvc := r.aiHandler.GetService(ctx)
+	if chatSvc == nil {
+		return
+	}
+
+	chatService, ok := chatSvc.(*chat.Service)
+	if !ok {
+		log.Warn().Msg("Chat service is not *chat.Service, cannot create patrol adapter")
+		return
+	}
+
+	aiService := r.aiSettingsHandler.GetAIService(ctx)
+	if aiService == nil {
+		return
+	}
+
+	aiService.SetChatService(&chatServiceAdapter{svc: chatService})
+	log.Info().Msg("Chat service wired to AI service for patrol and investigation")
 }
 
 // wireAIChatProviders wires up all MCP tool providers for AI chat
