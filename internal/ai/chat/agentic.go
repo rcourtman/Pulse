@@ -27,6 +27,10 @@ type AgenticLoop struct {
 	providerName string
 	modelName    string
 
+	// Token accumulation across all turns
+	totalInputTokens  int
+	totalOutputTokens int
+
 	// State for ongoing executions
 	mu             sync.Mutex
 	aborted        map[string]bool                  // sessionID -> aborted
@@ -92,6 +96,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	var resultMessages []Message
 	turn := 0
 	toolsSucceededThisEpisode := false // Track if any tool executed successfully this episode
+	preferredToolName := ""
+	preferredToolRetried := false
 
 	for turn < a.maxTurns {
 		// Check if aborted
@@ -131,21 +137,29 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			Tools:    tools,
 		}
 
-		// Determine tool_choice based on turn and intent
+		// Determine tool_choice based on turn, intent, and explicit tool requests.
 		// We only force tool use when:
 		// 1. Tools are available
 		// 2. It's the first turn
 		// 3. The user's message indicates they need live data or an action
 		// This prevents forcing tool calls on conceptual questions like "What is TCP?"
 		if len(tools) > 0 {
-			if turn == 0 && requiresToolUse(providerMessages) {
+			if preferredToolName == "" {
+				preferredToolName = getPreferredTool(providerMessages, tools)
+			}
+			if preferredToolName != "" {
+				req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceTool, Name: preferredToolName}
+				log.Debug().
+					Str("session_id", sessionID).
+					Str("tool", preferredToolName).
+					Msg("[AgenticLoop] Explicit tool request - forcing tool")
+			} else if turn == 0 && requiresToolUse(providerMessages) {
 				// First turn with action intent: force the model to use a tool
 				req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceAny}
 				log.Debug().
 					Str("session_id", sessionID).
 					Msg("[AgenticLoop] First turn with action intent - forcing tool use")
 			} else {
-				// Conceptual questions or subsequent turns: let the model decide
 				req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceAuto}
 				if turn == 0 {
 					log.Debug().
@@ -227,6 +241,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			case "done":
 				if data, ok := event.Data.(providers.DoneEvent); ok {
 					toolCalls = data.ToolCalls
+					a.totalInputTokens += data.InputTokens
+					a.totalOutputTokens += data.OutputTokens
 				}
 
 			case "error":
@@ -293,6 +309,19 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 		// If no tool calls, we're done - but first check FSM and phantom execution
 		if len(toolCalls) == 0 {
+			// If the user explicitly requested a tool and the model didn't comply, retry once.
+			if preferredToolName != "" && !preferredToolRetried {
+				preferredToolRetried = true
+
+				retryPrompt := fmt.Sprintf("Tool required: use %s for this request.", preferredToolName)
+				if len(resultMessages) > 0 {
+					resultMessages[len(resultMessages)-1].Content = retryPrompt
+				}
+
+				turn++
+				continue
+			}
+
 			// === FSM ENFORCEMENT GATE 2: Check if final answer is allowed ===
 			a.mu.Lock()
 			fsm := a.sessionFSM
@@ -386,6 +415,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 
 		// Execute tool calls
+		if len(toolCalls) > 0 && preferredToolName != "" {
+			// Clear preferred tool once the model has used any tool.
+			preferredToolName = ""
+		}
 		for _, tc := range toolCalls {
 			// Check for abort
 			a.mu.Lock()
@@ -775,6 +808,22 @@ func (a *AgenticLoop) SetProviderInfo(provider, model string) {
 	a.mu.Unlock()
 }
 
+// GetTotalInputTokens returns the accumulated input tokens across all turns.
+func (a *AgenticLoop) GetTotalInputTokens() int {
+	return a.totalInputTokens
+}
+
+// GetTotalOutputTokens returns the accumulated output tokens across all turns.
+func (a *AgenticLoop) GetTotalOutputTokens() int {
+	return a.totalOutputTokens
+}
+
+// ResetTokenCounts resets the accumulated token counts (for reuse across executions).
+func (a *AgenticLoop) ResetTokenCounts() {
+	a.totalInputTokens = 0
+	a.totalOutputTokens = 0
+}
+
 // hasPhantomExecution detects when the model claims to have executed something
 // but no actual tool calls were made. This catches models that "hallucinate"
 // tool execution by writing about it instead of calling tools.
@@ -976,8 +1025,30 @@ func requiresToolUse(messages []providers.Message) bool {
 				strings.Contains(lastUserContent, "usage")
 
 			if hasMyInfra && hasStateQuery {
-				break // Not conceptual, continue to action detection
+				return true // Explicit state query about user's infrastructure
 			}
+
+			// Exception: explicit resource references should trigger tools even in "tell me about" queries.
+			resourceNouns := []string{
+				"container", "vm", "lxc", "node", "pod", "deployment", "service", "host", "cluster",
+			}
+			hasResourceNoun := false
+			for _, noun := range resourceNouns {
+				if strings.Contains(lastUserContent, noun) {
+					hasResourceNoun = true
+					break
+				}
+			}
+			explicitIndicator := strings.Contains(lastUserContent, "@") ||
+				strings.Contains(lastUserContent, "\"") ||
+				strings.Contains(lastUserContent, "-") ||
+				strings.Contains(lastUserContent, "_") ||
+				strings.Contains(lastUserContent, "/")
+
+			if hasResourceNoun && explicitIndicator {
+				return true // Treat as action: specific resource is referenced
+			}
+
 			return false
 		}
 	}
@@ -1011,6 +1082,10 @@ func requiresToolUse(messages []providers.Message) bool {
 		// Questions about "my" specific infrastructure
 		"my server", "my container", "my vm", "my host", "my infrastructure",
 		"my node", "my cluster", "my proxmox", "my docker",
+		// Inventory-style queries
+		"what nodes do i have", "what proxmox nodes",
+		"what containers do i have", "what vms do i have",
+		"what is running on", "what's running on",
 	}
 
 	for _, pattern := range actionPatterns {
@@ -1019,8 +1094,75 @@ func requiresToolUse(messages []providers.Message) bool {
 		}
 	}
 
+	// Logs or journal queries should always hit tools.
+	if strings.Contains(lastUserContent, "logs") ||
+		strings.Contains(lastUserContent, " log") ||
+		strings.Contains(lastUserContent, "journal") ||
+		strings.Contains(lastUserContent, "journald") {
+		return true
+	}
+
 	// Default: assume conceptual question, don't force tools
 	return false
+}
+
+// getPreferredTool returns a tool name if the user explicitly requested one.
+// Only returns tools that are available for this request.
+func getPreferredTool(messages []providers.Message, tools []providers.Tool) string {
+	var lastUserContent string
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" && messages[i].ToolResult == nil {
+			lastUserContent = strings.ToLower(messages[i].Content)
+			break
+		}
+	}
+	if lastUserContent == "" {
+		return ""
+	}
+
+	toolSet := make(map[string]bool, len(tools))
+	for _, tool := range tools {
+		if tool.Name != "" {
+			toolSet[tool.Name] = true
+		}
+	}
+
+	// Explicit tool mentions
+	explicitTools := []string{
+		"pulse_read",
+		"pulse_control",
+		"pulse_query",
+		"pulse_discovery",
+		"pulse_docker",
+		"pulse_kubernetes",
+		"pulse_metrics",
+		"pulse_storage",
+	}
+	for _, tool := range explicitTools {
+		if strings.Contains(lastUserContent, tool) && toolSet[tool] {
+			return tool
+		}
+	}
+
+	// Natural language aliases
+	if (strings.Contains(lastUserContent, "read-only tool") || strings.Contains(lastUserContent, "read only tool")) && toolSet["pulse_read"] {
+		return "pulse_read"
+	}
+	if strings.Contains(lastUserContent, "control tool") && toolSet["pulse_control"] {
+		return "pulse_control"
+	}
+	if strings.Contains(lastUserContent, "query tool") && toolSet["pulse_query"] {
+		return "pulse_query"
+	}
+
+	// Context carryover: if we injected an explicit target and logs are requested, force pulse_read.
+	if strings.Contains(lastUserContent, "explicit target") &&
+		(strings.Contains(lastUserContent, "log") || strings.Contains(lastUserContent, "journal")) &&
+		toolSet["pulse_read"] {
+		return "pulse_read"
+	}
+
+	return ""
 }
 
 // getSystemPrompt builds the full system prompt including the current mode context.

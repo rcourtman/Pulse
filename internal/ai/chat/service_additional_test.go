@@ -37,34 +37,4 @@ func TestServiceExecuteCommand_NoExecutor(t *testing.T) {
 	}
 }
 
-func TestPatrolServiceSessionLifecycle(t *testing.T) {
-	store, err := NewSessionStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewSessionStore error: %v", err)
-	}
-
-	service := &Service{
-		sessions: store,
-		started:  true,
-	}
-
-	patrol := NewPatrolService(service)
-	if err := patrol.CreatePatrolSession(context.Background()); err != nil {
-		t.Fatalf("CreatePatrolSession error: %v", err)
-	}
-	if patrol.GetSessionID() == "" {
-		t.Fatalf("expected session ID to be set")
-	}
-
-	patrol.mu.Lock()
-	patrol.running = true
-	patrol.mu.Unlock()
-	if !patrol.IsRunning() {
-		t.Fatalf("expected patrol to be running")
-	}
-
-	service.started = false
-	if err := patrol.CreatePatrolSession(context.Background()); err == nil {
-		t.Fatalf("expected error when service not running")
-	}
-}
+// TestPatrolServiceSessionLifecycle was removed: it tested the deleted chat/patrol.go bridge.

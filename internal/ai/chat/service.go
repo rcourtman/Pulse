@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -326,6 +327,10 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	if prefetcher != nil {
 		prefetchCtx := prefetcher.Prefetch(ctx, req.Prompt)
+		mentionsFound := false
+		if prefetchCtx != nil {
+			mentionsFound = len(prefetchCtx.Mentions) > 0
+		}
 		if prefetchCtx != nil && prefetchCtx.Summary != "" {
 			log.Info().
 				Int("mentions", len(prefetchCtx.Mentions)).
@@ -372,6 +377,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 				}
 			}
 		}
+
+		if !mentionsFound {
+			s.injectRecentContextIfNeeded(req.Prompt, session.ID, messages, sessions)
+		}
+	} else {
+		s.injectRecentContextIfNeeded(req.Prompt, session.ID, messages, sessions)
 	}
 
 	// Run agentic loop
@@ -453,6 +464,204 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	callback(StreamEvent{Type: "done", Data: doneData})
 
 	return nil
+}
+
+// PatrolRequest represents a patrol execution request within the chat service
+type PatrolRequest struct {
+	Prompt       string `json:"prompt"`
+	SystemPrompt string `json:"system_prompt"`
+	SessionID    string `json:"session_id,omitempty"`
+	UseCase      string `json:"use_case"`
+}
+
+// PatrolResponse contains the results of a patrol execution
+type PatrolResponse struct {
+	Content      string `json:"content"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+}
+
+// ExecutePatrolStream creates a temporary agentic loop for patrol execution.
+// Unlike ExecuteStream (which uses the shared agentic loop with the chat system prompt),
+// this creates an isolated loop with the patrol's own system prompt and model.
+func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, callback StreamCallback) (*PatrolResponse, error) {
+	log.Debug().
+		Str("session_id", req.SessionID).
+		Int("prompt_len", len(req.Prompt)).
+		Msg("[ChatService] ExecutePatrolStream called")
+
+	s.mu.RLock()
+	if !s.started {
+		s.mu.RUnlock()
+		return nil, fmt.Errorf("service not started")
+	}
+	sessions := s.sessions
+	executor := s.executor
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	// Determine model: use patrol model or fall back to chat model
+	patrolModel := ""
+	if cfg != nil {
+		patrolModel = cfg.GetPatrolModel()
+		if patrolModel == "" {
+			patrolModel = cfg.GetChatModel()
+		}
+	}
+	if patrolModel == "" {
+		return nil, fmt.Errorf("no patrol model configured")
+	}
+
+	// Create a temporary provider for the patrol model
+	provider, err := s.createProviderForModel(patrolModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create patrol provider: %w", err)
+	}
+
+	// Create a temporary agentic loop with the patrol system prompt
+	systemPrompt := req.SystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = s.buildSystemPrompt()
+	}
+	tempLoop := NewAgenticLoop(provider, executor, systemPrompt)
+	tempLoop.SetAutonomousMode(true) // Patrol runs without approval prompts
+
+	// Set provider info for telemetry
+	parts := strings.SplitN(patrolModel, ":", 2)
+	if len(parts) == 2 {
+		tempLoop.SetProviderInfo(parts[0], parts[1])
+	}
+
+	// Ensure patrol session exists
+	sessionID := req.SessionID
+	if sessionID == "" {
+		sessionID = "patrol-main"
+	}
+	session, err := sessions.EnsureSession(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to ensure patrol session: %w", err)
+	}
+
+	// Set resolved context on executor (same as ExecuteStream does)
+	if executor != nil {
+		resolvedCtx := sessions.GetResolvedContext(session.ID)
+		executor.SetResolvedContext(resolvedCtx)
+	}
+
+	// Set session FSM
+	sessionFSM := sessions.GetSessionFSM(session.ID)
+	tempLoop.SetSessionFSM(sessionFSM)
+
+	// Add user message
+	userMsg := Message{
+		ID:        uuid.New().String(),
+		Role:      "user",
+		Content:   req.Prompt,
+		Timestamp: time.Now(),
+	}
+	if err := sessions.AddMessage(session.ID, userMsg); err != nil {
+		log.Warn().Err(err).Msg("Failed to save patrol user message")
+	}
+
+	// Get messages for context
+	messages, err := sessions.GetMessages(session.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get patrol messages: %w", err)
+	}
+
+	// Get all tools
+	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt)
+
+	// Run the agentic loop
+	resultMessages, err := tempLoop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
+	if err != nil {
+		// Still save any messages we got
+		for _, msg := range resultMessages {
+			if saveErr := sessions.AddMessage(session.ID, msg); saveErr != nil {
+				log.Warn().Err(saveErr).Msg("Failed to save patrol message after error")
+			}
+		}
+		return nil, err
+	}
+
+	// Save result messages
+	for _, msg := range resultMessages {
+		if msg.Role == "user" && msg.ToolResult == nil {
+			continue
+		}
+		if err := sessions.AddMessage(session.ID, msg); err != nil {
+			log.Warn().Err(err).Msg("Failed to save patrol message")
+		}
+	}
+
+	// Collect content from result messages
+	var contentBuilder strings.Builder
+	for _, msg := range resultMessages {
+		if msg.Role == "assistant" && msg.Content != "" {
+			contentBuilder.WriteString(msg.Content)
+		}
+	}
+
+	// Send done event
+	doneData, _ := json.Marshal(DoneData{
+		SessionID:    session.ID,
+		InputTokens:  tempLoop.GetTotalInputTokens(),
+		OutputTokens: tempLoop.GetTotalOutputTokens(),
+	})
+	callback(StreamEvent{Type: "done", Data: doneData})
+
+	return &PatrolResponse{
+		Content:      contentBuilder.String(),
+		InputTokens:  tempLoop.GetTotalInputTokens(),
+		OutputTokens: tempLoop.GetTotalOutputTokens(),
+	}, nil
+}
+
+// createProviderForModel creates a streaming provider for a specific model string (provider:model format).
+func (s *Service) createProviderForModel(modelStr string) (providers.StreamingProvider, error) {
+	if s.cfg == nil {
+		return nil, fmt.Errorf("no Pulse Assistant config")
+	}
+
+	parts := strings.SplitN(modelStr, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid model format: %s (expected provider:model)", modelStr)
+	}
+	providerName := parts[0]
+	modelName := parts[1]
+
+	timeout := 5 * time.Minute
+
+	switch providerName {
+	case "anthropic":
+		if s.cfg.AnthropicAPIKey == "" {
+			return nil, fmt.Errorf("Anthropic API key not configured")
+		}
+		return providers.NewAnthropicClient(s.cfg.AnthropicAPIKey, modelName, timeout), nil
+	case "openai":
+		if s.cfg.OpenAIAPIKey == "" {
+			return nil, fmt.Errorf("OpenAI API key not configured")
+		}
+		return providers.NewOpenAIClient(s.cfg.OpenAIAPIKey, modelName, "", timeout), nil
+	case "deepseek":
+		if s.cfg.DeepSeekAPIKey == "" {
+			return nil, fmt.Errorf("DeepSeek API key not configured")
+		}
+		return providers.NewOpenAIClient(s.cfg.DeepSeekAPIKey, modelName, "https://api.deepseek.com", timeout), nil
+	case "gemini":
+		if s.cfg.GeminiAPIKey == "" {
+			return nil, fmt.Errorf("Gemini API key not configured")
+		}
+		return providers.NewGeminiClient(s.cfg.GeminiAPIKey, modelName, "", timeout), nil
+	case "ollama":
+		baseURL := s.cfg.OllamaBaseURL
+		if baseURL == "" {
+			baseURL = "http://localhost:11434"
+		}
+		return providers.NewOllamaClient(modelName, baseURL, timeout), nil
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", providerName)
+	}
 }
 
 // ListAvailableTools returns tool names available for the given prompt.
@@ -926,6 +1135,110 @@ DOCKER BIND MOUNTS:
 - Container files are often mapped to host paths via bind mounts
 - To edit a container's config, find the bind mount and edit the host path
 - Use pulse_discovery to find bind mount mappings`
+}
+
+var recentContextPronounPattern = regexp.MustCompile(`(?i)\b(it|its|that|those|this|them|previous|earlier|last|same|former|latter)\b`)
+var recentContextNounPattern = regexp.MustCompile(`(?i)\b(the (service|container|vm|lxc|node|host|docker|instance|one))\b`)
+
+func shouldInjectRecentContext(prompt string) bool {
+	return recentContextPronounPattern.MatchString(prompt) || recentContextNounPattern.MatchString(prompt)
+}
+
+func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages []Message, sessions *SessionStore) {
+	if !shouldInjectRecentContext(prompt) {
+		return
+	}
+
+	if sessions == nil {
+		return
+	}
+	resolvedCtx := sessions.GetResolvedContext(sessionID)
+	if resolvedCtx == nil {
+		return
+	}
+
+	recentIDs := resolvedCtx.GetRecentlyAccessedResourcesSorted(tools.RecentAccessWindow, 3)
+	if len(recentIDs) == 0 {
+		return
+	}
+
+	var lines []string
+	primaryName := ""
+	primaryTarget := ""
+	for _, resourceID := range recentIDs {
+		res, ok := resolvedCtx.GetResourceByID(resourceID)
+		if !ok || res == nil {
+			continue
+		}
+		label := res.Name
+		if label == "" {
+			label = resourceID
+		}
+		kind := res.Kind
+		if kind == "" {
+			kind = res.ResourceType
+		}
+		location := res.Node
+		if location == "" {
+			location = res.Scope.HostName
+		}
+		if kind != "" && location != "" {
+			label = fmt.Sprintf("%s (%s on %s)", label, kind, location)
+		} else if kind != "" {
+			label = fmt.Sprintf("%s (%s)", label, kind)
+		}
+		lines = append(lines, "- "+label)
+		if primaryName == "" {
+			primaryName = res.Name
+			primaryTarget = res.TargetHost
+			if primaryName == "" {
+				primaryName = label
+			}
+		}
+	}
+
+	if len(lines) == 0 {
+		return
+	}
+
+	primary := strings.TrimPrefix(lines[0], "- ")
+	if primaryName == "" {
+		primaryName = primary
+	}
+	targetHint := ""
+	if primaryTarget != "" {
+		targetHint = fmt.Sprintf(" Use target_host=\"%s\".", primaryTarget)
+	}
+	summary := fmt.Sprintf("Context: The most recently referenced resource is %s. If the user says \"it/its/that\", assume they mean this resource unless they specify otherwise. Do not ask for clarification unless the user names a different resource.%s", primary, targetHint)
+	if len(lines) > 1 {
+		others := strings.Join(lines[1:], "\n")
+		summary += "\nOther recent resources:\n" + others
+	}
+
+	lowerPrompt := strings.ToLower(prompt)
+	if strings.Contains(lowerPrompt, "log") || strings.Contains(lowerPrompt, "journal") {
+		rewrite := fmt.Sprintf("Show logs for %s (last 50 lines).", primaryName)
+		if primaryTarget != "" {
+			summary += fmt.Sprintf("\nInstruction: %s Use pulse_read action=logs target_host=\"%s\" lines=50.", rewrite, primaryTarget)
+		} else {
+			summary += fmt.Sprintf("\nInstruction: %s Use pulse_read action=logs target_host=\"%s\" lines=50.", rewrite, primaryName)
+		}
+	}
+
+	log.Debug().
+		Str("session_id", sessionID).
+		Strs("recent_resource_ids", recentIDs).
+		Msg("[ChatService] Injecting recent context")
+
+	if len(messages) == 0 {
+		return
+	}
+	lastIdx := len(messages) - 1
+	if messages[lastIdx].Role != "user" {
+		return
+	}
+
+	messages[lastIdx].Content = summary + "\n\n---\nExplicit target: " + primaryName + "\nUser question (targeted): " + messages[lastIdx].Content
 }
 
 func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string) []providers.Tool {

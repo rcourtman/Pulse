@@ -3,6 +3,7 @@ package chat
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 	"time"
 
@@ -601,6 +602,43 @@ func (rc *ResolvedContext) GetRecentlyAccessedResources(window time.Duration) []
 		}
 	}
 	return recent
+}
+
+// GetRecentlyAccessedResourcesSorted returns recently accessed resources ordered by most recent access.
+// If max <= 0, all recent resources are returned.
+func (rc *ResolvedContext) GetRecentlyAccessedResourcesSorted(window time.Duration, max int) []string {
+	if rc.explicitlyAccessed == nil {
+		return nil
+	}
+
+	cutoff := time.Now().Add(-window)
+	type recentResource struct {
+		id string
+		ts time.Time
+	}
+	var recent []recentResource
+
+	for resourceID, explicitAccess := range rc.explicitlyAccessed {
+		if explicitAccess.After(cutoff) {
+			if _, ok := rc.ResourcesByID[resourceID]; ok {
+				recent = append(recent, recentResource{id: resourceID, ts: explicitAccess})
+			}
+		}
+	}
+
+	sort.Slice(recent, func(i, j int) bool {
+		return recent[i].ts.After(recent[j].ts)
+	})
+
+	if max > 0 && len(recent) > max {
+		recent = recent[:max]
+	}
+
+	ids := make([]string, len(recent))
+	for i, res := range recent {
+		ids[i] = res.id
+	}
+	return ids
 }
 
 // AddResource adds a resolved resource to the context (internal use).
