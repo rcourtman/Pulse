@@ -2,7 +2,6 @@ package chat
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -366,62 +365,17 @@ func TestService_ExtendedMethods(t *testing.T) {
 	err = service.AbortSession(ctx, "s1")
 	assert.Error(t, err) // Service not started
 }
-func TestParseRunCommandDecision(t *testing.T) {
-	cases := []struct {
-		name    string
-		payload string
-		want    bool
-		wantErr bool
-	}{
-		{
-			name:    "Allow true",
-			payload: `{"allow_run_command": true, "reason": "explicit"}`,
-			want:    true,
-		},
-		{
-			name:    "Allow false",
-			payload: `{"allow_run_command": false}`,
-			want:    false,
-		},
-		{
-			name:    "Bare true",
-			payload: "true",
-			wantErr: true,
-		},
-		{
-			name:    "Wrapped JSON",
-			payload: "Decision: {\"allow_run_command\": true}",
-			wantErr: true,
-		},
-		{
-			name:    "Invalid payload",
-			payload: "n/a",
-			wantErr: true,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := parseRunCommandDecision(tc.payload)
-			if tc.wantErr {
-				assert.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tc.want, got.Allow)
-		})
-	}
-}
-
 func TestService_SettersAndUpdateControlSettings(t *testing.T) {
 	service := NewService(Config{
 		AIConfig: &config.AIConfig{ControlLevel: config.ControlLevelReadOnly},
-		// Agent server makes pulse_run_command eligible when control is enabled.
-		AgentServer: &mockAgentServer{},
+		// Agent server makes pulse_control eligible when control is enabled.
+		AgentServer:   &mockAgentServer{},
+		StateProvider: &mockStateProvider{},
 	})
 
 	require.NotNil(t, service.executor)
-	assert.False(t, hasTool(service.executor.ListTools(), "pulse_run_command"))
+	// In read-only mode, pulse_control is not available
+	assert.False(t, hasTool(service.executor.ListTools(), "pulse_control"))
 
 	service.SetAlertProvider(nil)
 	service.SetFindingsProvider(nil)
@@ -442,64 +396,29 @@ func TestService_SettersAndUpdateControlSettings(t *testing.T) {
 		ProtectedGuests: []string{"101"},
 	})
 
-	assert.True(t, hasTool(service.executor.ListTools(), "pulse_run_command"))
+	// After updating to controlled mode, pulse_control should be available
+	assert.True(t, hasTool(service.executor.ListTools(), "pulse_control"))
 }
 
-func TestService_ClassifyRunCommand(t *testing.T) {
-	t.Run("ProviderMissing", func(t *testing.T) {
-		service := &Service{}
-		_, err := service.classifyRunCommand(context.Background(), "run ls")
-		assert.Error(t, err)
-	})
-
-	t.Run("AllowTrue", func(t *testing.T) {
-		mockProvider := &MockProvider{}
-		mockProvider.On("Chat", mock.Anything, mock.Anything).
-			Return(&providers.ChatResponse{Content: `{"allow_run_command": true}`}, nil).
-			Once()
-
-		service := &Service{provider: mockProvider}
-		allow, err := service.classifyRunCommand(context.Background(), "run ls")
-		require.NoError(t, err)
-		assert.True(t, allow)
-		mockProvider.AssertExpectations(t)
-	})
-}
-
-func TestService_FilterToolsForPrompt_ClassificationError(t *testing.T) {
+func TestService_FilterToolsForPrompt_AllToolsReturned(t *testing.T) {
+	// All tools should always be returned regardless of prompt content.
+	// The approval mechanism handles control, not tool filtering.
 	service := NewService(Config{
 		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
 		StateProvider: &mockStateProvider{},
 		AgentServer:   &mockAgentServer{},
 	})
-	require.True(t, hasTool(service.executor.ListTools(), "pulse_run_command"))
-	require.True(t, hasTool(service.executor.ListTools(), "pulse_control_guest"))
-	require.True(t, hasTool(service.executor.ListTools(), "pulse_control_docker"))
+	// After tool consolidation: pulse_control handles commands and guest control,
+	// pulse_docker handles Docker operations
+	require.True(t, hasTool(service.executor.ListTools(), "pulse_control"))
+	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
+	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
 
-	mockProvider := &MockProvider{}
-	mockProvider.On("Chat", mock.Anything, mock.Anything).
-		Return((*providers.ChatResponse)(nil), errors.New("boom")).
-		Once()
-	service.provider = mockProvider
-
+	// All tools should be returned for any prompt
 	filtered := service.filterToolsForPrompt(context.Background(), "run uptime")
-	assert.False(t, hasProviderTool(filtered, "pulse_run_command"))
-	assert.False(t, hasProviderTool(filtered, "pulse_control_guest"))
-	assert.False(t, hasProviderTool(filtered, "pulse_control_docker"))
-	mockProvider.AssertExpectations(t)
-}
-
-func TestService_FilterToolsForPrompt_AutonomousBypass(t *testing.T) {
-	service := NewService(Config{
-		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelAutonomous},
-		StateProvider: &mockStateProvider{},
-		AgentServer:   &mockAgentServer{},
-	})
-
-	filtered := service.filterToolsForPrompt(context.Background(), "just fix it")
-	assert.True(t, hasProviderTool(filtered, "pulse_run_command"))
-	assert.True(t, hasProviderTool(filtered, "pulse_control_guest"))
-	assert.True(t, hasProviderTool(filtered, "pulse_control_docker"))
+	assert.True(t, hasProviderTool(filtered, "pulse_control"))
+	assert.True(t, hasProviderTool(filtered, "pulse_docker"))
+	assert.True(t, hasProviderTool(filtered, "pulse_query"))
 }
 
 func TestService_Execute_NonStreaming(t *testing.T) {
@@ -508,9 +427,6 @@ func TestService_Execute_NonStreaming(t *testing.T) {
 	require.NoError(t, err)
 
 	mockProvider := &MockProvider{}
-	mockProvider.On("Chat", mock.Anything, mock.Anything).
-		Return(&providers.ChatResponse{Content: `{"allow_run_command": false}`}, nil).
-		Once()
 	mockProvider.On("ChatStream", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil).
 		Run(func(args mock.Arguments) {
