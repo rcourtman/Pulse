@@ -6,6 +6,7 @@ import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 
 const PULSE_PRO_URL = 'https://pulserelay.pro/';
+const PULSE_PRO_MANAGE_URL = 'https://pulserelay.pro/manage';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
@@ -259,6 +260,17 @@ export const ProLicensePanel: Component = () => {
                 </p>
               </div>
             </div>
+
+            <Show when={status()?.valid && status()?.tier !== 'free' && !status()?.is_lifetime}>
+              <a
+                class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                href={`${PULSE_PRO_MANAGE_URL}?email=${encodeURIComponent(status()?.email ?? '')}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Manage Subscription
+              </a>
+            </Show>
 
             <Show when={formattedFeatures().length > 0}>
               <div>
