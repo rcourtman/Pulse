@@ -169,9 +169,10 @@ func TestAgenticLoop_UpdateTools(t *testing.T) {
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	loop := NewAgenticLoop(mockProvider, executor, "test")
 
+	// After tool consolidation, pulse_metrics replaces pulse_get_metrics
 	hasMetrics := false
 	for _, tool := range loop.tools {
-		if tool.Name == "pulse_get_metrics" {
+		if tool.Name == "pulse_metrics" {
 			hasMetrics = true
 			break
 		}
@@ -183,7 +184,7 @@ func TestAgenticLoop_UpdateTools(t *testing.T) {
 
 	hasMetrics = false
 	for _, tool := range loop.tools {
-		if tool.Name == "pulse_get_metrics" {
+		if tool.Name == "pulse_metrics" {
 			hasMetrics = true
 			break
 		}
@@ -268,4 +269,129 @@ func TestWaitForApprovalDecision(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, approval.StatusApproved, decision.Status)
 	})
+}
+
+func TestRequiresToolUse(t *testing.T) {
+	tests := []struct {
+		name     string
+		message  string
+		expected bool
+	}{
+		// Should require tools - action requests
+		{"@mention", "@jellyfin status", true},
+		{"check status", "check the status of my server", true},
+		{"restart request", "please restart nginx", true},
+		{"status query", "is homepage running?", true},
+		{"logs request", "show me the logs for influxdb", true},
+		{"cpu query", "what's the cpu usage on delly?", true},
+		{"memory query", "how much memory is traefik using?", true},
+		{"container query", "list my docker containers", true},
+		{"my infrastructure", "what's happening on my server?", true},
+		{"troubleshoot my", "troubleshoot my plex server", true},
+		{"my docker", "show me my docker containers", true},
+
+		// Should NOT require tools (conceptual questions)
+		{"what is tcp", "what is tcp?", false},
+		{"explain docker", "explain how docker networking works", false},
+		{"general question", "how do i configure nginx?", false},
+		{"theory question", "what's the difference between lxc and vm?", false},
+		{"empty message", "", false},
+		{"greeting", "hello", false},
+		{"thanks", "thanks for your help!", false},
+		{"explain proxmox", "explain what proxmox is", false},
+		{"describe kubernetes", "describe how kubernetes pods work", false},
+
+		// Edge cases from feedback - these are conceptual despite mentioning infra terms
+		{"is docker hard", "is docker networking hard?", false},
+		{"best way cpu", "what's the best way to monitor CPU usage?", false},
+		{"best practice", "what are the best practices for container security?", false},
+		{"should i use", "should i use kubernetes or docker swarm?", false},
+
+		// Edge cases - conceptual patterns with action keywords should still be action
+		// ONLY when they reference MY specific infrastructure
+		{"what is status", "what is the status of my server", true},
+		{"what is running", "what is running on my host", true},
+		{"my cpu usage", "what is my cpu usage", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			messages := []providers.Message{
+				{Role: "user", Content: tt.message},
+			}
+			result := requiresToolUse(messages)
+			assert.Equal(t, tt.expected, result, "message: %q", tt.message)
+		})
+	}
+}
+
+func TestHasPhantomExecution(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		// Phantom execution patterns - concrete metrics
+		{"cpu percentage", "The CPU usage is at 85%", true},
+		{"memory usage", "Memory usage is 4.2GB", true},
+		{"disk at", "Disk is at 92% capacity", true},
+
+		// Phantom execution patterns - state claims
+		{"currently running", "The service is currently running", true},
+		{"currently stopped", "The container is currently stopped", true},
+		{"logs show", "The logs show several errors", true},
+		{"output shows", "The output shows the service failed", true},
+
+		// Phantom execution patterns - fake tool formatting
+		{"fake tool block", "```tool\npulse_query\n```", true},
+		{"fake function call", "pulse_query({\"type\": \"nodes\"})", true},
+
+		// Phantom execution patterns - action claims
+		{"restarted the", "I restarted the nginx service", true},
+		{"successfully restarted", "The service was successfully restarted", true},
+		{"has been stopped", "The container has been stopped", true},
+
+		// NOT phantom execution - these are safe
+		{"suggestion", "You should check the logs", false},
+		{"question", "Would you like me to restart it?", false},
+		{"explanation", "Docker containers run in isolated environments", false},
+		{"future tense", "I will check the status for you", false},
+		{"empty", "", false},
+		{"general info", "Proxmox uses LXC for containers", false},
+
+		// NOT phantom - these used to false-positive
+		{"checked docs", "I checked the documentation and found...", false},
+		{"ran through logic", "I ran through the logic and it seems...", false},
+		{"looked at code", "I looked at the configuration options", false},
+		{"verified understanding", "I verified my understanding of the issue", false},
+		{"found that general", "I found that Docker networking is complex", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasPhantomExecution(tt.content)
+			assert.Equal(t, tt.expected, result, "content: %q", tt.content)
+		})
+	}
+}
+
+func TestTruncateForLog(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxLen   int
+		expected string
+	}{
+		{"short string", "hello", 10, "hello"},
+		{"exact length", "hello", 5, "hello"},
+		{"needs truncation", "hello world", 5, "hello..."},
+		{"empty string", "", 10, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := truncateForLog(tt.input, tt.maxLen)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
