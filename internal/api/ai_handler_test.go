@@ -125,6 +125,12 @@ func (m *MockAIService) SetMetricsHistory(provider chat.MCPMetricsHistoryProvide
 }
 func (m *MockAIService) SetBackupProvider(provider chat.MCPBackupProvider)   { m.Called(provider) }
 func (m *MockAIService) SetStorageProvider(provider chat.MCPStorageProvider) { m.Called(provider) }
+func (m *MockAIService) SetStorageConfigProvider(provider chat.MCPStorageConfigProvider) {
+	m.Called(provider)
+}
+func (m *MockAIService) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {
+	m.Called(provider)
+}
 func (m *MockAIService) SetDiskHealthProvider(provider chat.MCPDiskHealthProvider) {
 	m.Called(provider)
 }
@@ -144,6 +150,9 @@ func (m *MockAIService) SetEventCorrelatorProvider(provider chat.EventCorrelator
 	m.Called(provider)
 }
 func (m *MockAIService) SetTopologyProvider(provider chat.TopologyProvider) { m.Called(provider) }
+func (m *MockAIService) SetDiscoveryProvider(provider chat.MCPDiscoveryProvider) {
+	m.Called(provider)
+}
 
 func (m *MockAIService) UpdateControlSettings(cfg *config.AIConfig) { m.Called(cfg) }
 func (m *MockAIService) GetBaseURL() string {

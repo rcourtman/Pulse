@@ -49,6 +49,8 @@ type AIService interface {
 	SetMetricsHistory(provider chat.MCPMetricsHistoryProvider)
 	SetAgentProfileManager(manager chat.AgentProfileManager)
 	SetStorageProvider(provider chat.MCPStorageProvider)
+	SetStorageConfigProvider(provider chat.MCPStorageConfigProvider)
+	SetGuestConfigProvider(provider chat.MCPGuestConfigProvider)
 	SetBackupProvider(provider chat.MCPBackupProvider)
 	SetDiskHealthProvider(provider chat.MCPDiskHealthProvider)
 	SetUpdatesProvider(provider chat.MCPUpdatesProvider)
@@ -856,6 +858,20 @@ func (h *AIHandler) SetAgentProfileManager(manager chat.AgentProfileManager) {
 func (h *AIHandler) SetStorageProvider(provider chat.MCPStorageProvider) {
 	if h.legacyService != nil {
 		h.legacyService.SetStorageProvider(provider)
+	}
+}
+
+// SetStorageConfigProvider sets the storage config provider for MCP tools
+func (h *AIHandler) SetStorageConfigProvider(provider chat.MCPStorageConfigProvider) {
+	if h.legacyService != nil {
+		h.legacyService.SetStorageConfigProvider(provider)
+	}
+}
+
+// SetGuestConfigProvider sets the guest config provider for MCP tools
+func (h *AIHandler) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {
+	if h.legacyService != nil {
+		h.legacyService.SetGuestConfigProvider(provider)
 	}
 }
 

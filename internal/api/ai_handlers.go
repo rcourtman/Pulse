@@ -30,11 +30,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
-	"github.com/rcourtman/pulse-go-rewrite/internal/aidiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -85,8 +85,8 @@ type AISettingsHandler struct {
 	investigationStores map[string]*investigation.Store // Investigation stores per org
 	investigationMu     sync.RWMutex
 
-	// AI Discovery store for deep infrastructure discovery
-	aiDiscoveryStore *aidiscovery.Store
+	// Discovery store for deep infrastructure discovery
+	discoveryStore *servicediscovery.Store
 }
 
 // NewAISettingsHandler creates a new AI settings handler
@@ -193,8 +193,8 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	if h.correlationDetector != nil {
 		svc.SetCorrelationDetector(h.correlationDetector)
 	}
-	if h.aiDiscoveryStore != nil {
-		svc.SetAIDiscoveryStore(h.aiDiscoveryStore)
+	if h.discoveryStore != nil {
+		svc.SetDiscoveryStore(h.discoveryStore)
 	}
 
 	// Set license checker if handler available
@@ -534,24 +534,24 @@ func (h *AISettingsHandler) GetUnifiedStore() *unified.UnifiedStore {
 	return h.unifiedStore
 }
 
-// SetAIDiscoveryStore sets the AI discovery store for deep infrastructure discovery
-func (h *AISettingsHandler) SetAIDiscoveryStore(store *aidiscovery.Store) {
-	h.aiDiscoveryStore = store
+// SetDiscoveryStore sets the discovery store for deep infrastructure discovery
+func (h *AISettingsHandler) SetDiscoveryStore(store *servicediscovery.Store) {
+	h.discoveryStore = store
 	// Also set on legacy service if it exists
 	if h.legacyAIService != nil {
-		h.legacyAIService.SetAIDiscoveryStore(store)
+		h.legacyAIService.SetDiscoveryStore(store)
 	}
 	// Set on all existing tenant services
 	h.aiServicesMu.RLock()
 	defer h.aiServicesMu.RUnlock()
 	for _, svc := range h.aiServices {
-		svc.SetAIDiscoveryStore(store)
+		svc.SetDiscoveryStore(store)
 	}
 }
 
-// GetAIDiscoveryStore returns the AI discovery store
-func (h *AISettingsHandler) GetAIDiscoveryStore() *aidiscovery.Store {
-	return h.aiDiscoveryStore
+// GetDiscoveryStore returns the discovery store
+func (h *AISettingsHandler) GetDiscoveryStore() *servicediscovery.Store {
+	return h.discoveryStore
 }
 
 // SetAlertBridge sets the alert bridge
@@ -750,7 +750,6 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	if cfg != nil {
 		invConfig.MaxTurns = cfg.GetPatrolInvestigationBudget()
 		invConfig.Timeout = cfg.GetPatrolInvestigationTimeout()
-		invConfig.CriticalRequireApproval = cfg.ShouldCriticalRequireApproval()
 	}
 
 	// Create orchestrator
@@ -766,10 +765,36 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	// The chatAdapter implements both ChatService and CommandExecutor interfaces
 	orchestrator.SetCommandExecutor(chatAdapter)
 
+	// Set autonomy level provider for re-checking before fix execution
+	// This handles cases where user changes autonomy level during an investigation
+	orchestrator.SetAutonomyLevelProvider(&autonomyLevelProviderAdapter{svc: svc})
+
 	// Set infrastructure context provider for CLI access information
 	// This enables investigations to know where services run (Docker, systemd, native)
 	// and propose correct commands (e.g., 'docker exec pbs proxmox-backup-manager ...')
 	if knowledgeStore := svc.GetKnowledgeStore(); knowledgeStore != nil {
+		// Wire up discovery context to the knowledge store
+		// This unifies deep-scanned discovery data with legacy knowledge notes
+		if discoveryService := svc.GetDiscoveryService(); discoveryService != nil {
+			knowledgeStore.SetDiscoveryContextProvider(func() string {
+				discoveries, err := discoveryService.ListDiscoveries()
+				if err != nil || len(discoveries) == 0 {
+					return ""
+				}
+				return servicediscovery.FormatForAIContext(discoveries)
+			})
+			knowledgeStore.SetDiscoveryContextProviderForResources(func(resourceIDs []string) string {
+				if len(resourceIDs) == 0 {
+					return ""
+				}
+				discoveries, err := discoveryService.ListDiscoveries()
+				if err != nil || len(discoveries) == 0 {
+					return ""
+				}
+				filtered := servicediscovery.FilterDiscoveriesByResourceIDs(discoveries, resourceIDs)
+				return servicediscovery.FormatForAIContext(filtered)
+			})
+		}
 		orchestrator.SetInfrastructureContextProvider(knowledgeStore)
 	}
 
@@ -803,6 +828,33 @@ func (w *findingsStoreWrapper) UpdateInvestigation(id, sessionID, status, outcom
 		return false
 	}
 	return w.store.UpdateInvestigation(id, sessionID, status, outcome, lastInvestigatedAt, attempts)
+}
+
+// autonomyLevelProviderAdapter provides current autonomy level from config for re-checking before fix execution
+type autonomyLevelProviderAdapter struct {
+	svc *ai.Service
+}
+
+func (a *autonomyLevelProviderAdapter) GetCurrentAutonomyLevel() string {
+	if a.svc == nil {
+		return config.PatrolAutonomyMonitor
+	}
+	cfg := a.svc.GetConfig()
+	if cfg == nil {
+		return config.PatrolAutonomyMonitor
+	}
+	return cfg.GetPatrolAutonomyLevel()
+}
+
+func (a *autonomyLevelProviderAdapter) IsFullModeUnlocked() bool {
+	if a.svc == nil {
+		return false
+	}
+	cfg := a.svc.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	return cfg.PatrolFullModeUnlocked
 }
 
 // AISettingsResponse is returned by GET /api/settings/ai
@@ -846,8 +898,8 @@ type AISettingsResponse struct {
 	// Infrastructure control settings
 	ControlLevel    string   `json:"control_level"`              // "read_only", "controlled", "autonomous"
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control
-	// AI Discovery settings
-	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if AI discovery is enabled
+	// Discovery settings
+	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if discovery is enabled
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
 }
 
@@ -891,8 +943,8 @@ type AISettingsUpdateRequest struct {
 	// Infrastructure control settings
 	ControlLevel    *string  `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control (nil = don't update, empty = clear)
-	// AI Discovery settings
-	DiscoveryEnabled       *bool `json:"discovery_enabled,omitempty"`        // Enable AI discovery
+	// Discovery settings
+	DiscoveryEnabled       *bool `json:"discovery_enabled,omitempty"`        // Enable discovery
 	DiscoveryIntervalHours *int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
 }
 
@@ -3024,6 +3076,8 @@ type PatrolStatusResponse struct {
 	Healthy          bool       `json:"healthy"`
 	IntervalMs       int64      `json:"interval_ms"` // Patrol interval in milliseconds
 	FixedCount       int        `json:"fixed_count"` // Number of issues auto-fixed by Patrol
+	BlockedReason    string     `json:"blocked_reason,omitempty"`
+	BlockedAt        *time.Time `json:"blocked_at,omitempty"`
 	// License status for Pro feature gating
 	LicenseRequired bool   `json:"license_required"` // True if Pro license needed for full features
 	LicenseStatus   string `json:"license_status"`   // "active", "expired", "grace_period", "none"
@@ -3084,6 +3138,8 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		Healthy:          status.Healthy,
 		IntervalMs:       status.IntervalMs,
 		FixedCount:       fixedCount,
+		BlockedReason:    status.BlockedReason,
+		BlockedAt:        status.BlockedAt,
 		LicenseRequired:  !hasPatrolFeature,
 		LicenseStatus:    licenseStatus,
 	}
@@ -5217,12 +5273,22 @@ func truncateForLog(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-// PatrolAutonomySettings represents the patrol autonomy configuration
+// PatrolAutonomySettings represents the patrol autonomy configuration for API requests
+// Uses pointer for FullModeUnlocked to distinguish "not sent" from "sent as false"
 type PatrolAutonomySettings struct {
-	AutonomyLevel           string `json:"autonomy_level"`            // "monitor", "approval", "full"
-	InvestigationBudget     int    `json:"investigation_budget"`      // Max turns per investigation (5-30)
-	InvestigationTimeoutSec int    `json:"investigation_timeout_sec"` // Max seconds per investigation (60-1800)
-	CriticalRequireApproval bool   `json:"critical_require_approval"` // Critical findings always require approval
+	AutonomyLevel           string `json:"autonomy_level"`               // "monitor", "approval", "assisted", "full"
+	FullModeUnlocked        *bool  `json:"full_mode_unlocked,omitempty"` // User has acknowledged Full mode risks (nil = preserve existing)
+	InvestigationBudget     int    `json:"investigation_budget"`         // Max turns per investigation (5-30)
+	InvestigationTimeoutSec int    `json:"investigation_timeout_sec"`    // Max seconds per investigation (60-1800)
+}
+
+// PatrolAutonomyResponse represents the patrol autonomy configuration for API responses
+// Uses plain bool for FullModeUnlocked since responses always include the actual value
+type PatrolAutonomyResponse struct {
+	AutonomyLevel           string `json:"autonomy_level"`
+	FullModeUnlocked        bool   `json:"full_mode_unlocked"`
+	InvestigationBudget     int    `json:"investigation_budget"`
+	InvestigationTimeoutSec int    `json:"investigation_timeout_sec"`
 }
 
 // HandleGetPatrolAutonomy returns the current patrol autonomy settings (GET /api/ai/patrol/autonomy)
@@ -5239,11 +5305,11 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 		return
 	}
 
-	settings := PatrolAutonomySettings{
+	settings := PatrolAutonomyResponse{
 		AutonomyLevel:           cfg.GetPatrolAutonomyLevel(),
+		FullModeUnlocked:        cfg.PatrolFullModeUnlocked,
 		InvestigationBudget:     cfg.GetPatrolInvestigationBudget(),
 		InvestigationTimeoutSec: int(cfg.GetPatrolInvestigationTimeout().Seconds()),
-		CriticalRequireApproval: cfg.ShouldCriticalRequireApproval(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -5266,7 +5332,7 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 	// Validate autonomy level
 	if !config.IsValidPatrolAutonomyLevel(req.AutonomyLevel) {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_autonomy_level",
-			fmt.Sprintf("Invalid autonomy level: %s. Must be 'monitor', 'approval', 'full', or 'autonomous'", req.AutonomyLevel), nil)
+			fmt.Sprintf("Invalid autonomy level: %s. Must be 'monitor', 'approval', 'assisted', or 'full'", req.AutonomyLevel), nil)
 		return
 	}
 
@@ -5293,11 +5359,33 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 		return
 	}
 
-	// Update config
-	cfg.PatrolAutonomyLevel = req.AutonomyLevel
+	// Determine effective unlock value: use request value if provided, else preserve existing
+	effectiveUnlocked := cfg.PatrolFullModeUnlocked
+	if req.FullModeUnlocked != nil {
+		effectiveUnlocked = *req.FullModeUnlocked
+	}
+
+	// Handle auto-downgrade FIRST: if turning off unlock while currently in full mode AND
+	// request still asks for "full", downgrade to assisted. If user explicitly requested a
+	// lower level (monitor, approval, assisted), honor that instead.
+	finalAutonomyLevel := req.AutonomyLevel
+	currentLevel := cfg.GetPatrolAutonomyLevel() // Use getter to handle legacy "autonomous" migration
+	if !effectiveUnlocked && currentLevel == config.PatrolAutonomyFull && req.AutonomyLevel == config.PatrolAutonomyFull {
+		finalAutonomyLevel = config.PatrolAutonomyAssisted
+	}
+
+	// Validate the FINAL level: can't use "full" mode unless unlocked
+	if finalAutonomyLevel == config.PatrolAutonomyFull && !effectiveUnlocked {
+		writeErrorResponse(w, http.StatusForbidden, "full_mode_locked",
+			"Full mode requires acknowledgment. Enable 'full_mode_unlocked' first.", nil)
+		return
+	}
+
+	// Now safe to update config (all validation passed)
+	cfg.PatrolFullModeUnlocked = effectiveUnlocked
+	cfg.PatrolAutonomyLevel = finalAutonomyLevel
 	cfg.PatrolInvestigationBudget = req.InvestigationBudget
 	cfg.PatrolInvestigationTimeoutSec = req.InvestigationTimeoutSec
-	cfg.PatrolCriticalRequireApproval = req.CriticalRequireApproval
 
 	// Save config via persistence layer
 	if err := h.getPersistence(r.Context()).SaveAIConfig(*cfg); err != nil {
@@ -5312,16 +5400,22 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 			fmt.Sprintf("Config saved but failed to reload: %v", err))
 	}
 
-	// Log audit event
+	// Log audit event with actual saved values
 	username := getAuthUsername(h.getConfig(r.Context()), r)
 	LogAuditEvent("patrol_autonomy_updated", username, GetClientIP(r), r.URL.Path, true,
-		fmt.Sprintf("Updated patrol autonomy: level=%s, budget=%d, timeout=%ds",
-			req.AutonomyLevel, req.InvestigationBudget, req.InvestigationTimeoutSec))
+		fmt.Sprintf("Updated patrol autonomy: level=%s, unlocked=%v, budget=%d, timeout=%ds",
+			finalAutonomyLevel, effectiveUnlocked, req.InvestigationBudget, req.InvestigationTimeoutSec))
 
+	// Return actual saved values (may differ from request due to auto-downgrade)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":  true,
-		"settings": req,
+		"success": true,
+		"settings": map[string]interface{}{
+			"autonomy_level":            finalAutonomyLevel,
+			"full_mode_unlocked":        effectiveUnlocked,
+			"investigation_budget":      req.InvestigationBudget,
+			"investigation_timeout_sec": req.InvestigationTimeoutSec,
+		},
 	})
 }
 
@@ -5529,7 +5623,7 @@ func (h *AISettingsHandler) HandleReinvestigateFinding(w http.ResponseWriter, r 
 	autonomyLevel := cfg.GetPatrolAutonomyLevel()
 	if autonomyLevel == config.PatrolAutonomyMonitor {
 		writeErrorResponse(w, http.StatusBadRequest, "autonomy_disabled",
-			"Patrol autonomy is set to 'monitor' mode. Enable 'approval' or 'full' mode to investigate findings.", nil)
+			"Patrol autonomy is set to 'monitor' mode. Enable 'approval', 'assisted', or 'full' mode to investigate findings.", nil)
 		return
 	}
 

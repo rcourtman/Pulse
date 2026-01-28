@@ -231,7 +231,6 @@ func TestHandlePatrolAutonomyGetAndUpdate(t *testing.T) {
 	aiCfg.PatrolAutonomyLevel = config.PatrolAutonomyApproval
 	aiCfg.PatrolInvestigationBudget = 8
 	aiCfg.PatrolInvestigationTimeoutSec = 120
-	aiCfg.PatrolCriticalRequireApproval = true
 	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
 		t.Fatalf("SaveAIConfig: %v", err)
 	}
@@ -256,9 +255,9 @@ func TestHandlePatrolAutonomyGetAndUpdate(t *testing.T) {
 
 	update := PatrolAutonomySettings{
 		AutonomyLevel:           config.PatrolAutonomyFull,
+		FullModeUnlocked:        func() *bool { v := true; return &v }(),
 		InvestigationBudget:     3,
 		InvestigationTimeoutSec: 10,
-		CriticalRequireApproval: false,
 	}
 	body, _ := json.Marshal(update)
 	updateReq := httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(string(body)))
@@ -277,6 +276,9 @@ func TestHandlePatrolAutonomyGetAndUpdate(t *testing.T) {
 	if settings["autonomy_level"] != config.PatrolAutonomyFull {
 		t.Fatalf("unexpected autonomy level %v", settings["autonomy_level"])
 	}
+	if settings["full_mode_unlocked"] != true {
+		t.Fatalf("expected full_mode_unlocked true, got %v", settings["full_mode_unlocked"])
+	}
 	if settings["investigation_budget"].(float64) != 5 {
 		t.Fatalf("expected clamped budget to 5, got %v", settings["investigation_budget"])
 	}
@@ -288,7 +290,7 @@ func TestHandlePatrolAutonomyGetAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadAIConfig: %v", err)
 	}
-	if loaded.PatrolAutonomyLevel != config.PatrolAutonomyFull || loaded.PatrolInvestigationBudget != 5 || loaded.PatrolInvestigationTimeoutSec != 60 {
+	if loaded.PatrolAutonomyLevel != config.PatrolAutonomyFull || !loaded.PatrolFullModeUnlocked || loaded.PatrolInvestigationBudget != 5 || loaded.PatrolInvestigationTimeoutSec != 60 {
 		t.Fatalf("unexpected persisted settings: %+v", loaded)
 	}
 }
