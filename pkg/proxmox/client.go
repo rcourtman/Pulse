@@ -908,6 +908,8 @@ type Storage struct {
 	Active    int    `json:"active"`
 	Enabled   int    `json:"enabled"`
 	Shared    int    `json:"shared"`
+	Nodes     string `json:"nodes,omitempty"`
+	Path      string `json:"path,omitempty"`
 	Total     uint64 `json:"total"`
 	Used      uint64 `json:"used"`
 	Available uint64 `json:"avail"`
