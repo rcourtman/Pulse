@@ -9,7 +9,7 @@
 //
 // Options:
 //
-//	-scenario string  Scenario to run: smoke, readonly, routing, logs, discovery, all (default "smoke")
+//	-scenario string  Scenario to run: smoke, readonly, enforce, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-recovery, readonly-guardrails, noninteractive, approval, approval-deny, all (default "smoke")
 //	-url string       Pulse API base URL (default "http://127.0.0.1:7655")
 //	-user string      Username for auth (default "admin")
 //	-pass string      Password for auth (default "admin")
@@ -26,7 +26,7 @@ import (
 )
 
 func main() {
-	scenario := flag.String("scenario", "smoke", "Scenario to run: smoke, readonly, routing, logs, discovery, all")
+	scenario := flag.String("scenario", "smoke", "Scenario to run: smoke, readonly, enforce, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-recovery, readonly-guardrails, noninteractive, approval, approval-deny, all")
 	url := flag.String("url", "http://127.0.0.1:7655", "Pulse API base URL")
 	user := flag.String("user", "admin", "Username for auth")
 	pass := flag.String("pass", "admin", "Password for auth")
@@ -84,8 +84,14 @@ func listScenarios() {
 	fmt.Println("  Basic:")
 	fmt.Println("    smoke        - Quick smoke test (1 step)")
 	fmt.Println("    readonly     - Read-only infrastructure test (3 steps)")
+	fmt.Println("    enforce      - Explicit tool enforcement (1 step)")
 	fmt.Println("    routing      - Routing validation test (2 steps)")
+	fmt.Println("    routing-recovery - Routing mismatch recovery (2 steps)")
 	fmt.Println("    logs         - Log tailing/bounded command test (2 steps)")
+	fmt.Println("    readonly-recovery - Read-only violation recovery (1 step)")
+	fmt.Println("    search-id    - Search then get by resource ID (1 step)")
+	fmt.Println("    disambiguate - Ambiguous resource disambiguation (1 step)")
+	fmt.Println("    context-target - Context target carryover (2 steps)")
 	fmt.Println("    discovery    - Infrastructure discovery test (2 steps)")
 	fmt.Println()
 	fmt.Println("  Advanced:")
@@ -96,6 +102,13 @@ func listScenarios() {
 	fmt.Println("    multinode    - Multi-node operations (3 steps)")
 	fmt.Println("    docker       - Docker-in-LXC operations (3 steps)")
 	fmt.Println("    context      - Context chain / follow-up questions (4 steps)")
+	fmt.Println("    writeverify  - Write + verify FSM flow (1 step)")
+	fmt.Println("    strict       - Strict resolution block + recovery (2 steps)")
+	fmt.Println("    strict-recovery - Strict resolution recovery (1 step)")
+	fmt.Println("    readonly-guardrails - Read-only enforcement (1 step)")
+	fmt.Println("    noninteractive    - Non-interactive guardrails (1 step)")
+	fmt.Println("    approval    - Approval flow (1 step, opt-in)")
+	fmt.Println("    approval-deny - Approval deny flow (1 step, opt-in)")
 	fmt.Println()
 	fmt.Println("  Collections:")
 	fmt.Println("    all          - Run all basic scenarios")
@@ -113,10 +126,22 @@ func getScenarios(name string) []eval.Scenario {
 		return []eval.Scenario{eval.QuickSmokeTest()}
 	case "readonly":
 		return []eval.Scenario{eval.ReadOnlyInfrastructureScenario()}
+	case "enforce":
+		return []eval.Scenario{eval.ExplicitToolEnforcementScenario()}
 	case "routing":
 		return []eval.Scenario{eval.RoutingValidationScenario()}
+	case "routing-recovery":
+		return []eval.Scenario{eval.RoutingMismatchRecoveryScenario()}
 	case "logs":
 		return []eval.Scenario{eval.LogTailingScenario()}
+	case "readonly-recovery":
+		return []eval.Scenario{eval.ReadOnlyViolationRecoveryScenario()}
+	case "search-id":
+		return []eval.Scenario{eval.SearchByIDScenario()}
+	case "disambiguate":
+		return []eval.Scenario{eval.AmbiguousResourceDisambiguationScenario()}
+	case "context-target":
+		return []eval.Scenario{eval.ContextTargetCarryoverScenario()}
 	case "discovery":
 		return []eval.Scenario{eval.DiscoveryScenario()}
 
@@ -135,14 +160,34 @@ func getScenarios(name string) []eval.Scenario {
 		return []eval.Scenario{eval.DockerInDockerScenario()}
 	case "context":
 		return []eval.Scenario{eval.ContextChainScenario()}
+	case "writeverify":
+		return []eval.Scenario{eval.WriteVerifyScenario()}
+	case "strict":
+		return []eval.Scenario{eval.StrictResolutionScenario()}
+	case "strict-recovery":
+		return []eval.Scenario{eval.StrictResolutionRecoveryScenario()}
+	case "readonly-guardrails":
+		return []eval.Scenario{eval.ReadOnlyEnforcementScenario()}
+	case "noninteractive":
+		return []eval.Scenario{eval.NonInteractiveGuardrailScenario()}
+	case "approval":
+		return []eval.Scenario{eval.ApprovalScenario()}
+	case "approval-deny":
+		return []eval.Scenario{eval.ApprovalDenyScenario()}
 
 	// Collections
 	case "all":
 		return []eval.Scenario{
 			eval.QuickSmokeTest(),
 			eval.ReadOnlyInfrastructureScenario(),
+			eval.ExplicitToolEnforcementScenario(),
 			eval.RoutingValidationScenario(),
+			eval.RoutingMismatchRecoveryScenario(),
 			eval.LogTailingScenario(),
+			eval.ReadOnlyViolationRecoveryScenario(),
+			eval.SearchByIDScenario(),
+			eval.AmbiguousResourceDisambiguationScenario(),
+			eval.ContextTargetCarryoverScenario(),
 			eval.DiscoveryScenario(),
 		}
 	case "advanced":
@@ -154,13 +199,25 @@ func getScenarios(name string) []eval.Scenario {
 			eval.MultiNodeScenario(),
 			eval.DockerInDockerScenario(),
 			eval.ContextChainScenario(),
+			eval.WriteVerifyScenario(),
+			eval.StrictResolutionScenario(),
+			eval.StrictResolutionRecoveryScenario(),
+			eval.ReadOnlyEnforcementScenario(),
+			eval.NonInteractiveGuardrailScenario(),
+			eval.ApprovalDenyScenario(),
 		}
 	case "full":
 		return []eval.Scenario{
 			eval.QuickSmokeTest(),
 			eval.ReadOnlyInfrastructureScenario(),
+			eval.ExplicitToolEnforcementScenario(),
 			eval.RoutingValidationScenario(),
+			eval.RoutingMismatchRecoveryScenario(),
 			eval.LogTailingScenario(),
+			eval.ReadOnlyViolationRecoveryScenario(),
+			eval.SearchByIDScenario(),
+			eval.AmbiguousResourceDisambiguationScenario(),
+			eval.ContextTargetCarryoverScenario(),
 			eval.DiscoveryScenario(),
 			eval.TroubleshootingScenario(),
 			eval.DeepDiveScenario(),
@@ -169,6 +226,12 @@ func getScenarios(name string) []eval.Scenario {
 			eval.MultiNodeScenario(),
 			eval.DockerInDockerScenario(),
 			eval.ContextChainScenario(),
+			eval.WriteVerifyScenario(),
+			eval.StrictResolutionScenario(),
+			eval.StrictResolutionRecoveryScenario(),
+			eval.ReadOnlyEnforcementScenario(),
+			eval.NonInteractiveGuardrailScenario(),
+			eval.ApprovalDenyScenario(),
 		}
 	default:
 		return nil

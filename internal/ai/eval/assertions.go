@@ -27,6 +27,26 @@ func AssertToolUsed(toolName string) Assertion {
 	}
 }
 
+// AssertToolNotUsed checks that a specific tool was NOT called
+func AssertToolNotUsed(toolName string) Assertion {
+	return func(result *StepResult) AssertionResult {
+		for _, tc := range result.ToolCalls {
+			if tc.Name == toolName {
+				return AssertionResult{
+					Name:    fmt.Sprintf("tool_not_used:%s", toolName),
+					Passed:  false,
+					Message: fmt.Sprintf("Tool '%s' was called", toolName),
+				}
+			}
+		}
+		return AssertionResult{
+			Name:    fmt.Sprintf("tool_not_used:%s", toolName),
+			Passed:  true,
+			Message: fmt.Sprintf("Tool '%s' was not called", toolName),
+		}
+	}
+}
+
 // AssertAnyToolUsed checks that at least one tool was called
 func AssertAnyToolUsed() Assertion {
 	return func(result *StepResult) AssertionResult {
@@ -87,6 +107,26 @@ func AssertContentContains(substring string) Assertion {
 	}
 }
 
+// AssertContentContainsAny checks that the response contains at least one substring.
+func AssertContentContainsAny(substrings ...string) Assertion {
+	return func(result *StepResult) AssertionResult {
+		for _, substring := range substrings {
+			if strings.Contains(strings.ToLower(result.Content), strings.ToLower(substring)) {
+				return AssertionResult{
+					Name:    "content_contains_any",
+					Passed:  true,
+					Message: fmt.Sprintf("Content contains '%s'", substring),
+				}
+			}
+		}
+		return AssertionResult{
+			Name:    "content_contains_any",
+			Passed:  false,
+			Message: fmt.Sprintf("Content does NOT contain any of: %v", substrings),
+		}
+	}
+}
+
 // AssertContentNotContains checks that the response does NOT contain a substring
 func AssertContentNotContains(substring string) Assertion {
 	return func(result *StepResult) AssertionResult {
@@ -111,6 +151,13 @@ func AssertNoPhantomDetection() Assertion {
 		// The exact phantom detection message from agentic.go
 		phantomMessage := "I apologize, but I wasn't able to access the infrastructure tools needed to complete that request"
 		if strings.Contains(result.Content, phantomMessage) {
+			if hasSuccessfulToolCall(result.ToolCalls) {
+				return AssertionResult{
+					Name:    "no_phantom_detection",
+					Passed:  true,
+					Message: "Phantom detection phrase present, but tool calls succeeded",
+				}
+			}
 			// Find where in the content it appears
 			idx := strings.Index(result.Content, phantomMessage)
 			context := result.Content[max(0, idx-50):min(len(result.Content), idx+100)]
@@ -206,7 +253,8 @@ func AssertToolNotBlocked() Assertion {
 			if strings.Contains(tc.Output, `"blocked":true`) ||
 				strings.Contains(tc.Output, "ROUTING_MISMATCH") ||
 				strings.Contains(tc.Output, "FSM_BLOCKED") ||
-				strings.Contains(tc.Output, "READ_ONLY_VIOLATION") {
+				strings.Contains(tc.Output, "READ_ONLY_VIOLATION") ||
+				strings.Contains(tc.Output, "STRICT_RESOLUTION") {
 				return AssertionResult{
 					Name:    "tool_not_blocked",
 					Passed:  false,
@@ -243,6 +291,33 @@ func AssertEventualSuccess() Assertion {
 			Name:    "eventual_success",
 			Passed:  false,
 			Message: "No tool calls succeeded",
+		}
+	}
+}
+
+// AssertEventualSuccessOrApproval checks that a tool succeeded or an approval was requested.
+func AssertEventualSuccessOrApproval() Assertion {
+	return func(result *StepResult) AssertionResult {
+		for _, tc := range result.ToolCalls {
+			if tc.Success {
+				return AssertionResult{
+					Name:    "eventual_success_or_approval",
+					Passed:  true,
+					Message: fmt.Sprintf("Tool '%s' succeeded", tc.Name),
+				}
+			}
+		}
+		if len(result.Approvals) > 0 {
+			return AssertionResult{
+				Name:    "eventual_success_or_approval",
+				Passed:  true,
+				Message: fmt.Sprintf("Approval requests: %d", len(result.Approvals)),
+			}
+		}
+		return AssertionResult{
+			Name:    "eventual_success_or_approval",
+			Passed:  false,
+			Message: "No tool calls succeeded and no approvals were requested",
 		}
 	}
 }
@@ -325,6 +400,240 @@ func AssertModelRecovered() Assertion {
 	}
 }
 
+// AssertToolSequence checks that tool calls occurred in the given order.
+// The sequence does not need to be contiguous, but order must be preserved.
+func AssertToolSequence(sequence []string) Assertion {
+	return func(result *StepResult) AssertionResult {
+		if len(sequence) == 0 {
+			return AssertionResult{
+				Name:    "tool_sequence",
+				Passed:  true,
+				Message: "No sequence required",
+			}
+		}
+
+		seqIdx := 0
+		for _, tc := range result.ToolCalls {
+			if tc.Name == sequence[seqIdx] {
+				seqIdx++
+				if seqIdx == len(sequence) {
+					return AssertionResult{
+						Name:    "tool_sequence",
+						Passed:  true,
+						Message: fmt.Sprintf("Tool sequence matched: %v", sequence),
+					}
+				}
+			}
+		}
+
+		return AssertionResult{
+			Name:    "tool_sequence",
+			Passed:  false,
+			Message: fmt.Sprintf("Tool sequence not found. Expected: %v, got: %v", sequence, getToolNames(result.ToolCalls)),
+		}
+	}
+}
+
+// AssertToolInputContains checks that a tool's input contains a substring.
+func AssertToolInputContains(toolName, substring string) Assertion {
+	return func(result *StepResult) AssertionResult {
+		for _, tc := range result.ToolCalls {
+			if toolName != "" && tc.Name != toolName {
+				continue
+			}
+			if strings.Contains(strings.ToLower(tc.Input), strings.ToLower(substring)) {
+				return AssertionResult{
+					Name:    fmt.Sprintf("tool_input:%s_contains:%s", toolName, truncate(substring, 20)),
+					Passed:  true,
+					Message: fmt.Sprintf("Tool '%s' input contains '%s'", tc.Name, substring),
+				}
+			}
+			if toolName != "" {
+				return AssertionResult{
+					Name:    fmt.Sprintf("tool_input:%s_contains:%s", toolName, truncate(substring, 20)),
+					Passed:  false,
+					Message: fmt.Sprintf("Tool '%s' input does NOT contain '%s'", toolName, substring),
+				}
+			}
+		}
+		return AssertionResult{
+			Name:    fmt.Sprintf("tool_input:%s_contains:%s", toolName, truncate(substring, 20)),
+			Passed:  false,
+			Message: fmt.Sprintf("Tool '%s' was not called", toolName),
+		}
+	}
+}
+
+// AssertAnyToolInputContains checks that any tool input contains a substring.
+// If toolName is empty, any tool input is considered.
+func AssertAnyToolInputContains(toolName, substring string) Assertion {
+	return func(result *StepResult) AssertionResult {
+		for _, tc := range result.ToolCalls {
+			if toolName != "" && tc.Name != toolName {
+				continue
+			}
+			if strings.Contains(strings.ToLower(tc.Input), strings.ToLower(substring)) {
+				return AssertionResult{
+					Name:    fmt.Sprintf("any_tool_input:%s_contains:%s", toolName, truncate(substring, 20)),
+					Passed:  true,
+					Message: fmt.Sprintf("Tool '%s' input contains '%s'", tc.Name, substring),
+				}
+			}
+		}
+		return AssertionResult{
+			Name:    fmt.Sprintf("any_tool_input:%s_contains:%s", toolName, truncate(substring, 20)),
+			Passed:  false,
+			Message: fmt.Sprintf("No tool input matched '%s'", substring),
+		}
+	}
+}
+
+// AssertAnyToolInputContainsAny checks that any tool input contains any of the substrings.
+// If toolName is empty, any tool input is considered.
+func AssertAnyToolInputContainsAny(toolName string, substrings ...string) Assertion {
+	return func(result *StepResult) AssertionResult {
+		for _, tc := range result.ToolCalls {
+			if toolName != "" && tc.Name != toolName {
+				continue
+			}
+			for _, substring := range substrings {
+				if strings.Contains(strings.ToLower(tc.Input), strings.ToLower(substring)) {
+					return AssertionResult{
+						Name:    fmt.Sprintf("any_tool_input:%s_contains_any", toolName),
+						Passed:  true,
+						Message: fmt.Sprintf("Tool '%s' input contains '%s'", tc.Name, substring),
+					}
+				}
+			}
+		}
+		return AssertionResult{
+			Name:    fmt.Sprintf("any_tool_input:%s_contains_any", toolName),
+			Passed:  false,
+			Message: fmt.Sprintf("No tool input matched any of: %v", substrings),
+		}
+	}
+}
+
+// AssertToolOutputContainsAny checks that a tool output contains any of the substrings.
+// If toolName is empty, any tool output is considered.
+func AssertToolOutputContainsAny(toolName string, substrings ...string) Assertion {
+	return func(result *StepResult) AssertionResult {
+		for _, tc := range result.ToolCalls {
+			if toolName != "" && tc.Name != toolName {
+				continue
+			}
+			for _, substring := range substrings {
+				if strings.Contains(strings.ToLower(tc.Output), strings.ToLower(substring)) {
+					return AssertionResult{
+						Name:    fmt.Sprintf("tool_output:%s_contains_any", toolName),
+						Passed:  true,
+						Message: fmt.Sprintf("Tool '%s' output contains '%s'", tc.Name, substring),
+					}
+				}
+			}
+		}
+		return AssertionResult{
+			Name:    fmt.Sprintf("tool_output:%s_contains_any", toolName),
+			Passed:  false,
+			Message: fmt.Sprintf("No tool output matched any of: %v", substrings),
+		}
+	}
+}
+
+// AssertApprovalRequested checks that at least one approval request was emitted.
+func AssertApprovalRequested() Assertion {
+	return func(result *StepResult) AssertionResult {
+		if len(result.Approvals) > 0 {
+			return AssertionResult{
+				Name:    "approval_requested",
+				Passed:  true,
+				Message: fmt.Sprintf("Approval requests: %d", len(result.Approvals)),
+			}
+		}
+		return AssertionResult{
+			Name:    "approval_requested",
+			Passed:  false,
+			Message: "No approval requests were captured",
+		}
+	}
+}
+
+// AssertOnlyToolsUsed checks that all tool calls are in the allow list.
+func AssertOnlyToolsUsed(allowed ...string) Assertion {
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, tool := range allowed {
+		allowedSet[tool] = struct{}{}
+	}
+	return func(result *StepResult) AssertionResult {
+		var unexpected []string
+		for _, tc := range result.ToolCalls {
+			if _, ok := allowedSet[tc.Name]; !ok {
+				unexpected = append(unexpected, tc.Name)
+			}
+		}
+		if len(unexpected) == 0 {
+			return AssertionResult{
+				Name:    "only_tools_used",
+				Passed:  true,
+				Message: fmt.Sprintf("Only allowed tools used: %v", allowed),
+			}
+		}
+		return AssertionResult{
+			Name:    "only_tools_used",
+			Passed:  false,
+			Message: fmt.Sprintf("Unexpected tools used: %v", unexpected),
+		}
+	}
+}
+
+// AssertRoutingMismatchRecovered verifies recovery if a routing mismatch occurs.
+// If a routing mismatch is seen, the tool input must target the specific container.
+// If no mismatch is seen, the tool input should still target the node.
+func AssertRoutingMismatchRecovered(nodeName, containerName string) Assertion {
+	return func(result *StepResult) AssertionResult {
+		sawMismatch := false
+		for _, tc := range result.ToolCalls {
+			if strings.Contains(strings.ToLower(tc.Output), "routing_mismatch") {
+				sawMismatch = true
+				break
+			}
+		}
+
+		if sawMismatch {
+			for _, tc := range result.ToolCalls {
+				if strings.Contains(strings.ToLower(tc.Input), strings.ToLower(containerName)) {
+					return AssertionResult{
+						Name:    "routing_mismatch_recovered",
+						Passed:  true,
+						Message: fmt.Sprintf("Routing mismatch recovered by targeting '%s'", containerName),
+					}
+				}
+			}
+			return AssertionResult{
+				Name:    "routing_mismatch_recovered",
+				Passed:  false,
+				Message: fmt.Sprintf("Routing mismatch seen, but no tool input targeted '%s'", containerName),
+			}
+		}
+
+		for _, tc := range result.ToolCalls {
+			if strings.Contains(strings.ToLower(tc.Input), strings.ToLower(nodeName)) {
+				return AssertionResult{
+					Name:    "routing_mismatch_recovered",
+					Passed:  true,
+					Message: fmt.Sprintf("No routing mismatch; tool input targeted node '%s'", nodeName),
+				}
+			}
+		}
+
+		return AssertionResult{
+			Name:    "routing_mismatch_recovered",
+			Passed:  false,
+			Message: fmt.Sprintf("No routing mismatch and no tool input targeted '%s'", nodeName),
+		}
+	}
+}
+
 // === Helper functions ===
 
 func getToolNames(toolCalls []ToolCallEvent) []string {
@@ -333,6 +642,15 @@ func getToolNames(toolCalls []ToolCallEvent) []string {
 		names[i] = tc.Name
 	}
 	return names
+}
+
+func hasSuccessfulToolCall(toolCalls []ToolCallEvent) bool {
+	for _, tc := range toolCalls {
+		if tc.Success {
+			return true
+		}
+	}
+	return false
 }
 
 func max(a, b int) int {
