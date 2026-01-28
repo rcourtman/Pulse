@@ -116,8 +116,8 @@ export function AIIntelligence() {
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
   const [showRunAnalysis, setShowRunAnalysis] = createSignal(false);
-  const scopeContext = createMemo(() => splitScopeContext(selectedRun()?.scope_context));
-  const runTokenUsage = createMemo(() => formatTokenUsage(selectedRun()));
+  const _scopeContext = createMemo(() => splitScopeContext(selectedRun()?.scope_context));
+  const _runTokenUsage = createMemo(() => formatTokenUsage(selectedRun()));
   const selectedRunFindings = createMemo(() => {
     aiIntelligenceStore.findingsSignal();
     const run = selectedRun();
@@ -127,7 +127,7 @@ export function AIIntelligence() {
     const idSet = new Set(run.finding_ids);
     return aiIntelligenceStore.findings.filter((finding) => idSet.has(finding.id));
   });
-  const scopeDrift = createMemo(() => {
+  const _scopeDrift = createMemo(() => {
     const run = selectedRun();
     if (!run) return null;
     const scopeIds = run.scope_resource_ids ?? [];
