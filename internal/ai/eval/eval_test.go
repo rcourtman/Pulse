@@ -137,3 +137,78 @@ func TestAllScenarios(t *testing.T) {
 		t.Fatal("One or more scenarios failed")
 	}
 }
+
+// TestPatrolBasic runs the basic patrol eval scenario
+// Run with: go test -v ./internal/ai/eval -run TestPatrolBasic -live
+func TestPatrolBasic(t *testing.T) {
+	if !*runLiveEval {
+		t.Skip("Skipping live eval test. Use -live flag to run against live Pulse API")
+	}
+
+	runner := NewRunner(DefaultConfig())
+	result := runner.RunPatrolScenario(PatrolBasicScenario())
+	runner.PrintPatrolSummary(result)
+
+	if !result.Success {
+		t.Fatalf("Patrol scenario '%s' failed", "Patrol Basic Run")
+	}
+}
+
+// TestPatrolInvestigation runs the patrol investigation quality scenario
+// Run with: go test -v ./internal/ai/eval -run TestPatrolInvestigation -live
+func TestPatrolInvestigation(t *testing.T) {
+	if !*runLiveEval {
+		t.Skip("Skipping live eval test. Use -live flag to run against live Pulse API")
+	}
+
+	runner := NewRunner(DefaultConfig())
+	result := runner.RunPatrolScenario(PatrolInvestigationScenario())
+	runner.PrintPatrolSummary(result)
+
+	if !result.Success {
+		t.Fatalf("Patrol scenario '%s' failed", "Patrol Investigation Quality")
+	}
+}
+
+// TestPatrolFindingQuality runs the patrol finding quality scenario
+// Run with: go test -v ./internal/ai/eval -run TestPatrolFindingQuality -live
+func TestPatrolFindingQuality(t *testing.T) {
+	if !*runLiveEval {
+		t.Skip("Skipping live eval test. Use -live flag to run against live Pulse API")
+	}
+
+	runner := NewRunner(DefaultConfig())
+	result := runner.RunPatrolScenario(PatrolFindingQualityScenario())
+	runner.PrintPatrolSummary(result)
+
+	if !result.Success {
+		t.Fatalf("Patrol scenario '%s' failed", "Patrol Finding Quality")
+	}
+}
+
+// TestAllPatrolScenarios runs all patrol eval scenarios
+// Run with: go test -v ./internal/ai/eval -run TestAllPatrolScenarios -live
+func TestAllPatrolScenarios(t *testing.T) {
+	if !*runLiveEval {
+		t.Skip("Skipping live eval test. Use -live flag to run against live Pulse API")
+	}
+
+	runner := NewRunner(DefaultConfig())
+
+	allPassed := true
+	for _, scenario := range AllPatrolScenarios() {
+		t.Run(scenario.Name, func(t *testing.T) {
+			result := runner.RunPatrolScenario(scenario)
+			runner.PrintPatrolSummary(result)
+
+			if !result.Success {
+				allPassed = false
+				t.Errorf("Patrol scenario '%s' failed", scenario.Name)
+			}
+		})
+	}
+
+	if !allPassed {
+		t.Fatal("One or more patrol scenarios failed")
+	}
+}

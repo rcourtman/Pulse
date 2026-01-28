@@ -26,7 +26,7 @@ import (
 )
 
 func main() {
-	scenario := flag.String("scenario", "smoke", "Scenario to run: smoke, readonly, enforce, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-recovery, readonly-guardrails, noninteractive, approval, approval-deny, all")
+	scenario := flag.String("scenario", "smoke", "Scenario to run: smoke, readonly, enforce, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-recovery, readonly-guardrails, noninteractive, approval, approval-deny, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, all")
 	url := flag.String("url", "http://127.0.0.1:7655", "Pulse API base URL")
 	user := flag.String("user", "admin", "Username for auth")
 	pass := flag.String("pass", "admin", "Password for auth")
@@ -49,6 +49,33 @@ func main() {
 
 	runner := eval.NewRunner(config)
 
+	// Check for patrol scenarios first
+	patrolScenarios := getPatrolScenarios(*scenario)
+	if len(patrolScenarios) > 0 {
+		allPassed := true
+		for _, ps := range patrolScenarios {
+			fmt.Printf("\n>>> Running patrol scenario: %s\n", ps.Name)
+			fmt.Printf(">>> %s\n", ps.Description)
+
+			result := runner.RunPatrolScenario(ps)
+			runner.PrintPatrolSummary(result)
+
+			if !result.Success {
+				allPassed = false
+			}
+		}
+
+		if allPassed {
+			fmt.Printf("\n>>> ALL PATROL SCENARIOS PASSED\n")
+			os.Exit(0)
+		} else {
+			fmt.Printf("\n>>> SOME PATROL SCENARIOS FAILED\n")
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Standard chat scenarios
 	scenarios := getScenarios(*scenario)
 	if len(scenarios) == 0 {
 		fmt.Fprintf(os.Stderr, "Unknown scenario: %s\n", *scenario)
@@ -110,6 +137,12 @@ func listScenarios() {
 	fmt.Println("    approval    - Approval flow (1 step, opt-in)")
 	fmt.Println("    approval-deny - Approval deny flow (1 step, opt-in)")
 	fmt.Println()
+	fmt.Println("  Patrol:")
+	fmt.Println("    patrol              - Run all patrol scenarios")
+	fmt.Println("    patrol-basic        - Basic patrol run (completion, tools, findings)")
+	fmt.Println("    patrol-investigation - Investigation quality (investigate before report)")
+	fmt.Println("    patrol-finding-quality - Finding validation (well-formed findings)")
+	fmt.Println()
 	fmt.Println("  Collections:")
 	fmt.Println("    all          - Run all basic scenarios")
 	fmt.Println("    advanced     - Run all advanced scenarios")
@@ -117,6 +150,22 @@ func listScenarios() {
 	fmt.Println()
 	fmt.Println("Example:")
 	fmt.Println("  go run ./cmd/eval -scenario troubleshoot")
+	fmt.Println("  go run ./cmd/eval -scenario patrol-basic")
+}
+
+func getPatrolScenarios(name string) []eval.PatrolScenario {
+	switch name {
+	case "patrol":
+		return eval.AllPatrolScenarios()
+	case "patrol-basic":
+		return []eval.PatrolScenario{eval.PatrolBasicScenario()}
+	case "patrol-investigation":
+		return []eval.PatrolScenario{eval.PatrolInvestigationScenario()}
+	case "patrol-finding-quality":
+		return []eval.PatrolScenario{eval.PatrolFindingQualityScenario()}
+	default:
+		return nil
+	}
 }
 
 func getScenarios(name string) []eval.Scenario {
