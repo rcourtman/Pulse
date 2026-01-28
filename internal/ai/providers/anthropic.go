@@ -62,12 +62,20 @@ func (c *AnthropicClient) Name() string {
 
 // anthropicRequest is the request body for the Anthropic API
 type anthropicRequest struct {
-	Model       string             `json:"model"`
-	Messages    []anthropicMessage `json:"messages"`
-	MaxTokens   int                `json:"max_tokens"`
-	System      string             `json:"system,omitempty"`
-	Temperature float64            `json:"temperature,omitempty"`
-	Tools       []anthropicTool    `json:"tools,omitempty"`
+	Model       string               `json:"model"`
+	Messages    []anthropicMessage   `json:"messages"`
+	MaxTokens   int                  `json:"max_tokens"`
+	System      string               `json:"system,omitempty"`
+	Temperature float64              `json:"temperature,omitempty"`
+	Tools       []anthropicTool      `json:"tools,omitempty"`
+	ToolChoice  *anthropicToolChoice `json:"tool_choice,omitempty"`
+}
+
+// anthropicToolChoice controls how Claude selects tools
+// See: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/implement-tool-use#forcing-tool-use
+type anthropicToolChoice struct {
+	Type string `json:"type"`           // "auto", "any", "tool", or "none"
+	Name string `json:"name,omitempty"` // Only used when Type is "tool"
 }
 
 type anthropicMessage struct {
@@ -227,6 +235,16 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 					InputSchema: t.InputSchema,
 				}
 			}
+		}
+	}
+
+	// Add tool_choice if specified
+	// This controls whether Claude MUST use tools vs just being able to
+	// See: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/implement-tool-use#forcing-tool-use
+	if req.ToolChoice != nil {
+		anthropicReq.ToolChoice = &anthropicToolChoice{
+			Type: string(req.ToolChoice.Type),
+			Name: req.ToolChoice.Name,
 		}
 	}
 
@@ -441,13 +459,14 @@ func (c *AnthropicClient) SupportsThinking(model string) bool {
 
 // anthropicStreamRequest is the request body for streaming API calls
 type anthropicStreamRequest struct {
-	Model       string             `json:"model"`
-	Messages    []anthropicMessage `json:"messages"`
-	MaxTokens   int                `json:"max_tokens"`
-	System      string             `json:"system,omitempty"`
-	Temperature float64            `json:"temperature,omitempty"`
-	Tools       []anthropicTool    `json:"tools,omitempty"`
-	Stream      bool               `json:"stream"`
+	Model       string               `json:"model"`
+	Messages    []anthropicMessage   `json:"messages"`
+	MaxTokens   int                  `json:"max_tokens"`
+	System      string               `json:"system,omitempty"`
+	Temperature float64              `json:"temperature,omitempty"`
+	Tools       []anthropicTool      `json:"tools,omitempty"`
+	ToolChoice  *anthropicToolChoice `json:"tool_choice,omitempty"`
+	Stream      bool                 `json:"stream"`
 }
 
 // anthropicStreamEvent represents a streaming event from the Anthropic API
@@ -562,6 +581,14 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 					InputSchema: t.InputSchema,
 				}
 			}
+		}
+	}
+
+	// Add tool_choice if specified (same as non-streaming)
+	if req.ToolChoice != nil {
+		anthropicReq.ToolChoice = &anthropicToolChoice{
+			Type: string(req.ToolChoice.Type),
+			Name: req.ToolChoice.Name,
 		}
 	}
 

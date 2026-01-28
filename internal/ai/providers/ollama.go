@@ -155,9 +155,8 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	if model == "" {
 		model = c.model
 	}
-	// Ultimate fallback - if no model configured anywhere, use llama3
 	if model == "" {
-		model = "llama3"
+		return nil, fmt.Errorf("no model specified")
 	}
 
 	ollamaReq := ollamaRequest{
@@ -167,7 +166,14 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	// Convert tools to Ollama format
-	if len(req.Tools) > 0 {
+	// Note: Ollama doesn't support tool_choice like Anthropic/OpenAI
+	// We handle ToolChoiceNone by not adding tools, but can't force tool use
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+
+	if shouldAddTools {
 		ollamaReq.Tools = make([]ollamaTool, 0, len(req.Tools))
 		for _, t := range req.Tools {
 			// Skip non-function tools (like web_search which Ollama doesn't support)
@@ -318,7 +324,7 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		model = c.model
 	}
 	if model == "" {
-		model = "llama3"
+		return fmt.Errorf("no model specified")
 	}
 
 	ollamaReq := ollamaRequest{
@@ -327,7 +333,13 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		Stream:   true, // Enable streaming
 	}
 
-	if len(req.Tools) > 0 {
+	// Handle tools with tool_choice support (same as non-streaming)
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+
+	if shouldAddTools {
 		ollamaReq.Tools = make([]ollamaTool, 0, len(req.Tools))
 		for _, t := range req.Tools {
 			if t.Type != "" && t.Type != "function" {

@@ -87,23 +87,6 @@ type openaiRequest struct {
 	ToolChoice          interface{}     `json:"tool_choice,omitempty"` // "auto", "none", or specific tool
 }
 
-// deepseekRequest extends openaiRequest with DeepSeek-specific fields
-type deepseekRequest struct {
-	Model      string          `json:"model"`
-	Messages   []openaiMessage `json:"messages"`
-	MaxTokens  int             `json:"max_tokens,omitempty"`
-	Tools      []openaiTool    `json:"tools,omitempty"`
-	ToolChoice interface{}     `json:"tool_choice,omitempty"`
-}
-
-// openaiCompletionsRequest is for non-chat models like gpt-5.2-pro that use /v1/completions
-type openaiCompletionsRequest struct {
-	Model               string  `json:"model"`
-	Prompt              string  `json:"prompt"`
-	MaxCompletionTokens int     `json:"max_completion_tokens,omitempty"`
-	Temperature         float64 `json:"temperature,omitempty"`
-}
-
 // openaiTool represents a function tool in OpenAI format
 type openaiTool struct {
 	Type     string         `json:"type"` // always "function"
@@ -147,8 +130,7 @@ type openaiResponse struct {
 
 type openaiChoice struct {
 	Index        int           `json:"index"`
-	Message      openaiRespMsg `json:"message"`       // For chat completions
-	Text         string        `json:"text"`          // For completions API (non-chat models)
+	Message      openaiRespMsg `json:"message"`
 	FinishReason string        `json:"finish_reason"` // "stop", "tool_calls", etc.
 }
 
@@ -186,19 +168,37 @@ func (c *OpenAIClient) isDeepSeekReasoner() bool {
 }
 
 // requiresMaxCompletionTokens returns true for models that need max_completion_tokens instead of max_tokens
+// Per OpenAI docs, o1/o3/o4 reasoning models require max_completion_tokens; max_tokens will error.
 func (c *OpenAIClient) requiresMaxCompletionTokens(model string) bool {
-	// o1, o1-mini, o1-preview, o3, o3-mini, o4-mini, gpt-5.2, etc.
-	return strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4") || strings.HasPrefix(model, "gpt-5")
+	return strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4")
 }
 
-// isGPT52NonChat returns true if using GPT-5.2 models that require /v1/completions endpoint
-// Only gpt-5.2-chat-latest uses chat completions; gpt-5.2, gpt-5.2-pro use completions
-func (c *OpenAIClient) isGPT52NonChat(model string) bool {
-	if !strings.HasPrefix(model, "gpt-5.2") {
-		return false
+// convertToolChoiceToOpenAI converts our ToolChoice to OpenAI's format
+// OpenAI uses "required" instead of Anthropic's "any" to force tool use
+// See: https://platform.openai.com/docs/api-reference/chat/create#chat-create-tool_choice
+func convertToolChoiceToOpenAI(tc *ToolChoice) interface{} {
+	if tc == nil {
+		return "auto"
 	}
-	// gpt-5.2-chat-latest is the only chat model
-	return !strings.Contains(model, "chat")
+	switch tc.Type {
+	case ToolChoiceAuto:
+		return "auto"
+	case ToolChoiceNone:
+		return "none"
+	case ToolChoiceAny:
+		// OpenAI uses "required" to force the model to use one of the provided tools
+		return "required"
+	case ToolChoiceTool:
+		// Force a specific tool
+		return map[string]interface{}{
+			"type": "function",
+			"function": map[string]string{
+				"name": tc.Name,
+			},
+		}
+	default:
+		return "auto"
+	}
 }
 
 // Chat sends a chat request to the OpenAI API
@@ -309,42 +309,16 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			})
 		}
 		if len(openaiReq.Tools) > 0 {
-			openaiReq.ToolChoice = "auto"
+			// Map ToolChoice to OpenAI format
+			// OpenAI uses "required" instead of Anthropic's "any"
+			openaiReq.ToolChoice = convertToolChoiceToOpenAI(req.ToolChoice)
 		}
 	}
 
 	// Log actual model being sent (INFO level for visibility)
 	log.Info().Str("model_in_request", openaiReq.Model).Str("base_url", c.baseURL).Msg("Sending OpenAI/DeepSeek request")
 
-	var body []byte
-	var err error
-
-	// GPT-5.2 non-chat models need completions format (prompt instead of messages)
-	if c.isGPT52NonChat(model) {
-		// Convert messages to a single prompt string
-		var promptBuilder strings.Builder
-		if req.System != "" {
-			promptBuilder.WriteString("System: ")
-			promptBuilder.WriteString(req.System)
-			promptBuilder.WriteString("\n\n")
-		}
-		for _, m := range req.Messages {
-			promptBuilder.WriteString(m.Role)
-			promptBuilder.WriteString(": ")
-			promptBuilder.WriteString(m.Content)
-			promptBuilder.WriteString("\n\n")
-		}
-		promptBuilder.WriteString("Assistant: ")
-
-		completionsReq := openaiCompletionsRequest{
-			Model:               model,
-			Prompt:              promptBuilder.String(),
-			MaxCompletionTokens: req.MaxTokens,
-		}
-		body, err = json.Marshal(completionsReq)
-	} else {
-		body, err = json.Marshal(openaiReq)
-	}
+	body, err := json.Marshal(openaiReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
@@ -370,14 +344,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			}
 		}
 
-		// Use the appropriate endpoint
-		endpoint := c.baseURL
-		if c.isGPT52NonChat(model) && strings.Contains(c.baseURL, "api.openai.com") {
-			// GPT-5.2 non-chat models need completions endpoint
-			endpoint = strings.Replace(c.baseURL, "/chat/completions", "/completions", 1)
-		}
-
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -449,10 +416,6 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	// For DeepSeek reasoner, the actual content may be in reasoning_content
 	// when content is empty (it shows the "thinking" but that's the full response)
 	contentToUse := choice.Message.Content
-	// Completions API uses Text instead of Message.Content
-	if contentToUse == "" && choice.Text != "" {
-		contentToUse = choice.Text
-	}
 	if contentToUse == "" && choice.Message.ReasoningContent != "" {
 		// DeepSeek reasoner puts output in reasoning_content
 		contentToUse = choice.Message.ReasoningContent
@@ -679,7 +642,8 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 			})
 		}
 		if len(openaiReq.Tools) > 0 {
-			openaiReq.ToolChoice = "auto"
+			// Map ToolChoice to OpenAI format (same as non-streaming)
+			openaiReq.ToolChoice = convertToolChoiceToOpenAI(req.ToolChoice)
 		}
 	}
 

@@ -269,50 +269,10 @@ func TestOpenAIClient_Chat_Success(t *testing.T) {
 	assert.Equal(t, 3, resp.OutputTokens)
 }
 
-func TestOpenAIClient_Chat_GPT52NonChat(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
-
-		var req openaiCompletionsRequest
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
-		assert.Equal(t, "gpt-5.2-pro", req.Model)
-		assert.Contains(t, req.Prompt, "System: sys")
-		assert.Contains(t, req.Prompt, "user: hi")
-		assert.Equal(t, 55, req.MaxCompletionTokens)
-
-		_ = json.NewEncoder(w).Encode(openaiResponse{
-			ID:    "cmpl-1",
-			Model: "gpt-5.2-pro",
-			Choices: []openaiChoice{
-				{
-					Text:         "Answer",
-					FinishReason: "stop",
-				},
-			},
-			Usage: openaiUsage{PromptTokens: 3, CompletionTokens: 4},
-		})
-	}))
-	defer server.Close()
-
-	client := NewOpenAIClient("sk-test", "gpt-5.2-pro", server.URL, 0)
-	resp, err := client.Chat(context.Background(), ChatRequest{
-		System:    "sys",
-		MaxTokens: 55,
-		Messages: []Message{
-			{Role: "user", Content: "hi"},
-		},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "Answer", resp.Content)
-}
-
 func TestOpenAIClient_HelperFlags(t *testing.T) {
 	client := NewOpenAIClient("sk", "gpt-4", "https://api.openai.com", 0)
 	assert.True(t, client.requiresMaxCompletionTokens("o1-mini"))
 	assert.False(t, client.requiresMaxCompletionTokens("gpt-4"))
-
-	assert.True(t, client.isGPT52NonChat("gpt-5.2-pro"))
-	assert.False(t, client.isGPT52NonChat("gpt-5.2-chat-latest"))
 }
 
 func TestOpenAIClient_SupportsThinking(t *testing.T) {

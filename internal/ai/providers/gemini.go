@@ -60,6 +60,17 @@ type geminiRequest struct {
 	SystemInstruction *geminiContent          `json:"systemInstruction,omitempty"`
 	GenerationConfig  *geminiGenerationConfig `json:"generationConfig,omitempty"`
 	Tools             []geminiToolDef         `json:"tools,omitempty"`
+	ToolConfig        *geminiToolConfig       `json:"toolConfig,omitempty"`
+}
+
+// geminiToolConfig controls how the model uses tools
+// See: https://ai.google.dev/api/caching#ToolConfig
+type geminiToolConfig struct {
+	FunctionCallingConfig *geminiFunctionCallingConfig `json:"functionCallingConfig,omitempty"`
+}
+
+type geminiFunctionCallingConfig struct {
+	Mode string `json:"mode"` // AUTO, ANY, or NONE
 }
 
 type geminiContent struct {
@@ -138,6 +149,28 @@ type geminiError struct {
 		Message string `json:"message"`
 		Status  string `json:"status"`
 	} `json:"error"`
+}
+
+// convertToolChoiceToGemini converts our ToolChoice to Gemini's mode string
+// Gemini uses: AUTO (default), ANY (force tool use), NONE (no tools)
+// See: https://ai.google.dev/api/caching#FunctionCallingConfig
+func convertToolChoiceToGemini(tc *ToolChoice) string {
+	if tc == nil {
+		return "AUTO"
+	}
+	switch tc.Type {
+	case ToolChoiceAuto:
+		return "AUTO"
+	case ToolChoiceNone:
+		return "NONE"
+	case ToolChoiceAny:
+		return "ANY"
+	case ToolChoiceTool:
+		// Gemini doesn't support forcing a specific tool, fall back to ANY
+		return "ANY"
+	default:
+		return "AUTO"
+	}
 }
 
 // Chat sends a chat request to the Gemini API
@@ -244,8 +277,13 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		geminiReq.GenerationConfig.Temperature = req.Temperature
 	}
 
-	// Add tools if provided
-	if len(req.Tools) > 0 {
+	// Add tools if provided (unless ToolChoice is None)
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+
+	if shouldAddTools {
 		funcDecls := make([]geminiFunctionDeclaration, 0, len(req.Tools))
 		for _, t := range req.Tools {
 			// Skip non-function tools
@@ -260,6 +298,15 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		}
 		if len(funcDecls) > 0 {
 			geminiReq.Tools = []geminiToolDef{{FunctionDeclarations: funcDecls}}
+
+			// Add tool_config based on ToolChoice
+			// Gemini uses: AUTO (default), ANY (force tool use), NONE (no tools)
+			geminiReq.ToolConfig = &geminiToolConfig{
+				FunctionCallingConfig: &geminiFunctionCallingConfig{
+					Mode: convertToolChoiceToGemini(req.ToolChoice),
+				},
+			}
+
 			log.Debug().Int("tool_count", len(funcDecls)).Strs("tool_names", func() []string {
 				names := make([]string, len(funcDecls))
 				for i, f := range funcDecls {
@@ -615,7 +662,13 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		geminiReq.GenerationConfig.Temperature = req.Temperature
 	}
 
-	if len(req.Tools) > 0 {
+	// Add tools if provided (unless ToolChoice is None) - same as non-streaming
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+
+	if shouldAddTools {
 		funcDecls := make([]geminiFunctionDeclaration, 0, len(req.Tools))
 		for _, t := range req.Tools {
 			if t.Type != "" && t.Type != "function" {
@@ -629,6 +682,23 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		}
 		if len(funcDecls) > 0 {
 			geminiReq.Tools = []geminiToolDef{{FunctionDeclarations: funcDecls}}
+
+			// Add tool_config based on ToolChoice (same as non-streaming)
+			geminiReq.ToolConfig = &geminiToolConfig{
+				FunctionCallingConfig: &geminiFunctionCallingConfig{
+					Mode: convertToolChoiceToGemini(req.ToolChoice),
+				},
+			}
+
+			// Log tool names for debugging tool selection issues
+			toolNames := make([]string, len(funcDecls))
+			for i, f := range funcDecls {
+				toolNames[i] = f.Name
+			}
+			log.Debug().
+				Int("tool_count", len(funcDecls)).
+				Strs("tool_names", toolNames).
+				Msg("Gemini stream request includes tools")
 		}
 	}
 
@@ -636,6 +706,12 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
+
+	// Log the full request body for debugging (at trace level to avoid noise)
+	log.Trace().
+		Str("model", model).
+		RawJSON("request_body", body).
+		Msg("Gemini stream request body")
 
 	// Use streamGenerateContent endpoint for streaming
 	url := fmt.Sprintf("%s/models/%s:streamGenerateContent?key=%s&alt=sse", c.baseURL, model, c.apiKey)
@@ -725,6 +801,10 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 							if len(signature) == 0 {
 								signature = part.ThoughtSignatureSnake
 							}
+							log.Debug().
+								Str("tool_name", part.FunctionCall.Name).
+								Interface("tool_args", part.FunctionCall.Args).
+								Msg("Gemini called tool")
 							callback(StreamEvent{
 								Type: "tool_start",
 								Data: ToolStartEvent{
@@ -823,35 +903,6 @@ func (c *GeminiClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 
 		// Extract model ID from the full name (e.g., "models/gemini-1.5-pro" -> "gemini-1.5-pro")
 		modelID := strings.TrimPrefix(m.Name, "models/")
-
-		// Only include the useful Gemini models for chat/agentic tasks
-		// Filter out Gemma (open-source, no function calling), embedding, AQA, vision-only models
-		// Keep: gemini-3-*, gemini-2.5-*, gemini-2.0-*, gemini-1.5-* (pro and flash variants)
-		isUsefulModel := false
-		usefulPrefixes := []string{
-			"gemini-3-pro", "gemini-3-flash",
-			"gemini-2.5-pro", "gemini-2.5-flash",
-			"gemini-2.0-pro", "gemini-2.0-flash",
-			"gemini-1.5-pro", "gemini-1.5-flash",
-			"gemini-flash", "gemini-pro", // Latest aliases
-		}
-		for _, prefix := range usefulPrefixes {
-			if strings.HasPrefix(modelID, prefix) {
-				isUsefulModel = true
-				break
-			}
-		}
-		if !isUsefulModel {
-			continue
-		}
-
-		// Skip experimental/deprecated variants
-		if strings.Contains(modelID, "exp-") ||
-			strings.Contains(modelID, "-exp") ||
-			strings.Contains(modelID, "tuning") ||
-			strings.Contains(modelID, "8b") { // Skip smaller variants
-			continue
-		}
 
 		models = append(models, ModelInfo{
 			ID:          modelID,

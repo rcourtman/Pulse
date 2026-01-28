@@ -39,14 +39,35 @@ type Tool struct {
 	MaxUses     int                    `json:"max_uses,omitempty"` // For web search: limit searches per request
 }
 
+// ToolChoiceType represents how the model should choose tools
+type ToolChoiceType string
+
+const (
+	// ToolChoiceAuto lets the model decide whether to use tools (default)
+	ToolChoiceAuto ToolChoiceType = "auto"
+	// ToolChoiceAny forces the model to use one of the provided tools
+	ToolChoiceAny ToolChoiceType = "any"
+	// ToolChoiceNone prevents the model from using any tools
+	ToolChoiceNone ToolChoiceType = "none"
+	// ToolChoiceTool forces the model to use a specific tool (set ToolName)
+	ToolChoiceTool ToolChoiceType = "tool"
+)
+
+// ToolChoice controls how the model selects tools
+type ToolChoice struct {
+	Type ToolChoiceType `json:"type"`
+	Name string         `json:"name,omitempty"` // Only used when Type is ToolChoiceTool
+}
+
 // ChatRequest represents a request to the AI provider
 type ChatRequest struct {
-	Messages    []Message `json:"messages"`
-	Model       string    `json:"model"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
-	Temperature float64   `json:"temperature,omitempty"`
-	System      string    `json:"system,omitempty"` // System prompt (Anthropic style)
-	Tools       []Tool    `json:"tools,omitempty"`  // Available tools
+	Messages    []Message   `json:"messages"`
+	Model       string      `json:"model"`
+	MaxTokens   int         `json:"max_tokens,omitempty"`
+	Temperature float64     `json:"temperature,omitempty"`
+	System      string      `json:"system,omitempty"`      // System prompt (Anthropic style)
+	Tools       []Tool      `json:"tools,omitempty"`       // Available tools
+	ToolChoice  *ToolChoice `json:"tool_choice,omitempty"` // How to select tools (nil = auto)
 }
 
 // ChatResponse represents a response from the AI provider
