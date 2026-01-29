@@ -151,6 +151,112 @@ type geminiError struct {
 	} `json:"error"`
 }
 
+// sanitizeGeminiContents validates and repairs message ordering for Gemini's constraints.
+// Gemini requires that a model message containing function calls must be immediately
+// followed by a user message containing function responses. If pruning or errors
+// leave orphaned function calls (model+functionCalls not followed by function responses),
+// this strips the function call parts, keeping only text content if present.
+func sanitizeGeminiContents(contents []geminiContent) []geminiContent {
+	result := make([]geminiContent, 0, len(contents))
+
+	for i, c := range contents {
+		// Check if this is a model message with function calls
+		hasFunctionCall := false
+		for _, p := range c.Parts {
+			if p.FunctionCall != nil {
+				hasFunctionCall = true
+				break
+			}
+		}
+
+		if c.Role == "model" && hasFunctionCall {
+			// Check if the next message is a user message with function responses
+			hasFollowingResponse := false
+			if i+1 < len(contents) {
+				next := contents[i+1]
+				if next.Role == "user" {
+					for _, p := range next.Parts {
+						if p.FunctionResponse != nil {
+							hasFollowingResponse = true
+							break
+						}
+					}
+				}
+			}
+
+			if !hasFollowingResponse {
+				// Orphaned function calls — strip them, keep text only
+				var textParts []geminiPart
+				for _, p := range c.Parts {
+					if p.Text != "" && p.FunctionCall == nil {
+						textParts = append(textParts, geminiPart{Text: p.Text})
+					}
+				}
+				if len(textParts) > 0 {
+					result = append(result, geminiContent{
+						Role:  c.Role,
+						Parts: textParts,
+					})
+				}
+				log.Debug().
+					Int("message_index", i).
+					Msg("[Gemini] Stripped orphaned function calls from model message")
+				continue
+			}
+		}
+
+		// Check if this is a user message with function responses
+		// that isn't preceded by a model message with function calls
+		hasFunctionResponse := false
+		for _, p := range c.Parts {
+			if p.FunctionResponse != nil {
+				hasFunctionResponse = true
+				break
+			}
+		}
+
+		if c.Role == "user" && hasFunctionResponse {
+			hasPrecedingCall := false
+			if i > 0 {
+				prev := contents[i-1]
+				if prev.Role == "model" {
+					for _, p := range prev.Parts {
+						if p.FunctionCall != nil {
+							hasPrecedingCall = true
+							break
+						}
+					}
+				}
+			}
+			// Also check if the preceding message in result has function calls
+			// (it might have been the immediately previous content we just added)
+			if !hasPrecedingCall && len(result) > 0 {
+				prev := result[len(result)-1]
+				if prev.Role == "model" {
+					for _, p := range prev.Parts {
+						if p.FunctionCall != nil {
+							hasPrecedingCall = true
+							break
+						}
+					}
+				}
+			}
+
+			if !hasPrecedingCall {
+				// Orphaned function responses — drop them
+				log.Debug().
+					Int("message_index", i).
+					Msg("[Gemini] Dropped orphaned function responses from user message")
+				continue
+			}
+		}
+
+		result = append(result, c)
+	}
+
+	return result
+}
+
 // convertToolChoiceToGemini converts our ToolChoice to Gemini's mode string
 // Gemini uses: AUTO (default), ANY (force tool use), NONE (no tools)
 // See: https://ai.google.dev/api/caching#FunctionCallingConfig
@@ -244,6 +350,9 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			},
 		})
 	}
+
+	// Sanitize message ordering for Gemini's constraints
+	contents = sanitizeGeminiContents(contents)
 
 	// Use provided model or fall back to client default
 	model := req.Model
@@ -633,6 +742,9 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 			},
 		})
 	}
+
+	// Sanitize message ordering for Gemini's constraints
+	contents = sanitizeGeminiContents(contents)
 
 	model := req.Model
 	if strings.HasPrefix(model, "gemini:") {
