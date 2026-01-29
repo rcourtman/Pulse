@@ -39,6 +39,9 @@ type AgenticLoop struct {
 
 	// Per-session FSMs for workflow enforcement (set before each execution)
 	sessionFSM *SessionFSM
+
+	// Budget checker called after each turn to enforce token spending limits
+	budgetChecker func() error
 }
 
 // NewAgenticLoop creates a new agentic loop
@@ -98,6 +101,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	toolsSucceededThisEpisode := false // Track if any tool executed successfully this episode
 	preferredToolName := ""
 	preferredToolRetried := false
+	singleToolRequested := isSingleToolRequest(providerMessages)
+	singleToolEnforced := false
+
+	// Loop detection: track identical tool calls (name + serialized input).
+	// After maxIdenticalCalls identical invocations, the next one is blocked.
+	const maxIdenticalCalls = 3
+	recentCallCounts := make(map[string]int)
 
 	for turn < a.maxTurns {
 		// Check if aborted
@@ -149,6 +159,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 			if preferredToolName != "" {
 				req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceTool, Name: preferredToolName}
+				if singleToolRequested {
+					singleToolEnforced = true
+				}
 				log.Debug().
 					Str("session_id", sessionID).
 					Str("tool", preferredToolName).
@@ -266,6 +279,15 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Provider error")
 			return resultMessages, fmt.Errorf("provider error: %w", err)
+		}
+
+		// Check mid-run budget after each turn completes
+		if a.budgetChecker != nil {
+			if budgetErr := a.budgetChecker(); budgetErr != nil {
+				log.Warn().Err(budgetErr).Int("turn", turn).Str("session_id", sessionID).
+					Msg("[AgenticLoop] Budget exceeded mid-run, stopping")
+				return resultMessages, fmt.Errorf("budget exceeded: %w", budgetErr)
+			}
 		}
 
 		// Create assistant message
@@ -419,6 +441,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			// Clear preferred tool once the model has used any tool.
 			preferredToolName = ""
 		}
+		firstToolResultText := ""
 		for _, tc := range toolCalls {
 			// Check for abort
 			a.mu.Lock()
@@ -501,6 +524,49 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				}
 			}
 
+			// === LOOP DETECTION: Block identical repeated tool calls ===
+			callKey := toolCallKey(tc.Name, tc.Input)
+			recentCallCounts[callKey]++
+			if recentCallCounts[callKey] > maxIdenticalCalls {
+				log.Warn().
+					Str("tool", tc.Name).
+					Int("count", recentCallCounts[callKey]).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] LOOP_DETECTED: blocking repeated identical tool call")
+
+				loopMsg := fmt.Sprintf("LOOP_DETECTED: You have called %s with the same arguments %d times. This call is blocked. Try a different tool or approach.", tc.Name, recentCallCounts[callKey])
+
+				jsonData, _ := json.Marshal(ToolEndData{
+					ID:      tc.ID,
+					Name:    tc.Name,
+					Input:   "",
+					Output:  loopMsg,
+					Success: false,
+				})
+				callback(StreamEvent{Type: "tool_end", Data: jsonData})
+
+				toolResultMsg := Message{
+					ID:        uuid.New().String(),
+					Role:      "user",
+					Timestamp: time.Now(),
+					ToolResult: &ToolResult{
+						ToolUseID: tc.ID,
+						Content:   loopMsg,
+						IsError:   true,
+					},
+				}
+				resultMessages = append(resultMessages, toolResultMsg)
+				providerMessages = append(providerMessages, providers.Message{
+					Role: "user",
+					ToolResult: &providers.ToolResult{
+						ToolUseID: tc.ID,
+						Content:   loopMsg,
+						IsError:   true,
+					},
+				})
+				continue
+			}
+
 			// Execute the tool
 			result, err := a.executor.ExecuteTool(ctx, tc.Name, tc.Input)
 
@@ -519,6 +585,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						Str("tool", tc.Name).
 						Msg("[AgenticLoop] Tool succeeded - toolsSucceededThisEpisode set to true")
 				}
+			}
+
+			if firstToolResultText == "" {
+				firstToolResultText = resultText
 			}
 
 			// Track pending recovery for strict resolution blocks
@@ -770,6 +840,26 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			})
 		}
 
+		if singleToolEnforced && len(toolCalls) > 0 {
+			summary := firstToolResultText
+			if strings.TrimSpace(summary) == "" {
+				if preferredToolName != "" {
+					summary = fmt.Sprintf("Tool %s completed.", preferredToolName)
+				} else {
+					summary = "Tool call completed."
+				}
+			}
+			if len(resultMessages) > 0 {
+				lastIdx := len(resultMessages) - 1
+				if resultMessages[lastIdx].Role == "assistant" && strings.TrimSpace(resultMessages[lastIdx].Content) == "" {
+					resultMessages[lastIdx].Content = summary
+				}
+			}
+			jsonData, _ := json.Marshal(ContentData{Text: summary})
+			callback(StreamEvent{Type: "content", Data: jsonData})
+			return resultMessages, nil
+		}
+
 		turn++
 	}
 
@@ -800,12 +890,25 @@ func (a *AgenticLoop) SetSessionFSM(fsm *SessionFSM) {
 	a.mu.Unlock()
 }
 
+// SetMaxTurns overrides the maximum number of agentic turns for this loop.
+func (a *AgenticLoop) SetMaxTurns(n int) {
+	a.mu.Lock()
+	a.maxTurns = n
+	a.mu.Unlock()
+}
+
 // SetProviderInfo sets the provider/model info for telemetry.
 func (a *AgenticLoop) SetProviderInfo(provider, model string) {
 	a.mu.Lock()
 	a.providerName = provider
 	a.modelName = model
 	a.mu.Unlock()
+}
+
+// SetBudgetChecker sets a function called after each agentic turn to enforce
+// token spending limits. If the checker returns an error, the loop stops.
+func (a *AgenticLoop) SetBudgetChecker(fn func() error) {
+	a.budgetChecker = fn
 }
 
 // GetTotalInputTokens returns the accumulated input tokens across all turns.
@@ -971,6 +1074,16 @@ func tryAutoRecovery(result tools.CallToolResult, tc providers.ToolCall, executo
 	}
 
 	return "", false
+}
+
+// toolCallKey returns a string key for a tool call (name + serialized input)
+// used to detect repeated identical calls in the agentic loop.
+func toolCallKey(name string, input map[string]interface{}) string {
+	inputBytes, err := json.Marshal(input)
+	if err != nil {
+		return name
+	}
+	return name + ":" + string(inputBytes)
 }
 
 // getCommandFromInput extracts the command from tool input for logging.
@@ -1163,6 +1276,45 @@ func getPreferredTool(messages []providers.Message, tools []providers.Tool) stri
 	}
 
 	return ""
+}
+
+// isSingleToolRequest detects user instructions to use exactly one tool call.
+func isSingleToolRequest(messages []providers.Message) bool {
+	var lastUserContent string
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" && messages[i].ToolResult == nil {
+			lastUserContent = strings.ToLower(messages[i].Content)
+			break
+		}
+	}
+	if lastUserContent == "" {
+		return false
+	}
+
+	patterns := []string{
+		"only that tool once",
+		"only this tool once",
+		"call only that tool once",
+		"call only this tool once",
+		"call only that tool",
+		"call only this tool",
+		"call only one tool",
+		"only one tool",
+		"single tool",
+		"use only that tool",
+		"use only this tool",
+		"do not call any other tools",
+		"don't call any other tools",
+		"no other tools",
+	}
+
+	for _, pattern := range patterns {
+		if strings.Contains(lastUserContent, pattern) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // getSystemPrompt builds the full system prompt including the current mode context.

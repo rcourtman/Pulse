@@ -339,11 +339,12 @@ func checkMutationCapabilityGuards(command, cmdLower string) string {
 
 	// Input redirection means we can't inspect the content.
 	// This catches: < (redirect), << (heredoc), <<< (here-string)
+	// But NOT stderr-to-stdout redirections like 2>&1 which are harmless.
 	// Examples blocked:
 	//   sqlite3 db < script.sql
 	//   psql <<EOF ... EOF
 	//   sqlite3 db <<< "SELECT ..."
-	if strings.Contains(command, "<") {
+	if hasInputRedirect(command) {
 		return "input redirection prevents content inspection"
 	}
 
@@ -929,6 +930,23 @@ func isInteractiveREPL(cmdLower string) bool {
 }
 
 // hasStdoutRedirect checks for dangerous output redirects while allowing safe stderr redirects.
+// hasInputRedirect checks for input redirection (<, <<, <<<) while
+// allowing harmless stderr-to-stdout redirections (2>&1, 2<&1).
+func hasInputRedirect(command string) bool {
+	if !strings.Contains(command, "<") {
+		return false
+	}
+	// Remove safe fd-merge patterns before checking for input redirects.
+	// 2>&1 = merge stderr into stdout; 2<&1 = merge stderr into stdout (rare)
+	// These contain '<' but aren't input redirection.
+	cmd := command
+	cmd = strings.ReplaceAll(cmd, "2>&1", "")
+	cmd = strings.ReplaceAll(cmd, "2<&1", "")
+	cmd = strings.ReplaceAll(cmd, "1>&2", "")
+	cmd = strings.ReplaceAll(cmd, "&>", "") // bash shorthand for > ... 2>&1
+	return strings.Contains(cmd, "<")
+}
+
 func hasStdoutRedirect(command string) bool {
 	if !strings.Contains(command, ">") {
 		return false
@@ -994,35 +1012,78 @@ func isReadOnlyByConstruction(cmdLower string) bool {
 	readOnlyCommands := []string{
 		"cat", "head", "tail",
 		"ls", "ll", "dir",
-		"ps", "free", "df", "du",
+		"ps", "free", "df", "du", "iostat", "vmstat", "mpstat", "sar",
 		"grep", "awk", "sed", "find", "locate", "which", "whereis",
 		"journalctl", "dmesg",
 		"uname", "hostname", "whoami", "id", "groups",
 		"date", "uptime", "env", "printenv", "locale",
-		"netstat", "ss", "ifconfig", "route",
+		"netstat", "ss", "ifconfig", "route", "arp",
 		"ping", "traceroute", "tracepath", "nslookup", "dig", "host",
 		"file", "stat", "wc", "sort", "uniq", "cut", "tr",
 		"lsof", "fuser",
 		"getent", "nproc", "lscpu", "lsmem", "lsblk", "blkid",
+		"lxc-ls", "lxc-info",
 		"zcat", "zgrep", "bzcat", "xzcat",
 		"md5sum", "sha256sum", "sha1sum",
 		"test",
+		// Process inspection
+		"pgrep", "pidof", "pstree",
+		// Login/session info
+		"last", "lastlog", "who", "w",
+		// Hardware inspection
+		"lspci", "lsusb", "dmidecode", "hwinfo", "inxi",
+		"sensors", "hddtemp", "smartctl", "nvme",
 		// Media inspection tools
 		"ffprobe", "mediainfo", "exiftool",
+		// Proxmox version
+		"pveversion",
 	}
 
 	// Multi-word patterns that must appear at the start
 	multiWordPatterns := []string{
-		"curl -s", "curl --silent", "curl -I", "curl --head",
+		// Curl read-only variants (various flag combinations)
+		"curl -s", "curl --silent", "curl -i", "curl --head",
+		"curl -k", "curl --insecure",
+		"curl -sk", "curl -ks", "curl -ki", "curl -ik",
+		"curl http", "curl https",
 		"wget -q", "wget --spider",
-		"docker ps", "docker logs", "docker inspect", "docker stats", "docker images", "docker info",
-		"systemctl status", "systemctl is-active", "systemctl is-enabled", "systemctl list", "systemctl show",
-		"pct list", "pct status",
-		"qm list", "qm status",
-		"ip addr", "ip route", "ip link",
+		// Docker read-only
+		"docker ps", "docker logs", "docker inspect", "docker stats",
+		"docker images", "docker info", "docker version",
+		"docker top", "docker port",
+		"docker network ls", "docker network inspect",
+		"docker volume ls", "docker volume inspect",
+		"docker-compose ps", "docker compose ps",
+		// Systemd read-only
+		"systemctl status", "systemctl is-active", "systemctl is-enabled",
+		"systemctl list", "systemctl show",
+		"service status", "service --status-all",
+		// Proxmox read-only
+		"pct list", "pct status", "pct config", "pct df",
+		"qm list", "qm status", "qm config", "qm guest cmd",
+		"pvesh get",
+		"pvecm status", "pvecm nodes",
+		"pvesm status", "pvesm list",
+		// ZFS/ZPool read-only
+		"zpool status", "zpool list", "zpool get",
+		"zfs list", "zfs get",
+		// RAID inspection
+		"mdadm --detail", "mdadm -D",
+		// Network: ip with optional protocol flags (-4, -6)
+		"ip addr", "ip route", "ip link", "ip neigh", "ip neighbor",
+		"ip -4 addr", "ip -4 route", "ip -4 link", "ip -4 neigh", "ip -4 neighbor",
+		"ip -6 addr", "ip -6 route", "ip -6 link", "ip -6 neigh", "ip -6 neighbor",
+		"ip a", "ip r", "ip n",
+		// Package info (read-only)
+		"apt list", "apt show", "apt-cache",
+		"dpkg -l", "dpkg --list", "dpkg -s",
+		"rpm -q", "rpm -qa",
+		"yum list", "dnf list",
 		// Kubectl read-only commands
 		"kubectl get", "kubectl describe", "kubectl logs", "kubectl top", "kubectl cluster-info",
 		"kubectl api-resources", "kubectl api-versions", "kubectl version", "kubectl config view",
+		// Network connectivity check (scan-only, no data sent)
+		"nc -z", "nc -vz", "nc -zv",
 		// Timeout wrapper (makes any command bounded)
 		"timeout ",
 	}
@@ -1064,8 +1125,8 @@ func matchesWritePatterns(cmdLower string) string {
 		"shutdown": "system shutdown", "reboot": "system reboot", "poweroff": "system poweroff", "halt": "system halt",
 		"systemctl restart": "service restart", "systemctl stop": "service stop", "systemctl start": "service start",
 		"systemctl enable": "service enable", "systemctl disable": "service disable",
-		"service ": "service control", "init ": "init control",
-		"apt ": "package management", "apt-get ": "package management", "yum ": "package management",
+		"init ": "init control",
+		"apt ":  "package management", "apt-get ": "package management", "yum ": "package management",
 		"dnf ": "package management", "pacman ": "package management", "apk ": "package management", "brew ": "package management",
 		"pip install": "package install", "pip uninstall": "package uninstall",
 		"npm install": "package install", "npm uninstall": "package uninstall", "cargo install": "package install",
@@ -1088,6 +1149,12 @@ func matchesWritePatterns(cmdLower string) string {
 		if strings.Contains(cmdLower, pattern) {
 			return reason
 		}
+	}
+
+	// Command-start-only patterns: these must be the first word to avoid matching
+	// substrings in arguments (e.g., "pve-daily-utils.service" contains "service").
+	if strings.HasPrefix(cmdLower, "service ") {
+		return "service control"
 	}
 
 	// Medium-risk patterns
@@ -2001,7 +2068,6 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			response.Nodes = append(response.Nodes, NodeSummary{
 				Name:           node.Name,
 				Status:         node.Status,
-				ID:             node.ID,
 				AgentConnected: connectedAgentHostnames[node.Name],
 			})
 			count++
@@ -2220,7 +2286,6 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 			hasAgent := connectedAgentHostnames[node.Name]
 			nodeMap[node.Name] = &ProxmoxNodeTopology{
 				Name:           node.Name,
-				ID:             node.ID,
 				Status:         node.Status,
 				AgentConnected: hasAgent,
 				CanExecute:     hasAgent && controlEnabled,
@@ -2230,7 +2295,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 		}
 	}
 
-	ensureNode := func(name, id, status string) *ProxmoxNodeTopology {
+	ensureNode := func(name, status string) *ProxmoxNodeTopology {
 		if !includeProxmox || summaryOnly {
 			return nil
 		}
@@ -2243,7 +2308,6 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 		hasAgent := connectedAgentHostnames[name]
 		nodeMap[name] = &ProxmoxNodeTopology{
 			Name:           name,
-			ID:             id,
 			Status:         status,
 			AgentConnected: hasAgent,
 			CanExecute:     hasAgent && controlEnabled,
@@ -2259,7 +2323,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 			summary.RunningVMs++
 		}
 
-		nodeTopology := ensureNode(vm.Node, "", "unknown")
+		nodeTopology := ensureNode(vm.Node, "unknown")
 		if nodeTopology == nil {
 			continue
 		}
@@ -2284,7 +2348,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 			summary.RunningLXC++
 		}
 
-		nodeTopology := ensureNode(ct.Node, "", "unknown")
+		nodeTopology := ensureNode(ct.Node, "unknown")
 		if nodeTopology == nil {
 			continue
 		}
@@ -2937,7 +3001,6 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			}
 			addMatch(ResourceMatch{
 				Type:           "node",
-				ID:             node.ID,
 				Name:           node.Name,
 				Status:         node.Status,
 				AgentConnected: connectedAgentHostnames[node.Name],
@@ -3072,9 +3135,9 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		case "node":
 			reg = ResourceRegistration{
 				Kind:          "node",
-				ProviderUID:   match.ID, // Node ID is the provider UID
+				ProviderUID:   match.Name, // Node name is the identifier used for routing
 				Name:          match.Name,
-				Aliases:       []string{match.Name, match.ID},
+				Aliases:       []string{match.Name},
 				HostName:      match.Name,
 				LocationChain: []string{"node:" + match.Name},
 				Executors: []ExecutorRegistration{{

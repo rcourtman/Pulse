@@ -253,7 +253,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 
 			if resourceType == "lxc" {
 				for _, c := range state.Containers {
-					if strings.EqualFold(c.Name, resourceID) && c.Node == hostID {
+					if strings.EqualFold(c.Name, resourceID) && nodeMatchesHostID(c.Node, hostID) {
 						resourceID = fmt.Sprintf("%d", c.VMID)
 						resolved = true
 						break
@@ -261,7 +261,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 				}
 			} else if resourceType == "vm" {
 				for _, vm := range state.VMs {
-					if strings.EqualFold(vm.Name, resourceID) && vm.Node == hostID {
+					if strings.EqualFold(vm.Name, resourceID) && nodeMatchesHostID(vm.Node, hostID) {
 						resourceID = fmt.Sprintf("%d", vm.VMID)
 						resolved = true
 						break
@@ -288,7 +288,19 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	if discovery == nil {
 		discovery, err = e.discoveryProvider.TriggerDiscovery(ctx, resourceType, hostID, resourceID)
 		if err != nil {
-			// Even on failure, provide cli_access so AI can investigate manually
+			// Distinguish transient errors (rate limits, timeouts) from genuine not-found.
+			// Transient errors must surface as IsError so the model stops retrying.
+			if isTransientError(err) {
+				return CallToolResult{
+					Content: []Content{{
+						Type: "text",
+						Text: fmt.Sprintf("Discovery temporarily unavailable: %v. Do NOT retry this call. Use pulse_control or a different approach to investigate the resource.", err),
+					}},
+					IsError: true,
+				}, nil
+			}
+
+			// Genuine failure (e.g. resource doesn't exist) — keep existing behavior
 			return NewJSONResult(map[string]interface{}{
 				"found":         false,
 				"resource_type": resourceType,
@@ -406,6 +418,56 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	}
 
 	return NewJSONResult(response), nil
+}
+
+// isTransientError checks whether an error is a transient API/infrastructure error
+// (rate limit, timeout, temporary unavailability) rather than a genuine "not found".
+// When true, the caller should return IsError:true so the model doesn't retry.
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+
+	transientPatterns := []string{
+		"429",
+		"503",
+		"rate_limit",
+		"rate limit",
+		"ratelimit",
+		"too many requests",
+		"timeout",
+		"context deadline exceeded",
+		"failed after", // "failed after N retries"
+		"temporarily",  // "temporarily unavailable"
+		"server overloaded",
+		"service unavailable",
+		"connection refused",
+		"connection reset",
+		"broken pipe",
+		"i/o timeout",
+		"network unreachable",
+	}
+
+	for _, pattern := range transientPatterns {
+		if strings.Contains(msg, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// nodeMatchesHostID checks if a node name matches a host_id which may be
+// a plain node name ("delly") or a composite instance-node ID ("homelab-delly").
+func nodeMatchesHostID(nodeName, hostID string) bool {
+	if strings.EqualFold(nodeName, hostID) {
+		return true
+	}
+	// Check if hostID is a composite "instance-node" format ending with the node name
+	if strings.HasSuffix(strings.ToLower(hostID), "-"+strings.ToLower(nodeName)) {
+		return true
+	}
+	return false
 }
 
 func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[string]interface{}) (CallToolResult, error) {

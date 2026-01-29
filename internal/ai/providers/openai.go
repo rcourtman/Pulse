@@ -308,9 +308,10 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 				},
 			})
 		}
-		if len(openaiReq.Tools) > 0 {
+		if len(openaiReq.Tools) > 0 && !c.isDeepSeekReasoner() {
 			// Map ToolChoice to OpenAI format
 			// OpenAI uses "required" instead of Anthropic's "any"
+			// DeepSeek Reasoner does not support tool_choice — it decides tool use via reasoning
 			openaiReq.ToolChoice = convertToolChoiceToOpenAI(req.ToolChoice)
 		}
 	}
@@ -380,6 +381,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
 				errMsg = errResp.Error.Message
 			}
+			errMsg = appendRateLimitInfo(errMsg, resp)
 			lastErr = fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 			continue
 		}
@@ -388,9 +390,11 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		if resp.StatusCode != http.StatusOK {
 			var errResp openaiError
 			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
-				return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+				errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
+				return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 			}
-			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+			errMsg := appendRateLimitInfo(string(respBody), resp)
+			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 		}
 
 		// Success - break out of retry loop
@@ -641,8 +645,9 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 				},
 			})
 		}
-		if len(openaiReq.Tools) > 0 {
+		if len(openaiReq.Tools) > 0 && !c.isDeepSeekReasoner() {
 			// Map ToolChoice to OpenAI format (same as non-streaming)
+			// DeepSeek Reasoner does not support tool_choice — it decides tool use via reasoning
 			openaiReq.ToolChoice = convertToolChoiceToOpenAI(req.ToolChoice)
 		}
 	}
@@ -671,9 +676,11 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		respBody, _ := io.ReadAll(resp.Body)
 		var errResp openaiError
 		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
-			return fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+			errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
+			return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 		}
-		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+		errMsg := appendRateLimitInfo(string(respBody), resp)
+		return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 	}
 
 	// Parse SSE stream
@@ -837,7 +844,8 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+		errMsg := appendRateLimitInfo(string(body), resp)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 	}
 
 	var result struct {
