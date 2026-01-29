@@ -28,6 +28,7 @@ import { SSOProvidersPanel } from './SSOProvidersPanel';
 import { AISettings } from './AISettings';
 import { AICostDashboard } from '@/components/AI/AICostDashboard';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
+import { SystemLogsPanel } from './SystemLogsPanel';
 import { GeneralSettingsPanel } from './GeneralSettingsPanel';
 import { NetworkSettingsPanel } from './NetworkSettingsPanel';
 import { UpdatesSettingsPanel } from './UpdatesSettingsPanel';
@@ -75,6 +76,7 @@ import FileText from 'lucide-solid/icons/file-text';
 import Globe from 'lucide-solid/icons/globe';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
+import Terminal from 'lucide-solid/icons/terminal';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
@@ -250,6 +252,7 @@ type SettingsTab =
   | 'system-updates'
   | 'system-backups'
   | 'system-ai'
+  | 'system-logs'
   | 'system-pro'
   | 'api'
   | 'security-overview'
@@ -261,7 +264,8 @@ type SettingsTab =
   | 'diagnostics'
   | 'updates'
   | 'reporting'
-  | 'security-webhooks';
+  | 'security-webhooks'
+  | 'system-logs';
 
 type AgentKey = 'pve' | 'pbs' | 'pmg';
 
@@ -355,6 +359,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     title: 'Detailed Reporting',
     description: 'Generate and export comprehensive infrastructure reports in PDF and CSV formats.',
   },
+  'system-logs': {
+    title: 'System Logs',
+    description: 'View real-time system logs and download support bundles.',
+  },
 };
 
 const BACKUP_INTERVAL_OPTIONS = [
@@ -416,6 +424,9 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/system-backups')) return 'system-backups';
     if (path.includes('/settings/system-ai')) return 'system-ai';
     if (path.includes('/settings/system-pro')) return 'system-pro';
+    if (path.includes('/settings/system-logs')) return 'system-logs';
+    // Generic /settings/system fallback must come AFTER specific system-* paths
+    // because /settings/system-logs contains /settings/system as a substring
     if (path.includes('/settings/system')) return 'system-general';
     if (path.includes('/settings/api')) return 'api';
     if (path.includes('/settings/security-overview')) return 'security-overview';
@@ -425,8 +436,11 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/security-users')) return 'security-users';
     if (path.includes('/settings/security-audit')) return 'security-audit';
     if (path.includes('/settings/security-webhooks')) return 'security-webhooks';
+    // Generic /settings/security fallback must come AFTER specific security-* paths
     if (path.includes('/settings/security')) return 'security-overview';
     if (path.includes('/settings/updates')) return 'updates';
+    if (path.includes('/settings/diagnostics')) return 'diagnostics';
+    if (path.includes('/settings/reporting')) return 'reporting';
     // Legacy platform paths map to the Proxmox tab
     if (
       path.includes('/settings/pve') ||
@@ -981,6 +995,12 @@ const Settings: Component<SettingsProps> = (props) => {
             icon: FileText,
             iconProps: { strokeWidth: 2 },
             features: ['advanced_reporting'],
+          },
+          {
+            id: 'system-logs',
+            label: 'System Logs',
+            icon: Terminal,
+            iconProps: { strokeWidth: 2 },
           },
         ],
       },
@@ -3388,6 +3408,11 @@ const Settings: Component<SettingsProps> = (props) => {
 
                 {/* Agent Profiles (Pro Feature) */}
                 <AgentProfilesPanel />
+              </Show>
+
+              {/* System Logs Tab */}
+              <Show when={activeTab() === 'system-logs'}>
+                <SystemLogsPanel />
               </Show>
 
               {/* System General Tab */}
