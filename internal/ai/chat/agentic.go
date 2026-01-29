@@ -1251,8 +1251,21 @@ func pruneMessagesForModel(messages []Message) []Message {
 
 	start := len(messages) - MaxContextMessagesLimit
 	pruned := messages[start:]
+
+	// Skip leading tool results (orphaned from pruned tool calls)
 	for len(pruned) > 0 && pruned[0].ToolResult != nil {
 		pruned = pruned[1:]
+	}
+
+	// If we start with an assistant message that has tool calls,
+	// skip it and its following tool results — we've pruned the
+	// user message that preceded it, so the sequence is broken.
+	for len(pruned) > 0 && pruned[0].Role == "assistant" && len(pruned[0].ToolCalls) > 0 {
+		pruned = pruned[1:]
+		// Also skip the tool results that followed
+		for len(pruned) > 0 && pruned[0].ToolResult != nil {
+			pruned = pruned[1:]
+		}
 	}
 
 	return pruned
