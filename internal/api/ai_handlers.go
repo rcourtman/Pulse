@@ -3239,6 +3239,11 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Send an SSE comment to flush headers immediately so clients get the
+	// HTTP 200 response right away instead of blocking until the first event.
+	fmt.Fprintf(w, ": connected\n\n")
+	flusher.Flush()
+
 	// Subscribe to patrol stream
 	// Note: SubscribeToStream already sends the current buffered output to the channel
 	ch := patrol.SubscribeToStream()

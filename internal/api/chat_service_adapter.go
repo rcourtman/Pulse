@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
 
 // chatServiceAdapter wraps chat.Service to implement ai.ChatServiceProvider.
@@ -66,6 +67,13 @@ func (a *chatServiceAdapter) GetMessages(ctx context.Context, sessionID string) 
 
 func (a *chatServiceAdapter) DeleteSession(ctx context.Context, sessionID string) error {
 	return a.svc.DeleteSession(ctx, sessionID)
+}
+
+// GetExecutor exposes the underlying chat service's tool executor so that
+// patrol can set the finding creator. This satisfies the
+// chatServiceExecutorAccessor interface in the ai package.
+func (a *chatServiceAdapter) GetExecutor() *tools.PulseToolExecutor {
+	return a.svc.GetExecutor()
 }
 
 // adaptCallback converts an ai.ChatStreamCallback to a chat.StreamCallback.
