@@ -57,6 +57,8 @@ EVAL_RETRY_ON_EXPLICIT_TOOL  (default 1)
 EVAL_RETRY_ON_STREAM_FAILURE (default 1)
 EVAL_RETRY_ON_EMPTY_RESPONSE (default 1)
 EVAL_RETRY_ON_TOOL_ERRORS    (default 1)
+EVAL_PREFLIGHT              (set to 1 to run a quick chat preflight)
+EVAL_PREFLIGHT_TIMEOUT       (seconds, default 15)
 EVAL_REPORT_DIR              (write JSON report per scenario)
 ```
 
@@ -74,6 +76,12 @@ EVAL_STRICT_RESOLUTION=1 EVAL_REQUIRE_STRICT_RECOVERY=1 \
 go run ./cmd/eval -scenario strict
 ```
 
+Strict-resolution block only (no recovery):
+```
+EVAL_STRICT_RESOLUTION=1 \
+go run ./cmd/eval -scenario strict-block
+```
+
 Strict-resolution recovery in a single step:
 ```
 EVAL_STRICT_RESOLUTION=1 EVAL_REQUIRE_STRICT_RECOVERY=1 \
@@ -84,6 +92,12 @@ Approval flow (requires Control Level = Controlled):
 ```
 EVAL_EXPECT_APPROVAL=1 \
 go run ./cmd/eval -scenario approval
+```
+
+Approval approve flow (auto-approves approvals during the step):
+```
+EVAL_EXPECT_APPROVAL=1 \
+go run ./cmd/eval -scenario approval-approve
 ```
 
 Approval deny flow (auto-denies approvals during the step):

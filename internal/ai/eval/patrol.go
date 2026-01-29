@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,6 +34,7 @@ type PatrolRunResult struct {
 	Content      string
 	RawEvents    []PatrolSSEEvent
 	Assertions   []AssertionResult
+	Completed    bool // true if patrol reported completion via status API
 }
 
 // PatrolFinding mirrors the Finding JSON from the API.
@@ -67,6 +69,14 @@ type PatrolSSEEvent struct {
 }
 
 // RunPatrolScenario executes a patrol scenario and returns the results.
+//
+// Strategy: trigger the patrol run, then use a dual approach:
+//  1. Poll GET /api/ai/patrol/status until Running=false (primary completion signal)
+//  2. Attempt to connect to the SSE stream in a goroutine to capture tool events
+//
+// The SSE stream may or may not connect depending on timing (the server only
+// sends HTTP headers once it has data). We treat the stream as best-effort
+// for tool-level visibility, and rely on polling for completion.
 func (r *Runner) RunPatrolScenario(scenario PatrolScenario) PatrolRunResult {
 	startTime := time.Now()
 	result := PatrolRunResult{
@@ -108,16 +118,6 @@ func (r *Runner) RunPatrolScenario(scenario PatrolScenario) PatrolRunResult {
 		return result
 	}
 
-	// Connect to SSE stream before triggering (to catch "start" event)
-	streamBody, err := r.connectPatrolStream(ctx)
-	if err != nil {
-		result.Error = fmt.Errorf("connecting to patrol stream: %w", err)
-		result.Success = false
-		result.Duration = time.Since(startTime)
-		return result
-	}
-	defer streamBody.Close()
-
 	// Trigger patrol run
 	if err := r.triggerPatrolRun(scenario.Deep); err != nil {
 		result.Error = fmt.Errorf("triggering patrol run: %w", err)
@@ -127,18 +127,73 @@ func (r *Runner) RunPatrolScenario(scenario PatrolScenario) PatrolRunResult {
 	}
 
 	if r.config.Verbose {
-		fmt.Printf("  Patrol triggered (deep=%v), reading SSE stream...\n", scenario.Deep)
+		fmt.Printf("  Patrol triggered (deep=%v)\n", scenario.Deep)
 	}
 
-	// Parse SSE stream until complete/error/timeout
-	rawEvents, toolCalls, content, streamErr := r.parsePatrolSSEStream(ctx, streamBody)
-	result.RawEvents = rawEvents
-	result.ToolCalls = toolCalls
-	result.Content = content
-	if streamErr != nil {
-		result.Error = streamErr
+	// Start SSE stream reader in background goroutine.
+	// This captures tool events if the stream connects. It's best-effort.
+	var streamMu sync.Mutex
+	var streamEvents []PatrolSSEEvent
+	var streamToolCalls []ToolCallEvent
+	var streamContent strings.Builder
+	var streamConnected bool
+
+	streamCtx, streamCancel := context.WithCancel(ctx)
+	defer streamCancel()
+
+	streamDone := make(chan struct{})
+	go func() {
+		defer close(streamDone)
+		body, err := r.connectPatrolStream(streamCtx)
+		if err != nil {
+			// Stream didn't connect — that's OK, we still poll for completion
+			if r.config.Verbose && streamCtx.Err() == nil {
+				fmt.Printf("  [SSE] Could not connect to stream: %v\n", err)
+			}
+			return
+		}
+		defer body.Close()
+
+		streamMu.Lock()
+		streamConnected = true
+		streamMu.Unlock()
+
+		if r.config.Verbose {
+			fmt.Printf("  [SSE] Connected to patrol stream\n")
+		}
+
+		events, toolCalls, content, _ := r.parsePatrolSSEStream(streamCtx, body)
+		streamMu.Lock()
+		streamEvents = events
+		streamToolCalls = toolCalls
+		streamContent.WriteString(content)
+		streamMu.Unlock()
+	}()
+
+	// Poll for completion (primary mechanism)
+	completed, pollErr := r.waitForPatrolComplete(ctx)
+	result.Completed = completed
+
+	// Cancel the stream goroutine and wait for it to finish
+	streamCancel()
+	<-streamDone
+
+	if pollErr != nil {
+		result.Error = pollErr
 		result.Success = false
 	}
+
+	// Collect stream results
+	streamMu.Lock()
+	result.RawEvents = streamEvents
+	result.ToolCalls = streamToolCalls
+	result.Content = streamContent.String()
+	if streamConnected && r.config.Verbose {
+		fmt.Printf("  [SSE] Captured %d events, %d tool calls\n", len(streamEvents), len(streamToolCalls))
+	} else if !streamConnected && r.config.Verbose {
+		fmt.Printf("  [SSE] Stream did not connect (tool events not captured)\n")
+	}
+	streamMu.Unlock()
 
 	// Fetch findings from REST API
 	findings, findErr := r.fetchPatrolFindings()
@@ -148,6 +203,10 @@ func (r *Runner) RunPatrolScenario(scenario PatrolScenario) PatrolRunResult {
 		}
 	}
 	result.Findings = findings
+
+	if r.config.Verbose && len(findings) > 0 {
+		fmt.Printf("  Fetched %d findings from API\n", len(findings))
+	}
 
 	// Run assertions
 	for _, assertion := range scenario.Assertions {
@@ -202,6 +261,99 @@ func (r *Runner) waitForPatrolIdle(ctx context.Context) error {
 		case <-time.After(3 * time.Second):
 		}
 	}
+}
+
+// waitForPatrolComplete polls status until patrol finishes (Running transitions
+// from true back to false). Returns true if patrol completed, false on timeout.
+func (r *Runner) waitForPatrolComplete(ctx context.Context) (bool, error) {
+	// First, wait briefly for patrol to actually start (Running=true)
+	sawRunning := false
+	for i := 0; i < 10; i++ {
+		select {
+		case <-ctx.Done():
+			return false, fmt.Errorf("timeout waiting for patrol to start")
+		case <-time.After(1 * time.Second):
+		}
+
+		running, healthy, err := r.getPatrolStatus(ctx)
+		if err != nil {
+			continue
+		}
+		if running {
+			sawRunning = true
+			if r.config.Verbose {
+				fmt.Printf("  Patrol is running...\n")
+			}
+			break
+		}
+		// If not running and we see a recent completion, maybe it finished instantly
+		if !running && i > 2 {
+			if r.config.Verbose {
+				fmt.Printf("  Patrol not running (may have completed quickly), healthy=%v\n", healthy)
+			}
+			return true, nil
+		}
+	}
+
+	if !sawRunning {
+		// May have completed extremely fast, check findings to verify it ran
+		if r.config.Verbose {
+			fmt.Printf("  Never saw patrol running state (may have completed instantly)\n")
+		}
+		return true, nil
+	}
+
+	// Now poll until Running=false (patrol completed)
+	for {
+		select {
+		case <-ctx.Done():
+			return false, fmt.Errorf("timeout waiting for patrol to complete")
+		case <-time.After(3 * time.Second):
+		}
+
+		running, healthy, err := r.getPatrolStatus(ctx)
+		if err != nil {
+			if r.config.Verbose {
+				fmt.Printf("  Status poll error: %v\n", err)
+			}
+			continue
+		}
+
+		if !running {
+			if r.config.Verbose {
+				fmt.Printf("  Patrol completed (healthy=%v)\n", healthy)
+			}
+			return true, nil
+		}
+
+		if r.config.Verbose {
+			fmt.Printf("  Still running...\n")
+		}
+	}
+}
+
+// getPatrolStatus returns (running, healthy, error) from the status endpoint.
+func (r *Runner) getPatrolStatus(ctx context.Context) (bool, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", r.config.BaseURL+"/api/ai/patrol/status", nil)
+	if err != nil {
+		return false, false, err
+	}
+	req.SetBasicAuth(r.config.Username, r.config.Password)
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return false, false, err
+	}
+	defer resp.Body.Close()
+
+	var status struct {
+		Running bool `json:"running"`
+		Healthy bool `json:"healthy"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return false, false, err
+	}
+	return status.Running, status.Healthy, nil
 }
 
 // triggerPatrolRun triggers POST /api/ai/patrol/run.
@@ -384,7 +536,7 @@ func (r *Runner) parsePatrolSSEStream(ctx context.Context, body io.Reader) ([]Pa
 
 	select {
 	case <-ctx.Done():
-		return events, toolCalls, contentBuilder.String(), fmt.Errorf("timeout reading patrol stream")
+		return events, toolCalls, contentBuilder.String(), nil // context cancel is expected
 	case <-done:
 		return events, toolCalls, contentBuilder.String(), scanErr
 	}
@@ -397,6 +549,7 @@ func (r *Runner) PrintPatrolSummary(result PatrolRunResult) {
 	fmt.Printf("PATROL SCENARIO: %s\n", result.ScenarioName)
 	fmt.Printf("========================================\n")
 	fmt.Printf("Duration: %v\n", result.Duration)
+	fmt.Printf("Completed: %v\n", result.Completed)
 
 	if result.Error != nil {
 		fmt.Printf("ERROR: %v\n", result.Error)

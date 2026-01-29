@@ -9,7 +9,7 @@
 //
 // Options:
 //
-//	-scenario string  Scenario to run: smoke, readonly, enforce, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-recovery, readonly-guardrails, noninteractive, approval, approval-deny, all (default "smoke")
+//	-scenario string  Scenario to run: smoke, readonly, enforce, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-block, strict-recovery, readonly-guardrails, noninteractive, approval, approval-approve, approval-deny, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, all (default "smoke")
 //	-url string       Pulse API base URL (default "http://127.0.0.1:7655")
 //	-user string      Username for auth (default "admin")
 //	-pass string      Password for auth (default "admin")
@@ -26,7 +26,7 @@ import (
 )
 
 func main() {
-	scenario := flag.String("scenario", "smoke", "Scenario to run: smoke, readonly, enforce, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-recovery, readonly-guardrails, noninteractive, approval, approval-deny, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, all")
+	scenario := flag.String("scenario", "smoke", "Scenario to run: smoke, readonly, enforce, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-block, strict-recovery, readonly-guardrails, noninteractive, approval, approval-approve, approval-deny, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, all")
 	url := flag.String("url", "http://127.0.0.1:7655", "Pulse API base URL")
 	user := flag.String("user", "admin", "Username for auth")
 	pass := flag.String("pass", "admin", "Password for auth")
@@ -131,10 +131,12 @@ func listScenarios() {
 	fmt.Println("    context      - Context chain / follow-up questions (4 steps)")
 	fmt.Println("    writeverify  - Write + verify FSM flow (1 step)")
 	fmt.Println("    strict       - Strict resolution block + recovery (2 steps)")
+	fmt.Println("    strict-block - Strict resolution block only (1 step)")
 	fmt.Println("    strict-recovery - Strict resolution recovery (1 step)")
 	fmt.Println("    readonly-guardrails - Read-only enforcement (1 step)")
 	fmt.Println("    noninteractive    - Non-interactive guardrails (1 step)")
 	fmt.Println("    approval    - Approval flow (1 step, opt-in)")
+	fmt.Println("    approval-approve - Approval approve flow (1 step, opt-in)")
 	fmt.Println("    approval-deny - Approval deny flow (1 step, opt-in)")
 	fmt.Println()
 	fmt.Println("  Patrol:")
@@ -213,6 +215,8 @@ func getScenarios(name string) []eval.Scenario {
 		return []eval.Scenario{eval.WriteVerifyScenario()}
 	case "strict":
 		return []eval.Scenario{eval.StrictResolutionScenario()}
+	case "strict-block":
+		return []eval.Scenario{eval.StrictResolutionBlockScenario()}
 	case "strict-recovery":
 		return []eval.Scenario{eval.StrictResolutionRecoveryScenario()}
 	case "readonly-guardrails":
@@ -221,6 +225,8 @@ func getScenarios(name string) []eval.Scenario {
 		return []eval.Scenario{eval.NonInteractiveGuardrailScenario()}
 	case "approval":
 		return []eval.Scenario{eval.ApprovalScenario()}
+	case "approval-approve":
+		return []eval.Scenario{eval.ApprovalApproveScenario()}
 	case "approval-deny":
 		return []eval.Scenario{eval.ApprovalDenyScenario()}
 
@@ -250,9 +256,11 @@ func getScenarios(name string) []eval.Scenario {
 			eval.ContextChainScenario(),
 			eval.WriteVerifyScenario(),
 			eval.StrictResolutionScenario(),
+			eval.StrictResolutionBlockScenario(),
 			eval.StrictResolutionRecoveryScenario(),
 			eval.ReadOnlyEnforcementScenario(),
 			eval.NonInteractiveGuardrailScenario(),
+			eval.ApprovalApproveScenario(),
 			eval.ApprovalDenyScenario(),
 		}
 	case "full":
@@ -277,9 +285,11 @@ func getScenarios(name string) []eval.Scenario {
 			eval.ContextChainScenario(),
 			eval.WriteVerifyScenario(),
 			eval.StrictResolutionScenario(),
+			eval.StrictResolutionBlockScenario(),
 			eval.StrictResolutionRecoveryScenario(),
 			eval.ReadOnlyEnforcementScenario(),
 			eval.NonInteractiveGuardrailScenario(),
+			eval.ApprovalApproveScenario(),
 			eval.ApprovalDenyScenario(),
 		}
 	default:

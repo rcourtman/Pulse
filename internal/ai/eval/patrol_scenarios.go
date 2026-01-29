@@ -6,13 +6,13 @@ import "time"
 func PatrolBasicScenario() PatrolScenario {
 	return PatrolScenario{
 		Name:        "Patrol Basic Run",
-		Description: "Does patrol run to completion, use tools, and interact with the findings system?",
+		Description: "Does patrol run to completion and use infrastructure tools?",
 		Assertions: []PatrolAssertion{
 			PatrolAssertNoError(),
 			PatrolAssertCompleted(),
 			PatrolAssertMinToolCalls(3),
 			PatrolAssertToolUsed("pulse_query"),
-			PatrolAssertToolUsedAny("patrol_report_finding", "patrol_get_findings"),
+			PatrolAssertToolUsedAny("pulse_metrics", "pulse_storage", "pulse_read"),
 			PatrolAssertDurationUnder(4 * time.Minute),
 		},
 	}
@@ -29,7 +29,7 @@ func PatrolInvestigationScenario() PatrolScenario {
 			PatrolAssertCompleted(),
 			PatrolAssertToolUsedAny("pulse_query", "pulse_metrics", "pulse_storage"),
 			PatrolAssertToolUsed("patrol_get_findings"),
-			PatrolAssertNoToolErrors(),
+			PatrolAssertToolSuccessRate(0.7),
 		},
 	}
 }

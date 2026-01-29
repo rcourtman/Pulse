@@ -854,7 +854,7 @@ func StrictResolutionScenario() Scenario {
 // StrictResolutionRecoveryScenario validates single-step recovery from strict resolution blocking.
 func StrictResolutionRecoveryScenario() Scenario {
 	t := loadEvalTargets()
-	prompt := fmt.Sprintf("Using pulse_control, run '%s' on %s without doing discovery first. If you get STRICT_RESOLUTION, use pulse_query action=search to discover '%s', then retry the command.",
+	prompt := fmt.Sprintf("First, use pulse_query action=health to establish session context (do NOT discover resources yet). Then use pulse_control to run '%s' on %s without doing discovery first. If you get STRICT_RESOLUTION, use pulse_query action=search to discover '%s', then retry the command.",
 		t.WriteCommand, t.WriteHost, t.WriteHost)
 
 	assertions := []Assertion{
@@ -870,17 +870,55 @@ func StrictResolutionRecoveryScenario() Scenario {
 		)
 	}
 	if t.RequireStrictRecovery {
-		assertions = append(assertions, AssertToolSequence([]string{"pulse_control", "pulse_query", "pulse_control"}))
+		assertions = append(assertions, AssertToolSequence([]string{"pulse_query", "pulse_control", "pulse_query", "pulse_control"}))
 	}
 
 	return Scenario{
 		Name:        "Strict Resolution Recovery",
-		Description: "Forces strict resolution error and recovery within a single step",
+		Description: "Forces strict resolution error and recovery within a single step (with a pre-read to avoid FSM blocking)",
 		Steps: []Step{
 			{
-				Name:       "Recover from strict resolution",
-				Prompt:     prompt,
-				Assertions: assertions,
+				Name:   "Recover from strict resolution",
+				Prompt: prompt,
+				// Auto-deny approvals so the eval doesn't hang if approval is triggered unexpectedly.
+				ApprovalDecision: ApprovalDeny,
+				ApprovalReason:   "eval deny (strict recovery)",
+				Assertions:       assertions,
+			},
+		},
+	}
+}
+
+// StrictResolutionBlockScenario validates strict resolution blocking (no recovery).
+func StrictResolutionBlockScenario() Scenario {
+	t := loadEvalTargets()
+	writeCmd := strings.TrimSpace(t.WriteCommand)
+	if writeCmd == "" || writeCmd == "true" {
+		writeCmd = "touch /tmp/pulse_eval_strict"
+	}
+	prompt := fmt.Sprintf("First, use pulse_query action=health to establish session context (do NOT discover resources yet). Then use pulse_control to run '%s' on %s without doing discovery first.",
+		writeCmd, t.WriteHost)
+
+	assertions := []Assertion{
+		AssertNoError(),
+		AssertAnyToolUsed(),
+		AssertToolUsed("pulse_query"),
+		AssertToolUsed("pulse_control"),
+	}
+	if t.StrictResolution {
+		assertions = append(assertions, AssertToolOutputContainsAny("pulse_control", "STRICT_RESOLUTION"))
+	}
+
+	return Scenario{
+		Name:        "Strict Resolution Block",
+		Description: "Checks strict resolution blocks undiscovered writes after a pre-read",
+		Steps: []Step{
+			{
+				Name:             "Strict resolution block",
+				Prompt:           prompt,
+				ApprovalDecision: ApprovalDeny,
+				ApprovalReason:   "eval deny (strict block)",
+				Assertions:       assertions,
 			},
 		},
 	}
@@ -905,6 +943,37 @@ func ApprovalScenario() Scenario {
 				Name:       "Approval required",
 				Prompt:     fmt.Sprintf("Run the command '%s' on %s using the control tool.", t.WriteCommand, t.WriteHost),
 				Assertions: assertions,
+			},
+		},
+	}
+}
+
+// ApprovalApproveScenario validates approval requests and successful execution after approval.
+func ApprovalApproveScenario() Scenario {
+	t := loadEvalTargets()
+	assertions := []Assertion{
+		AssertNoError(),
+		AssertAnyToolUsed(),
+	}
+	if t.ExpectApproval {
+		assertions = append(assertions,
+			AssertApprovalRequested(),
+			AssertToolOutputContainsAny("pulse_control", "Command completed successfully"),
+		)
+	} else {
+		assertions = append(assertions, AssertEventualSuccess())
+	}
+
+	return Scenario{
+		Name:        "Approval Approve Flow",
+		Description: "Ensures approval requests are emitted and executed when approved",
+		Steps: []Step{
+			{
+				Name:             "Approval approved",
+				Prompt:           fmt.Sprintf("Run the command '%s' on %s using the control tool.", t.WriteCommand, t.WriteHost),
+				ApprovalDecision: ApprovalApprove,
+				ApprovalReason:   "eval approve",
+				Assertions:       assertions,
 			},
 		},
 	}

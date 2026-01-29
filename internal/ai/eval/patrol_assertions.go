@@ -27,22 +27,30 @@ func PatrolAssertNoError() PatrolAssertion {
 	}
 }
 
-// PatrolAssertCompleted checks that the patrol SSE stream included a "complete" event.
+// PatrolAssertCompleted checks that the patrol run completed.
+// Uses the Completed field (from status polling) or a "complete" SSE event.
 func PatrolAssertCompleted() PatrolAssertion {
 	return func(result *PatrolRunResult) AssertionResult {
+		if result.Completed {
+			return AssertionResult{
+				Name:    "completed",
+				Passed:  true,
+				Message: "Patrol completed (confirmed via status API)",
+			}
+		}
 		for _, e := range result.RawEvents {
 			if e.Type == "complete" {
 				return AssertionResult{
 					Name:    "completed",
 					Passed:  true,
-					Message: "Patrol completed successfully",
+					Message: "Patrol completed (confirmed via SSE stream)",
 				}
 			}
 		}
 		return AssertionResult{
 			Name:    "completed",
 			Passed:  false,
-			Message: "Patrol did not emit a 'complete' event",
+			Message: "Patrol did not complete",
 		}
 	}
 }
@@ -147,6 +155,39 @@ func PatrolAssertNoToolErrors() PatrolAssertion {
 			Name:    "no_tool_errors",
 			Passed:  false,
 			Message: fmt.Sprintf("Tool failures: %v", failures),
+		}
+	}
+}
+
+// PatrolAssertToolSuccessRate checks that at least the given fraction of tool calls succeeded.
+// For example, 0.8 means 80% of tool calls must succeed.
+func PatrolAssertToolSuccessRate(minRate float64) PatrolAssertion {
+	return func(result *PatrolRunResult) AssertionResult {
+		if len(result.ToolCalls) == 0 {
+			return AssertionResult{
+				Name:    fmt.Sprintf("tool_success_rate:%.0f%%", minRate*100),
+				Passed:  true,
+				Message: "No tool calls to evaluate",
+			}
+		}
+		succeeded := 0
+		for _, tc := range result.ToolCalls {
+			if tc.Success {
+				succeeded++
+			}
+		}
+		rate := float64(succeeded) / float64(len(result.ToolCalls))
+		if rate >= minRate {
+			return AssertionResult{
+				Name:    fmt.Sprintf("tool_success_rate:%.0f%%", minRate*100),
+				Passed:  true,
+				Message: fmt.Sprintf("%d/%d tool calls succeeded (%.0f%%, min: %.0f%%)", succeeded, len(result.ToolCalls), rate*100, minRate*100),
+			}
+		}
+		return AssertionResult{
+			Name:    fmt.Sprintf("tool_success_rate:%.0f%%", minRate*100),
+			Passed:  false,
+			Message: fmt.Sprintf("%d/%d tool calls succeeded (%.0f%%, min: %.0f%%)", succeeded, len(result.ToolCalls), rate*100, minRate*100),
 		}
 	}
 }
@@ -295,9 +336,8 @@ func PatrolAssertAllFindingsValid() PatrolAssertion {
 func PatrolAssertFindingSeveritiesValid() PatrolAssertion {
 	validSeverities := map[string]bool{
 		"critical": true,
-		"high":     true,
-		"medium":   true,
-		"low":      true,
+		"warning":  true,
+		"watch":    true,
 		"info":     true,
 	}
 	return func(result *PatrolRunResult) AssertionResult {
@@ -325,16 +365,12 @@ func PatrolAssertFindingSeveritiesValid() PatrolAssertion {
 // PatrolAssertFindingCategoriesValid checks that all findings use valid category values.
 func PatrolAssertFindingCategoriesValid() PatrolAssertion {
 	validCategories := map[string]bool{
-		"performance":    true,
-		"security":       true,
-		"availability":   true,
-		"configuration":  true,
-		"resource_usage": true,
-		"best_practice":  true,
-		"health":         true,
-		"storage":        true,
-		"network":        true,
-		"update":         true,
+		"performance": true,
+		"capacity":    true,
+		"reliability": true,
+		"backup":      true,
+		"security":    true,
+		"general":     true,
 	}
 	return func(result *PatrolRunResult) AssertionResult {
 		var invalid []string

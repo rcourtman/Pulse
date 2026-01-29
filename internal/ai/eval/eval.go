@@ -29,6 +29,9 @@ type Config struct {
 	RetryOnStreamFailure bool
 	RetryOnEmptyResponse bool
 	RetryOnToolErrors    bool
+	// Optional preflight to fail fast when SSE hangs.
+	Preflight        bool
+	PreflightTimeout time.Duration
 	// Optional report output directory (JSON per scenario).
 	ReportDir string
 }
@@ -46,6 +49,8 @@ func DefaultConfig() Config {
 		RetryOnStreamFailure: true,
 		RetryOnEmptyResponse: true,
 		RetryOnToolErrors:    true,
+		Preflight:            false,
+		PreflightTimeout:     15 * time.Second,
 	}
 }
 
@@ -162,6 +167,19 @@ func (r *Runner) RunScenario(scenario Scenario) ScenarioResult {
 
 	var sessionID string
 
+	if r.config.Preflight {
+		preflight := r.runPreflight()
+		result.Steps = append(result.Steps, preflight)
+		if !preflight.Success {
+			result.Passed = false
+			result.Duration = time.Since(startTime)
+			if reportPath, err := r.writeReport(result); err == nil {
+				result.ReportPath = reportPath
+			}
+			return result
+		}
+	}
+
 	for i, step := range scenario.Steps {
 		if r.config.Verbose {
 			fmt.Printf("\n=== Step %d: %s ===\n", i+1, step.Name)
@@ -245,6 +263,10 @@ func (r *Runner) executeStepWithRetry(step Step, sessionID string, retries int) 
 }
 
 func (r *Runner) executeStepOnce(step Step, sessionID string) StepResult {
+	return r.executeStepOnceWithClient(step, sessionID, r.client)
+}
+
+func (r *Runner) executeStepOnceWithClient(step Step, sessionID string, client *http.Client) StepResult {
 	startTime := time.Now()
 	result := StepResult{
 		StepName:  step.Name,
@@ -274,7 +296,10 @@ func (r *Runner) executeStepOnce(step Step, sessionID string) StepResult {
 	req.SetBasicAuth(r.config.Username, r.config.Password)
 
 	// Execute request
-	resp, err := r.client.Do(req)
+	if client == nil {
+		client = r.client
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		result.Error = fmt.Errorf("request failed: %w", err)
 		result.Success = false
@@ -298,6 +323,23 @@ func (r *Runner) executeStepOnce(step Step, sessionID string) StepResult {
 	}
 
 	result.Duration = time.Since(startTime)
+	return result
+}
+
+func (r *Runner) runPreflight() StepResult {
+	step := Step{
+		Name:   "Preflight",
+		Prompt: "Say hello.",
+	}
+	client := &http.Client{
+		Timeout: r.config.PreflightTimeout,
+	}
+	result := r.executeStepOnceWithClient(step, "", client)
+	result.StepName = "Preflight"
+	if result.Error == nil && strings.TrimSpace(result.Content) == "" && len(result.ToolCalls) == 0 {
+		result.Error = fmt.Errorf("preflight returned empty response")
+		result.Success = false
+	}
 	return result
 }
 
@@ -404,6 +446,16 @@ func applyEvalEnvOverrides(config *Config) {
 		config.RetryOnToolErrors = value
 	} else if !config.RetryOnToolErrors {
 		config.RetryOnToolErrors = true
+	}
+
+	if value, ok := envBool("EVAL_PREFLIGHT"); ok {
+		config.Preflight = value
+	}
+
+	if value, ok := envInt("EVAL_PREFLIGHT_TIMEOUT"); ok && value > 0 {
+		config.PreflightTimeout = time.Duration(value) * time.Second
+	} else if config.PreflightTimeout == 0 {
+		config.PreflightTimeout = 15 * time.Second
 	}
 
 	if dir, ok := envString("EVAL_REPORT_DIR"); ok {
