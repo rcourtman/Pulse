@@ -82,22 +82,30 @@ func disksFromZpoolStats(
 		log.Debug().Str("pool", pool).Bool("hasZpoolStats", ok).Uint64("zpoolSize", stat.Size).Uint64("zpoolAlloc", stat.Alloc).Uint64("zpoolFree", stat.Free).Uint64("dsTotal", ds.Total).Uint64("dsUsed", ds.Used).Str("mount", mp).Msg("zfs: processing pool")
 
 		if ok && stat.Size > 0 {
-			// For RAIDZ/mirror pools, zpool SIZE is raw capacity (sum of all disks),
-			// but users expect usable capacity (accounting for parity/redundancy).
-			// The dataset's Total (from statfs) gives usable capacity.
-			// Similarly, zpool ALLOC includes parity overhead, but dataset Used gives
-			// actual data usage. Use dataset stats when available and smaller than
-			// zpool size. (issue #1052)
+			// Compute pool-level usable capacity by combining zpool stats with
+			// dataset stats. ZFS statfs on a dataset returns per-dataset Used
+			// (missing zvols and other datasets), but its Free reflects real
+			// pool-available space. We use the ratio ds.Free/stat.Free to
+			// convert the raw zpool Size to usable capacity. This handles
+			// RAIDZ (parity overhead), mirrors, and simple pools uniformly,
+			// and Used = Total - Free captures all pool consumers including
+			// zvols. (issues #1052, mirror-vdev fix)
 			totalBytes := stat.Size
-			usedBytes := stat.Alloc
 			freeBytes := stat.Free
-			if ds.Total > 0 && ds.Total < stat.Size {
-				log.Debug().Str("pool", pool).Uint64("dsTotal", ds.Total).Uint64("zpoolSize", stat.Size).Msg("zfs: using dataset stats (ds.Total < zpool.Size)")
-				totalBytes = ds.Total
-				usedBytes = ds.Used
+			if ds.Free > 0 && stat.Free > 0 && stat.Free >= ds.Free {
+				// Convert raw pool total to usable capacity using the
+				// raw-to-usable ratio derived from free space.
+				// For mirrors the ratio is ~1 (no overhead).
+				// For RAIDZ the ratio is (N-P)/N (parity overhead).
+				totalBytes = uint64(float64(stat.Size) * (float64(ds.Free) / float64(stat.Free)))
 				freeBytes = ds.Free
+				log.Debug().Str("pool", pool).Uint64("usableTotal", totalBytes).Uint64("usableFree", freeBytes).Uint64("zpoolSize", stat.Size).Uint64("zpoolFree", stat.Free).Uint64("dsFree", ds.Free).Msg("zfs: computed usable capacity from free-space ratio")
 			} else {
-				log.Debug().Str("pool", pool).Uint64("dsTotal", ds.Total).Uint64("zpoolSize", stat.Size).Msg("zfs: using zpool stats (ds.Total >= zpool.Size or ds.Total == 0)")
+				log.Debug().Str("pool", pool).Uint64("zpoolSize", stat.Size).Uint64("zpoolFree", stat.Free).Uint64("dsFree", ds.Free).Msg("zfs: using raw zpool stats (no usable dataset free)")
+			}
+			usedBytes := totalBytes - freeBytes
+			if freeBytes > totalBytes {
+				usedBytes = 0
 			}
 
 			usage := clampPercent(calculatePercent(totalBytes, usedBytes))

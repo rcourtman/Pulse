@@ -46,22 +46,24 @@ func TestSummarizeZFSPoolsUsesZpoolStats(t *testing.T) {
 
 // TestSummarizeZFSPoolsRAIDZCapacity verifies that RAIDZ pools show usable capacity
 // (from dataset stats) rather than raw capacity (from zpool list SIZE). Issue #1052.
+// The usable total is derived from: zpoolSize * (dsFree / zpoolFree).
+// Used is derived from: Total - Free, which captures all pool consumers including zvols.
 func TestSummarizeZFSPoolsRAIDZCapacity(t *testing.T) {
 	originalQuery := queryZpoolStats
 	t.Cleanup(func() { queryZpoolStats = originalQuery })
 
 	// Simulate a RAIDZ1 pool with 3 disks:
 	// - Raw SIZE from zpool list: 43.6 TB (sum of all disks)
-	// - Usable capacity from statfs: 29 TB (after RAIDZ1 parity overhead)
-	// - zpool ALLOC: 7 GB (includes parity data)
-	// - zfs USED: 4.6 GB (actual user data)
+	// - Usable capacity from statfs: ~29 TB (after RAIDZ1 parity overhead)
+	// - zpool FREE: 43.593 TB (raw)
+	// - dataset Free (statfs): 28.9954 TB (usable)
+	// The ratio dsFree/zpoolFree ≈ 0.6653, giving usable total ≈ 29 TB.
 	queryZpoolStats = func(ctx context.Context, pools []string) (map[string]zpoolStats, error) {
 		return map[string]zpoolStats{
 			"Main": {Size: 43600000000000, Alloc: 7000000000, Free: 43593000000000},
 		}, nil
 	}
 
-	// Dataset stats from statfs reflect usable capacity (29 TB) and actual data usage (4.6 GB)
 	datasets := []zfsDatasetUsage{
 		{Pool: "Main", Dataset: "Main", Mountpoint: "/mnt/Main", Total: 29000000000000, Used: 4600000000, Free: 28995400000000},
 	}
@@ -76,28 +78,141 @@ func TestSummarizeZFSPoolsRAIDZCapacity(t *testing.T) {
 		t.Errorf("expected device Main, got %s", main.Device)
 	}
 
-	// Should use usable capacity (29 TB), not raw capacity (43.6 TB)
-	expectedTotal := int64(29000000000000)
-	if main.TotalBytes != expectedTotal {
-		t.Errorf("expected TotalBytes %d (usable capacity), got %d (might be using raw capacity)", expectedTotal, main.TotalBytes)
+	// Total should be usable capacity (~29 TB), not raw (43.6 TB).
+	// Computed as zpoolSize * (dsFree / zpoolFree) = 43.6T * (28.9954T / 43.593T) ≈ 29T.
+	// Allow 0.1% tolerance for floating-point rounding.
+	if !withinPercent(main.TotalBytes, 29000000000000, 0.1) {
+		t.Errorf("expected TotalBytes ~29 TB (usable capacity), got %d (might be using raw capacity)", main.TotalBytes)
 	}
 
-	// Used should come from dataset stats (4.6 GB actual data), not zpool alloc (7 GB with parity)
-	expectedUsed := int64(4600000000)
-	if main.UsedBytes != expectedUsed {
-		t.Errorf("expected UsedBytes %d (dataset used), got %d (might be using zpool alloc which includes parity)", expectedUsed, main.UsedBytes)
-	}
-
-	// Free should use dataset stats when we're using dataset Total
+	// Free should be dataset free (pool available)
 	expectedFree := int64(28995400000000)
 	if main.FreeBytes != expectedFree {
 		t.Errorf("expected FreeBytes %d, got %d", expectedFree, main.FreeBytes)
 	}
 
-	// Usage should be calculated against usable capacity with actual used data
-	// 4600000000 / 29000000000000 * 100 ≈ 0.016%
+	// Used = Total - Free, should be close to actual data usage (~4.6 GB).
+	// Small deviation is expected due to the ratio approximation.
+	if !withinPercent(main.UsedBytes, 4600000000, 2.0) {
+		t.Errorf("expected UsedBytes ~4.6 GB, got %d", main.UsedBytes)
+	}
+
+	// Usage should be near 0% (tiny data on a 29 TB pool)
 	if main.Usage > 0.1 {
-		t.Errorf("expected usage ~0%%, got %.2f%% (might be calculated against wrong total)", main.Usage)
+		t.Errorf("expected usage ~0%%, got %.2f%%", main.Usage)
+	}
+}
+
+// TestSummarizeZFSPoolsMirrorWithZvols verifies that mirror pools correctly
+// report total pool usage including zvols (VM disk images on Proxmox).
+// Previously, Used only reflected mounted dataset usage, missing zvols entirely.
+func TestSummarizeZFSPoolsMirrorWithZvols(t *testing.T) {
+	originalQuery := queryZpoolStats
+	t.Cleanup(func() { queryZpoolStats = originalQuery })
+
+	// Simulate a Proxmox mirror pool (2x 8TB disks):
+	// - zpool SIZE: 8 TB (usable, one side of mirror)
+	// - zpool ALLOC: 2.5 TB (OS data + VM zvols)
+	// - zpool FREE: 5.5 TB
+	// The OS root dataset (rpool/ROOT/pve-1) only has 3 GB of files,
+	// but zvols under rpool/data hold 2.497 TB of VM disks.
+	// statfs on the root dataset sees: Used=3GB, Free=5.5TB (pool available).
+	queryZpoolStats = func(ctx context.Context, pools []string) (map[string]zpoolStats, error) {
+		return map[string]zpoolStats{
+			"rpool": {Size: 8000000000000, Alloc: 2500000000000, Free: 5500000000000},
+		}, nil
+	}
+
+	// statfs on rpool/ROOT/pve-1: only sees 3 GB used by the OS.
+	// Free = pool available = 5.5 TB. Total = 3GB + 5.5TB ≈ 5.5TB.
+	datasets := []zfsDatasetUsage{
+		{Pool: "rpool", Dataset: "rpool/ROOT/pve-1", Mountpoint: "/", Total: 5503000000000, Used: 3000000000, Free: 5500000000000},
+	}
+
+	disks := summarizeZFSPools(context.Background(), datasets)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 disk, got %d", len(disks))
+	}
+
+	rpool := disks[0]
+
+	// Total should be pool usable capacity (8 TB for mirror).
+	// Computed as zpoolSize * (dsFree / zpoolFree) = 8T * (5.5T / 5.5T) = 8T.
+	if !withinPercent(rpool.TotalBytes, 8000000000000, 0.1) {
+		t.Errorf("expected TotalBytes ~8 TB, got %d", rpool.TotalBytes)
+	}
+
+	// Free should be pool available (5.5 TB)
+	expectedFree := int64(5500000000000)
+	if rpool.FreeBytes != expectedFree {
+		t.Errorf("expected FreeBytes %d, got %d", expectedFree, rpool.FreeBytes)
+	}
+
+	// Used = Total - Free = 8T - 5.5T = 2.5 TB (includes zvols!)
+	// Previously this would have been 3 GB (just OS files), missing the zvols entirely.
+	if !withinPercent(rpool.UsedBytes, 2500000000000, 0.1) {
+		t.Errorf("expected UsedBytes ~2.5 TB (including zvols), got %d (might only be showing OS dataset usage)", rpool.UsedBytes)
+	}
+
+	// Usage should be ~31.25% (2.5 TB / 8 TB)
+	if rpool.Usage < 30.0 || rpool.Usage > 33.0 {
+		t.Errorf("expected usage ~31%%, got %.2f%%", rpool.Usage)
+	}
+}
+
+// TestSummarizeZFSPoolsRAIDZWithZvols verifies that RAIDZ pools with zvols
+// (like Proxmox VM disks) report correct usable used including zvol space.
+func TestSummarizeZFSPoolsRAIDZWithZvols(t *testing.T) {
+	originalQuery := queryZpoolStats
+	t.Cleanup(func() { queryZpoolStats = originalQuery })
+
+	// Simulate a RAIDZ1 pool with 4x 10TB disks on Proxmox:
+	// - Raw SIZE: 40 TB (sum of disks)
+	// - Usable capacity: 30 TB (3/4 for RAIDZ1)
+	// - Raw FREE: 26.667 TB
+	// - Usable FREE: 20 TB (pool available)
+	// - Actual usable used: 10 TB (OS data + VM zvols)
+	// - Raw ALLOC: 13.333 TB (includes parity)
+	//
+	// The root dataset sees: Used=5GB (OS files), Free=20TB (pool available)
+	// But 10 TB of usable space is consumed (5GB OS + ~10TB zvols).
+	queryZpoolStats = func(ctx context.Context, pools []string) (map[string]zpoolStats, error) {
+		return map[string]zpoolStats{
+			"tank": {Size: 40000000000000, Alloc: 13333000000000, Free: 26667000000000},
+		}, nil
+	}
+
+	datasets := []zfsDatasetUsage{
+		{Pool: "tank", Dataset: "tank/ROOT/pve-1", Mountpoint: "/", Total: 20005000000000, Used: 5000000000, Free: 20000000000000},
+	}
+
+	disks := summarizeZFSPools(context.Background(), datasets)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 disk, got %d", len(disks))
+	}
+
+	tank := disks[0]
+
+	// Total should be ~30 TB usable (not 40 TB raw)
+	// zpoolSize * (dsFree / zpoolFree) = 40T * (20T / 26.667T) = 40T * 0.75 = 30T
+	if !withinPercent(tank.TotalBytes, 30000000000000, 0.1) {
+		t.Errorf("expected TotalBytes ~30 TB (usable), got %d", tank.TotalBytes)
+	}
+
+	// Free should be 20 TB (pool available)
+	if tank.FreeBytes != 20000000000000 {
+		t.Errorf("expected FreeBytes 20 TB, got %d", tank.FreeBytes)
+	}
+
+	// Used = 30T - 20T = 10 TB (includes zvols!)
+	// Previously would have shown 5 GB (just OS files)
+	if !withinPercent(tank.UsedBytes, 10000000000000, 0.1) {
+		t.Errorf("expected UsedBytes ~10 TB (including zvols), got %d", tank.UsedBytes)
+	}
+
+	// Usage should be ~33.3% (10 TB / 30 TB)
+	if tank.Usage < 32.0 || tank.Usage > 35.0 {
+		t.Errorf("expected usage ~33%%, got %.2f%%", tank.Usage)
 	}
 }
 
@@ -866,4 +981,16 @@ func stringSliceEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// withinPercent checks if got is within pct% of want.
+func withinPercent(got, want int64, pct float64) bool {
+	if want == 0 {
+		return got == 0
+	}
+	diff := float64(got-want) / float64(want) * 100
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff <= pct
 }
