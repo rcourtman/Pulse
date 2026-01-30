@@ -1241,10 +1241,12 @@ func TestService_ListModelsWithCache_CacheHit(t *testing.T) {
 	// Pre-populate cache before the first call
 	svc.modelsCache.mu.Lock()
 	svc.modelsCache.key = cacheKey
-	svc.modelsCache.at = time.Now()
 	svc.modelsCache.ttl = 5 * time.Minute
-	svc.modelsCache.models = []providers.ModelInfo{
-		{ID: "test-model", Name: "Test Model"},
+	svc.modelsCache.providers = map[string]providerModelsEntry{
+		"openai": {
+			at:     time.Now(),
+			models: []providers.ModelInfo{{ID: "test-model", Name: "Test Model"}},
+		},
 	}
 	svc.modelsCache.mu.Unlock()
 

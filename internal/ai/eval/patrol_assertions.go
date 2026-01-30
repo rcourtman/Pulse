@@ -394,6 +394,54 @@ func PatrolAssertFindingCategoriesValid() PatrolAssertion {
 	}
 }
 
+// PatrolAssertSignalCoverage checks that signal coverage meets a minimum rate.
+// If tool calls aren't captured or no signals are detected, this passes with a note.
+func PatrolAssertSignalCoverage(minRate float64) PatrolAssertion {
+	return func(result *PatrolRunResult) AssertionResult {
+		if result == nil {
+			return AssertionResult{
+				Name:    "signal_coverage",
+				Passed:  false,
+				Message: "No result available",
+			}
+		}
+
+		if result.Quality == nil {
+			result.Quality = EvaluatePatrolQuality(result)
+		}
+
+		q := result.Quality
+		if q == nil || !q.CoverageKnown {
+			return AssertionResult{
+				Name:    "signal_coverage",
+				Passed:  true,
+				Message: "Signal coverage not measured (no tool calls captured)",
+			}
+		}
+		if q.SignalsTotal == 0 {
+			return AssertionResult{
+				Name:    "signal_coverage",
+				Passed:  true,
+				Message: "No deterministic signals detected",
+			}
+		}
+		if q.SignalCoverage >= minRate {
+			return AssertionResult{
+				Name:   "signal_coverage",
+				Passed: true,
+				Message: fmt.Sprintf("Signal coverage %.0f%% (%d/%d), min %.0f%%",
+					q.SignalCoverage*100, q.SignalsMatched, q.SignalsTotal, minRate*100),
+			}
+		}
+		return AssertionResult{
+			Name:   "signal_coverage",
+			Passed: false,
+			Message: fmt.Sprintf("Signal coverage %.0f%% (%d/%d) below min %.0f%%",
+				q.SignalCoverage*100, q.SignalsMatched, q.SignalsTotal, minRate*100),
+		}
+	}
+}
+
 // PatrolAssertFindingWithKey checks that a finding with the given key exists.
 func PatrolAssertFindingWithKey(key string) PatrolAssertion {
 	return func(result *PatrolRunResult) AssertionResult {

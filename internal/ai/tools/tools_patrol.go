@@ -29,8 +29,8 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 					},
 					"severity": {
 						Type:        "string",
-						Description: "Finding severity level",
-						Enum:        []string{"critical", "warning", "watch", "info"},
+						Description: "Finding severity level. Only report actionable issues — observations and minor notes belong in your analysis text, not as findings.",
+						Enum:        []string{"critical", "warning"},
 					},
 					"category": {
 						Type:        "string",
@@ -126,7 +126,7 @@ Returns a list of active findings with their IDs, severity, resource, and title.
 }
 
 func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
-	creator := e.patrolFindingCreator
+	creator := e.GetPatrolFindingCreator()
 	if creator == nil {
 		return NewTextResult("patrol_report_finding is only available during a patrol run."), nil
 	}
@@ -172,9 +172,9 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	}
 
 	// Validate enums
-	validSeverities := map[string]bool{"critical": true, "warning": true, "watch": true, "info": true}
+	validSeverities := map[string]bool{"critical": true, "warning": true}
 	if !validSeverities[severity] {
-		return NewErrorResult(fmt.Errorf("invalid severity %q: must be critical, warning, watch, or info", severity)), nil
+		return NewErrorResult(fmt.Errorf("invalid severity %q: must be critical or warning. For minor observations, include them in your analysis text instead of creating a finding", severity)), nil
 	}
 	validCategories := map[string]bool{"performance": true, "capacity": true, "reliability": true, "backup": true, "security": true, "general": true}
 	if !validCategories[category] {
@@ -213,7 +213,7 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 }
 
 func handlePatrolResolveFinding(_ context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
-	creator := e.patrolFindingCreator
+	creator := e.GetPatrolFindingCreator()
 	if creator == nil {
 		return NewTextResult("patrol_resolve_finding is only available during a patrol run."), nil
 	}
@@ -241,7 +241,7 @@ func handlePatrolResolveFinding(_ context.Context, e *PulseToolExecutor, args ma
 }
 
 func handlePatrolGetFindings(_ context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
-	creator := e.patrolFindingCreator
+	creator := e.GetPatrolFindingCreator()
 	if creator == nil {
 		return NewTextResult("patrol_get_findings is only available during a patrol run."), nil
 	}

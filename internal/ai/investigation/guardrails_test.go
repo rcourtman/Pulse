@@ -104,6 +104,47 @@ func TestGuardrails_ValidateAndSanitize(t *testing.T) {
 	}
 }
 
+func TestGuardrails_RequiresApproval_TableDriven(t *testing.T) {
+	g := NewGuardrails()
+
+	tests := []struct {
+		name           string
+		autonomyLevel  string
+		severity       string
+		command        string
+		expectApproval bool
+	}{
+		// Full mode — never requires approval
+		{"full/critical/destructive", "full", "critical", "rm -rf /tmp/test", false},
+		{"full/warning/safe", "full", "warning", "echo ok", false},
+
+		// Approval mode — always requires approval
+		{"approval/warning/safe", "approval", "warning", "echo ok", true},
+		{"approval/critical/destructive", "approval", "critical", "rm -rf /tmp/test", true},
+
+		// Assisted mode — auto-fix warnings (non-destructive), critical needs approval
+		{"assisted/warning/safe", "assisted", "warning", "echo ok", false},
+		{"assisted/critical/safe", "assisted", "critical", "echo ok", true},
+		{"assisted/warning/destructive", "assisted", "warning", "rm -rf /tmp/test", true},
+
+		// Monitor mode — always requires approval
+		{"monitor/warning/safe", "monitor", "warning", "echo ok", true},
+
+		// Empty/unknown — always requires approval
+		{"empty/critical/safe", "", "critical", "echo ok", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := g.RequiresApproval(tt.severity, tt.autonomyLevel, tt.command)
+			if got != tt.expectApproval {
+				t.Errorf("RequiresApproval(%q, %q, %q) = %v, want %v",
+					tt.severity, tt.autonomyLevel, tt.command, got, tt.expectApproval)
+			}
+		})
+	}
+}
+
 func TestGuardrails_GetDestructivePatterns(t *testing.T) {
 	g := NewGuardrails()
 	g.AddDestructivePattern("custom")

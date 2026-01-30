@@ -14,30 +14,8 @@ import (
 func (e *PulseToolExecutor) registerKubernetesTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_kubernetes",
-			Description: `Query and control Kubernetes clusters, nodes, pods, and deployments.
-
-Query types:
-- clusters: List all Kubernetes clusters with health summary
-- nodes: List nodes in a cluster with capacity and status
-- pods: List pods with optional namespace/status filters
-- deployments: List deployments with replica status
-
-Control types (require control permission):
-- scale: Scale a deployment (set replicas)
-- restart: Restart a deployment (rollout restart)
-- delete_pod: Delete a pod
-- exec: Execute a command inside a pod
-- logs: Get pod logs
-
-Examples:
-- List clusters: type="clusters"
-- Get pods: type="pods", cluster="production", namespace="default"
-- Scale deployment: type="scale", cluster="production", deployment="nginx", namespace="default", replicas=3
-- Restart deployment: type="restart", cluster="production", deployment="nginx", namespace="default"
-- Delete pod: type="delete_pod", cluster="production", pod="nginx-abc123", namespace="default"
-- Exec in pod: type="exec", cluster="production", pod="nginx-abc123", namespace="default", command="cat /etc/nginx/nginx.conf"
-- Get logs: type="logs", cluster="production", pod="nginx-abc123", namespace="default", lines=100`,
+			Name:        "pulse_kubernetes",
+			Description: `Query and control Kubernetes clusters, nodes, pods, and deployments. Query: clusters, nodes, pods, deployments. Control: scale, restart, delete_pod, exec, logs.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{

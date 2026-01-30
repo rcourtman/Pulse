@@ -11,21 +11,8 @@ import (
 func (e *PulseToolExecutor) registerDiscoveryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_discovery",
-			Description: `Get deep AI-discovered information about services (log paths, config locations, service details).
-
-Actions:
-- get: Trigger discovery and get detailed info for a specific resource. Use this when you need deep context about a container/VM (where logs are, config paths, service details). Requires resource_type, resource_id, and host_id - use pulse_query action="search" first if you don't know these.
-- list: Search existing discoveries only. Will NOT find resources that haven't been discovered yet. Use action="get" to trigger discovery for new resources.
-
-Workflow for investigating applications:
-1. Use pulse_query action="search" to find the resource by name
-2. Use pulse_discovery action="get" with the resource details to get deep context (log paths, config locations)
-3. Use pulse_control type="command" to run commands (check logs, query app state, etc.)
-
-Examples:
-- Trigger discovery: action="get", resource_type="docker", resource_id="jellyfin", host_id="docker-host-1"
-- Search existing: action="list", service_type="postgresql"`,
+			Name:        "pulse_discovery",
+			Description: `Get AI-discovered service details (log paths, config locations, ports). action="get" triggers discovery for a resource (requires resource_type, resource_id, host_id). action="list" searches existing discoveries. Use pulse_query action="search" first to find resource details.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{

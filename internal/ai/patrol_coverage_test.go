@@ -2,48 +2,97 @@ package ai
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-// TestPatrolService_RunPatrol_FullCoverage tests the main patrol loop logic including AI analysis
+// mockChatService implements ChatServiceProvider and chatServiceExecutorAccessor for testing
+type mockChatService struct {
+	executor                *tools.PulseToolExecutor
+	executePatrolStreamFunc func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error)
+}
+
+func (m *mockChatService) CreateSession(ctx context.Context) (*ChatSession, error) {
+	return &ChatSession{ID: "mock-session"}, nil
+}
+
+func (m *mockChatService) ExecuteStream(ctx context.Context, req ChatExecuteRequest, callback ChatStreamCallback) error {
+	return nil
+}
+
+func (m *mockChatService) ExecutePatrolStream(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+	if m.executePatrolStreamFunc != nil {
+		return m.executePatrolStreamFunc(ctx, req, callback)
+	}
+	return &PatrolStreamResponse{}, nil
+}
+
+func (m *mockChatService) GetMessages(ctx context.Context, sessionID string) ([]ChatMessage, error) {
+	return nil, nil
+}
+
+func (m *mockChatService) DeleteSession(ctx context.Context, sessionID string) error {
+	return nil
+}
+
+func (m *mockChatService) ReloadConfig(ctx context.Context, cfg *config.AIConfig) error {
+	return nil
+}
+
+func (m *mockChatService) GetExecutor() *tools.PulseToolExecutor {
+	return m.executor
+}
+
+// TestPatrolService_RunPatrol_FullCoverage tests the main patrol loop including findings generation
 func TestPatrolService_RunPatrol_FullCoverage(t *testing.T) {
 	// Setup dependencies
 	persistence := config.NewConfigPersistence(t.TempDir())
 	svc := NewService(persistence, nil)
-	svc.cfg = &config.AIConfig{Enabled: true}
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "mock:model"}
 
-	// Mock provider for AI analysis
-	mockP := &mockProvider{
-		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
-			// Return a response with findings to verify parsing
-			// ...
-			response := `
-[FINDING]
-SEVERITY: warning
-CATEGORY: performance
-RESOURCE: vm-100
-RESOURCE_TYPE: vm
-TITLE: High CPU
-DESCRIPTION: CPU usage is high
-RECOMMENDATION: Check processes
-EVIDENCE: CPU > 90%
-[/FINDING]
-`
-			return &providers.ChatResponse{
-				Content: response,
-				Model:   "mock-model",
+	// Create real executor with minimal config
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	svc.provider = &mockProvider{} // Satisfy IsEnabled()
+
+	// Setup mock chat service
+	mockCS := &mockChatService{
+		executor: executor,
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			// Simulate tool use
+			creator := executor.GetPatrolFindingCreator()
+			if creator == nil {
+				return nil, fmt.Errorf("patrol finding creator not set")
+			}
+
+			// Create a finding via the creator adapter directly
+			// This simulates what the tool handler would do
+			input := tools.PatrolFindingInput{
+				Severity:     "warning",
+				Category:     "performance",
+				ResourceID:   "vm-100",
+				ResourceName: "web-server",
+				ResourceType: "vm",
+				Title:        "High CPU",
+				Description:  "CPU usage is high",
+				Evidence:     "CPU > 90%",
+			}
+
+			_, _, err := creator.CreateFinding(input)
+			if err != nil {
+				return nil, err
+			}
+
+			return &PatrolStreamResponse{
+				Content: "Analysis complete. Found 1 issue.",
 			}, nil
 		},
 	}
-	svc.provider = mockP
-
-	// Set model that will fail creation (missing API key) to ensure fallback to mock provider
-	svc.cfg.PatrolModel = "anthropic:mock-model"
+	svc.SetChatService(mockCS)
 
 	// Mock state provider
 	stateProvider := &mockStateProvider{
@@ -67,12 +116,11 @@ EVIDENCE: CPU > 90%
 		AnalyzeNodes:  true,
 		AnalyzeGuests: true,
 	})
-	ps.SetProactiveMode(true)
 
-	// Since Start() runs in a goroutine, we want to test runPatrol directly to be deterministic
-	// But we also want to test that dependencies are wired up correctly.
-	// runPatrol checks cfg.Enabled and aiService.IsEnabled()
+	// Set proactive mode false to ensure exact threshold matching if any
+	ps.SetProactiveMode(false)
 
+	// Run patrol manually
 	ctx := context.Background()
 	ps.runPatrol(ctx)
 
@@ -81,18 +129,24 @@ EVIDENCE: CPU > 90%
 	if len(findings) == 0 {
 		t.Error("Expected findings from patrol run, got 0")
 	} else {
-		if findings[0].Title != "High CPU" {
-			t.Errorf("Expected finding title 'High CPU', got '%s'", findings[0].Title)
+		found := false
+		for _, f := range findings {
+			if f.Title == "High CPU" {
+				found = true
+				if f.ResourceID != "vm-100" {
+					t.Errorf("Expected resource ID vm-100, got %s", f.ResourceID)
+				}
+			}
+		}
+		if !found {
+			t.Error("Expected finding title 'High CPU' not found")
 		}
 	}
 
-	// Check coverage for GetStatus fields updated during run
+	// Check status
 	status := ps.GetStatus()
 	if status.FindingsCount != 1 {
 		t.Errorf("Expected 1 finding in status, got %d", status.FindingsCount)
-	}
-	if status.ResourcesChecked == 0 {
-		t.Error("Expected resources checked > 0")
 	}
 }
 
@@ -105,40 +159,27 @@ func TestPatrolService_StartStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Capture logs or side effects if needed, but mainly ensuring no panic and state transitions
 	ps.Start(ctx)
-
-	time.Sleep(10 * time.Millisecond) // Give it a moment to start
-
-	// Call Start again should return early coverage
-	ps.Start(ctx)
-
+	time.Sleep(10 * time.Millisecond)
+	ps.Start(ctx) // Idempotency check
 	ps.Stop()
-
-	// Call Stop again should return early coverage
-	ps.Stop()
+	ps.Stop() // Idempotency check
 }
 
 // TestPatrolService_Setters_Coverage tests setter methods not covered in existing tests
 func TestPatrolService_Setters_Coverage(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
-	// SetConfig trigger channel logic
+	// Test Start/Stop with config change
 	ps.Start(context.Background())
-
-	// We need to wait a bit for listeners
 	time.Sleep(10 * time.Millisecond)
 
-	// Create a new config with different interval to trigger update
 	newCfg := PatrolConfig{
 		Enabled:  true,
 		Interval: 5 * time.Minute,
 	}
 	ps.SetConfig(newCfg)
-
-	// Give it time to process channel
 	time.Sleep(10 * time.Millisecond)
-
 	ps.Stop()
 
 	// Verify SetIncidentStore getter/setter
@@ -148,81 +189,33 @@ func TestPatrolService_Setters_Coverage(t *testing.T) {
 	}
 }
 
-// TestPatrol_RunPatrol_AIRequired verifies patrol skips analysis when AI is unavailable.
+// TestPatrol_RunPatrol_AIRequired verifies specific behaviors when AI is/isn't available
 func TestPatrol_RunPatrol_AIRequired(t *testing.T) {
-	// Populate state with high-usage resources to prove heuristics are not used.
-
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
 			Nodes: []models.Node{
 				{ID: "node-high-cpu", Name: "node1", Status: "online", CPU: 95.0, Memory: models.Memory{Usage: 80.0}},
-				{ID: "node-high-mem", Name: "node2", Status: "online", CPU: 10.0, Memory: models.Memory{Usage: 95.0}},
-			},
-			VMs: []models.VM{
-				{ID: "vm-high-mem", Name: "vm1", Status: "running", Memory: models.Memory{Usage: 95.0}},
-			},
-			Storage: []models.Storage{
-				{ID: "storage-full", Name: "store1", Status: "active", Usage: 95.0},
 			},
 		},
 	}
 
 	ps := NewPatrolService(nil, stateProvider)
 
-	// Set low thresholds that would trigger heuristic findings if they still ran.
-	provider := &mockThresholdProvider{
-		nodeCPU:    50,
-		nodeMemory: 50,
-		guestMem:   50,
-		guestDisk:  50,
-		storage:    50,
-	}
-	ps.SetThresholdProvider(provider)
-
-	// If runPatrol requires AI service, we provide one.
+	// Create service without ChatService
 	svc := NewService(nil, nil)
+	svc.cfg = &config.AIConfig{Enabled: true}
+	// No ChatService set means GetChatService() returns nil
+	svc.provider = &mockProvider{} // Satisfy IsEnabled()
 
-	// Set model that will fail creation (missing API key) to ensure fallback to mock provider
-	svc.cfg = &config.AIConfig{
-		Enabled:     true,
-		PatrolModel: "anthropic:mock-model",
-	}
-
-	// Mock provider can return empty or error, finding generation dependent on logic
-	mockP := &mockProvider{
-		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
-			return &providers.ChatResponse{Content: "Nothing"}, nil
-		},
-	}
-	svc.provider = mockP
-
-	// Link them
 	ps.aiService = svc
 
-	// Disable AI patrol feature to force patrol to block (AI-only).
-	licenseChecker := &mockLicenseStore{
-		features: map[string]bool{
-			"ai_patrol": false, // explicitly false
-		},
-		state: "active",
-		valid: true,
-	}
-	svc.SetLicenseChecker(licenseChecker)
-
+	// Run patrol
 	ctx := context.Background()
-	ps.runPatrol(ctx)
+	ps.runPatrol(ctx) // Should log error and return early
 
-	// No findings should be generated when AI is unavailable.
-	findings := ps.GetFindings().GetActive(FindingSeverityWarning)
-	if len(findings) > 0 {
-		t.Errorf("Expected no findings when AI patrol is unavailable, got %d", len(findings))
-	}
-
+	// Check status - should record error
 	status := ps.GetStatus()
-	if status.BlockedReason == "" {
-		t.Error("Expected patrol to report a blocked reason when AI patrol is unavailable")
-	}
-	if status.BlockedAt == nil {
-		t.Error("Expected patrol to report blocked_at when AI patrol is unavailable")
+	if status.ErrorCount == 0 && status.Healthy {
+		t.Error("Expected error count > 0 or unhealthy status when chat service unavailable")
 	}
 }

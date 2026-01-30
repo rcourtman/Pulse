@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rs/zerolog/log"
 )
 
@@ -81,17 +82,19 @@ type RemediationPlan struct {
 
 // RemediationExecution tracks the execution of a remediation plan
 type RemediationExecution struct {
-	ID            string          `json:"id"`
-	PlanID        string          `json:"plan_id"`
-	Status        ExecutionStatus `json:"status"`
-	ApprovedBy    string          `json:"approved_by,omitempty"`
-	ApprovedAt    *time.Time      `json:"approved_at,omitempty"`
-	StartedAt     *time.Time      `json:"started_at,omitempty"`
-	CompletedAt   *time.Time      `json:"completed_at,omitempty"`
-	CurrentStep   int             `json:"current_step"`
-	StepResults   []StepResult    `json:"step_results,omitempty"`
-	Error         string          `json:"error,omitempty"`
-	RollbackError string          `json:"rollback_error,omitempty"`
+	ID               string          `json:"id"`
+	PlanID           string          `json:"plan_id"`
+	Status           ExecutionStatus `json:"status"`
+	ApprovedBy       string          `json:"approved_by,omitempty"`
+	ApprovedAt       *time.Time      `json:"approved_at,omitempty"`
+	StartedAt        *time.Time      `json:"started_at,omitempty"`
+	CompletedAt      *time.Time      `json:"completed_at,omitempty"`
+	CurrentStep      int             `json:"current_step"`
+	StepResults      []StepResult    `json:"step_results,omitempty"`
+	Error            string          `json:"error,omitempty"`
+	RollbackError    string          `json:"rollback_error,omitempty"`
+	Verified         *bool           `json:"verified,omitempty"`
+	VerificationNote string          `json:"verification_note,omitempty"`
 }
 
 // StepResult records the result of executing a step
@@ -155,9 +158,6 @@ type Engine struct {
 	// Approval rules
 	approvalRules map[string]*ApprovalRule
 
-	// Blocked commands that should never be auto-executed
-	blockedCommands []string
-
 	// Persistence
 	dataDir string
 }
@@ -179,26 +179,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		plans:         make(map[string]*RemediationPlan),
 		executions:    make(map[string]*RemediationExecution),
 		approvalRules: make(map[string]*ApprovalRule),
-		blockedCommands: []string{
-			"rm -rf",
-			"mkfs",
-			"dd if=",
-			"zpool destroy",
-			"zfs destroy",
-			"shutdown",
-			"poweroff",
-			"reboot",
-			"init 0",
-			"init 6",
-			"> /dev/sd",
-			"format",
-			"fdisk",
-			"parted",
-			"DROP DATABASE",
-			"DROP TABLE",
-			"TRUNCATE",
-		},
-		dataDir: cfg.DataDir,
+		dataDir:       cfg.DataDir,
 	}
 
 	// Load from disk
@@ -285,18 +266,10 @@ func (e *Engine) validatePlan(plan *RemediationPlan) error {
 	return nil
 }
 
-// isBlockedCommand checks if a command matches any blocked pattern
+// isBlockedCommand checks if a command matches any blocked pattern.
+// Delegates to the shared safety package for the canonical blocked command list.
 func (e *Engine) isBlockedCommand(command string) bool {
-	if command == "" {
-		return false
-	}
-
-	for _, blocked := range e.blockedCommands {
-		if containsIgnoreCase(command, blocked) {
-			return true
-		}
-	}
-	return false
+	return safety.IsBlockedCommand(command)
 }
 
 // assessRiskLevel determines the risk level of a plan
@@ -683,6 +656,17 @@ func (e *Engine) GetExecution(executionID string) *RemediationExecution {
 		return &copy
 	}
 	return nil
+}
+
+// SetExecutionVerification updates the verification status of an execution
+func (e *Engine) SetExecutionVerification(executionID string, verified bool, note string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if exec, ok := e.executions[executionID]; ok {
+		exec.Verified = &verified
+		exec.VerificationNote = note
+	}
 }
 
 // ListExecutions returns recent executions

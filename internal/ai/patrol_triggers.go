@@ -12,6 +12,16 @@ import (
 // TriggerReason describes why a patrol was triggered
 type TriggerReason string
 
+// Trigger priority values control which scoped patrol runs first when multiple are queued.
+const (
+	triggerPriorityManual       = 100 // User-initiated patrols run first
+	triggerPriorityAlertFired   = 80  // New alerts are high priority
+	triggerPriorityAnomaly      = 60  // Anomaly detection is medium-high
+	triggerPriorityAlertCleared = 40  // Cleared alerts are lower priority
+	triggerPriorityUserAction   = 30  // User finding actions
+	triggerPriorityScheduled    = 20  // Periodic background patrol
+)
+
 const (
 	TriggerReasonScheduled       TriggerReason = "scheduled"      // Regular interval trigger
 	TriggerReasonManual          TriggerReason = "manual"         // User-initiated patrol
@@ -21,6 +31,7 @@ const (
 	TriggerReasonUserAction      TriggerReason = "user_action"    // User dismissed/snoozed finding
 	TriggerReasonConfigChanged   TriggerReason = "config_changed" // System configuration changed
 	TriggerReasonStartup         TriggerReason = "startup"        // Service startup
+	TriggerReasonVerification    TriggerReason = "verification"   // Post-fix verification
 )
 
 // PatrolScope defines the scope of a patrol run
@@ -41,6 +52,13 @@ type PatrolScope struct {
 	AlertID string
 	// FindingID is the ID of the finding that triggered this patrol (if applicable)
 	FindingID string
+	// NoStream skips streaming updates (phase, content, subscriber notifications).
+	// Used for verification runs that are consumed programmatically.
+	NoStream bool
+	// RetryCount tracks how many times this scoped patrol has been re-queued after a drop
+	RetryCount int
+	// RetryAfter prevents processing before this time (for backoff on re-queued patrols)
+	RetryAfter time.Time
 }
 
 // PatrolDepth controls how thorough a patrol run should be
@@ -51,8 +69,6 @@ const (
 	PatrolDepthQuick PatrolDepth = iota
 	// PatrolDepthNormal is the standard patrol depth
 	PatrolDepthNormal
-	// PatrolDepthDeep is a thorough analysis with more context
-	PatrolDepthDeep
 )
 
 // String returns the depth as a string
@@ -62,8 +78,6 @@ func (d PatrolDepth) String() string {
 		return "quick"
 	case PatrolDepthNormal:
 		return "normal"
-	case PatrolDepthDeep:
-		return "deep"
 	default:
 		return "unknown"
 	}
@@ -242,9 +256,14 @@ func (tm *TriggerManager) processPendingTriggers(ctx context.Context) {
 	}
 
 	// Get highest priority trigger
+	now := time.Now()
 	highestPriority := -1
 	highestIndex := -1
 	for i, trigger := range tm.pendingTriggers {
+		// Skip triggers that are waiting for retry backoff
+		if !trigger.RetryAfter.IsZero() && now.Before(trigger.RetryAfter) {
+			continue
+		}
 		if trigger.Priority > highestPriority {
 			// Check resource rate limit
 			if len(trigger.ResourceIDs) > 0 {
@@ -451,7 +470,7 @@ func AlertTriggeredPatrolScope(alertID, resourceID, resourceType, alertType stri
 		Depth:         PatrolDepthQuick,
 		Reason:        TriggerReasonAlertFired,
 		Context:       "Alert: " + alertType,
-		Priority:      80, // High priority for alerts
+		Priority:      triggerPriorityAlertFired,
 		AlertID:       alertID,
 	}
 }
@@ -464,7 +483,7 @@ func AlertClearedPatrolScope(alertID, resourceID, resourceType string) PatrolSco
 		Depth:         PatrolDepthQuick,
 		Reason:        TriggerReasonAlertCleared,
 		Context:       "Verify resolution",
-		Priority:      40, // Medium-low priority for cleared alerts
+		Priority:      triggerPriorityAlertCleared,
 		AlertID:       alertID,
 	}
 }
@@ -477,7 +496,7 @@ func AnomalyDetectedPatrolScope(resourceID, resourceType, metric string, value, 
 		Depth:         PatrolDepthNormal,
 		Reason:        TriggerReasonAnomalyDetected,
 		Context:       "Anomaly: " + metric,
-		Priority:      60, // Medium-high priority for anomalies
+		Priority:      triggerPriorityAnomaly,
 	}
 }
 
@@ -507,7 +526,7 @@ func UserActionPatrolScope(findingID, resourceID, action string) PatrolScope {
 		Depth:       PatrolDepthQuick,
 		Reason:      TriggerReasonUserAction,
 		Context:     "User action: " + action,
-		Priority:    30, // Lower priority for user actions
+		Priority:    triggerPriorityUserAction,
 		FindingID:   findingID,
 	}
 }
@@ -519,7 +538,7 @@ func ManualPatrolScope(resourceIDs []string, depth PatrolDepth) PatrolScope {
 		Depth:       depth,
 		Reason:      TriggerReasonManual,
 		Context:     "Manual request",
-		Priority:    100, // Highest priority for manual requests
+		Priority:    triggerPriorityManual,
 	}
 }
 
@@ -529,6 +548,6 @@ func ScheduledPatrolScope() PatrolScope {
 		Depth:    PatrolDepthNormal,
 		Reason:   TriggerReasonScheduled,
 		Context:  "Scheduled patrol",
-		Priority: 20, // Low priority for scheduled
+		Priority: triggerPriorityScheduled,
 	}
 }

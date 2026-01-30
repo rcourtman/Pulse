@@ -54,11 +54,14 @@ func NewContextPrefetcher(stateProvider StateProvider, discoveryProvider tools.D
 	}
 }
 
-// Prefetch analyzes a user message and proactively gathers relevant context
-func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string) *PrefetchedContext {
+// Prefetch analyzes a user message and proactively gathers relevant context.
+// When structuredMentions are provided (from the frontend @ autocomplete), they are used
+// directly instead of fuzzy-matching resource names from the message text.
+func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, structuredMentions []StructuredMention) *PrefetchedContext {
 	log.Info().
 		Bool("hasStateProvider", p.stateProvider != nil).
 		Bool("hasDiscoveryProvider", p.discoveryProvider != nil).
+		Int("structured_mentions", len(structuredMentions)).
 		Msg("[ContextPrefetch] Starting prefetch")
 
 	if p.stateProvider == nil {
@@ -73,10 +76,47 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string) *Prefe
 		Int("dockerHosts", len(state.DockerHosts)).
 		Msg("[ContextPrefetch] Got state for matching")
 
-	mentions := p.extractResourceMentions(message, state)
+	var mentions []ResourceMention
+
+	if len(structuredMentions) > 0 {
+		// Structured path: frontend already resolved the resources via autocomplete.
+		// Convert to ResourceMention using ResolveResource for full routing info.
+		mentions = p.resolveStructuredMentions(structuredMentions, state)
+		log.Info().
+			Int("structured_input", len(structuredMentions)).
+			Int("resolved", len(mentions)).
+			Msg("[ContextPrefetch] Resolved structured mentions")
+	} else {
+		// Fallback: fuzzy-match resource names from the message text.
+		// Used when the user types @name manually without selecting from autocomplete.
+		mentions = p.extractResourceMentions(message, state)
+	}
 
 	if len(mentions) == 0 {
 		log.Info().Str("message", message[:min(50, len(message))]).Msg("[ContextPrefetch] No resource mentions found")
+
+		// Check for explicit @ mentions that didn't resolve to any resource.
+		// If the user tagged something with @ but we couldn't find it, tell the AI
+		// so it doesn't waste tool calls searching for it.
+		unresolvedMentions := extractExplicitAtMentions(message)
+		if len(unresolvedMentions) > 0 {
+			log.Info().
+				Strs("unresolved", unresolvedMentions).
+				Msg("[ContextPrefetch] Found unresolved @ mentions")
+
+			var sb strings.Builder
+			sb.WriteString("=== RESOURCE LOOKUP RESULT ===\n")
+			for _, name := range unresolvedMentions {
+				sb.WriteString(fmt.Sprintf("'%s' was NOT found in Pulse monitoring. It is not a tracked VM, LXC, Docker container, or host.\n", name))
+			}
+			sb.WriteString("Do NOT use pulse_discovery to search for these resources — they are not in the system.\n")
+			sb.WriteString("Instead: use pulse_control directly if you know the host where the service runs, or ask the user for the location.\n")
+
+			return &PrefetchedContext{
+				Summary: sb.String(),
+			}
+		}
+
 		return nil
 	}
 
@@ -299,6 +339,142 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 	return mentions
 }
 
+// resolveStructuredMentions converts frontend StructuredMention objects into ResourceMention
+// objects with full routing info. This is the preferred path — no fuzzy matching needed.
+func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMention, state models.StateSnapshot) []ResourceMention {
+	var mentions []ResourceMention
+
+	for _, sm := range structured {
+		// Parse the structured ID to extract resource details.
+		// Frontend ID formats: "vm:node:vmid", "lxc:node:vmid", "docker:hostId:containerId",
+		// "host:id", "node:instance:name"
+		parts := strings.Split(sm.ID, ":")
+
+		// Normalize frontend type "container" → "lxc"
+		resourceType := sm.Type
+		if resourceType == "container" {
+			resourceType = "lxc"
+		}
+
+		// Use ResolveResource for full routing info (target_host, Docker chain, etc.)
+		loc := state.ResolveResource(sm.Name)
+
+		switch resourceType {
+		case "vm":
+			vmid := ""
+			node := sm.Node
+			if len(parts) >= 3 {
+				node = parts[1]
+				vmid = parts[2]
+			}
+			mentions = append(mentions, ResourceMention{
+				Name:         sm.Name,
+				ResourceType: "vm",
+				ResourceID:   vmid,
+				HostID:       node,
+				MatchedText:  sm.Name,
+				TargetHost:   loc.TargetHost,
+			})
+
+		case "lxc":
+			vmid := ""
+			node := sm.Node
+			if len(parts) >= 3 {
+				node = parts[1]
+				vmid = parts[2]
+			}
+			mentions = append(mentions, ResourceMention{
+				Name:         sm.Name,
+				ResourceType: "lxc",
+				ResourceID:   vmid,
+				HostID:       node,
+				MatchedText:  sm.Name,
+				TargetHost:   loc.TargetHost,
+			})
+
+		case "docker":
+			hostID := ""
+			containerID := ""
+			if len(parts) >= 3 {
+				hostID = parts[1]
+				containerID = strings.Join(parts[2:], ":") // container ID may contain colons
+			}
+
+			// Gather bind mounts from state
+			var mounts []MountInfo
+			for _, dockerHost := range state.DockerHosts {
+				for _, container := range dockerHost.Containers {
+					if container.Name == sm.Name || container.ID == containerID {
+						for _, m := range container.Mounts {
+							if m.Source != "" && m.Destination != "" {
+								mounts = append(mounts, MountInfo{
+									Source:      m.Source,
+									Destination: m.Destination,
+								})
+							}
+						}
+						break
+					}
+				}
+			}
+
+			mentions = append(mentions, ResourceMention{
+				Name:           sm.Name,
+				ResourceType:   "docker",
+				ResourceID:     containerID,
+				HostID:         hostID,
+				MatchedText:    sm.Name,
+				BindMounts:     mounts,
+				DockerHostName: loc.DockerHostName,
+				DockerHostType: loc.DockerHostType,
+				DockerHostVMID: loc.DockerHostVMID,
+				ProxmoxNode:    loc.Node,
+				TargetHost:     loc.TargetHost,
+			})
+
+		case "node":
+			mentions = append(mentions, ResourceMention{
+				Name:         sm.Name,
+				ResourceType: "node",
+				ResourceID:   sm.Name,
+				HostID:       sm.Name,
+				MatchedText:  sm.Name,
+				TargetHost:   loc.TargetHost,
+			})
+
+		case "host":
+			hostID := ""
+			if len(parts) >= 2 {
+				hostID = strings.Join(parts[1:], ":")
+			}
+			mentions = append(mentions, ResourceMention{
+				Name:         sm.Name,
+				ResourceType: "host",
+				ResourceID:   hostID,
+				HostID:       hostID,
+				MatchedText:  sm.Name,
+				TargetHost:   loc.TargetHost,
+			})
+
+		default:
+			log.Warn().
+				Str("name", sm.Name).
+				Str("type", sm.Type).
+				Msg("[ContextPrefetch] Unknown structured mention type, falling back to ResolveResource")
+			mentions = append(mentions, ResourceMention{
+				Name:         sm.Name,
+				ResourceType: resourceType,
+				ResourceID:   sm.ID,
+				HostID:       sm.Node,
+				MatchedText:  sm.Name,
+				TargetHost:   loc.TargetHost,
+			})
+		}
+	}
+
+	return mentions
+}
+
 // getOrTriggerDiscovery gets existing discovery or triggers a new one
 func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention ResourceMention) (*tools.ResourceDiscoveryInfo, error) {
 	// First try to get existing discovery
@@ -390,15 +566,23 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 						sb.WriteString(fmt.Sprintf("Log files: %v\n", filePaths))
 					}
 				}
+			} else {
+				sb.WriteString("You have the resource location and target_host. Proceed directly with pulse_docker or pulse_control — do NOT call pulse_discovery.\n")
 			}
 
 			sb.WriteString("\n")
 			continue
 		}
 
-		// Non-Docker resources (LXC, VM, host)
+		// Non-Docker resources (LXC, VM, host, node)
 		sb.WriteString(fmt.Sprintf("## %s\n", mention.Name))
 		sb.WriteString(fmt.Sprintf("Type: %s | Host: %s\n", mention.ResourceType, mention.HostID))
+
+		// Include VMID for VMs and LXCs — the AI needs this for pulse_control guest operations
+		if (mention.ResourceType == "lxc" || mention.ResourceType == "vm") && mention.ResourceID != "" {
+			sb.WriteString(fmt.Sprintf("VMID: %s\n", mention.ResourceID))
+			sb.WriteString(fmt.Sprintf("To control this guest, use: pulse_control type=\"guest\", guest_id=\"%s\", action=\"start|stop|shutdown|restart\"\n", mention.ResourceID))
+		}
 
 		if hasDiscovery {
 			// Command routing
@@ -472,9 +656,13 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 				sb.WriteString("  To edit container files: use the left path (host path)\n")
 			}
 		} else {
-			// No discovery - provide basic routing
+			// No discovery - provide basic routing without suggesting discovery calls
 			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", mention.Name))
-			sb.WriteString("Discovery data not available. Run pulse_discovery to get details.\n")
+			if mention.ResourceType == "lxc" || mention.ResourceType == "vm" {
+				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
+			} else {
+				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
+			}
 		}
 
 		sb.WriteString("\n")
@@ -502,6 +690,38 @@ func extractWords(message string) []string {
 		words = append(words, current)
 	}
 	return words
+}
+
+// extractExplicitAtMentions finds @name patterns in a message that look like
+// explicit resource mentions typed by the user. Returns the names without the @ prefix.
+func extractExplicitAtMentions(message string) []string {
+	var mentions []string
+	seen := make(map[string]bool)
+
+	for i := 0; i < len(message); i++ {
+		if message[i] != '@' {
+			continue
+		}
+		// @ must be at start or preceded by whitespace
+		if i > 0 && message[i-1] != ' ' && message[i-1] != '\t' && message[i-1] != '\n' {
+			continue
+		}
+		// Extract the word after @
+		start := i + 1
+		end := start
+		for end < len(message) && message[end] != ' ' && message[end] != '\t' && message[end] != '\n' {
+			end++
+		}
+		if end > start {
+			name := message[start:end]
+			nameLower := strings.ToLower(name)
+			if len(nameLower) >= 2 && !seen[nameLower] {
+				seen[nameLower] = true
+				mentions = append(mentions, name)
+			}
+		}
+	}
+	return mentions
 }
 
 // matchesResource checks if a resource name matches the message using fuzzy matching

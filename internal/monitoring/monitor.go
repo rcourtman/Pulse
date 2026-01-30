@@ -7123,6 +7123,26 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				}
 			}
 
+			// Clamp memory and disk values to prevent >100% usage
+			// (Proxmox can report used > total for LXC due to cgroup accounting,
+			// shared pages, or thin-provisioned disk overcommit)
+			clampedMemUsed := memUsed
+			if clampedMemUsed > memTotal && memTotal > 0 {
+				clampedMemUsed = memTotal
+			}
+			memFree := int64(memTotal) - int64(clampedMemUsed)
+			if memFree < 0 {
+				memFree = 0
+			}
+			diskUsed := res.Disk
+			if diskUsed > res.MaxDisk && res.MaxDisk > 0 {
+				diskUsed = res.MaxDisk
+			}
+			diskFree := int64(res.MaxDisk) - int64(diskUsed)
+			if diskFree < 0 {
+				diskFree = 0
+			}
+
 			container := models.Container{
 				ID:       guestID,
 				VMID:     res.VMID,
@@ -7135,15 +7155,15 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				CPUs:     res.MaxCPU,
 				Memory: models.Memory{
 					Total: int64(memTotal),
-					Used:  int64(memUsed),
-					Free:  int64(memTotal - memUsed),
-					Usage: safePercentage(float64(memUsed), float64(memTotal)),
+					Used:  int64(clampedMemUsed),
+					Free:  memFree,
+					Usage: safePercentage(float64(clampedMemUsed), float64(memTotal)),
 				},
 				Disk: models.Disk{
 					Total: int64(res.MaxDisk),
-					Used:  int64(res.Disk),
-					Free:  int64(res.MaxDisk - res.Disk),
-					Usage: safePercentage(float64(res.Disk), float64(res.MaxDisk)),
+					Used:  int64(diskUsed),
+					Free:  diskFree,
+					Usage: safePercentage(float64(diskUsed), float64(res.MaxDisk)),
 				},
 				NetworkIn:  max(0, int64(netInRate)),
 				NetworkOut: max(0, int64(netOutRate)),

@@ -1513,6 +1513,34 @@ func Load() (*Config, error) {
 		log.Info().Str("format", logFormat).Msg("Log format overridden by LOG_FORMAT env var")
 	}
 
+	if logFile := os.Getenv("LOG_FILE"); logFile != "" {
+		cfg.LogFile = logFile
+		cfg.EnvOverrides["logFile"] = true
+		log.Info().Str("file", logFile).Msg("Log file overridden by LOG_FILE env var")
+	}
+
+	if logMaxSize := os.Getenv("LOG_MAX_SIZE"); logMaxSize != "" {
+		if size, err := strconv.Atoi(logMaxSize); err == nil && size > 0 {
+			cfg.LogMaxSize = size
+			cfg.EnvOverrides["logMaxSize"] = true
+			log.Info().Int("size_mb", size).Msg("Log max size overridden by LOG_MAX_SIZE env var")
+		}
+	}
+
+	if logMaxAge := os.Getenv("LOG_MAX_AGE"); logMaxAge != "" {
+		if age, err := strconv.Atoi(logMaxAge); err == nil && age > 0 {
+			cfg.LogMaxAge = age
+			cfg.EnvOverrides["logMaxAge"] = true
+			log.Info().Int("days", age).Msg("Log max age overridden by LOG_MAX_AGE env var")
+		}
+	}
+
+	if logCompress := os.Getenv("LOG_COMPRESS"); logCompress != "" {
+		cfg.LogCompress = logCompress == "true" || logCompress == "1"
+		cfg.EnvOverrides["logCompress"] = true
+		log.Info().Bool("compress", cfg.LogCompress).Msg("Log compression overridden by LOG_COMPRESS env var")
+	}
+
 	cfg.Discovery = NormalizeDiscoveryConfig(cfg.Discovery)
 	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
 		if d, err := time.ParseDuration(connectionTimeout + "s"); err == nil {

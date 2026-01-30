@@ -99,6 +99,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	var resultMessages []Message
 	turn := 0
 	toolsSucceededThisEpisode := false // Track if any tool executed successfully this episode
+	writeCompletedLastTurn := false    // When true, force text-only response on next turn
+	toolBlockedLastTurn := false       // When true, force text-only response after budget/loop block
 	preferredToolName := ""
 	preferredToolRetried := false
 	singleToolRequested := isSingleToolRequest(providerMessages)
@@ -109,7 +111,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	const maxIdenticalCalls = 3
 	recentCallCounts := make(map[string]int)
 
+	// Track where each turn's messages begin in providerMessages for compaction.
+	// We keep the last N turns' tool results in full; older ones get compacted.
+	const compactionKeepTurns = 3                  // Keep last 3 turns' tool results in full
+	const compactionMinChars = 500                 // Only compact results longer than this
+	currentTurnStartIndex := len(providerMessages) // Initial messages are never compacted
+
 	for turn < a.maxTurns {
+		// === CONTEXT COMPACTION: Compact old tool results to prevent context blowout ===
+		if turn > 0 {
+			compactOldToolResults(providerMessages, currentTurnStartIndex, compactionKeepTurns, compactionMinChars)
+		}
+
 		// Check if aborted
 		a.mu.Lock()
 		if a.aborted[sessionID] {
@@ -132,10 +145,12 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		default:
 		}
 
-		log.Debug().
+		log.Info().
 			Int("turn", turn).
 			Int("messages", len(providerMessages)).
 			Int("tools", len(tools)).
+			Int("total_input_tokens", a.totalInputTokens).
+			Int("total_output_tokens", a.totalOutputTokens).
 			Str("session_id", sessionID).
 			Msg("[AgenticLoop] Starting turn")
 
@@ -153,7 +168,25 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// 2. It's the first turn
 		// 3. The user's message indicates they need live data or an action
 		// This prevents forcing tool calls on conceptual questions like "What is TCP?"
-		if len(tools) > 0 {
+		if writeCompletedLastTurn {
+			// A write action completed successfully on the previous turn.
+			// Force text-only response so the model summarizes the result instead of
+			// making more tool calls (which often return stale cached data and cause loops).
+			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
+			writeCompletedLastTurn = false
+			log.Debug().
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Write completed last turn — forcing text-only response")
+		} else if toolBlockedLastTurn {
+			// Tool calls were blocked last turn (budget exceeded or loop detected).
+			// The model already has the data it gathered — force it to produce a text
+			// response instead of continuing to call tools that will just be blocked again.
+			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
+			toolBlockedLastTurn = false
+			log.Debug().
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Tool calls blocked last turn — forcing text-only response")
+		} else if len(tools) > 0 {
 			if preferredToolName == "" {
 				preferredToolName = getPreferredTool(providerMessages, tools)
 			}
@@ -256,6 +289,15 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					toolCalls = data.ToolCalls
 					a.totalInputTokens += data.InputTokens
 					a.totalOutputTokens += data.OutputTokens
+					log.Info().
+						Int("turn", turn).
+						Int("input_tokens_this_turn", data.InputTokens).
+						Int("output_tokens_this_turn", data.OutputTokens).
+						Int("total_input_tokens", a.totalInputTokens).
+						Int("total_output_tokens", a.totalOutputTokens).
+						Int("tool_calls", len(data.ToolCalls)).
+						Str("session_id", sessionID).
+						Msg("[AgenticLoop] Turn completed")
 				}
 
 			case "error":
@@ -442,6 +484,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			preferredToolName = ""
 		}
 		firstToolResultText := ""
+		budgetBlockedThisTurn := 0
 		for _, tc := range toolCalls {
 			// Check for abort
 			a.mu.Lock()
@@ -564,6 +607,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						IsError:   true,
 					},
 				})
+				budgetBlockedThisTurn++
 				continue
 			}
 
@@ -739,8 +783,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				}
 			}
 
-			modelResultText := truncateToolResultForModel(resultText)
-
 			// Send tool_end event
 			// Convert input to JSON string for frontend display
 			inputStr := ""
@@ -795,6 +837,33 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						Msg("[AgenticLoop] FSM verification complete after read, transitioning to READING")
 				}
 
+				// === AUTO-VERIFY: After a write, advance the FSM past VERIFYING ===
+				// The FSM requires a read after every write. Rather than querying
+				// infrastructure (which returns stale cached data that contradicts
+				// the success message and confuses the model), we advance the FSM
+				// directly. The control tool already confirms success/failure —
+				// that IS the verification.
+				if fsm.State == StateVerifying && toolKind == ToolKindWrite {
+					log.Info().
+						Str("write_tool", tc.Name).
+						Msg("[AgenticLoop] Auto-advancing FSM past VERIFYING — control tool result is the verification")
+
+					// Simulate a successful read to satisfy the FSM
+					fsm.OnToolSuccess(ToolKindRead, "auto_verify")
+					if fsm.State == StateVerifying && fsm.ReadAfterWrite {
+						fsm.CompleteVerification()
+					}
+					log.Info().
+						Str("new_state", string(fsm.State)).
+						Msg("[AgenticLoop] FSM advanced past VERIFYING")
+
+					// Force the model to produce a text response on the next turn.
+					// Without this, the model calls read tools to verify the write,
+					// but Pulse's cached state is stale and contradicts the success
+					// message, causing the model to loop.
+					writeCompletedLastTurn = true
+				}
+
 				log.Debug().
 					Str("tool", tc.Name).
 					Str("kind", toolKind.String()).
@@ -815,6 +884,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					}
 				}
 			}
+
+			// Compute model-facing result text AFTER auto-verify may have appended data.
+			// This ensures the model sees the verification result and task-completion signal.
+			modelResultText := truncateToolResultForModel(resultText)
 
 			// Create tool result message
 			toolResultMsg := Message{
@@ -840,6 +913,19 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			})
 		}
 
+		// If any tool call this turn was budget-blocked or loop-detected, force
+		// the model to produce text on the next turn. It already has the data from
+		// earlier successful calls — making more tool calls will just waste tokens.
+		if budgetBlockedThisTurn > 0 {
+			toolBlockedLastTurn = true
+			log.Warn().
+				Int("blocked", budgetBlockedThisTurn).
+				Int("total_calls", len(toolCalls)).
+				Int("turn", turn).
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Tool calls blocked this turn — will force text-only next turn")
+		}
+
 		if singleToolEnforced && len(toolCalls) > 0 {
 			summary := firstToolResultText
 			if strings.TrimSpace(summary) == "" {
@@ -860,6 +946,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			return resultMessages, nil
 		}
 
+		// Mark the start of the next turn's messages for compaction tracking
+		currentTurnStartIndex = len(providerMessages)
 		turn++
 	}
 
@@ -1317,6 +1405,54 @@ func isSingleToolRequest(messages []providers.Message) bool {
 	return false
 }
 
+// hasWriteIntent checks if the user's message contains explicit write/control intent.
+// Returns true if the user is asking for an action (stop, start, restart, run command, etc.).
+// Returns false if the intent is read-only (status check, logs, monitoring).
+// This is used to structurally block control tools on read-only requests.
+func hasWriteIntent(messages []providers.Message) bool {
+	var lastUserContent string
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" && messages[i].ToolResult == nil {
+			lastUserContent = strings.ToLower(messages[i].Content)
+			break
+		}
+	}
+	if lastUserContent == "" {
+		return false
+	}
+
+	// Explicit write/control action verbs
+	writePatterns := []string{
+		"stop ", "start ", "restart ", "reboot ", "shutdown ", "shut down",
+		"kill ", "terminate ",
+		"turn off", "turn on", "bring up", "bring down", "bring back",
+		"run command", "run the command", "execute ",
+		"using the control tool", "use pulse_control",
+		"using pulse_control",
+		// File editing
+		"edit ", "modify ", "change ", "update ", "write ",
+		"use pulse_file_edit",
+	}
+
+	for _, pattern := range writePatterns {
+		if strings.Contains(lastUserContent, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isWriteTool returns true if the tool name is a write/control tool that modifies infrastructure.
+func isWriteTool(name string) bool {
+	switch name {
+	case "pulse_control", "pulse_docker", "pulse_file_edit":
+		return true
+	default:
+		return false
+	}
+}
+
 // getSystemPrompt builds the full system prompt including the current mode context.
 // This is called at request time so the prompt reflects the current mode.
 func (a *AgenticLoop) getSystemPrompt() string {
@@ -1402,6 +1538,11 @@ func pruneMessagesForModel(messages []Message) []Message {
 	}
 
 	start := len(messages) - MaxContextMessagesLimit
+	log.Warn().
+		Int("total_messages", len(messages)).
+		Int("limit", MaxContextMessagesLimit).
+		Int("dropped", start).
+		Msg("[AgenticLoop] Pruning oldest messages to fit context limit")
 	pruned := messages[start:]
 
 	// Skip leading tool results (orphaned from pruned tool calls)
@@ -1430,6 +1571,11 @@ func truncateToolResultForModel(text string) string {
 
 	truncated := text[:MaxToolResultCharsLimit]
 	truncatedChars := len(text) - MaxToolResultCharsLimit
+	log.Warn().
+		Int("original_chars", len(text)).
+		Int("truncated_to", MaxToolResultCharsLimit).
+		Int("chars_cut", truncatedChars).
+		Msg("[AgenticLoop] Truncating oversized tool result")
 	return fmt.Sprintf("%s\n\n---\n[TRUNCATED: %d characters cut. The result was too large. If you need specific details that may have been cut, make a more targeted query (e.g., filter by specific resource or type).]", truncated, truncatedChars)
 }
 
@@ -1467,4 +1613,150 @@ func convertToProviderMessages(messages []Message) []providers.Message {
 	}
 
 	return result
+}
+
+// compactOldToolResults replaces full tool result content with short summaries
+// for tool results from older turns. This prevents context window blowout during
+// long agentic loops (e.g., patrol runs with 20+ tool calls).
+//
+// Only tool results before currentTurnStartIndex are candidates for compaction.
+// Results from the most recent keepTurns turns are kept in full.
+// Results shorter than minChars are not compacted (not worth it).
+//
+// The model retains all its assistant messages (reasoning, analysis, findings) in full.
+// Only the raw tool result data from older turns gets replaced with a summary line.
+func compactOldToolResults(messages []providers.Message, currentTurnStartIndex, keepTurns, minChars int) {
+	if currentTurnStartIndex <= 0 || keepTurns < 0 {
+		return
+	}
+
+	// Walk backwards from currentTurnStartIndex to find the compaction boundary.
+	// We keep the last keepTurns turns' tool results in full. Each "turn" starts
+	// with an assistant message. Once we've skipped keepTurns assistant messages,
+	// everything before that point is old enough to compact.
+	var compactBefore int
+	if keepTurns <= 0 {
+		// Compact everything before the current turn
+		compactBefore = currentTurnStartIndex
+	} else {
+		turnsFound := 0
+		for i := currentTurnStartIndex - 1; i >= 0; i-- {
+			if messages[i].Role == "assistant" {
+				turnsFound++
+				if turnsFound >= keepTurns {
+					// This is the keepTurns-th assistant message from the end.
+					// Everything before this index is old enough to compact.
+					compactBefore = i
+					break
+				}
+			}
+		}
+	}
+
+	// Nothing old enough to compact
+	if compactBefore <= 0 {
+		return
+	}
+
+	// Build a map of tool call ID -> (name, input) from assistant messages,
+	// so we can label compacted results with the tool name and key params.
+	toolCallInfo := make(map[string]struct {
+		Name  string
+		Input map[string]interface{}
+	})
+	for i := 0; i < compactBefore; i++ {
+		msg := messages[i]
+		if msg.Role == "assistant" {
+			for _, tc := range msg.ToolCalls {
+				toolCallInfo[tc.ID] = struct {
+					Name  string
+					Input map[string]interface{}
+				}{Name: tc.Name, Input: tc.Input}
+			}
+		}
+	}
+
+	// Compact tool results before the boundary
+	compacted := 0
+	savedChars := 0
+	for i := 0; i < compactBefore; i++ {
+		msg := &messages[i]
+		if msg.ToolResult == nil || msg.ToolResult.IsError {
+			continue
+		}
+		content := msg.ToolResult.Content
+		if len(content) < minChars {
+			continue
+		}
+
+		// Build summary
+		toolName := "unknown_tool"
+		var toolInput map[string]interface{}
+		if info, ok := toolCallInfo[msg.ToolResult.ToolUseID]; ok {
+			toolName = info.Name
+			toolInput = info.Input
+		}
+
+		summary := buildCompactSummary(toolName, toolInput, content)
+		savedChars += len(content) - len(summary)
+		msg.ToolResult.Content = summary
+		compacted++
+	}
+
+	if compacted > 0 {
+		log.Info().
+			Int("compacted_results", compacted).
+			Int("saved_chars", savedChars).
+			Int("compact_before_index", compactBefore).
+			Int("total_messages", len(messages)).
+			Msg("[AgenticLoop] Compacted old tool results to reduce context size")
+	}
+}
+
+// buildCompactSummary creates a short summary line for a compacted tool result.
+func buildCompactSummary(toolName string, toolInput map[string]interface{}, originalContent string) string {
+	params := formatKeyParams(toolInput)
+	// Count lines and try to extract a count hint (e.g., number of items returned)
+	lineCount := strings.Count(originalContent, "\n") + 1
+	charCount := len(originalContent)
+
+	if params != "" {
+		return fmt.Sprintf("[Tool result compacted: %s(%s) — %d chars, %d lines. Full data was provided to the model in an earlier turn and has already been processed.]",
+			toolName, params, charCount, lineCount)
+	}
+	return fmt.Sprintf("[Tool result compacted: %s — %d chars, %d lines. Full data was provided to the model in an earlier turn and has already been processed.]",
+		toolName, charCount, lineCount)
+}
+
+// formatKeyParams extracts the most important parameters from tool input for display.
+func formatKeyParams(input map[string]interface{}) string {
+	if len(input) == 0 {
+		return ""
+	}
+
+	// Priority keys that are most informative
+	priorityKeys := []string{"type", "resource_id", "action", "host", "node", "instance", "query", "command", "period"}
+	var parts []string
+
+	for _, key := range priorityKeys {
+		if val, ok := input[key]; ok {
+			if str, ok := val.(string); ok && str != "" {
+				parts = append(parts, fmt.Sprintf("%s=%s", key, str))
+			}
+		}
+	}
+
+	// If nothing from priority keys, take the first 2 non-empty string values
+	if len(parts) == 0 {
+		for key, val := range input {
+			if str, ok := val.(string); ok && str != "" {
+				parts = append(parts, fmt.Sprintf("%s=%s", key, str))
+				if len(parts) >= 2 {
+					break
+				}
+			}
+		}
+	}
+
+	return strings.Join(parts, ", ")
 }

@@ -22,8 +22,22 @@ type MetricBaseline struct {
 	Percentiles map[int]float64 `json:"percentiles"`  // 5, 25, 50, 75, 95
 	SampleCount int             `json:"sample_count"` // Number of samples used
 
-	// Time-of-day patterns (future enhancement)
-	HourlyMeans [24]float64 `json:"hourly_means,omitempty"`
+	// Time-of-day patterns for reducing false positives on resources with daily usage cycles
+	HourlyMeans        [24]float64 `json:"hourly_means,omitempty"`
+	HourlySampleCounts [24]int     `json:"hourly_sample_counts,omitempty"`
+}
+
+// GetHourlyMean returns the hourly mean for the given hour if that hour has sufficient
+// samples (≥3), otherwise falls back to the overall mean. The bool indicates whether
+// the hourly mean was used (true) or the overall mean was used as fallback (false).
+func (b *MetricBaseline) GetHourlyMean(hour int) (float64, bool) {
+	if hour < 0 || hour > 23 {
+		return b.Mean, false
+	}
+	if b.HourlySampleCounts[hour] >= 3 {
+		return b.HourlyMeans[hour], true
+	}
+	return b.Mean, false
 }
 
 // ResourceBaseline contains baselines for all metrics of a resource
@@ -158,6 +172,21 @@ func (s *Store) Learn(resourceID, resourceType, metric string, points []MetricPo
 		SampleCount: len(values),
 	}
 
+	// Compute hourly means for time-of-day baselines
+	var hourlySums [24]float64
+	var hourlyCounts [24]int
+	for _, p := range points {
+		h := p.Timestamp.Hour()
+		hourlySums[h] += p.Value
+		hourlyCounts[h]++
+	}
+	for h := 0; h < 24; h++ {
+		if hourlyCounts[h] > 0 {
+			baseline.HourlyMeans[h] = hourlySums[h] / float64(hourlyCounts[h])
+		}
+	}
+	baseline.HourlySampleCounts = hourlyCounts
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -231,8 +260,11 @@ func (s *Store) IsAnomaly(resourceID, metric string, value float64) (bool, float
 		return false, 0 // Not enough data to determine
 	}
 
+	// Use hourly mean for better time-of-day accuracy
+	effectiveMean, _ := baseline.GetHourlyMean(time.Now().Hour())
+
 	// Calculate absolute difference
-	absDiff := math.Abs(value - baseline.Mean)
+	absDiff := math.Abs(value - effectiveMean)
 
 	// Don't flag small absolute changes as anomalies
 	if absDiff < 3.0 {
@@ -253,7 +285,7 @@ func (s *Store) IsAnomaly(resourceID, metric string, value float64) (bool, float
 		effectiveStdDev = 1.0
 	}
 
-	zScore := (value - baseline.Mean) / effectiveStdDev
+	zScore := (value - effectiveMean) / effectiveStdDev
 
 	// Consider anything > 2 standard deviations as anomalous
 	// (covers ~95% of normal distribution)
@@ -273,15 +305,20 @@ const (
 	AnomalyCritical AnomalySeverity = "critical" // > 4 std devs
 )
 
-// CheckAnomaly performs a detailed anomaly check with severity classification
+// CheckAnomaly performs a detailed anomaly check with severity classification.
+// It uses time-of-day hourly means when available to reduce false positives
+// for resources with daily usage patterns.
 func (s *Store) CheckAnomaly(resourceID, metric string, value float64) (AnomalySeverity, float64, *MetricBaseline) {
 	baseline, ok := s.GetBaseline(resourceID, metric)
 	if !ok || baseline.SampleCount < s.minSamples {
 		return AnomalyNone, 0, nil
 	}
 
+	// Use hourly mean if available for better time-of-day accuracy
+	effectiveMean, _ := baseline.GetHourlyMean(time.Now().Hour())
+
 	// Calculate absolute difference for threshold checks
-	absDiff := math.Abs(value - baseline.Mean)
+	absDiff := math.Abs(value - effectiveMean)
 
 	// Handle zero stddev case more intelligently
 	// When values have been completely stable, small variations aren't anomalies
@@ -304,7 +341,7 @@ func (s *Store) CheckAnomaly(resourceID, metric string, value float64) (AnomalyS
 		effectiveStdDev = 1.0
 	}
 
-	zScore := (value - baseline.Mean) / effectiveStdDev
+	zScore := (value - effectiveMean) / effectiveStdDev
 	absZ := math.Abs(zScore)
 
 	// Also require a minimum absolute difference for practical significance
@@ -377,8 +414,11 @@ func (s *Store) checkResourceAnomaliesInternal(resourceID string, metrics map[st
 	for metric, value := range metrics {
 		severity, zScore, baseline := s.CheckAnomaly(resourceID, metric, value)
 		if severity != AnomalyNone && baseline != nil {
-			// Compute ratio: current value / baseline mean
-			ratio := value / baseline.Mean
+			// Use hourly mean for ratio/threshold calculations (consistent with CheckAnomaly)
+			effectiveMean, _ := baseline.GetHourlyMean(time.Now().Hour())
+
+			// Compute ratio: current value / effective baseline mean
+			ratio := value / effectiveMean
 
 			// Apply metric-specific filters to reduce noise
 			// Different metrics have different thresholds for what's "actionable"
@@ -389,7 +429,7 @@ func (s *Store) checkResourceAnomaliesInternal(resourceID string, metrics map[st
 				// Disk is critical - report if:
 				// 1. Usage is above 85% (absolute threshold), OR
 				// 2. Usage increased by more than 15 percentage points from baseline
-				if value >= 85.0 || (value-baseline.Mean) >= 15.0 {
+				if value >= 85.0 || (value-effectiveMean) >= 15.0 {
 					shouldReport = true
 				}
 
@@ -426,7 +466,7 @@ func (s *Store) checkResourceAnomaliesInternal(resourceID string, metrics map[st
 				CurrentValue:   value,
 				ZScore:         zScore,
 				Severity:       severity,
-				BaselineMean:   baseline.Mean,
+				BaselineMean:   effectiveMean,
 				BaselineStdDev: baseline.StdDev,
 			}
 
@@ -442,7 +482,7 @@ func (s *Store) checkResourceAnomaliesInternal(resourceID string, metrics map[st
 
 			// Trigger anomaly callback for event-driven processing
 			if onAnomaly != nil {
-				go onAnomaly(resourceID, resourceType, metric, severity, value, baseline.Mean)
+				go onAnomaly(resourceID, resourceType, metric, severity, value, effectiveMean)
 			}
 		}
 	}

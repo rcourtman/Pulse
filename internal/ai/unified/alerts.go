@@ -85,6 +85,13 @@ type UnifiedFinding struct {
 	EnhancedByAI  bool       `json:"enhanced_by_ai"`           // Whether AI has analyzed this
 	AIEnhancedAt  *time.Time `json:"ai_enhanced_at,omitempty"` // When AI analyzed
 
+	// Investigation fields (autonomous patrol investigation)
+	InvestigationSessionID string     `json:"investigation_session_id,omitempty"`
+	InvestigationStatus    string     `json:"investigation_status,omitempty"`
+	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts  int        `json:"investigation_attempts,omitempty"`
+
 	// Timestamps
 	DetectedAt time.Time  `json:"detected_at"`
 	LastSeenAt time.Time  `json:"last_seen_at"`

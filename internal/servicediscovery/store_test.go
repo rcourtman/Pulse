@@ -447,6 +447,83 @@ func TestStore_ListErrors(t *testing.T) {
 	}
 }
 
+func TestStore_GetChangedResources(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	// Save fingerprints for different resource types, using the same key
+	// format that collectFingerprints uses: "type:host:id"
+	dockerFP := &ContainerFingerprint{
+		ResourceID: "docker:host1:nginx",
+		HostID:     "host1",
+		Hash:       "aaa111",
+	}
+	lxcFP := &ContainerFingerprint{
+		ResourceID: "lxc:node1:101",
+		HostID:     "node1",
+		Hash:       "bbb222",
+	}
+	vmFP := &ContainerFingerprint{
+		ResourceID: "vm:node1:200",
+		HostID:     "node1",
+		Hash:       "ccc333",
+	}
+	for _, fp := range []*ContainerFingerprint{dockerFP, lxcFP, vmFP} {
+		if err := store.SaveFingerprint(fp); err != nil {
+			t.Fatalf("SaveFingerprint error: %v", err)
+		}
+	}
+
+	// No discoveries exist yet — all three should be reported as changed.
+	changed, err := store.GetChangedResources()
+	if err != nil {
+		t.Fatalf("GetChangedResources error: %v", err)
+	}
+	if len(changed) != 3 {
+		t.Fatalf("expected 3 changed (no discoveries yet), got %d: %v", len(changed), changed)
+	}
+
+	// Save discoveries with matching fingerprint hashes.
+	for _, d := range []*ResourceDiscovery{
+		{ID: "docker:host1:nginx", ResourceType: ResourceTypeDocker, HostID: "host1", ResourceID: "nginx", Fingerprint: "aaa111"},
+		{ID: "lxc:node1:101", ResourceType: ResourceTypeLXC, HostID: "node1", ResourceID: "101", Fingerprint: "bbb222"},
+		{ID: "vm:node1:200", ResourceType: ResourceTypeVM, HostID: "node1", ResourceID: "200", Fingerprint: "ccc333"},
+	} {
+		if err := store.Save(d); err != nil {
+			t.Fatalf("Save error: %v", err)
+		}
+	}
+
+	// All fingerprints match their discoveries — nothing should be changed.
+	changed, err = store.GetChangedResources()
+	if err != nil {
+		t.Fatalf("GetChangedResources error: %v", err)
+	}
+	if len(changed) != 0 {
+		t.Fatalf("expected 0 changed (all match), got %d: %v", len(changed), changed)
+	}
+
+	// Update the LXC fingerprint to simulate a change.
+	lxcFP.Hash = "bbb222_changed"
+	if err := store.SaveFingerprint(lxcFP); err != nil {
+		t.Fatalf("SaveFingerprint error: %v", err)
+	}
+
+	changed, err = store.GetChangedResources()
+	if err != nil {
+		t.Fatalf("GetChangedResources error: %v", err)
+	}
+	if len(changed) != 1 {
+		t.Fatalf("expected 1 changed (LXC only), got %d: %v", len(changed), changed)
+	}
+	if changed[0] != "lxc:node1:101" {
+		t.Fatalf("expected changed resource to be lxc:node1:101, got %s", changed[0])
+	}
+}
+
 func TestStore_DeleteError(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {

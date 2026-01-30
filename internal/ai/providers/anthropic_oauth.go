@@ -573,6 +573,7 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
 				errMsg = errResp.Error.Message
 			}
+			errMsg = appendRateLimitInfo(errMsg, resp)
 			lastErr = fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 			continue
 		}
@@ -580,9 +581,11 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 		if resp.StatusCode != http.StatusOK {
 			var errResp anthropicError
 			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
-				return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+				errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
+				return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 			}
-			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+			errMsg := appendRateLimitInfo(string(respBody), resp)
+			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 		}
 
 		lastErr = nil

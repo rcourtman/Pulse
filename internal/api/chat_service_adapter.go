@@ -7,6 +7,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // chatServiceAdapter wraps chat.Service to implement ai.ChatServiceProvider.
@@ -37,6 +38,7 @@ func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.Pat
 		SystemPrompt: req.SystemPrompt,
 		SessionID:    req.SessionID,
 		UseCase:      req.UseCase,
+		MaxTurns:     req.MaxTurns,
 	}, adaptCallback(callback))
 	if err != nil {
 		return nil, err
@@ -55,18 +57,38 @@ func (a *chatServiceAdapter) GetMessages(ctx context.Context, sessionID string) 
 	}
 	result := make([]ai.ChatMessage, len(messages))
 	for i, m := range messages {
-		result[i] = ai.ChatMessage{
-			ID:        m.ID,
-			Role:      m.Role,
-			Content:   m.Content,
-			Timestamp: m.Timestamp,
+		msg := ai.ChatMessage{
+			ID:               m.ID,
+			Role:             m.Role,
+			Content:          m.Content,
+			ReasoningContent: m.ReasoningContent,
+			Timestamp:        m.Timestamp,
 		}
+		for _, tc := range m.ToolCalls {
+			msg.ToolCalls = append(msg.ToolCalls, ai.ChatToolCall{
+				ID:    tc.ID,
+				Name:  tc.Name,
+				Input: tc.Input,
+			})
+		}
+		if m.ToolResult != nil {
+			msg.ToolResult = &ai.ChatToolResult{
+				ToolUseID: m.ToolResult.ToolUseID,
+				Content:   m.ToolResult.Content,
+				IsError:   m.ToolResult.IsError,
+			}
+		}
+		result[i] = msg
 	}
 	return result, nil
 }
 
 func (a *chatServiceAdapter) DeleteSession(ctx context.Context, sessionID string) error {
 	return a.svc.DeleteSession(ctx, sessionID)
+}
+
+func (a *chatServiceAdapter) ReloadConfig(ctx context.Context, cfg *config.AIConfig) error {
+	return a.svc.Restart(ctx, cfg)
 }
 
 // GetExecutor exposes the underlying chat service's tool executor so that

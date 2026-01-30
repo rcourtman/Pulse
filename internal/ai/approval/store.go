@@ -453,7 +453,9 @@ func (s *Store) save() {
 		approvals = append(approvals, a)
 	}
 	if data, err := json.MarshalIndent(approvals, "", "  "); err == nil {
-		os.WriteFile(s.approvalsFile(), data, 0600)
+		if err := os.WriteFile(s.approvalsFile(), data, 0600); err != nil {
+			log.Error().Err(err).Msg("Failed to save approvals")
+		}
 	}
 
 	// Save executions
@@ -462,7 +464,9 @@ func (s *Store) save() {
 		executions = append(executions, e)
 	}
 	if data, err := json.MarshalIndent(executions, "", "  "); err == nil {
-		os.WriteFile(s.executionsFile(), data, 0600)
+		if err := os.WriteFile(s.executionsFile(), data, 0600); err != nil {
+			log.Error().Err(err).Msg("Failed to save executions")
+		}
 	}
 }
 

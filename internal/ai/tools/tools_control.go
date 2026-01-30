@@ -18,34 +18,8 @@ import (
 func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_control",
-			Description: `Control Proxmox VMs/LXC containers or execute WRITE commands on infrastructure.
-
-IMPORTANT: For READ operations (grep, cat, tail, logs, ps, status checks), use pulse_read instead.
-This tool is for WRITE operations that modify state.
-
-Types:
-- guest: Start, stop, restart, shutdown, or delete VMs and LXC containers
-- command: Execute commands that MODIFY state (restart services, write files, etc.)
-
-USE pulse_control FOR:
-- Guest control: start/stop/restart/delete VMs and LXCs
-- Service management: systemctl restart, service start/stop
-- Package management: apt install, yum update
-- File modification: echo > file, sed -i, rm, mv, cp
-
-DO NOT use pulse_control for:
-- Reading logs → use pulse_read action=exec or action=logs
-- Checking status → use pulse_read action=exec
-- Reading files → use pulse_read action=file
-- Finding files → use pulse_read action=find
-
-Examples:
-- Restart VM: type="guest", guest_id="101", action="restart"
-- Restart service: type="command", command="systemctl restart nginx", target_host="webserver"
-
-For Docker container control, use pulse_docker.
-Note: Delete requires the guest to be stopped first.`,
+			Name:        "pulse_control",
+			Description: `WRITE operations: control VMs/LXCs (start/stop/restart/delete) or execute state-modifying commands. For read-only operations use pulse_read. For Docker use pulse_docker.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -197,7 +171,7 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 			if routing.TargetType == "container" || routing.TargetType == "vm" {
 				return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", targetHost, routing.TargetType)), nil
 			}
-			return NewErrorResult(fmt.Errorf("no agent available for target '%s'. Specify a valid hostname with a connected agent.", targetHost)), nil
+			return NewErrorResult(fmt.Errorf("no agent available for target '%s'. %s", targetHost, formatAvailableAgentHosts(e.agentServer.GetConnectedAgents()))), nil
 		}
 		return NewErrorResult(fmt.Errorf("no agent available for target")), nil
 	}
@@ -363,7 +337,28 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	}
 
 	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("✓ Successfully executed '%s' on %s (VMID %d). Action complete - no verification needed (state updates in ~10s).\n%s", action, guest.Name, guest.VMID, output)), nil
+		return NewTextResult(fmt.Sprintf("✓ Successfully executed '%s' on %s (VMID %d). The action is complete.\n%s", action, guest.Name, guest.VMID, output)), nil
+	}
+
+	// Detect idempotent success: the guest is already in the desired state.
+	// Proxmox returns exit code 255 with "not running" for stop/shutdown on a stopped guest,
+	// or "already running" for start on a running guest. These aren't failures — the desired
+	// state is already achieved.
+	outputLower := strings.ToLower(output)
+	alreadyDone := false
+	switch action {
+	case "stop", "shutdown":
+		alreadyDone = strings.Contains(outputLower, "not running")
+	case "start":
+		alreadyDone = strings.Contains(outputLower, "already running")
+	}
+	if alreadyDone {
+		return NewTextResult(fmt.Sprintf("✓ %s (VMID %d) is already %s. No action needed.\n", guest.Name, guest.VMID, func() string {
+			if action == "start" {
+				return "running"
+			}
+			return "stopped"
+		}())), nil
 	}
 
 	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
@@ -475,7 +470,7 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 	}
 
 	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("✓ Successfully executed 'docker %s' on container '%s' (host: %s). Action complete - no verification needed (state updates in ~10s).\n%s", action, container.Name, dockerHost.Hostname, output)), nil
+		return NewTextResult(fmt.Sprintf("✓ Successfully executed 'docker %s' on container '%s' (host: %s). The action is complete.\n%s", action, container.Name, dockerHost.Hostname, output)), nil
 	}
 
 	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
@@ -1049,6 +1044,33 @@ func formatTargetHostRequired(agents []agentexec.ConnectedAgent) string {
 		message = fmt.Sprintf("%s (+%d more)", message, len(hostnames)-maxItems)
 	}
 	return message
+}
+
+// formatAvailableAgentHosts returns a hint listing connected agent hostnames.
+func formatAvailableAgentHosts(agents []agentexec.ConnectedAgent) string {
+	hostnames := make([]string, 0, len(agents))
+	for _, agent := range agents {
+		name := strings.TrimSpace(agent.Hostname)
+		if name == "" {
+			name = strings.TrimSpace(agent.AgentID)
+		}
+		if name != "" {
+			hostnames = append(hostnames, name)
+		}
+	}
+	if len(hostnames) == 0 {
+		return "No agents are currently connected."
+	}
+	maxItems := 6
+	list := hostnames
+	if len(hostnames) > maxItems {
+		list = hostnames[:maxItems]
+	}
+	msg := fmt.Sprintf("Available targets: %s", strings.Join(list, ", "))
+	if len(hostnames) > maxItems {
+		msg = fmt.Sprintf("%s (+%d more)", msg, len(hostnames)-maxItems)
+	}
+	return msg
 }
 
 func formatControlApprovalNeeded(name string, vmid int, action, command, approvalID string) string {

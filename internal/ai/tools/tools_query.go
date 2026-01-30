@@ -256,11 +256,24 @@ var registeredInspectors = []ContentInspector{
 // ClassifyExecutionIntent determines whether a command can be proven non-mutating.
 // This is the main entry point for pulse_read gating decisions.
 func ClassifyExecutionIntent(command string) IntentResult {
+	// === PHASE 0: Shell chaining decomposition ===
+	// If the command contains ;, &&, or || outside quotes, split into
+	// sub-commands and classify each independently. If ALL are read-only,
+	// the whole chain is read-only. If ANY is write/unknown, block.
+	if hasShellChainingOutsideQuotes(command) {
+		return classifyChainedCommand(command)
+	}
+
+	return classifySingleCommand(command)
+}
+
+// classifySingleCommand classifies a single (non-chained) command.
+func classifySingleCommand(command string) IntentResult {
 	cmdLower := strings.ToLower(command)
 
 	// === PHASE 1: Mutation-capability guards ===
 	// These make ANY command potentially dangerous regardless of the binary.
-	// Includes: sudo, redirects, tee, subshells, pipes, shell chaining
+	// Includes: sudo, redirects, tee, subshells, pipes
 	if reason := checkMutationCapabilityGuards(command, cmdLower); reason != "" {
 		return IntentResult{Intent: IntentWriteOrUnknown, Reason: reason}
 	}
@@ -308,9 +321,9 @@ func ClassifyExecutionIntent(command string) IntentResult {
 		}
 	}
 
-	// === PHASE 6: Conservative fallback ===
-	// Unknown command with no inspector match → treat as write
-	return IntentResult{Intent: IntentWriteOrUnknown, Reason: "unknown command; no inspector matched"}
+	// === PHASE 6: Model-trusted fallback ===
+	// Unknown command passed all blocklist and structural checks → trust the model
+	return IntentResult{Intent: IntentReadOnlyConditional, Reason: "model-trusted: passed all blocklist and structural checks"}
 }
 
 // checkMutationCapabilityGuards checks for shell patterns that enable mutation
@@ -356,10 +369,8 @@ func checkMutationCapabilityGuards(command, cmdLower string) string {
 		}
 	}
 
-	// Shell chaining outside quotes (;, &&, ||)
-	if hasShellChainingOutsideQuotes(command) {
-		return "shell chaining detected outside quotes"
-	}
+	// Note: shell chaining (;, &&, ||) is handled at the top level of
+	// ClassifyExecutionIntent via classifyChainedCommand, not here.
 
 	return ""
 }
@@ -1016,6 +1027,7 @@ func isReadOnlyByConstruction(cmdLower string) bool {
 		"grep", "awk", "sed", "find", "locate", "which", "whereis",
 		"journalctl", "dmesg",
 		"uname", "hostname", "whoami", "id", "groups",
+		"echo", "printf",
 		"date", "uptime", "env", "printenv", "locale",
 		"netstat", "ss", "ifconfig", "route", "arp",
 		"ping", "traceroute", "tracepath", "nslookup", "dig", "host",
@@ -1082,8 +1094,9 @@ func isReadOnlyByConstruction(cmdLower string) bool {
 		// Kubectl read-only commands
 		"kubectl get", "kubectl describe", "kubectl logs", "kubectl top", "kubectl cluster-info",
 		"kubectl api-resources", "kubectl api-versions", "kubectl version", "kubectl config view",
-		// Network connectivity check (scan-only, no data sent)
-		"nc -z", "nc -vz", "nc -zv",
+		// Network connectivity checks (zero-I/O port scan, read-only)
+		"nc -z", "nc -vz", "nc -zv", "nc -zw", "nc -zvw",
+		"netcat -z", "netcat -zv",
 		// Timeout wrapper (makes any command bounded)
 		"timeout ",
 	}
@@ -1108,11 +1121,33 @@ func isReadOnlyByConstruction(cmdLower string) bool {
 		}
 	}
 
+	// Special case: nc/netcat with -z flag anywhere (zero-I/O mode is read-only regardless of flag order)
+	if (firstWord == "nc" || firstWord == "netcat") && containsFlag(cmdLower, "-z") {
+		return true
+	}
+
 	// Special case: [ (test shorthand)
 	if strings.HasPrefix(cmdLower, "[ ") {
 		return true
 	}
 
+	return false
+}
+
+// containsFlag checks whether a flag (e.g. "-z") appears as a standalone
+// token or embedded in a combined short-flag group (e.g. "-zv", "-zvw") in cmd.
+func containsFlag(cmd, flag string) bool {
+	// flag is expected to be like "-z"
+	char := strings.TrimPrefix(flag, "-")
+	for _, field := range strings.Fields(cmd) {
+		if field == flag {
+			return true
+		}
+		// Check combined flags like "-zv", "-zvw", "-wzv"
+		if strings.HasPrefix(field, "-") && !strings.HasPrefix(field, "--") && strings.Contains(field[1:], char) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -1131,19 +1166,20 @@ func matchesWritePatterns(cmdLower string) string {
 		"pip install": "package install", "pip uninstall": "package uninstall",
 		"npm install": "package install", "npm uninstall": "package uninstall", "cargo install": "package install",
 		"docker rm": "container removal", "docker stop": "container stop", "docker kill": "container kill",
-		"docker restart": "container restart", "docker exec": "container exec",
+		"docker restart": "container restart", "docker exec": "container exec", "kubectl exec": "container exec",
 		"kill ": "process termination", "killall ": "process termination", "pkill ": "process termination",
 		"dd ": "disk write", "mkfs": "filesystem creation", "fdisk": "disk partition", "parted": "disk partition", "mkswap": "swap creation",
 		"iptables": "firewall modification", "firewall-cmd": "firewall modification", "ufw ": "firewall modification",
 		"truncate": "file truncation",
 		"chmod ":   "permission change", "chown ": "ownership change", "chgrp ": "group change",
 		"useradd": "user creation", "userdel": "user deletion", "usermod": "user modification",
-		"passwd": "password change", "chpasswd": "password change",
+		"chpasswd":   "password change",
 		"crontab -e": "cron edit", "crontab -r": "cron removal", "crontab -": "cron modification",
 		"visudo": "sudoers edit", "vipw": "passwd edit",
 		"mount ": "filesystem mount", "umount ": "filesystem unmount",
 		"modprobe": "kernel module", "rmmod": "kernel module removal", "insmod": "kernel module insertion",
 		"sysctl -w": "kernel parameter change",
+		"nc -l":     "network listener",
 	}
 	for pattern, reason := range highRiskPatterns {
 		if strings.Contains(cmdLower, pattern) {
@@ -1152,9 +1188,13 @@ func matchesWritePatterns(cmdLower string) string {
 	}
 
 	// Command-start-only patterns: these must be the first word to avoid matching
-	// substrings in arguments (e.g., "pve-daily-utils.service" contains "service").
+	// substrings in arguments (e.g., "pve-daily-utils.service" contains "service",
+	// "grep /etc/passwd" contains "passwd").
 	if strings.HasPrefix(cmdLower, "service ") {
 		return "service control"
+	}
+	if strings.HasPrefix(cmdLower, "passwd") {
+		return "password change"
 	}
 
 	// Medium-risk patterns
@@ -1162,7 +1202,9 @@ func matchesWritePatterns(cmdLower string) string {
 		"mv ": "file move", "cp ": "file copy",
 		"sed -i": "in-place edit", "awk -i": "in-place edit",
 		"touch ": "file creation", "mkdir ": "directory creation",
-		"echo ": "output (may redirect)", "printf ": "output (may redirect)",
+		// echo/printf: output redirection is already caught by Phase 1 (hasStdoutRedirect).
+		// Without a redirect, echo/printf are read-only (just print to stdout).
+		// They are now in the read-only allowlist in Phase 3.
 		"wget -O": "file download", "wget --output": "file download",
 		"tar -x": "archive extraction", "tar x": "archive extraction", "unzip ": "archive extraction", "gunzip ": "archive extraction",
 	}
@@ -1179,8 +1221,8 @@ func matchesWritePatterns(cmdLower string) string {
 	if strings.Contains(cmdLower, "curl") {
 		if strings.Contains(cmdLower, "-d ") || strings.Contains(cmdLower, "--data") ||
 			strings.Contains(cmdLower, "--upload") ||
-			strings.Contains(cmdLower, "-X POST") || strings.Contains(cmdLower, "-X PUT") ||
-			strings.Contains(cmdLower, "-X DELETE") || strings.Contains(cmdLower, "-X PATCH") {
+			strings.Contains(cmdLower, "-x post") || strings.Contains(cmdLower, "-x put") ||
+			strings.Contains(cmdLower, "-x delete") || strings.Contains(cmdLower, "-x patch") {
 			return "HTTP mutation request"
 		}
 	}
@@ -1258,6 +1300,96 @@ func hasShellChainingOutsideQuotes(cmd string) bool {
 	}
 
 	return false
+}
+
+// splitChainedCommand splits a shell command on ;, &&, and || operators
+// that appear outside of quoted strings. Returns the individual sub-commands
+// with leading/trailing whitespace trimmed.
+func splitChainedCommand(cmd string) []string {
+	var parts []string
+	inSingleQuote := false
+	inDoubleQuote := false
+	start := 0
+
+	for i := 0; i < len(cmd); i++ {
+		ch := cmd[i]
+
+		if ch == '\\' && i+1 < len(cmd) {
+			i++
+			continue
+		}
+
+		switch ch {
+		case '\'':
+			if !inDoubleQuote {
+				inSingleQuote = !inSingleQuote
+			}
+		case '"':
+			if !inSingleQuote {
+				inDoubleQuote = !inDoubleQuote
+			}
+		case ';':
+			if !inSingleQuote && !inDoubleQuote {
+				parts = append(parts, strings.TrimSpace(cmd[start:i]))
+				start = i + 1
+			}
+		case '&':
+			if !inSingleQuote && !inDoubleQuote && i+1 < len(cmd) && cmd[i+1] == '&' {
+				parts = append(parts, strings.TrimSpace(cmd[start:i]))
+				start = i + 2
+				i++ // skip second &
+			}
+		case '|':
+			if !inSingleQuote && !inDoubleQuote && i+1 < len(cmd) && cmd[i+1] == '|' {
+				parts = append(parts, strings.TrimSpace(cmd[start:i]))
+				start = i + 2
+				i++ // skip second |
+			}
+		}
+	}
+
+	// Add the last segment
+	if start < len(cmd) {
+		last := strings.TrimSpace(cmd[start:])
+		if last != "" {
+			parts = append(parts, last)
+		}
+	}
+
+	return parts
+}
+
+// classifyChainedCommand handles commands with shell chaining operators.
+// It splits the command into sub-commands and classifies each individually.
+// If ALL sub-commands are read-only, the chain is allowed.
+// If ANY sub-command is write/unknown, the chain is blocked.
+func classifyChainedCommand(command string) IntentResult {
+	parts := splitChainedCommand(command)
+
+	if len(parts) == 0 {
+		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "empty chained command"}
+	}
+
+	// If splitting produced only 1 part (shouldn't happen since we checked
+	// hasShellChainingOutsideQuotes first), classify it directly.
+	if len(parts) == 1 {
+		return classifySingleCommand(parts[0])
+	}
+
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		result := classifySingleCommand(part)
+		if result.Intent != IntentReadOnlyCertain && result.Intent != IntentReadOnlyConditional {
+			return IntentResult{
+				Intent: IntentWriteOrUnknown,
+				Reason: fmt.Sprintf("chained sub-command not read-only: %s (reason: %s)", part, result.Reason),
+			}
+		}
+	}
+
+	return IntentResult{Intent: IntentReadOnlyCertain, Reason: "all chained sub-commands are read-only"}
 }
 
 // classifyCommandRisk provides backward-compatible risk classification.
@@ -1891,26 +2023,8 @@ func logRoutingMismatchDebug(targetHost string, childKinds, childIDs []string) {
 func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_query",
-			Description: `Query and search infrastructure resources. Start here to find resources by name.
-
-Actions:
-- search: Find resources by name, type, or status. Use this first when looking for a specific service/container/VM by name.
-- get: Get detailed info about a specific resource (CPU, memory, status, host)
-- config: Get VM/LXC configuration (disk, network, resources)
-- topology: Get hierarchical infrastructure view
-- list: List all infrastructure (lightweight overview)
-- health: Check connection health for instances
-
-When investigating applications (e.g., "check Jellyfin logs"):
-1. Use action="search" with query="jellyfin" to find where it runs
-2. Use pulse_discovery to get deep context (log paths, config locations)
-3. Use pulse_control type="command" to run investigative commands
-
-Examples:
-- Find a service: action="search", query="jellyfin"
-- Get resource details: action="get", resource_type="docker", resource_id="nginx"
-- List running VMs: action="list", type="vms", status="running"`,
+			Name:        "pulse_query",
+			Description: `Query and search infrastructure resources. Start here to find resources by name. Actions: search, get, config, topology, list, health.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{

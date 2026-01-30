@@ -43,7 +43,6 @@ func (a *PatrolHistoryPersistenceAdapter) SavePatrolRunHistory(runs []PatrolRunR
 			TriggerReason:      r.TriggerReason,
 			ScopeResourceIDs:   r.ScopeResourceIDs,
 			ScopeResourceTypes: r.ScopeResourceTypes,
-			ScopeDepth:         r.ScopeDepth,
 			ScopeContext:       r.ScopeContext,
 			AlertID:            r.AlertID,
 			FindingID:          r.FindingID,
@@ -66,6 +65,8 @@ func (a *PatrolHistoryPersistenceAdapter) SavePatrolRunHistory(runs []PatrolRunR
 			AIAnalysis:         r.AIAnalysis,
 			InputTokens:        r.InputTokens,
 			OutputTokens:       r.OutputTokens,
+			ToolCalls:          convertAIToolCallsToConfig(r.ToolCalls),
+			ToolCallCount:      r.ToolCallCount,
 		}
 	}
 	return a.config.SavePatrolRunHistory(records)
@@ -91,7 +92,6 @@ func (a *PatrolHistoryPersistenceAdapter) LoadPatrolRunHistory() ([]PatrolRunRec
 			TriggerReason:      r.TriggerReason,
 			ScopeResourceIDs:   r.ScopeResourceIDs,
 			ScopeResourceTypes: r.ScopeResourceTypes,
-			ScopeDepth:         r.ScopeDepth,
 			ScopeContext:       r.ScopeContext,
 			AlertID:            r.AlertID,
 			FindingID:          r.FindingID,
@@ -114,9 +114,51 @@ func (a *PatrolHistoryPersistenceAdapter) LoadPatrolRunHistory() ([]PatrolRunRec
 			AIAnalysis:         r.AIAnalysis,
 			InputTokens:        r.InputTokens,
 			OutputTokens:       r.OutputTokens,
+			ToolCalls:          convertConfigToolCallsToAI(r.ToolCalls),
+			ToolCallCount:      r.ToolCallCount,
 		}
 	}
 	return runs, nil
+}
+
+func convertAIToolCallsToConfig(calls []ToolCallRecord) []config.ToolCallRecord {
+	if len(calls) == 0 {
+		return nil
+	}
+	out := make([]config.ToolCallRecord, len(calls))
+	for i, c := range calls {
+		out[i] = config.ToolCallRecord{
+			ID:        c.ID,
+			ToolName:  c.ToolName,
+			Input:     c.Input,
+			Output:    c.Output,
+			Success:   c.Success,
+			StartTime: c.StartTime,
+			EndTime:   c.EndTime,
+			Duration:  c.Duration,
+		}
+	}
+	return out
+}
+
+func convertConfigToolCallsToAI(calls []config.ToolCallRecord) []ToolCallRecord {
+	if len(calls) == 0 {
+		return nil
+	}
+	out := make([]ToolCallRecord, len(calls))
+	for i, c := range calls {
+		out[i] = ToolCallRecord{
+			ID:        c.ID,
+			ToolName:  c.ToolName,
+			Input:     c.Input,
+			Output:    c.Output,
+			Success:   c.Success,
+			StartTime: c.StartTime,
+			EndTime:   c.EndTime,
+			Duration:  c.Duration,
+		}
+	}
+	return out
 }
 
 // PatrolRunHistoryStore provides thread-safe storage for patrol run history with optional persistence
@@ -261,8 +303,9 @@ func (s *PatrolRunHistoryStore) scheduleSaveLocked() {
 				log.Error().Err(err).Msg("Failed to save patrol run history")
 				s.mu.Lock()
 				s.lastSaveError = err
+				onErr := s.onSaveError
 				s.mu.Unlock()
-				if onErr := s.onSaveError; onErr != nil {
+				if onErr != nil {
 					onErr(err)
 				}
 			} else {

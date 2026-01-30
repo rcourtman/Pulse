@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -118,11 +119,6 @@ type BackupProvider interface {
 type StorageProvider interface {
 	GetStorage() []models.Storage
 	GetCephClusters() []models.CephCluster
-}
-
-// StorageConfigProvider provides storage configuration data.
-type StorageConfigProvider interface {
-	GetStorageConfig(instance string) ([]StorageConfigSummary, error)
 }
 
 // GuestConfigProvider provides guest configuration data (VM/LXC).
@@ -322,12 +318,12 @@ type ExecutorConfig struct {
 	FindingsProvider FindingsProvider
 
 	// Optional providers - infrastructure
-	BackupProvider        BackupProvider
-	StorageProvider       StorageProvider
-	StorageConfigProvider StorageConfigProvider
-	GuestConfigProvider   GuestConfigProvider
-	DiskHealthProvider    DiskHealthProvider
-	UpdatesProvider       UpdatesProvider
+	BackupProvider  BackupProvider
+	StorageProvider StorageProvider
+
+	GuestConfigProvider GuestConfigProvider
+	DiskHealthProvider  DiskHealthProvider
+	UpdatesProvider     UpdatesProvider
 
 	// Optional providers - management
 	MetadataUpdater     MetadataUpdater
@@ -363,12 +359,12 @@ type PulseToolExecutor struct {
 	findingsProvider FindingsProvider
 
 	// Infrastructure context providers
-	backupProvider        BackupProvider
-	storageProvider       StorageProvider
-	storageConfigProvider StorageConfigProvider
-	guestConfigProvider   GuestConfigProvider
-	diskHealthProvider    DiskHealthProvider
-	updatesProvider       UpdatesProvider
+	backupProvider  BackupProvider
+	storageProvider StorageProvider
+
+	guestConfigProvider GuestConfigProvider
+	diskHealthProvider  DiskHealthProvider
+	updatesProvider     UpdatesProvider
 
 	// Management providers
 	metadataUpdater     MetadataUpdater
@@ -403,7 +399,8 @@ type PulseToolExecutor struct {
 
 	// Patrol finding creator — set only during a patrol run, nil otherwise.
 	// Enables patrol_report_finding, patrol_resolve_finding, patrol_get_findings tools.
-	patrolFindingCreator PatrolFindingCreator
+	patrolFindingCreatorMu sync.RWMutex
+	patrolFindingCreator   PatrolFindingCreator
 
 	// Tool registry
 	registry *ToolRegistry
@@ -428,17 +425,17 @@ type TelemetryCallback interface {
 // NewPulseToolExecutor creates a new Pulse tool executor with the given configuration
 func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 	e := &PulseToolExecutor{
-		stateProvider:            cfg.StateProvider,
-		policy:                   cfg.Policy,
-		agentServer:              cfg.AgentServer,
-		metricsHistory:           cfg.MetricsHistory,
-		baselineProvider:         cfg.BaselineProvider,
-		patternProvider:          cfg.PatternProvider,
-		alertProvider:            cfg.AlertProvider,
-		findingsProvider:         cfg.FindingsProvider,
-		backupProvider:           cfg.BackupProvider,
-		storageProvider:          cfg.StorageProvider,
-		storageConfigProvider:    cfg.StorageConfigProvider,
+		stateProvider:    cfg.StateProvider,
+		policy:           cfg.Policy,
+		agentServer:      cfg.AgentServer,
+		metricsHistory:   cfg.MetricsHistory,
+		baselineProvider: cfg.BaselineProvider,
+		patternProvider:  cfg.PatternProvider,
+		alertProvider:    cfg.AlertProvider,
+		findingsProvider: cfg.FindingsProvider,
+		backupProvider:   cfg.BackupProvider,
+		storageProvider:  cfg.StorageProvider,
+
 		guestConfigProvider:      cfg.GuestConfigProvider,
 		diskHealthProvider:       cfg.DiskHealthProvider,
 		updatesProvider:          cfg.UpdatesProvider,
@@ -525,11 +522,6 @@ func (e *PulseToolExecutor) SetStorageProvider(provider StorageProvider) {
 	e.storageProvider = provider
 }
 
-// SetStorageConfigProvider sets the storage config provider
-func (e *PulseToolExecutor) SetStorageConfigProvider(provider StorageConfigProvider) {
-	e.storageConfigProvider = provider
-}
-
 // SetGuestConfigProvider sets the guest config provider
 func (e *PulseToolExecutor) SetGuestConfigProvider(provider GuestConfigProvider) {
 	e.guestConfigProvider = provider
@@ -589,11 +581,15 @@ func (e *PulseToolExecutor) SetTelemetryCallback(cb TelemetryCallback) {
 // SetPatrolFindingCreator sets (or clears) the patrol finding creator.
 // This must be set before a patrol run and cleared after.
 func (e *PulseToolExecutor) SetPatrolFindingCreator(creator PatrolFindingCreator) {
+	e.patrolFindingCreatorMu.Lock()
 	e.patrolFindingCreator = creator
+	e.patrolFindingCreatorMu.Unlock()
 }
 
 // GetPatrolFindingCreator returns the current patrol finding creator (may be nil).
 func (e *PulseToolExecutor) GetPatrolFindingCreator() PatrolFindingCreator {
+	e.patrolFindingCreatorMu.RLock()
+	defer e.patrolFindingCreatorMu.RUnlock()
 	return e.patrolFindingCreator
 }
 
@@ -626,7 +622,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case "pulse_metrics":
 		return e.stateProvider != nil || e.metricsHistory != nil || e.baselineProvider != nil || e.patternProvider != nil
 	case "pulse_storage":
-		return e.stateProvider != nil || e.storageProvider != nil || e.backupProvider != nil || e.storageConfigProvider != nil || e.diskHealthProvider != nil
+		return e.stateProvider != nil || e.storageProvider != nil || e.backupProvider != nil || e.diskHealthProvider != nil
 	case "pulse_docker":
 		return e.stateProvider != nil || e.updatesProvider != nil
 	case "pulse_kubernetes":
@@ -647,7 +643,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 		return e.stateProvider != nil
 	case "patrol_report_finding", "patrol_resolve_finding", "patrol_get_findings":
 		// Always available when registered; handler checks patrolFindingCreator at runtime
-		return e.patrolFindingCreator != nil
+		return e.GetPatrolFindingCreator() != nil
 	default:
 		return e.stateProvider != nil
 	}

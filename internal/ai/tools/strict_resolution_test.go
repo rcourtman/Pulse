@@ -65,6 +65,48 @@ func TestClassifyCommandRisk(t *testing.T) {
 		{"whoami", "whoami", CommandRiskReadOnly},
 		{"date", "date +%Y-%m-%d", CommandRiskReadOnly},
 
+		// Proxmox read-only commands
+		{"pct config", "pct config 105", CommandRiskReadOnly},
+		{"pct df", "pct df 105", CommandRiskReadOnly},
+		{"qm config", "qm config 100", CommandRiskReadOnly},
+		{"pvesm status", "pvesm status --storage pbs-pimox", CommandRiskReadOnly},
+		{"pvesm list", "pvesm list local", CommandRiskReadOnly},
+		{"pvesh get", "pvesh get /cluster/resources", CommandRiskReadOnly},
+		{"pvecm status", "pvecm status", CommandRiskReadOnly},
+		{"pveversion", "pveversion", CommandRiskReadOnly},
+		// ZFS/ZPool read-only
+		{"zfs list", "zfs list -t snapshot", CommandRiskReadOnly},
+		{"zfs list piped", "zfs list -t snapshot | grep 105", CommandRiskReadOnly},
+		{"zfs get", "zfs get all data/subvol-105-disk-0", CommandRiskReadOnly},
+		{"zpool status", "zpool status", CommandRiskReadOnly},
+		{"zpool list", "zpool list", CommandRiskReadOnly},
+		// Network with protocol flags
+		{"ip -4 addr", "ip -4 addr show", CommandRiskReadOnly},
+		{"ip -6 addr", "ip -6 addr show", CommandRiskReadOnly},
+		{"ip -4 route", "ip -4 route show", CommandRiskReadOnly},
+		// Hardware inspection
+		{"smartctl", "smartctl -a /dev/sda", CommandRiskReadOnly},
+		{"smartctl health", "smartctl -H /dev/nvme0", CommandRiskReadOnly},
+		{"nvme list", "nvme list", CommandRiskReadOnly},
+		{"sensors", "sensors", CommandRiskReadOnly},
+		{"lspci", "lspci -v", CommandRiskReadOnly},
+		// Curl read-only variants
+		{"curl -k", "curl -k https://192.168.0.8:8007", CommandRiskReadOnly},
+		{"curl https", "curl https://localhost:8080/health", CommandRiskReadOnly},
+		{"curl http", "curl http://localhost:8080/api/status", CommandRiskReadOnly},
+
+		// Network inspection commands
+		{"ip neigh", "ip neigh", CommandRiskReadOnly},
+		{"ip neighbor show", "ip neighbor show", CommandRiskReadOnly},
+		{"arp table", "arp -an", CommandRiskReadOnly},
+		{"arp", "arp", CommandRiskReadOnly},
+		{"cat proc arp", "cat /proc/net/arp", CommandRiskReadOnly},
+
+		// service command vs .service in arguments
+		{"service restart", "service nginx restart", CommandRiskHighWrite},
+		{"systemd unit .service", `journalctl -u pve-daily-utils.service --since "2 days ago"`, CommandRiskReadOnly},
+		{"systemctl status with .service", "systemctl status pve-daily-utils.service", CommandRiskReadOnly},
+
 		// Safe stderr redirects - should be ReadOnly
 		{"stderr to null", "find /var/log -name '*.log' 2>/dev/null", CommandRiskReadOnly},
 		{"stderr to stdout", "journalctl -u nginx 2>&1 | grep error", CommandRiskReadOnly},
@@ -98,8 +140,8 @@ func TestClassifyCommandRisk(t *testing.T) {
 		{"sqlite3 with redirect", `sqlite3 /data/app.db "SELECT 1" > /tmp/out`, CommandRiskHighWrite},
 		{"sqlite3 with chaining outside quotes", `sqlite3 /data/app.db ".tables"; rm -rf /`, CommandRiskHighWrite}, // HighWrite because contains "rm"
 		{"sqlite3 with sudo", `sudo sqlite3 /data/app.db "SELECT 1"`, CommandRiskHighWrite},
-		{"sqlite3 with && outside quotes", `sqlite3 db.db "SELECT 1" && echo done`, CommandRiskMediumWrite},
-		{"sqlite3 with || outside quotes", `sqlite3 db.db "SELECT 1" || echo failed`, CommandRiskMediumWrite},
+		{"sqlite3 with && outside quotes", `sqlite3 db.db "SELECT 1" && echo done`, CommandRiskReadOnly},   // Both sub-commands are read-only
+		{"sqlite3 with || outside quotes", `sqlite3 db.db "SELECT 1" || echo failed`, CommandRiskReadOnly}, // Both sub-commands are read-only
 
 		// Dual-use tools: Semicolons INSIDE quotes are allowed (normal SQL syntax)
 		{"sqlite3 select with semicolon", `sqlite3 /data/app.db "SELECT 1;"`, CommandRiskReadOnly},
@@ -1268,27 +1310,24 @@ func TestRoutingOrder_VMRoutesViaQMExec(t *testing.T) {
 // These tests validate the contract invariants, not specific commands.
 // ============================================================================
 
-// TestExecutionIntent_ConservativeFallback validates the invariant:
-// "Unknown commands with no inspector match → IntentWriteOrUnknown"
+// TestExecutionIntent_ConservativeFallback validates that commands blocked by
+// specific phases (Phase 1.5 interactive REPLs, Phase 2 write patterns, Phase 5
+// SQL without inline SQL) still return IntentWriteOrUnknown.
 //
-// This is critical for safety: if we can't prove a command is read-only,
-// we must treat it as potentially dangerous.
+// Note: Truly unknown commands (unknown binaries, custom scripts) now pass through
+// to Phase 6 which trusts the model — see TestExecutionIntent_ModelTrustedFallback.
 func TestExecutionIntent_ConservativeFallback(t *testing.T) {
 	unknownCommands := []struct {
 		name    string
 		command string
 	}{
-		// Completely unknown binaries
-		{"unknown binary", "myunknownbinary --do-something"},
-		{"made up tool", "superspecialtool action=foo"},
-		{"custom script", "./internal-script.sh"},
+		// Phase 2: Known write patterns
+		{"nc listen mode", "nc -l -p 9000"}, // Listening = write/server (Phase 2 blocklist)
 
-		// Known tools but we can't prove read-only
-		{"curl without flags", "curl http://example.com"}, // Could be POST by default
-		{"wget without flags", "wget http://example.com"}, // Downloads = write
-
-		// SQL CLI without inline SQL (could be piped/interactive)
+		// Phase 5: SQL CLI without inline SQL (could be piped/interactive)
 		{"sqlite3 no inline sql", "sqlite3 /data/app.db"},
+
+		// Phase 1.5: Interactive REPLs
 		{"mysql no query", "mysql -u root mydb"},
 		{"psql interactive", "psql -d production"},
 	}
@@ -1299,6 +1338,38 @@ func TestExecutionIntent_ConservativeFallback(t *testing.T) {
 			if result.Intent != IntentWriteOrUnknown {
 				t.Errorf("ClassifyExecutionIntent(%q) = %v (reason: %s), want IntentWriteOrUnknown",
 					tt.command, result.Intent, result.Reason)
+			}
+		})
+	}
+}
+
+// TestExecutionIntent_ModelTrustedFallback validates that truly unknown commands
+// (unknown binaries, custom scripts) that pass all blocklist and structural checks
+// are allowed with IntentReadOnlyConditional and a "model-trusted" reason.
+//
+// This is the Phase 6 behavior: trust the model's judgment for commands that
+// aren't caught by any specific blocklist or structural guard.
+func TestExecutionIntent_ModelTrustedFallback(t *testing.T) {
+	unknownCommands := []struct {
+		name    string
+		command string
+	}{
+		{"unknown binary", "myunknownbinary --do-something"},
+		{"made up tool", "superspecialtool action=foo"},
+		{"custom script", "./internal-script.sh"},
+		{"wget without flags", "wget http://example.com"},
+	}
+
+	for _, tt := range unknownCommands {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ClassifyExecutionIntent(tt.command)
+			if result.Intent != IntentReadOnlyConditional {
+				t.Errorf("ClassifyExecutionIntent(%q) = %v (reason: %s), want IntentReadOnlyConditional",
+					tt.command, result.Intent, result.Reason)
+			}
+			if !strings.Contains(result.Reason, "model-trusted") {
+				t.Errorf("ClassifyExecutionIntent(%q) reason = %q, want 'model-trusted' in reason",
+					tt.command, result.Reason)
 			}
 		})
 	}
@@ -1368,6 +1439,11 @@ func TestExecutionIntent_ReadOnlyCertainVsConditional(t *testing.T) {
 		"ps aux",
 		"docker logs mycontainer",
 		"journalctl -u nginx",
+		"ip neigh",
+		"ip neighbor show",
+		"arp -an",
+		"nc -zv verdeclose 8007",
+		"nc -w 3 -zv example.com 22",
 	}
 
 	for _, cmd := range certainCommands {
@@ -1759,6 +1835,16 @@ func TestExecutionIntent_TemporalBoundsAllowed(t *testing.T) {
 			}
 		})
 	}
+
+	// journalctl with --since and a unit (exact command from patrol eval)
+	patrolCmd := `journalctl -u pve-daily-utils.service --since "2 days ago"`
+	t.Run("allow: "+patrolCmd, func(t *testing.T) {
+		result := ClassifyExecutionIntent(patrolCmd)
+		if result.Intent != IntentReadOnlyCertain {
+			t.Errorf("ClassifyExecutionIntent(%q) = %v (reason: %s), want IntentReadOnlyCertain",
+				patrolCmd, result.Intent, result.Reason)
+		}
+	})
 
 	// These should still be blocked (no bounds)
 	blockedCommands := []string{

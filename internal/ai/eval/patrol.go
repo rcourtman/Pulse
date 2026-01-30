@@ -19,7 +19,6 @@ type PatrolScenario struct {
 	Setup       func(r *Runner) error // optional pre-run setup
 	Teardown    func(r *Runner) error // optional post-run cleanup
 	Assertions  []PatrolAssertion
-	Deep        bool          // trigger deep patrol
 	Timeout     time.Duration // default 5m
 }
 
@@ -35,6 +34,7 @@ type PatrolRunResult struct {
 	RawEvents    []PatrolSSEEvent
 	Assertions   []AssertionResult
 	Completed    bool // true if patrol reported completion via status API
+	Quality      *PatrolQualityReport
 }
 
 // PatrolFinding mirrors the Finding JSON from the API.
@@ -91,6 +91,18 @@ func (r *Runner) RunPatrolScenario(scenario PatrolScenario) PatrolRunResult {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	// Optional patrol model override (e.g., to force a cheaper model for evals)
+	restoreModel, overrideErr := r.applyPatrolModelOverride(ctx)
+	if overrideErr != nil {
+		result.Error = fmt.Errorf("patrol model override failed: %w", overrideErr)
+		result.Success = false
+		result.Duration = time.Since(startTime)
+		return result
+	}
+	if restoreModel != nil {
+		defer restoreModel()
+	}
+
 	// Run optional setup
 	if scenario.Setup != nil {
 		if err := scenario.Setup(r); err != nil {
@@ -119,7 +131,7 @@ func (r *Runner) RunPatrolScenario(scenario PatrolScenario) PatrolRunResult {
 	}
 
 	// Trigger patrol run
-	if err := r.triggerPatrolRun(scenario.Deep); err != nil {
+	if err := r.triggerPatrolRun(); err != nil {
 		result.Error = fmt.Errorf("triggering patrol run: %w", err)
 		result.Success = false
 		result.Duration = time.Since(startTime)
@@ -127,7 +139,7 @@ func (r *Runner) RunPatrolScenario(scenario PatrolScenario) PatrolRunResult {
 	}
 
 	if r.config.Verbose {
-		fmt.Printf("  Patrol triggered (deep=%v)\n", scenario.Deep)
+		fmt.Printf("  Patrol triggered\n")
 	}
 
 	// Start SSE stream reader in background goroutine.
@@ -207,6 +219,9 @@ func (r *Runner) RunPatrolScenario(scenario PatrolScenario) PatrolRunResult {
 	if r.config.Verbose && len(findings) > 0 {
 		fmt.Printf("  Fetched %d findings from API\n", len(findings))
 	}
+
+	// Compute quality metrics (best-effort)
+	result.Quality = EvaluatePatrolQuality(&result)
 
 	// Run assertions
 	for _, assertion := range scenario.Assertions {
@@ -357,11 +372,8 @@ func (r *Runner) getPatrolStatus(ctx context.Context) (bool, bool, error) {
 }
 
 // triggerPatrolRun triggers POST /api/ai/patrol/run.
-func (r *Runner) triggerPatrolRun(deep bool) error {
+func (r *Runner) triggerPatrolRun() error {
 	url := r.config.BaseURL + "/api/ai/patrol/run"
-	if deep {
-		url += "?deep=true"
-	}
 
 	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
@@ -573,6 +585,30 @@ func (r *Runner) PrintPatrolSummary(result PatrolRunResult) {
 		fmt.Printf("\nFindings (%d):\n", len(result.Findings))
 		for _, f := range result.Findings {
 			fmt.Printf("  - [%s] %s: %s\n", f.Severity, f.Key, f.Title)
+		}
+	}
+
+	if result.Quality != nil {
+		q := result.Quality
+		fmt.Printf("\nQuality:\n")
+		if q.CoverageKnown {
+			if q.SignalsTotal > 0 {
+				fmt.Printf("  Signal coverage: %d/%d (%.0f%%)\n", q.SignalsMatched, q.SignalsTotal, q.SignalCoverage*100)
+			} else {
+				fmt.Printf("  Signal coverage: no signals detected\n")
+			}
+		} else {
+			fmt.Printf("  Signal coverage: unknown (no tool calls captured)\n")
+		}
+		if r.config.Verbose && len(q.Signals) > 0 {
+			fmt.Printf("  Signals:\n")
+			for _, s := range q.Signals {
+				status := "MISS"
+				if s.Matched {
+					status = "MATCH"
+				}
+				fmt.Printf("    - [%s] %s on %s (%s)\n", status, s.SignalType, s.ResourceID, s.Category)
+			}
 		}
 	}
 

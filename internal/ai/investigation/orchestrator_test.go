@@ -121,6 +121,156 @@ func TestInvestigateFinding_CannotFix(t *testing.T) {
 	assert.Equal(t, "cannot_fix", finding.InvestigationOutcome)
 }
 
+func TestParseInvestigationSummary_CaseInsensitive(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStore(tempDir)
+	orchestrator := NewOrchestrator(nil, store, nil, nil, DefaultConfig())
+
+	tests := []struct {
+		name            string
+		summary         string
+		expectFix       bool
+		expectedOutcome Outcome
+	}{
+		{
+			name:            "uppercase PROPOSED_FIX",
+			summary:         "PROPOSED_FIX: systemctl restart apache2\nTARGET_HOST: web-01",
+			expectFix:       true,
+			expectedOutcome: OutcomeFixQueued,
+		},
+		{
+			name:            "lowercase proposed_fix",
+			summary:         "proposed_fix: systemctl restart apache2\ntarget_host: web-01",
+			expectFix:       true,
+			expectedOutcome: OutcomeFixQueued,
+		},
+		{
+			name:            "mixed case Proposed_Fix",
+			summary:         "Proposed_Fix: systemctl restart nginx\nTarget_Host: local",
+			expectFix:       true,
+			expectedOutcome: OutcomeFixQueued,
+		},
+		{
+			name:            "lowercase cannot_fix",
+			summary:         "cannot_fix: Hardware failure requires manual intervention",
+			expectFix:       false,
+			expectedOutcome: OutcomeCannotFix,
+		},
+		{
+			name:            "mixed case Needs_Attention",
+			summary:         "Needs_Attention: Requires manual review",
+			expectFix:       false,
+			expectedOutcome: OutcomeNeedsAttention,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fix, outcome := orchestrator.parseInvestigationSummary(tt.summary)
+			if tt.expectFix && fix == nil {
+				t.Error("Expected fix to be non-nil")
+			}
+			if !tt.expectFix && fix != nil {
+				t.Error("Expected fix to be nil")
+			}
+			assert.Equal(t, tt.expectedOutcome, outcome)
+		})
+	}
+}
+
+func TestParseInvestigationSummary_MarkdownWrapped(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStore(tempDir)
+	orchestrator := NewOrchestrator(nil, store, nil, nil, DefaultConfig())
+
+	tests := []struct {
+		name            string
+		summary         string
+		expectedCommand string
+	}{
+		{
+			name:            "triple backtick with language",
+			summary:         "PROPOSED_FIX: ```bash\nsystemctl restart apache2\n```\nTARGET_HOST: web-01",
+			expectedCommand: "systemctl restart apache2",
+		},
+		{
+			name:            "triple backtick without language",
+			summary:         "PROPOSED_FIX: ```\nsystemctl restart apache2\n```",
+			expectedCommand: "systemctl restart apache2",
+		},
+		{
+			name:            "single backtick",
+			summary:         "PROPOSED_FIX: `systemctl restart apache2`",
+			expectedCommand: "systemctl restart apache2",
+		},
+		{
+			name:            "no backticks",
+			summary:         "PROPOSED_FIX: systemctl restart apache2",
+			expectedCommand: "systemctl restart apache2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fix, outcome := orchestrator.parseInvestigationSummary(tt.summary)
+			require.NotNil(t, fix, "Fix should not be nil")
+			assert.Equal(t, OutcomeFixQueued, outcome)
+			assert.Equal(t, tt.expectedCommand, fix.Commands[0])
+		})
+	}
+}
+
+func TestParseInvestigationSummary_EmptyCommand(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStore(tempDir)
+	orchestrator := NewOrchestrator(nil, store, nil, nil, DefaultConfig())
+
+	// PROPOSED_FIX with nothing after the colon
+	fix, outcome := orchestrator.parseInvestigationSummary("PROPOSED_FIX: \nSome other text")
+	assert.Nil(t, fix, "Fix should be nil for empty command")
+	assert.Equal(t, OutcomeNeedsAttention, outcome)
+}
+
+func TestParseInvestigationSummary_LongCommand(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStore(tempDir)
+	orchestrator := NewOrchestrator(nil, store, nil, nil, DefaultConfig())
+
+	// Create a command that exceeds maxCommandLength (2000 chars)
+	longCommand := make([]byte, 2500)
+	for i := range longCommand {
+		longCommand[i] = 'x'
+	}
+	summary := "PROPOSED_FIX: " + string(longCommand)
+
+	fix, outcome := orchestrator.parseInvestigationSummary(summary)
+	assert.Nil(t, fix, "Fix should be nil for overly long command")
+	assert.Equal(t, OutcomeNeedsAttention, outcome)
+}
+
+func TestStripMarkdownCodeFences(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"triple with language", "```bash\necho hello\n```", "echo hello"},
+		{"triple without language", "```\necho hello\n```", "echo hello"},
+		{"single backtick", "`echo hello`", "echo hello"},
+		{"no backticks", "echo hello", "echo hello"},
+		{"empty", "", ""},
+		{"just backticks", "``````", ""},
+		{"triple with multiline", "```sh\nfirst line\nsecond line\n```", "first line\nsecond line"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := stripMarkdownCodeFences(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestGetFixedCount(t *testing.T) {
 	tempDir := t.TempDir()
 	store := NewStore(tempDir)

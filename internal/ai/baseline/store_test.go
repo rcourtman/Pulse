@@ -595,6 +595,214 @@ func TestGetAllAnomalies_EmptyStore(t *testing.T) {
 	}
 }
 
+func TestGetHourlyMean_InsufficientSamples(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+
+	// Create data with only 2 samples at hour 3 (below the 3-sample threshold)
+	points := make([]MetricPoint, 50)
+	now := time.Now()
+	for i := 0; i < 50; i++ {
+		// Put most samples at other hours, only 2 at hour 3
+		hour := 10 // Default hour
+		if i < 2 {
+			hour = 3
+		}
+		ts := time.Date(now.Year(), now.Month(), now.Day(), hour, i, 0, 0, now.Location())
+		points[i] = MetricPoint{
+			Value:     50 + float64(i%5),
+			Timestamp: ts,
+		}
+	}
+
+	err := store.Learn("test-vm", "vm", "cpu", points)
+	if err != nil {
+		t.Fatalf("Learn failed: %v", err)
+	}
+
+	baseline, ok := store.GetBaseline("test-vm", "cpu")
+	if !ok {
+		t.Fatal("Baseline not found")
+	}
+
+	// Hour 3 has <3 samples, so GetHourlyMean should fall back to overall mean
+	mean, isHourly := baseline.GetHourlyMean(3)
+	if isHourly {
+		t.Error("Expected fallback to overall mean for hour with <3 samples")
+	}
+	if math.Abs(mean-baseline.Mean) > 0.001 {
+		t.Errorf("Expected overall mean %f, got %f", baseline.Mean, mean)
+	}
+}
+
+func TestGetHourlyMean_SufficientSamples(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+
+	// Create data with many samples at hour 14, all with value ~80
+	points := make([]MetricPoint, 50)
+	now := time.Now()
+	for i := 0; i < 50; i++ {
+		var hour int
+		var value float64
+		if i < 20 {
+			// 20 samples at hour 14 with value ~80
+			hour = 14
+			value = 80 + float64(i%3) - 1
+		} else {
+			// 30 samples at hour 10 with value ~30
+			hour = 10
+			value = 30 + float64(i%3) - 1
+		}
+		ts := time.Date(now.Year(), now.Month(), now.Day(), hour, i%60, 0, 0, now.Location())
+		points[i] = MetricPoint{Value: value, Timestamp: ts}
+	}
+
+	err := store.Learn("test-vm", "vm", "cpu", points)
+	if err != nil {
+		t.Fatalf("Learn failed: %v", err)
+	}
+
+	baseline, ok := store.GetBaseline("test-vm", "cpu")
+	if !ok {
+		t.Fatal("Baseline not found")
+	}
+
+	// Hour 14 has ≥3 samples, should return hourly mean
+	mean, isHourly := baseline.GetHourlyMean(14)
+	if !isHourly {
+		t.Error("Expected hourly mean to be used for hour with ≥3 samples")
+	}
+	// Hourly mean for hour 14 should be around 80
+	if math.Abs(mean-80) > 2 {
+		t.Errorf("Expected hourly mean ~80, got %f", mean)
+	}
+}
+
+func TestGetHourlyMean_OutOfRange(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+
+	points := make([]MetricPoint, 50)
+	for i := 0; i < 50; i++ {
+		points[i] = MetricPoint{Value: 50, Timestamp: time.Now()}
+	}
+
+	store.Learn("test-vm", "vm", "cpu", points)
+
+	baseline, ok := store.GetBaseline("test-vm", "cpu")
+	if !ok {
+		t.Fatal("Baseline not found")
+	}
+
+	// Hour -1 (out of range) should fall back to overall mean
+	mean, isHourly := baseline.GetHourlyMean(-1)
+	if isHourly {
+		t.Error("Expected fallback for hour -1")
+	}
+	if math.Abs(mean-50) > 0.001 {
+		t.Errorf("Expected overall mean 50, got %f", mean)
+	}
+
+	// Hour 24 (out of range) should fall back to overall mean
+	mean, isHourly = baseline.GetHourlyMean(24)
+	if isHourly {
+		t.Error("Expected fallback for hour 24")
+	}
+	if math.Abs(mean-50) > 0.001 {
+		t.Errorf("Expected overall mean 50, got %f", mean)
+	}
+}
+
+func TestLearn_PopulatesHourlyMeans(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+
+	// Create data distributed across hours 0, 6, 12, 18
+	points := make([]MetricPoint, 40)
+	now := time.Now()
+	hourValues := map[int]float64{0: 10, 6: 30, 12: 50, 18: 70}
+	idx := 0
+	for hour, value := range hourValues {
+		for j := 0; j < 10; j++ {
+			ts := time.Date(now.Year(), now.Month(), now.Day(), hour, j, 0, 0, now.Location())
+			points[idx] = MetricPoint{Value: value + float64(j%3) - 1, Timestamp: ts}
+			idx++
+		}
+	}
+
+	err := store.Learn("test-vm", "vm", "cpu", points)
+	if err != nil {
+		t.Fatalf("Learn failed: %v", err)
+	}
+
+	baseline, ok := store.GetBaseline("test-vm", "cpu")
+	if !ok {
+		t.Fatal("Baseline not found")
+	}
+
+	// Verify hourly means are populated for each hour
+	for hour, expectedValue := range hourValues {
+		mean, isHourly := baseline.GetHourlyMean(hour)
+		if !isHourly {
+			t.Errorf("Expected hourly mean for hour %d", hour)
+		}
+		if math.Abs(mean-expectedValue) > 2 {
+			t.Errorf("Hour %d: expected mean ~%.0f, got %f", hour, expectedValue, mean)
+		}
+	}
+
+	// Verify unpopulated hours fall back to overall mean
+	mean, isHourly := baseline.GetHourlyMean(3) // No data at hour 3
+	if isHourly {
+		t.Error("Expected fallback for hour 3 (no data)")
+	}
+	if math.Abs(mean-baseline.Mean) > 0.001 {
+		t.Errorf("Expected overall mean %f for hour 3, got %f", baseline.Mean, mean)
+	}
+}
+
+func TestCheckAnomaly_UsesHourlyMean(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+
+	// Create data with very different day vs night patterns:
+	// Night (hour 2): values around 10 (low usage)
+	// Day (hour 14): values around 90 (high usage)
+	points := make([]MetricPoint, 40)
+	now := time.Now()
+	for i := 0; i < 20; i++ {
+		ts := time.Date(now.Year(), now.Month(), now.Day(), 2, i, 0, 0, now.Location())
+		points[i] = MetricPoint{Value: 10 + float64(i%3) - 1, Timestamp: ts}
+	}
+	for i := 0; i < 20; i++ {
+		ts := time.Date(now.Year(), now.Month(), now.Day(), 14, i, 0, 0, now.Location())
+		points[20+i] = MetricPoint{Value: 90 + float64(i%3) - 1, Timestamp: ts}
+	}
+
+	err := store.Learn("test-vm", "vm", "cpu", points)
+	if err != nil {
+		t.Fatalf("Learn failed: %v", err)
+	}
+
+	baseline, ok := store.GetBaseline("test-vm", "cpu")
+	if !ok {
+		t.Fatal("Baseline not found")
+	}
+
+	// The overall mean should be around 50
+	if math.Abs(baseline.Mean-50) > 5 {
+		t.Logf("Overall mean: %f (expected ~50)", baseline.Mean)
+	}
+
+	// Verify hourly means are close to expected values
+	nightMean, _ := baseline.GetHourlyMean(2)
+	dayMean, _ := baseline.GetHourlyMean(14)
+	t.Logf("Night (hour 2) mean: %f, Day (hour 14) mean: %f, Overall mean: %f", nightMean, dayMean, baseline.Mean)
+
+	if math.Abs(nightMean-10) > 3 {
+		t.Errorf("Night mean should be ~10, got %f", nightMean)
+	}
+	if math.Abs(dayMean-90) > 3 {
+		t.Errorf("Day mean should be ~90, got %f", dayMean)
+	}
+}
+
 func TestFloatToStr(t *testing.T) {
 	testCases := []struct {
 		value     float64

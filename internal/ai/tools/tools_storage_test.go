@@ -124,7 +124,7 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 				Datastores: []models.PBSDatastore{
 					{
 						Name:  "ds1",
-						Usage: 0.5,
+						Usage: 50.0,
 						Free:  1024 * 1024 * 1024,
 					},
 				},
@@ -157,7 +157,7 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 				Name:    "store1",
 				Type:    "zfs",
 				Status:  "active",
-				Usage:   0.25,
+				Usage:   25.0,
 				Used:    1024 * 1024 * 1024,
 				Total:   4 * 1024 * 1024 * 1024,
 				Free:    3 * 1024 * 1024 * 1024,
@@ -198,8 +198,68 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 	if len(storageResp.Pools) != 1 || storageResp.Pools[0].ZFS == nil {
 		t.Fatalf("unexpected storage pools: %+v", storageResp.Pools)
 	}
+	// Verify UsagePercent is passed through directly (not double-multiplied).
+	// Storage.Usage is already in 0-100 range from safePercentage().
+	if storageResp.Pools[0].UsagePercent != 25.0 {
+		t.Errorf("storage pool UsagePercent = %v, want 25.0 (was double-multiplied before fix)", storageResp.Pools[0].UsagePercent)
+	}
 	if len(storageResp.CephClusters) != 1 || storageResp.CephClusters[0].UsedTB != 2 {
 		t.Fatalf("unexpected ceph clusters: %+v", storageResp.CephClusters)
+	}
+}
+
+func TestStorageUsagePercentNotDoubled(t *testing.T) {
+	// Regression test: Usage is already 0-100 from safePercentage().
+	// The bug was multiplying by 100 again, turning 25% into 2500%.
+	executor := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{}})
+
+	// PBS datastore path
+	executor.backupProvider = &stubBackupProvider{
+		pbs: []models.PBSInstance{
+			{
+				Name:   "pbs1",
+				Host:   "10.0.0.1",
+				Status: "online",
+				Datastores: []models.PBSDatastore{
+					{Name: "ds1", Usage: 12.3, Free: 1024 * 1024 * 1024},
+				},
+			},
+		},
+	}
+	result, _ := executor.executeListBackups(context.Background(), map[string]interface{}{})
+	var backupsResp BackupsResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &backupsResp); err != nil {
+		t.Fatalf("decode backups response: %v", err)
+	}
+	if len(backupsResp.PBSServers) != 1 || len(backupsResp.PBSServers[0].Datastores) != 1 {
+		t.Fatalf("unexpected PBS servers: %+v", backupsResp.PBSServers)
+	}
+	got := backupsResp.PBSServers[0].Datastores[0].UsagePercent
+	if got != 12.3 {
+		t.Errorf("PBS datastore UsagePercent = %v, want 12.3 (double-multiplied = %v)", got, 12.3*100)
+	}
+
+	// Storage pool path
+	executor.storageProvider = &stubStorageProvider{
+		storage: []models.Storage{
+			{
+				ID: "s1", Name: "s1", Type: "dir", Status: "active",
+				Usage: 45.7,
+				Used:  1024 * 1024 * 1024, Total: 4 * 1024 * 1024 * 1024, Free: 3 * 1024 * 1024 * 1024,
+			},
+		},
+	}
+	result2, _ := executor.executeListStorage(context.Background(), map[string]interface{}{})
+	var storageResp StorageResponse
+	if err := json.Unmarshal([]byte(result2.Content[0].Text), &storageResp); err != nil {
+		t.Fatalf("decode storage response: %v", err)
+	}
+	if len(storageResp.Pools) != 1 {
+		t.Fatalf("unexpected pools: %+v", storageResp.Pools)
+	}
+	got2 := storageResp.Pools[0].UsagePercent
+	if got2 != 45.7 {
+		t.Errorf("storage pool UsagePercent = %v, want 45.7 (double-multiplied = %v)", got2, 45.7*100)
 	}
 }
 

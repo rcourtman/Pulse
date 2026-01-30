@@ -50,11 +50,34 @@ func PatrolFindingQualityScenario() PatrolScenario {
 	}
 }
 
+// PatrolSignalCoverageScenario evaluates coverage of deterministic signals.
+func PatrolSignalCoverageScenario() PatrolScenario {
+	minCoverage := patrolSignalCoverageMin()
+	return PatrolScenario{
+		Name:        "Patrol Signal Coverage",
+		Description: "Do deterministic signals map to findings (coverage score)?",
+		Assertions: []PatrolAssertion{
+			PatrolAssertNoError(),
+			PatrolAssertCompleted(),
+			PatrolAssertSignalCoverage(minCoverage),
+		},
+	}
+}
+
 // AllPatrolScenarios returns all patrol scenarios.
 func AllPatrolScenarios() []PatrolScenario {
 	return []PatrolScenario{
 		PatrolBasicScenario(),
 		PatrolInvestigationScenario(),
 		PatrolFindingQualityScenario(),
+		PatrolSignalCoverageScenario(),
 	}
+}
+
+func patrolSignalCoverageMin() float64 {
+	if value, ok := envFloat("EVAL_PATROL_SIGNAL_COVERAGE_MIN"); ok {
+		return value
+	}
+	// Conservative default: require half of deterministic signals to be matched.
+	return 0.5
 }

@@ -21,6 +21,7 @@ func (a *InvestigationOrchestratorAdapter) InvestigateFinding(ctx context.Contex
 	// Convert to investigation package's Finding type
 	invFinding := &investigation.Finding{
 		ID:                     finding.ID,
+		Key:                    finding.Key,
 		Severity:               finding.Severity,
 		Category:               finding.Category,
 		ResourceID:             finding.ResourceID,
@@ -98,4 +99,35 @@ func (a *InvestigationOrchestratorAdapter) CanStartInvestigation() bool {
 // ReinvestigateFinding triggers a re-investigation of a finding
 func (a *InvestigationOrchestratorAdapter) ReinvestigateFinding(ctx context.Context, findingID, autonomyLevel string) error {
 	return a.orchestrator.ReinvestigateFinding(ctx, findingID, autonomyLevel)
+}
+
+// SetFixVerifier registers a PatrolService as the fix verifier on the underlying orchestrator.
+func (a *InvestigationOrchestratorAdapter) SetFixVerifier(patrol *PatrolService) {
+	a.orchestrator.SetFixVerifier(&patrolFixVerifier{patrol: patrol})
+}
+
+// SetMetricsCallback wires patrol Prometheus metrics into the orchestrator.
+func (a *InvestigationOrchestratorAdapter) SetMetricsCallback() {
+	a.orchestrator.SetMetricsCallback(&patrolMetricsCallback{})
+}
+
+// patrolMetricsCallback adapts PatrolMetrics to the investigation.MetricsCallback interface.
+type patrolMetricsCallback struct{}
+
+func (c *patrolMetricsCallback) RecordInvestigationOutcome(outcome string) {
+	GetPatrolMetrics().RecordInvestigationOutcome(outcome)
+}
+
+func (c *patrolMetricsCallback) RecordFixVerification(result string) {
+	GetPatrolMetrics().RecordFixVerification(result)
+}
+
+// patrolFixVerifier adapts PatrolService to the investigation.FixVerifier interface.
+type patrolFixVerifier struct {
+	patrol *PatrolService
+}
+
+// VerifyFixResolved delegates to PatrolService.VerifyFixResolved, converting types.
+func (v *patrolFixVerifier) VerifyFixResolved(ctx context.Context, finding *investigation.Finding) (bool, error) {
+	return v.patrol.VerifyFixResolved(ctx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
 }

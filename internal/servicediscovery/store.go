@@ -480,24 +480,22 @@ func (s *Store) GetChangedResources() ([]string, error) {
 
 	var changed []string
 	for resourceID, fp := range fingerprints {
-		// Build the full discovery ID
-		discoveryID := MakeResourceID(ResourceTypeDocker, fp.HostID, resourceID)
-
-		// Get the discovery
-		discovery, err := s.Get(discoveryID)
+		// The fingerprint key is already in resource ID format (type:host:id)
+		// so use it directly as the discovery ID
+		discovery, err := s.Get(resourceID)
 		if err != nil {
 			continue
 		}
 
 		// If no discovery exists, it needs discovery
 		if discovery == nil {
-			changed = append(changed, discoveryID)
+			changed = append(changed, resourceID)
 			continue
 		}
 
 		// If fingerprint hash differs from discovery's stored fingerprint, it changed
 		if discovery.Fingerprint != fp.Hash {
-			changed = append(changed, discoveryID)
+			changed = append(changed, resourceID)
 		}
 	}
 

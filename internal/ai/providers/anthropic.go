@@ -85,11 +85,18 @@ type anthropicMessage struct {
 
 // anthropicTool represents a regular function tool
 type anthropicTool struct {
-	Type        string                 `json:"type,omitempty"` // "web_search_20250305" for web search, omit for regular tools
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`  // Not used for web search
-	InputSchema map[string]interface{} `json:"input_schema,omitempty"` // Not used for web search
-	MaxUses     int                    `json:"max_uses,omitempty"`     // For web search: limit searches per request
+	Type         string                 `json:"type,omitempty"` // "web_search_20250305" for web search, omit for regular tools
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description,omitempty"`   // Not used for web search
+	InputSchema  map[string]interface{} `json:"input_schema,omitempty"`  // Not used for web search
+	MaxUses      int                    `json:"max_uses,omitempty"`      // For web search: limit searches per request
+	CacheControl *anthropicCacheControl `json:"cache_control,omitempty"` // Prompt caching breakpoint
+}
+
+// anthropicCacheControl marks a cache breakpoint for Anthropic prompt caching.
+// Everything up to and including the tool with this marker is cached.
+type anthropicCacheControl struct {
+	Type string `json:"type"` // "ephemeral"
 }
 
 // anthropicResponse is the response from the Anthropic API
@@ -116,8 +123,10 @@ type anthropicContent struct {
 }
 
 type anthropicUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
 }
 
 type anthropicError struct {
@@ -221,14 +230,12 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		anthropicReq.Tools = make([]anthropicTool, len(req.Tools))
 		for i, t := range req.Tools {
 			if t.Type == "web_search_20250305" {
-				// Web search tool has a special format
 				anthropicReq.Tools[i] = anthropicTool{
 					Type:    t.Type,
 					Name:    t.Name,
 					MaxUses: t.MaxUses,
 				}
 			} else {
-				// Regular function tool
 				anthropicReq.Tools[i] = anthropicTool{
 					Name:        t.Name,
 					Description: t.Description,
@@ -236,6 +243,9 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 				}
 			}
 		}
+		// Mark the last tool with cache_control so Anthropic caches all tool
+		// definitions (and everything before them) on subsequent turns.
+		anthropicReq.Tools[len(anthropicReq.Tools)-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
 	}
 
 	// Add tool_choice if specified
@@ -303,6 +313,7 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
 				errMsg = errResp.Error.Message
 			}
+			errMsg = appendRateLimitInfo(errMsg, resp)
 			lastErr = fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 			continue
 		}
@@ -311,9 +322,11 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		if resp.StatusCode != http.StatusOK {
 			var errResp anthropicError
 			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
-				return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+				errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
+				return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 			}
-			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+			errMsg := appendRateLimitInfo(string(respBody), resp)
+			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 		}
 
 		// Success - break out of retry loop
@@ -356,13 +369,18 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		}
 	}
 
-	// Log content summary for debugging
-	log.Debug().
+	// Log content summary and cache stats for debugging
+	logEvent := log.Debug().
 		Int("content_blocks", len(anthropicResp.Content)).
 		Int("text_length", len(textContent)).
 		Int("tool_calls", len(toolCalls)).
-		Str("stop_reason", anthropicResp.StopReason).
-		Msg("Anthropic response parsed")
+		Str("stop_reason", anthropicResp.StopReason)
+	if anthropicResp.Usage.CacheCreationInputTokens > 0 || anthropicResp.Usage.CacheReadInputTokens > 0 {
+		logEvent = logEvent.
+			Int("cache_creation_tokens", anthropicResp.Usage.CacheCreationInputTokens).
+			Int("cache_read_tokens", anthropicResp.Usage.CacheReadInputTokens)
+	}
+	logEvent.Msg("Anthropic response parsed")
 
 	return &ChatResponse{
 		Content:      textContent,
@@ -427,14 +445,16 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	cache := GetNotableCache()
 	notableCount := 0
 	for _, m := range result.Data {
-		isNotable := cache.IsNotable("anthropic", m.ID, 0)
+		createdAt := parseModelCreatedAt(m.CreatedAt)
+		isNotable := cache.IsNotable("anthropic", m.ID, createdAt)
 		if isNotable {
 			notableCount++
 		}
 		models = append(models, ModelInfo{
-			ID:      m.ID,
-			Name:    m.DisplayName,
-			Notable: isNotable,
+			ID:        m.ID,
+			Name:      m.DisplayName,
+			CreatedAt: createdAt,
+			Notable:   isNotable,
 		})
 	}
 
@@ -448,6 +468,20 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	log.Debug().Strs("models", modelIDs).Msg("Anthropic models")
 
 	return models, nil
+}
+
+func parseModelCreatedAt(value string) int64 {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if parsed, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return parsed.Unix()
+	}
+	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+		return parsed.Unix()
+	}
+	return 0
 }
 
 // SupportsThinking returns true if the model supports extended thinking
@@ -582,6 +616,8 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 				}
 			}
 		}
+		// Mark the last tool with cache_control for prompt caching (same as non-streaming).
+		anthropicReq.Tools[len(anthropicReq.Tools)-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
 	}
 
 	// Add tool_choice if specified (same as non-streaming)
@@ -617,9 +653,11 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 		respBody, _ := io.ReadAll(resp.Body)
 		var errResp anthropicError
 		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
-			return fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+			errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
+			return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 		}
-		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+		errMsg := appendRateLimitInfo(string(respBody), resp)
+		return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 	}
 
 	// Parse SSE stream

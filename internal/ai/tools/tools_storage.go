@@ -11,40 +11,19 @@ import (
 func (e *PulseToolExecutor) registerStorageTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_storage",
-			Description: `Query storage pools, backups, snapshots, Ceph, and replication.
-
-Types:
-- pools: Storage pool usage and health (ZFS, Ceph, LVM, etc.)
-- config: Proxmox storage.cfg configuration
-- backups: Backup status for VMs/containers (PBS and PVE)
-- backup_tasks: Recent backup task history
-- snapshots: VM/container snapshots
-- ceph: Ceph cluster status from Proxmox API
-- ceph_details: Detailed Ceph status from host agents
-- replication: Proxmox replication job status
-- pbs_jobs: PBS backup, sync, verify, prune jobs
-- raid: Host RAID array status
-- disk_health: SMART and RAID health from agents
-- resource_disks: VM/container filesystem usage
-
-Examples:
-- List storage pools: type="pools"
-- Get specific storage: type="pools", storage_id="local-lvm"
-- Get backups for VM: type="backups", resource_id="101"
-- Get Ceph status: type="ceph"
-- Get replication jobs: type="replication"`,
+			Name:        "pulse_storage",
+			Description: `Query storage pools, backups, snapshots, Ceph, replication, RAID, and disk health. Use the "type" parameter to select what to query.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"type": {
 						Type:        "string",
 						Description: "Storage type to query",
-						Enum:        []string{"pools", "config", "backups", "backup_tasks", "snapshots", "ceph", "ceph_details", "replication", "pbs_jobs", "raid", "disk_health", "resource_disks"},
+						Enum:        []string{"pools", "backups", "backup_tasks", "snapshots", "ceph", "ceph_details", "replication", "pbs_jobs", "raid", "disk_health", "resource_disks"},
 					},
 					"storage_id": {
 						Type:        "string",
-						Description: "Filter by storage ID (for pools, config)",
+						Description: "Filter by storage ID (for pools)",
 					},
 					"resource_id": {
 						Type:        "string",
@@ -119,8 +98,7 @@ func (e *PulseToolExecutor) executeStorage(ctx context.Context, args map[string]
 	switch storageType {
 	case "pools":
 		return e.executeListStorage(ctx, args)
-	case "config":
-		return e.executeGetStorageConfig(ctx, args)
+
 	case "backups":
 		return e.executeListBackups(ctx, args)
 	case "backup_tasks":
@@ -142,7 +120,7 @@ func (e *PulseToolExecutor) executeStorage(ctx context.Context, args map[string]
 	case "resource_disks":
 		return e.executeGetResourceDisks(ctx, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown type: %s. Use: pools, config, backups, backup_tasks, snapshots, ceph, ceph_details, replication, pbs_jobs, raid, disk_health, resource_disks", storageType)), nil
+		return NewErrorResult(fmt.Errorf("unknown type: %s. Use: pools, backups, backup_tasks, snapshots, ceph, ceph_details, replication, pbs_jobs, raid, disk_health, resource_disks", storageType)), nil
 	}
 }
 
@@ -218,7 +196,7 @@ func (e *PulseToolExecutor) executeListBackups(_ context.Context, args map[strin
 		for _, ds := range pbs.Datastores {
 			server.Datastores = append(server.Datastores, DatastoreSummary{
 				Name:         ds.Name,
-				UsagePercent: ds.Usage * 100,
+				UsagePercent: ds.Usage,
 				FreeGB:       float64(ds.Free) / (1024 * 1024 * 1024),
 			})
 		}
@@ -294,7 +272,7 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 			Enabled:      s.Enabled,
 			Active:       s.Active,
 			Path:         s.Path,
-			UsagePercent: s.Usage * 100,
+			UsagePercent: s.Usage,
 			UsedGB:       float64(s.Used) / (1024 * 1024 * 1024),
 			TotalGB:      float64(s.Total) / (1024 * 1024 * 1024),
 			FreeGB:       float64(s.Free) / (1024 * 1024 * 1024),
@@ -343,54 +321,6 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 	}
 
 	return NewJSONResult(response), nil
-}
-
-func (e *PulseToolExecutor) executeGetStorageConfig(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	storageID, _ := args["storage_id"].(string)
-	instance, _ := args["instance"].(string)
-	node, _ := args["node"].(string)
-
-	storageID = strings.TrimSpace(storageID)
-	instance = strings.TrimSpace(instance)
-	node = strings.TrimSpace(node)
-
-	if e.storageConfigProvider == nil {
-		return NewTextResult("Storage configuration not available."), nil
-	}
-
-	configs, err := e.storageConfigProvider.GetStorageConfig(instance)
-	if err != nil {
-		return NewErrorResult(err), nil
-	}
-
-	response := StorageConfigResponse{}
-	for _, cfg := range configs {
-		if storageID != "" && !strings.EqualFold(cfg.ID, storageID) && !strings.EqualFold(cfg.Name, storageID) {
-			continue
-		}
-		if instance != "" && !strings.EqualFold(cfg.Instance, instance) {
-			continue
-		}
-		if node != "" && !storageConfigHasNode(cfg.Nodes, node) {
-			continue
-		}
-		response.Storages = append(response.Storages, cfg)
-	}
-
-	if response.Storages == nil {
-		response.Storages = []StorageConfigSummary{}
-	}
-
-	return NewJSONResult(response), nil
-}
-
-func storageConfigHasNode(nodes []string, node string) bool {
-	for _, n := range nodes {
-		if strings.EqualFold(strings.TrimSpace(n), node) {
-			return true
-		}
-	}
-	return false
 }
 
 func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string]interface{}) (CallToolResult, error) {

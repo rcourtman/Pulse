@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,15 +14,18 @@ import (
 
 // mockPatrolHistoryPersistence implements PatrolHistoryPersistence for testing
 type mockPatrolHistoryPersistence struct {
+	mu        sync.Mutex
 	runs      []PatrolRunRecord
 	saveErr   error
 	loadErr   error
-	saveCalls int
-	loadCalls int
+	saveCalls atomic.Int32
+	loadCalls atomic.Int32
 }
 
 func (m *mockPatrolHistoryPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
-	m.saveCalls++
+	m.saveCalls.Add(1)
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.saveErr != nil {
 		return m.saveErr
 	}
@@ -29,7 +34,9 @@ func (m *mockPatrolHistoryPersistence) SavePatrolRunHistory(runs []PatrolRunReco
 }
 
 func (m *mockPatrolHistoryPersistence) LoadPatrolRunHistory() ([]PatrolRunRecord, error) {
-	m.loadCalls++
+	m.loadCalls.Add(1)
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.loadErr != nil {
 		return nil, m.loadErr
 	}
@@ -281,7 +288,7 @@ func TestPatrolRunHistoryStore_ScheduleSave(t *testing.T) {
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
 	store.SetPersistence(mockPersistence)
-	mockPersistence.saveCalls = 0 // Reset after SetPersistence load
+	mockPersistence.saveCalls.Store(0) // Reset after SetPersistence load
 
 	// Add a run (triggers scheduleSave)
 	store.Add(PatrolRunRecord{ID: "run-1"})
@@ -289,8 +296,8 @@ func TestPatrolRunHistoryStore_ScheduleSave(t *testing.T) {
 	// Wait for debounce
 	time.Sleep(100 * time.Millisecond)
 
-	if mockPersistence.saveCalls < 1 {
-		t.Errorf("Expected at least 1 save call after debounce, got %d", mockPersistence.saveCalls)
+	if mockPersistence.saveCalls.Load() < 1 {
+		t.Errorf("Expected at least 1 save call after debounce, got %d", mockPersistence.saveCalls.Load())
 	}
 }
 
@@ -300,15 +307,15 @@ func TestPatrolRunHistoryStore_ScheduleSave_StopsExistingTimer(t *testing.T) {
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
 	store.SetPersistence(mockPersistence)
-	mockPersistence.saveCalls = 0
+	mockPersistence.saveCalls.Store(0)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})
 	store.Add(PatrolRunRecord{ID: "run-2"})
 
 	time.Sleep(120 * time.Millisecond)
 
-	if mockPersistence.saveCalls != 1 {
-		t.Errorf("expected 1 save call after reschedule, got %d", mockPersistence.saveCalls)
+	if mockPersistence.saveCalls.Load() != 1 {
+		t.Errorf("expected 1 save call after reschedule, got %d", mockPersistence.saveCalls.Load())
 	}
 }
 
@@ -318,7 +325,7 @@ func TestPatrolRunHistoryStore_ScheduleSave_Cancelled(t *testing.T) {
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
 	store.SetPersistence(mockPersistence)
-	mockPersistence.saveCalls = 0
+	mockPersistence.saveCalls.Store(0)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})
 
@@ -328,8 +335,8 @@ func TestPatrolRunHistoryStore_ScheduleSave_Cancelled(t *testing.T) {
 
 	time.Sleep(120 * time.Millisecond)
 
-	if mockPersistence.saveCalls != 0 {
-		t.Errorf("expected no save calls after cancellation, got %d", mockPersistence.saveCalls)
+	if mockPersistence.saveCalls.Load() != 0 {
+		t.Errorf("expected no save calls after cancellation, got %d", mockPersistence.saveCalls.Load())
 	}
 }
 
@@ -339,14 +346,14 @@ func TestPatrolRunHistoryStore_ScheduleSave_Error(t *testing.T) {
 
 	mockPersistence := &mockPatrolHistoryPersistence{saveErr: errors.New("save failed")}
 	store.SetPersistence(mockPersistence)
-	mockPersistence.saveCalls = 0
+	mockPersistence.saveCalls.Store(0)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})
 
 	time.Sleep(120 * time.Millisecond)
 
-	if mockPersistence.saveCalls < 1 {
-		t.Errorf("expected save to be attempted, got %d calls", mockPersistence.saveCalls)
+	if mockPersistence.saveCalls.Load() < 1 {
+		t.Errorf("expected save to be attempted, got %d calls", mockPersistence.saveCalls.Load())
 	}
 }
 

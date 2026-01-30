@@ -44,7 +44,6 @@ type (
 	MCPMetricsHistoryProvider = tools.MetricsHistoryProvider
 	MCPBackupProvider         = tools.BackupProvider
 	MCPStorageProvider        = tools.StorageProvider
-	MCPStorageConfigProvider  = tools.StorageConfigProvider
 	MCPGuestConfigProvider    = tools.GuestConfigProvider
 	MCPDiskHealthProvider     = tools.DiskHealthProvider
 	MCPUpdatesProvider        = tools.UpdatesProvider
@@ -82,6 +81,7 @@ type Service struct {
 	started           bool
 	autonomousMode    bool
 	contextPrefetcher *ContextPrefetcher
+	budgetChecker     func() error // Optional mid-run budget enforcement
 }
 
 // NewService creates a new chat service
@@ -315,6 +315,38 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("message_count", len(messages)).
 		Msg("[ChatService] Got messages, calling agentic loop")
 
+	// Determine which model/loop to use for this request.
+	selectedModel := ""
+	configuredModel := ""
+	overrideModel := strings.TrimSpace(req.Model)
+	var executor *tools.PulseToolExecutor
+	autonomousMode := false
+	s.mu.RLock()
+	executor = s.executor
+	autonomousMode = s.autonomousMode
+	if s.cfg != nil {
+		configuredModel = strings.TrimSpace(s.cfg.GetChatModel())
+	}
+	s.mu.RUnlock()
+	selectedModel = configuredModel
+	if overrideModel != "" {
+		selectedModel = overrideModel
+	}
+	loop := agenticLoop
+	if overrideModel != "" && overrideModel != configuredModel {
+		provider, err := s.createProviderForModel(overrideModel)
+		if err != nil {
+			return fmt.Errorf("failed to create provider for model override %q: %w", overrideModel, err)
+		}
+		systemPrompt := s.buildSystemPrompt()
+		tempLoop := NewAgenticLoop(provider, executor, systemPrompt)
+		tempLoop.SetAutonomousMode(autonomousMode)
+		loop = tempLoop
+	}
+
+	// Reset token counts so per-request usage is accurate.
+	loop.ResetTokenCounts()
+
 	// Proactively gather context for mentioned resources
 	s.mu.RLock()
 	prefetcher := s.contextPrefetcher
@@ -325,9 +357,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Str("prompt", req.Prompt[:min(50, len(req.Prompt))]).
 		Msg("[ChatService] Checking prefetcher")
 
+	mentionsFound := false
 	if prefetcher != nil {
-		prefetchCtx := prefetcher.Prefetch(ctx, req.Prompt)
-		mentionsFound := false
+		prefetchCtx := prefetcher.Prefetch(ctx, req.Prompt, req.Mentions)
 		if prefetchCtx != nil {
 			mentionsFound = len(prefetchCtx.Mentions) > 0
 		}
@@ -394,9 +426,6 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	// Set session-scoped resolved context on executor for resource validation
 	// This ensures tools can only operate on resources discovered in this session
-	s.mu.RLock()
-	executor := s.executor
-	s.mu.RUnlock()
 	if executor != nil {
 		resolvedCtx := sessions.GetResolvedContext(session.ID)
 		executor.SetResolvedContext(resolvedCtx)
@@ -409,28 +438,38 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	// Set session-scoped FSM on agentic loop for workflow enforcement
 	// This ensures structural guarantees: discover before write, verify after write
 	sessionFSM := sessions.GetSessionFSM(session.ID)
-	agenticLoop.SetSessionFSM(sessionFSM)
+	loop.SetSessionFSM(sessionFSM)
+
+	// If the prefetcher resolved mentions, advance FSM past RESOLVING.
+	// The prefetched context already contains the resource details (type, VMID, node, host)
+	// so forcing the AI to redundantly call a read tool would be wasteful.
+	if mentionsFound && sessionFSM.State == StateResolving {
+		sessionFSM.State = StateReading
+		log.Info().
+			Str("session_id", session.ID).
+			Msg("[ChatService] Advanced FSM to READING — prefetched mentions count as resolution")
+	}
+
 	log.Debug().
 		Str("session_id", session.ID).
 		Str("fsm_state", string(sessionFSM.State)).
 		Bool("wrote_this_episode", sessionFSM.WroteThisEpisode).
 		Msg("[ChatService] Set session FSM on agentic loop")
 
-	// Set provider info for telemetry
-	s.mu.RLock()
-	chatModel := ""
-	if s.cfg != nil {
-		chatModel = s.cfg.GetChatModel()
+	// Set mid-run budget checker if configured
+	if s.budgetChecker != nil {
+		loop.SetBudgetChecker(s.budgetChecker)
 	}
-	s.mu.RUnlock()
-	if chatModel != "" {
-		parts := strings.SplitN(chatModel, ":", 2)
+
+	// Set provider info for telemetry
+	if selectedModel != "" {
+		parts := strings.SplitN(selectedModel, ":", 2)
 		if len(parts) == 2 {
-			agenticLoop.SetProviderInfo(parts[0], parts[1])
+			loop.SetProviderInfo(parts[0], parts[1])
 		}
 	}
 
-	resultMessages, err := agenticLoop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
+	resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
 
 	log.Debug().
 		Str("session_id", session.ID).
@@ -459,8 +498,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 	}
 
-	// Send done event
-	doneData, _ := json.Marshal(DoneData{SessionID: session.ID})
+	// Send done event with token usage for this request.
+	doneData, _ := json.Marshal(DoneData{
+		SessionID:    session.ID,
+		InputTokens:  loop.GetTotalInputTokens(),
+		OutputTokens: loop.GetTotalOutputTokens(),
+	})
 	callback(StreamEvent{Type: "done", Data: doneData})
 
 	return nil
@@ -472,6 +515,7 @@ type PatrolRequest struct {
 	SystemPrompt string `json:"system_prompt"`
 	SessionID    string `json:"session_id,omitempty"`
 	UseCase      string `json:"use_case"`
+	MaxTurns     int    `json:"max_turns,omitempty"`
 }
 
 // PatrolResponse contains the results of a patrol execution
@@ -525,6 +569,9 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	}
 	tempLoop := NewAgenticLoop(provider, executor, systemPrompt)
 	tempLoop.SetAutonomousMode(true) // Patrol runs without approval prompts
+	if req.MaxTurns > 0 {
+		tempLoop.SetMaxTurns(req.MaxTurns)
+	}
 
 	// Set provider info for telemetry
 	parts := strings.SplitN(patrolModel, ":", 2)
@@ -551,6 +598,11 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	// Set session FSM
 	sessionFSM := sessions.GetSessionFSM(session.ID)
 	tempLoop.SetSessionFSM(sessionFSM)
+
+	// Set mid-run budget checker if configured
+	if s.budgetChecker != nil {
+		tempLoop.SetBudgetChecker(s.budgetChecker)
+	}
 
 	// Add user message
 	userMsg := Message{
@@ -864,14 +916,6 @@ func (s *Service) SetStorageProvider(provider MCPStorageProvider) {
 	}
 }
 
-func (s *Service) SetStorageConfigProvider(provider MCPStorageConfigProvider) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.executor != nil {
-		s.executor.SetStorageConfigProvider(provider)
-	}
-}
-
 func (s *Service) SetGuestConfigProvider(provider MCPGuestConfigProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -984,6 +1028,14 @@ func (s *Service) UpdateControlSettings(cfg *config.AIConfig) {
 
 // SetAutonomousMode enables or disables autonomous mode for investigations
 // When enabled, read-only commands can be auto-approved without user confirmation
+// SetBudgetChecker sets a function called after each agentic turn to enforce
+// token spending limits. The checker is propagated to the agentic loop.
+func (s *Service) SetBudgetChecker(fn func() error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.budgetChecker = fn
+}
+
 func (s *Service) SetAutonomousMode(enabled bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1142,7 +1194,18 @@ INFRASTRUCTURE TOPOLOGY:
 DOCKER BIND MOUNTS:
 - Container files are often mapped to host paths via bind mounts
 - To edit a container's config, find the bind mount and edit the host path
-- Use pulse_discovery to find bind mount mappings`
+- Use pulse_discovery to find bind mount mappings
+
+TOOL SELECTION:
+- pulse_control and pulse_docker are WRITE tools — they change infrastructure state (start, stop, restart, run commands).
+- ONLY use write tools when the user explicitly asks you to perform an action (e.g. "stop X", "restart Y", "run command Z").
+- NEVER use write tools for status checks, monitoring, or information gathering. Use pulse_query or pulse_read instead.
+- If the user asks "what is the status of X" or "is X running", use pulse_query action=get — do NOT use pulse_control.
+
+TASK COMPLETION:
+- When a control action succeeds (start, stop, restart, etc.), respond to the user immediately with a brief summary. The system automatically verifies actions — you do NOT need to run additional verification commands.
+- After receiving a tool result that says "The action is complete" or "Verification complete", do NOT make further tool calls. Summarize the result for the user.
+- Avoid running shell commands (systemctl status, pct status, etc.) to double-check actions that already succeeded. The auto-verification handles this.`
 }
 
 var recentContextPronounPattern = regexp.MustCompile(`(?i)\b(it|its|that|those|this|them|previous|earlier|last|same|former|latter)\b`)
@@ -1253,11 +1316,130 @@ func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string) []pro
 	mcpTools := s.executor.ListTools()
 	providerTools := ConvertMCPToolsToProvider(mcpTools)
 
-	// Always pass all tools to the model. The approval mechanism handles control.
-	// Previously we filtered control tools based on a classifier, but this caused
-	// the model to see different tool sets between turns, leading to hallucinated
-	// tool names when control tools suddenly appeared in later turns.
-	return providerTools
+	// Filter out write/control tools when the user's request is read-only.
+	// This prevents models from calling pulse_control (restart, stop, etc.) when
+	// the user only asked for status, logs, or monitoring information.
+	//
+	// The tool set is determined once per user message and stays consistent for
+	// the entire agentic loop. This avoids the old problem of tools appearing/
+	// disappearing mid-conversation (which caused hallucinated tool names).
+	readOnly := !hasWriteIntent(convertPromptToMessages(prompt))
+
+	// Determine which specialty tools are relevant based on prompt keywords.
+	// Core tools are always included; specialty tools only when topic-relevant.
+	// This reduces token consumption on every request.
+	lowerPrompt := strings.ToLower(prompt)
+	includeK8s := promptMentionsAny(lowerPrompt, k8sKeywords)
+	includePMG := promptMentionsAny(lowerPrompt, pmgKeywords)
+	includeStorage := promptMentionsAny(lowerPrompt, storageKeywords) || promptMentionsBroadInfra(lowerPrompt)
+	includeDocker := promptMentionsAny(lowerPrompt, dockerKeywords)
+
+	// If no specialty keywords detected, include everything (safe default).
+	noSpecialtyDetected := !includeK8s && !includePMG && !includeStorage && !includeDocker
+
+	filtered := make([]providers.Tool, 0, len(providerTools))
+	for _, tool := range providerTools {
+		// Remove write tools for read-only prompts
+		if readOnly && isWriteTool(tool.Name) {
+			continue
+		}
+		// Conditionally include specialty tools
+		if !noSpecialtyDetected && isSpecialtyTool(tool.Name) {
+			switch tool.Name {
+			case "pulse_kubernetes":
+				if !includeK8s {
+					continue
+				}
+			case "pulse_pmg":
+				if !includePMG {
+					continue
+				}
+			case "pulse_storage":
+				if !includeStorage {
+					continue
+				}
+			case "pulse_docker":
+				if !includeDocker && readOnly {
+					// Only filter docker for read-only; write-intent already implies docker may be needed
+					continue
+				}
+			}
+		}
+		filtered = append(filtered, tool)
+	}
+
+	log.Debug().
+		Int("total_tools", len(providerTools)).
+		Int("filtered_tools", len(filtered)).
+		Bool("read_only", readOnly).
+		Bool("specialty_filter_active", !noSpecialtyDetected).
+		Str("prompt_prefix", truncateForLog(prompt, 80)).
+		Msg("[filterToolsForPrompt] Filtered tools for prompt")
+
+	return filtered
+}
+
+// isSpecialtyTool returns true for tools that are only relevant to specific topics.
+func isSpecialtyTool(name string) bool {
+	switch name {
+	case "pulse_kubernetes", "pulse_pmg", "pulse_storage", "pulse_docker":
+		return true
+	default:
+		return false
+	}
+}
+
+// Keyword lists for specialty tool detection
+var (
+	k8sKeywords = []string{
+		"k8s", "kubernetes", "kubectl", "pod", "pods", "deployment", "deployments",
+		"namespace", "namespaces", "replica", "replicas", "cluster",
+		"node pool", "daemonset", "statefulset", "ingress", "helm",
+	}
+	pmgKeywords = []string{
+		"mail", "email", "spam", "pmg", "mail gateway", "postfix",
+		"smtp", "queue", "bounce", "quarantine",
+	}
+	storageKeywords = []string{
+		"backup", "backups", "snapshot", "snapshots", "storage", "disk",
+		"ceph", "zfs", "raid", "replication", "pbs", "lvm",
+		"smart", "pool", "pools", "s3", "nfs",
+	}
+	dockerKeywords = []string{
+		"docker", "container", "containers", "swarm", "compose",
+		"image", "images", "registry",
+	}
+)
+
+// promptMentionsAny checks if the lowercased prompt contains any of the keywords.
+func promptMentionsAny(lowerPrompt string, keywords []string) bool {
+	for _, kw := range keywords {
+		if strings.Contains(lowerPrompt, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// promptMentionsBroadInfra returns true for broad infrastructure questions
+// where storage tools should remain available.
+func promptMentionsBroadInfra(lowerPrompt string) bool {
+	broadPatterns := []string{
+		"infrastructure", "overview", "health check", "full status",
+		"everything", "all systems", "entire",
+	}
+	for _, p := range broadPatterns {
+		if strings.Contains(lowerPrompt, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// convertPromptToMessages wraps a prompt string into a providers.Message slice
+// for use with hasWriteIntent.
+func convertPromptToMessages(prompt string) []providers.Message {
+	return []providers.Message{{Role: "user", Content: prompt}}
 }
 
 func (s *Service) isAutonomousModeEnabled() bool {

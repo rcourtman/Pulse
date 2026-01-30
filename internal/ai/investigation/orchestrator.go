@@ -56,10 +56,27 @@ type StreamEvent struct {
 
 // Message represents a chat message
 type Message struct {
-	ID        string    `json:"id"`
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
+	ID               string          `json:"id"`
+	Role             string          `json:"role"`
+	Content          string          `json:"content"`
+	ReasoningContent string          `json:"reasoning_content,omitempty"`
+	ToolCalls        []ToolCallInfo  `json:"tool_calls,omitempty"`
+	ToolResult       *ToolResultInfo `json:"tool_result,omitempty"`
+	Timestamp        time.Time       `json:"timestamp"`
+}
+
+// ToolCallInfo represents a tool invocation in an investigation message
+type ToolCallInfo struct {
+	ID    string                 `json:"id"`
+	Name  string                 `json:"name"`
+	Input map[string]interface{} `json:"input"`
+}
+
+// ToolResultInfo represents the result of a tool invocation
+type ToolResultInfo struct {
+	ToolUseID string `json:"tool_use_id"`
+	Content   string `json:"content"`
+	IsError   bool   `json:"is_error,omitempty"`
 }
 
 // FindingsStore interface for updating findings
@@ -71,6 +88,7 @@ type FindingsStore interface {
 // Finding represents a patrol finding (simplified for this package)
 type Finding struct {
 	ID                     string     `json:"id"`
+	Key                    string     `json:"key,omitempty"` // Stable issue key for matching
 	Severity               string     `json:"severity"`
 	Category               string     `json:"category"`
 	ResourceID             string     `json:"resource_id"`
@@ -115,6 +133,18 @@ type AutonomyLevelProvider interface {
 	IsFullModeUnlocked() bool
 }
 
+// FixVerifier verifies that a fix actually resolved the issue it was intended to fix.
+type FixVerifier interface {
+	VerifyFixResolved(ctx context.Context, finding *Finding) (bool, error)
+}
+
+// MetricsCallback allows the parent package to receive metrics events
+// without creating circular imports.
+type MetricsCallback interface {
+	RecordInvestigationOutcome(outcome string)
+	RecordFixVerification(result string)
+}
+
 // Orchestrator manages the investigation lifecycle
 type Orchestrator struct {
 	mu sync.RWMutex
@@ -132,6 +162,12 @@ type Orchestrator struct {
 
 	// Autonomy level provider for re-checking before fix execution
 	autonomyProvider AutonomyLevelProvider
+
+	// Fix verifier for post-fix verification
+	fixVerifier FixVerifier
+
+	// Optional metrics callback for recording investigation outcomes
+	metricsCallback MetricsCallback
 
 	// Track running investigations
 	runningCount int
@@ -163,6 +199,13 @@ func (o *Orchestrator) SetConfig(config InvestigationConfig) {
 	o.config = config
 }
 
+// SetMetricsCallback sets the metrics callback for recording investigation outcomes
+func (o *Orchestrator) SetMetricsCallback(cb MetricsCallback) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.metricsCallback = cb
+}
+
 // SetCommandExecutor sets the command executor for auto-executing fixes
 func (o *Orchestrator) SetCommandExecutor(executor CommandExecutor) {
 	o.mu.Lock()
@@ -185,6 +228,13 @@ func (o *Orchestrator) SetAutonomyLevelProvider(provider AutonomyLevelProvider) 
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.autonomyProvider = provider
+}
+
+// SetFixVerifier sets the verifier used to confirm fixes resolved the issue
+func (o *Orchestrator) SetFixVerifier(fv FixVerifier) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.fixVerifier = fv
 }
 
 // GetConfig returns the current configuration
@@ -220,9 +270,12 @@ func (o *Orchestrator) InvestigateFinding(ctx context.Context, finding *Finding,
 		o.runningMu.Unlock()
 	}()
 
-	// Enable autonomous mode for this investigation
-	// This allows read-only commands to be auto-approved without user confirmation
-	o.chatService.SetAutonomousMode(true)
+	// Only enable autonomous mode if patrol autonomy is "full".
+	// For all other levels, write commands (pulse_control, pulse_file_edit)
+	// must go through the normal approval gate. The investigation AI should
+	// propose fixes via PROPOSED_FIX markers, not execute them directly.
+	useAutonomous := autonomyLevel == "full"
+	o.chatService.SetAutonomousMode(useAutonomous)
 	defer o.chatService.SetAutonomousMode(false)
 
 	// Create chat session
@@ -550,6 +603,7 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 			if o.approvalStore != nil {
 				if err := o.approvalStore.Create(approval); err != nil {
 					log.Error().Err(err).Msg("Failed to queue fix for approval")
+					outcome = OutcomeNeedsAttention
 				} else {
 					o.store.SetApprovalID(investigation.ID, approval.ID)
 					outcome = OutcomeFixQueued
@@ -592,6 +646,44 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 						Msg("Auto-executed fix successfully")
 					outcome = OutcomeFixExecuted
 					fix.Rationale = fmt.Sprintf("%s\n\nAuto-executed successfully:\n%s", fix.Rationale, output)
+
+					// Verify the fix actually resolved the issue
+					o.mu.RLock()
+					verifier := o.fixVerifier
+					verificationDelay := o.config.VerificationDelay
+					o.mu.RUnlock()
+
+					if verifier != nil {
+						if verificationDelay > 0 {
+							time.Sleep(verificationDelay)
+						}
+						verified, verifyErr := verifier.VerifyFixResolved(ctx, finding)
+						o.mu.RLock()
+						vmc := o.metricsCallback
+						o.mu.RUnlock()
+						if verifyErr != nil {
+							log.Error().Err(verifyErr).Str("finding_id", finding.ID).Msg("Fix verification failed with error")
+							outcome = OutcomeFixVerificationFailed
+							fix.Rationale += fmt.Sprintf("\n\nVerification error: %v", verifyErr)
+							if vmc != nil {
+								vmc.RecordFixVerification("error")
+							}
+						} else if !verified {
+							log.Warn().Str("finding_id", finding.ID).Msg("Fix executed but issue persists")
+							outcome = OutcomeFixVerificationFailed
+							fix.Rationale += "\n\nVerification: Issue persists after fix execution."
+							if vmc != nil {
+								vmc.RecordFixVerification("failed")
+							}
+						} else {
+							log.Info().Str("finding_id", finding.ID).Msg("Fix verified - issue resolved")
+							outcome = OutcomeFixVerified
+							fix.Rationale += "\n\nVerification: Issue confirmed resolved."
+							if vmc != nil {
+								vmc.RecordFixVerification("verified")
+							}
+						}
+					}
 				}
 			} else {
 				// No command executor available, fall back to queueing for approval
@@ -608,6 +700,14 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 		o.store.Complete(investigation.ID, outcome, summary, nil)
 	}
 
+	// Record metrics
+	o.mu.RLock()
+	mc := o.metricsCallback
+	o.mu.RUnlock()
+	if mc != nil {
+		mc.RecordInvestigationOutcome(string(outcome))
+	}
+
 	// Update finding
 	finding.InvestigationStatus = string(StatusCompleted)
 	finding.InvestigationOutcome = string(outcome)
@@ -622,53 +722,135 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 	return nil
 }
 
-// parseInvestigationSummary extracts fix proposals from the investigation output
-func (o *Orchestrator) parseInvestigationSummary(summary string) (*Fix, Outcome) {
-	// Look for PROPOSED_FIX marker
-	if idx := indexString(summary, "PROPOSED_FIX:"); idx >= 0 {
-		// Extract the command
-		remaining := summary[idx+len("PROPOSED_FIX:"):]
-		// Find the end of the line
-		endIdx := indexString(remaining, "\n")
-		if endIdx < 0 {
-			endIdx = len(remaining)
-		}
-		command := trim(remaining[:endIdx])
+// maxCommandLength is the maximum allowed length for a proposed fix command.
+// Commands longer than this are rejected as likely malformed.
+const maxCommandLength = 2000
 
-		// Look for TARGET_HOST
+// parseInvestigationSummary extracts fix proposals from the investigation output.
+// Marker detection is case-insensitive to handle varying LLM output styles.
+func (o *Orchestrator) parseInvestigationSummary(summary string) (*Fix, Outcome) {
+	upper := strings.ToUpper(summary)
+
+	// Look for PROPOSED_FIX marker (case-insensitive)
+	if idx := strings.Index(upper, "PROPOSED_FIX:"); idx >= 0 {
+		// Extract the command from the original string (preserving case)
+		remaining := summary[idx+len("PROPOSED_FIX:"):]
+
+		// If the remaining text starts with a code fence, extract until the closing fence
+		// so multiline fenced commands are captured correctly.
+		var command string
+		trimmedRemaining := strings.TrimSpace(remaining)
+		if strings.HasPrefix(trimmedRemaining, "```") {
+			// Find the closing fence after the opening one
+			afterOpen := trimmedRemaining[3:]
+			closeIdx := strings.Index(afterOpen, "```")
+			if closeIdx >= 0 {
+				fenced := trimmedRemaining[:3+closeIdx+3]
+				command = stripMarkdownCodeFences(fenced)
+			} else {
+				// No closing fence — take the first line only
+				endIdx := strings.Index(remaining, "\n")
+				if endIdx < 0 {
+					endIdx = len(remaining)
+				}
+				command = trim(remaining[:endIdx])
+			}
+		} else {
+			// Single-line command — take to end of line
+			endIdx := strings.Index(remaining, "\n")
+			if endIdx < 0 {
+				endIdx = len(remaining)
+			}
+			command = trim(remaining[:endIdx])
+			command = stripMarkdownCodeFences(command)
+		}
+
+		log.Debug().
+			Int("marker_pos", idx).
+			Str("raw_command", command).
+			Msg("Found PROPOSED_FIX marker")
+
+		// Look for TARGET_HOST (case-insensitive)
 		targetHost := "local"
-		if hostIdx := indexString(summary, "TARGET_HOST:"); hostIdx >= 0 {
+		if hostIdx := strings.Index(upper, "TARGET_HOST:"); hostIdx >= 0 {
 			hostRemaining := summary[hostIdx+len("TARGET_HOST:"):]
-			hostEndIdx := indexString(hostRemaining, "\n")
+			hostEndIdx := strings.Index(hostRemaining, "\n")
 			if hostEndIdx < 0 {
 				hostEndIdx = len(hostRemaining)
 			}
 			targetHost = trim(hostRemaining[:hostEndIdx])
 		}
 
-		if command != "" {
-			return &Fix{
-				ID:          uuid.New().String(),
-				Description: "Proposed fix from investigation",
-				Commands:    []string{command},
-				TargetHost:  targetHost,
-				Rationale:   summary,
-			}, OutcomeFixQueued
+		// Validate command
+		if command == "" {
+			log.Warn().Msg("PROPOSED_FIX marker found but command is empty, falling back to needs_attention")
+			return nil, OutcomeNeedsAttention
 		}
+		if len(command) > maxCommandLength {
+			log.Warn().
+				Int("command_length", len(command)).
+				Int("max_length", maxCommandLength).
+				Msg("PROPOSED_FIX command exceeds max length, falling back to needs_attention")
+			return nil, OutcomeNeedsAttention
+		}
+
+		return &Fix{
+			ID:          uuid.New().String(),
+			Description: "Proposed fix from investigation",
+			Commands:    []string{command},
+			TargetHost:  targetHost,
+			Rationale:   summary,
+		}, OutcomeFixQueued
 	}
 
-	// Look for CANNOT_FIX marker
-	if idx := indexString(summary, "CANNOT_FIX:"); idx >= 0 {
+	// Look for CANNOT_FIX marker (case-insensitive)
+	if strings.Index(upper, "CANNOT_FIX:") >= 0 {
+		log.Debug().Msg("Found CANNOT_FIX marker")
 		return nil, OutcomeCannotFix
 	}
 
-	// Look for NEEDS_ATTENTION marker
-	if idx := indexString(summary, "NEEDS_ATTENTION:"); idx >= 0 {
+	// Look for NEEDS_ATTENTION marker (case-insensitive)
+	if strings.Index(upper, "NEEDS_ATTENTION:") >= 0 {
+		log.Debug().Msg("Found NEEDS_ATTENTION marker")
 		return nil, OutcomeNeedsAttention
 	}
 
 	// Default to needs attention if we couldn't parse the output
 	return nil, OutcomeNeedsAttention
+}
+
+// stripMarkdownCodeFences removes surrounding markdown code fences from a string.
+// Handles formats like: ```bash\ncommand\n```, ```command```, `command`
+func stripMarkdownCodeFences(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+
+	// Handle triple backtick fences (possibly with language tag)
+	if strings.HasPrefix(s, "```") {
+		s = s[3:]
+		// Strip optional language tag on the same line
+		if idx := strings.Index(s, "\n"); idx >= 0 {
+			// Check if everything before newline looks like a language tag (no spaces typically)
+			tag := strings.TrimSpace(s[:idx])
+			if tag == "" || (!strings.Contains(tag, " ") && len(tag) < 20) {
+				s = s[idx+1:]
+			}
+		}
+		// Strip closing fence
+		if idx := strings.LastIndex(s, "```"); idx >= 0 {
+			s = s[:idx]
+		}
+		return strings.TrimSpace(s)
+	}
+
+	// Handle single backtick wrapping
+	if len(s) >= 2 && s[0] == '`' && s[len(s)-1] == '`' {
+		return strings.TrimSpace(s[1 : len(s)-1])
+	}
+
+	return s
 }
 
 func (o *Orchestrator) updateFinding(finding *Finding) {
@@ -699,6 +881,11 @@ func (o *Orchestrator) ReinvestigateFinding(ctx context.Context, findingID, auto
 	finding := o.findingsStore.Get(findingID)
 	if finding == nil {
 		return fmt.Errorf("finding not found: %s", findingID)
+	}
+
+	// Prevent duplicate investigations
+	if finding.InvestigationStatus == "running" {
+		return fmt.Errorf("investigation already running for finding %s", findingID)
 	}
 
 	// Convert to our local Finding type

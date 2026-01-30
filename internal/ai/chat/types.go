@@ -54,11 +54,22 @@ type StreamEvent struct {
 // StreamCallback is called for each streaming event
 type StreamCallback func(event StreamEvent)
 
+// StructuredMention represents a resource explicitly tagged by the user via @ mention.
+// The frontend resolves these from the autocomplete and sends them alongside the prompt,
+// so the backend doesn't need to re-derive resource identity from text.
+type StructuredMention struct {
+	ID   string `json:"id"`             // e.g. "lxc:delly:123", "docker:host:container"
+	Name string `json:"name"`           // Display name, e.g. "ntfy"
+	Type string `json:"type"`           // "vm", "lxc", "container", "docker", "node", "host"
+	Node string `json:"node,omitempty"` // Proxmox node or parent host
+}
+
 // ExecuteRequest represents a chat execution request
 type ExecuteRequest struct {
-	Prompt    string `json:"prompt"`
-	SessionID string `json:"session_id,omitempty"`
-	Model     string `json:"model,omitempty"`
+	Prompt    string              `json:"prompt"`
+	SessionID string              `json:"session_id,omitempty"`
+	Model     string              `json:"model,omitempty"`
+	Mentions  []StructuredMention `json:"mentions,omitempty"`
 }
 
 // QuestionAnswer represents a user's answer to a question
@@ -1006,9 +1017,10 @@ const (
 	DefaultStatelessContext = false
 	MaxContextMessagesLimit = 40
 	// MaxToolResultCharsLimit caps tool results sent to the LLM.
-	// Set high enough to preserve discovery data (which can be 10-20KB for detailed results).
+	// With context compaction in place, this safety net rarely fires.
+	// 16K chars (~4K tokens) is sufficient for any single tool result.
 	// The UI shows full results regardless of this limit.
-	MaxToolResultCharsLimit = 32000
+	MaxToolResultCharsLimit = 16000
 )
 
 var (

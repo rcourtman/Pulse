@@ -394,6 +394,12 @@ func classifyToolByName(toolName string, args map[string]interface{}) ToolKind {
 	case "pulse_get_docker_logs", "pulse_get_performance_metrics",
 		"pulse_get_temperatures", "pulse_get_baselines", "pulse_get_patterns":
 		return ToolKindRead
+
+	// === Patrol tools ===
+	case "patrol_get_findings":
+		return ToolKindRead // Reading existing findings doesn't require discovery
+	case "patrol_report_finding", "patrol_resolve_finding":
+		return ToolKindWrite
 	}
 
 	// Check if the action/operation parameter indicates a write

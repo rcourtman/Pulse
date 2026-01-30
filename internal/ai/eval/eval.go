@@ -6,6 +6,7 @@ package eval
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // Config holds eval runner configuration
@@ -22,6 +25,9 @@ type Config struct {
 	Username string
 	Password string
 	Verbose  bool
+	Model    string
+	// HTTP timeout for each chat request.
+	RequestTimeout time.Duration
 	// Retry behavior for transient eval failures.
 	StepRetries          int
 	RetryOnPhantom       bool
@@ -29,6 +35,8 @@ type Config struct {
 	RetryOnStreamFailure bool
 	RetryOnEmptyResponse bool
 	RetryOnToolErrors    bool
+	RetryOnRateLimit     bool
+	RateLimitCooldown    time.Duration
 	// Optional preflight to fail fast when SSE hangs.
 	Preflight        bool
 	PreflightTimeout time.Duration
@@ -43,12 +51,15 @@ func DefaultConfig() Config {
 		Username:             "admin",
 		Password:             "admin",
 		Verbose:              true,
+		RequestTimeout:       5 * time.Minute,
 		StepRetries:          2,
 		RetryOnPhantom:       true,
 		RetryOnExplicitTool:  true,
 		RetryOnStreamFailure: true,
 		RetryOnEmptyResponse: true,
 		RetryOnToolErrors:    true,
+		RetryOnRateLimit:     false,
+		RateLimitCooldown:    0,
 		Preflight:            false,
 		PreflightTimeout:     15 * time.Second,
 	}
@@ -63,29 +74,36 @@ type Runner struct {
 // NewRunner creates a new eval runner
 func NewRunner(config Config) *Runner {
 	applyEvalEnvOverrides(&config)
+	timeout := config.RequestTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
 	return &Runner{
 		config: config,
 		client: &http.Client{
-			Timeout: 5 * time.Minute, // Long timeout for AI responses
+			Timeout: timeout, // Long timeout for AI responses
 		},
 	}
 }
 
 // StepResult captures the result of a single eval step
 type StepResult struct {
-	StepName   string
-	Prompt     string
-	SessionID  string
-	Success    bool
-	Error      error
-	Duration   time.Duration
-	Retries    int
-	RetryNotes []string
-	ToolCalls  []ToolCallEvent
-	Approvals  []ApprovalEvent
-	Content    string
-	RawEvents  []SSEEvent
-	Assertions []AssertionResult
+	StepName     string
+	Prompt       string
+	SessionID    string
+	Model        string
+	InputTokens  int
+	OutputTokens int
+	Success      bool
+	Error        error
+	Duration     time.Duration
+	Retries      int
+	RetryNotes   []string
+	ToolCalls    []ToolCallEvent
+	Approvals    []ApprovalEvent
+	Content      string
+	RawEvents    []SSEEvent
+	Assertions   []AssertionResult
 }
 
 // ToolCallEvent represents a tool call captured during execution
@@ -129,10 +147,21 @@ type ScenarioResult struct {
 	ReportPath   string
 }
 
+// StepMention represents a structured mention attached to a step.
+// When present, these are sent alongside the prompt so the backend
+// can resolve resources without discovery tool calls.
+type StepMention struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Node string `json:"node,omitempty"`
+}
+
 // Step defines a single step in an eval scenario
 type Step struct {
 	Name             string
 	Prompt           string
+	Mentions         []StepMention // optional structured mentions
 	Assertions       []Assertion
 	ApprovalDecision ApprovalDecision
 	ApprovalReason   string
@@ -253,6 +282,12 @@ func (r *Runner) executeStepWithRetry(step Step, sessionID string, retries int) 
 		if reason != "" {
 			retryNotes = append(retryNotes, reason)
 		}
+		if reason == "rate_limit" && r.config.RateLimitCooldown > 0 {
+			if r.config.Verbose {
+				fmt.Printf("\n--- Rate limit cooldown (%s) before retry ---\n", r.config.RateLimitCooldown)
+			}
+			time.Sleep(r.config.RateLimitCooldown)
+		}
 		if r.config.Verbose {
 			fmt.Printf("\n--- Retrying step '%s' (attempt %d/%d) due to transient failure ---\n",
 				step.Name, attempt+1, retries)
@@ -276,11 +311,17 @@ func (r *Runner) executeStepOnceWithClient(step Step, sessionID string, client *
 	}
 
 	// Build request
-	reqBody := map[string]string{
+	reqBody := map[string]interface{}{
 		"prompt": step.Prompt,
 	}
 	if sessionID != "" {
 		reqBody["session_id"] = sessionID
+	}
+	if strings.TrimSpace(r.config.Model) != "" {
+		reqBody["model"] = r.config.Model
+	}
+	if len(step.Mentions) > 0 {
+		reqBody["mentions"] = step.Mentions
 	}
 
 	bodyBytes, _ := json.Marshal(reqBody)
@@ -315,7 +356,7 @@ func (r *Runner) executeStepOnceWithClient(step Step, sessionID string, client *
 	}
 
 	// Parse SSE stream
-	result.RawEvents, result.ToolCalls, result.Approvals, result.Content, result.SessionID, err = r.parseSSEStream(resp.Body, step.ApprovalDecision, step.ApprovalReason)
+	result.RawEvents, result.ToolCalls, result.Approvals, result.Content, result.SessionID, result.Model, result.InputTokens, result.OutputTokens, err = r.parseSSEStream(resp.Body, step.ApprovalDecision, step.ApprovalReason)
 	if err != nil {
 		result.Error = fmt.Errorf("failed to parse SSE stream: %w", err)
 		result.Success = false
@@ -348,6 +389,13 @@ func (r *Runner) shouldRetryStep(result *StepResult, step Step) (bool, string) {
 		return false, ""
 	}
 
+	if result.Error != nil && isRateLimitError(result.Error.Error()) {
+		if r.config.RetryOnRateLimit {
+			return true, "rate_limit"
+		}
+		return false, ""
+	}
+
 	// Retry on known transient errors (stream parse or phantom detection).
 	if result.Error != nil && r.config.RetryOnStreamFailure {
 		errMsg := result.Error.Error()
@@ -364,7 +412,10 @@ func (r *Runner) shouldRetryStep(result *StepResult, step Step) (bool, string) {
 	}
 
 	if r.config.RetryOnEmptyResponse && strings.TrimSpace(result.Content) == "" {
-		return true, "empty_response"
+		// If we got successful tool calls, don't retry just because content was empty.
+		if len(result.ToolCalls) == 0 || !hasSuccessfulToolCallRetry(result.ToolCalls) {
+			return true, "empty_response"
+		}
 	}
 
 	// If an explicit tool was requested and no tool calls occurred, retry once.
@@ -412,6 +463,10 @@ func applyEvalEnvOverrides(config *Config) {
 		return
 	}
 
+	if value, ok := envInt("EVAL_HTTP_TIMEOUT"); ok && value > 0 {
+		config.RequestTimeout = time.Duration(value) * time.Second
+	}
+
 	if value, ok := envInt("EVAL_STEP_RETRIES"); ok {
 		config.StepRetries = value
 	} else if config.StepRetries == 0 {
@@ -448,6 +503,14 @@ func applyEvalEnvOverrides(config *Config) {
 		config.RetryOnToolErrors = true
 	}
 
+	if value, ok := envBool("EVAL_RETRY_ON_RATE_LIMIT"); ok {
+		config.RetryOnRateLimit = value
+	}
+
+	if value, ok := envInt("EVAL_RATE_LIMIT_COOLDOWN"); ok && value > 0 {
+		config.RateLimitCooldown = time.Duration(value) * time.Second
+	}
+
 	if value, ok := envBool("EVAL_PREFLIGHT"); ok {
 		config.Preflight = value
 	}
@@ -456,6 +519,10 @@ func applyEvalEnvOverrides(config *Config) {
 		config.PreflightTimeout = time.Duration(value) * time.Second
 	} else if config.PreflightTimeout == 0 {
 		config.PreflightTimeout = 15 * time.Second
+	}
+
+	if value, ok := envString("EVAL_MODEL"); ok && strings.TrimSpace(config.Model) == "" {
+		config.Model = value
 	}
 
 	if dir, ok := envString("EVAL_REPORT_DIR"); ok {
@@ -473,18 +540,24 @@ func (r *Runner) writeReport(result ScenarioResult) (string, error) {
 	}
 
 	timestamp := time.Now().Format("20060102-150405")
-	filename := fmt.Sprintf("eval-%s-%s.json", sanitizeFilename(result.ScenarioName), timestamp)
+	nameParts := []string{sanitizeFilename(result.ScenarioName)}
+	if model := strings.TrimSpace(r.config.Model); model != "" {
+		nameParts = append(nameParts, sanitizeFilename(model))
+	}
+	filename := fmt.Sprintf("eval-%s-%s.json", strings.Join(nameParts, "-"), timestamp)
 	path := filepath.Join(r.config.ReportDir, filename)
 
 	report := struct {
 		GeneratedAt time.Time      `json:"generated_at"`
 		BaseURL     string         `json:"base_url"`
 		Username    string         `json:"username"`
+		Model       string         `json:"model,omitempty"`
 		Result      ScenarioResult `json:"result"`
 	}{
 		GeneratedAt: time.Now(),
 		BaseURL:     r.config.BaseURL,
 		Username:    r.config.Username,
+		Model:       r.config.Model,
 		Result:      result,
 	}
 
@@ -536,6 +609,18 @@ func envInt(key string) (int, bool) {
 	return parsed, true
 }
 
+func envFloat(key string) (float64, bool) {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return 0, false
+	}
+	var parsed float64
+	if _, err := fmt.Sscanf(strings.TrimSpace(value), "%f", &parsed); err != nil {
+		return 0, false
+	}
+	return parsed, true
+}
+
 func envString(key string) (string, bool) {
 	value, ok := os.LookupEnv(key)
 	if !ok {
@@ -546,6 +631,120 @@ func envString(key string) (string, bool) {
 		return "", false
 	}
 	return value, true
+}
+
+type aiSettingsResponse struct {
+	PatrolModel string `json:"patrol_model"`
+}
+
+type aiSettingsUpdateRequest struct {
+	PatrolModel *string `json:"patrol_model,omitempty"`
+}
+
+func (r *Runner) applyPatrolModelOverride(ctx context.Context) (func(), error) {
+	if r == nil {
+		return nil, nil
+	}
+
+	override := r.patrolModelOverride()
+	if override == "" {
+		return nil, nil
+	}
+
+	current, err := r.getAISettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if current.PatrolModel == override {
+		return nil, nil
+	}
+
+	if err := r.updateAISettings(ctx, aiSettingsUpdateRequest{PatrolModel: &override}); err != nil {
+		return nil, err
+	}
+
+	restore := func() {
+		_ = r.updateAISettings(context.Background(), aiSettingsUpdateRequest{PatrolModel: &current.PatrolModel})
+	}
+	return restore, nil
+}
+
+func (r *Runner) patrolModelOverride() string {
+	if value, ok := envString("EVAL_PATROL_MODEL"); ok {
+		return normalizeModelString(value)
+	}
+	return normalizeModelString(strings.TrimSpace(r.config.Model))
+}
+
+func normalizeModelString(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ""
+	}
+	provider, name := config.ParseModelString(model)
+	if provider == "" || name == "" {
+		return model
+	}
+	return provider + ":" + name
+}
+
+func (r *Runner) getAISettings(ctx context.Context) (*aiSettingsResponse, error) {
+	if r == nil {
+		return nil, fmt.Errorf("nil runner")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.config.BaseURL+"/api/settings/ai", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth(r.config.Username, r.config.Password)
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("get AI settings failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var settings aiSettingsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&settings); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
+func (r *Runner) updateAISettings(ctx context.Context, update aiSettingsUpdateRequest) error {
+	if r == nil {
+		return fmt.Errorf("nil runner")
+	}
+	payload, err := json.Marshal(update)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, r.config.BaseURL+"/api/settings/ai/update", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(r.config.Username, r.config.Password)
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("update AI settings failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	return nil
 }
 
 func (r *Runner) handleApprovalDecision(decision ApprovalDecision, approvalID, reason string) error {
@@ -651,12 +850,34 @@ func hasRetryableToolError(toolCalls []ToolCallEvent) bool {
 	return false
 }
 
-func (r *Runner) parseSSEStream(body io.Reader, approvalDecision ApprovalDecision, approvalReason string) ([]SSEEvent, []ToolCallEvent, []ApprovalEvent, string, string, error) {
+func isRateLimitError(message string) bool {
+	lower := strings.ToLower(message)
+	indicators := []string{
+		"rate limit",
+		"rate-limit",
+		"retry-after",
+		"too many requests",
+		"429",
+		"quota",
+		"resource has been exhausted",
+	}
+	for _, indicator := range indicators {
+		if indicator != "" && strings.Contains(lower, indicator) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Runner) parseSSEStream(body io.Reader, approvalDecision ApprovalDecision, approvalReason string) ([]SSEEvent, []ToolCallEvent, []ApprovalEvent, string, string, string, int, int, error) {
 	var events []SSEEvent
 	var toolCalls []ToolCallEvent
 	var approvals []ApprovalEvent
 	var contentBuilder strings.Builder
 	var sessionID string
+	var model string
+	var inputTokens int
+	var outputTokens int
 	handledApprovals := make(map[string]struct{})
 
 	// Track tool calls in progress
@@ -688,9 +909,13 @@ func (r *Runner) parseSSEStream(body io.Reader, approvalDecision ApprovalDecisio
 			continue
 		}
 
+		eventData := event.Data
+		if event.Type == "complete" && len(event.Data) == 0 {
+			eventData = json.RawMessage([]byte(data))
+		}
 		events = append(events, SSEEvent{
 			Type: event.Type,
-			Data: event.Data,
+			Data: eventData,
 		})
 
 		switch event.Type {
@@ -703,11 +928,17 @@ func (r *Runner) parseSSEStream(body io.Reader, approvalDecision ApprovalDecisio
 			}
 		case "done":
 			var doneData struct {
-				SessionID string `json:"session_id"`
+				SessionID    string `json:"session_id"`
+				InputTokens  int    `json:"input_tokens"`
+				OutputTokens int    `json:"output_tokens"`
 			}
 			if err := json.Unmarshal(event.Data, &doneData); err == nil {
 				if doneData.SessionID != "" {
 					sessionID = doneData.SessionID
+				}
+				if doneData.InputTokens > 0 || doneData.OutputTokens > 0 {
+					inputTokens = doneData.InputTokens
+					outputTokens = doneData.OutputTokens
 				}
 			}
 
@@ -737,11 +968,15 @@ func (r *Runner) parseSSEStream(body io.Reader, approvalDecision ApprovalDecisio
 			var toolData struct {
 				ID      string `json:"id"`
 				Name    string `json:"name"`
+				Input   string `json:"input"`
 				Output  string `json:"output"`
 				Success bool   `json:"success"`
 			}
 			if err := json.Unmarshal(event.Data, &toolData); err == nil {
 				if tc, ok := toolCallsInProgress[toolData.ID]; ok {
+					if toolData.Input != "" {
+						tc.Input = toolData.Input
+					}
 					tc.Output = toolData.Output
 					tc.Success = toolData.Success
 					toolCalls = append(toolCalls, *tc)
@@ -751,6 +986,7 @@ func (r *Runner) parseSSEStream(body io.Reader, approvalDecision ApprovalDecisio
 					toolCalls = append(toolCalls, ToolCallEvent{
 						ID:      toolData.ID,
 						Name:    toolData.Name,
+						Input:   toolData.Input,
 						Output:  toolData.Output,
 						Success: toolData.Success,
 					})
@@ -779,27 +1015,45 @@ func (r *Runner) parseSSEStream(body io.Reader, approvalDecision ApprovalDecisio
 					if _, ok := handledApprovals[approvalData.ApprovalID]; !ok {
 						handledApprovals[approvalData.ApprovalID] = struct{}{}
 						if err := r.handleApprovalDecision(approvalDecision, approvalData.ApprovalID, approvalReason); err != nil {
-							return events, toolCalls, approvals, contentBuilder.String(), sessionID, err
+							return events, toolCalls, approvals, contentBuilder.String(), sessionID, model, inputTokens, outputTokens, err
 						}
 					}
 				}
+			}
+
+		case "complete":
+			var completeData struct {
+				Model        string `json:"model"`
+				InputTokens  int    `json:"input_tokens"`
+				OutputTokens int    `json:"output_tokens"`
+			}
+			if err := json.Unmarshal([]byte(data), &completeData); err == nil {
+				if completeData.Model != "" {
+					model = completeData.Model
+				}
+				inputTokens = completeData.InputTokens
+				outputTokens = completeData.OutputTokens
 			}
 
 		case "error":
 			var errorData struct {
 				Message string `json:"message"`
 			}
-			if err := json.Unmarshal(event.Data, &errorData); err == nil {
-				return events, toolCalls, approvals, contentBuilder.String(), sessionID, fmt.Errorf("stream error: %s", errorData.Message)
+			if err := json.Unmarshal(event.Data, &errorData); err == nil && strings.TrimSpace(errorData.Message) != "" {
+				return events, toolCalls, approvals, contentBuilder.String(), sessionID, model, inputTokens, outputTokens, fmt.Errorf("stream error: %s", errorData.Message)
+			}
+			var rawMsg string
+			if err := json.Unmarshal(event.Data, &rawMsg); err == nil && strings.TrimSpace(rawMsg) != "" {
+				return events, toolCalls, approvals, contentBuilder.String(), sessionID, model, inputTokens, outputTokens, fmt.Errorf("stream error: %s", rawMsg)
 			}
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return events, toolCalls, approvals, contentBuilder.String(), sessionID, err
+		return events, toolCalls, approvals, contentBuilder.String(), sessionID, model, inputTokens, outputTokens, err
 	}
 
-	return events, toolCalls, approvals, contentBuilder.String(), sessionID, nil
+	return events, toolCalls, approvals, contentBuilder.String(), sessionID, model, inputTokens, outputTokens, nil
 }
 
 func (r *Runner) printStepResult(result *StepResult) {

@@ -340,6 +340,44 @@ func AssertMinToolCalls(min int) Assertion {
 	}
 }
 
+// AssertMaxInputTokens checks that total input tokens stayed under a ceiling.
+// This catches regressions where the model loops and burns excessive tokens.
+func AssertMaxInputTokens(max int) Assertion {
+	return func(result *StepResult) AssertionResult {
+		if result.InputTokens <= max {
+			return AssertionResult{
+				Name:    fmt.Sprintf("max_input_tokens:%d", max),
+				Passed:  true,
+				Message: fmt.Sprintf("%d input tokens used (max: %d)", result.InputTokens, max),
+			}
+		}
+		return AssertionResult{
+			Name:    fmt.Sprintf("max_input_tokens:%d", max),
+			Passed:  false,
+			Message: fmt.Sprintf("%d input tokens used (expected at most %d)", result.InputTokens, max),
+		}
+	}
+}
+
+// AssertMaxToolCalls checks that the assistant made at most N tool calls.
+// This catches regressions where the model loops excessively on simple tasks.
+func AssertMaxToolCalls(max int) Assertion {
+	return func(result *StepResult) AssertionResult {
+		if len(result.ToolCalls) <= max {
+			return AssertionResult{
+				Name:    fmt.Sprintf("max_tool_calls:%d", max),
+				Passed:  true,
+				Message: fmt.Sprintf("%d tool calls made (max: %d)", len(result.ToolCalls), max),
+			}
+		}
+		return AssertionResult{
+			Name:    fmt.Sprintf("max_tool_calls:%d", max),
+			Passed:  false,
+			Message: fmt.Sprintf("%d tool calls made (expected at most %d). Tools: %v", len(result.ToolCalls), max, getToolNames(result.ToolCalls)),
+		}
+	}
+}
+
 // AssertHasContent checks that the assistant produced a non-empty response
 func AssertHasContent() Assertion {
 	return func(result *StepResult) AssertionResult {

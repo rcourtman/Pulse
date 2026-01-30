@@ -3,6 +3,8 @@ package investigation
 
 import (
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 )
 
 // InvestigationSession represents an AI investigation of a finding
@@ -39,12 +41,14 @@ const (
 type Outcome string
 
 const (
-	OutcomeResolved       Outcome = "resolved"
-	OutcomeFixQueued      Outcome = "fix_queued"
-	OutcomeFixExecuted    Outcome = "fix_executed" // Fix was auto-executed successfully
-	OutcomeFixFailed      Outcome = "fix_failed"   // Fix was attempted but failed
-	OutcomeNeedsAttention Outcome = "needs_attention"
-	OutcomeCannotFix      Outcome = "cannot_fix"
+	OutcomeResolved              Outcome = "resolved"
+	OutcomeFixQueued             Outcome = "fix_queued"
+	OutcomeFixExecuted           Outcome = "fix_executed"            // Fix was auto-executed successfully
+	OutcomeFixFailed             Outcome = "fix_failed"              // Fix was attempted but failed
+	OutcomeFixVerified           Outcome = "fix_verified"            // Fix worked, issue resolved
+	OutcomeFixVerificationFailed Outcome = "fix_verification_failed" // Fix ran but issue persists
+	OutcomeNeedsAttention        Outcome = "needs_attention"
+	OutcomeCannotFix             Outcome = "cannot_fix"
 )
 
 // Fix represents a proposed remediation action
@@ -58,47 +62,9 @@ type Fix struct {
 	Rationale   string   `json:"rationale,omitempty"`   // Why this fix was suggested
 }
 
-// DestructivePatterns contains patterns that indicate destructive commands
-var DestructivePatterns = []string{
-	// File/disk destruction
-	"rm -rf",
-	"rm -r",
-	"rm -f",
-	"rmdir",
-	"dd if=",
-	"mkfs",
-	"fdisk",
-	"wipefs",
-	"shred",
-	// Proxmox VM/container destruction
-	"pct destroy",
-	"qm destroy",
-	"pvecm delnode",
-	"zfs destroy",
-	// Docker/container destruction
-	"docker rm -f",
-	"docker system prune",
-	"docker volume rm",
-	"docker image prune",
-	"podman rm -f",
-	// Package removal
-	"apt remove",
-	"apt purge",
-	"apt autoremove",
-	"yum remove",
-	"dnf remove",
-	"pacman -R",
-	// Service disruption
-	"systemctl stop",
-	"systemctl disable",
-	"service stop",
-	"killall",
-	"pkill",
-	// Network disruption
-	"iptables -F",
-	"ip link delete",
-	"ifdown",
-}
+// DestructivePatterns delegates to the shared safety package for the canonical
+// list of destructive command patterns. All subsystems use the same list.
+var DestructivePatterns = safety.DestructivePatterns
 
 // InvestigationConfig holds configuration for investigations
 type InvestigationConfig struct {
@@ -107,6 +73,7 @@ type InvestigationConfig struct {
 	MaxConcurrent         int           // Maximum concurrent investigations
 	MaxAttemptsPerFinding int           // Maximum investigation attempts per finding
 	CooldownDuration      time.Duration // Cooldown before re-investigating
+	VerificationDelay     time.Duration // Wait before verifying fix (default: 30s)
 }
 
 // DefaultConfig returns the default investigation configuration
@@ -117,17 +84,14 @@ func DefaultConfig() InvestigationConfig {
 		MaxConcurrent:         3,
 		MaxAttemptsPerFinding: 3,
 		CooldownDuration:      1 * time.Hour,
+		VerificationDelay:     30 * time.Second,
 	}
 }
 
-// IsDestructive checks if a command matches known destructive patterns
+// IsDestructive checks if a command matches known destructive patterns.
+// Delegates to the shared safety package.
 func IsDestructive(command string) bool {
-	for _, pattern := range DestructivePatterns {
-		if containsPattern(command, pattern) {
-			return true
-		}
-	}
-	return false
+	return safety.IsDestructiveCommand(command)
 }
 
 // containsPattern checks if a command contains a pattern (case-insensitive partial match)

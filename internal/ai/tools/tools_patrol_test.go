@@ -207,7 +207,7 @@ func TestHandlePatrolReportFinding_InvalidCategory(t *testing.T) {
 }
 
 func TestHandlePatrolReportFinding_ValidSeverities(t *testing.T) {
-	for _, sev := range []string{"critical", "warning", "watch", "info"} {
+	for _, sev := range []string{"critical", "warning"} {
 		t.Run(sev, func(t *testing.T) {
 			creator := &mockPatrolFindingCreator{}
 			exec := newPatrolTestExecutor(creator)
@@ -224,6 +224,24 @@ func TestHandlePatrolReportFinding_ValidSeverities(t *testing.T) {
 			var parsed map[string]interface{}
 			require.NoError(t, json.Unmarshal([]byte(text), &parsed))
 			assert.Equal(t, true, parsed["ok"])
+		})
+	}
+}
+
+func TestHandlePatrolReportFinding_RejectedSeverities(t *testing.T) {
+	for _, sev := range []string{"watch", "info"} {
+		t.Run(sev, func(t *testing.T) {
+			creator := &mockPatrolFindingCreator{}
+			exec := newPatrolTestExecutor(creator)
+
+			args := validReportArgs()
+			args["severity"] = sev
+
+			result, err := handlePatrolReportFinding(context.Background(), exec, args)
+			require.NoError(t, err)
+
+			text := extractText(result)
+			assert.Contains(t, text, "invalid severity")
 		})
 	}
 }

@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// Investigation limits for automatic finding investigation.
+const (
+	investigationCooldown    = 1 * time.Hour // Minimum time between investigation attempts
+	maxInvestigationAttempts = 3             // Maximum number of investigation retries
+)
+
 // FindingSeverity represents how urgent a finding is
 type FindingSeverity string
 
@@ -74,6 +80,7 @@ type Finding struct {
 	LastSeenAt     time.Time       `json:"last_seen_at"`
 	ResolvedAt     *time.Time      `json:"resolved_at,omitempty"`
 	AutoResolved   bool            `json:"auto_resolved"`
+	ResolveReason  string          `json:"resolve_reason,omitempty"` // Why the finding was resolved (e.g., "No longer detected by patrol")
 	AcknowledgedAt *time.Time      `json:"acknowledged_at,omitempty"`
 	SnoozedUntil   *time.Time      `json:"snoozed_until,omitempty"` // Finding hidden until this time
 	// Link to alert if this finding was triggered by or attached to an alert
@@ -138,6 +145,12 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 		return false
 	}
 
+	// Don't re-investigate findings where the fix was verified as failed
+	// (user should review manually)
+	if f.InvestigationOutcome == "fix_verification_failed" {
+		return false
+	}
+
 	// Only investigate warning and critical severity (info/watch are not actionable)
 	if f.Severity != FindingSeverityWarning && f.Severity != FindingSeverityCritical {
 		return false
@@ -149,14 +162,13 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 	}
 
 	// Don't re-investigate if at max attempts (3)
-	if f.InvestigationAttempts >= 3 {
+	if f.InvestigationAttempts >= maxInvestigationAttempts {
 		return false
 	}
 
 	// Don't re-investigate within cooldown period (1 hour)
 	if f.LastInvestigatedAt != nil {
-		cooldownDuration := 1 * time.Hour
-		if time.Since(*f.LastInvestigatedAt) < cooldownDuration {
+		if time.Since(*f.LastInvestigatedAt) < investigationCooldown {
 			return false
 		}
 	}
@@ -172,13 +184,12 @@ func (f *Finding) IsBeingInvestigated() bool {
 // CanRetryInvestigation returns true if the finding can be re-investigated
 func (f *Finding) CanRetryInvestigation() bool {
 	// Can't retry if at max attempts
-	if f.InvestigationAttempts >= 3 {
+	if f.InvestigationAttempts >= maxInvestigationAttempts {
 		return false
 	}
 	// Can't retry if still in cooldown
 	if f.LastInvestigatedAt != nil {
-		cooldownDuration := 1 * time.Hour
-		if time.Since(*f.LastInvestigatedAt) < cooldownDuration {
+		if time.Since(*f.LastInvestigatedAt) < investigationCooldown {
 			return false
 		}
 	}
@@ -429,8 +440,13 @@ func (s *FindingsStore) Add(f *Finding) bool {
 		existing.Title = f.Title // Update title in case LLM phrased it better
 		existing.Severity = f.Severity
 		existing.TimesRaised++ // Track recurrence
+		severity := existing.Severity
 		s.mu.Unlock()
 		s.scheduleSave()
+		// Bypass debounce for warning+ findings to avoid data loss on crash
+		if severity == FindingSeverityWarning || severity == FindingSeverityCritical {
+			_ = s.ForceSave()
+		}
 		return false
 	}
 
@@ -451,8 +467,13 @@ func (s *FindingsStore) Add(f *Finding) bool {
 	if f.IsActive() {
 		s.activeCounts[f.Severity]++
 	}
+	severity := f.Severity
 	s.mu.Unlock()
 	s.scheduleSave()
+	// Bypass debounce for warning+ findings to avoid data loss on crash
+	if severity == FindingSeverityWarning || severity == FindingSeverityCritical {
+		_ = s.ForceSave()
+	}
 
 	return true
 }
@@ -470,6 +491,28 @@ func (s *FindingsStore) Resolve(id string, auto bool) bool {
 	now := time.Now()
 	f.ResolvedAt = &now
 	f.AutoResolved = auto
+	s.activeCounts[f.Severity]--
+	s.mu.Unlock()
+	s.scheduleSave()
+
+	return true
+}
+
+// ResolveWithReason marks a finding as resolved with a specific reason string.
+// This is used by auto-resolution to distinguish why a finding was resolved.
+func (s *FindingsStore) ResolveWithReason(id string, reason string) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists || !f.IsActive() {
+		s.mu.Unlock()
+		return false
+	}
+
+	now := time.Now()
+	f.ResolvedAt = &now
+	f.AutoResolved = true
+	f.ResolveReason = reason
 	s.activeCounts[f.Severity]--
 	s.mu.Unlock()
 	s.scheduleSave()

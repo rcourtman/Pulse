@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
 
@@ -224,162 +223,20 @@ func (a *AlertTriggeredAnalyzer) analyzeResource(alert *alerts.Alert, resourceKe
 	}
 }
 
-// analyzeResourceByAlert determines the resource type from the alert and analyzes it
+// analyzeResourceByAlert determines the resource type from the alert and analyzes it.
+// Only docker-container-update alerts produce findings; all other alert types are
+// handled by LLM-based patrol via TriggerScopedPatrol.
 func (a *AlertTriggeredAnalyzer) analyzeResourceByAlert(ctx context.Context, alert *alerts.Alert) []*Finding {
 	if a.patrolService == nil {
 		return nil
 	}
 
-	// Parse alert type to determine what kind of resource this is
 	alertType := strings.ToLower(alert.Type)
-
-	switch {
-	// Node alerts
-	case strings.HasPrefix(alertType, "node") ||
-		alertType == "cpu" && strings.Contains(alert.ResourceID, "/node/") ||
-		alertType == "memory" && strings.Contains(alert.ResourceID, "/node/"):
-		return a.analyzeNodeFromAlert(ctx, alert)
-
-	// Docker update alerts - provide AI-powered update risk assessment
-	// NOTE: This must come BEFORE the guest container check since "container" matches "docker-container-update"
-	case alertType == "docker-container-update":
+	if alertType == "docker-container-update" {
 		return a.analyzeUpdateAlertFromAlert(ctx, alert)
-
-	// Guest (VM/Container) alerts - Proxmox VMs and LXC containers
-	case strings.Contains(alertType, "container") ||
-		strings.Contains(alertType, "vm") ||
-		strings.HasPrefix(alertType, "qemu") ||
-		strings.HasPrefix(alertType, "lxc") ||
-		strings.Contains(alert.ResourceID, "/qemu/") ||
-		strings.Contains(alert.ResourceID, "/lxc/"):
-		return a.analyzeGuestFromAlert(ctx, alert)
-
-	// Docker alerts (other than container-update)
-	case strings.Contains(alertType, "docker"):
-		return a.analyzeDockerFromAlert(ctx, alert)
-
-	// Storage alerts
-	case strings.Contains(alertType, "storage") ||
-		strings.HasSuffix(alertType, "-usage"):
-		return a.analyzeStorageFromAlert(ctx, alert)
-
-	// Generic CPU/Memory/Disk alerts - try to determine from resource ID
-	case alertType == "cpu" || alertType == "memory" || alertType == "disk":
-		return a.analyzeGenericResourceFromAlert(ctx, alert)
-
-	default:
-		log.Debug().
-			Str("alertType", alertType).
-			Str("resourceID", alert.ResourceID).
-			Msg("Unknown alert type for targeted AI analysis, skipping")
-		return nil
-	}
-}
-
-// analyzeNodeFromAlert analyzes a Proxmox node triggered by an alert
-func (a *AlertTriggeredAnalyzer) analyzeNodeFromAlert(_ context.Context, alert *alerts.Alert) []*Finding {
-	if a.stateProvider == nil {
-		return nil
 	}
 
-	state := a.stateProvider.GetState()
-
-	// Find the node - first try ResourceID, then ResourceName
-	var targetNode *models.Node
-	for i := range state.Nodes {
-		node := &state.Nodes[i]
-		if node.ID == alert.ResourceID || node.Name == alert.ResourceName || node.Name == alert.Node {
-			targetNode = node
-			break
-		}
-	}
-
-	if targetNode == nil {
-		log.Warn().
-			Str("alertID", alert.ID).
-			Str("resourceID", alert.ResourceID).
-			Str("resourceName", alert.ResourceName).
-			Msg("Could not find node for alert-triggered analysis")
-		return nil
-	}
-
-	// Use patrol service's node analysis
-	return a.patrolService.analyzeNode(*targetNode)
-}
-
-// analyzeGuestFromAlert analyzes a VM/Container triggered by an alert
-func (a *AlertTriggeredAnalyzer) analyzeGuestFromAlert(_ context.Context, alert *alerts.Alert) []*Finding {
-	if a.stateProvider == nil {
-		return nil
-	}
-
-	state := a.stateProvider.GetState()
-
-	// Check VMs
-	for _, vm := range state.VMs {
-		if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
-			var lastBackup *time.Time
-			if !vm.LastBackup.IsZero() {
-				lastBackup = &vm.LastBackup
-			}
-			return a.patrolService.analyzeGuest(
-				vm.ID, vm.Name, "vm", vm.Node, vm.Status,
-				vm.CPU, vm.Memory.Usage, vm.Disk.Usage,
-				lastBackup, vm.Template,
-			)
-		}
-	}
-
-	// Check containers
-	for _, ct := range state.Containers {
-		if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
-			var lastBackup *time.Time
-			if !ct.LastBackup.IsZero() {
-				lastBackup = &ct.LastBackup
-			}
-			return a.patrolService.analyzeGuest(
-				ct.ID, ct.Name, "container", ct.Node, ct.Status,
-				ct.CPU, ct.Memory.Usage, ct.Disk.Usage,
-				lastBackup, ct.Template,
-			)
-		}
-	}
-
-	log.Warn().
-		Str("alertID", alert.ID).
-		Str("resourceID", alert.ResourceID).
-		Msg("Could not find guest for alert-triggered analysis")
-	return nil
-}
-
-// analyzeDockerFromAlert analyzes a Docker container/host triggered by an alert
-func (a *AlertTriggeredAnalyzer) analyzeDockerFromAlert(_ context.Context, alert *alerts.Alert) []*Finding {
-	if a.stateProvider == nil {
-		return nil
-	}
-
-	state := a.stateProvider.GetState()
-
-	// Try to find the Docker host or container
-	// Containers are nested inside DockerHosts
-	for _, dh := range state.DockerHosts {
-		// Check if this is a host alert
-		if dh.ID == alert.ResourceID || dh.Hostname == alert.ResourceName {
-			return a.patrolService.analyzeDockerHost(dh)
-		}
-
-		// Check containers within this host
-		for _, container := range dh.Containers {
-			if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
-				return a.patrolService.analyzeDockerHost(dh)
-			}
-		}
-	}
-
-	log.Warn().
-		Str("alertID", alert.ID).
-		Str("resourceID", alert.ResourceID).
-		Msg("Could not find Docker resource for alert-triggered analysis")
+	// All other alert types are handled by LLM-based patrol via TriggerScopedPatrol
 	return nil
 }
 
@@ -651,50 +508,6 @@ func (a *AlertTriggeredAnalyzer) classifyContainerUpdate(containerName, imageNam
 	}
 
 	return severity, category, urgencyReason, recommendation
-}
-
-// analyzeStorageFromAlert analyzes a storage resource triggered by an alert
-func (a *AlertTriggeredAnalyzer) analyzeStorageFromAlert(_ context.Context, alert *alerts.Alert) []*Finding {
-	if a.stateProvider == nil {
-		return nil
-	}
-
-	state := a.stateProvider.GetState()
-
-	// Storage is at the top level of StateSnapshot
-	for _, storage := range state.Storage {
-		if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
-			return a.patrolService.analyzeStorage(storage)
-		}
-	}
-
-	log.Warn().
-		Str("alertID", alert.ID).
-		Str("resourceID", alert.ResourceID).
-		Msg("Could not find storage for alert-triggered analysis")
-	return nil
-}
-
-// analyzeGenericResourceFromAlert tries to determine resource type and analyze
-func (a *AlertTriggeredAnalyzer) analyzeGenericResourceFromAlert(ctx context.Context, alert *alerts.Alert) []*Finding {
-	// Try each resource type in order of likelihood
-	resourceID := alert.ResourceID
-
-	switch {
-	case strings.Contains(resourceID, "/node/"):
-		return a.analyzeNodeFromAlert(ctx, alert)
-	case strings.Contains(resourceID, "/qemu/") || strings.Contains(resourceID, "/lxc/"):
-		return a.analyzeGuestFromAlert(ctx, alert)
-	case strings.Contains(resourceID, "docker"):
-		return a.analyzeDockerFromAlert(ctx, alert)
-	default:
-		// Try guest first (most common), then node
-		findings := a.analyzeGuestFromAlert(ctx, alert)
-		if len(findings) > 0 {
-			return findings
-		}
-		return a.analyzeNodeFromAlert(ctx, alert)
-	}
 }
 
 // resourceKeyFromAlert creates a unique key for the resource in an alert

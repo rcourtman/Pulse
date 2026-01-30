@@ -157,6 +157,14 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 		if err != nil {
 			return NewErrorResult(err), nil
 		}
+		// Downsample to maxMetricPoints to prevent context window blowout.
+		// 7d of per-minute data can be 10K-20K points (~1.6MB JSON).
+		// 120 bucket-averaged points preserves trends while keeping output manageable.
+		if len(metrics) > maxMetricPoints {
+			response.OriginalCount = len(metrics)
+			response.Downsampled = true
+			metrics = downsampleMetrics(metrics, maxMetricPoints)
+		}
 		response.Points = metrics
 		return NewJSONResult(response), nil
 	}
@@ -639,4 +647,67 @@ func (e *PulseToolExecutor) executeListPhysicalDisks(_ context.Context, args map
 	}
 
 	return NewJSONResult(response), nil
+}
+
+// maxMetricPoints is the maximum number of metric data points returned per resource.
+// Beyond this, points are downsampled via bucket averaging to preserve trends
+// while keeping the response size manageable for the LLM context window.
+const maxMetricPoints = 120
+
+// downsampleMetrics reduces a slice of MetricPoints to targetCount points
+// by bucket-averaging. Each bucket covers an equal time span and the output
+// point uses the bucket's midpoint timestamp with averaged metric values.
+func downsampleMetrics(points []MetricPoint, targetCount int) []MetricPoint {
+	if len(points) <= targetCount || targetCount <= 0 {
+		return points
+	}
+
+	// Sort by timestamp (should already be sorted, but be safe)
+	sort.Slice(points, func(i, j int) bool {
+		return points[i].Timestamp.Before(points[j].Timestamp)
+	})
+
+	bucketSize := len(points) / targetCount
+	if bucketSize < 1 {
+		bucketSize = 1
+	}
+
+	result := make([]MetricPoint, 0, targetCount)
+	for i := 0; i < len(points); i += bucketSize {
+		end := i + bucketSize
+		if end > len(points) {
+			end = len(points)
+		}
+		bucket := points[i:end]
+
+		var sumCPU, sumMem, sumDisk float64
+		hasDisk := false
+		for _, p := range bucket {
+			sumCPU += p.CPU
+			sumMem += p.Memory
+			if p.Disk != 0 {
+				sumDisk += p.Disk
+				hasDisk = true
+			}
+		}
+		n := float64(len(bucket))
+
+		// Use midpoint timestamp
+		midIdx := len(bucket) / 2
+		avg := MetricPoint{
+			Timestamp: bucket[midIdx].Timestamp,
+			CPU:       sumCPU / n,
+			Memory:    sumMem / n,
+		}
+		if hasDisk {
+			avg.Disk = sumDisk / n
+		}
+		result = append(result, avg)
+
+		if len(result) >= targetCount {
+			break
+		}
+	}
+
+	return result
 }

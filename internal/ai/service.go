@@ -74,6 +74,7 @@ type ChatServiceProvider interface {
 	ExecutePatrolStream(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error)
 	GetMessages(ctx context.Context, sessionID string) ([]ChatMessage, error)
 	DeleteSession(ctx context.Context, sessionID string) error
+	ReloadConfig(ctx context.Context, cfg *config.AIConfig) error
 }
 
 // ChatSession represents a chat session (minimal interface for investigations)
@@ -98,10 +99,27 @@ type ChatStreamEvent struct {
 
 // ChatMessage represents a chat message
 type ChatMessage struct {
-	ID        string    `json:"id"`
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
+	ID               string          `json:"id"`
+	Role             string          `json:"role"`
+	Content          string          `json:"content"`
+	ReasoningContent string          `json:"reasoning_content,omitempty"`
+	ToolCalls        []ChatToolCall  `json:"tool_calls,omitempty"`
+	ToolResult       *ChatToolResult `json:"tool_result,omitempty"`
+	Timestamp        time.Time       `json:"timestamp"`
+}
+
+// ChatToolCall represents a tool invocation in a chat message
+type ChatToolCall struct {
+	ID    string                 `json:"id"`
+	Name  string                 `json:"name"`
+	Input map[string]interface{} `json:"input"`
+}
+
+// ChatToolResult represents the result of a tool invocation
+type ChatToolResult struct {
+	ToolUseID string `json:"tool_use_id"`
+	Content   string `json:"content"`
+	IsError   bool   `json:"is_error,omitempty"`
 }
 
 // PatrolExecuteRequest represents a patrol execution request via the chat service
@@ -110,6 +128,7 @@ type PatrolExecuteRequest struct {
 	SystemPrompt string `json:"system_prompt"`
 	SessionID    string `json:"session_id,omitempty"`
 	UseCase      string `json:"use_case"` // "patrol" — for model selection
+	MaxTurns     int    `json:"max_turns,omitempty"`
 }
 
 // PatrolStreamResponse contains the results of a patrol execution via the chat service
@@ -162,12 +181,16 @@ type executionLimits struct {
 	patrolSlots chan struct{}
 }
 
-type modelsCache struct {
-	mu     sync.RWMutex
+type providerModelsEntry struct {
 	at     time.Time
-	key    string
 	models []providers.ModelInfo
-	ttl    time.Duration
+}
+
+type modelsCache struct {
+	mu        sync.RWMutex
+	key       string
+	providers map[string]providerModelsEntry
+	ttl       time.Duration
 }
 
 // NewService creates a new AI service
@@ -204,7 +227,8 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 			patrolSlots: make(chan struct{}, 1),
 		},
 		modelsCache: modelsCache{
-			ttl: 5 * time.Minute,
+			ttl:       5 * time.Minute,
+			providers: make(map[string]providerModelsEntry),
 		},
 	}
 }
@@ -258,6 +282,12 @@ func (s *Service) enforceBudget(useCase string) error {
 	}
 
 	return nil
+}
+
+// CheckBudget is a public wrapper around enforceBudget, allowing callers
+// (e.g. patrol) to verify budget availability before starting expensive work.
+func (s *Service) CheckBudget(useCase string) error {
+	return s.enforceBudget(useCase)
 }
 
 // SetStateProvider sets the state provider for infrastructure context
@@ -2832,22 +2862,21 @@ func (s *Service) GetKnowledgeStore() *knowledge.Store {
 
 // AnalyzeForDiscovery implements the infradiscovery.AIAnalyzer interface.
 // It sends a prompt to the AI using the discovery model (optimized for cost).
+// Dynamically creates a provider matching the discovery model to avoid using a
+// stale or mismatched global provider (e.g., when the user selects a different
+// model per-session in chat). Falls back to other configured providers on failure.
 func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
 	s.mu.RLock()
-	provider := s.provider
 	cfg := s.cfg
 	costStore := s.costStore
+	fallbackProvider := s.provider // keep as last resort
 	s.mu.RUnlock()
-
-	if provider == nil {
-		return "", fmt.Errorf("AI provider not configured")
-	}
 
 	if cfg == nil || !cfg.Enabled {
 		return "", fmt.Errorf("AI is not enabled")
 	}
 
-	// Get the discovery model (defaults to cheap/fast model)
+	// Get the discovery model (defaults to main model from settings)
 	model := cfg.GetDiscoveryModel()
 
 	// Build simple message for discovery (no tools needed)
@@ -2858,14 +2887,73 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 		},
 	}
 
+	// Dynamically create a provider for the discovery model.
+	// This ensures we use the correct provider even if s.provider was created
+	// for a different model (e.g., user changed settings or uses per-session override).
+	var provider providers.Provider
+	if model != "" {
+		var providerErr error
+		provider, providerErr = providers.NewForModel(cfg, model)
+		if providerErr != nil {
+			log.Debug().Err(providerErr).Str("model", model).Msg("[Discovery] Could not create provider for discovery model, using default")
+			provider = fallbackProvider
+		}
+	} else {
+		provider = fallbackProvider
+	}
+
+	if provider == nil {
+		return "", fmt.Errorf("AI provider not configured")
+	}
+
 	// Make the API call
 	resp, err := provider.Chat(ctx, providers.ChatRequest{
 		Messages:  messages,
 		Model:     model,
 		MaxTokens: 4096, // Discovery responses need room for detailed JSON
 	})
+
+	// If the primary provider fails (e.g., rate limited), try other configured providers
 	if err != nil {
-		return "", fmt.Errorf("discovery analysis failed: %w", err)
+		primaryErr := err
+		primaryProvider, _ := config.ParseModelString(model)
+
+		for _, altProviderName := range cfg.GetConfiguredProviders() {
+			if altProviderName == primaryProvider {
+				continue // skip the one that just failed
+			}
+
+			altModel := config.DefaultModelForProvider(altProviderName)
+			if altModel == "" {
+				continue
+			}
+
+			altProvider, createErr := providers.NewForModel(cfg, altModel)
+			if createErr != nil {
+				continue
+			}
+
+			log.Info().
+				Str("failed_provider", primaryProvider).
+				Str("fallback_provider", altProviderName).
+				Str("fallback_model", altModel).
+				Msg("[Discovery] Primary provider failed, trying fallback")
+
+			resp, err = altProvider.Chat(ctx, providers.ChatRequest{
+				Messages:  messages,
+				Model:     altModel,
+				MaxTokens: 4096,
+			})
+			if err == nil {
+				model = altModel
+				provider = altProvider
+				break
+			}
+		}
+
+		if err != nil {
+			return "", fmt.Errorf("discovery analysis failed: %w (primary error: %v)", err, primaryErr)
+		}
 	}
 
 	// Track cost if cost store is available
@@ -3608,26 +3696,37 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 	}
 
 	cacheKey := buildModelsCacheKey(cfg)
-	s.modelsCache.mu.RLock()
-	if s.modelsCache.key == cacheKey && s.modelsCache.ttl > 0 && time.Since(s.modelsCache.at) < s.modelsCache.ttl && len(s.modelsCache.models) > 0 {
-		out := make([]providers.ModelInfo, len(s.modelsCache.models))
-		copy(out, s.modelsCache.models)
-		s.modelsCache.mu.RUnlock()
-		return out, true, nil
+
+	// If config changed, clear all cached provider entries
+	s.modelsCache.mu.Lock()
+	if s.modelsCache.key != cacheKey {
+		s.modelsCache.key = cacheKey
+		s.modelsCache.providers = make(map[string]providerModelsEntry)
 	}
-	s.modelsCache.mu.RUnlock()
+	s.modelsCache.mu.Unlock()
 
-	var allModels []providers.ModelInfo
-
-	// Query each configured provider
 	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek, config.AIProviderGemini, config.AIProviderOllama}
+
+	allCached := true
 
 	for _, providerName := range providersList {
 		if !cfg.HasProvider(providerName) {
 			continue
 		}
 
-		// Create provider for this specific provider
+		// Check if this provider's cache is still valid
+		s.modelsCache.mu.RLock()
+		entry, hasEntry := s.modelsCache.providers[providerName]
+		valid := hasEntry && s.modelsCache.ttl > 0 && time.Since(entry.at) < s.modelsCache.ttl && len(entry.models) > 0
+		s.modelsCache.mu.RUnlock()
+
+		if valid {
+			continue
+		}
+
+		allCached = false
+
+		// Create provider
 		provider, err := providers.NewForProvider(cfg, providerName, "")
 		if err != nil {
 			log.Debug().Err(err).Str("provider", providerName).Msg("Skipping provider - not configured")
@@ -3638,12 +3737,15 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 		models, err := provider.ListModels(ctx)
 		if err != nil {
 			log.Warn().Err(err).Str("provider", providerName).Msg("Failed to fetch models from provider")
+			// Keep stale entry (don't overwrite or delete) — the provider's
+			// previous models remain visible until a successful fetch replaces them.
 			continue
 		}
 
-		// Add provider prefix to each model
+		// Build prefixed model list for this provider
+		prefixed := make([]providers.ModelInfo, 0, len(models))
 		for _, m := range models {
-			allModels = append(allModels, providers.ModelInfo{
+			prefixed = append(prefixed, providers.ModelInfo{
 				ID:          config.FormatModelString(providerName, m.ID),
 				Name:        m.Name,
 				Description: providerDisplayName(providerName) + ": " + m.ID,
@@ -3651,16 +3753,26 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 				Notable:     m.Notable,
 			})
 		}
+
+		s.modelsCache.mu.Lock()
+		s.modelsCache.providers[providerName] = providerModelsEntry{
+			at:     time.Now(),
+			models: prefixed,
+		}
+		s.modelsCache.mu.Unlock()
 	}
 
-	s.modelsCache.mu.Lock()
-	s.modelsCache.key = cacheKey
-	s.modelsCache.at = time.Now()
-	s.modelsCache.models = make([]providers.ModelInfo, len(allModels))
-	copy(s.modelsCache.models, allModels)
-	s.modelsCache.mu.Unlock()
+	// Aggregate results in stable provider order
+	var allModels []providers.ModelInfo
+	s.modelsCache.mu.RLock()
+	for _, providerName := range providersList {
+		if entry, ok := s.modelsCache.providers[providerName]; ok {
+			allModels = append(allModels, entry.models...)
+		}
+	}
+	s.modelsCache.mu.RUnlock()
 
-	return allModels, false, nil
+	return allModels, allCached, nil
 }
 
 func buildModelsCacheKey(cfg *config.AIConfig) string {
@@ -3702,7 +3814,23 @@ func providerDisplayName(provider string) string {
 
 // Reload reloads the AI configuration (call after settings change)
 func (s *Service) Reload() error {
-	return s.LoadConfig()
+	if err := s.LoadConfig(); err != nil {
+		return err
+	}
+
+	// Also reload the chat service so patrol picks up model/provider changes
+	s.mu.RLock()
+	cs := s.chatService
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	if cs != nil && cfg != nil {
+		if err := cs.ReloadConfig(context.Background(), cfg); err != nil {
+			log.Warn().Err(err).Msg("Failed to reload chat service config")
+		}
+	}
+
+	return nil
 }
 
 // buildRemediationContext adds past remediation history to help AI learn from previous fixes

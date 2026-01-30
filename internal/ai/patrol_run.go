@@ -1,0 +1,1495 @@
+// patrol_run.go implements the PatrolService runtime: Start/Stop lifecycle,
+// the main patrol loop, scoped patrol execution, alert auto-resolution,
+// live streaming to UI subscribers, and run history tracking.
+package ai
+
+import (
+	"context"
+	"crypto/sha256"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rs/zerolog/log"
+)
+
+// Patrol run lifecycle constants.
+const (
+	initialPatrolStartDelay   = 30 * time.Second // Delay before first patrol after startup
+	findingCleanupAge         = 24 * time.Hour   // Resolved findings older than this are purged
+	scopedPatrolRetryBackoff1 = 5 * time.Second  // First retry backoff for dropped scoped patrols
+	scopedPatrolRetryBackoff2 = 15 * time.Second // Second retry backoff for dropped scoped patrols
+	scopedPatrolMaxRetries    = 2                // Maximum re-queue attempts for dropped scoped patrols
+)
+
+// Start begins the background patrol loop
+func (p *PatrolService) Start(ctx context.Context) {
+	p.mu.Lock()
+	if p.running {
+		p.mu.Unlock()
+		return
+	}
+	p.running = true
+	p.stopCh = make(chan struct{})
+	p.configChanged = make(chan struct{}, 1) // Buffered to allow non-blocking send
+	p.mu.Unlock()
+
+	log.Info().
+		Dur("interval", p.config.GetInterval()).
+		Msg("Starting AI Patrol Service")
+
+	go p.patrolLoop(ctx)
+}
+
+// Stop stops the patrol service
+func (p *PatrolService) Stop() {
+	p.mu.Lock()
+	if !p.running {
+		p.mu.Unlock()
+		return
+	}
+	p.running = false
+	close(p.stopCh)
+	p.mu.Unlock()
+
+	log.Info().Msg("Stopping AI Patrol Service")
+}
+
+// patrolLoop is the main background loop
+func (p *PatrolService) patrolLoop(ctx context.Context) {
+	// Run initial patrol shortly after startup, but only if one hasn't run recently
+	initialDelay := initialPatrolStartDelay
+	select {
+	case <-time.After(initialDelay):
+		// Check if a patrol ran recently (within last hour) to avoid wasting tokens on restarts
+		runHistory := p.GetRunHistory(1)
+
+		skipInitial := false
+		if len(runHistory) > 0 {
+			lastRun := runHistory[0]
+			timeSinceLastRun := time.Since(lastRun.CompletedAt)
+			if timeSinceLastRun < 1*time.Hour {
+				log.Info().
+					Dur("time_since_last", timeSinceLastRun).
+					Msg("AI Patrol: Skipping initial patrol - recent run exists")
+				skipInitial = true
+			}
+		}
+
+		if !skipInitial {
+			p.runPatrolWithTrigger(ctx, TriggerReasonStartup, nil)
+		}
+	case <-p.stopCh:
+		return
+	case <-ctx.Done():
+		return
+	}
+
+	p.mu.RLock()
+	interval := p.config.GetInterval()
+	configCh := p.configChanged
+	p.mu.RUnlock()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			p.runPatrolWithTrigger(ctx, TriggerReasonScheduled, nil)
+
+		case alert := <-p.adHocTrigger:
+			// Run immediate targeted patrol for this alert
+			log.Info().Str("alert_id", alert.ID).Msg("Patrol triggered by alert")
+			p.runTargetedPatrol(ctx, alert)
+
+		case <-configCh:
+			// Config changed - reset ticker with new interval
+			p.mu.RLock()
+			newInterval := p.config.GetInterval()
+			p.mu.RUnlock()
+
+			if newInterval != interval {
+				interval = newInterval
+				ticker.Reset(interval)
+				log.Info().
+					Dur("interval", interval).
+					Msg("Patrol ticker reset to new interval")
+			}
+
+		case <-p.stopCh:
+			return
+
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// runPatrol executes a scheduled patrol run
+func (p *PatrolService) runPatrol(ctx context.Context) {
+	p.runPatrolWithTrigger(ctx, TriggerReasonScheduled, nil)
+}
+
+// runPatrolWithTrigger executes a patrol run with trigger context
+func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger TriggerReason, scope *PatrolScope) {
+	p.mu.RLock()
+	cfg := p.config
+	breaker := p.circuitBreaker
+	p.mu.RUnlock()
+
+	if !cfg.Enabled {
+		return
+	}
+
+	if !p.tryStartRun("full") {
+		return
+	}
+	defer p.endRun()
+
+	// Check if circuit breaker allows LLM calls.
+	llmAllowed := breaker == nil || breaker.Allow()
+	if !llmAllowed {
+		log.Warn().Msg("AI Patrol: Circuit breaker is open (LLM calls blocked)")
+	}
+
+	start := time.Now()
+	patrolType := "patrol"
+	GetPatrolMetrics().RecordRun(string(trigger), "full")
+
+	log.Debug().Msg("AI Patrol: Starting patrol run")
+
+	// Track run statistics
+	var runStats struct {
+		resourceCount     int
+		nodesChecked      int
+		guestsChecked     int
+		dockerChecked     int
+		storageChecked    int
+		hostsChecked      int
+		pbsChecked        int
+		kubernetesChecked int
+		newFindings       int
+		existingFindings  int
+		rejectedFindings  int
+		findingIDs        []string
+		errors            int
+		aiAnalysis        *AIAnalysisResult // Stores the AI's analysis for the run record
+	}
+	var newFindings []*Finding
+
+	// Get current state
+	if p.stateProvider == nil {
+		log.Warn().Msg("AI Patrol: No state provider available")
+		return
+	}
+
+	state := p.stateProvider.GetState()
+
+	// Helper to track findings
+	// Note: Only warning+ severity findings count toward newFindings since watch/info are filtered from UI
+	trackFinding := func(f *Finding) bool {
+		isNew := p.recordFinding(f)
+		if isNew {
+			// Only count warning+ findings as "new" for user-facing stats
+			if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
+				runStats.newFindings++
+				newFindings = append(newFindings, f)
+			}
+		} else {
+			runStats.existingFindings++
+		}
+
+		// Only track warning+ severity finding IDs in the run record
+		if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
+			runStats.findingIDs = append(runStats.findingIDs, f.ID)
+		}
+
+		return isNew
+	}
+
+	// Count resources for statistics (respect analysis configuration)
+	if cfg.AnalyzeNodes {
+		runStats.nodesChecked = len(state.Nodes)
+	}
+	if cfg.AnalyzeGuests {
+		runStats.guestsChecked = len(state.VMs) + len(state.Containers)
+	}
+	if cfg.AnalyzeDocker {
+		runStats.dockerChecked = len(state.DockerHosts)
+	}
+	if cfg.AnalyzeStorage {
+		runStats.storageChecked = len(state.Storage)
+	}
+	if cfg.AnalyzePBS {
+		runStats.pbsChecked = len(state.PBSInstances)
+	}
+	if cfg.AnalyzeHosts {
+		runStats.hostsChecked = len(state.Hosts)
+	}
+	if cfg.AnalyzeKubernetes {
+		runStats.kubernetesChecked = len(state.KubernetesClusters)
+	}
+	runStats.resourceCount = runStats.nodesChecked + runStats.guestsChecked +
+		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.hostsChecked +
+		runStats.kubernetesChecked
+
+	// Determine if we can run LLM analysis (requires AI service + license + circuit breaker not open)
+	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
+	hasPatrolFeature := aiServiceEnabled && p.aiService.HasLicenseFeature(FeatureAIPatrol)
+	canRunLLM := hasPatrolFeature && llmAllowed
+
+	// Check if we can run LLM analysis (AI-only patrol)
+	if !canRunLLM {
+		reason := "requires Pulse Pro license for LLM analysis"
+		if !aiServiceEnabled {
+			reason = "Pulse Assistant service not configured - configure a provider in Settings > Pulse Assistant"
+		} else if !llmAllowed {
+			reason = "circuit breaker is open"
+			GetPatrolMetrics().RecordCircuitBlock()
+		}
+		p.setBlockedReason(reason)
+		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping run - AI unavailable")
+		return
+	} else {
+		p.clearBlockedReason()
+		// Run agentic AI analysis — the LLM uses tools to investigate and reports findings
+		aiResult, aiErr := p.runAIAnalysis(ctx, state, scope)
+		if aiErr != nil {
+			log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
+			runStats.errors++
+
+			// Create a finding to surface this error to the user
+			errMsg := aiErr.Error()
+			var title, description, recommendation string
+			if strings.Contains(errMsg, "Insufficient Balance") || strings.Contains(errMsg, "402") {
+				title = "Pulse Patrol: Insufficient API credits"
+				description = "Pulse Patrol cannot analyze your infrastructure because your provider account has insufficient credits."
+				recommendation = "Add credits to your provider account (DeepSeek, OpenAI, etc.) or switch to a different provider in Pulse Assistant settings."
+			} else if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "Unauthorized") {
+				title = "Pulse Patrol: Invalid API key"
+				description = "Pulse Patrol cannot analyze your infrastructure because the API key is invalid or expired."
+				recommendation = "Check your API key in Pulse Assistant settings and verify it is correct."
+			} else if strings.Contains(errMsg, "rate limit") || strings.Contains(errMsg, "429") {
+				title = "Pulse Patrol: Rate limited"
+				description = "Pulse Patrol is being rate limited by your provider. Analysis will be retried on the next patrol run."
+				recommendation = "Wait for the rate limit to reset, or consider upgrading your API plan for higher limits."
+			} else {
+				title = "Pulse Patrol: Analysis failed"
+				description = fmt.Sprintf("Pulse Patrol encountered an error while analyzing your infrastructure: %s", errMsg)
+				recommendation = "Check your Pulse Assistant settings and API key. If the problem persists, check the logs for more details."
+			}
+
+			errorFinding := &Finding{
+				ID:             generateFindingID("ai-service", "reliability", "ai-patrol-error"),
+				Key:            "ai-patrol-error",
+				Severity:       "warning",
+				Category:       "reliability",
+				ResourceID:     "ai-service",
+				ResourceName:   "Pulse Patrol Service",
+				ResourceType:   "service",
+				Title:          title,
+				Description:    description,
+				Recommendation: recommendation,
+				Evidence:       fmt.Sprintf("Error: %s", errMsg),
+				DetectedAt:     time.Now(),
+				LastSeenAt:     time.Now(),
+			}
+			trackFinding(errorFinding)
+		} else if aiResult != nil {
+			runStats.aiAnalysis = aiResult
+			runStats.rejectedFindings = aiResult.RejectedFindings
+
+			// Auto-resolve previous patrol error finding if this run succeeded
+			errorFindingID := generateFindingID("ai-service", "reliability", "ai-patrol-error")
+			if existing := p.findings.Get(errorFindingID); existing != nil && !existing.IsResolved() {
+				p.findings.Resolve(errorFindingID, true) // auto-resolved
+				if resolver := p.unifiedFindingResolver; resolver != nil {
+					resolver(errorFindingID)
+				}
+				log.Info().Msg("AI Patrol: Auto-resolved previous patrol error finding after successful run")
+			}
+
+			// Findings are already recorded via patrol_report_finding tool calls.
+			// Track stats from the collected findings.
+			for _, f := range aiResult.Findings {
+				if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
+					runStats.findingIDs = append(runStats.findingIDs, f.ID)
+					// Check if this finding was new by looking at the store
+					stored := p.findings.Get(f.ID)
+					if stored != nil && stored.TimesRaised <= 1 {
+						runStats.newFindings++
+						newFindings = append(newFindings, f)
+					} else {
+						runStats.existingFindings++
+					}
+				}
+			}
+		}
+	}
+
+	// Count resolved findings: LLM-resolved (via tool) + auto-reconciled stale findings.
+	var resolvedCount int
+	if runStats.aiAnalysis != nil {
+		resolvedCount = len(runStats.aiAnalysis.ResolvedIDs)
+
+		// Auto-resolve stale findings: active findings that were presented to the LLM
+		// in seed context but were neither re-reported nor explicitly resolved.
+		// Only runs after successful full patrols (not scoped).
+		autoResolved := p.reconcileStaleFindings(
+			runStats.aiAnalysis.ReportedIDs,
+			runStats.aiAnalysis.ResolvedIDs,
+			runStats.aiAnalysis.SeededFindingIDs,
+			runStats.errors > 0,
+		)
+		resolvedCount += autoResolved
+		if autoResolved > 0 {
+			log.Info().
+				Int("auto_resolved", autoResolved).
+				Msg("AI Patrol: Auto-resolved stale findings after full patrol")
+		}
+	}
+
+	// Cleanup old resolved findings (always runs, doesn't require LLM)
+	cleaned := p.findings.Cleanup(findingCleanupAge)
+	if cleaned > 0 {
+		log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
+	}
+
+	// AI-based alert review: check active alerts against current state and auto-resolve fixed issues
+	// Pass llmAllowed so it knows whether AI calls are allowed.
+	alertsResolved := p.reviewAndResolveAlerts(ctx, state, llmAllowed)
+	if alertsResolved > 0 {
+		log.Info().Int("alerts_resolved", alertsResolved).Msg("AI Patrol: Auto-resolved alerts where issues are fixed")
+	}
+
+	duration := time.Since(start)
+	completedAt := time.Now()
+
+	// Build findings summary string
+	summary := p.findings.GetSummary()
+	var findingsSummaryStr string
+	var status string
+	// Only count critical and warning as active issues (watch/info are filtered from UI)
+	totalActive := summary.Critical + summary.Warning
+	if totalActive == 0 {
+		findingsSummaryStr = "All healthy"
+		status = "healthy"
+	} else {
+		parts := []string{}
+		if summary.Critical > 0 {
+			parts = append(parts, fmt.Sprintf("%d critical", summary.Critical))
+		}
+		if summary.Warning > 0 {
+			parts = append(parts, fmt.Sprintf("%d warning", summary.Warning))
+		}
+		findingsSummaryStr = fmt.Sprintf("%s", joinParts(parts))
+		if summary.Critical > 0 {
+			status = "critical"
+		} else {
+			status = "issues_found"
+		}
+	}
+	if runStats.errors > 0 {
+		status = "error"
+		// Don't claim "All healthy" if there were errors - the patrol didn't complete properly
+		if findingsSummaryStr == "All healthy" {
+			findingsSummaryStr = fmt.Sprintf("Analysis incomplete (%d errors)", runStats.errors)
+		}
+	}
+
+	// Create run record
+	runRecord := PatrolRunRecord{
+		ID:                fmt.Sprintf("%d", start.UnixNano()),
+		StartedAt:         start,
+		CompletedAt:       completedAt,
+		Duration:          duration,
+		DurationMs:        duration.Milliseconds(),
+		Type:              patrolType,
+		TriggerReason:     string(trigger),
+		ResourcesChecked:  runStats.resourceCount,
+		NodesChecked:      runStats.nodesChecked,
+		GuestsChecked:     runStats.guestsChecked,
+		DockerChecked:     runStats.dockerChecked,
+		StorageChecked:    runStats.storageChecked,
+		HostsChecked:      runStats.hostsChecked,
+		PBSChecked:        runStats.pbsChecked,
+		KubernetesChecked: runStats.kubernetesChecked,
+		NewFindings:       runStats.newFindings,
+		ExistingFindings:  runStats.existingFindings,
+		RejectedFindings:  runStats.rejectedFindings,
+		ResolvedFindings:  resolvedCount,
+		AutoFixCount:      0,
+		FindingsSummary:   findingsSummaryStr,
+		FindingIDs:        runStats.findingIDs,
+		ErrorCount:        runStats.errors,
+		Status:            status,
+	}
+
+	if scope != nil {
+		runRecord.ScopeResourceIDs = scope.ResourceIDs
+		runRecord.ScopeResourceTypes = scope.ResourceTypes
+		runRecord.ScopeContext = scope.Context
+		runRecord.AlertID = scope.AlertID
+		runRecord.FindingID = scope.FindingID
+	}
+
+	// Add AI analysis details if available
+	if runStats.aiAnalysis != nil {
+		runRecord.AIAnalysis = runStats.aiAnalysis.Response
+		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
+		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
+		toolCalls := runStats.aiAnalysis.ToolCalls
+		if len(toolCalls) > MaxToolCallsPerRun {
+			toolCalls = toolCalls[:MaxToolCallsPerRun]
+		}
+		runRecord.ToolCalls = toolCalls
+		runRecord.ToolCallCount = len(runStats.aiAnalysis.ToolCalls)
+		log.Debug().
+			Int("response_length", len(runStats.aiAnalysis.Response)).
+			Int("input_tokens", runStats.aiAnalysis.InputTokens).
+			Int("output_tokens", runStats.aiAnalysis.OutputTokens).
+			Int("tool_calls", runRecord.ToolCallCount).
+			Msg("AI Patrol: Storing AI analysis in run record")
+	} else {
+		log.Debug().Msg("AI Patrol: No AI analysis to store (aiAnalysis is nil)")
+	}
+
+	p.mu.Lock()
+	p.lastPatrol = completedAt
+	p.lastDuration = duration
+	p.resourcesChecked = runStats.resourceCount
+	p.errorCount = runStats.errors
+	p.mu.Unlock()
+
+	// Record circuit breaker result only if we actually attempted LLM calls
+	// canRunLLM is true only when AI is enabled, licensed, AND breaker allowed
+	if breaker != nil && canRunLLM {
+		if runStats.errors > 0 {
+			breaker.RecordFailure(fmt.Errorf("patrol completed with %d errors", runStats.errors))
+		} else {
+			breaker.RecordSuccess()
+		}
+	}
+
+	// Add to history store (handles persistence automatically)
+	p.runHistoryStore.Add(runRecord)
+
+	log.Info().
+		Str("type", patrolType).
+		Dur("duration", duration).
+		Int("resources", runStats.resourceCount).
+		Int("new_findings", runStats.newFindings).
+		Int("resolved", resolvedCount).
+		Int("critical", summary.Critical).
+		Int("warning", summary.Warning).
+		Int("watch", summary.Watch).
+		Msg("AI Patrol: Completed patrol run")
+}
+
+// runScopedPatrol runs a patrol on a filtered subset of resources.
+// This provides token-efficient analysis for event-driven patrols.
+func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) {
+	p.mu.RLock()
+	cfg := p.config
+	breaker := p.circuitBreaker
+	p.mu.RUnlock()
+
+	if !cfg.Enabled {
+		return
+	}
+
+	if !p.tryStartRun("scoped") {
+		// Re-queue with backoff if retries remain
+		if scope.RetryCount < scopedPatrolMaxRetries {
+			scope.RetryCount++
+			backoff := scopedPatrolRetryBackoff1
+			if scope.RetryCount == scopedPatrolMaxRetries {
+				backoff = scopedPatrolRetryBackoff2
+			}
+			scope.RetryAfter = time.Now().Add(backoff)
+			if tm := p.GetTriggerManager(); tm != nil {
+				tm.TriggerPatrol(scope)
+				log.Info().
+					Int("retry", scope.RetryCount).
+					Dur("backoff", backoff).
+					Strs("resources", scope.ResourceIDs).
+					Msg("AI Patrol: Re-queued dropped scoped patrol with backoff")
+			}
+		} else {
+			GetPatrolMetrics().RecordScopedDroppedFinal()
+			log.Error().
+				Strs("resources", scope.ResourceIDs).
+				Str("reason", string(scope.Reason)).
+				Msg("AI Patrol: Scoped patrol permanently dropped after 2 retries")
+		}
+		return
+	}
+	defer p.endRun()
+
+	// Check if circuit breaker allows LLM calls.
+	llmAllowed := breaker == nil || breaker.Allow()
+	if !llmAllowed {
+		log.Warn().Msg("AI Patrol: Circuit breaker is open for scoped patrol (LLM calls blocked)")
+	}
+
+	start := time.Now()
+	GetPatrolMetrics().RecordRun(string(scope.Reason), "scoped")
+	var runStats struct {
+		resourceCount     int
+		nodesChecked      int
+		guestsChecked     int
+		dockerChecked     int
+		storageChecked    int
+		hostsChecked      int
+		pbsChecked        int
+		kubernetesChecked int
+		newFindings       int
+		existingFindings  int
+		rejectedFindings  int
+		findingIDs        []string
+		errors            int
+		aiAnalysis        *AIAnalysisResult
+	}
+
+	// Get current state
+	if p.stateProvider == nil {
+		log.Warn().Msg("AI Patrol: No state provider available for scoped patrol")
+		return
+	}
+
+	fullState := p.stateProvider.GetState()
+
+	// Filter state based on scope
+	filteredState := p.filterStateByScope(fullState, scope)
+
+	// Count filtered resources (respect analysis configuration)
+	resourceCount := 0
+	if cfg.AnalyzeNodes {
+		resourceCount += len(filteredState.Nodes)
+	}
+	if cfg.AnalyzeGuests {
+		resourceCount += len(filteredState.VMs) + len(filteredState.Containers)
+	}
+	if cfg.AnalyzeDocker {
+		resourceCount += len(filteredState.DockerHosts)
+	}
+	if cfg.AnalyzeStorage {
+		resourceCount += len(filteredState.Storage)
+	}
+	if cfg.AnalyzePBS {
+		resourceCount += len(filteredState.PBSInstances)
+	}
+	if cfg.AnalyzeHosts {
+		resourceCount += len(filteredState.Hosts)
+	}
+	if cfg.AnalyzeKubernetes {
+		resourceCount += len(filteredState.KubernetesClusters)
+	}
+
+	if resourceCount == 0 {
+		log.Debug().
+			Strs("requested_ids", scope.ResourceIDs).
+			Strs("requested_types", scope.ResourceTypes).
+			Msg("AI Patrol: No resources matched scope filter")
+		return
+	}
+
+	log.Debug().
+		Int("resource_count", resourceCount).
+		Str("reason", string(scope.Reason)).
+		Msg("AI Patrol: Running scoped analysis")
+
+	// Track run statistics
+	if cfg.AnalyzeNodes {
+		runStats.nodesChecked = len(filteredState.Nodes)
+	}
+	if cfg.AnalyzeGuests {
+		runStats.guestsChecked = len(filteredState.VMs) + len(filteredState.Containers)
+	}
+	if cfg.AnalyzeDocker {
+		runStats.dockerChecked = len(filteredState.DockerHosts)
+	}
+	if cfg.AnalyzeStorage {
+		runStats.storageChecked = len(filteredState.Storage)
+	}
+	if cfg.AnalyzePBS {
+		runStats.pbsChecked = len(filteredState.PBSInstances)
+	}
+	if cfg.AnalyzeHosts {
+		runStats.hostsChecked = len(filteredState.Hosts)
+	}
+	if cfg.AnalyzeKubernetes {
+		runStats.kubernetesChecked = len(filteredState.KubernetesClusters)
+	}
+	runStats.resourceCount = resourceCount
+
+	// Determine if we can run LLM analysis
+	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
+	hasPatrolFeature := aiServiceEnabled && p.aiService.HasLicenseFeature(FeatureAIPatrol)
+	canRunLLM := hasPatrolFeature && llmAllowed
+
+	if !canRunLLM {
+		reason := "requires Pulse Pro license for LLM analysis"
+		if !aiServiceEnabled {
+			reason = "Pulse Assistant service not configured - configure a provider in Settings > Pulse Assistant"
+		} else if !llmAllowed {
+			reason = "circuit breaker is open"
+			GetPatrolMetrics().RecordCircuitBlock()
+		}
+		p.setBlockedReason(reason)
+		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping scoped run - AI unavailable")
+		return
+	} else {
+		p.clearBlockedReason()
+		// Run agentic AI analysis on filtered state with scope
+		aiResult, aiErr := p.runAIAnalysis(ctx, filteredState, &scope)
+		if aiErr != nil {
+			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed")
+			runStats.errors++
+		} else if aiResult != nil {
+			runStats.aiAnalysis = aiResult
+			runStats.rejectedFindings = aiResult.RejectedFindings
+			// Findings are already recorded via patrol_report_finding tool calls.
+			for _, f := range aiResult.Findings {
+				if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
+					runStats.findingIDs = append(runStats.findingIDs, f.ID)
+					stored := p.findings.Get(f.ID)
+					if stored != nil && stored.TimesRaised <= 1 {
+						runStats.newFindings++
+					} else {
+						runStats.existingFindings++
+					}
+				}
+			}
+		}
+	}
+
+	duration := time.Since(start)
+	completedAt := time.Now()
+
+	// Build findings summary string
+	summary := p.findings.GetSummary()
+	var findingsSummaryStr string
+	var status string
+	totalActive := summary.Critical + summary.Warning
+	if totalActive == 0 {
+		findingsSummaryStr = "All healthy"
+		status = "healthy"
+	} else {
+		parts := []string{}
+		if summary.Critical > 0 {
+			parts = append(parts, fmt.Sprintf("%d critical", summary.Critical))
+		}
+		if summary.Warning > 0 {
+			parts = append(parts, fmt.Sprintf("%d warning", summary.Warning))
+		}
+		findingsSummaryStr = fmt.Sprintf("%s", joinParts(parts))
+		if summary.Critical > 0 {
+			status = "critical"
+		} else {
+			status = "issues_found"
+		}
+	}
+	if runStats.errors > 0 {
+		status = "error"
+		if findingsSummaryStr == "All healthy" {
+			findingsSummaryStr = fmt.Sprintf("Analysis incomplete (%d errors)", runStats.errors)
+		}
+	}
+
+	runRecord := PatrolRunRecord{
+		ID:                 fmt.Sprintf("%d", start.UnixNano()),
+		StartedAt:          start,
+		CompletedAt:        completedAt,
+		Duration:           duration,
+		DurationMs:         duration.Milliseconds(),
+		Type:               "scoped",
+		TriggerReason:      string(scope.Reason),
+		ScopeResourceIDs:   scope.ResourceIDs,
+		ScopeResourceTypes: scope.ResourceTypes,
+		ScopeContext:       scope.Context,
+		AlertID:            scope.AlertID,
+		FindingID:          scope.FindingID,
+		ResourcesChecked:   runStats.resourceCount,
+		NodesChecked:       runStats.nodesChecked,
+		GuestsChecked:      runStats.guestsChecked,
+		DockerChecked:      runStats.dockerChecked,
+		StorageChecked:     runStats.storageChecked,
+		HostsChecked:       runStats.hostsChecked,
+		PBSChecked:         runStats.pbsChecked,
+		KubernetesChecked:  runStats.kubernetesChecked,
+		NewFindings:        runStats.newFindings,
+		ExistingFindings:   runStats.existingFindings,
+		RejectedFindings:   runStats.rejectedFindings,
+		FindingsSummary:    findingsSummaryStr,
+		FindingIDs:         runStats.findingIDs,
+		ErrorCount:         runStats.errors,
+		Status:             status,
+	}
+
+	if runStats.aiAnalysis != nil {
+		runRecord.AIAnalysis = runStats.aiAnalysis.Response
+		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
+		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
+		toolCalls := runStats.aiAnalysis.ToolCalls
+		if len(toolCalls) > MaxToolCallsPerRun {
+			toolCalls = toolCalls[:MaxToolCallsPerRun]
+		}
+		runRecord.ToolCalls = toolCalls
+		runRecord.ToolCallCount = len(runStats.aiAnalysis.ToolCalls)
+	}
+
+	p.mu.Lock()
+	p.lastPatrol = completedAt
+	p.lastDuration = duration
+	p.resourcesChecked = runStats.resourceCount
+	p.errorCount = runStats.errors
+	p.mu.Unlock()
+
+	p.runHistoryStore.Add(runRecord)
+
+	log.Info().
+		Dur("duration", duration).
+		Int("resources", resourceCount).
+		Str("reason", string(scope.Reason)).
+		Msg("AI Patrol: Scoped patrol complete")
+}
+
+// filterStateByScope filters a StateSnapshot to only include resources matching the scope.
+func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope PatrolScope) models.StateSnapshot {
+	// Build lookup sets for efficient matching
+	resourceIDSet := make(map[string]bool)
+	for _, id := range scope.ResourceIDs {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" {
+			continue
+		}
+		resourceIDSet[trimmed] = true
+	}
+
+	typeSet := make(map[string]bool)
+	addScopeType := func(t string) {
+		trimmed := strings.TrimSpace(strings.ToLower(t))
+		if trimmed == "" {
+			return
+		}
+		typeSet[trimmed] = true
+		switch trimmed {
+		case "docker", "docker_host", "docker_container":
+			typeSet["docker"] = true
+			typeSet["docker_host"] = true
+			typeSet["docker_container"] = true
+		case "k8s", "kubernetes", "kubernetes_cluster":
+			typeSet["k8s"] = true
+			typeSet["kubernetes"] = true
+			typeSet["kubernetes_cluster"] = true
+		case "lxc", "container":
+			typeSet["lxc"] = true
+			typeSet["container"] = true
+		case "vm", "qemu":
+			typeSet["vm"] = true
+			typeSet["qemu"] = true
+		case "host", "host_raid", "host_sensor":
+			typeSet["host"] = true
+			typeSet["host_raid"] = true
+			typeSet["host_sensor"] = true
+		case "pbs", "pbs_datastore", "pbs_job":
+			typeSet["pbs"] = true
+			typeSet["pbs_datastore"] = true
+			typeSet["pbs_job"] = true
+		}
+	}
+	for _, t := range scope.ResourceTypes {
+		addScopeType(t)
+	}
+
+	hasIDs := len(resourceIDSet) > 0
+	hasTypes := len(typeSet) > 0
+
+	matchesType := func(candidates ...string) bool {
+		if !hasTypes {
+			return true
+		}
+		for _, candidate := range candidates {
+			if candidate == "" {
+				continue
+			}
+			if typeSet[strings.ToLower(candidate)] {
+				return true
+			}
+		}
+		return false
+	}
+
+	matchesID := func(candidates ...string) bool {
+		if !hasIDs {
+			return true
+		}
+		for _, candidate := range candidates {
+			if candidate == "" {
+				continue
+			}
+			if resourceIDSet[candidate] {
+				return true
+			}
+		}
+		return false
+	}
+
+	filtered := models.StateSnapshot{
+		LastUpdate:       state.LastUpdate,
+		ConnectionHealth: state.ConnectionHealth,
+		Stats:            state.Stats,
+		ActiveAlerts:     state.ActiveAlerts,
+		RecentlyResolved: state.RecentlyResolved,
+	}
+
+	// Filter each resource type
+	for _, n := range state.Nodes {
+		if matchesType("node") && matchesID(n.ID, n.Name) {
+			filtered.Nodes = append(filtered.Nodes, n)
+		}
+	}
+	for _, vm := range state.VMs {
+		if matchesType("vm", "qemu") && matchesID(vm.ID, vm.Name) {
+			filtered.VMs = append(filtered.VMs, vm)
+		}
+	}
+	for _, c := range state.Containers {
+		if matchesType("container", "lxc") && matchesID(c.ID, c.Name) {
+			filtered.Containers = append(filtered.Containers, c)
+		}
+	}
+	for _, d := range state.DockerHosts {
+		if !matchesType("docker", "docker_host", "docker_container") {
+			continue
+		}
+
+		hostName := d.CustomDisplayName
+		if hostName == "" {
+			hostName = d.DisplayName
+		}
+		if hostName == "" {
+			hostName = d.Hostname
+		}
+
+		hostMatches := matchesID(d.ID, hostName, d.Hostname, d.DisplayName, d.CustomDisplayName)
+		if !hasIDs {
+			filtered.DockerHosts = append(filtered.DockerHosts, d)
+			continue
+		}
+
+		var matchedContainers []models.DockerContainer
+		for _, c := range d.Containers {
+			if matchesID(c.ID, c.Name) {
+				matchedContainers = append(matchedContainers, c)
+			}
+		}
+
+		if hostMatches {
+			filtered.DockerHosts = append(filtered.DockerHosts, d)
+			continue
+		}
+		if len(matchedContainers) > 0 {
+			hostCopy := d
+			hostCopy.Containers = matchedContainers
+			filtered.DockerHosts = append(filtered.DockerHosts, hostCopy)
+		}
+	}
+	for _, s := range state.Storage {
+		if matchesType("storage") && matchesID(s.ID, s.Name) {
+			filtered.Storage = append(filtered.Storage, s)
+		}
+	}
+	for _, pbs := range state.PBSInstances {
+		if !matchesType("pbs", "pbs_datastore", "pbs_job") {
+			continue
+		}
+
+		pbsName := pbs.Name
+		if pbsName == "" {
+			pbsName = pbs.Host
+		}
+		pbsMatches := matchesID(pbs.ID, pbs.Name, pbsName, pbs.Host)
+		if !hasIDs {
+			filtered.PBSInstances = append(filtered.PBSInstances, pbs)
+			continue
+		}
+		if !pbsMatches {
+			for _, ds := range pbs.Datastores {
+				if matchesID(pbs.ID+":"+ds.Name, ds.Name) {
+					pbsMatches = true
+					break
+				}
+			}
+		}
+		if !pbsMatches {
+			for _, job := range pbs.BackupJobs {
+				if matchesID(pbs.ID+":job:"+job.ID, job.ID) {
+					pbsMatches = true
+					break
+				}
+			}
+		}
+		if !pbsMatches {
+			for _, job := range pbs.VerifyJobs {
+				if matchesID(pbs.ID+":verify:"+job.ID, job.ID) {
+					pbsMatches = true
+					break
+				}
+			}
+		}
+		if pbsMatches {
+			filtered.PBSInstances = append(filtered.PBSInstances, pbs)
+		}
+	}
+	for _, h := range state.Hosts {
+		if matchesType("host", "host_raid", "host_sensor") && matchesID(h.ID, h.DisplayName, h.Hostname) {
+			filtered.Hosts = append(filtered.Hosts, h)
+		}
+	}
+	for _, k := range state.KubernetesClusters {
+		clusterName := k.CustomDisplayName
+		if clusterName == "" {
+			clusterName = k.DisplayName
+		}
+		if clusterName == "" {
+			clusterName = k.Name
+		}
+		if matchesType("kubernetes", "k8s", "kubernetes_cluster") && matchesID(k.ID, clusterName) {
+			filtered.KubernetesClusters = append(filtered.KubernetesClusters, k)
+		}
+	}
+
+	return filtered
+}
+
+// GetStatus returns the current patrol status
+func (p *PatrolService) GetStatus() PatrolStatus {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	interval := p.config.GetInterval()
+	intervalMs := int64(interval / time.Millisecond)
+
+	// "Running" means an analysis is currently in progress, not just the service loop
+	analysisInProgress := p.runInProgress
+
+	status := PatrolStatus{
+		Running:          analysisInProgress,
+		Enabled:          p.config.Enabled,
+		LastDuration:     p.lastDuration,
+		ResourcesChecked: p.resourcesChecked,
+		FindingsCount:    len(p.findings.GetActive(FindingSeverityInfo)),
+		ErrorCount:       p.errorCount,
+		IntervalMs:       intervalMs,
+		BlockedReason:    p.lastBlockedReason,
+	}
+
+	if !p.lastPatrol.IsZero() {
+		status.LastPatrolAt = &p.lastPatrol
+	}
+	if !p.lastBlockedAt.IsZero() {
+		status.BlockedAt = &p.lastBlockedAt
+	}
+
+	// Calculate next patrol time only when patrol is enabled
+	if p.config.Enabled && interval > 0 && !p.lastPatrol.IsZero() {
+		next := p.lastPatrol.Add(interval)
+		status.NextPatrolAt = &next
+	}
+
+	summary := p.findings.GetSummary()
+	status.Healthy = summary.IsHealthy()
+
+	return status
+}
+
+// SubscribeToStream returns a channel that will receive streaming patrol events
+func (p *PatrolService) SubscribeToStream() chan PatrolStreamEvent {
+	ch := make(chan PatrolStreamEvent, 100) // Buffered to prevent blocking
+
+	p.streamMu.Lock()
+	p.streamSubscribers[ch] = struct{}{}
+	// Send current state to new subscriber
+	if p.streamPhase != "idle" {
+		ch <- PatrolStreamEvent{
+			Type:    "content",
+			Content: p.currentOutput.String(),
+			Phase:   p.streamPhase,
+		}
+	}
+	p.streamMu.Unlock()
+
+	return ch
+}
+
+// UnsubscribeFromStream removes a subscriber
+func (p *PatrolService) UnsubscribeFromStream(ch chan PatrolStreamEvent) {
+	p.streamMu.Lock()
+	_, exists := p.streamSubscribers[ch]
+	delete(p.streamSubscribers, ch)
+	p.streamMu.Unlock()
+
+	// Only close if we actually removed it from the map
+	// (broadcast may have already removed and closed it)
+	if exists {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Interface("error", r).Msg("panic recovered in UnsubscribeFromStream")
+			}
+		}()
+		close(ch)
+	}
+}
+
+// broadcast sends an event to all subscribers
+// Subscribers with full channels are automatically removed to prevent memory leaks
+func (p *PatrolService) broadcast(event PatrolStreamEvent) {
+	p.streamMu.Lock()
+	defer p.streamMu.Unlock()
+
+	var staleChannels []chan PatrolStreamEvent
+	for ch := range p.streamSubscribers {
+		select {
+		case ch <- event:
+			// Successfully sent
+		default:
+			// Channel full - mark for removal (likely dead subscriber)
+			staleChannels = append(staleChannels, ch)
+		}
+	}
+
+	// Clean up stale subscribers
+	for _, ch := range staleChannels {
+		delete(p.streamSubscribers, ch)
+		// Close in a goroutine to avoid blocking if receiver is stuck
+		go func(c chan PatrolStreamEvent) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("error", r).Msg("panic recovered in broadcast channel close")
+				}
+			}()
+			close(c)
+		}(ch)
+	}
+}
+
+// appendStreamContent adds content to the current output and broadcasts it
+func (p *PatrolService) appendStreamContent(content string) {
+	p.streamMu.Lock()
+	p.currentOutput.WriteString(content)
+	p.streamMu.Unlock()
+
+	p.broadcast(PatrolStreamEvent{
+		Type:    "content",
+		Content: content,
+	})
+}
+
+// setStreamPhase updates the current phase (internal state tracking only)
+// Does not broadcast phase changes - those are explicit via broadcast()
+func (p *PatrolService) setStreamPhase(phase string) {
+	p.streamMu.Lock()
+	p.streamPhase = phase
+	if phase == "idle" {
+		p.currentOutput.Reset()
+	}
+	p.streamMu.Unlock()
+	// Note: We don't broadcast phase changes automatically
+	// The patrol explicitly broadcasts "start" and "complete" events
+}
+
+// GetCurrentStreamOutput returns the current buffered output (for late joiners)
+func (p *PatrolService) GetCurrentStreamOutput() (string, string) {
+	p.streamMu.RLock()
+	defer p.streamMu.RUnlock()
+	return p.currentOutput.String(), p.streamPhase
+}
+
+// reviewAndResolveAlerts uses AI to review active alerts and resolve those where the issue is fixed.
+// This is the core of autonomous alert management - the AI looks at each alert, checks current state,
+// and determines if the underlying issue has been resolved.
+func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models.StateSnapshot, llmAllowed bool) int {
+	p.mu.RLock()
+	resolver := p.alertResolver
+	aiService := p.aiService
+	p.mu.RUnlock()
+
+	if resolver == nil {
+		return 0
+	}
+
+	activeAlerts := resolver.GetActiveAlerts()
+	if len(activeAlerts) == 0 {
+		return 0
+	}
+
+	// Only review alerts that have been active for at least 10 minutes
+	// This avoids thrashing on transient alerts
+	minAge := 10 * time.Minute
+	var alertsToReview []AlertInfo
+	for _, alert := range activeAlerts {
+		if time.Since(alert.StartTime) >= minAge {
+			alertsToReview = append(alertsToReview, alert)
+		}
+	}
+
+	if len(alertsToReview) == 0 {
+		return 0
+	}
+
+	log.Info().
+		Int("total_active", len(activeAlerts)).
+		Int("to_review", len(alertsToReview)).
+		Msg("AI Patrol: Reviewing alerts for auto-resolution")
+
+	resolvedCount := 0
+
+	// Pass nil for aiService if LLM is not allowed (use heuristic checks only).
+	aiSvc := aiService
+	if !llmAllowed {
+		aiSvc = nil
+	}
+
+	for _, alert := range alertsToReview {
+		shouldResolve, reason := p.shouldResolveAlert(ctx, alert, state, aiSvc)
+		if shouldResolve {
+			if resolver.ResolveAlert(alert.ID) {
+				resolvedCount++
+				log.Info().
+					Str("alertID", alert.ID).
+					Str("resource", alert.ResourceName).
+					Str("reason", reason).
+					Dur("age", time.Since(alert.StartTime)).
+					Msg("AI Patrol: Auto-resolved alert - issue no longer detected")
+			}
+		}
+	}
+
+	if resolvedCount > 0 {
+		log.Info().
+			Int("resolved", resolvedCount).
+			Msg("AI Patrol: Completed alert review")
+	}
+
+	return resolvedCount
+}
+
+// shouldResolveAlert determines if an alert should be auto-resolved based on current state.
+// Returns (shouldResolve, reason)
+func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo, state models.StateSnapshot, aiService *Service) (bool, string) {
+	// First, try smart heuristic checks based on alert type
+	switch alert.Type {
+	case "usage": // Storage usage alert
+		// Find the storage in current state
+		for _, storage := range state.Storage {
+			if storage.ID == alert.ResourceID {
+				// If current usage is below the threshold (with some margin), resolve
+				if storage.Usage < alert.Threshold*0.95 { // 5% margin below threshold
+					return true, fmt.Sprintf("storage usage dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
+						alert.Value, storage.Usage, alert.Threshold)
+				}
+				// Still high, don't resolve
+				return false, ""
+			}
+		}
+		// Storage not found in current state - might have been removed
+		// Resolve after 24 hours if resource is gone
+		if time.Since(alert.StartTime) > 24*time.Hour {
+			return true, "resource no longer present in infrastructure"
+		}
+
+	case "cpu", "memory": // Resource utilization alerts
+		// Check if this is a node, VM, container, or docker container
+		currentValue := p.getCurrentMetricValue(alert, state)
+		if currentValue >= 0 && currentValue < alert.Threshold*0.95 {
+			return true, fmt.Sprintf("%s dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
+				alert.Type, alert.Value, currentValue, alert.Threshold)
+		}
+
+	case "offline", "stopped", "docker-offline":
+		// Check if the resource is now online
+		if p.isResourceOnline(alert, state) {
+			return true, "resource is now online/running"
+		}
+	}
+
+	// For complex cases or when heuristics don't apply, use AI judgment if available
+	if aiService != nil && aiService.IsEnabled() {
+		return p.askAIAboutAlert(ctx, alert, state, aiService)
+	}
+
+	return false, ""
+}
+
+// getCurrentMetricValue gets the current value of the metric that triggered the alert
+func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, state models.StateSnapshot) float64 {
+	switch alert.ResourceType {
+	case "node":
+		for _, node := range state.Nodes {
+			if node.ID == alert.ResourceID || node.Name == alert.ResourceName {
+				if alert.Type == "cpu" {
+					return node.CPU * 100
+				} else if alert.Type == "memory" {
+					return node.Memory.Usage
+				}
+			}
+		}
+	case "guest", "vm":
+		for _, vm := range state.VMs {
+			if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
+				if alert.Type == "cpu" {
+					return vm.CPU * 100
+				} else if alert.Type == "memory" {
+					return vm.Memory.Usage
+				}
+			}
+		}
+	case "container":
+		for _, ct := range state.Containers {
+			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
+				if alert.Type == "cpu" {
+					return ct.CPU * 100
+				} else if alert.Type == "memory" {
+					return ct.Memory.Usage
+				}
+			}
+		}
+	case "docker":
+		for _, host := range state.DockerHosts {
+			for _, container := range host.Containers {
+				if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
+					if alert.Type == "cpu" {
+						return container.CPUPercent
+					} else if alert.Type == "memory" {
+						return container.MemoryPercent
+					}
+				}
+			}
+		}
+	case "Storage":
+		for _, storage := range state.Storage {
+			if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
+				return storage.Usage
+			}
+		}
+	}
+	return -1 // Not found
+}
+
+// isResourceOnline checks if a resource that triggered an offline alert is now online
+func (p *PatrolService) isResourceOnline(alert AlertInfo, state models.StateSnapshot) bool {
+	switch alert.ResourceType {
+	case "node":
+		for _, node := range state.Nodes {
+			if (node.ID == alert.ResourceID || node.Name == alert.ResourceName) && node.Status == "online" {
+				return true
+			}
+		}
+	case "guest", "vm":
+		for _, vm := range state.VMs {
+			if (vm.ID == alert.ResourceID || vm.Name == alert.ResourceName) && vm.Status == "running" {
+				return true
+			}
+		}
+	case "container":
+		for _, ct := range state.Containers {
+			if (ct.ID == alert.ResourceID || ct.Name == alert.ResourceName) && ct.Status == "running" {
+				return true
+			}
+		}
+	case "docker":
+		for _, host := range state.DockerHosts {
+			for _, container := range host.Containers {
+				if (container.ID == alert.ResourceID || container.Name == alert.ResourceName) && container.State == "running" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// askAIAboutAlert uses the AI to determine if an alert should be resolved
+func (p *PatrolService) askAIAboutAlert(ctx context.Context, alert AlertInfo, state models.StateSnapshot, aiService *Service) (bool, string) {
+	// Build a focused prompt for the AI
+	prompt := fmt.Sprintf(`Review this alert and determine if it should be auto-resolved based on current state.
+
+ALERT:
+- ID: %s
+- Type: %s
+- Resource: %s (%s)
+- Message: %s
+- Value when triggered: %.1f
+- Threshold: %.1f
+- Active for: %s
+
+CURRENT STATE OF THIS RESOURCE:
+%s
+
+Should this alert be RESOLVED because the underlying issue is fixed?
+Respond with ONLY one of:
+- RESOLVE: <brief reason>
+- KEEP: <brief reason>`,
+		alert.ID, alert.Type, alert.ResourceName, alert.ResourceType,
+		alert.Message, alert.Value, alert.Threshold, alert.Duration,
+		p.getResourceCurrentState(alert, state))
+
+	// Use a quick, low-cost AI call
+	response, err := aiService.QuickAnalysis(ctx, prompt)
+	if err != nil {
+		log.Debug().Err(err).Str("alertID", alert.ID).Msg("AI Patrol: Failed to get AI judgment on alert")
+		return false, ""
+	}
+
+	response = strings.TrimSpace(response)
+	if strings.HasPrefix(strings.ToUpper(response), "RESOLVE:") {
+		reason := strings.TrimSpace(strings.TrimPrefix(response, "RESOLVE:"))
+		if reason == "" {
+			reason = strings.TrimSpace(strings.TrimPrefix(strings.ToUpper(response), "RESOLVE:"))
+		}
+		return true, "Patrol: " + reason
+	}
+
+	return false, ""
+}
+
+// getResourceCurrentState returns a description of the resource's current state
+func (p *PatrolService) getResourceCurrentState(alert AlertInfo, state models.StateSnapshot) string {
+	switch alert.ResourceType {
+	case "Storage":
+		for _, storage := range state.Storage {
+			if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
+				return fmt.Sprintf("Storage '%s': %.1f%% used, status: %s", storage.Name, storage.Usage, storage.Status)
+			}
+		}
+		return "Storage not found in current state (may have been removed)"
+	case "node":
+		for _, node := range state.Nodes {
+			if node.ID == alert.ResourceID || node.Name == alert.ResourceName {
+				return fmt.Sprintf("Node '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+					node.Name, node.CPU, node.Memory.Usage, node.Status)
+			}
+		}
+		return "Node not found in current state"
+	case "guest", "vm":
+		for _, vm := range state.VMs {
+			if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
+				return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+					vm.Name, vm.CPU, vm.Memory.Usage, vm.Status)
+			}
+		}
+		return "VM not found in current state"
+	case "container":
+		for _, ct := range state.Containers {
+			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
+				return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+					ct.Name, ct.CPU, ct.Memory.Usage, ct.Status)
+			}
+		}
+		return "Container not found in current state"
+	case "docker":
+		for _, host := range state.DockerHosts {
+			for _, container := range host.Containers {
+				if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
+					return fmt.Sprintf("Docker container '%s': CPU %.1f%%, Memory %.1f%%, State: %s",
+						container.Name, container.CPUPercent, container.MemoryPercent, container.State)
+				}
+			}
+		}
+		return "Docker container not found in current state"
+	default:
+		return "Resource state unknown"
+	}
+}
+
+// TriggerPatrolForAlert triggers an immediate patrol for a specific alert
+func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
+	if alert == nil {
+		return
+	}
+
+	p.mu.RLock()
+	triggerManager := p.triggerManager
+	p.mu.RUnlock()
+
+	resourceType := inferResourceType(alert.Type, alert.Metadata)
+
+	if triggerManager != nil {
+		scope := AlertTriggeredPatrolScope(alert.ID, alert.ResourceID, resourceType, alert.Type)
+		if triggerManager.TriggerPatrol(scope) {
+			log.Debug().Str("alert_id", alert.ID).Msg("Queued alert-triggered patrol via trigger manager")
+		} else {
+			log.Warn().Str("alert_id", alert.ID).Msg("Alert-triggered patrol rejected by trigger manager")
+		}
+		return
+	}
+
+	// Non-blocking send
+	select {
+	case p.adHocTrigger <- alert:
+		log.Debug().Str("alert_id", alert.ID).Msg("Queued ad-hoc patrol trigger")
+	default:
+		log.Warn().Str("alert_id", alert.ID).Msg("Patrol trigger queue full, dropping trigger")
+	}
+}
+
+func (p *PatrolService) tryStartRun(kind string) bool {
+	p.mu.Lock()
+	if p.runInProgress {
+		p.mu.Unlock()
+		if kind == "scoped" {
+			GetPatrolMetrics().RecordScopedDropped()
+			log.Warn().Str("kind", kind).Msg("AI Patrol: Run already in progress, dropping scoped patrol")
+		} else {
+			log.Debug().Str("kind", kind).Msg("AI Patrol: Run already in progress, skipping")
+		}
+		return false
+	}
+	p.runInProgress = true
+	p.mu.Unlock()
+	return true
+}
+
+func (p *PatrolService) endRun() {
+	p.mu.Lock()
+	p.runInProgress = false
+	p.mu.Unlock()
+}
+
+// runTargetedPatrol executes a focused patrol for a specific alert
+func (p *PatrolService) runTargetedPatrol(ctx context.Context, alert *alerts.Alert) {
+	log.Info().
+		Str("alert_id", alert.ID).
+		Str("resource_id", alert.ResourceID).
+		Msg("Running targeted AI patrol for alert")
+
+	resourceType := inferResourceType(alert.Type, alert.Metadata)
+	scope := AlertTriggeredPatrolScope(alert.ID, alert.ResourceID, resourceType, alert.Type)
+	p.TriggerScopedPatrol(ctx, scope)
+}
+
+// joinParts joins string parts with commas and "and" for the last element
+func joinParts(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	if len(parts) == 2 {
+		return parts[0] + " and " + parts[1]
+	}
+	return strings.Join(parts[:len(parts)-1], ", ") + ", and " + parts[len(parts)-1]
+}
+
+// generateFindingID creates a stable ID for a finding based on resource, category, and issue.
+// All three components are included to ensure distinct issues on the same resource remain separate.
+func generateFindingID(resourceID, category, issue string) string {
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s", resourceID, category, issue)))
+	return fmt.Sprintf("%x", hash[:8])
+}

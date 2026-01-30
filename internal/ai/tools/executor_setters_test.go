@@ -28,12 +28,6 @@ func (s *stubAgentProfileManager) GetAgentScope(ctx context.Context, agentID str
 	return &AgentScope{AgentID: agentID}, nil
 }
 
-type stubStorageConfigProvider struct{}
-
-func (s *stubStorageConfigProvider) GetStorageConfig(instance string) ([]StorageConfigSummary, error) {
-	return nil, nil
-}
-
 func TestPulseToolExecutor_Setters(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
 
@@ -83,10 +77,6 @@ func TestPulseToolExecutor_Setters(t *testing.T) {
 	storageProvider := &stubStorageProvider{}
 	exec.SetStorageProvider(storageProvider)
 	assert.Equal(t, storageProvider, exec.storageProvider)
-
-	storageConfigProvider := &stubStorageConfigProvider{}
-	exec.SetStorageConfigProvider(storageConfigProvider)
-	assert.Equal(t, storageConfigProvider, exec.storageConfigProvider)
 
 	diskHealthProvider := &mockDiskHealthProvider{}
 	exec.SetDiskHealthProvider(diskHealthProvider)

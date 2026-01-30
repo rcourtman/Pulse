@@ -27,7 +27,7 @@ type StateProvider interface {
 // without creating circular dependencies with the AI package.
 type AIAnalyzer interface {
 	// AnalyzeForDiscovery sends a prompt to the AI and returns the response.
-	// The model parameter specifies which model to use (e.g., "anthropic:claude-3-5-haiku-latest")
+	// The model parameter specifies which model to use (e.g., "anthropic:claude-haiku-4-5")
 	AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error)
 }
 

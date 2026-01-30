@@ -428,11 +428,13 @@ type FindingCounts struct {
 
 // MetricsResponse is returned by pulse_get_metrics
 type MetricsResponse struct {
-	ResourceID string                            `json:"resource_id,omitempty"`
-	Period     string                            `json:"period"`
-	Points     []MetricPoint                     `json:"points,omitempty"`
-	Summary    map[string]ResourceMetricsSummary `json:"summary,omitempty"`
-	Pagination *PaginationInfo                   `json:"pagination,omitempty"`
+	ResourceID    string                            `json:"resource_id,omitempty"`
+	Period        string                            `json:"period"`
+	Points        []MetricPoint                     `json:"points,omitempty"`
+	Summary       map[string]ResourceMetricsSummary `json:"summary,omitempty"`
+	Pagination    *PaginationInfo                   `json:"pagination,omitempty"`
+	Downsampled   bool                              `json:"downsampled,omitempty"`
+	OriginalCount int                               `json:"original_count,omitempty"`
 }
 
 // BaselinesResponse is returned by pulse_get_baselines
@@ -505,25 +507,6 @@ type StorageResponse struct {
 	Pools        []StoragePoolSummary `json:"pools,omitempty"`
 	CephClusters []CephClusterSummary `json:"ceph_clusters,omitempty"`
 	Pagination   *PaginationInfo      `json:"pagination,omitempty"`
-}
-
-// StorageConfigResponse is returned by pulse_get_storage_config
-type StorageConfigResponse struct {
-	Storages []StorageConfigSummary `json:"storages,omitempty"`
-}
-
-// StorageConfigSummary is a summarized storage config entry
-type StorageConfigSummary struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Instance string   `json:"instance,omitempty"`
-	Type     string   `json:"type,omitempty"`
-	Content  string   `json:"content,omitempty"`
-	Nodes    []string `json:"nodes,omitempty"`
-	Path     string   `json:"path,omitempty"`
-	Shared   bool     `json:"shared"`
-	Enabled  bool     `json:"enabled"`
-	Active   bool     `json:"active"`
 }
 
 // StoragePoolSummary is a summarized storage pool

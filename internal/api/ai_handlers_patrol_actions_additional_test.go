@@ -333,7 +333,7 @@ func TestHandleForcePatrol_ConfigDisabled(t *testing.T) {
 	cfg.Enabled = false
 	patrol.SetConfig(cfg)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/run?deep=true", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/run", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleForcePatrol(rec, req)

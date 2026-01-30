@@ -14,30 +14,8 @@ import (
 func (e *PulseToolExecutor) registerReadTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_read",
-			Description: `Execute read-only operations on infrastructure. Use this for investigation and diagnostics.
-
-This tool is for READ-ONLY operations only. It will reject any command that could modify state.
-
-Actions:
-- exec: Execute a read-only shell command (grep, cat, tail, journalctl, docker logs, ps, etc.)
-- file: Read contents of a file
-- find: Find files by pattern (glob)
-- tail: Tail a file or log (last N lines)
-- logs: Read logs from journalctl or docker
-
-USE THIS TOOL FOR:
-- Checking logs: action="exec", command="grep -i error /var/log/app/*.log"
-- Reading files: action="file", path="/etc/config.yaml"
-- Finding files: action="find", pattern="/var/log/*.log"
-- Tailing logs: action="tail", path="/var/log/syslog", lines=100
-- Docker logs: action="logs", source="docker", container="nginx"
-- Journal logs: action="logs", source="journal", unit="nginx"
-
-DO NOT use this for write operations - use pulse_control instead.
-
-Routing: target_host can be a Proxmox host (delly), an LXC name (jellyfin), or a VM name.
-Commands are automatically routed through the appropriate agent.`,
+			Name:        "pulse_read",
+			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. target_host routes to Proxmox host, LXC, or VM by name.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -141,6 +119,13 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 	// Uses ExecutionIntent: ReadOnlyCertain and ReadOnlyConditional are allowed;
 	// WriteOrUnknown is rejected.
 	intentResult := ClassifyExecutionIntent(command)
+	if intentResult.Intent == IntentReadOnlyConditional && strings.Contains(intentResult.Reason, "model-trusted") {
+		log.Info().
+			Str("command", truncateCommand(command, 200)).
+			Str("reason", intentResult.Reason).
+			Str("target_host", targetHost).
+			Msg("pulse_read: allowing model-trusted command (no blocklist match)")
+	}
 	if intentResult.Intent == IntentWriteOrUnknown {
 		hint := GetReadOnlyViolationHint(command, intentResult)
 		alternative := "Use pulse_control type=command for write operations"
@@ -194,7 +179,7 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 		if routing.TargetType == "container" || routing.TargetType == "vm" {
 			return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its Proxmox host", targetHost, routing.TargetType)), nil
 		}
-		return NewErrorResult(fmt.Errorf("no agent available for target '%s'", targetHost)), nil
+		return NewErrorResult(fmt.Errorf("no agent available for target '%s'. %s", targetHost, formatAvailableAgentHosts(e.agentServer.GetConnectedAgents()))), nil
 	}
 
 	// Build command (with optional Docker wrapper)
@@ -389,7 +374,7 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 
 	case "journal":
 		if unit == "" {
-			return NewErrorResult(fmt.Errorf("unit is required for journal logs")), nil
+			return NewErrorResult(fmt.Errorf("unit is required for journal logs (e.g. unit=\"pvestatd\"). To search across all journal entries, use action=\"exec\" with a journalctl command instead")), nil
 		}
 		command = fmt.Sprintf("journalctl -u %s -n %d --no-pager", shellEscape(unit), lines)
 		if since != "" {

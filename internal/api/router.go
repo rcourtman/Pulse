@@ -74,6 +74,7 @@ type Router struct {
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
 	licenseHandlers           *LicenseHandlers
+	logHandlers               *LogHandlers
 	agentExecServer           *agentexec.Server
 	wsHub                     *websocket.Hub
 	reloadFunc                func() error
@@ -246,12 +247,27 @@ func (r *Router) setupRoutes() {
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
 	r.reportingHandlers = NewReportingHandlers()
+	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacHandlers := NewRBACHandlers(r.config)
 
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/monitoring/scheduler/health", RequireAuth(r.config, r.handleSchedulerHealth))
 	r.mux.HandleFunc("/api/state", r.handleState)
+
+	// Log management routes
+	r.mux.HandleFunc("/api/logs/stream", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.logHandlers.HandleStreamLogs)))
+	r.mux.HandleFunc("/api/logs/download", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.logHandlers.HandleDownloadBundle)))
+	r.mux.HandleFunc("/api/logs/level", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.logHandlers.HandleGetLevel))(w, req)
+		case http.MethodPost:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.logHandlers.HandleSetLevel))(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/kubernetes/report", RequireAuth(r.config, RequireScope(config.ScopeKubernetesReport, r.kubernetesAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleReport)))
@@ -289,7 +305,6 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/agents/kubernetes/clusters/", RequireAdmin(r.config, RequireScope(config.ScopeKubernetesManage, r.kubernetesAgentHandlers.HandleClusterActions)))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
 	r.mux.HandleFunc("/api/storage/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorage)))
-	r.mux.HandleFunc("/api/storage/config", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorageConfig)))
 	r.mux.HandleFunc("/api/storage-charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorageCharts)))
 	r.mux.HandleFunc("/api/charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleCharts)))
 	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
@@ -1360,6 +1375,7 @@ func (r *Router) setupRoutes() {
 	// Dismiss and resolve don't require Pro license - users should be able to clear findings they can see
 	// This is especially important for users who accumulated findings before fixing the patrol-without-AI bug
 	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, r.aiSettingsHandler.HandleDismissFinding))
+	r.mux.HandleFunc("/api/ai/patrol/findings/note", RequireAuth(r.config, r.aiSettingsHandler.HandleSetFindingNote))
 	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleSuppressFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleSnoozeFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, r.aiSettingsHandler.HandleResolveFinding))
@@ -2105,20 +2121,25 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				patrol.SetUnifiedFindingCallback(func(f *ai.Finding) bool {
 					// Convert ai.Finding to unified.UnifiedFinding
 					uf := &unified.UnifiedFinding{
-						ID:             f.ID,
-						Source:         unified.SourceAIPatrol,
-						Severity:       unified.UnifiedSeverity(f.Severity),
-						Category:       unified.UnifiedCategory(f.Category),
-						ResourceID:     f.ResourceID,
-						ResourceName:   f.ResourceName,
-						ResourceType:   f.ResourceType,
-						Node:           f.Node,
-						Title:          f.Title,
-						Description:    f.Description,
-						Recommendation: f.Recommendation,
-						Evidence:       f.Evidence,
-						DetectedAt:     f.DetectedAt,
-						LastSeenAt:     f.LastSeenAt,
+						ID:                     f.ID,
+						Source:                 unified.SourceAIPatrol,
+						Severity:               unified.UnifiedSeverity(f.Severity),
+						Category:               unified.UnifiedCategory(f.Category),
+						ResourceID:             f.ResourceID,
+						ResourceName:           f.ResourceName,
+						ResourceType:           f.ResourceType,
+						Node:                   f.Node,
+						Title:                  f.Title,
+						Description:            f.Description,
+						Recommendation:         f.Recommendation,
+						Evidence:               f.Evidence,
+						DetectedAt:             f.DetectedAt,
+						LastSeenAt:             f.LastSeenAt,
+						InvestigationSessionID: f.InvestigationSessionID,
+						InvestigationStatus:    f.InvestigationStatus,
+						InvestigationOutcome:   f.InvestigationOutcome,
+						LastInvestigatedAt:     f.LastInvestigatedAt,
+						InvestigationAttempts:  f.InvestigationAttempts,
 					}
 					_, isNew := unifiedStore.AddFromAI(uf)
 					return isNew
@@ -2137,20 +2158,25 @@ func (r *Router) StartPatrol(ctx context.Context) {
 							continue
 						}
 						uf := &unified.UnifiedFinding{
-							ID:             f.ID,
-							Source:         unified.SourceAIPatrol,
-							Severity:       unified.UnifiedSeverity(f.Severity),
-							Category:       unified.UnifiedCategory(f.Category),
-							ResourceID:     f.ResourceID,
-							ResourceName:   f.ResourceName,
-							ResourceType:   f.ResourceType,
-							Node:           f.Node,
-							Title:          f.Title,
-							Description:    f.Description,
-							Recommendation: f.Recommendation,
-							Evidence:       f.Evidence,
-							DetectedAt:     f.DetectedAt,
-							LastSeenAt:     f.LastSeenAt,
+							ID:                     f.ID,
+							Source:                 unified.SourceAIPatrol,
+							Severity:               unified.UnifiedSeverity(f.Severity),
+							Category:               unified.UnifiedCategory(f.Category),
+							ResourceID:             f.ResourceID,
+							ResourceName:           f.ResourceName,
+							ResourceType:           f.ResourceType,
+							Node:                   f.Node,
+							Title:                  f.Title,
+							Description:            f.Description,
+							Recommendation:         f.Recommendation,
+							Evidence:               f.Evidence,
+							DetectedAt:             f.DetectedAt,
+							LastSeenAt:             f.LastSeenAt,
+							InvestigationSessionID: f.InvestigationSessionID,
+							InvestigationStatus:    f.InvestigationStatus,
+							InvestigationOutcome:   f.InvestigationOutcome,
+							LastInvestigatedAt:     f.LastInvestigatedAt,
+							InvestigationAttempts:  f.InvestigationAttempts,
 						}
 						// Copy resolution timestamp if resolved
 						if f.ResolvedAt != nil || f.AutoResolved {
@@ -2540,6 +2566,12 @@ func (r *Router) wireChatServiceToAI() {
 	}
 
 	aiService.SetChatService(&chatServiceAdapter{svc: chatService})
+
+	// Wire mid-run budget enforcement from AI service to chat service
+	chatService.SetBudgetChecker(func() error {
+		return aiService.CheckBudget("patrol")
+	})
+
 	log.Info().Msg("Chat service wired to AI service for patrol and investigation")
 }
 
@@ -2596,11 +2628,7 @@ func (r *Router) wireAIChatProviders() {
 			service.SetStorageProvider(storageAdapter)
 			log.Debug().Msg("AI chat: Storage provider wired")
 		}
-		storageConfigAdapter := tools.NewStorageConfigMCPAdapter(r.monitor)
-		if storageConfigAdapter != nil {
-			service.SetStorageConfigProvider(storageConfigAdapter)
-			log.Debug().Msg("AI chat: Storage config provider wired")
-		}
+
 		guestConfigAdapter := tools.NewGuestConfigMCPAdapter(r.monitor)
 		if guestConfigAdapter != nil {
 			service.SetGuestConfigProvider(guestConfigAdapter)

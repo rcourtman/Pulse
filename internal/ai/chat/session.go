@@ -28,6 +28,10 @@ type SessionStore struct {
 	// These track the RESOLVING -> READING -> WRITING -> VERIFYING workflow
 	// to ensure structural guarantees (must discover before write, verify after write)
 	sessionFSMs map[string]*SessionFSM
+
+	// sessionToolSets holds per-session tool allowlists (in-memory only).
+	// These keep tool availability stable across turns while allowing additive expansion.
+	sessionToolSets map[string]map[string]bool
 }
 
 // sessionData is the on-disk format for a session
@@ -50,6 +54,7 @@ func NewSessionStore(dataDir string) (*SessionStore, error) {
 		dataDir:          sessionsDir,
 		resolvedContexts: make(map[string]*ResolvedContext),
 		sessionFSMs:      make(map[string]*SessionFSM),
+		sessionToolSets:  make(map[string]map[string]bool),
 	}, nil
 }
 
@@ -158,6 +163,7 @@ func (s *SessionStore) Delete(id string) error {
 	// Also clean up resolved context and FSM
 	delete(s.resolvedContexts, id)
 	delete(s.sessionFSMs, id)
+	delete(s.sessionToolSets, id)
 
 	return nil
 }
@@ -426,6 +432,10 @@ func (s *SessionStore) ClearSessionState(sessionID string, keepPinned bool) {
 		ctx.Clear(keepPinned)
 	}
 
+	if !keepPinned {
+		delete(s.sessionToolSets, sessionID)
+	}
+
 	// Reset FSM coherently with context state
 	fsm, hasFSM := s.sessionFSMs[sessionID]
 	if hasFSM {
@@ -458,4 +468,52 @@ func (s *SessionStore) ClearSessionState(sessionID string, keepPinned bool) {
 func (s *SessionStore) cleanupResolvedContext(sessionID string) {
 	// Note: caller must NOT hold the lock (or use a separate lock for contexts)
 	delete(s.resolvedContexts, sessionID)
+}
+
+// GetToolSet returns a copy of the tool allowlist for a session, or nil if none set.
+func (s *SessionStore) GetToolSet(sessionID string) map[string]bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	toolSet, ok := s.sessionToolSets[sessionID]
+	if !ok {
+		return nil
+	}
+	return copyToolSet(toolSet)
+}
+
+// SetToolSet stores a tool allowlist for a session.
+func (s *SessionStore) SetToolSet(sessionID string, toolSet map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.sessionToolSets[sessionID] = copyToolSet(toolSet)
+}
+
+// AddToolSet merges tool allowlist entries into the session's tool set.
+// Returns a copy of the updated tool set.
+func (s *SessionStore) AddToolSet(sessionID string, additions map[string]bool) map[string]bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	toolSet, ok := s.sessionToolSets[sessionID]
+	if !ok {
+		toolSet = make(map[string]bool)
+	}
+	for name := range additions {
+		toolSet[name] = true
+	}
+	s.sessionToolSets[sessionID] = toolSet
+	return copyToolSet(toolSet)
+}
+
+func copyToolSet(source map[string]bool) map[string]bool {
+	if source == nil {
+		return nil
+	}
+	out := make(map[string]bool, len(source))
+	for key, value := range source {
+		out[key] = value
+	}
+	return out
 }

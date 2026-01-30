@@ -7,7 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 )
 
 func TestPatrolService_BroadcastFullChannel(t *testing.T) {
@@ -32,62 +32,6 @@ func TestPatrolService_BroadcastFullChannel(t *testing.T) {
 
 	if exists {
 		t.Error("Expected channel to be removed from subscribers after full broadcast")
-	}
-}
-
-func TestPatrolService_CheckAnomalies(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
-
-	// Case 1: No baseline store
-	findings := ps.checkAnomalies("res1", "name1", "node", map[string]float64{"cpu": 50})
-	if findings != nil {
-		t.Error("Expected nil findings when baseline store is nil")
-	}
-
-	// Case 2: With baseline store
-	bs := baseline.NewStore(baseline.StoreConfig{MinSamples: 1})
-
-	// Set some baselines
-	pts := []baseline.MetricPoint{
-		{Value: 10, Timestamp: time.Now().Add(-1 * time.Hour)},
-		{Value: 10, Timestamp: time.Now()},
-	}
-	// We need enough samples to satisfy minSamples. Default for NewStore is 50.
-	// Let's use 1 to make it easy.
-	bs.Learn("res1", "node", "cpu", pts)
-	bs.Learn("res1", "node", "memory", pts)
-	bs.Learn("res1", "node", "disk", pts)
-
-	ps.mu.Lock()
-	ps.baselineStore = bs
-	ps.mu.Unlock()
-
-	// Metric values that should trigger High/Critical anomalies
-	// Need to check baseline.go to see what z-scores correspond to High (3-4) and Critical (>4)
-	// zScore = (value - mean) / stddev
-	// Since pts are all 10, mean=10, stddev=0.
-	// When stddev=0, CheckAnomaly returns AnomalyMedium if absDiff > 5.
-	// Wait, I want to test High and Critical.
-
-	// Let's set some variance
-	ptsVar := []baseline.MetricPoint{
-		{Value: 10, Timestamp: time.Now().Add(-10 * time.Hour)},
-		{Value: 20, Timestamp: time.Now().Add(-9 * time.Hour)},
-		{Value: 10, Timestamp: time.Now().Add(-8 * time.Hour)},
-		{Value: 20, Timestamp: time.Now().Add(-7 * time.Hour)},
-		{Value: 15, Timestamp: time.Now().Add(-6 * time.Hour)},
-	}
-	bs.Learn("res1", "node", "cpu", ptsVar) // Mean ~15, StdDev ~5
-
-	metrics := map[string]float64{
-		"cpu":    100, // (100-15)/5 = 17 -> Critical
-		"normal": 15,
-	}
-
-	findings = ps.checkAnomalies("res1", "name1", "node", metrics)
-
-	if len(findings) == 0 {
-		t.Error("Expected findings for anomalous CPU")
 	}
 }
 
@@ -120,92 +64,6 @@ func (m *mockBaselineStore) GetBaseline(resourceID, metric string) (*baseline.Me
 func (m *mockBaselineStore) Update(resourceID, metric string, value float64) {}
 func (m *mockBaselineStore) Save() error                                     { return nil }
 func (m *mockBaselineStore) Load() error                                     { return nil }
-
-func TestPatrolService_ValidateAIFindings(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
-
-	state := models.StateSnapshot{
-		Nodes: []models.Node{
-			{ID: "node1", Name: "Node 1", CPU: 0.1, Memory: models.Memory{Total: 1000, Used: 100}}, // CPU 10%, Mem 10%
-		},
-		VMs: []models.VM{
-			{ID: "vm1", Name: "VM 1", CPU: 0.95, Memory: models.Memory{Usage: 95}, Disk: models.Disk{Usage: 95}}, // 95% across board
-		},
-		Containers: []models.Container{
-			{ID: "ct1", Name: "CT 1", CPU: 0.2, Memory: models.Memory{Usage: 30}, Disk: models.Disk{Usage: 40}}, // Low usage
-		},
-		Storage: []models.Storage{
-			{ID: "st1", Name: "ST 1", Total: 1000, Used: 900}, // 90% usage
-		},
-	}
-
-	findings := []*Finding{
-		nil, // Should be ignored
-		{
-			ID:           "f1",
-			Key:          "cpu-high",
-			Title:        "High CPU on Node 1",
-			ResourceID:   "node1",
-			ResourceName: "Node 1",
-			Severity:     FindingSeverityWarning,
-			Category:     FindingCategoryPerformance,
-		}, // Should be filtered (actual 10% < 50%)
-		{
-			ID:           "f2",
-			Key:          "cpu-high",
-			Title:        "High CPU on VM 1",
-			ResourceID:   "vm1",
-			ResourceName: "VM 1",
-			Severity:     FindingSeverityWarning,
-			Category:     FindingCategoryPerformance,
-		}, // Should be kept (actual 95% > 50%)
-		{
-			ID:           "f3",
-			Key:          "unknown",
-			Title:        "Generic Issue",
-			ResourceID:   "unknown-res",
-			ResourceName: "Unknown",
-			Severity:     FindingSeverityWarning,
-			Category:     FindingCategoryPerformance,
-		}, // Should be kept (benefit of doubt)
-		{
-			ID:           "f4",
-			Key:          "cpu-high",
-			Title:        "Critical CPU",
-			ResourceID:   "node1",
-			ResourceName: "Node 1",
-			Severity:     FindingSeverityCritical,
-			Category:     FindingCategoryPerformance,
-		}, // Should be kept (Critical severity)
-	}
-
-	validated := ps.validateAIFindings(findings, state)
-
-	// Expected: f2, f3, f4
-	if len(validated) != 3 {
-		t.Errorf("Expected 3 validated findings, got %d", len(validated))
-	}
-
-	// Verify specific ones
-	foundF2 := false
-	foundF3 := false
-	foundF4 := false
-	for _, v := range validated {
-		if v.ID == "f2" {
-			foundF2 = true
-		}
-		if v.ID == "f3" {
-			foundF3 = true
-		}
-		if v.ID == "f4" {
-			foundF4 = true
-		}
-	}
-
-	if !foundF2 || !foundF3 || !foundF4 {
-		t.Error("Missing expected findings in validated output")
-	}
-}
 
 func TestGenerateRemediationSummary(t *testing.T) {
 	tests := []struct {
@@ -257,6 +115,63 @@ func TestGenerateRemediationSummary(t *testing.T) {
 			t.Errorf("generateRemediationSummary(%s) = %s, want %s", tt.command, result, tt.expected)
 		}
 	}
+}
+
+// mockMetricsHistoryProvider implements MetricsHistoryProvider
+type mockMetricsHistoryProvider struct {
+	metrics map[string][]types.MetricPoint // resourceID:metrics -> points
+}
+
+func (m *mockMetricsHistoryProvider) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []types.MetricPoint {
+	return m.metrics[nodeID+":"+metricType]
+}
+
+func (m *mockMetricsHistoryProvider) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []types.MetricPoint {
+	return m.metrics[guestID+":"+metricType]
+}
+
+func (m *mockMetricsHistoryProvider) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]types.MetricPoint {
+	result := make(map[string][]types.MetricPoint)
+	for k, v := range m.metrics {
+		if strings.HasPrefix(k, guestID+":") {
+			parts := strings.Split(k, ":")
+			if len(parts) == 2 {
+				result[parts[1]] = v
+			}
+		}
+	}
+	return result
+}
+
+func (m *mockMetricsHistoryProvider) GetAllStorageMetrics(storageID string, duration time.Duration) map[string][]types.MetricPoint {
+	return nil
+}
+
+// mockAlertProvider implements AlertProvider
+type mockAlertProvider struct {
+	active  []AlertInfo
+	history []ResolvedAlertInfo
+}
+
+func (m *mockAlertProvider) GetActiveAlerts() []AlertInfo                        { return m.active }
+func (m *mockAlertProvider) GetRecentlyResolved(minutes int) []ResolvedAlertInfo { return m.history }
+func (m *mockAlertProvider) GetAlertsByResource(resourceID string) []AlertInfo {
+	var res []AlertInfo
+	for _, a := range m.active {
+		if a.ResourceID == resourceID {
+			res = append(res, a)
+		}
+	}
+	return res
+}
+func (m *mockAlertProvider) GetAlertHistory(resourceID string, limit int) []ResolvedAlertInfo {
+	var res []ResolvedAlertInfo
+	for _, a := range m.history {
+		if a.ResourceID == resourceID {
+			res = append(res, a)
+		}
+	}
+	return res
 }
 
 func TestService_BuildEnrichedResourceContext(t *testing.T) {
@@ -312,6 +227,120 @@ func TestService_BuildEnrichedResourceContext(t *testing.T) {
 	if !strings.Contains(ctx, "normal") {
 		t.Error("Expected normal in context for memory")
 	}
+
+	// Case 4: With Metrics History (Trends)
+	mockMH := &mockMetricsHistoryProvider{
+		metrics: make(map[string][]types.MetricPoint),
+	}
+	// Add data showing increasing trend for CPU (>5% trend)
+	// Last 24h: 10% -> 20% = +10% over 1 day (+10%/day > 5%)
+	tsOld := now.Add(-24 * time.Hour)
+	mockMH.metrics["res1:cpu"] = []types.MetricPoint{
+		{Value: 10, Timestamp: tsOld},
+		{Value: 15, Timestamp: tsOld.Add(12 * time.Hour)},
+		{Value: 20, Timestamp: now},
+	}
+	// Add data showing flat trend for memory
+	mockMH.metrics["res1:memory"] = []types.MetricPoint{
+		{Value: 50, Timestamp: tsOld},
+		{Value: 50, Timestamp: now},
+	}
+
+	ps.SetMetricsHistoryProvider(mockMH)
+
+	ctx = s.buildEnrichedResourceContext("res1", "node", metrics)
+	t.Logf("Enriched context (trends): %s", ctx)
+
+	if !strings.Contains(ctx, "CPU") || !strings.Contains(ctx, "increasing") {
+		t.Error("Expected 'CPU' and 'increasing' trend in context")
+	}
+
+	// Case 5: With Pattern Detector (Predictions)
+	pd := NewPatternDetector(DefaultPatternConfig())
+	// Record 3 events to form a pattern (T-4h, T-2h, T-0h -> Interval 2h -> Next T+2h)
+	pd.RecordEvent(HistoricalEvent{ResourceID: "res1", EventType: EventHighCPU, Timestamp: now.Add(-4 * time.Hour)})
+	pd.RecordEvent(HistoricalEvent{ResourceID: "res1", EventType: EventHighCPU, Timestamp: now.Add(-2 * time.Hour)})
+	pd.RecordEvent(HistoricalEvent{ResourceID: "res1", EventType: EventHighCPU, Timestamp: now})
+
+	ps.SetPatternDetector(pd)
+
+	ctx = s.buildEnrichedResourceContext("res1", "node", metrics)
+	t.Logf("Enriched context (patterns): %s", ctx)
+
+	if !strings.Contains(ctx, "Predictions") {
+		t.Error("Expected 'Predictions' section in context")
+	}
+	// Note: formatPatternBasis is showing just the event type currently
+	if !strings.Contains(ctx, "high_cpu") {
+		t.Error("Expected 'high_cpu' prediction in context")
+	}
+
+	// Case 6: With Active/Historical Alerts
+	mockAP := &mockAlertProvider{
+		active: []AlertInfo{
+			{ResourceID: "res1", Type: "cpu", Level: "warning", Message: "High CPU detected", Value: 85, Duration: "5m"},
+		},
+		history: []ResolvedAlertInfo{
+			{AlertInfo: AlertInfo{ResourceID: "res1", Type: "cpu", Level: "warning"}, ResolvedTime: now.Add(-1 * time.Hour)},
+		},
+	}
+	s.SetAlertProvider(mockAP)
+
+	ctx = s.buildEnrichedResourceContext("res1", "node", metrics)
+	t.Logf("Enriched context (alerts): %s", ctx)
+
+	if !strings.Contains(ctx, "active alert") {
+		t.Error("Expected 'active alert' count in context")
+	}
+	if !strings.Contains(ctx, "Past 30 days") {
+		t.Error("Expected 'Past 30 days' history in context")
+	}
+
+	// Case 7: With Change Logic
+	cd := NewChangeDetector(memory.ChangeDetectorConfig{})
+	// Simulate a "created" change
+	cd.DetectChanges([]memory.ResourceSnapshot{
+		{
+			ID:           "res1",
+			Name:         "res1",
+			Type:         "vm",
+			Status:       "running",
+			SnapshotTime: now,
+		},
+	})
+	// Force persistence flush/processing if needed (DetectChanges does it async but returns changes immediately)
+
+	ps.SetChangeDetector(cd)
+
+	ctx = s.buildEnrichedResourceContext("res1", "node", metrics)
+	t.Logf("Enriched context (changes): %s", ctx)
+
+	if !strings.Contains(ctx, "Changes") {
+		t.Error("Expected 'Changes' section")
+	}
+	if !strings.Contains(ctx, "created") {
+		t.Error("Expected creation event in context")
+	}
+
+	// Case 8: With Correlation Logic
+	// We need correlation package or just use the alias
+	cord := NewCorrelationDetector(DefaultCorrelationConfig())
+	// Record an event that should contribute to correlation
+	cord.RecordEvent(CorrelationEvent{
+		ResourceID:   "res1",
+		ResourceType: "vm",
+		EventType:    CorrelationEventHighCPU,
+		Timestamp:    now,
+	})
+
+	ps.SetCorrelationDetector(cord)
+
+	ctx = s.buildEnrichedResourceContext("res1", "node", metrics)
+	t.Logf("Enriched context (correlation): %s", ctx)
+
+	// Correlation text might appear depending on implementation.
+	// If no correlations found (single event might not be enough), it might be empty section.
+	// But let's verify it doesn't crash and we exercised the path.
 }
 
 func TestService_BuildIncidentContext(t *testing.T) {

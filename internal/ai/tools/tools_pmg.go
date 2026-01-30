@@ -9,21 +9,8 @@ import (
 func (e *PulseToolExecutor) registerPMGTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_pmg",
-			Description: `Query Proxmox Mail Gateway status and statistics.
-
-Types:
-- status: Instance status and health (nodes, uptime, load)
-- mail_stats: Mail flow statistics (counts, spam, virus, bounces)
-- queues: Mail queue status (active, deferred, hold)
-- spam: Spam quarantine statistics and score distribution
-
-Examples:
-- Get status: type="status"
-- Get specific instance: type="status", instance="pmg01"
-- Get mail stats: type="mail_stats"
-- Get queue status: type="queues"
-- Get spam stats: type="spam"`,
+			Name:        "pulse_pmg",
+			Description: `Query Proxmox Mail Gateway status and statistics. Types: status, mail_stats, queues, spam.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{

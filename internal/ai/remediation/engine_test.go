@@ -42,8 +42,8 @@ func TestEngine_CreatePlan(t *testing.T) {
 		Title:       "Restart service",
 		Description: "Restart the web service to fix memory leak",
 		Steps: []RemediationStep{
-			{Order: 1, Description: "Stop service", Command: "systemctl stop nginx"},
-			{Order: 2, Description: "Start service", Command: "systemctl start nginx"},
+			{Order: 1, Description: "Restart service", Command: "systemctl restart nginx"},
+			{Order: 2, Description: "Verify service", Command: "systemctl status nginx"},
 		},
 	}
 

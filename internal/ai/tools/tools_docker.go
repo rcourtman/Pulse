@@ -13,26 +13,8 @@ import (
 func (e *PulseToolExecutor) registerDockerTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_docker",
-			Description: `Manage Docker containers, updates, and Swarm services.
-
-Actions:
-- control: Start, stop, or restart containers
-- updates: List containers with pending image updates
-- check_updates: Trigger update check on a host
-- update: Update a container to latest image (requires control permission)
-- services: List Docker Swarm services
-- tasks: List Docker Swarm tasks
-- swarm: Get Swarm cluster status
-
-To check Docker container logs or run commands inside containers, use pulse_control with type="command":
-  command="docker logs jellyfin --tail 100"
-  command="docker exec jellyfin cat /config/log/log.txt"
-
-Examples:
-- Restart container: action="control", container="nginx", operation="restart"
-- List updates: action="updates", host="Tower"
-- Update container: action="update", container="nginx", host="Tower"`,
+			Name:        "pulse_docker",
+			Description: `Manage Docker containers, updates, and Swarm services. Actions: control, updates, check_updates, update, services, tasks, swarm.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{

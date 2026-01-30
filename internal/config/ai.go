@@ -121,7 +121,7 @@ const (
 
 // Default models per provider
 const (
-	DefaultAIModelAnthropic = "claude-3-5-haiku-latest"
+	DefaultAIModelAnthropic = "claude-haiku-4-5"
 	DefaultAIModelOpenAI    = "gpt-4o"
 	DefaultAIModelOllama    = "llama3"
 	DefaultAIModelDeepSeek  = "deepseek-chat"    // V3.2 with tool-use support
@@ -322,6 +322,25 @@ func ParseModelString(model string) (provider, modelName string) {
 // FormatModelString creates a "provider:model-name" format string
 func FormatModelString(provider, modelName string) string {
 	return provider + ":" + modelName
+}
+
+// DefaultModelForProvider returns the default "provider:model" string for a given provider name.
+// Returns empty string if the provider is unknown.
+func DefaultModelForProvider(provider string) string {
+	switch provider {
+	case AIProviderAnthropic:
+		return FormatModelString(AIProviderAnthropic, DefaultAIModelAnthropic)
+	case AIProviderOpenAI:
+		return FormatModelString(AIProviderOpenAI, DefaultAIModelOpenAI)
+	case AIProviderDeepSeek:
+		return FormatModelString(AIProviderDeepSeek, DefaultAIModelDeepSeek)
+	case AIProviderGemini:
+		return FormatModelString(AIProviderGemini, DefaultAIModelGemini)
+	case AIProviderOllama:
+		return FormatModelString(AIProviderOllama, DefaultAIModelOllama)
+	default:
+		return ""
+	}
 }
 
 // GetBaseURL returns the base URL, using defaults where appropriate

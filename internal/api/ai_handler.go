@@ -49,7 +49,7 @@ type AIService interface {
 	SetMetricsHistory(provider chat.MCPMetricsHistoryProvider)
 	SetAgentProfileManager(manager chat.AgentProfileManager)
 	SetStorageProvider(provider chat.MCPStorageProvider)
-	SetStorageConfigProvider(provider chat.MCPStorageConfigProvider)
+
 	SetGuestConfigProvider(provider chat.MCPGuestConfigProvider)
 	SetBackupProvider(provider chat.MCPBackupProvider)
 	SetDiskHealthProvider(provider chat.MCPDiskHealthProvider)
@@ -366,11 +366,20 @@ func (h *AIHandler) IsRunning(ctx context.Context) bool {
 	return svc != nil && svc.IsRunning()
 }
 
+// ChatMention represents a resource tagged via @ mention in the chat UI
+type ChatMention struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Node string `json:"node,omitempty"`
+}
+
 // ChatRequest represents a chat request
 type ChatRequest struct {
-	Prompt    string `json:"prompt"`
-	SessionID string `json:"session_id,omitempty"`
-	Model     string `json:"model,omitempty"`
+	Prompt    string        `json:"prompt"`
+	SessionID string        `json:"session_id,omitempty"`
+	Model     string        `json:"model,omitempty"`
+	Mentions  []ChatMention `json:"mentions,omitempty"`
 }
 
 // HandleChat handles POST /api/ai/chat - streaming chat
@@ -490,11 +499,23 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
+	// Convert API mentions to chat mentions
+	var chatMentions []chat.StructuredMention
+	for _, m := range req.Mentions {
+		chatMentions = append(chatMentions, chat.StructuredMention{
+			ID:   m.ID,
+			Name: m.Name,
+			Type: m.Type,
+			Node: m.Node,
+		})
+	}
+
 	// Stream from AI chat service
 	err := svc.ExecuteStream(ctx, chat.ExecuteRequest{
 		Prompt:    req.Prompt,
 		SessionID: req.SessionID,
 		Model:     req.Model,
+		Mentions:  chatMentions,
 	}, func(event chat.StreamEvent) {
 		writeEvent(event)
 	})
@@ -858,13 +879,6 @@ func (h *AIHandler) SetAgentProfileManager(manager chat.AgentProfileManager) {
 func (h *AIHandler) SetStorageProvider(provider chat.MCPStorageProvider) {
 	if h.legacyService != nil {
 		h.legacyService.SetStorageProvider(provider)
-	}
-}
-
-// SetStorageConfigProvider sets the storage config provider for MCP tools
-func (h *AIHandler) SetStorageConfigProvider(provider chat.MCPStorageConfigProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetStorageConfigProvider(provider)
 	}
 }
 

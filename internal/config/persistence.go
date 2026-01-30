@@ -1967,7 +1967,6 @@ type PatrolRunRecord struct {
 	TriggerReason      string    `json:"trigger_reason,omitempty"`
 	ScopeResourceIDs   []string  `json:"scope_resource_ids,omitempty"`
 	ScopeResourceTypes []string  `json:"scope_resource_types,omitempty"`
-	ScopeDepth         string    `json:"scope_depth,omitempty"`
 	ScopeContext       string    `json:"scope_context,omitempty"`
 	AlertID            string    `json:"alert_id,omitempty"`
 	FindingID          string    `json:"finding_id,omitempty"`
@@ -1993,6 +1992,21 @@ type PatrolRunRecord struct {
 	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
 	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
 	OutputTokens int    `json:"output_tokens,omitempty"` // Tokens received from AI
+	// Tool call traces
+	ToolCalls     []ToolCallRecord `json:"tool_calls,omitempty"`
+	ToolCallCount int              `json:"tool_call_count"`
+}
+
+// ToolCallRecord captures a single tool invocation during a patrol run.
+type ToolCallRecord struct {
+	ID        string `json:"id"`
+	ToolName  string `json:"tool_name"`
+	Input     string `json:"input"`
+	Output    string `json:"output"`
+	Success   bool   `json:"success"`
+	StartTime int64  `json:"start_time"`
+	EndTime   int64  `json:"end_time"`
+	Duration  int64  `json:"duration_ms"`
 }
 
 // AIUsageHistoryData represents persisted AI usage history with metadata

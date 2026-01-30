@@ -804,6 +804,12 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	// Set on patrol service
 	patrol.SetInvestigationOrchestrator(adapter)
 
+	// Wire up fix verification: patrol re-checks resources after fixes are executed
+	adapter.SetFixVerifier(patrol)
+
+	// Wire up Prometheus metrics for investigation outcomes and fix verification
+	adapter.SetMetricsCallback()
+
 	log.Info().Str("orgID", orgID).Msg("Investigation orchestrator configured for patrol service")
 }
 
@@ -1595,6 +1601,7 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Description string `json:"description,omitempty"`
+		CreatedAt   int64  `json:"created_at,omitempty"`
 		Notable     bool   `json:"notable"`
 	}
 
@@ -1628,6 +1635,7 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 			ID:          m.ID,
 			Name:        m.Name,
 			Description: m.Description,
+			CreatedAt:   m.CreatedAt,
 			Notable:     m.Notable,
 		})
 	}
@@ -3067,7 +3075,6 @@ type PatrolStatusResponse struct {
 	Running          bool       `json:"running"`
 	Enabled          bool       `json:"enabled"`
 	LastPatrolAt     *time.Time `json:"last_patrol_at,omitempty"`
-	LastDeepAnalysis *time.Time `json:"last_deep_analysis_at,omitempty"`
 	NextPatrolAt     *time.Time `json:"next_patrol_at,omitempty"`
 	LastDurationMs   int64      `json:"last_duration_ms"`
 	ResourcesChecked int        `json:"resources_checked"`
@@ -3355,6 +3362,8 @@ func redactPatrolRunHistory(runs []ai.PatrolRunRecord) []ai.PatrolRunRecord {
 		copy.InputTokens = 0
 		copy.OutputTokens = 0
 		copy.FindingIDs = nil
+		copy.ToolCalls = nil
+		copy.ToolCallCount = 0
 		redacted[i] = copy
 	}
 	return redacted
@@ -3414,11 +3423,8 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Check for deep=true query parameter (kept for backwards compatibility)
-	deep := r.URL.Query().Get("deep") == "true"
-
 	// Trigger patrol asynchronously
-	patrol.ForcePatrol(r.Context(), deep)
+	patrol.ForcePatrol(r.Context())
 
 	response := map[string]interface{}{
 		"success": true,
@@ -3742,6 +3748,54 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write resolve response")
+	}
+}
+
+// HandleSetFindingNote sets or updates a user note on a finding (POST /api/ai/patrol/findings/note)
+// Notes provide context that Patrol sees on future runs (e.g., "PBS server was decommissioned").
+func (h *AISettingsHandler) HandleSetFindingNote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !CheckAuth(h.getConfig(r.Context()), w, r) {
+		return
+	}
+
+	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		FindingID string `json:"finding_id"`
+		Note      string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.FindingID == "" {
+		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		return
+	}
+
+	findings := patrol.GetFindings()
+	ok := findings.SetUserNote(req.FindingID, req.Note)
+	if !ok {
+		http.Error(w, "Finding not found", http.StatusNotFound)
+		return
+	}
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Note updated",
+	}
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write set-note response")
 	}
 }
 
@@ -4084,6 +4138,15 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 	}
 
 	runs := patrol.GetRunHistory(limit)
+
+	// By default, omit full tool call arrays to keep payloads lean.
+	// Use ?include=tool_calls to get the full array.
+	includeToolCalls := r.URL.Query().Get("include") == "tool_calls"
+	if !includeToolCalls {
+		for i := range runs {
+			runs[i].ToolCalls = nil
+		}
+	}
 
 	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIPatrol) {
 		w.Header().Set("X-License-Required", "true")
@@ -4973,6 +5036,42 @@ func (h *AISettingsHandler) executeInvestigationFix(w http.ResponseWriter, r *ht
 	LogAuditEvent("ai_fix_executed", getAuthUsername(h.getConfig(ctx), r), GetClientIP(r), r.URL.Path, success,
 		fmt.Sprintf("Executed fix for finding %s: %s (exit code: %d)", findingID, truncateForLog(req.Command, 100), exitCode))
 
+	// Launch background verification if fix executed successfully
+	if success {
+		aiSvc := h.GetAIService(ctx)
+		go func() {
+			time.Sleep(30 * time.Second)
+
+			patrol := aiSvc.GetPatrolService()
+			if patrol == nil {
+				log.Warn().Str("findingID", findingID).Msg("Post-fix verification skipped: no patrol service")
+				return
+			}
+
+			finding := patrol.GetFindings().Get(findingID)
+			if finding == nil {
+				log.Warn().Str("findingID", findingID).Msg("Post-fix verification skipped: finding not found")
+				return
+			}
+
+			bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+
+			verified, verifyErr := patrol.VerifyFixResolved(bgCtx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
+			if verifyErr != nil {
+				log.Error().Err(verifyErr).Str("findingID", findingID).Msg("Post-fix verification failed with error")
+				invStore.Complete(session.ID, investigation.OutcomeFixVerificationFailed, fmt.Sprintf("Fix executed but verification error: %v", verifyErr), session.ProposedFix)
+			} else if !verified {
+				log.Warn().Str("findingID", findingID).Msg("Post-fix verification: issue persists")
+				invStore.Complete(session.ID, investigation.OutcomeFixVerificationFailed, "Fix executed but issue persists after verification.", session.ProposedFix)
+			} else {
+				log.Info().Str("findingID", findingID).Msg("Post-fix verification: issue resolved")
+				invStore.Complete(session.ID, investigation.OutcomeFixVerified, "Fix executed and verified - issue resolved.", session.ProposedFix)
+			}
+			h.updateFindingOutcome(bgCtx, orgID, findingID, string(invStore.GetLatestByFinding(findingID).Outcome))
+		}()
+	}
+
 	// Return response
 	response := map[string]interface{}{
 		"approved":   true,
@@ -5648,6 +5747,19 @@ func (h *AISettingsHandler) HandleReinvestigateFinding(w http.ResponseWriter, r 
 		}
 		if orchestrator == nil {
 			writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Investigation orchestrator not initialized", nil)
+			return
+		}
+	}
+
+	// Check for already-running investigation (return 409 Conflict)
+	orgID := GetOrgID(r.Context())
+	h.investigationMu.RLock()
+	invStore := h.investigationStores[orgID]
+	h.investigationMu.RUnlock()
+	if invStore != nil {
+		if latest := invStore.GetLatestByFinding(findingID); latest != nil && latest.Status == investigation.StatusRunning {
+			writeErrorResponse(w, http.StatusConflict, "investigation_running",
+				"An investigation is already running for this finding", nil)
 			return
 		}
 	}

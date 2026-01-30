@@ -3,13 +3,10 @@ package tools
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 // StateGetter provides access to the current infrastructure state
@@ -90,96 +87,6 @@ func (a *StorageMCPAdapter) GetCephClusters() []models.CephCluster {
 	}
 	state := a.stateGetter.GetState()
 	return state.CephClusters
-}
-
-// StorageConfigSource provides storage configuration data with context.
-type StorageConfigSource interface {
-	GetStorageConfig(ctx context.Context, instance string) (map[string][]proxmox.Storage, error)
-}
-
-// StorageConfigMCPAdapter adapts monitoring storage config access to MCP StorageConfigProvider interface.
-type StorageConfigMCPAdapter struct {
-	source  StorageConfigSource
-	timeout time.Duration
-}
-
-// NewStorageConfigMCPAdapter creates a new adapter for storage config data.
-func NewStorageConfigMCPAdapter(source StorageConfigSource) *StorageConfigMCPAdapter {
-	if source == nil {
-		return nil
-	}
-	return &StorageConfigMCPAdapter{
-		source:  source,
-		timeout: 5 * time.Second,
-	}
-}
-
-// GetStorageConfig implements mcp.StorageConfigProvider.
-func (a *StorageConfigMCPAdapter) GetStorageConfig(instance string) ([]StorageConfigSummary, error) {
-	if a == nil || a.source == nil {
-		return nil, fmt.Errorf("storage config source not available")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), a.timeout)
-	defer cancel()
-
-	storageByInstance, err := a.source.GetStorageConfig(ctx, instance)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]StorageConfigSummary, 0)
-	seen := make(map[string]bool)
-	for inst, storages := range storageByInstance {
-		for _, storage := range storages {
-			key := inst + ":" + storage.Storage
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			entry := StorageConfigSummary{
-				ID:       storage.Storage,
-				Name:     storage.Storage,
-				Instance: inst,
-				Type:     storage.Type,
-				Content:  storage.Content,
-				Nodes:    parseStorageConfigNodes(storage.Nodes),
-				Path:     storage.Path,
-				Shared:   storage.Shared == 1,
-				Enabled:  storage.Enabled == 1,
-				Active:   storage.Active == 1,
-			}
-			result = append(result, entry)
-		}
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		if result[i].Instance != result[j].Instance {
-			return result[i].Instance < result[j].Instance
-		}
-		return result[i].ID < result[j].ID
-	})
-
-	return result, nil
-}
-
-func parseStorageConfigNodes(nodes string) []string {
-	nodes = strings.TrimSpace(nodes)
-	if nodes == "" {
-		return nil
-	}
-	parts := strings.Split(nodes, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		node := strings.TrimSpace(part)
-		if node == "" {
-			continue
-		}
-		result = append(result, node)
-	}
-	if len(result) == 0 {
-		return nil
-	}
-	return result
 }
 
 // GuestConfigSource provides guest configuration data with context.

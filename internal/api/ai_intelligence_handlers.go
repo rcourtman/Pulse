@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -1160,30 +1162,37 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 	}
 
 	type findingView struct {
-		ID              string     `json:"id"`
-		Source          string     `json:"source"`
-		Severity        string     `json:"severity"`
-		Category        string     `json:"category"`
-		ResourceID      string     `json:"resource_id"`
-		ResourceName    string     `json:"resource_name"`
-		ResourceType    string     `json:"resource_type"`
-		Node            string     `json:"node,omitempty"`
-		Title           string     `json:"title"`
-		Description     string     `json:"description"`
-		Recommendation  string     `json:"recommendation,omitempty"`
-		Evidence        string     `json:"evidence,omitempty"`
-		AlertID         string     `json:"alert_id,omitempty"`
-		AlertType       string     `json:"alert_type,omitempty"`
-		Value           float64    `json:"value,omitempty"`
-		Threshold       float64    `json:"threshold,omitempty"`
-		IsThreshold     bool       `json:"is_threshold,omitempty"`
-		AIContext       string     `json:"ai_context,omitempty"`
-		RootCauseID     string     `json:"root_cause_id,omitempty"`
-		CorrelatedIDs   []string   `json:"correlated_ids,omitempty"`
-		RemediationID   string     `json:"remediation_id,omitempty"`
-		AIConfidence    float64    `json:"ai_confidence,omitempty"`
-		EnhancedByAI    bool       `json:"enhanced_by_ai,omitempty"`
-		AIEnhancedAt    *time.Time `json:"ai_enhanced_at,omitempty"`
+		ID             string     `json:"id"`
+		Source         string     `json:"source"`
+		Severity       string     `json:"severity"`
+		Category       string     `json:"category"`
+		ResourceID     string     `json:"resource_id"`
+		ResourceName   string     `json:"resource_name"`
+		ResourceType   string     `json:"resource_type"`
+		Node           string     `json:"node,omitempty"`
+		Title          string     `json:"title"`
+		Description    string     `json:"description"`
+		Recommendation string     `json:"recommendation,omitempty"`
+		Evidence       string     `json:"evidence,omitempty"`
+		AlertID        string     `json:"alert_id,omitempty"`
+		AlertType      string     `json:"alert_type,omitempty"`
+		Value          float64    `json:"value,omitempty"`
+		Threshold      float64    `json:"threshold,omitempty"`
+		IsThreshold    bool       `json:"is_threshold,omitempty"`
+		AIContext      string     `json:"ai_context,omitempty"`
+		RootCauseID    string     `json:"root_cause_id,omitempty"`
+		CorrelatedIDs  []string   `json:"correlated_ids,omitempty"`
+		RemediationID  string     `json:"remediation_id,omitempty"`
+		AIConfidence   float64    `json:"ai_confidence,omitempty"`
+		EnhancedByAI   bool       `json:"enhanced_by_ai,omitempty"`
+		AIEnhancedAt   *time.Time `json:"ai_enhanced_at,omitempty"`
+		// Investigation fields
+		InvestigationSessionID string     `json:"investigationSessionId,omitempty"`
+		InvestigationStatus    string     `json:"investigationStatus,omitempty"`
+		InvestigationOutcome   string     `json:"investigationOutcome,omitempty"`
+		LastInvestigatedAt     *time.Time `json:"lastInvestigatedAt,omitempty"`
+		InvestigationAttempts  int        `json:"investigationAttempts,omitempty"`
+		// Timestamps and user feedback
 		DetectedAt      time.Time  `json:"detected_at"`
 		LastSeenAt      time.Time  `json:"last_seen_at"`
 		ResolvedAt      *time.Time `json:"resolved_at,omitempty"`
@@ -1226,40 +1235,45 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 		}
 
 		result = append(result, findingView{
-			ID:              f.ID,
-			Source:          string(f.Source),
-			Severity:        string(f.Severity),
-			Category:        string(f.Category),
-			ResourceID:      f.ResourceID,
-			ResourceName:    f.ResourceName,
-			ResourceType:    f.ResourceType,
-			Node:            f.Node,
-			Title:           f.Title,
-			Description:     f.Description,
-			Recommendation:  f.Recommendation,
-			Evidence:        f.Evidence,
-			AlertID:         f.AlertID,
-			AlertType:       f.AlertType,
-			Value:           f.Value,
-			Threshold:       f.Threshold,
-			IsThreshold:     f.IsThreshold,
-			AIContext:       f.AIContext,
-			RootCauseID:     f.RootCauseID,
-			CorrelatedIDs:   f.CorrelatedIDs,
-			RemediationID:   f.RemediationID,
-			AIConfidence:    f.AIConfidence,
-			EnhancedByAI:    f.EnhancedByAI,
-			AIEnhancedAt:    f.AIEnhancedAt,
-			DetectedAt:      f.DetectedAt,
-			LastSeenAt:      f.LastSeenAt,
-			ResolvedAt:      f.ResolvedAt,
-			AcknowledgedAt:  f.AcknowledgedAt,
-			SnoozedUntil:    f.SnoozedUntil,
-			DismissedReason: f.DismissedReason,
-			UserNote:        f.UserNote,
-			Suppressed:      f.Suppressed,
-			TimesRaised:     f.TimesRaised,
-			Status:          status,
+			ID:                     f.ID,
+			Source:                 string(f.Source),
+			Severity:               string(f.Severity),
+			Category:               string(f.Category),
+			ResourceID:             f.ResourceID,
+			ResourceName:           f.ResourceName,
+			ResourceType:           f.ResourceType,
+			Node:                   f.Node,
+			Title:                  f.Title,
+			Description:            f.Description,
+			Recommendation:         f.Recommendation,
+			Evidence:               f.Evidence,
+			AlertID:                f.AlertID,
+			AlertType:              f.AlertType,
+			Value:                  f.Value,
+			Threshold:              f.Threshold,
+			IsThreshold:            f.IsThreshold,
+			AIContext:              f.AIContext,
+			RootCauseID:            f.RootCauseID,
+			CorrelatedIDs:          f.CorrelatedIDs,
+			RemediationID:          f.RemediationID,
+			AIConfidence:           f.AIConfidence,
+			EnhancedByAI:           f.EnhancedByAI,
+			AIEnhancedAt:           f.AIEnhancedAt,
+			InvestigationSessionID: f.InvestigationSessionID,
+			InvestigationStatus:    f.InvestigationStatus,
+			InvestigationOutcome:   f.InvestigationOutcome,
+			LastInvestigatedAt:     f.LastInvestigatedAt,
+			InvestigationAttempts:  f.InvestigationAttempts,
+			DetectedAt:             f.DetectedAt,
+			LastSeenAt:             f.LastSeenAt,
+			ResolvedAt:             f.ResolvedAt,
+			AcknowledgedAt:         f.AcknowledgedAt,
+			SnoozedUntil:           f.SnoozedUntil,
+			DismissedReason:        f.DismissedReason,
+			UserNote:               f.UserNote,
+			Suppressed:             f.Suppressed,
+			TimesRaised:            f.TimesRaised,
+			Status:                 status,
 		})
 	}
 
@@ -1598,6 +1612,51 @@ func (h *AISettingsHandler) HandleExecuteRemediationPlan(w http.ResponseWriter, 
 	}
 
 	execution := engine.GetExecution(req.ExecutionID)
+
+	// Launch background verification if execution completed successfully
+	if execution != nil && execution.Status == remediation.StatusCompleted {
+		plan := engine.GetPlan(execution.PlanID)
+		aiSvc := h.GetAIService(r.Context())
+		if plan != nil && plan.FindingID != "" && aiSvc != nil {
+			go func() {
+				time.Sleep(30 * time.Second)
+
+				patrol := aiSvc.GetPatrolService()
+				if patrol == nil {
+					log.Warn().Str("findingID", plan.FindingID).Msg("[Remediation] Post-fix verification skipped: no patrol service")
+					return
+				}
+
+				finding := patrol.GetFindings().Get(plan.FindingID)
+				if finding == nil {
+					log.Warn().Str("findingID", plan.FindingID).Msg("[Remediation] Post-fix verification skipped: finding not found")
+					return
+				}
+
+				bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+
+				verified, verifyErr := patrol.VerifyFixResolved(bgCtx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
+				if verifyErr != nil {
+					log.Error().Err(verifyErr).Str("findingID", plan.FindingID).Msg("[Remediation] Post-fix verification failed with error")
+				} else if !verified {
+					log.Warn().Str("findingID", plan.FindingID).Msg("[Remediation] Post-fix verification: issue persists")
+				} else {
+					log.Info().Str("findingID", plan.FindingID).Msg("[Remediation] Post-fix verification: issue resolved")
+				}
+
+				// Update execution status based on verification result
+				if verifyErr != nil {
+					engine.SetExecutionVerification(execution.ID, false, fmt.Sprintf("Verification error: %v", verifyErr))
+				} else if !verified {
+					engine.SetExecutionVerification(execution.ID, false, "Issue persists after fix")
+				} else {
+					engine.SetExecutionVerification(execution.ID, true, "Issue resolved")
+				}
+			}()
+		}
+	}
+
 	if err := utils.WriteJSONResponse(w, execution); err != nil {
 		log.Error().Err(err).Msg("Failed to write remediation execution response")
 	}

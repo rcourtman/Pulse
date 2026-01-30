@@ -3,7 +3,6 @@ package investigation
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rs/zerolog/log"
@@ -89,12 +88,28 @@ func (a *ChatServiceAdapter) GetMessages(ctx context.Context, sessionID string) 
 
 	messages := make([]Message, len(chatMessages))
 	for i, msg := range chatMessages {
-		messages[i] = Message{
-			ID:        msg.ID,
-			Role:      msg.Role,
-			Content:   msg.Content,
-			Timestamp: time.Now(), // chat.Message might not have timestamp
+		m := Message{
+			ID:               msg.ID,
+			Role:             msg.Role,
+			Content:          msg.Content,
+			ReasoningContent: msg.ReasoningContent,
+			Timestamp:        msg.Timestamp,
 		}
+		for _, tc := range msg.ToolCalls {
+			m.ToolCalls = append(m.ToolCalls, ToolCallInfo{
+				ID:    tc.ID,
+				Name:  tc.Name,
+				Input: tc.Input,
+			})
+		}
+		if msg.ToolResult != nil {
+			m.ToolResult = &ToolResultInfo{
+				ToolUseID: msg.ToolResult.ToolUseID,
+				Content:   msg.ToolResult.Content,
+				IsError:   msg.ToolResult.IsError,
+			}
+		}
+		messages[i] = m
 	}
 	return messages, nil
 }
