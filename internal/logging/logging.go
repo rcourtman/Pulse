@@ -81,6 +81,11 @@ func Init(cfg Config) zerolog.Logger {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
 	writer := selectWriter(cfg.Format)
+
+	// Hook in the in-memory broadcaster for live UI streaming
+	broadcaster := GetBroadcaster()
+	writer = io.MultiWriter(writer, broadcaster)
+
 	if fileWriter, err := newRollingFileWriter(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "logging: unable to configure file output: %v\n", err)
 	} else if fileWriter != nil {
