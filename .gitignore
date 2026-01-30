@@ -199,8 +199,13 @@ measure_sessions.sh
 
 # Auto-backup logs
 
-# Local backup scripts (not committed)
-scripts/watch-backup.sh
+# Local backup/snapshot scripts (not committed)
+scripts/watch-snapshot.sh
 scripts/auto-backup.sh
 scripts/safe-checkout.sh
 BACKUP_SYSTEM.md
+
+# Generated artifacts
+eval
+test_output.txt
+coverage_summary.txt
