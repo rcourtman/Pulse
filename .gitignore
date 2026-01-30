@@ -206,6 +206,6 @@ scripts/safe-checkout.sh
 BACKUP_SYSTEM.md
 
 # Generated artifacts
-eval
+/eval
 test_output.txt
 coverage_summary.txt

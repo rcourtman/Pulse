@@ -125,6 +125,35 @@ Alert-triggered analysis runs attach a timeline event to the alert, so investiga
 
 > **License note**: Kubernetes AI analysis is gated by the `kubernetes_ai` Pulse Pro feature.
 
+## Pulse Assistant (Chat): How It Works
+
+Pulse Assistant is **tool-driven**. It does not "guess" system state — it calls live tools and reports their outputs.
+
+### The Model's Workflow (Discover → Investigate → Act)
+- **Discover**: Uses `pulse_query` (or `pulse_discovery`) to find real resources and IDs.
+- **Investigate**: Uses `pulse_read` to run bounded, read-only commands and check status/logs.
+- **Act** (optional): Uses `pulse_control` for changes, then verifies with a read.
+
+### Safety Gates That Make It Trustworthy
+- **Strict Resolution (optional)**: When enabled, the assistant must discover a resource before it can act on it. This prevents fabricated IDs.
+- **Read/Write separation**: Read-only commands go through `pulse_read`; write actions go through `pulse_control`. This keeps the workflow state machine honest.
+- **Verification after writes**: After any write, the assistant must perform a read check before it can finish the response.
+- **Non‑interactive guardrails**: Commands that could hang (e.g., `tail -f`) are rewritten into bounded, safe forms.
+- **Approval mode**: In Controlled mode, every write requires explicit user approval. Autonomous mode is available only with Pro.
+
+### What You See As a User
+- **Clear tool usage**: Each step shows which tool ran and what it returned.
+- **Structured recovery**: If a tool is blocked, the assistant adapts (e.g., runs discovery, switches tools, or asks for approval).
+- **Verified outcomes**: Changes are followed by a read check before the assistant claims success.
+
+## Why It's Impressive (and Reliable)
+
+Pulse Assistant behaves like a careful operator:
+- It **grounds answers in live data** instead of assumptions.
+- It **adapts** when guardrails block an action.
+- It **verifies** changes before reporting success.
+- It **keeps you in control** with explicit approval gates.
+
 ## Configuration
 
 Configure in the UI: **Settings → System → AI Assistant**
@@ -148,6 +177,34 @@ You can set separate models for:
 - Chat (`chat_model`)
 - Patrol (`patrol_model`)
 - Auto-fix remediation (`auto_fix_model`)
+
+## Model Matrix (Pulse Assistant)
+
+This table summarizes the most recent **Pulse Assistant** eval runs per model. Patrol is still in development and is not scored yet.
+Time/tokens reflect the combined **Smoke + Read-only** matrix run.
+Transient provider errors (rate limits, unavailable chat endpoints) are skipped when rendering the table.
+
+Update the table from eval reports:
+```
+EVAL_REPORT_DIR=tmp/eval-reports go run ./cmd/eval -scenario matrix -auto-models
+python3 scripts/eval/render_model_matrix.py tmp/eval-reports --write-doc docs/AI.md
+```
+Or use the helper script:
+```
+scripts/eval/run_model_matrix.sh
+```
+
+<!-- MODEL_MATRIX_START -->
+| Model | Smoke | Read-only | Time (matrix) | Tokens (matrix) | Last run (UTC) |
+| --- | --- | --- | --- | --- | --- |
+| anthropic:claude-3-haiku-20240307 | ✅ | ❌ | 2m 42s | — | 2026-01-29 |
+| anthropic:claude-haiku-4-5-20251001 | ✅ | ✅ | 8s | 18,923 | 2026-01-29 |
+| anthropic:claude-opus-4-5-20251101 | ✅ | ✅ | 9m 31s | 1,120,530 | 2026-01-29 |
+| gemini:gemini-3-flash-preview | ✅ | ✅ | 7m 4s | — | 2026-01-29 |
+| gemini:gemini-3-pro-preview | ✅ | ✅ | 3m 54s | 1,914 | 2026-01-29 |
+| openai:gpt-5.2 | ✅ | ✅ | 5s | 12,363 | 2026-01-29 |
+| openai:gpt-5.2-chat-latest | ✅ | ✅ | 8s | 12,595 | 2026-01-29 |
+<!-- MODEL_MATRIX_END -->
 
 ### Testing
 
@@ -201,6 +258,14 @@ Pulse uses three AI permission levels for infrastructure control:
 - **Read-only**: AI can observe and query data only.
 - **Controlled**: AI asks for approval before executing commands or control actions.
 - **Autonomous (Pro)**: AI executes actions without prompting.
+
+### Using Approvals (Controlled Mode)
+
+When control level is **Controlled**, write actions pause for approval:
+
+- In chat, you’ll see an approval card with the proposed command.
+- **Approve** to execute and verify the change, or **Deny** to cancel it.
+- Only users with admin privileges can approve/deny.
 
 ### Advanced Network Restrictions
 

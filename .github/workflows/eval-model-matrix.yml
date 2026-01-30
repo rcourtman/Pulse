@@ -1,0 +1,63 @@
+name: Pulse AI Model Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Scenario or collection to run (e.g. matrix, smoke, readonly, advanced)
+        required: true
+        default: matrix
+      models:
+        description: Comma-separated model list (e.g. gpt-4.1-mini,claude-3-5-sonnet,gemini-1.5-pro,ollama:llama3.1)
+        required: false
+        default: ""
+      providers:
+        description: Optional provider filter (e.g. openai,anthropic,gemini,ollama)
+        required: false
+        default: ""
+      base_url:
+        description: Pulse API base URL (e.g. http://127.0.0.1:7655)
+        required: true
+
+jobs:
+  eval:
+    name: Model Matrix Eval
+    runs-on: self-hosted
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run eval matrix
+        env:
+          EVAL_REPORT_DIR: tmp/eval-reports
+          PULSE_EVAL_USER: ${{ secrets.PULSE_EVAL_USER || 'admin' }}
+          PULSE_EVAL_PASS: ${{ secrets.PULSE_EVAL_PASS || 'admin' }}
+        run: |
+          MODEL_ARGS=("-auto-models")
+          if [ -n "${{ inputs.models }}" ]; then
+            MODEL_ARGS=("-models" "${{ inputs.models }}")
+          fi
+          if [ -n "${{ inputs.providers }}" ]; then
+            export EVAL_MODEL_PROVIDERS="${{ inputs.providers }}"
+          fi
+          go run ./cmd/eval \
+            -scenario "${{ inputs.scenario }}" \
+            "${MODEL_ARGS[@]}" \
+            -url "${{ inputs.base_url }}" \
+            -user "${PULSE_EVAL_USER}" \
+            -pass "${PULSE_EVAL_PASS}"
+
+      - name: Upload eval reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-reports
+          path: tmp/eval-reports
+          retention-days: 14

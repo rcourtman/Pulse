@@ -5,7 +5,7 @@
 # - Go backend with auto-rebuild on file changes (via inotifywait)
 # - Vite frontend dev server with HMR
 # - Auto-detection of pulse-pro module for Pro features
-# - File backup watcher (if scripts/watch-backup.sh exists)
+# - Snapshot watcher (if scripts/watch-snapshot.sh exists)
 #
 # Environment Variables:
 #   HOT_DEV_USE_PROD_DATA=true   Use /etc/pulse for data (sessions, config, etc.)
@@ -204,9 +204,13 @@ pkill -x "pulse" 2>/dev/null || true
 sleep 1
 pkill -9 -x "pulse" 2>/dev/null || true
 
+
 kill_port "${FRONTEND_DEV_PORT}"
 kill_port "${PULSE_DEV_API_PORT}"
 kill_port "${EXTRA_CLEANUP_PORT}"
+
+# Truncate debug log
+:> /tmp/pulse-debug.log
 
 sleep 2
 
@@ -387,7 +391,7 @@ else
     fi
 fi
 
-LOG_LEVEL=debug \
+LOG_LEVEL="${LOG_LEVEL:-debug}" \
 FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
 PORT="${PULSE_DEV_API_PORT:-7655}" \
 PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
@@ -397,7 +401,9 @@ PULSE_DEV="${PULSE_DEV:-true}" \
 PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
 PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
 ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
-./pulse >> /tmp/pulse-debug.log 2>&1 &
+LOG_FILE="/tmp/pulse-debug.log" \
+LOG_MAX_SIZE="50" \
+./pulse > /dev/null 2>&1 &
 BACKEND_PID=$!
 
 sleep 2
@@ -418,7 +424,7 @@ log_info "Starting backend health monitor..."
 
         if [[ "$PULSE_COUNT" -eq 0 ]]; then
             log_warn "⚠️  Pulse died unexpectedly, restarting..."
-            LOG_LEVEL=debug \
+            LOG_LEVEL="${LOG_LEVEL:-debug}" \
             FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
             PORT="${PULSE_DEV_API_PORT:-7655}" \
             PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
@@ -428,7 +434,9 @@ log_info "Starting backend health monitor..."
             PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
             PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
             ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
-            ./pulse >> /tmp/pulse-debug.log 2>&1 &
+            LOG_FILE="/tmp/pulse-debug.log" \
+            LOG_MAX_SIZE="50" \
+            ./pulse > /dev/null 2>&1 &
             NEW_PID=$!
             sleep 2
             if kill -0 "$NEW_PID" 2>/dev/null; then
@@ -440,7 +448,7 @@ log_info "Starting backend health monitor..."
             log_error "⚠️  Multiple Pulse processes detected ($PULSE_COUNT), killing all and restarting..."
             pkill -9 -f "^\./pulse$" 2>/dev/null || true
             sleep 2
-            LOG_LEVEL=debug \
+            LOG_LEVEL="${LOG_LEVEL:-debug}" \
             FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
             PORT="${PULSE_DEV_API_PORT:-7655}" \
             PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
@@ -450,7 +458,9 @@ log_info "Starting backend health monitor..."
             PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
             PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
             ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
-            ./pulse >> /tmp/pulse-debug.log 2>&1 &
+            LOG_FILE="/tmp/pulse-debug.log" \
+            LOG_MAX_SIZE="50" \
+            ./pulse > /dev/null 2>&1 &
             NEW_PID=$!
             sleep 2
             if kill -0 "$NEW_PID" 2>/dev/null; then
@@ -479,7 +489,7 @@ log_info "Starting backend file watcher..."
         pkill -9 -f "^\./pulse$" 2>/dev/null || true
         sleep 1
 
-        LOG_LEVEL=debug \
+        LOG_LEVEL="${LOG_LEVEL:-debug}" \
         FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
         PORT="${PULSE_DEV_API_PORT:-7655}" \
         PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
@@ -489,7 +499,9 @@ log_info "Starting backend file watcher..."
         PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
         PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
         ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
-        ./pulse >> /tmp/pulse-debug.log 2>&1 &
+        LOG_FILE="/tmp/pulse-debug.log" \
+        LOG_MAX_SIZE="50" \
+        ./pulse > /dev/null 2>&1 &
         NEW_PID=$!
         sleep 1
 
@@ -612,7 +624,7 @@ cleanup() {
     # Fallback cleanup
     pkill -f "inotifywait.*pulse" 2>/dev/null || true
     pkill -f "fswatch.*pulse" 2>/dev/null || true
-    pkill -f "watch-backup.sh" 2>/dev/null || true
+    pkill -f "watch-snapshot.sh" 2>/dev/null || true
 
     log_info "Hot-dev stopped."
 }
@@ -620,12 +632,12 @@ trap cleanup INT TERM EXIT
 
 # --- Start File Backup Watcher (optional) ---
 
-BACKUP_SCRIPT="${ROOT_DIR}/scripts/watch-backup.sh"
-if [[ -x "${BACKUP_SCRIPT}" ]]; then
-    log_info "Starting file backup watcher..."
-    "${BACKUP_SCRIPT}" > /tmp/pulse-watch-backup.log 2>&1 &
+SNAPSHOT_SCRIPT="${ROOT_DIR}/scripts/watch-snapshot.sh"
+if [[ -x "${SNAPSHOT_SCRIPT}" ]]; then
+    log_info "Starting snapshot watcher..."
+    "${SNAPSHOT_SCRIPT}" > /tmp/pulse-watch-snapshot.log 2>&1 &
     BACKUP_WATCHER_PID=$!
-    log_info "File backups: ~/.pulse-backups (PID: ${BACKUP_WATCHER_PID})"
+    log_info "Snapshots: ~/.pulse-snapshots (PID: ${BACKUP_WATCHER_PID})"
 fi
 
 # --- Start Frontend ---

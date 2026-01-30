@@ -57,6 +57,18 @@ Pulse Assistant is a **protocol-driven, safety-gated AI system** for infrastruct
 3. **Writes must be verified.** FSM enforces read-after-write before final answer.
 4. **Errors are recoverable.** Structured error responses enable self-correction without prompt engineering.
 
+## 1.1 User-Visible Behavior (What Feels "Impressive")
+
+When you use Pulse Assistant in chat, these behaviors are deliberate and enforced by the backend:
+
+- **Grounded answers**: The assistant uses live tools and surfaces their outputs.
+- **Discover → Investigate → Act**: It queries resources first, reads status/logs, and only then acts.
+- **Verified changes**: After a write, it performs a read check before concluding.
+- **Approval gates**: In Controlled mode, write actions emit approvals and wait for a decision.
+- **Self‑recovery**: If blocked (routing mismatch, read‑only violation, strict resolution), it adapts and retries with a safe path.
+
+These are not prompt conventions — they are enforced by the FSM + tool executor.
+
 ---
 
 ## 2. Core Design Principles (Invariants)
@@ -87,6 +99,18 @@ If the model claims to have executed an action but produced no tool calls, the r
 Resolved resources are **session-scoped** and **in-memory only**. They are never persisted because infrastructure state may change between sessions.
 
 **Enforcement:** `ResolvedContext` not serialized, rebuilt each session in `chat/session.go`
+
+### Approval Flow (Controlled Mode)
+
+When `control_level=controlled`, write tools emit an approval request instead of executing:
+
+1. Tool returns `APPROVAL_REQUIRED: { approval_id, command, ... }`
+2. Agentic loop emits `approval_needed` SSE event
+3. UI or API approves/denies via `/api/ai/approvals/{id}/approve|deny`
+4. On approve, the tool re-executes with `_approval_id` and proceeds
+5. On deny, the assistant returns `Command denied: <reason>`
+
+This keeps the LLM in a proposer role while letting users explicitly authorize actions.
 
 ### Invariant 6: Read/Write Tool Separation
 
