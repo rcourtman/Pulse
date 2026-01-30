@@ -412,6 +412,15 @@ export const aiChatStore = {
     setIsAIChatOpen(true);
   },
 
+  // Clear the initialPrompt so it doesn't re-fire on subsequent opens
+  clearInitialPrompt() {
+    setAIChatContext(prev => {
+      if (!prev.initialPrompt) return prev;
+      const { initialPrompt: _, ...rest } = prev;
+      return rest;
+    });
+  },
+
   // Register the AI input element (called by AIChat component)
   registerInput(ref: HTMLTextAreaElement | null) {
     aiInputRef = ref;

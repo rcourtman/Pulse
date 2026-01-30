@@ -94,7 +94,7 @@ interface LabeledToggleProps extends BaseToggleProps {
 export function Toggle(props: LabeledToggleProps) {
   const size = props.size ?? 'md';
   return (
-    <label class={`flex items-center gap-3 ${props.containerClass ?? ''}`.trim()}>
+    <div class={`flex items-center gap-3 ${props.containerClass ?? ''}`.trim()}>
       <TogglePrimitive {...props} size={size} />
       {(props.label || props.description) && (
         <span class="flex flex-col text-sm text-gray-700 dark:text-gray-300">
@@ -104,7 +104,7 @@ export function Toggle(props: LabeledToggleProps) {
           )}
         </span>
       )}
-    </label>
+    </div>
   );
 }
 

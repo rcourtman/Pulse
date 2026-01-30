@@ -40,11 +40,11 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
         return props.models.length - notable.length;
     });
 
-    // Apply search filter on top of notable filter
+    // Apply search filter - search ALL models (not just notable) when there's a query
     const filteredModels = createMemo(() => {
         const query = searchQuery().trim().toLowerCase();
-        const baseModels = notableFilteredModels();
-        if (!query) return baseModels;
+        if (!query) return notableFilteredModels();
+        const baseModels = props.models;
         return baseModels.filter((model) => {
             const provider = getProviderFromModelId(model.id);
             const providerName = PROVIDER_DISPLAY_NAMES[provider] || provider;

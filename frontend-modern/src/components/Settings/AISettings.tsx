@@ -118,13 +118,11 @@ export const AISettings: Component = () => {
   // Per-provider test state
   const [testingProvider, setTestingProvider] = createSignal<string | null>(null);
   const [providerTestResult, setProviderTestResult] = createSignal<{ provider: string; success: boolean; message: string } | null>(null);
-  const hasAlertAnalysisFeature = createMemo(() => hasFeature('ai_alerts'));
   const hasAutoFixFeature = createMemo(() => hasFeature('ai_autofix'));
-  const alertAnalysisLocked = createMemo(() => !hasAlertAnalysisFeature());
   const autoFixLocked = createMemo(() => !hasAutoFixFeature());
 
   // Auto-fix acknowledgement state (not persisted - must acknowledge each session)
-  const [autoFixAcknowledged, setAutoFixAcknowledged] = createSignal(false);
+  // Note: autoFixAcknowledged removed — auto-fix UI moved to Patrol page
 
   // First-time setup modal state
   const [showSetupModal, setShowSetupModal] = createSignal(false);
@@ -135,7 +133,7 @@ export const AISettings: Component = () => {
 
   // UI state for collapsible sections - START COLLAPSED for compact view
   const [showAdvancedModels, setShowAdvancedModels] = createSignal(false);
-  const [showPatrolSettings, setShowPatrolSettings] = createSignal(false);
+  // Note: showPatrolSettings removed — patrol settings section moved to Patrol page
   const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);
 
   const [showChatMaintenance, setShowChatMaintenance] = createSignal(false);
@@ -1361,185 +1359,6 @@ export const AISettings: Component = () => {
                     </Show>
                   </div>
                 </div>
-              </div>
-
-              {/* Pulse Patrol & Efficiency Settings - Collapsible */}
-              <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                <button
-                  type="button"
-                  class="w-full px-3 py-2 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-left"
-                  onClick={() => setShowPatrolSettings(!showPatrolSettings())}
-                >
-                  <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Pulse Patrol Settings</span>
-                    {/* Summary badges */}
-                    <Show when={form.patrolIntervalMinutes > 0}>
-                      <span class="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
-                        {form.patrolIntervalMinutes >= 60 ? `${Math.floor(form.patrolIntervalMinutes / 60)}h` : `${form.patrolIntervalMinutes}m`}
-                      </span>
-                    </Show>
-                    <Show when={form.patrolAutoFix}>
-                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-300 rounded">Auto-Fix</span>
-                    </Show>
-                  </div>
-                  <svg class={`w-4 h-4 text-gray-500 transition-transform ${showPatrolSettings() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                <Show when={showPatrolSettings()}>
-                  <div class="px-3 py-3 bg-white dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                    {/* Patrol Interval - Compact */}
-                    <div class="flex flex-col gap-1">
-                      <div class="flex items-center gap-3">
-                        <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-32 flex-shrink-0">Patrol Interval</label>
-                        <input
-                          type="number"
-                          class={`w-20 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-700 ${form.patrolIntervalMinutes > 0 && form.patrolIntervalMinutes < 10
-                            ? 'border-red-300 dark:border-red-600'
-                            : 'border-gray-300 dark:border-gray-600'
-                            }`}
-                          value={form.patrolIntervalMinutes}
-                          onInput={(e) => {
-                            const value = parseInt(e.currentTarget.value, 10);
-                            if (!isNaN(value)) setForm('patrolIntervalMinutes', Math.max(0, value));
-                          }}
-                          min={0}
-                          max={10080}
-                          step={15}
-                          disabled={saving()}
-                        />
-                        <span class="text-xs text-gray-500">min (0=off, 10+ to enable)</span>
-                      </div>
-                      <Show when={form.patrolIntervalMinutes > 0 && form.patrolIntervalMinutes < 10}>
-                        <p class="text-xs text-red-500 ml-32 pl-3">Minimum interval is 10 minutes</p>
-                      </Show>
-                    </div>
-
-                    {/* Alert Analysis Toggle - Compact */}
-                    <div class="flex items-center justify-between gap-2">
-                      <label class="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-                        Alert-Triggered Analysis
-                        <span class="px-1 py-0.5 text-[9px] font-medium bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Efficient</span>
-                      </label>
-                      <Toggle
-                        checked={form.alertTriggeredAnalysis}
-                        onChange={(event) => setForm('alertTriggeredAnalysis', event.currentTarget.checked)}
-                        disabled={saving() || alertAnalysisLocked()}
-                      />
-                    </div>
-                    <Show when={alertAnalysisLocked()}>
-                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        <a
-                          class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
-                          href="https://pulserelay.pro/"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Upgrade to Pro
-                        </a>{' '}
-                        to enable alert-triggered analysis.
-                      </p>
-                    </Show>
-
-                    {/* Auto-Fix Toggle - Compact with inline warning */}
-                    <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <div class="flex items-center justify-between gap-2">
-                        <label class="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-                          Auto-Fix Mode
-                          <span class="px-1 py-0.5 text-[9px] font-medium bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">Advanced</span>
-                        </label>
-                        <Show when={autoFixAcknowledged() || form.patrolAutoFix}>
-                          <Toggle
-                            checked={form.patrolAutoFix}
-                            onChange={(event) => setForm('patrolAutoFix', event.currentTarget.checked)}
-                            disabled={saving() || autoFixLocked()}
-                          />
-                        </Show>
-                        <Show when={!autoFixAcknowledged() && !form.patrolAutoFix}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAutoFixAcknowledged(true);
-                              setForm('patrolAutoFix', true);
-                            }}
-                            disabled={saving() || autoFixLocked()}
-                            class="px-2 py-1 text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded hover:bg-amber-200 dark:hover:bg-amber-800 disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            Enable
-                          </button>
-                        </Show>
-                      </div>
-                      <Show when={autoFixLocked()}>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                          <a
-                            class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
-                            href="https://pulserelay.pro/"
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Upgrade to Pro
-                          </a>{' '}
-                          to enable auto-fix.
-                        </p>
-                      </Show>
-                      <Show when={!autoFixLocked() && !form.patrolAutoFix && !autoFixAcknowledged()}>
-                        <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
-                          ⚠️ Pulse Patrol will execute fixes without approval. Enable with caution.
-                        </p>
-                      </Show>
-                      <Show when={!autoFixLocked() && form.patrolAutoFix}>
-                        <p class="text-[10px] text-red-600 dark:text-red-400 mt-1 flex items-center gap-1">
-                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
-                          Auto-Fix is ON. Pulse Patrol will attempt automatic remediation.
-                        </p>
-                      </Show>
-                    </div>
-
-                    {/* Auto-Fix Model - Only when enabled */}
-                    <Show when={form.patrolAutoFix && !autoFixLocked()}>
-                      <div class="flex items-center gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
-                        <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-32 flex-shrink-0">Fix Model</label>
-                        <Show when={availableModels().length > 0} fallback={
-                          <input
-                            type="text"
-                            value={form.autoFixModel}
-                            onInput={(e) => setForm('autoFixModel', e.currentTarget.value)}
-                            placeholder="Use patrol model"
-                            class="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
-                            disabled={saving()}
-                          />
-                        }>
-                          <select
-                            value={form.autoFixModel}
-                            onChange={(e) => setForm('autoFixModel', e.currentTarget.value)}
-                            class="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
-                            disabled={saving()}
-                          >
-                            <option value="">Use patrol model</option>
-                            <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
-                              {([provider, models]) => (
-                                <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
-                                  <For each={models}>
-                                    {(model) => (
-                                      <option value={model.id}>
-                                        {model.name || model.id.split(':').pop()}
-                                      </option>
-                                    )}
-                                  </For>
-                                </optgroup>
-                              )}
-                            </For>
-                          </select>
-                        </Show>
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
               </div>
 
               {/* Discovery Settings - Collapsible */}

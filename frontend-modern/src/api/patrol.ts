@@ -90,7 +90,22 @@ export interface ChatMessage {
     id: string;
     role: 'user' | 'assistant' | 'system';
     content: string;
+    reasoning_content?: string;
+    tool_calls?: ChatToolCall[];
+    tool_result?: ChatToolResult;
     timestamp: string;
+}
+
+export interface ChatToolCall {
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+}
+
+export interface ChatToolResult {
+    tool_use_id: string;
+    content: string;
+    is_error?: boolean;
 }
 
 export interface FindingsSummary {
@@ -106,7 +121,6 @@ export interface PatrolStatus {
     running: boolean;
     enabled: boolean;
     last_patrol_at?: string;
-    last_deep_analysis_at?: string;
     next_patrol_at?: string;
     last_duration_ms: number;
     resources_checked: number;
@@ -168,6 +182,19 @@ export async function dismissFinding(
     return apiFetchJSON('/api/ai/patrol/dismiss', {
         method: 'POST',
         body: JSON.stringify({ finding_id: findingId, reason, note }),
+    });
+}
+
+/**
+ * Set or update a user note on a finding
+ * Notes provide context that Patrol sees on future runs.
+ * @param findingId The ID of the finding
+ * @param note The note text (empty string to clear)
+ */
+export async function setFindingNote(findingId: string, note: string): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON('/api/ai/patrol/findings/note', {
+        method: 'POST',
+        body: JSON.stringify({ finding_id: findingId, note }),
     });
 }
 
@@ -290,6 +317,17 @@ export const investigationOutcomeLabels: Record<InvestigationOutcome, string> = 
 
 export type PatrolRunStatus = 'healthy' | 'issues_found' | 'critical' | 'error';
 
+export interface ToolCallRecord {
+    id: string;
+    tool_name: string;
+    input: string;
+    output: string;
+    success: boolean;
+    start_time: number;
+    end_time: number;
+    duration_ms: number;
+}
+
 export interface PatrolRunRecord {
     id: string;
     started_at: string;
@@ -299,7 +337,6 @@ export interface PatrolRunRecord {
     trigger_reason?: string;
     scope_resource_ids?: string[];
     scope_resource_types?: string[];
-    scope_depth?: string;
     scope_context?: string;
     alert_id?: string;
     finding_id?: string;
@@ -313,6 +350,7 @@ export interface PatrolRunRecord {
     kubernetes_checked: number;
     new_findings: number;
     existing_findings: number;
+    rejected_findings: number;
     resolved_findings: number;
     auto_fix_count: number;
     findings_summary: string;
@@ -322,6 +360,8 @@ export interface PatrolRunRecord {
     ai_analysis?: string;
     input_tokens?: number;
     output_tokens?: number;
+    tool_calls?: ToolCallRecord[];
+    tool_call_count: number;
 }
 
 /**
@@ -331,6 +371,28 @@ export interface PatrolRunRecord {
 export async function getPatrolRunHistory(limit: number = 30): Promise<PatrolRunRecord[]> {
     const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?limit=${limit}`);
     return runs || [];
+}
+
+/**
+ * Get patrol run history with tool calls included
+ * @param limit Maximum number of runs to return (default: 30)
+ */
+export async function getPatrolRunHistoryWithToolCalls(limit: number = 30): Promise<PatrolRunRecord[]> {
+    const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?include=tool_calls&limit=${limit}`);
+    return runs || [];
+}
+
+/** SSE event from /api/ai/patrol/stream */
+export interface PatrolStreamEvent {
+    type: 'start' | 'content' | 'phase' | 'complete' | 'error' | 'tool_start' | 'tool_end';
+    content?: string;
+    phase?: string;
+    tokens?: number;
+    tool_id?: string;
+    tool_name?: string;
+    tool_input?: string;
+    tool_output?: string;
+    tool_success?: boolean;
 }
 
 /**

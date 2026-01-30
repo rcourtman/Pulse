@@ -1,278 +1,327 @@
-// AI Intelligence types for patterns, predictions, and correlations
+/**
+ * AI Intelligence Store
+ *
+ * Central store for managing AI intelligence state:
+ * - Unified findings (alerts + AI findings)
+ * - Remediation plans
+ * - Circuit breaker status
+ */
 
-export interface FailurePattern {
-    key: string;
-    resource_id: string;
-    event_type: string;
-    occurrences: number;
-    average_interval: string;
-    average_duration: string;
-    last_occurrence: string;
-    confidence: number;
+import { createSignal } from 'solid-js';
+import { AIAPI } from '@/api/ai';
+import { acknowledgeFinding, snoozeFinding, dismissFinding, setFindingNote } from '@/api/patrol';
+import type {
+  RemediationPlan,
+  CircuitBreakerStatus,
+  UnifiedFindingRecord,
+  ApprovalRequest,
+  ApprovalExecutionResult,
+} from '@/api/ai';
+import { logger } from '@/utils/logger';
+
+// ============================================
+// Unified Findings
+// ============================================
+
+export interface UnifiedFinding {
+  id: string;
+  source: 'threshold' | 'ai-patrol' | 'ai-chat' | 'anomaly' | 'correlation' | 'forecast';
+  resourceId: string;
+  resourceName: string;
+  resourceType: string;
+  alertId?: string;
+  alertType?: string;
+  isThreshold?: boolean;
+  category: string;
+  severity: 'critical' | 'warning' | 'info' | 'watch';
+  title: string;
+  description: string;
+  recommendation?: string;
+  detectedAt: string;
+  resolvedAt?: string;
+  acknowledgedAt?: string;
+  snoozedUntil?: string;
+  dismissedReason?: string;
+  userNote?: string;
+  status: 'active' | 'resolved' | 'dismissed' | 'snoozed';
+  correlatedFindingIds?: string[];
+  remediationPlanId?: string;
+  // Investigation fields (Patrol Autonomy)
+  investigationSessionId?: string;
+  investigationStatus?: 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
+  investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix';
+  lastInvestigatedAt?: string;
+  investigationAttempts?: number;
 }
 
-export interface FailurePrediction {
-    resource_id: string;
-    resource_name?: string;
-    resource_type?: string;
-    event_type: string;
-    predicted_at: string;
-    days_until: number;
-    confidence: number;
-    basis: string;
-    is_overdue: boolean;
-}
+const [unifiedFindings, setUnifiedFindings] = createSignal<UnifiedFinding[]>([]);
+const [findingsLoading, setFindingsLoading] = createSignal(false);
+const [findingsError, setFindingsError] = createSignal<string | null>(null);
 
-export interface ResourceCorrelation {
-    source_id: string;
-    source_name: string;
-    source_type: string;
-    target_id: string;
-    target_name: string;
-    target_type: string;
-    event_pattern: string;
-    occurrences: number;
-    avg_delay: string;
-    confidence: number;
-    last_seen: string;
-    description: string;
-}
+// ============================================
+// Remediation Plans
+// ============================================
 
-export interface InfrastructureChange {
-    id: string;
-    resource_id: string;
-    resource_name: string;
-    resource_type: string;
-    change_type: string;
-    before: unknown;
-    after: unknown;
-    detected_at: string;
-    description: string;
-}
+const [remediationPlans, setRemediationPlans] = createSignal<RemediationPlan[]>([]);
+const [plansLoading, setPlansLoading] = createSignal(false);
 
-export interface ResourceBaseline {
-    key: string;
-    resource_id: string;
-    metric: string;
-    mean: number;
-    std_dev: number;
-    min: number;
-    max: number;
-    samples: number;
-    last_update: string;
-}
+// ============================================
+// Pending Approvals
+// ============================================
 
-export interface RemediationRecord {
-    id: string;
-    timestamp: string;
-    resource_id: string;
-    resource_type: string;
-    resource_name: string;
-    finding_id?: string;
-    problem: string;
-    summary?: string;  // AI-generated summary of what was achieved
-    action: string;
-    output?: string;
-    outcome: string;
-    duration_ms?: number;
-    note?: string;
-    automatic: boolean;
-}
+const [pendingApprovals, setPendingApprovals] = createSignal<ApprovalRequest[]>([]);
 
-export interface RemediationStats {
-    total: number;
-    resolved: number;
-    partial: number;
-    failed: number;
-    unknown: number;
-    automatic: number;
-    manual: number;
-}
+// ============================================
+// Circuit Breaker
+// ============================================
 
-// API response types
-interface LicenseGatedResponse {
-    license_required?: boolean;
-    upgrade_url?: string;
-    message?: string;
-}
+const [circuitBreakerStatus, setCircuitBreakerStatus] = createSignal<CircuitBreakerStatus | null>(null);
 
-export interface PatternsResponse extends LicenseGatedResponse {
-    patterns: FailurePattern[];
-    count: number;
-}
+// ============================================
+// Store API
+// ============================================
 
-export interface PredictionsResponse extends LicenseGatedResponse {
-    predictions: FailurePrediction[];
-    count: number;
-}
+export const aiIntelligenceStore = {
+  // Unified Findings
+  get findings() { return unifiedFindings(); },
+  get findingsLoading() { return findingsLoading(); },
+  get findingsError() { return findingsError(); },
+  findingsSignal: unifiedFindings,
 
-export interface CorrelationsResponse extends LicenseGatedResponse {
-    correlations: ResourceCorrelation[];
-    count: number;
-}
+  async loadFindings() {
+    setFindingsLoading(true);
+    setFindingsError(null);
+    try {
+      const resp = await AIAPI.getUnifiedFindings({ includeResolved: true });
+      const now = Date.now();
 
-export interface ChangesResponse extends LicenseGatedResponse {
-    changes: InfrastructureChange[];
-    count: number;
-    hours: number;
-}
+      const findings = (resp.findings || []).map((item: UnifiedFindingRecord): UnifiedFinding => {
+        let status = item.status as UnifiedFinding['status'] | undefined;
+        if (!status) {
+          if (item.resolved_at) {
+            status = 'resolved';
+          } else if (item.snoozed_until && new Date(item.snoozed_until).getTime() > now) {
+            status = 'snoozed';
+          } else if (item.dismissed_reason || item.suppressed) {
+            status = 'dismissed';
+          } else {
+            status = 'active';
+          }
+        }
 
-export interface BaselinesResponse extends LicenseGatedResponse {
-    baselines: ResourceBaseline[];
-    count: number;
-}
+        return {
+          id: item.id,
+          source: (item.source as UnifiedFinding['source']) || 'ai-patrol',
+          resourceId: item.resource_id,
+          resourceName: item.resource_name || item.resource_id,
+          resourceType: item.resource_type || 'unknown',
+          alertId: item.alert_id,
+          isThreshold: Boolean(item.is_threshold || item.source === 'threshold'),
+          category: item.category || 'general',
+          severity: (item.severity as UnifiedFinding['severity']) || 'info',
+          title: item.title,
+          description: item.description,
+          recommendation: item.recommendation,
+          detectedAt: item.detected_at,
+          resolvedAt: item.resolved_at,
+          acknowledgedAt: item.acknowledged_at,
+          snoozedUntil: item.snoozed_until,
+          dismissedReason: item.dismissed_reason,
+          userNote: item.user_note,
+          status,
+          correlatedFindingIds: item.correlated_ids,
+          remediationPlanId: item.remediation_id,
+          investigationSessionId: item.investigationSessionId || '',
+          investigationStatus: item.investigationStatus as UnifiedFinding['investigationStatus'],
+          investigationOutcome: item.investigationOutcome as UnifiedFinding['investigationOutcome'],
+          lastInvestigatedAt: item.lastInvestigatedAt || undefined,
+          investigationAttempts: item.investigationAttempts || 0,
+        };
+      });
 
-export interface RemediationsResponse extends LicenseGatedResponse {
-    remediations: RemediationRecord[];
-    count: number;
-    stats?: RemediationStats;
-}
+      setUnifiedFindings(findings);
+    } catch (e) {
+      logger.error('Failed to load unified findings:', e);
+      setFindingsError(e instanceof Error ? e.message : 'Failed to load findings');
+    } finally {
+      setFindingsLoading(false);
+    }
+  },
 
-// Real-time anomaly detection types
-export type AnomalySeverity = 'low' | 'medium' | 'high' | 'critical';
+  // Remediation Plans
+  get remediationPlans() { return remediationPlans(); },
+  get plansLoading() { return plansLoading(); },
+  remediationPlansSignal: remediationPlans,
 
-export interface AnomalyReport {
-    resource_id: string;
-    resource_name: string;
-    resource_type: string;
-    metric: string;
-    current_value: number;
-    baseline_mean: number;
-    baseline_std_dev: number;
-    z_score: number;
-    severity: AnomalySeverity;
-    description: string;
-}
+  async loadRemediationPlans() {
+    setPlansLoading(true);
+    try {
+      const resp = await AIAPI.getRemediationPlans();
+      setRemediationPlans(resp.plans || []);
+    } catch (e) {
+      logger.error('Failed to load remediation plans:', e);
+    } finally {
+      setPlansLoading(false);
+    }
+  },
 
-export interface AnomaliesResponse extends LicenseGatedResponse {
-    anomalies: AnomalyReport[];
-    count: number;
-    severity_counts: {
-        critical: number;
-        high: number;
-        medium: number;
-        low: number;
-    };
-}
+  async approvePlan(planId: string) {
+    try {
+      await AIAPI.approveRemediationPlan(planId);
+      await this.loadRemediationPlans();
+      return true;
+    } catch (e) {
+      logger.error('Failed to approve plan:', e);
+      return false;
+    }
+  },
 
-// Learning/baseline status for showing system intelligence state
-export type LearningStatus = 'waiting' | 'learning' | 'active';
+  async executePlan(planId: string) {
+    try {
+      const result = await AIAPI.executeRemediationPlan(planId);
+      await this.loadRemediationPlans();
+      return result;
+    } catch (e) {
+      logger.error('Failed to execute plan:', e);
+      throw e;
+    }
+  },
 
-export interface LearningStatusResponse {
-    resources_baselined: number;
-    total_metrics: number;
-    metric_breakdown: {
-        cpu?: number;
-        memory?: number;
-        disk?: number;
-    };
-    status: LearningStatus;
-    message: string;
-    license_required: boolean;
-}
+  async rollbackPlan(executionId: string) {
+    try {
+      await AIAPI.rollbackRemediationPlan(executionId);
+      await this.loadRemediationPlans();
+      return true;
+    } catch (e) {
+      logger.error('Failed to rollback plan:', e);
+      return false;
+    }
+  },
 
+  async acknowledgeFinding(findingId: string) {
+    try {
+      await acknowledgeFinding(findingId);
+      await this.loadFindings();
+      return true;
+    } catch (e) {
+      logger.error('Failed to acknowledge finding:', e);
+      return false;
+    }
+  },
 
-// ============================================================================
-// Unified Intelligence Types (for /api/ai/intelligence endpoint)
-// ============================================================================
+  async snoozeFinding(findingId: string, durationHours: number) {
+    try {
+      await snoozeFinding(findingId, durationHours);
+      await this.loadFindings();
+      return true;
+    } catch (e) {
+      logger.error('Failed to snooze finding:', e);
+      return false;
+    }
+  },
 
-export type HealthGrade = 'A' | 'B' | 'C' | 'D' | 'F';
-export type HealthTrend = 'improving' | 'stable' | 'declining';
+  async dismissFinding(
+    findingId: string,
+    reason: 'not_an_issue' | 'expected_behavior' | 'will_fix_later',
+    note?: string,
+  ) {
+    try {
+      await dismissFinding(findingId, reason, note);
+      await this.loadFindings();
+      return true;
+    } catch (e) {
+      logger.error('Failed to dismiss finding:', e);
+      return false;
+    }
+  },
 
-export interface HealthFactor {
-    name: string;
-    impact: number;  // -1 to 1, negative is bad, positive is good
-    description: string;
-    category: string;  // "finding", "prediction", "baseline", "learning"
-}
+  async setFindingNote(findingId: string, note: string) {
+    try {
+      await setFindingNote(findingId, note);
+      // Update local state immediately for responsiveness
+      setUnifiedFindings(prev =>
+        prev.map(f => f.id === findingId ? { ...f, userNote: note } : f),
+      );
+      return true;
+    } catch (e) {
+      logger.error('Failed to set finding note:', e);
+      return false;
+    }
+  },
 
-export interface HealthScore {
-    score: number;  // 0-100
-    grade: HealthGrade;
-    trend: HealthTrend;
-    factors: HealthFactor[];
-    prediction?: string;  // AI-predicted future state
-}
+  // Pending Approvals
+  get pendingApprovals() { return pendingApprovals(); },
+  pendingApprovalsSignal: pendingApprovals,
 
-export interface FindingsCounts {
-    total: number;
-    critical: number;
-    warning: number;
-    watch: number;
-    info: number;
-}
+  get pendingApprovalCount() {
+    return pendingApprovals().filter(a => a.status === 'pending').length;
+  },
 
-export interface LearningStats {
-    resources_with_knowledge: number;
-    total_notes: number;
-    resources_with_baselines: number;
-    patterns_detected: number;
-    correlations_learned: number;
-    incidents_tracked: number;
-}
+  get findingsWithPendingApprovals() {
+    const approvals = pendingApprovals().filter(a => a.status === 'pending');
+    const findingIds = new Set(approvals.filter(a => a.toolId === 'investigation_fix').map(a => a.targetId));
+    return unifiedFindings().filter(f => findingIds.has(f.id));
+  },
 
-export interface ResourceRiskSummary {
-    resource_id: string;
-    resource_name: string;
-    resource_type: string;
-    health: HealthScore;
-    top_issue: string;
-}
+  async loadPendingApprovals() {
+    try {
+      const approvals = await AIAPI.getPendingApprovals();
+      setPendingApprovals(approvals);
+    } catch (e) {
+      logger.error('Failed to load pending approvals:', e);
+    }
+  },
 
-// System-wide intelligence summary
-export interface IntelligenceSummary {
-    timestamp: string;
-    overall_health: HealthScore;
+  async approveInvestigationFix(approvalId: string): Promise<ApprovalExecutionResult | null> {
+    try {
+      const result = await AIAPI.approveInvestigationFix(approvalId);
+      await this.loadPendingApprovals();
+      await this.loadFindings();
+      return result;
+    } catch (e) {
+      logger.error('Failed to approve fix:', e);
+      return null;
+    }
+  },
 
-    // Findings overview
-    findings_count: FindingsCounts;
-    top_findings?: unknown[];  // Top N findings by severity
+  async denyInvestigationFix(approvalId: string, reason?: string) {
+    try {
+      await AIAPI.denyInvestigationFix(approvalId, reason);
+      await this.loadPendingApprovals();
+      return true;
+    } catch (e) {
+      logger.error('Failed to deny fix:', e);
+      return false;
+    }
+  },
 
-    // Predictions overview
-    predictions_count: number;
-    upcoming_risks?: FailurePrediction[];
+  // Circuit Breaker
+  get circuitBreakerStatus() { return circuitBreakerStatus(); },
+  circuitBreakerStatusSignal: circuitBreakerStatus,
 
-    // Recent activity
-    recent_changes_count: number;
-    recent_remediations?: RemediationRecord[];
+  async loadCircuitBreakerStatus() {
+    try {
+      const status = await AIAPI.getCircuitBreakerStatus();
+      setCircuitBreakerStatus(status);
+    } catch (e) {
+      logger.error('Failed to load circuit breaker status:', e);
+    }
+  },
 
-    // Learning progress
-    learning: LearningStats;
+  // Initialize - load all data
+  async initialize() {
+    await Promise.all([
+      this.loadFindings(),
+      this.loadRemediationPlans(),
+      this.loadCircuitBreakerStatus(),
+      this.loadPendingApprovals(),
+    ]);
+  },
 
-    // Resources needing attention
-    resources_at_risk?: ResourceRiskSummary[];
-}
+  // Refresh all data
+  async refresh() {
+    await this.initialize();
+  },
+};
 
-// Per-resource intelligence
-export interface ResourceIntelligence {
-    resource_id: string;
-    resource_name: string;
-    resource_type: string;
-
-    // Health score for this resource
-    health: HealthScore;
-
-    // Active findings for this resource
-    active_findings?: unknown[];
-
-    // Predictions for this resource
-    predictions?: FailurePrediction[];
-
-    // Correlations involving this resource
-    correlations?: ResourceCorrelation[];
-    dependencies?: string[];  // Resources this depends on
-    dependents?: string[];    // Resources that depend on this
-
-    // Baselines for this resource
-    baselines?: Record<string, ResourceBaseline>;
-
-    // Current anomalies
-    anomalies?: AnomalyReport[];
-
-    // Recent incidents
-    recent_incidents?: unknown[];
-
-    // Knowledge/notes
-    knowledge?: unknown;
-    note_count: number;
-}
+export default aiIntelligenceStore;

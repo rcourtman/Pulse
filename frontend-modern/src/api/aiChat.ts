@@ -175,17 +175,23 @@ export class AIChatAPI {
     sessionId: string | undefined,
     model: string | undefined,
     onEvent: (event: StreamEvent) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    mentions?: Array<{ id: string; name: string; type: string; node?: string }>
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
 
+    const body: Record<string, unknown> = {
+      prompt,
+      session_id: sessionId,
+      model,
+    };
+    if (mentions && mentions.length > 0) {
+      body.mentions = mentions;
+    }
+
     const response = await apiFetch(`${this.baseUrl}/chat`, {
       method: 'POST',
-      body: JSON.stringify({
-        prompt,
-        session_id: sessionId,
-        model,
-      }),
+      body: JSON.stringify(body),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',

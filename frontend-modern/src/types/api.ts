@@ -599,19 +599,6 @@ export interface Storage {
   zfsPool?: ZFSPool;
 }
 
-export interface StorageConfigEntry {
-  id: string;
-  name: string;
-  instance?: string;
-  type?: string;
-  content?: string;
-  nodes?: string[];
-  path?: string;
-  shared: boolean;
-  enabled: boolean;
-  active: boolean;
-}
-
 export interface CephCluster {
   id: string;
   instance: string;

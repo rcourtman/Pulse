@@ -342,6 +342,12 @@ export interface UnifiedFindingRecord {
   ai_confidence?: number;
   enhanced_by_ai?: boolean;
   ai_enhanced_at?: string;
+  // Investigation fields (camelCase from API)
+  investigationSessionId?: string;
+  investigationStatus?: string;
+  investigationOutcome?: string;
+  lastInvestigatedAt?: string;
+  investigationAttempts?: number;
   detected_at: string;
   last_seen_at?: string;
   resolved_at?: string;

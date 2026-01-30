@@ -5,6 +5,9 @@
  * - Pulse Patrol Findings (AI-discovered insights)
  * - Threshold Alerts (user-configured rules)
  * Each section has severity-based sorting and quick actions
+ *
+ * Investigation and approval details are shown inline via
+ * InvestigationSection and ApprovalSection components.
  */
 
 import { Component, createSignal, createEffect, Show, For, createMemo } from 'solid-js';
@@ -12,9 +15,10 @@ import { useLocation } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
-import { InvestigationDrawer } from './InvestigationDrawer';
+import { aiChatStore } from '@/stores/aiChat';
+import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { investigationStatusLabels, investigationOutcomeLabels, type InvestigationStatus } from '@/api/patrol';
-import { AIAPI, type RemediationPlan, type ApprovalRequest, type ApprovalExecutionResult, type InvestigationSession } from '@/api/ai';
+import { AIAPI, type RemediationPlan } from '@/api/ai';
 
 // Severity priority for sorting (lower number = higher priority)
 const severityOrder: Record<string, number> = {
@@ -66,7 +70,7 @@ interface FindingsPanelProps {
   showResolved?: boolean;
   maxItems?: number;
   onFindingClick?: (finding: UnifiedFinding) => void;
-  filterOverride?: 'all' | 'active' | 'resolved';
+  filterOverride?: 'all' | 'active' | 'resolved' | 'approvals';
   filterFindingIds?: string[];
   showControls?: boolean;
   nextPatrolAt?: string;
@@ -79,111 +83,19 @@ interface FindingsPanelProps {
 
 export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const location = useLocation();
-  const [filter, setFilter] = createSignal<'all' | 'active' | 'resolved'>(props.filterOverride ?? 'active');
+  const [filter, setFilter] = createSignal<'all' | 'active' | 'resolved' | 'approvals'>(props.filterOverride ?? 'active');
   const [sortBy, setSortBy] = createSignal<'severity' | 'time'>('severity');
   const [expandedId, setExpandedId] = createSignal<string | null>(null);
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
   const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = createSignal<string | null>(null);
+  const [noteText, setNoteText] = createSignal('');
 
-  // Investigation drawer state
-  const [investigationDrawerOpen, setInvestigationDrawerOpen] = createSignal(false);
-  const [selectedFindingForInvestigation, setSelectedFindingForInvestigation] = createSignal<UnifiedFinding | null>(null);
-
-  // Investigation fix approvals state (real fixes that can be executed)
-  const [pendingApprovals, setPendingApprovals] = createSignal<ApprovalRequest[]>([]);
-  const [approvalActionLoading, setApprovalActionLoading] = createSignal<string | null>(null);
-  // Store execution results by approval ID so we can display them
-  const [executionResults, setExecutionResults] = createSignal<Map<string, ApprovalExecutionResult>>(new Map());
-
-  // Approve and execute an investigation fix
-  const handleApproveInvestigationFix = async (approval: ApprovalRequest, e: Event) => {
-    e.stopPropagation();
-    setApprovalActionLoading(approval.id);
-    try {
-      const result = await AIAPI.approveInvestigationFix(approval.id);
-
-      // Store the execution result
-      setExecutionResults(prev => {
-        const newMap = new Map(prev);
-        newMap.set(approval.id, result);
-        return newMap;
-      });
-
-      if (result.success) {
-        notificationStore.success('Fix executed successfully');
-      } else {
-        notificationStore.error(result.error || 'Fix execution failed');
-      }
-
-      // Reload approvals to get updated status
-      const approvals = await AIAPI.getPendingApprovals();
-      setPendingApprovals(approvals);
-      // Reload findings in case status changed
-      aiIntelligenceStore.loadFindings();
-    } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to execute fix');
-    } finally {
-      setApprovalActionLoading(null);
-    }
-  };
-
-  const handleDenyInvestigationFix = async (approval: ApprovalRequest, e: Event) => {
-    e.stopPropagation();
-    setApprovalActionLoading(approval.id);
-    try {
-      await AIAPI.denyInvestigationFix(approval.id);
-      notificationStore.success('Fix denied');
-      // Reload approvals
-      const approvals = await AIAPI.getPendingApprovals();
-      setPendingApprovals(approvals);
-    } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to deny fix');
-    } finally {
-      setApprovalActionLoading(null);
-    }
-  };
-
-  // Investigation details cache (for showing proposed fixes when approval expired)
-  const [investigationDetails, setInvestigationDetails] = createSignal<Map<string, InvestigationSession>>(new Map());
-  const [reapproveLoading, setReapproveLoading] = createSignal<string | null>(null);
-
-  // Handle re-approve for expired approvals
-  const handleReapproveAndExecute = async (findingId: string, e: Event) => {
-    e.stopPropagation();
-    setReapproveLoading(findingId);
-    try {
-      // Create a new approval
-      const result = await AIAPI.reapproveInvestigationFix(findingId);
-      // Now approve and execute it
-      const execResult = await AIAPI.approveInvestigationFix(result.approval_id);
-
-      // Store the execution result
-      setExecutionResults(prev => {
-        const newMap = new Map(prev);
-        newMap.set(result.approval_id, execResult);
-        return newMap;
-      });
-
-      if (execResult.success) {
-        notificationStore.success('Fix executed successfully');
-      } else {
-        notificationStore.error(execResult.error || 'Fix execution failed');
-      }
-
-      // Reload findings in case status changed
-      aiIntelligenceStore.loadFindings();
-    } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to execute fix');
-    } finally {
-      setReapproveLoading(null);
-    }
-  };
-
-  // Keep remediation plans for backwards compatibility (generic plans without real execution)
+  // Legacy remediation plans (generic plans without real execution)
   const [remediationPlans, setRemediationPlans] = createSignal<RemediationPlan[]>([]);
   const [planActionLoading, setPlanActionLoading] = createSignal<string | null>(null);
 
-  // Remediation plan actions (legacy - these don't actually execute anything real)
+  // Remediation plan actions (legacy)
   const handleApprovePlan = async (plan: RemediationPlan, e: Event) => {
     e.stopPropagation();
     setPlanActionLoading(plan.id);
@@ -218,24 +130,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     notificationStore.success('Remediation plan dismissed');
   };
 
-  const openInvestigationDrawer = (finding: UnifiedFinding, e: Event) => {
-    e.stopPropagation();
-    setSelectedFindingForInvestigation(finding);
-    setInvestigationDrawerOpen(true);
-  };
-
-  // Map of finding_id -> pending approval (investigation fixes)
-  const approvalsByFindingId = createMemo(() => {
-    const map = new Map<string, ApprovalRequest>();
-    for (const approval of pendingApprovals()) {
-      // Investigation fix approvals have targetId = finding ID
-      if (approval.toolId === 'investigation_fix') {
-        map.set(approval.targetId, approval);
-      }
-    }
-    return map;
-  });
-
   // Map of finding_id -> remediation plan (legacy plans)
   const plansByFindingId = createMemo(() => {
     const map = new Map<string, RemediationPlan>();
@@ -245,43 +139,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     return map;
   });
 
-  // Load findings, pending approvals, and remediation plans on mount
+  // Load findings and remediation plans on mount
   createEffect(() => {
     aiIntelligenceStore.loadFindings();
-    // Fetch real investigation fix approvals
-    AIAPI.getPendingApprovals()
-      .then(approvals => setPendingApprovals(approvals))
-      .catch(() => {}); // Silently ignore errors
     // Fetch legacy remediation plans
     AIAPI.getRemediationPlans()
       .then((response: { plans: RemediationPlan[] }) => setRemediationPlans(response.plans))
       .catch(() => {}); // Silently ignore errors
-  });
-
-  // Fetch investigation details for findings with fix_queued outcome but no pending approval
-  createEffect(() => {
-    const findings = aiIntelligenceStore.findings;
-    const approvals = approvalsByFindingId();
-
-    // Find findings that have fix_queued but no pending approval
-    const findingsNeedingDetails = findings.filter(f =>
-      f.investigationOutcome === 'fix_queued' &&
-      !approvals.has(f.id) &&
-      !investigationDetails().has(f.id)
-    );
-
-    // Fetch investigation details for each
-    for (const finding of findingsNeedingDetails) {
-      AIAPI.getInvestigation(finding.id).then(inv => {
-        if (inv?.proposed_fix) {
-          setInvestigationDetails(prev => {
-            const newMap = new Map(prev);
-            newMap.set(finding.id, inv);
-            return newMap;
-          });
-        }
-      }).catch(() => {});
-    }
   });
 
   createEffect(() => {
@@ -304,6 +168,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       findings = findings.filter(f => f.status === 'active');
     } else if (filter() === 'resolved') {
       findings = findings.filter(f => f.status === 'resolved' || f.status === 'dismissed');
+    } else if (filter() === 'approvals') {
+      const approvalFindingIds = new Set(aiIntelligenceStore.findingsWithPendingApprovals.map(f => f.id));
+      findings = findings.filter(f => approvalFindingIds.has(f.id));
     }
 
     // Filter by specific finding IDs if provided
@@ -315,12 +182,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     // Sort
     findings.sort((a, b) => {
       if (sortBy() === 'severity') {
-        // Sort by urgency: critical (0) first, then warning (1), watch (2), info (3)
         const aPriority = severityOrder[a.severity] ?? 4;
         const bPriority = severityOrder[b.severity] ?? 4;
         if (aPriority !== bPriority) return aPriority - bPriority;
       }
-      // Secondary sort by time (most recent first)
       return new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
     });
 
@@ -413,6 +278,38 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
   };
 
+  const handleStartEditNote = (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    setEditingNoteId(finding.id);
+    setNoteText(finding.userNote || '');
+  };
+
+  const handleSaveNote = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    setActionLoading(finding.id);
+    const ok = await aiIntelligenceStore.setFindingNote(finding.id, noteText());
+    setActionLoading(null);
+    if (ok) {
+      setEditingNoteId(null);
+      notificationStore.success('Note saved');
+    } else {
+      notificationStore.error('Failed to save note');
+    }
+  };
+
+  const handleCancelNote = (e: Event) => {
+    e.stopPropagation();
+    setEditingNoteId(null);
+  };
+
+  const handleDiscussWithAssistant = (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    aiChatStore.openWithPrompt(
+      `I'd like to discuss this Patrol finding: "${finding.title}" on ${finding.resourceName}.\n\n${finding.description}`,
+      { targetType: finding.resourceType, targetId: finding.resourceId, findingId: finding.id },
+    );
+  };
+
   const formatTime = (isoString: string) => {
     const date = new Date(isoString);
     const now = new Date();
@@ -444,7 +341,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const getResolutionReason = (finding: UnifiedFinding): string => {
     const resolvedTime = finding.resolvedAt ? formatTime(finding.resolvedAt) : '';
 
-    // For threshold alerts, provide specific reasons based on alert type
     if (finding.isThreshold || finding.source === 'threshold') {
       const alertType = finding.alertType || '';
       switch (alertType) {
@@ -465,16 +361,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       }
     }
 
-    // For AI patrol findings
     if (finding.source === 'ai-patrol') {
       return `Issue no longer detected ${resolvedTime}`;
     }
 
-    // Generic fallback
     return `Resolved ${resolvedTime}`;
   };
 
-  // Render a single finding item (shared between both sections)
+  // Render a single finding item
   const renderFindingItem = (finding: UnifiedFinding, showSourceBadge: boolean = false) => (
     <div
       id={`finding-${finding.id}`}
@@ -612,19 +506,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </svg>
             </button>
           </Show>
-          {/* Investigation button - show for findings with investigation data */}
-          <Show when={finding.investigationSessionId}>
-            <button
-              type="button"
-              onClick={(e) => openInvestigationDrawer(finding, e)}
-              class="p-1 text-purple-500 hover:text-purple-700 dark:hover:text-purple-300"
-              title="View investigation"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-            </button>
-          </Show>
           {/* Expand indicator */}
           <svg
             class={`w-4 h-4 text-gray-400 transition-transform ${expandedId() === finding.id ? 'rotate-180' : ''}`}
@@ -644,7 +525,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     </div>
   );
 
-  // Render expanded content for a finding (extracted for reuse)
+  // Render expanded content for a finding
   const renderExpandedContent = (finding: UnifiedFinding) => (
     <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
       <Show when={finding.alertId}>
@@ -660,6 +541,81 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <span class="font-medium">Recommendation:</span> {finding.recommendation}
         </p>
       </Show>
+
+      {/* User note display / editor */}
+      <Show when={editingNoteId() === finding.id}>
+        <div class="mt-3 p-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20" onClick={(e) => e.stopPropagation()}>
+          <textarea
+            class="w-full text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+            rows={3}
+            value={noteText()}
+            onInput={(e) => setNoteText(e.currentTarget.value)}
+            placeholder="Add context for Patrol (e.g., 'PBS server was decommissioned last week')"
+          />
+          <div class="flex gap-2 mt-2">
+            <button
+              type="button"
+              onClick={(e) => handleSaveNote(finding, e)}
+              class="px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+              disabled={actionLoading() === finding.id}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelNote}
+              class="px-3 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Show>
+      <Show when={editingNoteId() !== finding.id && finding.userNote}>
+        <div class="mt-3 p-2 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-start gap-2">
+          <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+          </svg>
+          <p class="text-sm text-gray-600 dark:text-gray-400 flex-1">{finding.userNote}</p>
+          <button
+            type="button"
+            onClick={(e) => handleStartEditNote(finding, e)}
+            class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+            title="Edit note"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+        </div>
+      </Show>
+
+      {/* Add Note / Discuss with Assistant buttons */}
+      <div class="mt-3 flex flex-wrap gap-2 text-xs">
+        <Show when={editingNoteId() !== finding.id && !finding.userNote}>
+          <button
+            type="button"
+            onClick={(e) => handleStartEditNote(finding, e)}
+            class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-1"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+            </svg>
+            Add Note
+          </button>
+        </Show>
+        <button
+          type="button"
+          onClick={(e) => handleDiscussWithAssistant(finding, e)}
+          class="px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 flex items-center gap-1"
+        >
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          Discuss with Assistant
+        </button>
+      </div>
+
       <Show when={finding.status === 'active'}>
         <div class="mt-3 flex flex-wrap gap-2 text-xs">
           <button
@@ -725,161 +681,30 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           Related findings: {finding.correlatedFindingIds?.length}
         </div>
       </Show>
-      {/* Investigation Fix Approval - real fixes that can be executed */}
-      <Show when={finding.status === 'active' && approvalsByFindingId().get(finding.id)}>
-        {(approval) => {
-          const result = () => executionResults().get(approval().id);
-          return (
-            <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-              <div class="flex items-center gap-2 mb-2">
-                <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Fix Available</span>
-                <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                  approval().riskLevel === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
-                  approval().riskLevel === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
-                  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                }`}>
-                  {approval().riskLevel} risk
-                </span>
-              </div>
 
-              <div class="space-y-2 text-sm">
-                <div class="text-gray-600 dark:text-gray-400">
-                  {approval().context}
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-800 rounded p-2 font-mono text-xs text-gray-700 dark:text-gray-300 break-all">
-                  {approval().command}
-                </div>
-              </div>
-
-              {/* Show execution result if available */}
-              <Show when={result()}>
-                {(res) => (
-                  <div class={`mt-2 p-2 rounded text-xs ${
-                    res().success
-                      ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-                      : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
-                  }`}>
-                    <div class="font-medium mb-1">{res().success ? 'Fix executed successfully' : 'Fix failed'}</div>
-                    <Show when={res().output}>
-                      <div class="bg-white dark:bg-gray-900 rounded p-2 font-mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap">
-                        {res().output}
-                      </div>
-                    </Show>
-                    <Show when={res().error}>
-                      <div class="text-red-600 dark:text-red-400 mt-1">{res().error}</div>
-                    </Show>
-                  </div>
-                )}
-              </Show>
-
-              {/* Action buttons */}
-              <Show when={!result()}>
-                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                  <button
-                    type="button"
-                    onClick={(e) => handleApproveInvestigationFix(approval(), e)}
-                    disabled={approvalActionLoading() === approval().id}
-                    class="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
-                  >
-                    <Show when={approvalActionLoading() === approval().id}>
-                      <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    </Show>
-                    <Show when={approvalActionLoading() !== approval().id}>
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </Show>
-                    Approve & Execute
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleDenyInvestigationFix(approval(), e)}
-                    disabled={approvalActionLoading() === approval().id}
-                    class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50 text-gray-600 dark:text-gray-400 text-xs font-medium rounded"
-                  >
-                    Deny
-                  </button>
-                </div>
-              </Show>
-            </div>
-          );
-        }}
+      {/* Inline Investigation Section (replaces drawer) */}
+      <Show when={finding.investigationSessionId}>
+        <InvestigationSection
+          findingId={finding.id}
+          investigationStatus={finding.investigationStatus}
+          investigationOutcome={finding.investigationOutcome}
+        />
       </Show>
 
-      {/* Proposed Fix from Investigation (when approval expired) */}
-      <Show when={
-        finding.status === 'active' &&
-        finding.investigationOutcome === 'fix_queued' &&
-        !approvalsByFindingId().get(finding.id) &&
-        investigationDetails().get(finding.id)?.proposed_fix
-      }>
-        {(() => {
-          const inv = () => investigationDetails().get(finding.id)!;
-          const fix = () => inv().proposed_fix!;
-          return (
-            <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-              <div class="flex items-center gap-2 mb-2">
-                <svg class="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Fix Pending Approval</span>
-                <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                  fix().risk_level === 'high' || fix().risk_level === 'critical' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
-                  fix().risk_level === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
-                  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                }`}>
-                  {fix().risk_level || 'unknown'} risk
-                </span>
-                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                  approval expired
-                </span>
-              </div>
-
-              <div class="space-y-2 text-sm">
-                <div class="text-gray-600 dark:text-gray-400">
-                  {fix().description || 'Proposed fix from investigation'}
-                </div>
-                <Show when={fix().commands && fix().commands!.length > 0}>
-                  <div class="bg-gray-50 dark:bg-gray-800 rounded p-2 font-mono text-xs text-gray-700 dark:text-gray-300 break-all">
-                    {fix().commands![0]}
-                  </div>
-                </Show>
-                <Show when={fix().target_host}>
-                  <div class="text-xs text-gray-500 dark:text-gray-400">
-                    Target: {fix().target_host}
-                  </div>
-                </Show>
-              </div>
-
-              {/* Action buttons */}
-              <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                <button
-                  type="button"
-                  onClick={(e) => handleReapproveAndExecute(finding.id, e)}
-                  disabled={reapproveLoading() === finding.id}
-                  class="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
-                >
-                  <Show when={reapproveLoading() === finding.id}>
-                    <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  </Show>
-                  <Show when={reapproveLoading() !== finding.id}>
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </Show>
-                  Approve & Execute
-                </button>
-              </div>
-            </div>
-          );
-        })()}
+      {/* Inline Approval Section (replaces manual approval JSX) */}
+      <Show when={finding.status === 'active' && (
+        finding.investigationOutcome === 'fix_queued' ||
+        finding.investigationOutcome === 'fix_executed' ||
+        finding.investigationOutcome === 'fix_failed'
+      )}>
+        <ApprovalSection
+          findingId={finding.id}
+          investigationOutcome={finding.investigationOutcome}
+        />
       </Show>
 
-      {/* Legacy Remediation Plan - only shown if no investigation fix approval exists */}
-      <Show when={finding.status === 'active' && !approvalsByFindingId().get(finding.id) && !investigationDetails().get(finding.id)?.proposed_fix && plansByFindingId().get(finding.id)}>
+      {/* Legacy Remediation Plan - only shown if no investigation fix exists */}
+      <Show when={finding.status === 'active' && !finding.investigationOutcome && plansByFindingId().get(finding.id)}>
         {(plan) => (
           <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
             <div class="flex items-center gap-2 mb-2">
@@ -917,7 +742,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </For>
             </div>
 
-            {/* Action buttons for pending plans */}
             <Show when={plan().status === 'pending'}>
               <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
                 <button
@@ -947,7 +771,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </div>
             </Show>
 
-            {/* Status indicators for non-pending plans */}
             <Show when={plan().status === 'executing'}>
               <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 text-amber-600 dark:text-amber-400">
                 <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -974,24 +797,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
           </div>
         )}
-      </Show>
-      {/* Investigation link */}
-      <Show when={finding.investigationSessionId}>
-        <div class="mt-2">
-          <button
-            type="button"
-            onClick={(e) => openInvestigationDrawer(finding, e)}
-            class="text-xs text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
-          >
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-            View investigation details
-            <Show when={finding.investigationStatus === 'running'}>
-              <span class="ml-1 h-2 w-2 border border-purple-400 border-t-transparent rounded-full animate-spin" />
-            </Show>
-          </button>
-        </div>
       </Show>
     </div>
   );
@@ -1025,13 +830,25 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={() => setFilter('resolved')}
-              class={`px-2 py-1 rounded-r border ${filter() === 'resolved'
+              class={`px-2 py-1 border ${filter() === 'resolved'
                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                } ${aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r'}`}
             >
               Resolved
             </button>
+            <Show when={aiIntelligenceStore.pendingApprovalCount > 0}>
+              <button
+                type="button"
+                onClick={() => setFilter('approvals')}
+                class={`px-2 py-1 rounded-r border ${filter() === 'approvals'
+                  ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+              >
+                Approvals ({aiIntelligenceStore.pendingApprovalCount})
+              </button>
+            </Show>
           </div>
           <select
             value={sortBy()}
@@ -1134,23 +951,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </div>
         </Card>
       </Show>
-
-      {/* Investigation Drawer */}
-      <InvestigationDrawer
-        open={investigationDrawerOpen()}
-        onClose={() => {
-          setInvestigationDrawerOpen(false);
-          setSelectedFindingForInvestigation(null);
-        }}
-        findingId={selectedFindingForInvestigation()?.id}
-        findingTitle={selectedFindingForInvestigation()?.title}
-        findingSeverity={selectedFindingForInvestigation()?.severity as 'critical' | 'warning' | 'watch' | 'info'}
-        resourceName={selectedFindingForInvestigation()?.resourceName}
-        resourceType={selectedFindingForInvestigation()?.resourceType}
-        onReinvestigate={() => {
-          aiIntelligenceStore.loadFindings();
-        }}
-      />
     </div>
   );
 };

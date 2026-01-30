@@ -30,7 +30,6 @@ export interface AISettings {
   patrol_schedule_preset?: string; // DEPRECATED: use patrol_interval_minutes
   patrol_interval_minutes?: number; // Patrol interval in minutes (0 = disabled, minimum 10)
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
-  patrol_auto_fix?: boolean; // true if patrol can attempt automatic remediation
   available_models?: ModelInfo[]; // DEPRECATED: use /api/ai/models endpoint
   // Multi-provider configuration
   anthropic_configured: boolean; // true if Anthropic API key or OAuth is set
@@ -74,7 +73,6 @@ export interface AISettingsUpdateRequest {
   patrol_schedule_preset?: string; // DEPRECATED: use patrol_interval_minutes
   patrol_interval_minutes?: number; // Custom interval in minutes (0 = disabled, minimum 10)
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
-  patrol_auto_fix?: boolean; // true if patrol can attempt automatic remediation
   // Multi-provider credentials
   anthropic_api_key?: string; // Set Anthropic API key
   openai_api_key?: string; // Set OpenAI API key

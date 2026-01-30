@@ -9,11 +9,13 @@
 
 import { createSignal } from 'solid-js';
 import { AIAPI } from '@/api/ai';
-import { acknowledgeFinding, snoozeFinding, dismissFinding } from '@/api/patrol';
+import { acknowledgeFinding, snoozeFinding, dismissFinding, setFindingNote } from '@/api/patrol';
 import type {
   RemediationPlan,
   CircuitBreakerStatus,
   UnifiedFindingRecord,
+  ApprovalRequest,
+  ApprovalExecutionResult,
 } from '@/api/ai';
 import { logger } from '@/utils/logger';
 
@@ -47,7 +49,7 @@ export interface UnifiedFinding {
   // Investigation fields (Patrol Autonomy)
   investigationSessionId?: string;
   investigationStatus?: 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-  investigationOutcome?: 'resolved' | 'fix_queued' | 'needs_attention' | 'cannot_fix';
+  investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix';
   lastInvestigatedAt?: string;
   investigationAttempts?: number;
 }
@@ -62,6 +64,12 @@ const [findingsError, setFindingsError] = createSignal<string | null>(null);
 
 const [remediationPlans, setRemediationPlans] = createSignal<RemediationPlan[]>([]);
 const [plansLoading, setPlansLoading] = createSignal(false);
+
+// ============================================
+// Pending Approvals
+// ============================================
+
+const [pendingApprovals, setPendingApprovals] = createSignal<ApprovalRequest[]>([]);
 
 // ============================================
 // Circuit Breaker
@@ -123,6 +131,11 @@ export const aiIntelligenceStore = {
           status,
           correlatedFindingIds: item.correlated_ids,
           remediationPlanId: item.remediation_id,
+          investigationSessionId: item.investigationSessionId || '',
+          investigationStatus: item.investigationStatus as UnifiedFinding['investigationStatus'],
+          investigationOutcome: item.investigationOutcome as UnifiedFinding['investigationOutcome'],
+          lastInvestigatedAt: item.lastInvestigatedAt || undefined,
+          investigationAttempts: item.investigationAttempts || 0,
         };
       });
 
@@ -222,6 +235,66 @@ export const aiIntelligenceStore = {
     }
   },
 
+  async setFindingNote(findingId: string, note: string) {
+    try {
+      await setFindingNote(findingId, note);
+      // Update local state immediately for responsiveness
+      setUnifiedFindings(prev =>
+        prev.map(f => f.id === findingId ? { ...f, userNote: note } : f),
+      );
+      return true;
+    } catch (e) {
+      logger.error('Failed to set finding note:', e);
+      return false;
+    }
+  },
+
+  // Pending Approvals
+  get pendingApprovals() { return pendingApprovals(); },
+  pendingApprovalsSignal: pendingApprovals,
+
+  get pendingApprovalCount() {
+    return pendingApprovals().filter(a => a.status === 'pending').length;
+  },
+
+  get findingsWithPendingApprovals() {
+    const approvals = pendingApprovals().filter(a => a.status === 'pending');
+    const findingIds = new Set(approvals.filter(a => a.toolId === 'investigation_fix').map(a => a.targetId));
+    return unifiedFindings().filter(f => findingIds.has(f.id));
+  },
+
+  async loadPendingApprovals() {
+    try {
+      const approvals = await AIAPI.getPendingApprovals();
+      setPendingApprovals(approvals);
+    } catch (e) {
+      logger.error('Failed to load pending approvals:', e);
+    }
+  },
+
+  async approveInvestigationFix(approvalId: string): Promise<ApprovalExecutionResult | null> {
+    try {
+      const result = await AIAPI.approveInvestigationFix(approvalId);
+      await this.loadPendingApprovals();
+      await this.loadFindings();
+      return result;
+    } catch (e) {
+      logger.error('Failed to approve fix:', e);
+      return null;
+    }
+  },
+
+  async denyInvestigationFix(approvalId: string, reason?: string) {
+    try {
+      await AIAPI.denyInvestigationFix(approvalId, reason);
+      await this.loadPendingApprovals();
+      return true;
+    } catch (e) {
+      logger.error('Failed to deny fix:', e);
+      return false;
+    }
+  },
+
   // Circuit Breaker
   get circuitBreakerStatus() { return circuitBreakerStatus(); },
   circuitBreakerStatusSignal: circuitBreakerStatus,
@@ -241,6 +314,7 @@ export const aiIntelligenceStore = {
       this.loadFindings(),
       this.loadRemediationPlans(),
       this.loadCircuitBreakerStatus(),
+      this.loadPendingApprovals(),
     ]);
   },
 

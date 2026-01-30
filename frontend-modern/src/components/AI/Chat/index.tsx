@@ -49,6 +49,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [mentionQuery, setMentionQuery] = createSignal('');
   const [mentionStartIndex, setMentionStartIndex] = createSignal(0);
   const [mentionResources, setMentionResources] = createSignal<MentionResource[]>([]);
+  const [accumulatedMentions, setAccumulatedMentions] = createSignal<MentionResource[]>([]);
   let textareaRef: HTMLTextAreaElement | undefined;
 
   const loadModelSelections = (): Record<string, string> => {
@@ -252,6 +253,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   });
 
+  // Pre-fill input when opened with an initialPrompt (e.g., "Discuss with Assistant" from findings)
+  createEffect(() => {
+    const ctx = aiChatStore.context;
+    if (ctx.initialPrompt && isOpen()) {
+      setInput(ctx.initialPrompt);
+      // Clear so it doesn't re-fire on subsequent opens
+      aiChatStore.clearInitialPrompt?.();
+    }
+  });
+
   // Compute current status for display
   const currentStatus = createMemo(() => {
     if (!chat.isLoading()) return null;
@@ -393,8 +404,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (chat.isLoading()) return;
     const prompt = input().trim();
     if (!prompt) return;
-    chat.sendMessage(prompt);
+    const mentions = accumulatedMentions();
+    chat.sendMessage(prompt, mentions.length > 0 ? mentions : undefined);
     setInput('');
+    setAccumulatedMentions([]);
     setMentionActive(false);
   };
 
@@ -440,6 +453,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     setInput(newValue);
     setMentionActive(false);
+
+    // Accumulate the structured mention data so we can send it with the prompt
+    setAccumulatedMentions(prev => {
+      // Deduplicate by id
+      if (prev.some(m => m.id === resource.id)) return prev;
+      return [...prev, resource];
+    });
 
     // Focus textarea and set cursor position after the inserted name
     setTimeout(() => {
