@@ -20,21 +20,35 @@ func TestExtractFacts_InvalidJSON(t *testing.T) {
 }
 
 func TestExtractFacts_QueryGet(t *testing.T) {
-	input := map[string]interface{}{"action": "get", "resource_type": "lxc"}
+	input := map[string]interface{}{"action": "get", "resource_type": "lxc", "resource_id": "106"}
 	// Actual format from NewJSONResult(ResourceResponse): direct JSON, no wrapper.
 	// CPU/Memory are nested structs.
 	result := `{"type":"lxc","name":"postfix-server","status":"running","node":"delly","id":"lxc/106","vmid":106,"cpu":{"percent":2.5,"cores":4},"memory":{"percent":45.0,"used_gb":1.2,"total_gb":4.0}}`
 
 	facts := ExtractFacts("pulse_query", input, result)
-	require.Len(t, facts, 1)
+	require.Len(t, facts, 2) // primary + cached key
 
 	f := facts[0]
 	assert.Equal(t, FactCategoryResource, f.Category)
-	assert.Equal(t, "lxc:delly:lxc/106:status", f.Key)
+	assert.Equal(t, "lxc:delly:106:status", f.Key)
 	assert.Contains(t, f.Value, "running")
 	assert.Contains(t, f.Value, "postfix-server")
 	assert.Contains(t, f.Value, "CPU=2.5%")
 	assert.Contains(t, f.Value, "Mem=45.0%")
+
+	// Secondary cached fact
+	assert.Equal(t, "query:get:106:cached", facts[1].Key)
+	assert.Equal(t, FactCategoryResource, facts[1].Category)
+}
+
+func TestExtractFacts_QueryGet_NoResourceID(t *testing.T) {
+	// Without resource_id in input, only primary fact should be emitted (no cached key)
+	input := map[string]interface{}{"action": "get", "resource_type": "lxc"}
+	result := `{"type":"lxc","name":"postfix-server","status":"running","node":"delly","id":"lxc/106","vmid":106,"cpu":{"percent":2.5,"cores":4},"memory":{"percent":45.0,"used_gb":1.2,"total_gb":4.0}}`
+
+	facts := ExtractFacts("pulse_query", input, result)
+	require.Len(t, facts, 1) // only primary fact
+	assert.Equal(t, "lxc:delly:106:status", facts[0].Key)
 }
 
 func TestExtractFacts_QueryGet_NotFound(t *testing.T) {
@@ -132,16 +146,37 @@ func TestExtractFacts_StoragePools(t *testing.T) {
 
 func TestExtractFacts_BackupTasks_OnlyFailures(t *testing.T) {
 	input := map[string]interface{}{"action": "backup_tasks"}
-	result := `{"tasks":[{"vmid":"106","node":"delly","status":"ok"},{"vmid":"200","node":"minipc","status":"failed","start_time":"2024-01-15T03:00","error":"snapshot failed"}]}`
+	result := `{"tasks":[{"vmid":106,"node":"delly","status":"OK"},{"vmid":200,"node":"minipc","status":"failed","start_time":"2024-01-15T03:00","error":"snapshot failed"}],"total":2}`
 
 	facts := ExtractFacts("pulse_storage", input, result)
-	require.Len(t, facts, 1)
+	require.Len(t, facts, 2) // marker + 1 failure
 
-	f := facts[0]
+	// Marker fact
+	assert.Equal(t, "backup_tasks:queried", facts[0].Key)
+	assert.Equal(t, "2 tasks, 1 failed", facts[0].Value)
+
+	// Failure fact
+	f := facts[1]
 	assert.Equal(t, FactCategoryStorage, f.Category)
 	assert.Equal(t, "backup:200:minipc", f.Key)
 	assert.Contains(t, f.Value, "failed")
 	assert.Contains(t, f.Value, "snapshot failed")
+}
+
+func TestExtractFacts_BackupTasks_AllOK(t *testing.T) {
+	input := map[string]interface{}{"action": "backup_tasks"}
+	result := `{"tasks":[{"vmid":106,"node":"delly","status":"OK"},{"vmid":200,"node":"minipc","status":"success"}],"total":2}`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 1) // marker only (no failures)
+	assert.Equal(t, "backup_tasks:queried", facts[0].Key)
+	assert.Equal(t, "2 tasks, 0 failed", facts[0].Value)
+}
+
+func TestPredictFactKeys_BackupTasks(t *testing.T) {
+	keys := PredictFactKeys("pulse_storage", map[string]interface{}{"action": "backup_tasks"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "backup_tasks:queried", keys[0])
 }
 
 func TestExtractFacts_Discovery(t *testing.T) {
@@ -272,7 +307,7 @@ func TestPredictFactKeys_Metrics(t *testing.T) {
 }
 
 func TestPredictFactKeys_UnpredictableTools(t *testing.T) {
-	// pulse_query get/search keys depend on result data
+	// pulse_query get without resource_id / search without query are unpredictable
 	assert.Nil(t, PredictFactKeys("pulse_query", map[string]interface{}{"action": "get"}))
 	assert.Nil(t, PredictFactKeys("pulse_query", map[string]interface{}{"action": "search"}))
 	assert.Nil(t, PredictFactKeys("unknown_tool", nil))
@@ -404,7 +439,8 @@ func TestExtractFacts_QueryHealth_Disconnected(t *testing.T) {
 
 func TestExtractFacts_AlertsFindings(t *testing.T) {
 	input := map[string]interface{}{"action": "findings"}
-	result := `{"findings":[{"key":"high-cpu-vm101","severity":"warning","title":"High CPU on vm101","status":"active","resource_id":"vm101"},{"key":"disk-full-ct200","severity":"critical","title":"Disk full on ct200","status":"active","resource_id":"ct200"},{"key":"old-issue","severity":"info","title":"Old issue","status":"dismissed","resource_id":"ct300"}]}`
+	// Real response format: {"active": [...], "counts": {"active": N, "dismissed": N}}
+	result := `{"active":[{"key":"high-cpu-vm101","severity":"warning","title":"High CPU on vm101","resource_id":"vm101"},{"key":"disk-full-ct200","severity":"critical","title":"Disk full on ct200","resource_id":"ct200"}],"counts":{"active":2,"dismissed":1}}`
 
 	facts := ExtractFacts("pulse_alerts", input, result)
 	require.GreaterOrEqual(t, len(facts), 2) // overview + per-finding
@@ -420,8 +456,8 @@ func TestExtractFacts_AlertsFindings(t *testing.T) {
 	for _, f := range facts[1:] {
 		findingKeys = append(findingKeys, f.Key)
 	}
-	assert.Contains(t, findingKeys, "finding:high-cpu-vm101")
-	assert.Contains(t, findingKeys, "finding:disk-full-ct200")
+	assert.Contains(t, findingKeys, "finding:high-cpu-vm101:vm101")
+	assert.Contains(t, findingKeys, "finding:disk-full-ct200:ct200")
 }
 
 // --- Alerts: List ---
@@ -589,9 +625,10 @@ func TestPredictFactKeys_AlertsList(t *testing.T) {
 }
 
 func TestPredictFactKeys_MetricsBaselines(t *testing.T) {
+	// Even with resource_id, predict always returns the marker key
 	keys := PredictFactKeys("pulse_metrics", map[string]interface{}{"action": "baselines", "resource_id": "vm101"})
 	require.Len(t, keys, 1)
-	assert.Equal(t, "baseline:vm101", keys[0])
+	assert.Equal(t, "baselines:queried", keys[0])
 }
 
 func TestPredictFactKeys_MetricsBaselinesGlobal(t *testing.T) {
@@ -827,7 +864,7 @@ func TestExtractFacts_QueryConfig_LXC(t *testing.T) {
 	result := `{"guest_type":"lxc","vmid":106,"name":"postfix-server","node":"delly","hostname":"postfix","os_type":"ubuntu","onboot":true,"mounts":[{"key":"mp0","mountpoint":"/data"},{"key":"mp1","mountpoint":"/logs"}],"disks":[{"key":"rootfs"}]}`
 
 	facts := ExtractFacts("pulse_query", input, result)
-	require.Len(t, facts, 1)
+	require.Len(t, facts, 2) // primary + cached key
 
 	f := facts[0]
 	assert.Equal(t, FactCategoryResource, f.Category)
@@ -838,22 +875,26 @@ func TestExtractFacts_QueryConfig_LXC(t *testing.T) {
 	assert.Contains(t, f.Value, "onboot=yes")
 	assert.Contains(t, f.Value, "2 mounts")
 	assert.Contains(t, f.Value, "1 disks")
+
+	// Secondary cached key for gate matching without node
+	assert.Equal(t, "config:106:cached", facts[1].Key)
+	assert.Equal(t, f.Value, facts[1].Value)
 }
 
 func TestExtractFacts_QueryConfig_VM(t *testing.T) {
 	input := map[string]interface{}{"action": "config", "resource_id": "200"}
-	onbootFalse := false
-	_ = onbootFalse
 	result := `{"guest_type":"qemu","vmid":200,"name":"win10","node":"minipc","os_type":"win10","onboot":false,"disks":[{"key":"scsi0"},{"key":"scsi1"}]}`
 
 	facts := ExtractFacts("pulse_query", input, result)
-	require.Len(t, facts, 1)
+	require.Len(t, facts, 2) // primary + cached key
 
 	f := facts[0]
 	assert.Equal(t, "config:minipc:200", f.Key)
 	assert.Contains(t, f.Value, "qemu")
 	assert.Contains(t, f.Value, "onboot=no")
 	assert.Contains(t, f.Value, "2 disks")
+
+	assert.Equal(t, "config:200:cached", facts[1].Key)
 }
 
 func TestExtractFacts_QueryConfig_Empty(t *testing.T) {
@@ -870,26 +911,44 @@ func TestPredictFactKeys_QueryConfig(t *testing.T) {
 		"resource_id": "106",
 		"node":        "delly",
 	})
-	require.Len(t, keys, 1)
-	assert.Equal(t, "config:delly:106", keys[0])
+	require.Len(t, keys, 2)
+	assert.Equal(t, "config:106:cached", keys[0])
+	assert.Equal(t, "config:delly:106", keys[1])
 }
 
 func TestPredictFactKeys_QueryConfig_NoNode(t *testing.T) {
-	// Without node, can't predict exact key
+	// Without node, still predicts the cached key
 	keys := PredictFactKeys("pulse_query", map[string]interface{}{
 		"action":      "config",
 		"resource_id": "106",
+	})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "config:106:cached", keys[0])
+}
+
+func TestPredictFactKeys_QueryConfig_NoResourceID(t *testing.T) {
+	// Without resource_id, can't predict anything
+	keys := PredictFactKeys("pulse_query", map[string]interface{}{
+		"action": "config",
 	})
 	assert.Nil(t, keys)
 }
 
 // --- Change 4: PredictFactKeys for query:get ---
 
-func TestPredictFactKeys_QueryGet_ReturnsNil(t *testing.T) {
-	// get success key depends on response data (type:node:id:status), can't predict
+func TestPredictFactKeys_QueryGet_WithResourceID(t *testing.T) {
 	keys := PredictFactKeys("pulse_query", map[string]interface{}{
 		"action":      "get",
 		"resource_id": "106",
+	})
+	require.Len(t, keys, 2)
+	assert.Equal(t, "query:get:106:cached", keys[0])
+	assert.Equal(t, "query:get:106:error", keys[1])
+}
+
+func TestPredictFactKeys_QueryGet_NoResourceID(t *testing.T) {
+	keys := PredictFactKeys("pulse_query", map[string]interface{}{
+		"action": "get",
 	})
 	assert.Nil(t, keys)
 }
@@ -1016,6 +1075,37 @@ func TestCategoryForPredictedKey(t *testing.T) {
 		{"findings:overview", FactCategoryFinding},
 		{"alert:vm101:cpu", FactCategoryAlert},
 		{"alerts:overview", FactCategoryAlert},
+		{"ceph:queried", FactCategoryStorage},
+		{"ceph:mycluster", FactCategoryStorage},
+		{"ceph_details:queried", FactCategoryStorage},
+		{"ceph_details:host1", FactCategoryStorage},
+		{"snapshots:queried", FactCategoryStorage},
+		{"snapshots:summary", FactCategoryStorage},
+		{"replication:queried", FactCategoryStorage},
+		{"replication:summary", FactCategoryStorage},
+		{"pbs_jobs:queried", FactCategoryStorage},
+		{"pbs_jobs:summary", FactCategoryStorage},
+		{"resource_disks:queried", FactCategoryStorage},
+		{"resource_disks:summary", FactCategoryStorage},
+		{"backup_tasks:queried", FactCategoryStorage},
+		{"backup:200:minipc", FactCategoryStorage},
+		{"docker_services:queried", FactCategoryResource},
+		{"docker_services:summary", FactCategoryResource},
+		{"docker_updates:queried", FactCategoryResource},
+		{"docker_swarm:status", FactCategoryResource},
+		{"docker_tasks:queried", FactCategoryResource},
+		{"k8s_clusters:queried", FactCategoryResource},
+		{"k8s_cluster:mycluster", FactCategoryResource},
+		{"k8s_nodes:queried", FactCategoryResource},
+		{"k8s_pods:queried", FactCategoryResource},
+		{"k8s_deployments:queried", FactCategoryResource},
+		{"pmg:queried", FactCategoryResource},
+		{"pmg:mypmg", FactCategoryResource},
+		{"pmg_mail_stats:queried", FactCategoryResource},
+		{"pmg_queues:queried", FactCategoryResource},
+		{"pmg_spam:queried", FactCategoryResource},
+		{"patrol_findings:queried", FactCategoryFinding},
+		{"patrol_findings:summary", FactCategoryFinding},
 		{"unknown:key", FactCategoryResource}, // default
 	}
 
@@ -1024,4 +1114,810 @@ func TestCategoryForPredictedKey(t *testing.T) {
 			assert.Equal(t, tt.expected, categoryForPredictedKey(tt.key))
 		})
 	}
+}
+
+// --- Storage: Ceph ---
+
+func TestExtractFacts_Ceph(t *testing.T) {
+	input := map[string]interface{}{"action": "ceph"}
+	result := `[{"name":"ceph-main","health":"HEALTH_OK","details":{"osd_count":6,"osds_up":6,"osds_down":0,"monitors":3,"usage_percent":42.5}}]`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 2) // marker + 1 cluster
+
+	assert.Equal(t, "ceph:queried", facts[0].Key)
+	assert.Equal(t, "1 clusters", facts[0].Value)
+	assert.Equal(t, FactCategoryStorage, facts[0].Category)
+
+	assert.Equal(t, "ceph:ceph-main", facts[1].Key)
+	assert.Contains(t, facts[1].Value, "HEALTH_OK")
+	assert.Contains(t, facts[1].Value, "6 OSDs")
+	assert.Contains(t, facts[1].Value, "6 up")
+	assert.Contains(t, facts[1].Value, "0 down")
+	assert.Contains(t, facts[1].Value, "3 monitors")
+	assert.Contains(t, facts[1].Value, "42% used")
+}
+
+func TestExtractFacts_Ceph_Empty(t *testing.T) {
+	input := map[string]interface{}{"action": "ceph"}
+	result := `[]`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 1) // marker only
+	assert.Equal(t, "ceph:queried", facts[0].Key)
+	assert.Equal(t, "0 clusters", facts[0].Value)
+}
+
+func TestPredictFactKeys_Ceph(t *testing.T) {
+	keys := PredictFactKeys("pulse_storage", map[string]interface{}{"action": "ceph"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "ceph:queried", keys[0])
+}
+
+// --- Storage: Ceph Details ---
+
+func TestExtractFacts_CephDetails(t *testing.T) {
+	input := map[string]interface{}{"action": "ceph_details"}
+	result := `{"hosts":[{"hostname":"node1","health":{"status":"HEALTH_OK"},"osd_map":{"num_osds":4,"num_up":4,"num_down":0},"pg_map":{"usage_percent":35.2},"pools":[{},{}]}],"total":1}`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 2) // marker + 1 host
+
+	assert.Equal(t, "ceph_details:queried", facts[0].Key)
+	assert.Equal(t, "1 hosts", facts[0].Value)
+	assert.Equal(t, FactCategoryStorage, facts[0].Category)
+
+	assert.Equal(t, "ceph_details:node1", facts[1].Key)
+	assert.Contains(t, facts[1].Value, "HEALTH_OK")
+	assert.Contains(t, facts[1].Value, "4 OSDs")
+	assert.Contains(t, facts[1].Value, "4 up")
+	assert.Contains(t, facts[1].Value, "35% used")
+	assert.Contains(t, facts[1].Value, "2 pools")
+}
+
+func TestExtractFacts_CephDetails_Empty(t *testing.T) {
+	input := map[string]interface{}{"action": "ceph_details"}
+	result := `{"hosts":[],"total":0}`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 1) // marker only
+	assert.Equal(t, "ceph_details:queried", facts[0].Key)
+	assert.Equal(t, "0 hosts", facts[0].Value)
+}
+
+func TestPredictFactKeys_CephDetails(t *testing.T) {
+	keys := PredictFactKeys("pulse_storage", map[string]interface{}{"action": "ceph_details"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "ceph_details:queried", keys[0])
+}
+
+// --- Storage: Snapshots ---
+
+func TestExtractFacts_Snapshots(t *testing.T) {
+	input := map[string]interface{}{"action": "snapshots"}
+	result := `{"snapshots":[{"vmid":100,"vm_name":"docker","type":"qemu","node":"minipc","snapshot_name":"snap1"},{"vmid":100,"vm_name":"docker","type":"qemu","node":"minipc","snapshot_name":"snap2"},{"vmid":106,"vm_name":"postfix","type":"lxc","node":"delly","snapshot_name":"backup"}],"total":3}`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 2) // marker + summary
+
+	assert.Equal(t, "snapshots:queried", facts[0].Key)
+	assert.Equal(t, "3 snapshots", facts[0].Value)
+
+	assert.Equal(t, "snapshots:summary", facts[1].Key)
+	assert.Contains(t, facts[1].Value, "3 total")
+}
+
+func TestExtractFacts_Snapshots_Empty(t *testing.T) {
+	input := map[string]interface{}{"action": "snapshots"}
+	result := `{"snapshots":[],"total":0}`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 1) // marker only
+	assert.Equal(t, "snapshots:queried", facts[0].Key)
+	assert.Equal(t, "0 snapshots", facts[0].Value)
+}
+
+func TestPredictFactKeys_Snapshots(t *testing.T) {
+	keys := PredictFactKeys("pulse_storage", map[string]interface{}{"action": "snapshots"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "snapshots:queried", keys[0])
+}
+
+// --- Storage: Replication ---
+
+func TestExtractFacts_Replication(t *testing.T) {
+	input := map[string]interface{}{"action": "replication"}
+	result := `[{"id":"106-0","guest_id":106,"guest_name":"postfix","source_node":"delly","target_node":"minipc","status":"ok","error":""},{"id":"200-0","guest_id":200,"guest_name":"win10","source_node":"delly","target_node":"minipc","status":"error","error":"connection refused"}]`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 2) // marker + summary
+
+	assert.Equal(t, "replication:queried", facts[0].Key)
+	assert.Equal(t, "2 jobs", facts[0].Value)
+
+	assert.Equal(t, "replication:summary", facts[1].Key)
+	assert.Contains(t, facts[1].Value, "2 jobs")
+	assert.Contains(t, facts[1].Value, "1 with errors")
+	assert.Contains(t, facts[1].Value, "win10")
+}
+
+func TestExtractFacts_Replication_AllOK(t *testing.T) {
+	input := map[string]interface{}{"action": "replication"}
+	result := `[{"id":"106-0","guest_id":106,"guest_name":"postfix","source_node":"delly","target_node":"minipc","status":"ok","error":""}]`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 2)
+	assert.Contains(t, facts[1].Value, "all ok")
+}
+
+func TestExtractFacts_Replication_Empty(t *testing.T) {
+	input := map[string]interface{}{"action": "replication"}
+	result := `[]`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 1) // marker only
+	assert.Equal(t, "replication:queried", facts[0].Key)
+	assert.Equal(t, "0 jobs", facts[0].Value)
+}
+
+func TestPredictFactKeys_Replication(t *testing.T) {
+	keys := PredictFactKeys("pulse_storage", map[string]interface{}{"action": "replication"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "replication:queried", keys[0])
+}
+
+// --- Storage: PBS Jobs ---
+
+func TestExtractFacts_PBSJobs(t *testing.T) {
+	input := map[string]interface{}{"action": "pbs_jobs"}
+	result := `{"instance":"pbs-minipc","jobs":[{"id":"j1","type":"backup","store":"datastore1","status":"ok","error":""},{"id":"j2","type":"backup","store":"datastore1","status":"error","error":"timeout"},{"id":"j3","type":"sync","store":"datastore2","status":"ok","error":""}],"total":3}`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 2) // marker + summary
+
+	assert.Equal(t, "pbs_jobs:queried", facts[0].Key)
+	assert.Equal(t, "3 jobs", facts[0].Value)
+
+	assert.Equal(t, "pbs_jobs:summary", facts[1].Key)
+	assert.Contains(t, facts[1].Value, "backup")
+	assert.Contains(t, facts[1].Value, "sync")
+	assert.Contains(t, facts[1].Value, "1 with errors")
+}
+
+func TestExtractFacts_PBSJobs_Empty(t *testing.T) {
+	input := map[string]interface{}{"action": "pbs_jobs"}
+	result := `{"instance":"pbs-minipc","jobs":[],"total":0}`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 1) // marker only
+	assert.Equal(t, "pbs_jobs:queried", facts[0].Key)
+	assert.Equal(t, "0 jobs", facts[0].Value)
+}
+
+func TestPredictFactKeys_PBSJobs(t *testing.T) {
+	keys := PredictFactKeys("pulse_storage", map[string]interface{}{"action": "pbs_jobs"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "pbs_jobs:queried", keys[0])
+}
+
+// --- Storage: Resource Disks ---
+
+func TestExtractFacts_ResourceDisks(t *testing.T) {
+	input := map[string]interface{}{"action": "resource_disks"}
+	result := `{"resources":[{"vmid":106,"name":"postfix","type":"lxc","node":"delly","disks":[{"mountpoint":"/","usage_percent":45.2},{"mountpoint":"/data","usage_percent":85.0}]},{"vmid":200,"name":"win10","type":"qemu","node":"minipc","disks":[{"mountpoint":"C:","usage_percent":92.3}]}],"total":2}`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 2) // marker + summary
+
+	assert.Equal(t, "resource_disks:queried", facts[0].Key)
+	assert.Equal(t, "2 resources", facts[0].Value)
+
+	assert.Equal(t, "resource_disks:summary", facts[1].Key)
+	assert.Contains(t, facts[1].Value, "2 resources")
+	assert.Contains(t, facts[1].Value, "3 disks total")
+	assert.Contains(t, facts[1].Value, "2 disks over 80%")
+}
+
+func TestExtractFacts_ResourceDisks_Empty(t *testing.T) {
+	input := map[string]interface{}{"action": "resource_disks"}
+	result := `{"resources":[],"total":0}`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 1) // marker only
+	assert.Equal(t, "resource_disks:queried", facts[0].Key)
+	assert.Equal(t, "0 resources", facts[0].Value)
+}
+
+func TestPredictFactKeys_ResourceDisks(t *testing.T) {
+	keys := PredictFactKeys("pulse_storage", map[string]interface{}{"action": "resource_disks"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "resource_disks:queried", keys[0])
+}
+
+// --- Docker: Services ---
+
+func TestExtractFacts_DockerServices(t *testing.T) {
+	input := map[string]interface{}{"action": "services"}
+	result := `{"host":"delly","services":[{"name":"nginx","mode":"replicated","desired_tasks":3,"running_tasks":3},{"name":"redis","mode":"replicated","desired_tasks":2,"running_tasks":1}],"total":2}`
+
+	facts := ExtractFacts("pulse_docker", input, result)
+	require.Len(t, facts, 2) // marker + summary
+
+	assert.Equal(t, "docker_services:queried", facts[0].Key)
+	assert.Equal(t, "2 services", facts[0].Value)
+	assert.Equal(t, FactCategoryResource, facts[0].Category)
+
+	assert.Equal(t, "docker_services:summary", facts[1].Key)
+	assert.Contains(t, facts[1].Value, "2 services")
+	assert.Contains(t, facts[1].Value, "1 healthy")
+	assert.Contains(t, facts[1].Value, "1 degraded")
+}
+
+func TestExtractFacts_DockerServices_Empty(t *testing.T) {
+	input := map[string]interface{}{"action": "services"}
+	result := `{"host":"delly","services":[],"total":0}`
+
+	facts := ExtractFacts("pulse_docker", input, result)
+	require.Len(t, facts, 1) // marker only
+	assert.Equal(t, "docker_services:queried", facts[0].Key)
+	assert.Equal(t, "0 services", facts[0].Value)
+}
+
+func TestPredictFactKeys_DockerServices(t *testing.T) {
+	keys := PredictFactKeys("pulse_docker", map[string]interface{}{"action": "services"})
+	require.Len(t, keys, 2)
+	assert.Equal(t, "docker_services:queried", keys[0])
+	assert.Equal(t, "docker_services:summary", keys[1])
+}
+
+// --- Docker: Updates ---
+
+func TestExtractFacts_DockerUpdates(t *testing.T) {
+	input := map[string]interface{}{"action": "updates"}
+	result := `{"updates":[{"container_name":"nginx","update_available":true},{"container_name":"redis","update_available":false}],"total":2}`
+
+	facts := ExtractFacts("pulse_docker", input, result)
+	require.Len(t, facts, 1)
+
+	assert.Equal(t, "docker_updates:queried", facts[0].Key)
+	assert.Contains(t, facts[0].Value, "2 containers")
+	assert.Contains(t, facts[0].Value, "1 updates available")
+}
+
+func TestPredictFactKeys_DockerUpdates(t *testing.T) {
+	keys := PredictFactKeys("pulse_docker", map[string]interface{}{"action": "updates"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "docker_updates:queried", keys[0])
+}
+
+// --- Docker: Swarm ---
+
+func TestExtractFacts_DockerSwarm(t *testing.T) {
+	input := map[string]interface{}{"action": "swarm"}
+	result := `{"host":"delly","status":{"node_role":"manager","local_state":"active","control_available":true,"cluster_name":"prod"}}`
+
+	facts := ExtractFacts("pulse_docker", input, result)
+	require.Len(t, facts, 1)
+
+	assert.Equal(t, "docker_swarm:status", facts[0].Key)
+	assert.Contains(t, facts[0].Value, "role=manager")
+	assert.Contains(t, facts[0].Value, "state=active")
+	assert.Contains(t, facts[0].Value, "host=delly")
+}
+
+func TestPredictFactKeys_DockerSwarm(t *testing.T) {
+	keys := PredictFactKeys("pulse_docker", map[string]interface{}{"action": "swarm"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "docker_swarm:status", keys[0])
+}
+
+// --- Docker: Tasks ---
+
+func TestExtractFacts_DockerTasks(t *testing.T) {
+	input := map[string]interface{}{"action": "tasks"}
+	result := `{"host":"delly","service":"nginx","tasks":[{"current_state":"running"},{"current_state":"running"},{"current_state":"failed","error":"OOM killed"}],"total":3}`
+
+	facts := ExtractFacts("pulse_docker", input, result)
+	require.Len(t, facts, 1)
+
+	assert.Equal(t, "docker_tasks:queried", facts[0].Key)
+	assert.Contains(t, facts[0].Value, "service=nginx")
+	assert.Contains(t, facts[0].Value, "3 tasks")
+	assert.Contains(t, facts[0].Value, "2 running")
+	assert.Contains(t, facts[0].Value, "1 failed")
+}
+
+func TestPredictFactKeys_DockerTasks(t *testing.T) {
+	keys := PredictFactKeys("pulse_docker", map[string]interface{}{"action": "tasks"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "docker_tasks:queried", keys[0])
+}
+
+// --- Docker: Unknown action ---
+
+func TestExtractFacts_DockerUnknown(t *testing.T) {
+	input := map[string]interface{}{"action": "control"}
+	result := `some text result`
+
+	facts := ExtractFacts("pulse_docker", input, result)
+	assert.Empty(t, facts) // control is a write action, no extractor
+}
+
+// --- Kubernetes: Clusters ---
+
+func TestExtractFacts_K8sClusters(t *testing.T) {
+	input := map[string]interface{}{"action": "clusters"}
+	result := `{"clusters":[{"name":"prod","display_name":"Production","status":"healthy","node_count":3,"pod_count":42,"ready_nodes":3}],"total":1}`
+
+	facts := ExtractFacts("pulse_kubernetes", input, result)
+	require.Len(t, facts, 2) // marker + 1 cluster
+
+	assert.Equal(t, "k8s_clusters:queried", facts[0].Key)
+	assert.Equal(t, "1 clusters", facts[0].Value)
+
+	assert.Equal(t, "k8s_cluster:Production", facts[1].Key)
+	assert.Contains(t, facts[1].Value, "healthy")
+	assert.Contains(t, facts[1].Value, "3 nodes")
+	assert.Contains(t, facts[1].Value, "3 ready")
+	assert.Contains(t, facts[1].Value, "42 pods")
+}
+
+func TestExtractFacts_K8sClusters_Empty(t *testing.T) {
+	input := map[string]interface{}{"action": "clusters"}
+	result := `{"clusters":[],"total":0}`
+
+	facts := ExtractFacts("pulse_kubernetes", input, result)
+	require.Len(t, facts, 1)
+	assert.Equal(t, "k8s_clusters:queried", facts[0].Key)
+	assert.Equal(t, "0 clusters", facts[0].Value)
+}
+
+func TestPredictFactKeys_K8sClusters(t *testing.T) {
+	keys := PredictFactKeys("pulse_kubernetes", map[string]interface{}{"action": "clusters"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "k8s_clusters:queried", keys[0])
+}
+
+// --- Kubernetes: Nodes ---
+
+func TestExtractFacts_K8sNodes(t *testing.T) {
+	input := map[string]interface{}{"action": "nodes"}
+	result := `{"cluster":"prod","nodes":[{"name":"node1","ready":true},{"name":"node2","ready":true},{"name":"node3","ready":false}],"total":3}`
+
+	facts := ExtractFacts("pulse_kubernetes", input, result)
+	require.Len(t, facts, 1)
+
+	assert.Equal(t, "k8s_nodes:queried", facts[0].Key)
+	assert.Contains(t, facts[0].Value, "cluster=prod")
+	assert.Contains(t, facts[0].Value, "3 nodes")
+	assert.Contains(t, facts[0].Value, "2 ready")
+	assert.Contains(t, facts[0].Value, "1 not ready")
+}
+
+func TestPredictFactKeys_K8sNodes(t *testing.T) {
+	keys := PredictFactKeys("pulse_kubernetes", map[string]interface{}{"action": "nodes"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "k8s_nodes:queried", keys[0])
+}
+
+// --- Kubernetes: Pods ---
+
+func TestExtractFacts_K8sPods(t *testing.T) {
+	input := map[string]interface{}{"action": "pods"}
+	result := `{"cluster":"prod","pods":[{"name":"nginx-1","namespace":"default","phase":"Running","restarts":0},{"name":"redis-1","namespace":"default","phase":"Running","restarts":10},{"name":"broken-1","namespace":"test","phase":"CrashLoopBackOff","restarts":0}],"total":3}`
+
+	facts := ExtractFacts("pulse_kubernetes", input, result)
+	require.Len(t, facts, 1)
+
+	assert.Equal(t, "k8s_pods:queried", facts[0].Key)
+	assert.Contains(t, facts[0].Value, "cluster=prod")
+	assert.Contains(t, facts[0].Value, "3 pods")
+	assert.Contains(t, facts[0].Value, "Running")
+	assert.Contains(t, facts[0].Value, "1 high-restart")
+}
+
+func TestPredictFactKeys_K8sPods(t *testing.T) {
+	keys := PredictFactKeys("pulse_kubernetes", map[string]interface{}{"action": "pods"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "k8s_pods:queried", keys[0])
+}
+
+// --- Kubernetes: Deployments ---
+
+func TestExtractFacts_K8sDeployments(t *testing.T) {
+	input := map[string]interface{}{"action": "deployments"}
+	result := `{"cluster":"prod","deployments":[{"name":"nginx","namespace":"default","desired_replicas":3,"ready_replicas":3,"available_replicas":3},{"name":"redis","namespace":"default","desired_replicas":2,"ready_replicas":1,"available_replicas":1}],"total":2}`
+
+	facts := ExtractFacts("pulse_kubernetes", input, result)
+	require.Len(t, facts, 1)
+
+	assert.Equal(t, "k8s_deployments:queried", facts[0].Key)
+	assert.Contains(t, facts[0].Value, "cluster=prod")
+	assert.Contains(t, facts[0].Value, "2 deployments")
+	assert.Contains(t, facts[0].Value, "1 healthy")
+	assert.Contains(t, facts[0].Value, "1 degraded")
+}
+
+func TestPredictFactKeys_K8sDeployments(t *testing.T) {
+	keys := PredictFactKeys("pulse_kubernetes", map[string]interface{}{"action": "deployments"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "k8s_deployments:queried", keys[0])
+}
+
+// --- PMG: Status ---
+
+func TestExtractFacts_PMGStatus(t *testing.T) {
+	input := map[string]interface{}{"action": "status"}
+	result := `{"instances":[{"name":"pmg-main","host":"10.0.0.5","status":"running","version":"8.1.2"}],"total":1}`
+
+	facts := ExtractFacts("pulse_pmg", input, result)
+	require.Len(t, facts, 2) // marker + 1 instance
+
+	assert.Equal(t, "pmg:queried", facts[0].Key)
+	assert.Equal(t, "1 instances", facts[0].Value)
+
+	assert.Equal(t, "pmg:pmg-main", facts[1].Key)
+	assert.Contains(t, facts[1].Value, "running")
+	assert.Contains(t, facts[1].Value, "v8.1.2")
+}
+
+func TestExtractFacts_PMGStatus_Empty(t *testing.T) {
+	input := map[string]interface{}{"action": "status"}
+	result := `{"instances":[],"total":0}`
+
+	facts := ExtractFacts("pulse_pmg", input, result)
+	require.Len(t, facts, 1)
+	assert.Equal(t, "pmg:queried", facts[0].Key)
+	assert.Equal(t, "0 instances", facts[0].Value)
+}
+
+func TestPredictFactKeys_PMGStatus(t *testing.T) {
+	keys := PredictFactKeys("pulse_pmg", map[string]interface{}{"action": "status"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "pmg:queried", keys[0])
+}
+
+// --- PMG: Mail Stats ---
+
+func TestExtractFacts_PMGMailStats(t *testing.T) {
+	input := map[string]interface{}{"action": "mail_stats"}
+	result := `{"instance":"pmg-main","stats":{"total_in":1500,"total_out":800,"spam_in":200,"virus_in":5}}`
+
+	facts := ExtractFacts("pulse_pmg", input, result)
+	require.Len(t, facts, 1)
+
+	assert.Equal(t, "pmg_mail_stats:queried", facts[0].Key)
+	assert.Contains(t, facts[0].Value, "pmg-main")
+	assert.Contains(t, facts[0].Value, "in=1500")
+	assert.Contains(t, facts[0].Value, "out=800")
+	assert.Contains(t, facts[0].Value, "spam=200")
+	assert.Contains(t, facts[0].Value, "virus=5")
+}
+
+func TestPredictFactKeys_PMGMailStats(t *testing.T) {
+	keys := PredictFactKeys("pulse_pmg", map[string]interface{}{"action": "mail_stats"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "pmg_mail_stats:queried", keys[0])
+}
+
+// --- PMG: Queues ---
+
+func TestExtractFacts_PMGQueues(t *testing.T) {
+	input := map[string]interface{}{"action": "queues"}
+	result := `{"instance":"pmg-main","queues":[{"node":"pmg1","active":5,"deferred":12,"total":17},{"node":"pmg2","active":2,"deferred":3,"total":5}]}`
+
+	facts := ExtractFacts("pulse_pmg", input, result)
+	require.Len(t, facts, 1)
+
+	assert.Equal(t, "pmg_queues:queried", facts[0].Key)
+	assert.Contains(t, facts[0].Value, "pmg-main")
+	assert.Contains(t, facts[0].Value, "2 nodes")
+	assert.Contains(t, facts[0].Value, "22 queued")
+	assert.Contains(t, facts[0].Value, "15 deferred")
+}
+
+func TestPredictFactKeys_PMGQueues(t *testing.T) {
+	keys := PredictFactKeys("pulse_pmg", map[string]interface{}{"action": "queues"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "pmg_queues:queried", keys[0])
+}
+
+// --- PMG: Spam ---
+
+func TestExtractFacts_PMGSpam(t *testing.T) {
+	input := map[string]interface{}{"action": "spam"}
+	result := `{"instance":"pmg-main","quarantine":{"spam":150,"virus":3,"total":153}}`
+
+	facts := ExtractFacts("pulse_pmg", input, result)
+	require.Len(t, facts, 1)
+
+	assert.Equal(t, "pmg_spam:queried", facts[0].Key)
+	assert.Contains(t, facts[0].Value, "pmg-main")
+	assert.Contains(t, facts[0].Value, "153 total")
+	assert.Contains(t, facts[0].Value, "150 spam")
+	assert.Contains(t, facts[0].Value, "3 virus")
+}
+
+func TestPredictFactKeys_PMGSpam(t *testing.T) {
+	keys := PredictFactKeys("pulse_pmg", map[string]interface{}{"action": "spam"})
+	require.Len(t, keys, 1)
+	assert.Equal(t, "pmg_spam:queried", keys[0])
+}
+
+// --- Patrol: Get Findings ---
+
+func TestExtractFacts_PatrolGetFindings(t *testing.T) {
+	result := `{"ok":true,"count":3,"findings":[{"key":"high-cpu","severity":"warning","title":"High CPU","resource_id":"vm101"},{"key":"disk-full","severity":"critical","title":"Disk Full","resource_id":"ct200"},{"key":"low-mem","severity":"warning","title":"Low Memory","resource_id":"vm102"}]}`
+
+	facts := ExtractFacts("patrol_get_findings", nil, result)
+	require.Len(t, facts, 2) // marker + summary
+
+	assert.Equal(t, "patrol_findings:queried", facts[0].Key)
+	assert.Equal(t, "3 findings", facts[0].Value)
+	assert.Equal(t, FactCategoryFinding, facts[0].Category)
+
+	assert.Equal(t, "patrol_findings:summary", facts[1].Key)
+	assert.Contains(t, facts[1].Value, "3 total")
+	assert.Contains(t, facts[1].Value, "warning")
+	assert.Contains(t, facts[1].Value, "critical")
+}
+
+func TestExtractFacts_PatrolGetFindings_Empty(t *testing.T) {
+	result := `{"ok":true,"count":0,"findings":[]}`
+
+	facts := ExtractFacts("patrol_get_findings", nil, result)
+	require.Len(t, facts, 1) // marker only
+	assert.Equal(t, "patrol_findings:queried", facts[0].Key)
+	assert.Equal(t, "0 findings", facts[0].Value)
+}
+
+func TestPredictFactKeys_PatrolGetFindings(t *testing.T) {
+	keys := PredictFactKeys("patrol_get_findings", nil)
+	require.Len(t, keys, 1)
+	assert.Equal(t, "patrol_findings:queried", keys[0])
+}
+
+// --- Roundtrip Consistency: Predict keys must match extracted keys ---
+// This test prevents the class of bug where PredictFactKeys returns keys that
+// don't match what ExtractFacts actually stores — making the gate useless.
+
+func TestPredictExtractRoundtrip(t *testing.T) {
+	// Each entry: tool, input, sample result, description
+	// PredictFactKeys must return at least one key that appears in ExtractFacts output.
+	cases := []struct {
+		name   string
+		tool   string
+		input  map[string]interface{}
+		result string
+	}{
+		{"query:topology", "pulse_query", map[string]interface{}{"action": "topology"},
+			`{"summary":{"total_nodes":1},"proxmox":{"nodes":[{"name":"n1","status":"online"}]}}`},
+		{"query:health", "pulse_query", map[string]interface{}{"action": "health"},
+			`{"connections":[{"instance_id":"n1","connected":true}]}`},
+		{"query:get", "pulse_query", map[string]interface{}{"action": "get", "resource_id": "106"},
+			`{"type":"lxc","name":"test","status":"running","node":"n1","id":"106","vmid":106,"cpu":{"percent":1},"memory":{"percent":50}}`},
+		{"query:get:error", "pulse_query", map[string]interface{}{"action": "get", "resource_id": "999"},
+			`{"error":"not_found","resource_id":"999","type":"vm"}`},
+		{"query:search", "pulse_query", map[string]interface{}{"action": "search", "query": "test"},
+			`{"matches":[{"name":"test","status":"running"}],"total":1}`},
+		{"query:list", "pulse_query", map[string]interface{}{"action": "list"},
+			`{"nodes":[{"name":"n1","status":"online"}],"total":{"nodes":1}}`},
+		{"query:config", "pulse_query", map[string]interface{}{"action": "config", "resource_id": "106", "node": "n1"},
+			`{"guest_type":"lxc","vmid":106,"name":"test","node":"n1"}`},
+		{"query:config:no_node", "pulse_query", map[string]interface{}{"action": "config", "resource_id": "106"},
+			`{"guest_type":"lxc","vmid":106,"name":"test","node":"n1"}`},
+		{"storage:pools", "pulse_storage", map[string]interface{}{"action": "pools"},
+			`{"pools":[{"name":"local","node":"n1","type":"dir","usage_percent":50,"total_gb":100,"used_gb":50}]}`},
+		{"storage:disk_health", "pulse_storage", map[string]interface{}{"action": "disk_health"},
+			`{"hosts":[{"hostname":"n1","smart":[{"device":"/dev/sda","health":"PASSED"}]}]}`},
+		{"storage:raid", "pulse_storage", map[string]interface{}{"action": "raid"},
+			`{"hosts":[{"hostname":"n1","arrays":[{"device":"/dev/md0","state":"clean","failed_devices":0}]}]}`},
+		{"storage:backups", "pulse_storage", map[string]interface{}{"action": "backups"},
+			`{"pbs":[],"pve":[],"pbs_servers":[]}`},
+		{"storage:backup_tasks", "pulse_storage", map[string]interface{}{"action": "backup_tasks"},
+			`{"tasks":[{"vmid":100,"node":"n1","status":"OK"}],"total":1}`},
+		{"storage:ceph", "pulse_storage", map[string]interface{}{"action": "ceph"},
+			`[{"name":"c1","health":"OK","details":{"osd_count":3,"osds_up":3,"osds_down":0,"monitors":1,"usage_percent":30}}]`},
+		{"storage:ceph_details", "pulse_storage", map[string]interface{}{"action": "ceph_details"},
+			`{"hosts":[{"hostname":"n1","health":{"status":"OK"},"osd_map":{"num_osds":3,"num_up":3},"pg_map":{"usage_percent":30},"pools":[]}]}`},
+		{"storage:snapshots", "pulse_storage", map[string]interface{}{"action": "snapshots"},
+			`{"snapshots":[{"vmid":100,"vm_name":"test","snapshot_name":"s1"}],"total":1}`},
+		{"storage:replication", "pulse_storage", map[string]interface{}{"action": "replication"},
+			`[{"id":"1","guest_id":100,"guest_name":"test","status":"ok","error":""}]`},
+		{"storage:pbs_jobs", "pulse_storage", map[string]interface{}{"action": "pbs_jobs"},
+			`{"jobs":[{"id":"j1","type":"backup","status":"ok"}],"total":1}`},
+		{"storage:resource_disks", "pulse_storage", map[string]interface{}{"action": "resource_disks"},
+			`{"resources":[{"vmid":100,"name":"test","disks":[{"mountpoint":"/","usage_percent":50}]}],"total":1}`},
+		{"metrics:performance", "pulse_metrics", map[string]interface{}{"action": "performance", "resource_id": "vm101"},
+			`{"summary":{"vm101":{"avg_cpu":10,"max_cpu":50,"trend":"stable"}}}`},
+		{"metrics:baselines", "pulse_metrics", map[string]interface{}{"action": "baselines"},
+			`{"baselines":{"n1":{"n1:100:cpu":{"mean":5,"std_dev":2,"min":0,"max":20}}}}`},
+		{"metrics:disks", "pulse_metrics", map[string]interface{}{"action": "disks"},
+			`{"disks":[{"host":"n1","device":"/dev/sda","health":"PASSED"}]}`},
+		{"metrics:temperatures", "pulse_metrics", map[string]interface{}{"action": "temperatures"},
+			`[{"hostname":"n1","cpu_temps":{"core0":50},"disk_temps":{}}]`},
+		{"alerts:findings", "pulse_alerts", map[string]interface{}{"action": "findings"},
+			`{"active":[{"key":"k1","severity":"warning","title":"test"}],"counts":{"active":1,"dismissed":0}}`},
+		{"alerts:list", "pulse_alerts", map[string]interface{}{"action": "list"},
+			`{"alerts":[{"resource_name":"vm101","type":"cpu","severity":"warning","value":90,"threshold":80,"status":"active"}]}`},
+		{"docker:services", "pulse_docker", map[string]interface{}{"action": "services"},
+			`{"host":"h1","services":[{"name":"nginx","desired_tasks":2,"running_tasks":2}],"total":1}`},
+		{"docker:updates", "pulse_docker", map[string]interface{}{"action": "updates"},
+			`{"updates":[{"container_name":"nginx","update_available":false}],"total":1}`},
+		{"docker:swarm", "pulse_docker", map[string]interface{}{"action": "swarm"},
+			`{"host":"h1","status":{"node_role":"manager","local_state":"active","control_available":true}}`},
+		{"docker:tasks", "pulse_docker", map[string]interface{}{"action": "tasks"},
+			`{"host":"h1","tasks":[{"current_state":"running"}],"total":1}`},
+		{"k8s:clusters", "pulse_kubernetes", map[string]interface{}{"action": "clusters"},
+			`{"clusters":[{"name":"prod","status":"healthy","node_count":3,"ready_nodes":3,"pod_count":10}],"total":1}`},
+		{"k8s:nodes", "pulse_kubernetes", map[string]interface{}{"action": "nodes"},
+			`{"cluster":"prod","nodes":[{"name":"n1","ready":true}],"total":1}`},
+		{"k8s:pods", "pulse_kubernetes", map[string]interface{}{"action": "pods"},
+			`{"cluster":"prod","pods":[{"name":"p1","phase":"Running"}],"total":1}`},
+		{"k8s:deployments", "pulse_kubernetes", map[string]interface{}{"action": "deployments"},
+			`{"cluster":"prod","deployments":[{"name":"d1","desired_replicas":2,"ready_replicas":2}],"total":1}`},
+		{"pmg:status", "pulse_pmg", map[string]interface{}{"action": "status"},
+			`{"instances":[{"name":"pmg1","status":"running"}],"total":1}`},
+		{"pmg:mail_stats", "pulse_pmg", map[string]interface{}{"action": "mail_stats"},
+			`{"instance":"pmg1","stats":{"total_in":100,"total_out":50,"spam_in":10,"virus_in":1}}`},
+		{"pmg:queues", "pulse_pmg", map[string]interface{}{"action": "queues"},
+			`{"instance":"pmg1","queues":[{"node":"n1","total":5,"deferred":2}]}`},
+		{"pmg:spam", "pulse_pmg", map[string]interface{}{"action": "spam"},
+			`{"instance":"pmg1","quarantine":{"spam":10,"virus":1,"total":11}}`},
+		{"patrol:get_findings", "patrol_get_findings", nil,
+			`{"ok":true,"count":1,"findings":[{"key":"k1","severity":"warning","title":"test"}]}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			predictedKeys := PredictFactKeys(tc.tool, tc.input)
+			require.NotNil(t, predictedKeys, "PredictFactKeys should return keys for %s", tc.name)
+
+			extractedFacts := ExtractFacts(tc.tool, tc.input, tc.result)
+			require.NotEmpty(t, extractedFacts, "ExtractFacts should return facts for %s", tc.name)
+
+			// Build set of extracted keys
+			extractedKeys := make(map[string]bool)
+			for _, f := range extractedFacts {
+				extractedKeys[f.Key] = true
+			}
+
+			// At least one predicted key must appear in extracted keys
+			matched := false
+			for _, pk := range predictedKeys {
+				if extractedKeys[pk] {
+					matched = true
+					break
+				}
+			}
+			assert.True(t, matched,
+				"PredictFactKeys %v must match at least one ExtractFacts key %v for %s",
+				predictedKeys, keys(extractedKeys), tc.name)
+		})
+	}
+}
+
+// keys extracts map keys as a slice for readable test output.
+func keys(m map[string]bool) []string {
+	var result []string
+	for k := range m {
+		result = append(result, k)
+	}
+	return result
+}
+
+// --- End-to-end gate flow test ---
+// Simulates the full cycle: extract facts → store in KA → predict → lookup → gate fires.
+// Also validates MarkerExpansion enrichment for marker-based extractors.
+
+func TestGateFlowEndToEnd(t *testing.T) {
+	cases := []struct {
+		name         string
+		tool         string
+		input        map[string]interface{}
+		result       string
+		expectEnrich bool // whether MarkerExpansions should add related facts
+	}{
+		{"storage:pools", "pulse_storage", map[string]interface{}{"action": "pools"},
+			`{"pools":[{"name":"local","node":"n1","type":"dir","usage_percent":50,"total_gb":100,"used_gb":50}]}`,
+			true}, // Marker expansion: storage:pools:queried → storage:
+		{"storage:ceph", "pulse_storage", map[string]interface{}{"action": "ceph"},
+			`[{"name":"c1","health":"OK","details":{"osd_count":3,"osds_up":3,"osds_down":0,"monitors":1,"usage_percent":30}}]`,
+			true}, // Marker expansion: ceph:queried → ceph:
+		{"k8s:clusters", "pulse_kubernetes", map[string]interface{}{"action": "clusters"},
+			`{"clusters":[{"name":"prod","status":"healthy","node_count":3,"ready_nodes":3,"pod_count":10}],"total":1}`,
+			true}, // Marker expansion: k8s_clusters:queried → k8s_cluster:
+		{"pmg:status", "pulse_pmg", map[string]interface{}{"action": "status"},
+			`{"instances":[{"name":"pmg1","status":"running"}],"total":1}`,
+			true}, // Marker expansion: pmg:queried → pmg:
+		{"query:get", "pulse_query", map[string]interface{}{"action": "get", "resource_id": "106"},
+			`{"type":"lxc","name":"test","status":"running","node":"n1","id":"106","vmid":106,"cpu":{"percent":1},"memory":{"percent":50}}`,
+			false}, // No marker expansion for query:get:106:cached
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ka := NewKnowledgeAccumulator()
+
+			// Step 1: Extract facts from tool result
+			facts := ExtractFacts(tc.tool, tc.input, tc.result)
+			require.NotEmpty(t, facts, "should extract facts")
+
+			// Step 2: Store facts in KA (as agentic.go does)
+			for _, f := range facts {
+				ka.AddFact(f.Category, f.Key, f.Value)
+			}
+
+			// Step 3: Predict keys (as gate does on second call)
+			predictedKeys := PredictFactKeys(tc.tool, tc.input)
+			require.NotNil(t, predictedKeys, "should predict keys")
+
+			// Step 4: Gate lookup — at least one predicted key should be found
+			var cachedParts []string
+			for _, key := range predictedKeys {
+				if value, found := ka.Lookup(key); found {
+					cachedParts = append(cachedParts, fmt.Sprintf("%s = %s", key, value))
+				}
+			}
+			require.NotEmpty(t, cachedParts, "gate should fire (cached facts found)")
+
+			// Step 5: Enrichment via MarkerExpansions
+			if tc.expectEnrich {
+				enriched := false
+				for _, key := range predictedKeys {
+					if prefix, ok := MarkerExpansions[key]; ok {
+						related := ka.RelatedFacts(prefix)
+						if related != "" {
+							enriched = true
+							// RelatedFacts should not include the marker itself
+							assert.NotContains(t, related, ":queried",
+								"RelatedFacts should exclude marker keys")
+						}
+					}
+				}
+				assert.True(t, enriched, "MarkerExpansion should enrich with related facts")
+			}
+		})
+	}
+}
+
+// --- Negative marker gate test ---
+// Verifies that when ExtractFacts returns nil (text/error response),
+// the negative marker prevents re-execution on the next call.
+
+func TestNegativeMarkerGateFlow(t *testing.T) {
+	ka := NewKnowledgeAccumulator()
+
+	tool := "pulse_storage"
+	input := map[string]interface{}{"action": "ceph"}
+	textResult := "No Ceph clusters configured on this system"
+
+	// ExtractFacts should return nil for plain text
+	facts := ExtractFacts(tool, input, textResult)
+	assert.Empty(t, facts)
+
+	// Simulate negative marker storage (as agentic.go does)
+	predictedKeys := PredictFactKeys(tool, input)
+	require.NotEmpty(t, predictedKeys)
+	for _, key := range predictedKeys {
+		if _, found := ka.Lookup(key); !found {
+			cat := categoryForPredictedKey(key)
+			summary := textResult
+			if len(summary) > 120 {
+				summary = summary[:120]
+			}
+			ka.AddFact(cat, key, fmt.Sprintf("checked: %s", summary))
+		}
+	}
+
+	// Now simulate second call — gate should fire
+	predictedKeys2 := PredictFactKeys(tool, input)
+	var cachedParts []string
+	for _, key := range predictedKeys2 {
+		if value, found := ka.Lookup(key); found {
+			cachedParts = append(cachedParts, value)
+		}
+	}
+	require.NotEmpty(t, cachedParts, "gate should fire on second call due to negative marker")
+	assert.Contains(t, cachedParts[0], "checked:", "negative marker value should start with 'checked:'")
 }
