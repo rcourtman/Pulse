@@ -400,9 +400,8 @@ func TestService_SettersAndUpdateControlSettings(t *testing.T) {
 	assert.True(t, hasTool(service.executor.ListTools(), "pulse_control"))
 }
 
-func TestService_FilterToolsForPrompt_AllToolsReturned(t *testing.T) {
-	// All tools should always be returned regardless of prompt content.
-	// The approval mechanism handles control, not tool filtering.
+func TestService_FilterToolsForPrompt_ReadOnlyFiltersWriteTools(t *testing.T) {
+	// Read-only prompts should not include write/control tools.
 	service := NewService(Config{
 		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
 		StateProvider: &mockStateProvider{},
@@ -414,8 +413,24 @@ func TestService_FilterToolsForPrompt_AllToolsReturned(t *testing.T) {
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
 
-	// All tools should be returned for any prompt
+	// Read-only prompts should exclude write tools
 	filtered := service.filterToolsForPrompt(context.Background(), "run uptime")
+	assert.False(t, hasProviderTool(filtered, "pulse_control"))
+	assert.False(t, hasProviderTool(filtered, "pulse_docker"))
+	assert.True(t, hasProviderTool(filtered, "pulse_query"))
+}
+
+func TestService_FilterToolsForPrompt_WriteIntentIncludesWriteTools(t *testing.T) {
+	service := NewService(Config{
+		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
+	})
+	require.True(t, hasTool(service.executor.ListTools(), "pulse_control"))
+	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
+	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
+
+	filtered := service.filterToolsForPrompt(context.Background(), "restart vm 101")
 	assert.True(t, hasProviderTool(filtered, "pulse_control"))
 	assert.True(t, hasProviderTool(filtered, "pulse_docker"))
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))

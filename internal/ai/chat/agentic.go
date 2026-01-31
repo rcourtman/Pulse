@@ -40,6 +40,9 @@ type AgenticLoop struct {
 	// Per-session FSMs for workflow enforcement (set before each execution)
 	sessionFSM *SessionFSM
 
+	// Knowledge accumulator for fact extraction across turns
+	knowledgeAccumulator *KnowledgeAccumulator
+
 	// Budget checker called after each turn to enforce token spending limits
 	budgetChecker func() error
 }
@@ -78,8 +81,10 @@ func (a *AgenticLoop) ExecuteWithTools(ctx context.Context, sessionID string, me
 }
 
 func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, messages []Message, tools []providers.Tool, callback StreamCallback) ([]Message, error) {
-	// Track this session for potential abort
+	// Snapshot maxTurns under the lock — callers may override via SetMaxTurns
+	// before calling ExecuteWithTools, and this avoids races with concurrent sessions.
 	a.mu.Lock()
+	maxTurns := a.maxTurns
 	a.aborted[sessionID] = false
 	a.mu.Unlock()
 	defer func() {
@@ -113,11 +118,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 	// Track where each turn's messages begin in providerMessages for compaction.
 	// We keep the last N turns' tool results in full; older ones get compacted.
-	const compactionKeepTurns = 3                  // Keep last 3 turns' tool results in full
-	const compactionMinChars = 500                 // Only compact results longer than this
+	const compactionKeepTurns = 2                  // Keep last 2 turns' tool results in full (KA preserves key facts)
+	const compactionMinChars = 300                 // Only compact results longer than this
 	currentTurnStartIndex := len(providerMessages) // Initial messages are never compacted
 
-	for turn < a.maxTurns {
+	for turn < maxTurns {
 		// === CONTEXT COMPACTION: Compact old tool results to prevent context blowout ===
 		if turn > 0 {
 			compactOldToolResults(providerMessages, currentTurnStartIndex, compactionKeepTurns, compactionMinChars)
@@ -168,11 +173,23 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// 2. It's the first turn
 		// 3. The user's message indicates they need live data or an action
 		// This prevents forcing tool calls on conceptual questions like "What is TCP?"
-		if writeCompletedLastTurn {
+		forcedTextOnly := false
+		if turn >= maxTurns-1 {
+			// Last turn before hitting the limit — force a text-only response so
+			// the model summarizes its findings instead of silently stopping.
+			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
+			forcedTextOnly = true
+			log.Warn().
+				Int("turn", turn).
+				Int("max_turns", maxTurns).
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Approaching max turns — forcing text-only response for summary")
+		} else if writeCompletedLastTurn {
 			// A write action completed successfully on the previous turn.
 			// Force text-only response so the model summarizes the result instead of
 			// making more tool calls (which often return stale cached data and cause loops).
 			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
+			forcedTextOnly = true
 			writeCompletedLastTurn = false
 			log.Debug().
 				Str("session_id", sessionID).
@@ -182,6 +199,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			// The model already has the data it gathered — force it to produce a text
 			// response instead of continuing to call tools that will just be blocked again.
 			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
+			forcedTextOnly = true
 			toolBlockedLastTurn = false
 			log.Debug().
 				Str("session_id", sessionID).
@@ -248,7 +266,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					// Format input for frontend display
 					// For control tools, show a human-readable summary instead of raw JSON to avoid "hallucination" look
 					inputStr := "{}"
+					rawInput := ""
 					if data.Input != nil {
+						if inputBytes, err := json.Marshal(data.Input); err == nil {
+							rawInput = string(inputBytes)
+						}
 						// Special handling for command execution tools to avoid showing raw JSON
 						if data.Name == "pulse_control" || data.Name == "pulse_run_command" || data.Name == "control" {
 							if cmd, ok := data.Input["command"].(string); ok {
@@ -277,9 +299,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						}
 					}
 					jsonData, _ := json.Marshal(ToolStartData{
-						ID:    data.ID,
-						Name:  data.Name,
-						Input: inputStr,
+						ID:       data.ID,
+						Name:     data.Name,
+						Input:    inputStr,
+						RawInput: rawInput,
 					})
 					callback(StreamEvent{Type: "tool_start", Data: jsonData})
 				}
@@ -321,6 +344,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Provider error")
 			return resultMessages, fmt.Errorf("provider error: %w", err)
+		}
+
+		// Guard: if we forced text-only but the model still returned tool calls
+		// (some providers like Gemini can hallucinate function calls from conversation
+		// history even when tools are not offered in the request), strip them so the
+		// model's text content is treated as the final response.
+		if forcedTextOnly && len(toolCalls) > 0 {
+			log.Warn().
+				Str("session_id", sessionID).
+				Int("stripped_tool_calls", len(toolCalls)).
+				Msg("[AgenticLoop] Model returned tool calls despite ToolChoiceNone — stripping them")
+			toolCalls = nil
 		}
 
 		// Check mid-run budget after each turn completes
@@ -475,6 +510,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 
 			log.Debug().Msg("Agentic loop complete - no tool calls")
+			resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 			return resultMessages, nil
 		}
 
@@ -611,6 +647,58 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				continue
 			}
 
+			// === KNOWLEDGE GATE: Return cached facts for redundant tool calls ===
+			if a.knowledgeAccumulator != nil {
+				if keys := PredictFactKeys(tc.Name, tc.Input); len(keys) > 0 {
+					var cachedParts []string
+					for _, key := range keys {
+						if value, found := a.knowledgeAccumulator.Lookup(key); found {
+							cachedParts = append(cachedParts, value)
+						}
+					}
+					if len(cachedParts) > 0 {
+						cachedResult := fmt.Sprintf("Already known (from earlier investigation, matched keys: %s): %s. If you need fresh data, use a different query or approach.", strings.Join(keys, ","), strings.Join(cachedParts, "; "))
+
+						log.Info().
+							Str("tool", tc.Name).
+							Str("session_id", sessionID).
+							Strs("matched_keys", keys).
+							Int("cached_parts", len(cachedParts)).
+							Msg("[AgenticLoop] Knowledge gate: returning cached fact instead of re-executing tool")
+
+						jsonData, _ := json.Marshal(ToolEndData{
+							ID:      tc.ID,
+							Name:    tc.Name,
+							Input:   "",
+							Output:  cachedResult,
+							Success: true,
+						})
+						callback(StreamEvent{Type: "tool_end", Data: jsonData})
+
+						toolResultMsg := Message{
+							ID:        uuid.New().String(),
+							Role:      "user",
+							Timestamp: time.Now(),
+							ToolResult: &ToolResult{
+								ToolUseID: tc.ID,
+								Content:   cachedResult,
+								IsError:   false,
+							},
+						}
+						resultMessages = append(resultMessages, toolResultMsg)
+						providerMessages = append(providerMessages, providers.Message{
+							Role: "user",
+							ToolResult: &providers.ToolResult{
+								ToolUseID: tc.ID,
+								Content:   cachedResult,
+								IsError:   false,
+							},
+						})
+						continue
+					}
+				}
+			}
+
 			// Execute the tool
 			result, err := a.executor.ExecuteTool(ctx, tc.Name, tc.Input)
 
@@ -628,6 +716,20 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					log.Debug().
 						Str("tool", tc.Name).
 						Msg("[AgenticLoop] Tool succeeded - toolsSucceededThisEpisode set to true")
+
+					// Extract and accumulate knowledge facts
+					if a.knowledgeAccumulator != nil {
+						a.knowledgeAccumulator.SetTurn(turn)
+						facts := ExtractFacts(tc.Name, tc.Input, resultText)
+						for _, f := range facts {
+							a.knowledgeAccumulator.AddFact(f.Category, f.Key, f.Value)
+							log.Debug().
+								Str("tool", tc.Name).
+								Str("fact_key", f.Key).
+								Int("value_len", len(f.Value)).
+								Msg("[AgenticLoop] Stored knowledge fact")
+						}
+					}
 				}
 			}
 
@@ -786,7 +888,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			// Send tool_end event
 			// Convert input to JSON string for frontend display
 			inputStr := ""
+			rawInput := ""
 			if tc.Input != nil {
+				if inputBytes, err := json.Marshal(tc.Input); err == nil {
+					rawInput = string(inputBytes)
+				}
 				// Special handling for command execution tools to avoid showing raw JSON
 				if tc.Name == "pulse_control" || tc.Name == "pulse_run_command" || tc.Name == "control" {
 					if cmd, ok := tc.Input["command"].(string); ok {
@@ -814,11 +920,12 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				}
 			}
 			jsonData, _ := json.Marshal(ToolEndData{
-				ID:      tc.ID,
-				Name:    tc.Name,
-				Input:   inputStr,
-				Output:  resultText,
-				Success: !isError,
+				ID:       tc.ID,
+				Name:     tc.Name,
+				Input:    inputStr,
+				RawInput: rawInput,
+				Output:   resultText,
+				Success:  !isError,
 			})
 			callback(StreamEvent{Type: "tool_end", Data: jsonData})
 
@@ -951,8 +1058,91 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		turn++
 	}
 
-	log.Warn().Int("max_turns", a.maxTurns).Msg("Agentic loop hit max turns limit")
+	log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("Agentic loop hit max turns limit")
+	resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 	return resultMessages, nil
+}
+
+// ensureFinalTextResponse checks if the result messages contain any assistant text.
+// If not, it makes one last text-only LLM call to force the model to summarize its findings.
+// This prevents the loop from exiting silently after making tool calls without answering.
+func (a *AgenticLoop) ensureFinalTextResponse(
+	ctx context.Context,
+	sessionID string,
+	resultMessages []Message,
+	providerMessages []providers.Message,
+	callback StreamCallback,
+) []Message {
+	// Check if any assistant message has text content
+	for i := len(resultMessages) - 1; i >= 0; i-- {
+		if resultMessages[i].Role == "assistant" && strings.TrimSpace(resultMessages[i].Content) != "" {
+			return resultMessages // Already has text — nothing to do
+		}
+	}
+
+	// No text content from the model. Make a final text-only call.
+	log.Warn().Str("session_id", sessionID).Msg("[AgenticLoop] No text content produced — making final summary call")
+
+	// Build clean message history for the summary call:
+	// 1. Strip any trailing empty assistant messages (the model already failed to produce
+	//    text with these, so including them would just get the same empty result).
+	// 2. Append a user-role nudge to give the model a clear instruction.
+	cleanMessages := make([]providers.Message, len(providerMessages))
+	copy(cleanMessages, providerMessages)
+	for len(cleanMessages) > 0 {
+		last := cleanMessages[len(cleanMessages)-1]
+		if last.Role == "assistant" && strings.TrimSpace(last.Content) == "" && len(last.ToolCalls) == 0 {
+			cleanMessages = cleanMessages[:len(cleanMessages)-1]
+		} else {
+			break
+		}
+	}
+	cleanMessages = append(cleanMessages, providers.Message{
+		Role:    "user",
+		Content: "You've gathered information above using tools. Now provide your analysis and answer to the original question. Summarize your findings concisely.",
+	})
+
+	summaryReq := providers.ChatRequest{
+		Messages:   cleanMessages,
+		System:     a.getSystemPrompt(),
+		ToolChoice: &providers.ToolChoice{Type: providers.ToolChoiceNone},
+		// No Tools field — completely omit tools to prevent hallucinated function calls
+	}
+
+	var summaryBuilder strings.Builder
+
+	summaryErr := a.provider.ChatStream(ctx, summaryReq, func(event providers.StreamEvent) {
+		switch event.Type {
+		case "content":
+			if data, ok := event.Data.(providers.ContentEvent); ok {
+				summaryBuilder.WriteString(data.Text)
+				jsonData, _ := json.Marshal(ContentData{Text: data.Text})
+				callback(StreamEvent{Type: "content", Data: jsonData})
+			}
+		case "done":
+			if data, ok := event.Data.(providers.DoneEvent); ok {
+				a.totalInputTokens += data.InputTokens
+				a.totalOutputTokens += data.OutputTokens
+			}
+		}
+	})
+
+	if summaryErr == nil && summaryBuilder.Len() > 0 {
+		summaryMsg := Message{
+			ID:        uuid.New().String(),
+			Role:      "assistant",
+			Content:   summaryBuilder.String(),
+			Timestamp: time.Now(),
+		}
+		resultMessages = append(resultMessages, summaryMsg)
+		log.Info().Str("session_id", sessionID).Int("summary_len", summaryBuilder.Len()).Msg("[AgenticLoop] Final summary produced")
+	} else if summaryErr != nil {
+		log.Error().Err(summaryErr).Str("session_id", sessionID).Msg("[AgenticLoop] Final summary call failed")
+	} else {
+		log.Warn().Str("session_id", sessionID).Msg("[AgenticLoop] Final summary call returned empty content")
+	}
+
+	return resultMessages
 }
 
 // Abort aborts an ongoing session
@@ -975,6 +1165,14 @@ func (a *AgenticLoop) SetAutonomousMode(enabled bool) {
 func (a *AgenticLoop) SetSessionFSM(fsm *SessionFSM) {
 	a.mu.Lock()
 	a.sessionFSM = fsm
+	a.mu.Unlock()
+}
+
+// SetKnowledgeAccumulator sets the knowledge accumulator for fact extraction.
+// This must be called before Execute to enable knowledge accumulation.
+func (a *AgenticLoop) SetKnowledgeAccumulator(ka *KnowledgeAccumulator) {
+	a.mu.Lock()
+	a.knowledgeAccumulator = ka
 	a.mu.Unlock()
 }
 
@@ -1475,7 +1673,14 @@ confirmation prompt - you don't need to ask "Would you like me to...?" Just exec
 needed and the system will prompt the user to approve if required.`
 	}
 
-	return a.baseSystemPrompt + modeContext
+	prompt := a.baseSystemPrompt + modeContext
+
+	// Append accumulated knowledge facts to system prompt
+	if ka := a.knowledgeAccumulator; ka != nil && ka.Len() > 0 {
+		prompt += "\n\n" + ka.Render()
+	}
+
+	return prompt
 }
 
 // AnswerQuestion provides an answer to a pending question

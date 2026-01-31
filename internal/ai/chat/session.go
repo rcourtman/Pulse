@@ -32,6 +32,11 @@ type SessionStore struct {
 	// sessionToolSets holds per-session tool allowlists (in-memory only).
 	// These keep tool availability stable across turns while allowing additive expansion.
 	sessionToolSets map[string]map[string]bool
+
+	// knowledgeAccumulators holds per-session knowledge accumulators (in-memory only).
+	// These extract and preserve key facts from tool results to prevent amnesia
+	// when old tool results are compacted from the conversation context.
+	knowledgeAccumulators map[string]*KnowledgeAccumulator
 }
 
 // sessionData is the on-disk format for a session
@@ -51,10 +56,11 @@ func NewSessionStore(dataDir string) (*SessionStore, error) {
 	}
 
 	return &SessionStore{
-		dataDir:          sessionsDir,
-		resolvedContexts: make(map[string]*ResolvedContext),
-		sessionFSMs:      make(map[string]*SessionFSM),
-		sessionToolSets:  make(map[string]map[string]bool),
+		dataDir:               sessionsDir,
+		resolvedContexts:      make(map[string]*ResolvedContext),
+		sessionFSMs:           make(map[string]*SessionFSM),
+		sessionToolSets:       make(map[string]map[string]bool),
+		knowledgeAccumulators: make(map[string]*KnowledgeAccumulator),
 	}, nil
 }
 
@@ -160,10 +166,11 @@ func (s *SessionStore) Delete(id string) error {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
 
-	// Also clean up resolved context and FSM
+	// Also clean up resolved context, FSM, and knowledge accumulator
 	delete(s.resolvedContexts, id)
 	delete(s.sessionFSMs, id)
 	delete(s.sessionToolSets, id)
+	delete(s.knowledgeAccumulators, id)
 
 	return nil
 }
@@ -355,6 +362,32 @@ func (s *SessionStore) GetSessionFSM(sessionID string) *SessionFSM {
 	return fsm
 }
 
+// GetKnowledgeAccumulator returns the knowledge accumulator for a session, creating one if needed.
+// For user chat sessions, this persists across messages (facts accumulate during a conversation).
+func (s *SessionStore) GetKnowledgeAccumulator(sessionID string) *KnowledgeAccumulator {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ka, ok := s.knowledgeAccumulators[sessionID]
+	if !ok {
+		ka = NewKnowledgeAccumulator()
+		s.knowledgeAccumulators[sessionID] = ka
+	}
+	return ka
+}
+
+// NewKnowledgeAccumulatorForRun creates a fresh KA for a patrol run.
+// Unlike GetKnowledgeAccumulator (which reuses a session-scoped KA),
+// this always returns a new instance to avoid stale facts from prior runs.
+func (s *SessionStore) NewKnowledgeAccumulatorForRun(sessionID string) *KnowledgeAccumulator {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ka := NewKnowledgeAccumulator()
+	s.knowledgeAccumulators[sessionID] = ka
+	return ka
+}
+
 // ResetSessionFSM resets the FSM for a session (e.g., after context clear)
 func (s *SessionStore) ResetSessionFSM(sessionID string, keepProgress bool) {
 	s.mu.Lock()
@@ -434,6 +467,7 @@ func (s *SessionStore) ClearSessionState(sessionID string, keepPinned bool) {
 
 	if !keepPinned {
 		delete(s.sessionToolSets, sessionID)
+		delete(s.knowledgeAccumulators, sessionID)
 	}
 
 	// Reset FSM coherently with context state

@@ -104,6 +104,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   // Chat hook
   const chat = useChat({ model: initialModelSelections[DEFAULT_SESSION_KEY] || '' });
 
+
   const defaultModelLabel = createMemo(() => {
     const fallback = defaultModel().trim();
     if (!fallback) return '';

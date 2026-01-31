@@ -131,3 +131,9 @@ export interface StreamCompleteData {
   output_tokens: number;
   tool_calls?: ToolExecution[];
 }
+
+export interface StreamDoneData {
+  session_id?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+}

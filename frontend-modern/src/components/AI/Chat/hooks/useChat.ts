@@ -96,6 +96,18 @@ export function useChat(options: UseChatOptions = {}) {
     return '';
   };
 
+  const extractTokens = (data: unknown): { input: number; output: number } | null => {
+    if (!data || typeof data !== 'object') return null;
+    const record = data as Record<string, unknown>;
+    const input = Number(record.input_tokens ?? record.inputTokens ?? record.input);
+    const output = Number(record.output_tokens ?? record.outputTokens ?? record.output);
+    if (!Number.isFinite(input) && !Number.isFinite(output)) return null;
+    return {
+      input: Number.isFinite(input) && input > 0 ? input : 0,
+      output: Number.isFinite(output) && output > 0 ? output : 0,
+    };
+  };
+
   const processEvent = (
     assistantId: string,
     event: StreamEvent
@@ -281,6 +293,10 @@ export function useChat(options: UseChatOptions = {}) {
           }
 
           case 'done': {
+            const tokens = extractTokens(event.data);
+            if (tokens && (tokens.input > 0 || tokens.output > 0)) {
+              return { ...msg, isStreaming: false, pendingTools: [], tokens };
+            }
             return { ...msg, isStreaming: false, pendingTools: [] };
           }
 

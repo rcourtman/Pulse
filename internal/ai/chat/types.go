@@ -70,6 +70,7 @@ type ExecuteRequest struct {
 	SessionID string              `json:"session_id,omitempty"`
 	Model     string              `json:"model,omitempty"`
 	Mentions  []StructuredMention `json:"mentions,omitempty"`
+	MaxTurns  int                 `json:"max_turns,omitempty"` // Override max agentic turns (0 = use default)
 }
 
 // QuestionAnswer represents a user's answer to a question
@@ -90,18 +91,20 @@ type ThinkingData struct {
 
 // ToolStartData is the data for "tool_start" events
 type ToolStartData struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Input string `json:"input"` // JSON string of input parameters
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Input    string `json:"input"`               // JSON string of input parameters
+	RawInput string `json:"raw_input,omitempty"` // Unmodified JSON input
 }
 
 // ToolEndData is the data for "tool_end" events
 type ToolEndData struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Input   string `json:"input,omitempty"`
-	Output  string `json:"output,omitempty"`
-	Success bool   `json:"success"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Input    string `json:"input,omitempty"`
+	RawInput string `json:"raw_input,omitempty"`
+	Output   string `json:"output,omitempty"`
+	Success  bool   `json:"success"`
 }
 
 // ApprovalNeededData is the data for "approval_needed" events

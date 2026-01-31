@@ -440,6 +440,11 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	sessionFSM := sessions.GetSessionFSM(session.ID)
 	loop.SetSessionFSM(sessionFSM)
 
+	// Set session-scoped knowledge accumulator for fact extraction across turns.
+	// For user chat, this persists across messages so facts accumulate during a conversation.
+	ka := sessions.GetKnowledgeAccumulator(session.ID)
+	loop.SetKnowledgeAccumulator(ka)
+
 	// If the prefetcher resolved mentions, advance FSM past RESOLVING.
 	// The prefetched context already contains the resource details (type, VMID, node, host)
 	// so forcing the AI to redundantly call a read tool would be wasteful.
@@ -467,6 +472,13 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		if len(parts) == 2 {
 			loop.SetProviderInfo(parts[0], parts[1])
 		}
+	}
+
+	// Override max turns if the caller specified one (e.g. investigations use 15).
+	// Reset after the call to avoid affecting concurrent sessions on the shared loop.
+	if req.MaxTurns > 0 {
+		loop.SetMaxTurns(req.MaxTurns)
+		defer loop.SetMaxTurns(MaxAgenticTurns)
 	}
 
 	resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
@@ -598,6 +610,13 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	// Set session FSM
 	sessionFSM := sessions.GetSessionFSM(session.ID)
 	tempLoop.SetSessionFSM(sessionFSM)
+
+	// Create a fresh knowledge accumulator for this patrol run.
+	// Unlike user chat (which reuses session-scoped KA across messages),
+	// patrol runs need a clean slate to avoid stale facts from prior runs
+	// (patrol-main reuses the same session ID across scheduled runs).
+	ka := sessions.NewKnowledgeAccumulatorForRun(session.ID)
+	tempLoop.SetKnowledgeAccumulator(ka)
 
 	// Set mid-run budget checker if configured
 	if s.budgetChecker != nil {

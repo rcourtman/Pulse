@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -163,6 +164,83 @@ func TestAgenticLoop(t *testing.T) {
 		loop.Abort("abort-me")
 		// In a real execution, loop would check aborted map
 		assert.True(t, loop.aborted["abort-me"])
+	})
+
+	t.Run("KnowledgeAccumulatorInjectedInSystemPrompt", func(t *testing.T) {
+		state := models.StateSnapshot{
+			VMs: []models.VM{{
+				ID:     "vm-100",
+				VMID:   100,
+				Name:   "vm-one",
+				Node:   "node1",
+				Status: "running",
+				CPU:    0.5,
+				CPUs:   4,
+				Memory: models.Memory{
+					Usage: 0.42,
+					Used:  4 * 1024 * 1024 * 1024,
+					Total: 8 * 1024 * 1024 * 1024,
+				},
+			}},
+		}
+		execWithState := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+			StateProvider: &mockStateProvider{state: state},
+		})
+		mockProvider := &MockProvider{}
+		loop := NewAgenticLoop(mockProvider, execWithState, "You are a helper")
+		ka := NewKnowledgeAccumulator()
+		loop.SetKnowledgeAccumulator(ka)
+
+		ctx := context.Background()
+		sessionID := "ka-session"
+		messages := []Message{{Role: "user", Content: "Get VM status"}}
+
+		mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+			return len(req.Messages) == 1
+		}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+			callback := args.Get(2).(providers.StreamCallback)
+			callback(providers.StreamEvent{
+				Type: "tool_start",
+				Data: providers.ToolStartEvent{ID: "call_1", Name: "pulse_query"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{
+					ToolCalls: []providers.ToolCall{{
+						ID:   "call_1",
+						Name: "pulse_query",
+						Input: map[string]interface{}{
+							"action":        "get",
+							"resource_type": "vm",
+							"resource_id":   "100",
+						},
+					}},
+				},
+			})
+		}).Once()
+
+		var secondSystem string
+		mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+			return len(req.Messages) == 3
+		}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+			req := args.Get(1).(providers.ChatRequest)
+			secondSystem = req.System
+			callback := args.Get(2).(providers.StreamCallback)
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "Done."},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{},
+			})
+		}).Once()
+
+		_, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {})
+		require.NoError(t, err)
+		require.NotEmpty(t, secondSystem)
+		assert.Contains(t, secondSystem, "## Known Facts")
+		assert.Contains(t, secondSystem, "vm-one")
 	})
 }
 
