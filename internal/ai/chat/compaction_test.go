@@ -41,7 +41,7 @@ func TestCompactOldToolResults_NoCompactionOnFirstTurn(t *testing.T) {
 		{Role: "user", Content: "check my infra"},
 	}
 	original := msgs[0].Content
-	compactOldToolResults(msgs, len(msgs), 3, 500)
+	compactOldToolResults(msgs, len(msgs), 3, 500, nil)
 	assert.Equal(t, original, msgs[0].Content, "user message should not be modified")
 }
 
@@ -56,7 +56,7 @@ func TestCompactOldToolResults_DoesNotCompactCurrentTurn(t *testing.T) {
 	}
 
 	// currentTurnStartIndex = 3 means all messages are from the current turn
-	compactOldToolResults(msgs, 3, 3, 500)
+	compactOldToolResults(msgs, 3, 3, 500, nil)
 	assert.Equal(t, bigResult, msgs[2].ToolResult.Content, "current turn results should not be compacted")
 }
 
@@ -101,7 +101,7 @@ func TestCompactOldToolResults_CompactsOldTurns(t *testing.T) {
 	keepTurns := 2
 	minChars := 500
 
-	compactOldToolResults(msgs, currentTurnStart, keepTurns, minChars)
+	compactOldToolResults(msgs, currentTurnStart, keepTurns, minChars, nil)
 
 	// With keepTurns=2, we walk back from currentTurnStart=9:
 	//   index 7 (turn 2 assistant): turnsFound=1
@@ -144,7 +144,7 @@ func TestCompactOldToolResults_DoesNotCompactErrors(t *testing.T) {
 		makeToolResultMessage("tc2", bigContent(1000), false),
 	}
 
-	compactOldToolResults(msgs, 3, 0, 500) // keepTurns=0 means compact everything before currentTurnStart
+	compactOldToolResults(msgs, 3, 0, 500, nil) // keepTurns=0 means compact everything before currentTurnStart
 
 	assert.Equal(t, errorContent, msgs[2].ToolResult.Content, "error results should never be compacted")
 }
@@ -165,15 +165,15 @@ func TestCompactOldToolResults_KeepTurnsZero(t *testing.T) {
 		makeToolResultMessage("tc2", bigContent(3000), false),
 	}
 
-	compactOldToolResults(msgs, 3, 0, 500)
+	compactOldToolResults(msgs, 3, 0, 500, nil)
 	assert.Contains(t, msgs[2].ToolResult.Content, "[Tool result compacted:", "should compact with keepTurns=0")
 }
 
 func TestCompactOldToolResults_EmptyMessages(t *testing.T) {
 	// Edge case: empty or nil-ish slices should not panic
-	compactOldToolResults(nil, 0, 3, 500)
-	compactOldToolResults([]providers.Message{}, 0, 3, 500)
-	compactOldToolResults([]providers.Message{{Role: "user", Content: "hi"}}, 0, 3, 500)
+	compactOldToolResults(nil, 0, 3, 500, nil)
+	compactOldToolResults([]providers.Message{}, 0, 3, 500, nil)
+	compactOldToolResults([]providers.Message{{Role: "user", Content: "hi"}}, 0, 3, 500, nil)
 }
 
 func TestCompactOldToolResults_ContextSavings(t *testing.T) {
@@ -202,7 +202,7 @@ func TestCompactOldToolResults_ContextSavings(t *testing.T) {
 		}
 	}
 
-	compactOldToolResults(msgs, currentTurnStart, 3, 500)
+	compactOldToolResults(msgs, currentTurnStart, 3, 500, nil)
 
 	// Measure after
 	charsAfter := 0
@@ -267,7 +267,7 @@ func TestBuildCompactSummary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := buildCompactSummary(tt.toolName, tt.toolInput, tt.content)
+			result := buildCompactSummary(tt.toolName, tt.toolInput, tt.content, nil, "")
 			for _, part := range tt.wantParts {
 				assert.Contains(t, result, part)
 			}
@@ -341,13 +341,156 @@ func TestCompactOldToolResults_PreservesToolCallInfo(t *testing.T) {
 		makeToolResultMessage("tc3", bigContent(1000), false),
 	}
 
-	compactOldToolResults(msgs, 4, 0, 500) // compact everything before index 4
+	compactOldToolResults(msgs, 4, 0, 500, nil) // compact everything before index 4
 
 	require.Contains(t, msgs[2].ToolResult.Content, "pulse_storage")
 	require.Contains(t, msgs[2].ToolResult.Content, "type=pools")
 	require.Contains(t, msgs[3].ToolResult.Content, "pulse_metrics")
 	require.Contains(t, msgs[3].ToolResult.Content, "type=performance")
 	require.Contains(t, msgs[3].ToolResult.Content, "period=7d")
+}
+
+func TestBuildCompactSummary_WithKAFacts(t *testing.T) {
+	ka := NewKnowledgeAccumulator()
+	ka.AddFactForTool("tc-abc", FactCategoryStorage, "storage:delly+minipc:pbs-minipc", "PBS, available, active on delly+minipc, 42.7% used, 573GB free")
+
+	result := buildCompactSummary("pulse_storage", map[string]interface{}{"type": "pools"}, bigContent(2847), ka, "tc-abc")
+	assert.Contains(t, result, "[Compacted:")
+	assert.Contains(t, result, "pulse_storage")
+	assert.Contains(t, result, "Key facts:")
+	assert.Contains(t, result, "PBS")
+	assert.Contains(t, result, "42.7% used")
+	assert.NotContains(t, result, "already been processed", "should use KA format, not generic format")
+}
+
+func TestBuildCompactSummary_WithKAFacts_NoFacts(t *testing.T) {
+	ka := NewKnowledgeAccumulator()
+	// No facts added for this tool ID — should fall back to generic format
+	result := buildCompactSummary("pulse_query", map[string]interface{}{"type": "topology"}, bigContent(5000), ka, "tc-unknown")
+	assert.Contains(t, result, "[Tool result compacted:")
+	assert.Contains(t, result, "already been processed")
+	assert.NotContains(t, result, "Key facts:")
+}
+
+func TestCompactOldToolResults_WithKAFacts(t *testing.T) {
+	ka := NewKnowledgeAccumulator()
+	ka.AddFactForTool("tc1", FactCategoryStorage, "storage:delly:local-lvm", "dir, available, 80% used, 20GB free")
+
+	msgs := []providers.Message{
+		{Role: "user", Content: "check storage"},
+		makeAssistantMessageWithToolCalls("",
+			providers.ToolCall{ID: "tc1", Name: "pulse_storage", Input: map[string]interface{}{"type": "pools"}},
+		),
+		makeToolResultMessage("tc1", bigContent(3000), false),
+		// Current turn
+		makeAssistantMessageWithToolCalls("",
+			providers.ToolCall{ID: "tc2", Name: "pulse_read", Input: map[string]interface{}{}},
+		),
+		makeToolResultMessage("tc2", bigContent(1000), false),
+	}
+
+	compactOldToolResults(msgs, 3, 0, 500, ka)
+
+	assert.Contains(t, msgs[2].ToolResult.Content, "[Compacted:")
+	assert.Contains(t, msgs[2].ToolResult.Content, "Key facts:")
+	assert.Contains(t, msgs[2].ToolResult.Content, "80% used")
+}
+
+func TestMaybeInjectWrapUpNudge(t *testing.T) {
+	msgs := []providers.Message{
+		{Role: "user", Content: "check everything"},
+		makeAssistantMessageWithToolCalls("",
+			providers.ToolCall{ID: "tc1", Name: "pulse_query", Input: map[string]interface{}{"type": "topology"}},
+		),
+		makeToolResultMessage("tc1", "some result data", false),
+	}
+
+	// Above threshold: should inject nudge
+	injected := maybeInjectWrapUpNudge(msgs, 13, 20, 5, 12)
+	assert.True(t, injected)
+	assert.Contains(t, msgs[2].ToolResult.Content, "[System: You have made 13 tool calls")
+	assert.Contains(t, msgs[2].ToolResult.Content, "14 turns remaining")
+	assert.Contains(t, msgs[2].ToolResult.Content, "Start forming your response")
+}
+
+func TestMaybeInjectWrapUpNudge_NotInjectedBelowThreshold(t *testing.T) {
+	msgs := []providers.Message{
+		{Role: "user", Content: "check something"},
+		makeAssistantMessageWithToolCalls("",
+			providers.ToolCall{ID: "tc1", Name: "pulse_query", Input: map[string]interface{}{}},
+		),
+		makeToolResultMessage("tc1", "result", false),
+	}
+
+	originalContent := msgs[2].ToolResult.Content
+	injected := maybeInjectWrapUpNudge(msgs, 5, 20, 2, 12)
+	assert.False(t, injected)
+	assert.Equal(t, originalContent, msgs[2].ToolResult.Content, "content should not be modified below threshold")
+}
+
+func TestMaybeInjectWrapUpNudge_SkipsErrorResults(t *testing.T) {
+	msgs := []providers.Message{
+		makeToolResultMessage("tc1", "good result", false),
+		makeToolResultMessage("tc2", "error result", true), // Last result is an error
+	}
+
+	injected := maybeInjectWrapUpNudge(msgs, 15, 20, 5, 12)
+	assert.True(t, injected)
+	// Should inject into tc1 (the last non-error result), not tc2
+	assert.Contains(t, msgs[0].ToolResult.Content, "[System:")
+	assert.NotContains(t, msgs[1].ToolResult.Content, "[System:")
+}
+
+func TestWrapUpNudge_FiresOnce(t *testing.T) {
+	// Simulate calling maybeInjectWrapUpNudge twice above threshold.
+	// Only the first call should inject text (caller gates with wrapUpNudgeFired).
+	msgs := []providers.Message{
+		makeToolResultMessage("tc1", "result data", false),
+	}
+
+	// First call: should inject
+	injected := maybeInjectWrapUpNudge(msgs, 13, 20, 5, 12)
+	assert.True(t, injected)
+	assert.Contains(t, msgs[0].ToolResult.Content, "[System: You have made 13 tool calls")
+
+	// Record content after first injection
+	contentAfterFirst := msgs[0].ToolResult.Content
+
+	// Second call: the function itself always injects if above threshold,
+	// but the agentic loop gates it with wrapUpNudgeFired. Verify that
+	// calling it again would add a second nudge (showing why the gate matters).
+	injected2 := maybeInjectWrapUpNudge(msgs, 15, 20, 7, 12)
+	assert.True(t, injected2)
+	// Content changed — this proves the agentic loop gate is necessary
+	assert.NotEqual(t, contentAfterFirst, msgs[0].ToolResult.Content)
+}
+
+func TestWrapUpNudge_Escalation(t *testing.T) {
+	// Verify escalation fires at 18+ calls with stronger text.
+	msgs := []providers.Message{
+		makeToolResultMessage("tc1", "some data", false),
+	}
+
+	// Escalation should NOT fire below 18 (it's gated in the loop, but test the function)
+	injected := maybeInjectWrapUpEscalation(msgs, 18)
+	assert.True(t, injected)
+	assert.Contains(t, msgs[0].ToolResult.Content, "WRAP UP NOW")
+	assert.Contains(t, msgs[0].ToolResult.Content, "18 tool calls")
+	assert.Contains(t, msgs[0].ToolResult.Content, "MUST respond")
+	assert.Contains(t, msgs[0].ToolResult.Content, "Do NOT make any more tool calls")
+}
+
+func TestWrapUpEscalation_SkipsErrorResults(t *testing.T) {
+	msgs := []providers.Message{
+		makeToolResultMessage("tc1", "good result", false),
+		makeToolResultMessage("tc2", "error result", true),
+	}
+
+	injected := maybeInjectWrapUpEscalation(msgs, 20)
+	assert.True(t, injected)
+	// Should inject into tc1 (last non-error), not tc2
+	assert.Contains(t, msgs[0].ToolResult.Content, "WRAP UP NOW")
+	assert.NotContains(t, msgs[1].ToolResult.Content, "WRAP UP NOW")
 }
 
 func TestTruncateToolResultForModel_ReducedLimit(t *testing.T) {

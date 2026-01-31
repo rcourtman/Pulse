@@ -13,11 +13,19 @@ type FactCategory string
 const (
 	FactCategoryResource  FactCategory = "resource"
 	FactCategoryStorage   FactCategory = "storage"
+	FactCategoryAlert     FactCategory = "alert"
 	FactCategoryDiscovery FactCategory = "discovery"
 	FactCategoryExec      FactCategory = "exec"
 	FactCategoryMetrics   FactCategory = "metrics"
 	FactCategoryFinding   FactCategory = "finding"
 )
+
+// isMarkerKey returns true if the fact key is a marker (ends with ":queried").
+// Markers exist only for gate matching and should not appear in rendered output
+// or count toward the character budget.
+func isMarkerKey(key string) bool {
+	return strings.HasSuffix(key, ":queried")
+}
 
 // Fact is a single extracted knowledge entry.
 type Fact struct {
@@ -39,8 +47,9 @@ const (
 // Thread-safe: all methods are protected by a mutex.
 type KnowledgeAccumulator struct {
 	mu          sync.Mutex
-	facts       map[string]*Fact // key -> fact (upsert: same key updates value)
-	order       []string         // insertion order for LRU eviction
+	facts       map[string]*Fact    // key -> fact (upsert: same key updates value)
+	order       []string            // insertion order for LRU eviction
+	toolFacts   map[string][]string // tool_use_id -> fact keys extracted from that tool call
 	totalChars  int
 	maxEntries  int
 	maxChars    int
@@ -51,6 +60,7 @@ type KnowledgeAccumulator struct {
 func NewKnowledgeAccumulator() *KnowledgeAccumulator {
 	return &KnowledgeAccumulator{
 		facts:      make(map[string]*Fact),
+		toolFacts:  make(map[string][]string),
 		maxEntries: defaultMaxEntries,
 		maxChars:   defaultMaxChars,
 	}
@@ -73,6 +83,47 @@ func (ka *KnowledgeAccumulator) AddFact(category FactCategory, key, value string
 	ka.mu.Lock()
 	defer ka.mu.Unlock()
 
+	ka.addFactLocked(category, key, value)
+}
+
+// AddFactForTool upserts a fact and records the association with a specific tool_use_id.
+// This allows FactSummaryForTool to later retrieve what facts were extracted from a given tool call.
+func (ka *KnowledgeAccumulator) AddFactForTool(toolUseID string, category FactCategory, key, value string) {
+	if key == "" || value == "" {
+		return
+	}
+
+	ka.mu.Lock()
+	defer ka.mu.Unlock()
+
+	ka.addFactLocked(category, key, value)
+	if toolUseID != "" {
+		ka.toolFacts[toolUseID] = append(ka.toolFacts[toolUseID], key)
+	}
+}
+
+// FactSummaryForTool returns a joined summary of fact values extracted from the given tool call.
+// Returns empty string if no facts were recorded for this tool_use_id.
+func (ka *KnowledgeAccumulator) FactSummaryForTool(toolUseID string) string {
+	ka.mu.Lock()
+	defer ka.mu.Unlock()
+
+	keys, ok := ka.toolFacts[toolUseID]
+	if !ok || len(keys) == 0 {
+		return ""
+	}
+
+	var parts []string
+	for _, key := range keys {
+		if fact, ok := ka.facts[key]; ok {
+			parts = append(parts, fmt.Sprintf("%s = %s", key, fact.Value))
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
+// addFactLocked is the internal implementation of AddFact. Caller must hold ka.mu.
+func (ka *KnowledgeAccumulator) addFactLocked(category FactCategory, key, value string) {
 	// Truncate value
 	if len(value) > maxValueLen {
 		value = value[:maxValueLen]
@@ -80,14 +131,20 @@ func (ka *KnowledgeAccumulator) AddFact(category FactCategory, key, value string
 
 	now := time.Now()
 
+	marker := isMarkerKey(key)
+
 	if existing, ok := ka.facts[key]; ok {
 		// Upsert: update existing fact
-		ka.totalChars -= len(existing.Value)
+		if !marker {
+			ka.totalChars -= len(existing.Value)
+		}
 		existing.Value = value
 		existing.Category = category
 		existing.ObservedAt = now
 		existing.Turn = ka.currentTurn
-		ka.totalChars += len(value)
+		if !marker {
+			ka.totalChars += len(value)
+		}
 	} else {
 		// New fact
 		fact := &Fact{
@@ -99,7 +156,9 @@ func (ka *KnowledgeAccumulator) AddFact(category FactCategory, key, value string
 		}
 		ka.facts[key] = fact
 		ka.order = append(ka.order, key)
-		ka.totalChars += len(value)
+		if !marker {
+			ka.totalChars += len(value)
+		}
 	}
 
 	// Evict until within budget
@@ -125,7 +184,9 @@ func (ka *KnowledgeAccumulator) evict() {
 				continue
 			}
 			// Evict this fact
-			ka.totalChars -= len(fact.Value)
+			if !isMarkerKey(key) {
+				ka.totalChars -= len(fact.Value)
+			}
 			delete(ka.facts, key)
 			ka.order = append(ka.order[:i], ka.order[i+1:]...)
 			evicted = true
@@ -162,6 +223,25 @@ func (ka *KnowledgeAccumulator) Lookup(key string) (string, bool) {
 	return "", false
 }
 
+// RelatedFacts returns a semicolon-joined summary of non-marker facts
+// whose keys start with the given prefix. Used by the gate to enrich
+// marker-based cache hits with actual per-resource data.
+func (ka *KnowledgeAccumulator) RelatedFacts(prefix string) string {
+	ka.mu.Lock()
+	defer ka.mu.Unlock()
+
+	var parts []string
+	for _, key := range ka.order {
+		if isMarkerKey(key) || !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		if fact, ok := ka.facts[key]; ok {
+			parts = append(parts, fmt.Sprintf("%s = %s", key, fact.Value))
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
 // Render produces the system prompt section with grouped facts.
 func (ka *KnowledgeAccumulator) Render() string {
 	ka.mu.Lock()
@@ -175,6 +255,7 @@ func (ka *KnowledgeAccumulator) Render() string {
 	categoryOrder := []FactCategory{
 		FactCategoryResource,
 		FactCategoryStorage,
+		FactCategoryAlert,
 		FactCategoryDiscovery,
 		FactCategoryExec,
 		FactCategoryMetrics,
@@ -184,6 +265,7 @@ func (ka *KnowledgeAccumulator) Render() string {
 	categoryLabels := map[FactCategory]string{
 		FactCategoryResource:  "Resources",
 		FactCategoryStorage:   "Storage",
+		FactCategoryAlert:     "Alerts",
 		FactCategoryDiscovery: "Discovery",
 		FactCategoryExec:      "Exec",
 		FactCategoryMetrics:   "Metrics",
@@ -192,6 +274,9 @@ func (ka *KnowledgeAccumulator) Render() string {
 
 	grouped := make(map[FactCategory][]*Fact)
 	for _, key := range ka.order {
+		if isMarkerKey(key) {
+			continue
+		}
 		if fact, ok := ka.facts[key]; ok {
 			grouped[fact.Category] = append(grouped[fact.Category], fact)
 		}
@@ -208,7 +293,7 @@ func (ka *KnowledgeAccumulator) Render() string {
 		label := categoryLabels[cat]
 		sb.WriteString(fmt.Sprintf("\n%s:", label))
 		for _, fact := range facts {
-			sb.WriteString(fmt.Sprintf("\n- %s", fact.Value))
+			sb.WriteString(fmt.Sprintf("\n- [%s] %s", fact.Key, fact.Value))
 		}
 	}
 

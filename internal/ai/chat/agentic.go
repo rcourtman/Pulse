@@ -122,10 +122,17 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	const compactionMinChars = 300                 // Only compact results longer than this
 	currentTurnStartIndex := len(providerMessages) // Initial messages are never compacted
 
+	// Wrap-up nudge: after this many cumulative tool calls, hint the model to start wrapping up.
+	const wrapUpNudgeAfterCalls = 12
+	const wrapUpEscalateAfterCalls = 18
+	totalToolCalls := 0
+	wrapUpNudgeFired := false
+	wrapUpEscalateFired := false
+
 	for turn < maxTurns {
 		// === CONTEXT COMPACTION: Compact old tool results to prevent context blowout ===
 		if turn > 0 {
-			compactOldToolResults(providerMessages, currentTurnStartIndex, compactionKeepTurns, compactionMinChars)
+			compactOldToolResults(providerMessages, currentTurnStartIndex, compactionKeepTurns, compactionMinChars, a.knowledgeAccumulator)
 		}
 
 		// Check if aborted
@@ -657,7 +664,15 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						}
 					}
 					if len(cachedParts) > 0 {
-						cachedResult := fmt.Sprintf("Already known (from earlier investigation, matched keys: %s): %s. If you need fresh data, use a different query or approach.", strings.Join(keys, ","), strings.Join(cachedParts, "; "))
+						// Enrich marker-based cache hits with related per-resource facts
+						for _, key := range keys {
+							if prefix, ok := MarkerExpansions[key]; ok {
+								if related := a.knowledgeAccumulator.RelatedFacts(prefix); related != "" {
+									cachedParts = append(cachedParts, related)
+								}
+							}
+						}
+						cachedResult := fmt.Sprintf("Already known (from earlier investigation): %s. If you need fresh data, use a different query or approach.", strings.Join(cachedParts, "; "))
 
 						log.Info().
 							Str("tool", tc.Name).
@@ -716,18 +731,38 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					log.Debug().
 						Str("tool", tc.Name).
 						Msg("[AgenticLoop] Tool succeeded - toolsSucceededThisEpisode set to true")
+				}
+				// Extract and accumulate knowledge facts from both success and structured error responses
+				if a.knowledgeAccumulator != nil {
+					a.knowledgeAccumulator.SetTurn(turn)
+					facts := ExtractFacts(tc.Name, tc.Input, resultText)
+					for _, f := range facts {
+						a.knowledgeAccumulator.AddFactForTool(tc.ID, f.Category, f.Key, f.Value)
+						log.Debug().
+							Str("tool", tc.Name).
+							Str("fact_key", f.Key).
+							Int("value_len", len(f.Value)).
+							Msg("[AgenticLoop] Stored knowledge fact")
+					}
 
-					// Extract and accumulate knowledge facts
-					if a.knowledgeAccumulator != nil {
-						a.knowledgeAccumulator.SetTurn(turn)
-						facts := ExtractFacts(tc.Name, tc.Input, resultText)
-						for _, f := range facts {
-							a.knowledgeAccumulator.AddFact(f.Category, f.Key, f.Value)
-							log.Debug().
-								Str("tool", tc.Name).
-								Str("fact_key", f.Key).
-								Int("value_len", len(f.Value)).
-								Msg("[AgenticLoop] Stored knowledge fact")
+					// If no facts were extracted but we predicted keys, store negative markers
+					// to prevent the gate from re-executing the same tool call.
+					if len(facts) == 0 && !isError {
+						if predictedKeys := PredictFactKeys(tc.Name, tc.Input); len(predictedKeys) > 0 {
+							for _, key := range predictedKeys {
+								if _, found := a.knowledgeAccumulator.Lookup(key); !found {
+									cat := categoryForPredictedKey(key)
+									summary := resultText
+									if len(summary) > 120 {
+										summary = summary[:120]
+									}
+									a.knowledgeAccumulator.AddFactForTool(tc.ID, cat, key, fmt.Sprintf("checked: %s", summary))
+									log.Debug().
+										Str("tool", tc.Name).
+										Str("fact_key", key).
+										Msg("[AgenticLoop] Stored negative marker (text response)")
+								}
+							}
 						}
 					}
 				}
@@ -1051,6 +1086,16 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			jsonData, _ := json.Marshal(ContentData{Text: summary})
 			callback(StreamEvent{Type: "content", Data: jsonData})
 			return resultMessages, nil
+		}
+
+		// Track cumulative tool calls and inject wrap-up nudge/escalation if threshold exceeded
+		totalToolCalls += len(toolCalls)
+		if !wrapUpNudgeFired && totalToolCalls >= wrapUpNudgeAfterCalls {
+			maybeInjectWrapUpNudge(providerMessages, totalToolCalls, maxTurns, turn, wrapUpNudgeAfterCalls)
+			wrapUpNudgeFired = true
+		} else if wrapUpNudgeFired && !wrapUpEscalateFired && totalToolCalls >= wrapUpEscalateAfterCalls {
+			maybeInjectWrapUpEscalation(providerMessages, totalToolCalls)
+			wrapUpEscalateFired = true
 		}
 
 		// Mark the start of the next turn's messages for compaction tracking
@@ -1830,7 +1875,7 @@ func convertToProviderMessages(messages []Message) []providers.Message {
 //
 // The model retains all its assistant messages (reasoning, analysis, findings) in full.
 // Only the raw tool result data from older turns gets replaced with a summary line.
-func compactOldToolResults(messages []providers.Message, currentTurnStartIndex, keepTurns, minChars int) {
+func compactOldToolResults(messages []providers.Message, currentTurnStartIndex, keepTurns, minChars int, ka *KnowledgeAccumulator) {
 	if currentTurnStartIndex <= 0 || keepTurns < 0 {
 		return
 	}
@@ -1902,7 +1947,7 @@ func compactOldToolResults(messages []providers.Message, currentTurnStartIndex, 
 			toolInput = info.Input
 		}
 
-		summary := buildCompactSummary(toolName, toolInput, content)
+		summary := buildCompactSummary(toolName, toolInput, content, ka, msg.ToolResult.ToolUseID)
 		savedChars += len(content) - len(summary)
 		msg.ToolResult.Content = summary
 		compacted++
@@ -1919,18 +1964,89 @@ func compactOldToolResults(messages []providers.Message, currentTurnStartIndex, 
 }
 
 // buildCompactSummary creates a short summary line for a compacted tool result.
-func buildCompactSummary(toolName string, toolInput map[string]interface{}, originalContent string) string {
+// When a KnowledgeAccumulator is provided and has facts for this tool_use_id,
+// the summary includes those facts so the model knows what it learned.
+func buildCompactSummary(toolName string, toolInput map[string]interface{}, originalContent string, ka *KnowledgeAccumulator, toolUseID string) string {
 	params := formatKeyParams(toolInput)
-	// Count lines and try to extract a count hint (e.g., number of items returned)
-	lineCount := strings.Count(originalContent, "\n") + 1
 	charCount := len(originalContent)
 
+	// Try to include KA facts for this specific tool call
+	if ka != nil && toolUseID != "" {
+		if factSummary := ka.FactSummaryForTool(toolUseID); factSummary != "" {
+			var summary string
+			if params != "" {
+				summary = fmt.Sprintf("[Compacted: %s(%s) — Key facts: %s]",
+					toolName, params, factSummary)
+			} else {
+				summary = fmt.Sprintf("[Compacted: %s — Key facts: %s]",
+					toolName, factSummary)
+			}
+			log.Info().
+				Str("tool", toolName).
+				Str("tool_use_id", toolUseID).
+				Int("original_chars", charCount).
+				Int("summary_chars", len(summary)).
+				Msg("[SmartCompaction] Used KA facts for compacted summary")
+			return summary
+		}
+	}
+
+	// Fallback: generic format when no KA facts available
+	lineCount := strings.Count(originalContent, "\n") + 1
 	if params != "" {
 		return fmt.Sprintf("[Tool result compacted: %s(%s) — %d chars, %d lines. Full data was provided to the model in an earlier turn and has already been processed.]",
 			toolName, params, charCount, lineCount)
 	}
 	return fmt.Sprintf("[Tool result compacted: %s — %d chars, %d lines. Full data was provided to the model in an earlier turn and has already been processed.]",
 		toolName, charCount, lineCount)
+}
+
+// maybeInjectWrapUpNudge appends a system hint to the last non-error tool result in
+// providerMessages when totalCalls exceeds the threshold. This nudges the model to
+// start wrapping up without forcing text-only mode.
+// Returns true if a nudge was injected.
+func maybeInjectWrapUpNudge(messages []providers.Message, totalCalls, maxTurns, currentTurn, threshold int) bool {
+	if totalCalls < threshold {
+		return false
+	}
+
+	turnsRemaining := maxTurns - currentTurn - 1
+	nudge := fmt.Sprintf("\n\n[System: You have made %d tool calls (%d turns remaining). You likely have enough data to answer. Start forming your response. You may make 1-2 more targeted calls if critical information is missing, but avoid exploratory calls.]",
+		totalCalls, turnsRemaining)
+
+	// Find the last non-error tool result in messages and append the nudge
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].ToolResult != nil && !messages[i].ToolResult.IsError {
+			messages[i].ToolResult.Content += nudge
+			log.Info().
+				Int("total_calls", totalCalls).
+				Int("turns_remaining", turnsRemaining).
+				Int("message_index", i).
+				Msg("[WrapUpNudge] Injected wrap-up nudge into tool result")
+			return true
+		}
+	}
+	return false
+}
+
+// maybeInjectWrapUpEscalation appends a strong wrap-up directive to the last non-error
+// tool result. Called once when the model ignores the initial nudge and reaches 18+ calls.
+// Returns true if an escalation was injected.
+func maybeInjectWrapUpEscalation(messages []providers.Message, totalCalls int) bool {
+	escalation := fmt.Sprintf("\n\n[System: WRAP UP NOW. You have made %d tool calls — well past the recommended limit. You MUST respond with your findings on this turn. Do NOT make any more tool calls.]",
+		totalCalls)
+
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].ToolResult != nil && !messages[i].ToolResult.IsError {
+			messages[i].ToolResult.Content += escalation
+			log.Info().
+				Int("total_calls", totalCalls).
+				Int("message_index", i).
+				Msg("[WrapUpEscalation] Injected wrap-up escalation into tool result")
+			return true
+		}
+	}
+	return false
 }
 
 // formatKeyParams extracts the most important parameters from tool input for display.
