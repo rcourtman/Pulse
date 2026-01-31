@@ -176,6 +176,51 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 	return true
 }
 
+func inferFindingResourceType(resourceID, resourceName string) string {
+	joined := strings.ToLower(strings.TrimSpace(resourceID + " " + resourceName))
+
+	switch {
+	case strings.Contains(joined, "pbs") || strings.Contains(joined, "backup"):
+		return "pbs"
+	case strings.Contains(joined, "storage") || strings.Contains(joined, "pool") || strings.Contains(joined, "zfs"):
+		return "storage"
+	case strings.Contains(joined, "docker"):
+		return "docker_container"
+	case strings.Contains(joined, "lxc") || strings.Contains(joined, "ct") || strings.Contains(joined, "container"):
+		return "container"
+	case strings.Contains(joined, "vm"):
+		return "vm"
+	case strings.Contains(joined, "node") || strings.Contains(joined, "host"):
+		return "node"
+	}
+
+	if hasFindingNumericSuffix(resourceID) {
+		return "vm"
+	}
+
+	return "node"
+}
+
+func hasFindingNumericSuffix(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	sep := strings.LastIndexAny(value, ":/")
+	if sep >= 0 && sep+1 < len(value) {
+		value = value[sep+1:]
+	}
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // IsBeingInvestigated returns true if an investigation is currently in progress
 func (f *Finding) IsBeingInvestigated() bool {
 	return f.InvestigationStatus == string(InvestigationStatusRunning)
@@ -407,8 +452,21 @@ func (s *FindingsStore) GetPersistenceStatus() (lastError error, lastSaveTime ti
 func (s *FindingsStore) Add(f *Finding) bool {
 	s.mu.Lock()
 
+	if f.ResourceType == "" {
+		f.ResourceType = inferFindingResourceType(f.ResourceID, f.ResourceName)
+	}
+
 	existing, exists := s.findings[f.ID]
 	if exists {
+		wasResolved := existing.ResolvedAt != nil
+		if existing.ResourceType == "" {
+			if f.ResourceType != "" {
+				existing.ResourceType = f.ResourceType
+			} else {
+				existing.ResourceType = inferFindingResourceType(existing.ResourceID, existing.ResourceName)
+			}
+		}
+
 		// Check if dismissed or suppressed - only update if severity has escalated
 		if existing.DismissedReason != "" || existing.Suppressed {
 			severityOrder := map[FindingSeverity]int{
@@ -440,6 +498,14 @@ func (s *FindingsStore) Add(f *Finding) bool {
 		existing.Title = f.Title // Update title in case LLM phrased it better
 		existing.Severity = f.Severity
 		existing.TimesRaised++ // Track recurrence
+		if wasResolved {
+			existing.ResolvedAt = nil
+			existing.AutoResolved = false
+			existing.ResolveReason = ""
+			if existing.IsActive() {
+				s.activeCounts[existing.Severity]++
+			}
+		}
 		severity := existing.Severity
 		s.mu.Unlock()
 		s.scheduleSave()

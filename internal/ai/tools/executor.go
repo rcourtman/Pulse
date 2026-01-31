@@ -79,6 +79,12 @@ type PatrolFindingCreator interface {
 	GetActiveFindings(resourceID, minSeverity string) []PatrolFindingInfo
 }
 
+// PatrolFindingsChecker tracks whether a patrol run has queried existing findings.
+// Tools can use this to enforce calling patrol_get_findings before reporting or resolving.
+type PatrolFindingsChecker interface {
+	HasCheckedFindings() bool
+}
+
 // PatrolFindingInput contains the structured parameters the LLM passes
 // to the patrol_report_finding tool.
 type PatrolFindingInput struct {

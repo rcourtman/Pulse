@@ -336,7 +336,9 @@ func (p *PatrolService) generateSecuritySteps(finding *Finding) []remediation.Re
 
 // GetFindingsForResource returns active findings for a specific resource
 func (p *PatrolService) GetFindingsForResource(resourceID string) []*Finding {
-	return p.findings.GetByResource(resourceID)
+	findings := p.findings.GetByResource(resourceID)
+	normalizeFindingResourceTypes(findings)
+	return findings
 }
 
 // GetFindingsSummary returns a summary of all findings
@@ -430,6 +432,7 @@ func (p *PatrolService) GetRunHistory(limit int) []PatrolRunRecord {
 // Only returns critical and warning findings - watch/info are filtered out as noise
 func (p *PatrolService) GetAllFindings() []*Finding {
 	findings := p.findings.GetActive(FindingSeverityWarning)
+	normalizeFindingResourceTypes(findings)
 
 	// Sort by severity (critical first) then by time
 	severityOrder := map[FindingSeverity]int{
@@ -447,6 +450,15 @@ func (p *PatrolService) GetAllFindings() []*Finding {
 	})
 
 	return findings
+}
+
+func normalizeFindingResourceTypes(findings []*Finding) {
+	for _, f := range findings {
+		if f == nil || f.ResourceType != "" {
+			continue
+		}
+		f.ResourceType = inferFindingResourceType(f.ResourceID, f.ResourceName)
+	}
 }
 
 // GetFindingsHistory returns all findings including resolved ones for history display
@@ -481,12 +493,13 @@ type chatServiceExecutorAccessor interface {
 // patrolFindingCreatorAdapter implements tools.PatrolFindingCreator by wrapping
 // the PatrolService's existing FindingsStore and recordFinding method.
 type patrolFindingCreatorAdapter struct {
-	patrol        *PatrolService
-	state         models.StateSnapshot
-	findingsMu    sync.Mutex
-	findings      []*Finding
-	resolvedIDs   []string
-	rejectedCount int
+	patrol          *PatrolService
+	state           models.StateSnapshot
+	findingsMu      sync.Mutex
+	findings        []*Finding
+	resolvedIDs     []string
+	rejectedCount   int
+	checkedFindings bool
 }
 
 func newPatrolFindingCreatorAdapter(p *PatrolService, state models.StateSnapshot) *patrolFindingCreatorAdapter {
@@ -702,6 +715,10 @@ func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) e
 }
 
 func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity string) []tools.PatrolFindingInfo {
+	a.findingsMu.Lock()
+	a.checkedFindings = true
+	a.findingsMu.Unlock()
+
 	var minSev FindingSeverity
 	switch strings.ToLower(minSeverity) {
 	case "critical":
@@ -734,6 +751,12 @@ func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity 
 		})
 	}
 	return result
+}
+
+func (a *patrolFindingCreatorAdapter) HasCheckedFindings() bool {
+	a.findingsMu.Lock()
+	defer a.findingsMu.Unlock()
+	return a.checkedFindings
 }
 
 // getCollectedFindings returns all findings created during this patrol run.

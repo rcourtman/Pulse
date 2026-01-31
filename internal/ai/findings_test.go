@@ -696,6 +696,40 @@ func TestFindingsStore_GetByResource(t *testing.T) {
 	}
 }
 
+func TestFindingsStore_Add_ReactivatesResolved(t *testing.T) {
+	store := NewFindingsStore()
+
+	f1 := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Finding 1",
+	}
+	store.Add(f1)
+	store.Resolve("f1", false)
+
+	activeAfterResolve := store.GetActive(FindingSeverityWarning)
+	if len(activeAfterResolve) != 0 {
+		t.Fatalf("Expected 0 active findings after resolve, got %d", len(activeAfterResolve))
+	}
+
+	f1Repeat := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Finding 1 reoccurred",
+	}
+	store.Add(f1Repeat)
+
+	active := store.GetActive(FindingSeverityWarning)
+	if len(active) != 1 {
+		t.Fatalf("Expected 1 active finding after re-add, got %d", len(active))
+	}
+	if active[0].ResolvedAt != nil {
+		t.Fatal("Expected resolved finding to be reactivated")
+	}
+}
+
 func TestFindingsStore_GetAll(t *testing.T) {
 	store := NewFindingsStore()
 

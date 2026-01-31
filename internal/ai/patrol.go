@@ -322,11 +322,12 @@ type PatrolStreamEvent struct {
 	Phase   string `json:"phase,omitempty"`  // Current phase description
 	Tokens  int    `json:"tokens,omitempty"` // Token count so far
 	// Tool event fields (present only for tool_start/tool_end)
-	ToolID      string `json:"tool_id,omitempty"`
-	ToolName    string `json:"tool_name,omitempty"`
-	ToolInput   string `json:"tool_input,omitempty"`
-	ToolOutput  string `json:"tool_output,omitempty"`
-	ToolSuccess *bool  `json:"tool_success,omitempty"` // pointer so omitempty works with false
+	ToolID       string `json:"tool_id,omitempty"`
+	ToolName     string `json:"tool_name,omitempty"`
+	ToolInput    string `json:"tool_input,omitempty"`
+	ToolRawInput string `json:"tool_raw_input,omitempty"`
+	ToolOutput   string `json:"tool_output,omitempty"`
+	ToolSuccess  *bool  `json:"tool_success,omitempty"` // pointer so omitempty works with false
 }
 
 // NewPatrolService creates a new patrol service

@@ -27,6 +27,8 @@ type mockPatrolFindingCreator struct {
 		ResourceID  string
 		MinSeverity string
 	}
+
+	checked bool
 }
 
 func (m *mockPatrolFindingCreator) CreateFinding(input PatrolFindingInput) (string, bool, error) {
@@ -53,10 +55,15 @@ func (m *mockPatrolFindingCreator) GetActiveFindings(resourceID, minSeverity str
 		ResourceID  string
 		MinSeverity string
 	}{resourceID, minSeverity})
+	m.checked = true
 	if m.getActiveFn != nil {
 		return m.getActiveFn(resourceID, minSeverity)
 	}
 	return nil
+}
+
+func (m *mockPatrolFindingCreator) HasCheckedFindings() bool {
+	return m.checked
 }
 
 // --- Helper to create executor with patrol creator ---
@@ -93,8 +100,19 @@ func TestHandlePatrolReportFinding_NilCreator(t *testing.T) {
 	assert.Contains(t, text, "only available during a patrol run")
 }
 
-func TestHandlePatrolReportFinding_ValidInput(t *testing.T) {
+func TestHandlePatrolReportFinding_RequiresGetFindings(t *testing.T) {
 	creator := &mockPatrolFindingCreator{}
+	exec := newPatrolTestExecutor(creator)
+
+	result, err := handlePatrolReportFinding(context.Background(), exec, validReportArgs())
+	require.NoError(t, err)
+
+	text := extractText(result)
+	assert.Contains(t, text, "patrol_get_findings")
+}
+
+func TestHandlePatrolReportFinding_ValidInput(t *testing.T) {
+	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
 
 	args := validReportArgs()
@@ -128,7 +146,7 @@ func TestHandlePatrolReportFinding_ValidInput(t *testing.T) {
 }
 
 func TestHandlePatrolReportFinding_MissingRequiredFields(t *testing.T) {
-	creator := &mockPatrolFindingCreator{}
+	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
 
 	tests := []struct {
@@ -162,7 +180,7 @@ func TestHandlePatrolReportFinding_MissingRequiredFields(t *testing.T) {
 }
 
 func TestHandlePatrolReportFinding_AllRequiredFieldsMissing(t *testing.T) {
-	creator := &mockPatrolFindingCreator{}
+	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
 
 	result, err := handlePatrolReportFinding(context.Background(), exec, map[string]interface{}{})
@@ -177,7 +195,7 @@ func TestHandlePatrolReportFinding_AllRequiredFieldsMissing(t *testing.T) {
 }
 
 func TestHandlePatrolReportFinding_InvalidSeverity(t *testing.T) {
-	creator := &mockPatrolFindingCreator{}
+	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
 
 	args := validReportArgs()
@@ -192,7 +210,7 @@ func TestHandlePatrolReportFinding_InvalidSeverity(t *testing.T) {
 }
 
 func TestHandlePatrolReportFinding_InvalidCategory(t *testing.T) {
-	creator := &mockPatrolFindingCreator{}
+	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
 
 	args := validReportArgs()
@@ -209,7 +227,7 @@ func TestHandlePatrolReportFinding_InvalidCategory(t *testing.T) {
 func TestHandlePatrolReportFinding_ValidSeverities(t *testing.T) {
 	for _, sev := range []string{"critical", "warning"} {
 		t.Run(sev, func(t *testing.T) {
-			creator := &mockPatrolFindingCreator{}
+			creator := &mockPatrolFindingCreator{checked: true}
 			exec := newPatrolTestExecutor(creator)
 
 			args := validReportArgs()
@@ -231,7 +249,7 @@ func TestHandlePatrolReportFinding_ValidSeverities(t *testing.T) {
 func TestHandlePatrolReportFinding_RejectedSeverities(t *testing.T) {
 	for _, sev := range []string{"watch", "info"} {
 		t.Run(sev, func(t *testing.T) {
-			creator := &mockPatrolFindingCreator{}
+			creator := &mockPatrolFindingCreator{checked: true}
 			exec := newPatrolTestExecutor(creator)
 
 			args := validReportArgs()
@@ -249,7 +267,7 @@ func TestHandlePatrolReportFinding_RejectedSeverities(t *testing.T) {
 func TestHandlePatrolReportFinding_ValidCategories(t *testing.T) {
 	for _, cat := range []string{"performance", "capacity", "reliability", "backup", "security", "general"} {
 		t.Run(cat, func(t *testing.T) {
-			creator := &mockPatrolFindingCreator{}
+			creator := &mockPatrolFindingCreator{checked: true}
 			exec := newPatrolTestExecutor(creator)
 
 			args := validReportArgs()
@@ -273,6 +291,7 @@ func TestHandlePatrolReportFinding_DuplicateFinding(t *testing.T) {
 		createFindingFunc: func(input PatrolFindingInput) (string, bool, error) {
 			return "finding-existing", false, nil // isNew = false
 		},
+		checked: true,
 	}
 	exec := newPatrolTestExecutor(creator)
 
@@ -293,6 +312,7 @@ func TestHandlePatrolReportFinding_CreatorError(t *testing.T) {
 		createFindingFunc: func(input PatrolFindingInput) (string, bool, error) {
 			return "", false, fmt.Errorf("validation failed: CPU is below threshold")
 		},
+		checked: true,
 	}
 	exec := newPatrolTestExecutor(creator)
 
@@ -305,7 +325,7 @@ func TestHandlePatrolReportFinding_CreatorError(t *testing.T) {
 }
 
 func TestHandlePatrolReportFinding_OptionalFieldsOmitted(t *testing.T) {
-	creator := &mockPatrolFindingCreator{}
+	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
 
 	// Only required fields, no recommendation or evidence
@@ -338,8 +358,22 @@ func TestHandlePatrolResolveFinding_NilCreator(t *testing.T) {
 	assert.Contains(t, text, "only available during a patrol run")
 }
 
-func TestHandlePatrolResolveFinding_ValidInput(t *testing.T) {
+func TestHandlePatrolResolveFinding_RequiresGetFindings(t *testing.T) {
 	creator := &mockPatrolFindingCreator{}
+	exec := newPatrolTestExecutor(creator)
+
+	result, err := handlePatrolResolveFinding(context.Background(), exec, map[string]interface{}{
+		"finding_id": "f-123",
+		"reason":     "CPU recovered",
+	})
+	require.NoError(t, err)
+
+	text := extractText(result)
+	assert.Contains(t, text, "patrol_get_findings")
+}
+
+func TestHandlePatrolResolveFinding_ValidInput(t *testing.T) {
+	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
 
 	result, err := handlePatrolResolveFinding(context.Background(), exec, map[string]interface{}{
@@ -361,7 +395,7 @@ func TestHandlePatrolResolveFinding_ValidInput(t *testing.T) {
 }
 
 func TestHandlePatrolResolveFinding_MissingFindingID(t *testing.T) {
-	creator := &mockPatrolFindingCreator{}
+	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
 
 	result, err := handlePatrolResolveFinding(context.Background(), exec, map[string]interface{}{
@@ -374,7 +408,7 @@ func TestHandlePatrolResolveFinding_MissingFindingID(t *testing.T) {
 }
 
 func TestHandlePatrolResolveFinding_MissingReason(t *testing.T) {
-	creator := &mockPatrolFindingCreator{}
+	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
 
 	result, err := handlePatrolResolveFinding(context.Background(), exec, map[string]interface{}{
@@ -391,6 +425,7 @@ func TestHandlePatrolResolveFinding_ResolveError(t *testing.T) {
 		resolveFindingFunc: func(findingID, reason string) error {
 			return fmt.Errorf("finding not found: %s", findingID)
 		},
+		checked: true,
 	}
 	exec := newPatrolTestExecutor(creator)
 

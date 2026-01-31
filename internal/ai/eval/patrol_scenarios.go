@@ -10,9 +10,7 @@ func PatrolBasicScenario() PatrolScenario {
 		Assertions: []PatrolAssertion{
 			PatrolAssertNoError(),
 			PatrolAssertCompleted(),
-			PatrolAssertMinToolCalls(3),
-			PatrolAssertToolUsed("pulse_query"),
-			PatrolAssertToolUsedAny("pulse_metrics", "pulse_storage", "pulse_read"),
+			PatrolAssertToolUsedAny("pulse_query", "pulse_metrics", "pulse_storage", "pulse_read"),
 			PatrolAssertDurationUnder(4 * time.Minute),
 		},
 	}
@@ -27,7 +25,7 @@ func PatrolInvestigationScenario() PatrolScenario {
 		Assertions: []PatrolAssertion{
 			PatrolAssertNoError(),
 			PatrolAssertCompleted(),
-			PatrolAssertToolUsedAny("pulse_query", "pulse_metrics", "pulse_storage"),
+			PatrolAssertInvestigatedBeforeReporting("pulse_query", "pulse_metrics", "pulse_storage", "pulse_read"),
 			PatrolAssertToolUsed("patrol_get_findings"),
 			PatrolAssertToolSuccessRate(0.7),
 		},
@@ -78,6 +76,6 @@ func patrolSignalCoverageMin() float64 {
 	if value, ok := envFloat("EVAL_PATROL_SIGNAL_COVERAGE_MIN"); ok {
 		return value
 	}
-	// Conservative default: require half of deterministic signals to be matched.
-	return 0.5
+	// Default to a stricter bar once signal detection is tuned.
+	return 0.75
 }

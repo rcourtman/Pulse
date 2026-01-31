@@ -57,15 +57,16 @@ type PatrolAssertion func(result *PatrolRunResult) AssertionResult
 
 // PatrolSSEEvent represents a raw SSE event from the patrol stream.
 type PatrolSSEEvent struct {
-	Type        string `json:"type"`
-	Content     string `json:"content,omitempty"`
-	Phase       string `json:"phase,omitempty"`
-	Tokens      int    `json:"tokens,omitempty"`
-	ToolID      string `json:"tool_id,omitempty"`
-	ToolName    string `json:"tool_name,omitempty"`
-	ToolInput   string `json:"tool_input,omitempty"`
-	ToolOutput  string `json:"tool_output,omitempty"`
-	ToolSuccess *bool  `json:"tool_success,omitempty"`
+	Type         string `json:"type"`
+	Content      string `json:"content,omitempty"`
+	Phase        string `json:"phase,omitempty"`
+	Tokens       int    `json:"tokens,omitempty"`
+	ToolID       string `json:"tool_id,omitempty"`
+	ToolName     string `json:"tool_name,omitempty"`
+	ToolInput    string `json:"tool_input,omitempty"`
+	ToolRawInput string `json:"tool_raw_input,omitempty"`
+	ToolOutput   string `json:"tool_output,omitempty"`
+	ToolSuccess  *bool  `json:"tool_success,omitempty"`
 }
 
 // RunPatrolScenario executes a patrol scenario and returns the results.
@@ -214,7 +215,7 @@ func (r *Runner) RunPatrolScenario(scenario PatrolScenario) PatrolRunResult {
 			result.Error = fmt.Errorf("fetching findings: %w", findErr)
 		}
 	}
-	result.Findings = findings
+	result.Findings = mergeFindingsFromToolCalls(findings, result.ToolCalls)
 
 	if r.config.Verbose && len(findings) > 0 {
 		fmt.Printf("  Fetched %d findings from API\n", len(findings))
@@ -234,6 +235,77 @@ func (r *Runner) RunPatrolScenario(scenario PatrolScenario) PatrolRunResult {
 
 	result.Duration = time.Since(startTime)
 	return result
+}
+
+func mergeFindingsFromToolCalls(findings []PatrolFinding, toolCalls []ToolCallEvent) []PatrolFinding {
+	if len(toolCalls) == 0 {
+		return findings
+	}
+
+	byID := make(map[string]PatrolFinding, len(findings))
+	for _, f := range findings {
+		if f.ID == "" {
+			continue
+		}
+		byID[f.ID] = f
+	}
+
+	for _, tc := range toolCalls {
+		if tc.Name != "patrol_get_findings" || strings.TrimSpace(tc.Output) == "" {
+			continue
+		}
+
+		var payload struct {
+			Findings []struct {
+				ID             string `json:"id"`
+				Key            string `json:"key"`
+				Severity       string `json:"severity"`
+				Category       string `json:"category"`
+				ResourceID     string `json:"resource_id"`
+				ResourceName   string `json:"resource_name"`
+				ResourceType   string `json:"resource_type"`
+				Title          string `json:"title"`
+				Description    string `json:"description"`
+				Recommendation string `json:"recommendation,omitempty"`
+				Evidence       string `json:"evidence,omitempty"`
+			} `json:"findings"`
+		}
+		if err := json.Unmarshal([]byte(tc.Output), &payload); err != nil {
+			continue
+		}
+
+		for _, info := range payload.Findings {
+			if info.ID == "" {
+				continue
+			}
+			if _, exists := byID[info.ID]; exists {
+				continue
+			}
+			byID[info.ID] = PatrolFinding{
+				ID:             info.ID,
+				Key:            info.Key,
+				Severity:       info.Severity,
+				Category:       info.Category,
+				ResourceID:     info.ResourceID,
+				ResourceName:   info.ResourceName,
+				ResourceType:   info.ResourceType,
+				Title:          info.Title,
+				Description:    info.Description,
+				Recommendation: info.Recommendation,
+				Evidence:       info.Evidence,
+			}
+		}
+	}
+
+	if len(byID) == len(findings) {
+		return findings
+	}
+
+	merged := make([]PatrolFinding, 0, len(byID))
+	for _, f := range byID {
+		merged = append(merged, f)
+	}
+	return merged
 }
 
 // waitForPatrolIdle polls GET /api/ai/patrol/status until Running=false.
@@ -509,25 +581,40 @@ func (r *Runner) parsePatrolSSEStream(ctx context.Context, body io.Reader) ([]Pa
 				contentBuilder.WriteString(event.Content)
 
 			case "tool_start":
+				input := event.ToolInput
+				if event.ToolRawInput != "" {
+					input = event.ToolRawInput
+				}
 				toolCallsInProgress[event.ToolID] = &ToolCallEvent{
 					ID:    event.ToolID,
 					Name:  event.ToolName,
-					Input: event.ToolInput,
+					Input: input,
 				}
 
 			case "tool_end":
 				success := event.ToolSuccess != nil && *event.ToolSuccess
 				if tc, ok := toolCallsInProgress[event.ToolID]; ok {
+					input := event.ToolInput
+					if event.ToolRawInput != "" {
+						input = event.ToolRawInput
+					}
+					if tc.Input == "" && input != "" {
+						tc.Input = input
+					}
 					tc.Output = event.ToolOutput
 					tc.Success = success
 					toolCalls = append(toolCalls, *tc)
 					delete(toolCallsInProgress, event.ToolID)
 				} else {
+					input := event.ToolInput
+					if event.ToolRawInput != "" {
+						input = event.ToolRawInput
+					}
 					// tool_end without matching tool_start
 					toolCalls = append(toolCalls, ToolCallEvent{
 						ID:      event.ToolID,
 						Name:    event.ToolName,
-						Input:   event.ToolInput,
+						Input:   input,
 						Output:  event.ToolOutput,
 						Success: success,
 					})

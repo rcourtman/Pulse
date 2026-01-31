@@ -130,6 +130,9 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	if creator == nil {
 		return NewTextResult("patrol_report_finding is only available during a patrol run."), nil
 	}
+	if checker, ok := creator.(PatrolFindingsChecker); ok && !checker.HasCheckedFindings() {
+		return NewErrorResult(fmt.Errorf("call patrol_get_findings before reporting a finding")), nil
+	}
 
 	// Extract required fields
 	key, _ := args["key"].(string)
@@ -216,6 +219,9 @@ func handlePatrolResolveFinding(_ context.Context, e *PulseToolExecutor, args ma
 	creator := e.GetPatrolFindingCreator()
 	if creator == nil {
 		return NewTextResult("patrol_resolve_finding is only available during a patrol run."), nil
+	}
+	if checker, ok := creator.(PatrolFindingsChecker); ok && !checker.HasCheckedFindings() {
+		return NewErrorResult(fmt.Errorf("call patrol_get_findings before resolving a finding")), nil
 	}
 
 	findingID, _ := args["finding_id"].(string)

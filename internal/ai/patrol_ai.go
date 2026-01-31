@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
@@ -30,6 +31,14 @@ type AIAnalysisResult struct {
 	ResolvedIDs      []string         // Finding IDs explicitly resolved by LLM this run
 	SeededFindingIDs []string         // Finding IDs that were presented in seed context
 }
+
+const (
+	patrolMinTurns          = 20
+	patrolMaxTurnsLimit     = 80
+	patrolTurnsPer50Devices = 5
+	patrolQuickMinTurns     = 10
+	patrolQuickMaxTurns     = 30
+)
 
 // cleanThinkingTokens removes model-specific thinking markers from AI responses.
 // Different AI models use different markers for their internal reasoning:
@@ -178,6 +187,16 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 
 	log.Debug().Msg("AI Patrol: Starting agentic patrol analysis")
 
+	p.mu.RLock()
+	cfg := p.config
+	p.mu.RUnlock()
+	resourceCount := patrolResourceCount(state, cfg)
+	maxTurns := computePatrolMaxTurns(resourceCount, scope)
+	log.Debug().
+		Int("resource_count", resourceCount).
+		Int("max_turns", maxTurns).
+		Msg("AI Patrol: Calculated agentic max turns")
+
 	// Determine whether to skip streaming updates (verification runs are consumed
 	// programmatically and must not interleave with a concurrent normal patrol's stream).
 	noStream := scope != nil && scope.NoStream
@@ -227,13 +246,17 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	// Tool call collection
 	var toolCallsMu sync.Mutex
 	pendingToolCalls := make(map[string]ToolCallRecord)
+	var pendingToolOrder []string
+	anonToolCounter := 0
 	var completedToolCalls []ToolCallRecord
+	var rawToolOutputs []string
 
 	chatResp, chatErr := cs.ExecutePatrolStream(ctx, PatrolExecuteRequest{
 		Prompt:       seedContext,
 		SystemPrompt: p.getPatrolSystemPrompt(),
 		SessionID:    "patrol-main",
 		UseCase:      "patrol",
+		MaxTurns:     maxTurns,
 	}, func(event ChatStreamEvent) {
 		switch event.Type {
 		case "content":
@@ -260,57 +283,111 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 			}
 		case "tool_start":
 			var data struct {
-				ID    string `json:"id"`
-				Name  string `json:"name"`
-				Input string `json:"input"`
+				ID       string `json:"id"`
+				Name     string `json:"name"`
+				Input    string `json:"input"`
+				RawInput string `json:"raw_input"`
 			}
 			if json.Unmarshal(event.Data, &data) == nil {
+				if data.ID == "" {
+					anonToolCounter++
+					data.ID = fmt.Sprintf("patrol-anon-%d", anonToolCounter)
+				}
 				if !noStream {
 					p.broadcast(PatrolStreamEvent{
-						Type:      "tool_start",
-						ToolID:    data.ID,
-						ToolName:  data.Name,
-						ToolInput: data.Input,
+						Type:         "tool_start",
+						ToolID:       data.ID,
+						ToolName:     data.Name,
+						ToolInput:    data.Input,
+						ToolRawInput: data.RawInput,
 					})
 				}
+				input := data.Input
+				if data.RawInput != "" {
+					input = data.RawInput
+				}
 				toolCallsMu.Lock()
+				pendingToolOrder = append(pendingToolOrder, data.ID)
 				pendingToolCalls[data.ID] = ToolCallRecord{
 					ID:        data.ID,
 					ToolName:  data.Name,
-					Input:     truncateString(data.Input, MaxToolInputSize),
+					Input:     truncateString(input, MaxToolInputSize),
 					StartTime: time.Now().UnixMilli(),
 				}
 				toolCallsMu.Unlock()
 			}
 		case "tool_end":
 			var data struct {
-				ID      string `json:"id"`
-				Name    string `json:"name"`
-				Input   string `json:"input"`
-				Output  string `json:"output"`
-				Success bool   `json:"success"`
+				ID       string `json:"id"`
+				Name     string `json:"name"`
+				Input    string `json:"input"`
+				RawInput string `json:"raw_input"`
+				Output   string `json:"output"`
+				Success  bool   `json:"success"`
 			}
 			if json.Unmarshal(event.Data, &data) == nil {
+				if data.ID == "" {
+					if len(pendingToolOrder) > 0 {
+						data.ID = pendingToolOrder[0]
+						pendingToolOrder = pendingToolOrder[1:]
+					} else {
+						anonToolCounter++
+						data.ID = fmt.Sprintf("patrol-anon-end-%d", anonToolCounter)
+					}
+				} else if len(pendingToolOrder) > 0 {
+					for i, id := range pendingToolOrder {
+						if id == data.ID {
+							pendingToolOrder = append(pendingToolOrder[:i], pendingToolOrder[i+1:]...)
+							break
+						}
+					}
+				}
 				if !noStream {
 					success := data.Success
 					p.broadcast(PatrolStreamEvent{
-						Type:        "tool_end",
-						ToolID:      data.ID,
-						ToolName:    data.Name,
-						ToolInput:   data.Input,
-						ToolOutput:  data.Output,
-						ToolSuccess: &success,
+						Type:         "tool_end",
+						ToolID:       data.ID,
+						ToolName:     data.Name,
+						ToolInput:    data.Input,
+						ToolRawInput: data.RawInput,
+						ToolOutput:   data.Output,
+						ToolSuccess:  &success,
 					})
 				}
 				toolCallsMu.Lock()
 				if pending, ok := pendingToolCalls[data.ID]; ok {
 					now := time.Now().UnixMilli()
+					input := data.Input
+					if data.RawInput != "" {
+						input = data.RawInput
+					}
+					if input != "" {
+						pending.Input = truncateString(input, MaxToolInputSize)
+					}
 					pending.Output = truncateString(data.Output, MaxToolOutputSize)
 					pending.Success = data.Success
 					pending.EndTime = now
 					pending.Duration = now - pending.StartTime
 					completedToolCalls = append(completedToolCalls, pending)
+					rawToolOutputs = append(rawToolOutputs, data.Output)
 					delete(pendingToolCalls, data.ID)
+				} else {
+					now := time.Now().UnixMilli()
+					input := data.Input
+					if data.RawInput != "" {
+						input = data.RawInput
+					}
+					completedToolCalls = append(completedToolCalls, ToolCallRecord{
+						ID:        data.ID,
+						ToolName:  data.Name,
+						Input:     truncateString(input, MaxToolInputSize),
+						Output:    truncateString(data.Output, MaxToolOutputSize),
+						Success:   data.Success,
+						StartTime: now,
+						EndTime:   now,
+						Duration:  0,
+					})
+					rawToolOutputs = append(rawToolOutputs, data.Output)
 				}
 				toolCallsMu.Unlock()
 			}
@@ -342,6 +419,8 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 		Int("findings_resolved", adapter.getResolvedCount()).
 		Msg("AI Patrol: Agentic patrol analysis complete")
 
+	p.ensureInvestigationToolCall(ctx, executor, &toolCallsMu, &completedToolCalls, &rawToolOutputs, noStream)
+
 	// Broadcast completion
 	if !noStream {
 		p.broadcast(PatrolStreamEvent{
@@ -354,6 +433,13 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	// Collect completed tool calls
 	toolCallsMu.Lock()
 	collectedToolCalls := completedToolCalls
+	signalToolCalls := make([]ToolCallRecord, len(collectedToolCalls))
+	for i, tc := range collectedToolCalls {
+		signalToolCalls[i] = tc
+		if i < len(rawToolOutputs) && rawToolOutputs[i] != "" {
+			signalToolCalls[i].Output = rawToolOutputs[i]
+		}
+	}
 	toolCallsMu.Unlock()
 
 	// --- Deterministic signal detection + evaluation pass ---
@@ -361,7 +447,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	p.mu.RLock()
 	sigThresholds := SignalThresholdsFromPatrol(p.thresholds)
 	p.mu.RUnlock()
-	detectedSignals := DetectSignals(collectedToolCalls, sigThresholds)
+	detectedSignals := DetectSignals(signalToolCalls, sigThresholds)
 	if len(detectedSignals) > 0 {
 		log.Info().
 			Int("detected_signals", len(detectedSignals)).
@@ -385,6 +471,18 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 					Int("total_findings", len(adapter.getCollectedFindings())).
 					Msg("AI Patrol: Evaluation pass completed")
 			}
+
+			// Deterministic fallback: if unmatched signals remain, create findings directly.
+			remaining := UnmatchedSignals(detectedSignals, adapter.getCollectedFindings())
+			if len(remaining) > 0 {
+				created := p.createFindingsFromSignals(adapter, remaining)
+				if created > 0 {
+					log.Info().
+						Int("created", created).
+						Int("remaining", len(remaining)).
+						Msg("AI Patrol: Created deterministic findings for unmatched signals")
+				}
+			}
 		} else {
 			log.Debug().
 				Int("detected_signals", len(detectedSignals)).
@@ -407,6 +505,158 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 		ResolvedIDs:      adapter.getResolvedIDs(),
 		SeededFindingIDs: seededFindingIDs,
 	}, nil
+}
+
+func patrolResourceCount(state models.StateSnapshot, cfg PatrolConfig) int {
+	resourceCount := 0
+	if cfg.AnalyzeNodes {
+		resourceCount += len(state.Nodes)
+	}
+	if cfg.AnalyzeGuests {
+		resourceCount += len(state.VMs) + len(state.Containers)
+	}
+	if cfg.AnalyzeDocker {
+		resourceCount += len(state.DockerHosts)
+	}
+	if cfg.AnalyzeStorage {
+		resourceCount += len(state.Storage)
+	}
+	if cfg.AnalyzePBS {
+		resourceCount += len(state.PBSInstances)
+	}
+	if cfg.AnalyzeHosts {
+		resourceCount += len(state.Hosts)
+	}
+	if cfg.AnalyzeKubernetes {
+		resourceCount += len(state.KubernetesClusters)
+	}
+	return resourceCount
+}
+
+func computePatrolMaxTurns(resourceCount int, scope *PatrolScope) int {
+	minTurns := patrolMinTurns
+	maxTurns := patrolMaxTurnsLimit
+	if scope != nil && scope.Depth == PatrolDepthQuick {
+		minTurns = patrolQuickMinTurns
+		maxTurns = patrolQuickMaxTurns
+	}
+
+	extra := (resourceCount / 50) * patrolTurnsPer50Devices
+	turns := minTurns + extra
+	if turns < minTurns {
+		return minTurns
+	}
+	if turns > maxTurns {
+		return maxTurns
+	}
+	return turns
+}
+
+func (p *PatrolService) ensureInvestigationToolCall(
+	ctx context.Context,
+	executor *tools.PulseToolExecutor,
+	toolCallsMu *sync.Mutex,
+	completedToolCalls *[]ToolCallRecord,
+	rawToolOutputs *[]string,
+	noStream bool,
+) {
+	if executor == nil {
+		return
+	}
+
+	toolCallsMu.Lock()
+	needsInvestigation := true
+	for _, tc := range *completedToolCalls {
+		if isInvestigationTool(tc.ToolName) {
+			needsInvestigation = false
+			break
+		}
+	}
+	toolCallsMu.Unlock()
+
+	if !needsInvestigation {
+		return
+	}
+
+	fallbackName := "pulse_query"
+	args := map[string]interface{}{"action": "health"}
+	inputBytes, _ := json.Marshal(args)
+	inputStr := string(inputBytes)
+	fallbackID := fmt.Sprintf("patrol-fallback-%d", time.Now().UnixNano())
+
+	start := time.Now().UnixMilli()
+	if !noStream {
+		p.broadcast(PatrolStreamEvent{
+			Type:         "tool_start",
+			ToolID:       fallbackID,
+			ToolName:     fallbackName,
+			ToolInput:    inputStr,
+			ToolRawInput: inputStr,
+		})
+	}
+
+	result, err := executor.ExecuteTool(ctx, fallbackName, args)
+	output := ""
+	success := false
+	if err != nil {
+		output = err.Error()
+	} else {
+		output = formatToolResult(result)
+		success = !result.IsError
+	}
+
+	end := time.Now().UnixMilli()
+	if !noStream {
+		p.broadcast(PatrolStreamEvent{
+			Type:         "tool_end",
+			ToolID:       fallbackID,
+			ToolName:     fallbackName,
+			ToolInput:    inputStr,
+			ToolRawInput: inputStr,
+			ToolOutput:   output,
+			ToolSuccess:  &success,
+		})
+	}
+
+	toolCallsMu.Lock()
+	*completedToolCalls = append(*completedToolCalls, ToolCallRecord{
+		ID:        fallbackID,
+		ToolName:  fallbackName,
+		Input:     truncateString(inputStr, MaxToolInputSize),
+		Output:    truncateString(output, MaxToolOutputSize),
+		Success:   success,
+		StartTime: start,
+		EndTime:   end,
+		Duration:  end - start,
+	})
+	*rawToolOutputs = append(*rawToolOutputs, output)
+	toolCallsMu.Unlock()
+}
+
+func isInvestigationTool(name string) bool {
+	switch name {
+	case "pulse_query", "pulse_metrics", "pulse_storage", "pulse_read":
+		return true
+	default:
+		return false
+	}
+}
+
+func formatToolResult(result tools.CallToolResult) string {
+	if len(result.Content) == 0 {
+		return ""
+	}
+
+	var text string
+	for _, c := range result.Content {
+		if c.Type == "text" && c.Text != "" {
+			if text != "" {
+				text += "\n"
+			}
+			text += c.Text
+		}
+	}
+	return text
 }
 
 // runEvaluationPass runs a focused second LLM call to evaluate unmatched signals
@@ -481,6 +731,122 @@ func buildEvalUserPrompt(signals []DetectedSignal) string {
 	return sb.String()
 }
 
+func (p *PatrolService) createFindingsFromSignals(adapter *patrolFindingCreatorAdapter, signals []DetectedSignal) int {
+	if adapter == nil || len(signals) == 0 {
+		return 0
+	}
+	created := 0
+	for _, s := range signals {
+		input := signalToFindingInput(s)
+		if input.ResourceName == "" {
+			input.ResourceName = input.ResourceID
+		}
+		if input.ResourceType == "" {
+			input.ResourceType = inferFindingResourceType(input.ResourceID, input.ResourceName)
+		}
+		if input.Category == "" {
+			input.Category = "general"
+		}
+		if input.Severity == "" {
+			input.Severity = "warning"
+		}
+		if input.Recommendation == "" {
+			input.Recommendation = defaultRecommendationForSignal(s)
+		}
+		if input.Title == "" {
+			input.Title = s.Summary
+		}
+		if input.Description == "" {
+			input.Description = s.Summary
+		}
+
+		if _, _, err := adapter.CreateFinding(input); err == nil {
+			created++
+		}
+	}
+	return created
+}
+
+func signalToFindingInput(s DetectedSignal) tools.PatrolFindingInput {
+	key := signalKey(s)
+	category := s.Category
+	severity := s.SuggestedSeverity
+	return tools.PatrolFindingInput{
+		Key:          key,
+		Severity:     severity,
+		Category:     category,
+		ResourceID:   s.ResourceID,
+		ResourceName: s.ResourceName,
+		ResourceType: s.ResourceType,
+		Title:        signalTitle(s),
+		Description:  s.Summary,
+		Evidence:     s.Evidence,
+	}
+}
+
+func signalKey(s DetectedSignal) string {
+	switch s.SignalType {
+	case SignalSMARTFailure:
+		return "smart-failure"
+	case SignalHighCPU:
+		return "cpu-high"
+	case SignalHighMemory:
+		return "memory-high"
+	case SignalHighDisk:
+		return "disk-high"
+	case SignalBackupFailed:
+		return "backup-failed"
+	case SignalBackupStale:
+		return "backup-stale"
+	case SignalActiveAlert:
+		return "active-alert"
+	default:
+		return "deterministic-signal"
+	}
+}
+
+func signalTitle(s DetectedSignal) string {
+	switch s.SignalType {
+	case SignalSMARTFailure:
+		return "SMART health check failed"
+	case SignalHighCPU:
+		return "High CPU usage detected"
+	case SignalHighMemory:
+		return "High memory usage detected"
+	case SignalHighDisk:
+		return "Storage usage is high"
+	case SignalBackupFailed:
+		return "Backup failed"
+	case SignalBackupStale:
+		return "Backup is stale"
+	case SignalActiveAlert:
+		return "Active alert detected"
+	default:
+		return "Infrastructure signal detected"
+	}
+}
+
+func defaultRecommendationForSignal(s DetectedSignal) string {
+	switch s.SignalType {
+	case SignalSMARTFailure:
+		return "Inspect the disk for errors and consider replacing it if SMART failures persist."
+	case SignalHighCPU:
+		return "Identify processes causing high CPU usage and optimize or scale resources."
+	case SignalHighMemory:
+		return "Identify memory-heavy processes and consider increasing memory or tuning workloads."
+	case SignalHighDisk:
+		return "Investigate disk usage growth and clean up or expand storage as needed."
+	case SignalBackupFailed:
+		return "Review backup logs and fix the underlying error, then rerun the backup."
+	case SignalBackupStale:
+		return "Ensure backups are scheduled and completing successfully; run a new backup."
+	case SignalActiveAlert:
+		return "Investigate the active alert and resolve the underlying issue."
+	default:
+		return "Investigate the signal and take corrective action if needed."
+	}
+}
+
 // getPatrolSystemPrompt returns the system prompt for AI patrol analysis.
 // The new agentic prompt instructs the LLM to use investigation tools and
 // report findings via the patrol_report_finding tool instead of text blocks.
@@ -531,12 +897,14 @@ You are provided with the current state of the user's infrastructure below, incl
 - Use **pulse_query** to check resource configuration for misconfigurations.
 
 **Step 3 — Report or resolve findings.** Report findings for confirmed issues. Resolve active findings that are no longer issues based on current data.
+Always call patrol_get_findings before reporting or resolving findings.
 
 The snapshot eliminates routine data gathering, but you must still investigate to distinguish real problems from noise. Do not skip investigation — a snapshot alone cannot tell you whether a metric is stable or rapidly changing.
 
 ## Efficiency Rules
 - Do NOT call the same tool with the same parameters twice in a single patrol run.
 - Keep track of what you've already checked. If you've already retrieved metrics for a resource, use the data you have.
+- Always call at least one investigation tool (pulse_query, pulse_metrics, pulse_storage, or pulse_read) in every patrol run, even if everything appears healthy.
 
 ## Severity & Thresholds
 

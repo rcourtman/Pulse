@@ -132,6 +132,12 @@ func resourceMatches(signal ai.DetectedSignal, finding *PatrolFinding) bool {
 		strings.EqualFold(signal.ResourceID, finding.ResourceName)) {
 		return true
 	}
+	if signal.ResourceID != "" {
+		suffix := ":" + signal.ResourceID
+		if strings.HasSuffix(finding.ResourceID, suffix) || strings.HasSuffix(finding.ResourceName, suffix) {
+			return true
+		}
+	}
 	if signal.ResourceName != "" && (strings.EqualFold(signal.ResourceName, finding.ResourceID) ||
 		strings.EqualFold(signal.ResourceName, finding.ResourceName)) {
 		return true

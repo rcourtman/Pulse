@@ -195,7 +195,33 @@ func TestDetectSignals_BackupFailed(t *testing.T) {
 	}
 }
 
-func TestDetectSignals_BackupStale(t *testing.T) {
+func TestDetectSignals_BackupFailedLatestSuccess(t *testing.T) {
+	now := time.Now()
+	output, _ := json.Marshal(map[string]interface{}{
+		"node": "pve1",
+		"tasks": []map[string]interface{}{
+			{"id": "task1", "status": "ERROR: backup failed", "vmid": "100", "end_time": now.Add(-2 * time.Hour).Format(time.RFC3339)},
+			{"id": "task2", "status": "OK", "vmid": "100", "end_time": now.Add(-1 * time.Hour).Format(time.RFC3339)},
+		},
+	})
+
+	toolCalls := []ToolCallRecord{
+		{
+			ID:       "tc1",
+			ToolName: "pulse_storage",
+			Input:    `{"type":"backup_tasks"}`,
+			Output:   string(output),
+			Success:  true,
+		},
+	}
+
+	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
+	if len(signals) != 0 {
+		t.Fatalf("expected 0 signals (latest success), got %d", len(signals))
+	}
+}
+
+func TestDetectSignals_BackupTasksNoStale(t *testing.T) {
 	staleTime := time.Now().Add(-72 * time.Hour).Format(time.RFC3339)
 	output, _ := json.Marshal(map[string]interface{}{
 		"node": "pve1",
@@ -215,11 +241,94 @@ func TestDetectSignals_BackupStale(t *testing.T) {
 	}
 
 	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
-	if len(signals) != 1 {
-		t.Fatalf("expected 1 signal (stale backup), got %d", len(signals))
+	if len(signals) != 0 {
+		t.Fatalf("expected 0 signals (no stale from backup_tasks), got %d", len(signals))
 	}
-	if signals[0].SignalType != SignalBackupStale {
-		t.Errorf("expected SignalBackupStale, got %s", signals[0].SignalType)
+}
+
+func TestDetectSignals_BackupsRecentTasksFailed(t *testing.T) {
+	output, _ := json.Marshal(map[string]interface{}{
+		"recent_tasks": []map[string]interface{}{
+			{"vmid": 105, "node": "pve1", "status": "OK", "start_time": time.Now().Format(time.RFC3339)},
+			{"vmid": 106, "node": "pve1", "status": "ERROR: could not activate storage", "start_time": time.Now().Format(time.RFC3339)},
+		},
+	})
+
+	toolCalls := []ToolCallRecord{
+		{
+			ID:       "tc1",
+			ToolName: "pulse_storage",
+			Input:    `{"type":"backups"}`,
+			Output:   string(output),
+			Success:  true,
+		},
+	}
+
+	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
+	if len(signals) != 1 {
+		t.Fatalf("expected 1 signal (backup failed), got %d", len(signals))
+	}
+	if signals[0].SignalType != SignalBackupFailed {
+		t.Errorf("expected SignalBackupFailed, got %s", signals[0].SignalType)
+	}
+	if signals[0].ResourceID != "106" {
+		t.Errorf("expected resource ID 106 (VMID), got %s", signals[0].ResourceID)
+	}
+}
+
+func TestDetectSignals_BackupsRecentTasksLatestSuccess(t *testing.T) {
+	now := time.Now()
+	output, _ := json.Marshal(map[string]interface{}{
+		"recent_tasks": []map[string]interface{}{
+			{"vmid": 105, "node": "pve1", "status": "ERROR: could not activate storage", "start_time": now.Add(-2 * time.Hour).Format(time.RFC3339)},
+			{"vmid": 105, "node": "pve1", "status": "OK", "start_time": now.Add(-30 * time.Minute).Format(time.RFC3339)},
+		},
+	})
+
+	toolCalls := []ToolCallRecord{
+		{
+			ID:       "tc1",
+			ToolName: "pulse_storage",
+			Input:    `{"type":"backups"}`,
+			Output:   string(output),
+			Success:  true,
+		},
+	}
+
+	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
+	if len(signals) != 0 {
+		t.Fatalf("expected 0 signals (latest success), got %d", len(signals))
+	}
+}
+
+func TestDetectSignals_BackupsStaleFromSummaries(t *testing.T) {
+	staleTime := time.Now().Add(-96 * time.Hour).Format(time.RFC3339)
+	output, _ := json.Marshal(map[string]interface{}{
+		"pbs": []map[string]interface{}{
+			{"vmid": "200", "backup_time": staleTime},
+		},
+		"pve": []map[string]interface{}{
+			{"vmid": 201, "backup_time": staleTime},
+		},
+		"recent_tasks": []map[string]interface{}{
+			{"vmid": 200, "node": "pve1", "status": "OK", "start_time": time.Now().Format(time.RFC3339)},
+			{"vmid": 201, "node": "pve1", "status": "OK", "start_time": time.Now().Format(time.RFC3339)},
+		},
+	})
+
+	toolCalls := []ToolCallRecord{
+		{
+			ID:       "tc1",
+			ToolName: "pulse_storage",
+			Input:    `{"type":"backups"}`,
+			Output:   string(output),
+			Success:  true,
+		},
+	}
+
+	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
+	if len(signals) != 2 {
+		t.Fatalf("expected 2 signals (stale backups), got %d", len(signals))
 	}
 }
 
@@ -301,6 +410,40 @@ func TestDetectSignals_MalformedJSON(t *testing.T) {
 	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
 	if len(signals) != 0 {
 		t.Fatalf("expected 0 signals for malformed JSON, got %d", len(signals))
+	}
+}
+
+func TestDetectSignals_NoDataMessageSkipped(t *testing.T) {
+	toolCalls := []ToolCallRecord{
+		{
+			ID:       "tc1",
+			ToolName: "pulse_storage",
+			Input:    `{"type":"pools"}`,
+			Output:   "No storage data available",
+			Success:  true,
+		},
+	}
+
+	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
+	if len(signals) != 0 {
+		t.Fatalf("expected 0 signals for no-data output, got %d", len(signals))
+	}
+}
+
+func TestDetectSignals_StateProviderUnavailableSkipped(t *testing.T) {
+	toolCalls := []ToolCallRecord{
+		{
+			ID:       "tc1",
+			ToolName: "pulse_metrics",
+			Input:    `{"type":"performance"}`,
+			Output:   "State provider not available",
+			Success:  true,
+		},
+	}
+
+	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
+	if len(signals) != 0 {
+		t.Fatalf("expected 0 signals when state provider unavailable, got %d", len(signals))
 	}
 }
 

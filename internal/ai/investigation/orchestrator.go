@@ -43,6 +43,7 @@ type Session struct {
 type ExecuteRequest struct {
 	Prompt    string `json:"prompt"`
 	SessionID string `json:"session_id,omitempty"`
+	MaxTurns  int    `json:"max_turns,omitempty"` // Override max agentic turns (0 = use default)
 }
 
 // StreamCallback is called for each streaming event
@@ -461,10 +462,11 @@ func (o *Orchestrator) executeWithLimits(ctx context.Context, investigation *Inv
 	toolsUsedSet := make(map[string]bool)
 	evidenceSet := make(map[string]bool)
 
-	// Execute the prompt
+	// Execute the prompt with investigation-specific turn limit
 	req := ExecuteRequest{
 		Prompt:    prompt,
 		SessionID: investigation.SessionID,
+		MaxTurns:  maxTurns,
 	}
 
 	log.Debug().
