@@ -279,7 +279,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
       return;
     }
     if (!aiConfigured()) {
-      setAnalysisError('Pulse Assistant is not configured. Configure it in Settings → Pulse Assistant.');
+      setAnalysisError('Pulse Assistant is not configured. Configure it in Settings → AI.');
       return;
     }
     if (!kubernetesAiEnabled()) {
@@ -573,7 +573,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                   href={upgradeUrl()}
                   target="_blank"
                   rel="noreferrer"
-                  class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md text-xs font-bold"
+                  class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-md text-xs font-bold"
                 >
                   Get Pulse Pro
                   <ExternalLink class="w-3 h-3" />
@@ -589,7 +589,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
             </Show>
 
             <Show when={!licenseLoading() && !kubernetesAiEnabled()}>
-              <div class="relative overflow-hidden p-6 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/40 border border-indigo-100 dark:border-indigo-800 shadow-xl group">
+              <div class="relative overflow-hidden p-6 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800 shadow-xl group">
                 <div class="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
                   <Sparkles class="w-32 h-32 text-indigo-600" />
                 </div>
@@ -646,7 +646,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
                 <Show when={!aiLoading() && !aiConfigured()}>
                   <div class="text-xs text-amber-600 dark:text-amber-400">
-                    Pulse Assistant is not configured. Configure it in Settings → Pulse Assistant.
+                    Pulse Assistant is not configured. Configure it in Settings → AI.
                   </div>
                 </Show>
 

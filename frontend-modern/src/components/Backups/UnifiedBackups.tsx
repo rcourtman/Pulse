@@ -1194,7 +1194,7 @@ const UnifiedBackups: Component = () => {
 
       {/* PBS Enhancement Banner - shown when PBS storage exists via PVE but no direct PBS connection */}
       <Show when={showPBSEnhancementBanner()}>
-        <div class="relative bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
+        <div class="relative bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
           <button
             type="button"
             onClick={() => setPbsBannerDismissed(true)}

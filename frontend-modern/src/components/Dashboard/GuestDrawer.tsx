@@ -445,7 +445,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                             {/* Single shared Pro lock overlay */}
                             <Show when={isHistoryLocked()}>
                                 <div class="absolute inset-0 z-10 flex flex-col items-center justify-center backdrop-blur-sm bg-white/60 dark:bg-gray-900/60 rounded-lg">
-                                    <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full p-3 shadow-lg mb-3">
+                                    <div class="bg-indigo-500 rounded-full p-3 shadow-lg mb-3">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>

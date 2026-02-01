@@ -69,7 +69,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
 
                 {/* Scrubbing/Resilvering Animation Overlay */}
                 <Show when={isScrubbing() || isResilvering()}>
-                    <div class="absolute inset-0 w-full h-full bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.3)_50%,transparent_75%)] bg-[length:20px_20px] animate-[progress-bar-stripes_1s_linear_infinite]" />
+                    <div class="absolute inset-0 w-full h-full bg-white/30 animate-pulse" />
                 </Show>
 
                 {/* Error Indicator (Red border/glow) */}
