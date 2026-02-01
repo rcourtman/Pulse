@@ -294,106 +294,99 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           </div>
         </div>
 
-        {/* Row 2: Filters - grouped for logical wrapping */}
+        {/* Row 2: All filters on one line */}
         <div class="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-2">
-          {/* Primary Filters Group: Type + Status */}
-          <div class="flex flex-wrap items-center gap-2">
-            {/* Type Filter */}
-            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <button
-                type="button"
-                onClick={() => props.setViewMode('all')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'all'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                  }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setViewMode(props.viewMode() === 'vm' ? 'all' : 'vm')}
-                class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'vm'
-                  ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-blue-200 dark:ring-blue-800'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                  }`}
-              >
-                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="2" y="3" width="20" height="14" rx="2" />
-                  <path d="M8 21h8M12 17v4" />
-                </svg>
-                VMs
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setViewMode(props.viewMode() === 'lxc' ? 'all' : 'lxc')}
-                class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'lxc'
-                  ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm ring-1 ring-green-200 dark:ring-green-800'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                  }`}
-              >
-                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                </svg>
-                LXCs
-              </button>
-            </div>
-
-            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-
-            {/* Status Filter */}
-            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <button
-                type="button"
-                onClick={() => props.setStatusMode('all')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.statusMode() === 'all'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                  }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setStatusMode(props.statusMode() === 'running' ? 'all' : 'running')}
-                class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.statusMode() === 'running'
-                  ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm ring-1 ring-green-200 dark:ring-green-800'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                  }`}
-              >
-                <span class={`w-2 h-2 rounded-full ${props.statusMode() === 'running' ? 'bg-green-500 shadow-sm shadow-green-500/50' : 'bg-green-400/60'}`} />
-                Running
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setStatusMode(props.statusMode() === 'degraded' ? 'all' : 'degraded')}
-                class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.statusMode() === 'degraded'
-                  ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-200 dark:ring-amber-800'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                  }`}
-              >
-                <span class={`w-2 h-2 rounded-full ${props.statusMode() === 'degraded' ? 'bg-amber-500 shadow-sm shadow-amber-500/50' : 'bg-amber-400/60'}`} />
-                Degraded
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setStatusMode(props.statusMode() === 'stopped' ? 'all' : 'stopped')}
-                class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.statusMode() === 'stopped'
-                  ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm ring-1 ring-red-200 dark:ring-red-800'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                  }`}
-              >
-                <span class={`w-2 h-2 rounded-full ${props.statusMode() === 'stopped' ? 'bg-red-500 shadow-sm shadow-red-500/50' : 'bg-red-400/60'}`} />
-                Stopped
-              </button>
-            </div>
+          {/* Type Filter */}
+          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+            <button
+              type="button"
+              onClick={() => props.setViewMode('all')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'all'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+                }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setViewMode(props.viewMode() === 'vm' ? 'all' : 'vm')}
+              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'vm'
+                ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-blue-200 dark:ring-blue-800'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+                }`}
+            >
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <path d="M8 21h8M12 17v4" />
+              </svg>
+              VMs
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setViewMode(props.viewMode() === 'lxc' ? 'all' : 'lxc')}
+              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'lxc'
+                ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm ring-1 ring-green-200 dark:ring-green-800'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+                }`}
+            >
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              </svg>
+              LXCs
+            </button>
           </div>
 
-        </div>
-        {/* End Primary Filters Group */}
+          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
-        {/* Secondary Controls Group: Grouping, View, Columns, Reset */}
-        <div class="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-2">
+          {/* Status Filter */}
+          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+            <button
+              type="button"
+              onClick={() => props.setStatusMode('all')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.statusMode() === 'all'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+                }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setStatusMode(props.statusMode() === 'running' ? 'all' : 'running')}
+              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.statusMode() === 'running'
+                ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm ring-1 ring-green-200 dark:ring-green-800'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+                }`}
+            >
+              <span class={`w-2 h-2 rounded-full ${props.statusMode() === 'running' ? 'bg-green-500 shadow-sm shadow-green-500/50' : 'bg-green-400/60'}`} />
+              Running
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setStatusMode(props.statusMode() === 'degraded' ? 'all' : 'degraded')}
+              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.statusMode() === 'degraded'
+                ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-200 dark:ring-amber-800'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+                }`}
+            >
+              <span class={`w-2 h-2 rounded-full ${props.statusMode() === 'degraded' ? 'bg-amber-500 shadow-sm shadow-amber-500/50' : 'bg-amber-400/60'}`} />
+              Degraded
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setStatusMode(props.statusMode() === 'stopped' ? 'all' : 'stopped')}
+              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.statusMode() === 'stopped'
+                ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm ring-1 ring-red-200 dark:ring-red-800'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+                }`}
+            >
+              <span class={`w-2 h-2 rounded-full ${props.statusMode() === 'stopped' ? 'bg-red-500 shadow-sm shadow-red-500/50' : 'bg-red-400/60'}`} />
+              Stopped
+            </button>
+          </div>
+
+          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
           {/* Grouping Mode Toggle */}
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
