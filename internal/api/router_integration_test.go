@@ -44,7 +44,6 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		BackendPort:    7655,
 		ConfigPath:     tmpDir,
 		DataPath:       tmpDir,
 		DemoMode:       false,

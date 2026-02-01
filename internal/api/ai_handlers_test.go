@@ -934,7 +934,7 @@ func TestAISettingsHandler_SetConfig(t *testing.T) {
 	handler.SetConfig(nil)
 
 	// SetConfig with new config should update the handler's config
-	newCfg := &config.Config{DataPath: tmp, BackendPort: 9999}
+	newCfg := &config.Config{DataPath: tmp}
 	handler.SetConfig(newCfg)
 	// No assertion needed - just verifying it doesn't panic
 }

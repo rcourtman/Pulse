@@ -909,7 +909,7 @@ func TestRunServer_FrontendFail(t *testing.T) {
 	// Keep l open
 	defer l.Close()
 
-	t.Setenv("BACKEND_HOST", "127.0.0.1")
+	t.Setenv("BIND_ADDRESS", "127.0.0.1")
 
 	// Set frontend port to busy port
 	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", port))

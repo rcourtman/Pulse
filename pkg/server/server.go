@@ -126,7 +126,7 @@ func Run(ctx context.Context, version string) error {
 	defer cancel()
 
 	// Metrics port is configurable via MetricsPort variable
-	metricsAddr := fmt.Sprintf("%s:%d", cfg.BackendHost, MetricsPort)
+	metricsAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, MetricsPort)
 	startMetricsServer(ctx, metricsAddr)
 
 	// Initialize WebSocket hub first
@@ -250,7 +250,7 @@ func Run(ctx context.Context, version string) error {
 
 	// Create HTTP server with unified configuration
 	srv := &http.Server{
-		Addr:              fmt.Sprintf("%s:%d", cfg.BackendHost, cfg.FrontendPort),
+		Addr:              fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.FrontendPort),
 		Handler:           router.Handler(),
 		ReadHeaderTimeout: 15 * time.Second,
 		WriteTimeout:      0, // Disabled to support SSE/streaming
@@ -291,7 +291,7 @@ func Run(ctx context.Context, version string) error {
 	go func() {
 		if cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
 			log.Info().
-				Str("host", cfg.BackendHost).
+				Str("host", cfg.BindAddress).
 				Int("port", cfg.FrontendPort).
 				Str("protocol", "HTTPS").
 				Msg("Server listening")
@@ -303,7 +303,7 @@ func Run(ctx context.Context, version string) error {
 				log.Warn().Msg("HTTPS_ENABLED is true but TLS_CERT_FILE or TLS_KEY_FILE not configured, falling back to HTTP")
 			}
 			log.Info().
-				Str("host", cfg.BackendHost).
+				Str("host", cfg.BindAddress).
 				Int("port", cfg.FrontendPort).
 				Str("protocol", "HTTP").
 				Msg("Server listening")

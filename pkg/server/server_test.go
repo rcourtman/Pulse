@@ -80,7 +80,7 @@ func TestServerRun_Shutdown(t *testing.T) {
 	// Create a dummy config.yaml
 	configFile := filepath.Join(tmpDir, "config.yaml")
 	// Use 0 port to try to avoid conflicts, though Run() might default it.
-	if err := os.WriteFile(configFile, []byte("backendHost: 127.0.0.1\nfrontendPort: 0"), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte("bindAddress: 127.0.0.1\nfrontendPort: 0"), 0644); err != nil {
 		t.Fatal(err)
 	}
 

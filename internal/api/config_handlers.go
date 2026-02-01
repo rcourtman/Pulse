@@ -3268,7 +3268,6 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 	settings.PVEPollingInterval = int(h.getConfig(r.Context()).PVEPollingInterval.Seconds())
 	settings.PBSPollingInterval = int(h.getConfig(r.Context()).PBSPollingInterval.Seconds())
 	settings.BackupPollingInterval = int(h.getConfig(r.Context()).BackupPollingInterval.Seconds())
-	settings.BackendPort = h.getConfig(r.Context()).BackendPort
 	settings.FrontendPort = h.getConfig(r.Context()).FrontendPort
 	settings.AllowedOrigins = h.getConfig(r.Context()).AllowedOrigins
 	settings.ConnectionTimeout = int(h.getConfig(r.Context()).ConnectionTimeout.Seconds())

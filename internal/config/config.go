@@ -79,8 +79,7 @@ func IsPasswordHashed(password string) bool {
 // NOTE: The envconfig tags are legacy and not used - configuration is loaded from encrypted JSON files
 type Config struct {
 	// Server settings
-	BackendPort     int
-	BackendHost     string
+	BindAddress     string
 	FrontendPort    int `envconfig:"FRONTEND_PORT" default:"7655"`
 	ConfigPath      string
 	DataPath        string
@@ -101,7 +100,7 @@ type Config struct {
 	PVEPollingInterval              time.Duration `envconfig:"PVE_POLLING_INTERVAL"`             // PVE polling interval (10s default)
 	PBSPollingInterval              time.Duration `envconfig:"PBS_POLLING_INTERVAL"`             // PBS polling interval (60s default)
 	PMGPollingInterval              time.Duration `envconfig:"PMG_POLLING_INTERVAL"`             // PMG polling interval (60s default)
-	ConnectionTimeout               time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
+	ConnectionTimeout               time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"60s"` // Default 60s for slow storage operations
 	BackupPollingCycles             int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
 	BackupPollingInterval           time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
 	EnableBackupPolling             bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
@@ -620,8 +619,7 @@ func Load() (*Config, error) {
 
 	// Initialize config with defaults
 	cfg := &Config{
-		BackendPort:                     3000,
-		BackendHost:                     "0.0.0.0",
+		BindAddress:                     "0.0.0.0",
 		FrontendPort:                    7655,
 		ConfigPath:                      dataDir,
 		DataPath:                        dataDir,
@@ -1121,9 +1119,14 @@ func Load() (*Config, error) {
 		cfg.EnvOverrides["ALLOWED_ORIGINS"] = true
 	}
 
-	if backendHost := utils.GetenvTrim("BACKEND_HOST"); backendHost != "" {
-		cfg.BackendHost = backendHost
-		cfg.EnvOverrides["BACKEND_HOST"] = true
+	if bindAddr := utils.GetenvTrim("BIND_ADDRESS"); bindAddr != "" {
+		cfg.BindAddress = bindAddr
+		cfg.EnvOverrides["BIND_ADDRESS"] = true
+	} else if backendHost := utils.GetenvTrim("BACKEND_HOST"); backendHost != "" {
+		// Deprecated: BACKEND_HOST is the old name for BIND_ADDRESS
+		log.Warn().Msg("BACKEND_HOST is deprecated, use BIND_ADDRESS instead")
+		cfg.BindAddress = backendHost
+		cfg.EnvOverrides["BIND_ADDRESS"] = true
 	}
 
 	if sshPort := utils.GetenvTrim("SSH_PORT"); sshPort != "" {
@@ -1628,9 +1631,6 @@ func SaveOIDCConfig(settings *OIDCConfig) error {
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
 	// Validate server settings
-	if c.BackendPort <= 0 || c.BackendPort > 65535 {
-		return fmt.Errorf("invalid backend port: %d", c.BackendPort)
-	}
 	if c.FrontendPort <= 0 || c.FrontendPort > 65535 {
 		return fmt.Errorf("invalid frontend port: %d", c.FrontendPort)
 	}

@@ -10,7 +10,6 @@ import (
 func getValidConfig() *Config {
 	return &Config{
 		FrontendPort:                7655,
-		BackendPort:                 7656,
 		PVEPollingInterval:          30 * time.Second,
 		ConnectionTimeout:           10 * time.Second,
 		AdaptivePollingMinInterval:  10 * time.Second,
@@ -31,18 +30,6 @@ func TestConfig_Validate(t *testing.T) {
 			name:    "Valid Config",
 			mutate:  func(c *Config) {},
 			isValid: true,
-		},
-		{
-			name:    "Invalid Backend Port Low",
-			mutate:  func(c *Config) { c.BackendPort = 0 },
-			isValid: false,
-			errMsg:  "invalid backend port",
-		},
-		{
-			name:    "Invalid Backend Port High",
-			mutate:  func(c *Config) { c.BackendPort = 65536 },
-			isValid: false,
-			errMsg:  "invalid backend port",
 		},
 		{
 			name:    "Invalid Frontend Port Low",

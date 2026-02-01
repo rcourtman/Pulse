@@ -15,18 +15,16 @@ func TestRouter_ConfigUpdates(t *testing.T) {
 	// Initialize Router with minimal dependencies
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		BackendPort: 8080,
-		DataPath:    tmpDir,
-		ConfigPath:  tmpDir,
+		DataPath:   tmpDir,
+		ConfigPath: tmpDir,
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	// Test SetConfig
 	newCfg := &config.Config{
-		BackendPort: 9090,
-		DataPath:    tmpDir,
-		ConfigPath:  tmpDir,
+		DataPath:   tmpDir,
+		ConfigPath: tmpDir,
 	}
 	router.SetConfig(newCfg)
 

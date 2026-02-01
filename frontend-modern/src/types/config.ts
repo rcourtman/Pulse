@@ -37,7 +37,6 @@ export interface SystemConfig {
   temperatureMonitoringEnabled?: boolean; // Collect CPU/NVMe temperatures via SSH
   sshPort?: number; // SSH port for temperature monitoring (default: 22)
   allowedOrigins?: string; // CORS allowed origins
-  backendPort?: number; // Backend API port (default: 7655)
   frontendPort?: number; // Frontend UI port (default: 7655)
   theme?: string; // Theme preference: 'light' | 'dark' | undefined (system default)
   fullWidthMode?: boolean; // Full-width layout mode preference
@@ -181,7 +180,7 @@ export const DEFAULT_CONFIG: {
   system: SystemConfig;
 } = {
   system: {
-    connectionTimeout: 10,
+    connectionTimeout: 60,
     autoUpdateEnabled: false,
     updateChannel: 'stable',
     autoUpdateCheckInterval: 24,
@@ -191,7 +190,6 @@ export const DEFAULT_CONFIG: {
     temperatureMonitoringEnabled: true,
     sshPort: 22,
     allowedOrigins: '',
-    backendPort: 7655,
     frontendPort: 7655,
   },
 };

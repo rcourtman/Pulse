@@ -334,7 +334,6 @@ func TestHandleGetSystemSettings_ConfigOverrides(t *testing.T) {
 		PVEPollingInterval:           30 * time.Second,
 		PBSPollingInterval:           90 * time.Second,
 		BackupPollingInterval:        12 * time.Second,
-		BackendPort:                  8081,
 		FrontendPort:                 3000,
 		AllowedOrigins:               "https://example.com",
 		ConnectionTimeout:            15 * time.Second,
