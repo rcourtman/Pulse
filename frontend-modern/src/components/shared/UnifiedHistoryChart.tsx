@@ -4,6 +4,8 @@ import { AggregatedMetricPoint, ChartsAPI, HistoryTimeRange, ResourceType } from
 import { formatBytes } from '@/utils/format';
 import { hasFeature, loadLicenseStatus } from '@/stores/license';
 import { logger } from '@/utils/logger';
+import { calculateOptimalPoints } from '@/utils/downsample';
+
 
 interface UnifiedHistoryChartProps {
     resourceType: ResourceType;
@@ -35,6 +37,13 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
     const [maxPoints, setMaxPoints] = createSignal<number | null>(null);
     const [group, setGroup] = createSignal<'utilization' | 'io'>('utilization');
     const [refreshTick, setRefreshTick] = createSignal(0);
+    // Track if we have ever loaded data successfully - used to determine if we show loading spinner
+    const [hasLoadedOnce, setHasLoadedOnce] = createSignal(false);
+    // Track cursor X position for crosshair line (null when not hovering)
+    const [cursorX, setCursorX] = createSignal<number | null>(null);
+    // Track the last successfully fetched params to avoid redundant fetches on prop reference changes
+    let lastFetchParams: { resourceType: string; resourceId: string; range: string; maxPoints: number | null } | null = null;
+
 
     const metricGroups: Record<'utilization' | 'io', Record<string, { label: string; color: string; unit: string }>> = {
         utilization: {
@@ -66,10 +75,17 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         }
     });
 
-    const loadData = async (resourceType: ResourceType, resourceId: string, rangeValue: HistoryTimeRange, pointsCap?: number | null) => {
-        setLoading(true);
+    const loadData = async (resourceType: ResourceType, resourceId: string, rangeValue: HistoryTimeRange, pointsCap?: number | null, isBackgroundRefresh = false) => {
+        // Only show loading spinner if this is NOT a background refresh and we haven't loaded once yet
+        // This prevents flickering when data refreshes in the background
+        if (!isBackgroundRefresh && !hasLoadedOnce()) {
+            setLoading(true);
+        }
         setError(null);
-        setSource(null);
+        // Don't clear source during background refresh to avoid flashing UI changes
+        if (!isBackgroundRefresh) {
+            setSource(null);
+        }
         try {
             // Fetch all metrics for the resource
             const response = await ChartsAPI.getMetricsHistory({
@@ -87,14 +103,24 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
                 setMetricsData({ [response.metric]: response.points });
                 setSource(response.source ?? 'store');
             }
+            // Mark that we've successfully loaded data at least once
+            if (!hasLoadedOnce()) {
+                setHasLoadedOnce(true);
+            }
+            // Update the last fetch params
+            lastFetchParams = { resourceType, resourceId, range: rangeValue, maxPoints: pointsCap ?? null };
         } catch (err: any) {
             console.error('[UnifiedHistoryChart] Failed to load history:', err);
-            setError('Failed to load history data');
+            // Only show error if we don't have data already
+            if (!hasLoadedOnce()) {
+                setError('Failed to load history data');
+            }
             setSource(null);
         } finally {
             setLoading(false);
         }
     };
+
 
     onMount(() => {
         loadLicenseStatus();
@@ -104,13 +130,14 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         if (props.range) setRange(props.range);
     });
 
+    // Main data loading effect - responds to resource/range changes
+    // This is NOT a background refresh, so show loading spinner on first load
     createEffect(() => {
         const resourceType = props.resourceType;
         const resourceId = props.resourceId;
         const rangeValue = props.range ?? range();
         const locked = isLocked();
         const pointsCap = maxPoints();
-        refreshTick();
 
         if (!resourceType || !resourceId) return;
         if (locked) {
@@ -118,7 +145,38 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
             setError(null);
             return;
         }
-        loadData(resourceType, resourceId, rangeValue, pointsCap);
+
+        // Check if we need to fetch - skip if params haven't actually changed
+        // This prevents redundant fetches when props change reference but not value
+        const paramsChanged = !lastFetchParams ||
+            lastFetchParams.resourceType !== resourceType ||
+            lastFetchParams.resourceId !== resourceId ||
+            lastFetchParams.range !== rangeValue ||
+            lastFetchParams.maxPoints !== pointsCap;
+
+        if (paramsChanged) {
+            // This is an initial or user-triggered load (not background refresh)
+            loadData(resourceType, resourceId, rangeValue, pointsCap, false);
+        }
+    });
+
+    // Separate effect for background refresh - uses refreshTick only
+    // This ensures background refreshes are silent (no loading spinner)
+    createEffect(() => {
+        const tick = refreshTick();
+        // Only trigger background refresh after at least one tick (initial is 0)
+        if (tick === 0) return;
+
+        const resourceType = props.resourceType;
+        const resourceId = props.resourceId;
+        const rangeValue = props.range ?? range();
+        const locked = isLocked();
+        const pointsCap = maxPoints();
+
+        if (!resourceType || !resourceId || locked) return;
+
+        // Background refresh - pass true to prevent loading spinner
+        loadData(resourceType, resourceId, rangeValue, pointsCap, true);
     });
 
     createEffect(() => {
@@ -130,6 +188,7 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         onCleanup(() => window.clearInterval(timer));
     });
 
+
     const drawChart = () => {
         if (!canvasRef) return;
         const ctx = canvasRef.getContext('2d');
@@ -140,14 +199,29 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         const activeGroup = group();
         const metricConfigs = metricGroups[activeGroup];
 
+        // Set canvas size ONLY if dimensions have changed
+        // Resizing canvas clears its content and resets transforms, which causes flickering
         const dpr = window.devicePixelRatio || 1;
-        canvasRef.width = w * dpr;
-        canvasRef.height = h * dpr;
-        canvasRef.style.width = `${w}px`;
-        canvasRef.style.height = `${h}px`;
-        ctx.scale(dpr, dpr);
+        const targetWidth = Math.round(w * dpr);
+        const targetHeight = Math.round(h * dpr);
 
-        ctx.clearRect(0, 0, w, h);
+        const needsResize = canvasRef.width !== targetWidth || canvasRef.height !== targetHeight;
+
+        if (needsResize) {
+            canvasRef.width = targetWidth;
+            canvasRef.height = targetHeight;
+            canvasRef.style.width = `${w}px`;
+            canvasRef.style.height = `${h}px`;
+        }
+
+        // Reset transform and apply DPR scale before drawing
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // Clear canvas (if not already cleared by resize)
+        if (!needsResize) {
+            ctx.clearRect(0, 0, w, h);
+        }
+
 
         const isDark = document.documentElement.classList.contains('dark');
         const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
@@ -272,30 +346,98 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
                 ctx.fillText(`${formatBytes(value)}/s`, 35, y);
             });
         }
+
+        // Draw crosshair vertical line and point circles if cursor is hovering
+        const cursor = cursorX();
+        if (cursor !== null && cursor >= 40) {
+            // Draw the vertical dashed line
+            ctx.save();
+            ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]); // Dotted line pattern
+            ctx.beginPath();
+            ctx.moveTo(cursor, 0);
+            ctx.lineTo(cursor, h - 20); // Stop at x-axis labels area
+            ctx.stroke();
+            ctx.restore();
+
+            // Draw point circles at each metric's intersection with the crosshair
+            Object.entries(metricConfigs).forEach(([metricId, config]) => {
+                const points = dataMap[metricId];
+                if (!points || points.length === 0) return;
+
+                const startTime = points[0].timestamp;
+                const endTime = points[points.length - 1].timestamp;
+                const timeSpan = endTime - startTime || 1;
+
+                // Calculate which point is nearest to the cursor X position
+                const ratio = (cursor - 40) / (w - 40);
+                const hoverTs = startTime + ratio * timeSpan;
+
+                // Find the nearest point
+                let closest = points[0];
+                let minDiff = Math.abs(points[0].timestamp - hoverTs);
+                for (const p of points) {
+                    const diff = Math.abs(p.timestamp - hoverTs);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closest = p;
+                    }
+                }
+
+                // Calculate the exact position
+                const getX = (ts: number) => 40 + ((ts - startTime) / timeSpan) * (w - 40);
+                const getY = (val: number) => {
+                    const clamped = Math.max(0, Math.min(val, maxAxisValue));
+                    return h - 20 - (clamped / maxAxisValue) * (h - 40);
+                };
+
+                const pointX = getX(closest.timestamp);
+                const pointY = getY(closest.value);
+
+                // Draw outer ring (white/dark background for contrast)
+                ctx.beginPath();
+                ctx.arc(pointX, pointY, 5, 0, Math.PI * 2);
+                ctx.fillStyle = isDark ? '#1f2937' : '#ffffff';
+                ctx.fill();
+
+                // Draw colored circle
+                ctx.beginPath();
+                ctx.arc(pointX, pointY, 4, 0, Math.PI * 2);
+                ctx.fillStyle = config.color;
+                ctx.fill();
+
+                // Draw inner highlight
+                ctx.beginPath();
+                ctx.arc(pointX, pointY, 2, 0, Math.PI * 2);
+                ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.8)';
+                ctx.fill();
+            });
+        }
     };
+
+
 
     createEffect(() => {
         metricsData();
+        cursorX(); // Track cursor position for crosshair redraw
         drawChart();
     });
 
+
     createEffect(() => {
         if (!containerRef) return;
-        const computeMaxPoints = (width: number) => {
-            const safeWidth = Math.max(120, Math.floor(width));
-            const dpr = window.devicePixelRatio || 1;
-            const points = Math.round(safeWidth * dpr);
-            return Math.min(1200, Math.max(180, points));
-        };
 
         const updateMaxPoints = () => {
             const width = containerRef?.clientWidth || 0;
             if (width <= 0) return;
-            const next = computeMaxPoints(width);
+            // Use optimized point calculation: ~1 point per 2 pixels
+            const next = calculateOptimalPoints(width, 'history');
             if (next !== maxPoints()) {
                 setMaxPoints(next);
             }
         };
+
 
         const ro = new ResizeObserver(() => {
             updateMaxPoints();
@@ -312,8 +454,12 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         const x = e.clientX - rect.left;
         if (x < 40) {
             setHoveredPoint(null);
+            setCursorX(null);
             return;
         }
+
+        // Update cursor position for crosshair line
+        setCursorX(x);
 
         const dataMap = metricsData();
         const activeGroup = group();
@@ -364,6 +510,12 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
         setHoveredPoint(hoverInfo);
     };
 
+    const handleMouseLeave = () => {
+        setHoveredPoint(null);
+        setCursorX(null);
+    };
+
+
     const updateRange = (r: HistoryTimeRange) => {
         setRange(r);
         if (props.onRangeChange) props.onRangeChange(r);
@@ -376,11 +528,10 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
                     <span class="text-sm font-bold text-gray-700 dark:text-gray-200">{props.label || 'Unified History'}</span>
                     <Show when={source() && source() !== 'store'}>
                         <span
-                            class={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
-                                source() === 'live'
-                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                            }`}
+                            class={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${source() === 'live'
+                                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                }`}
                             title={source() === 'live' ? 'Live sample shown because history is not available yet.' : 'In-memory buffer shown while history is warming up.'}
                         >
                             {source() === 'live' ? 'Live' : 'Memory'}
@@ -436,7 +587,8 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
                     ref={canvasRef}
                     class="block w-full h-full cursor-crosshair"
                     onMouseMove={handleMouseMove}
-                    onMouseLeave={() => setHoveredPoint(null)}
+                    onMouseLeave={handleMouseLeave}
+
                 />
 
                 <Show when={loading()}>

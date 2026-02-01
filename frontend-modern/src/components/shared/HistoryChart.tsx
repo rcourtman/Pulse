@@ -10,6 +10,8 @@ import { ChartsAPI, type ResourceType, type HistoryTimeRange, type AggregatedMet
 import { hasFeature, loadLicenseStatus } from '@/stores/license';
 import { Portal } from 'solid-js/web';
 import { formatBytes } from '@/utils/format';
+import { calculateOptimalPoints } from '@/utils/downsample';
+
 
 interface HistoryChartProps {
     resourceType: ResourceType;
@@ -22,6 +24,10 @@ interface HistoryChartProps {
     range?: HistoryTimeRange;
     onRangeChange?: (range: HistoryTimeRange) => void;
     hideSelector?: boolean;
+    /** Strip outer card chrome (border/padding/shadow) and reduce min-height for inline embedding. */
+    compact?: boolean;
+    /** Suppress the built-in Pro lock overlay (caller handles it externally). */
+    hideLock?: boolean;
 }
 
 export const HistoryChart: Component<HistoryChartProps> = (props) => {
@@ -35,6 +41,10 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     const [source, setSource] = createSignal<'store' | 'memory' | 'live' | null>(null);
     const [maxPoints, setMaxPoints] = createSignal<number | null>(null);
     const [refreshTick, setRefreshTick] = createSignal(0);
+    // Track if we have ever loaded data successfully - used to determine if we show loading spinner
+    const [hasLoadedOnce, setHasLoadedOnce] = createSignal(false);
+    // Track cursor X position for crosshair line (null when not hovering)
+    const [cursorX, setCursorX] = createSignal<number | null>(null);
 
     const refreshIntervalMs = createMemo(() => {
         const r = range();
@@ -92,28 +102,17 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         y: number;
     } | null>(null);
 
-    // Fetch data when range or resource changes
-    createEffect(async () => {
-        const r = range();
-        const type = props.resourceType;
-        const id = props.resourceId;
-        const metric = props.metric;
-        const locked = isLocked();
-        const pointsCap = maxPoints();
-        refreshTick();
-
-        if (!id || !type) return;
-
-        if (locked) {
-            setLoading(false);
-            setError(null);
-            setSource(null);
-            return;
+    // Helper function to load data
+    const loadData = async (r: HistoryTimeRange, type: ResourceType, id: string, metric: string, pointsCap: number | null, isBackgroundRefresh: boolean) => {
+        // Only show loading spinner if this is NOT a background refresh and we haven't loaded once yet
+        if (!isBackgroundRefresh && !hasLoadedOnce()) {
+            setLoading(true);
         }
-
-        setLoading(true);
         setError(null);
-        setSource(null);
+        // Don't clear source during background refresh to avoid flashing UI changes
+        if (!isBackgroundRefresh) {
+            setSource(null);
+        }
         try {
             const result = await ChartsAPI.getMetricsHistory({
                 resourceType: type,
@@ -131,13 +130,63 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                 setData([]);
                 setSource(result.source ?? 'store');
             }
+            // Mark that we've successfully loaded data at least once
+            if (!hasLoadedOnce()) {
+                setHasLoadedOnce(true);
+            }
         } catch (err) {
             console.error('Failed to fetch metrics history:', err);
-            setError('Failed to load history data');
+            // Only show error if we don't have data already
+            if (!hasLoadedOnce()) {
+                setError('Failed to load history data');
+            }
             setSource(null);
         } finally {
             setLoading(false);
         }
+    };
+
+    // Main data loading effect - responds to resource/range changes
+    // This is NOT a background refresh, so show loading spinner on first load
+    createEffect(async () => {
+        const r = range();
+        const type = props.resourceType;
+        const id = props.resourceId;
+        const metric = props.metric;
+        const locked = isLocked();
+        const pointsCap = maxPoints();
+
+        if (!id || !type) return;
+
+        if (locked) {
+            setLoading(false);
+            setError(null);
+            setSource(null);
+            return;
+        }
+
+        // Initial or user-triggered load (not background refresh)
+        loadData(r, type, id, metric, pointsCap, false);
+    });
+
+    // Separate effect for background refresh - uses refreshTick only
+    // This ensures background refreshes are silent (no loading spinner)
+    createEffect(() => {
+        const tick = refreshTick();
+        // Only trigger background refresh after at least one tick (initial is 0)
+        if (tick === 0) return;
+
+        const r = range();
+        const type = props.resourceType;
+        const id = props.resourceId;
+        const metric = props.metric;
+        const locked = isLocked();
+        const pointsCap = maxPoints();
+
+        if (!id || !type || locked) return;
+
+        // Background refresh - pass true to prevent loading spinner
+        loadData(r, type, id, metric, pointsCap, true);
     });
 
     createEffect(() => {
@@ -148,6 +197,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         }, interval);
         onCleanup(() => window.clearInterval(timer));
     });
+
 
     // Draw chart
     const drawChart = () => {
@@ -160,16 +210,29 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         const w = canvas.parentElement?.clientWidth || 300;
         const h = props.height || 200;
 
-        // Handle device pixel ratio
+        // Set canvas size ONLY if dimensions have changed
+        // Resizing canvas clears its content and resets transforms, which causes flickering
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = w * dpr;
-        canvas.height = h * dpr;
-        canvas.style.width = `${w}px`;
-        canvas.style.height = `${h}px`;
-        ctx.scale(dpr, dpr);
+        const targetWidth = Math.round(w * dpr);
+        const targetHeight = Math.round(h * dpr);
 
-        // Clear
-        ctx.clearRect(0, 0, w, h);
+        const needsResize = canvas.width !== targetWidth || canvas.height !== targetHeight;
+
+        if (needsResize) {
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            canvas.style.width = `${w}px`;
+            canvas.style.height = `${h}px`;
+        }
+
+        // Reset transform and apply DPR scale before drawing
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // Clear canvas (if not already cleared by resize)
+        if (!needsResize) {
+            ctx.clearRect(0, 0, w, h);
+        }
+
 
         // Colors
         const isDark = document.documentElement.classList.contains('dark');
@@ -276,33 +339,84 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
             ctx.fillText(formatTimeLabel(t), x, h - 2);
         }
 
+        // Draw crosshair vertical line and point circle if cursor is hovering
+        const cursor = cursorX();
+        if (cursor !== null && cursor >= 40 && points.length > 0) {
+            // Draw the vertical dashed line
+            ctx.save();
+            ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]); // Dotted line pattern
+            ctx.beginPath();
+            ctx.moveTo(cursor, 0);
+            ctx.lineTo(cursor, h - 20); // Stop at x-axis labels area
+            ctx.stroke();
+            ctx.restore();
+
+            // Calculate which point is nearest to the cursor X position
+            const ratio = (cursor - 40) / (w - 40);
+            const hoverTs = startTime + ratio * timeSpan;
+
+            // Find the nearest point
+            let closest = points[0];
+            let minDiff = Math.abs(points[0].timestamp - hoverTs);
+            for (const p of points) {
+                const diff = Math.abs(p.timestamp - hoverTs);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = p;
+                }
+            }
+
+            // Calculate the exact position
+            const pointX = getX(closest.timestamp);
+            const pointY = getY(closest.value);
+
+            // Draw outer ring (white/dark background for contrast)
+            ctx.beginPath();
+            ctx.arc(pointX, pointY, 5, 0, Math.PI * 2);
+            ctx.fillStyle = isDark ? '#1f2937' : '#ffffff';
+            ctx.fill();
+
+            // Draw colored circle
+            ctx.beginPath();
+            ctx.arc(pointX, pointY, 4, 0, Math.PI * 2);
+            ctx.fillStyle = mainColor;
+            ctx.fill();
+
+            // Draw inner highlight
+            ctx.beginPath();
+            ctx.arc(pointX, pointY, 2, 0, Math.PI * 2);
+            ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.8)';
+            ctx.fill();
+        }
+
+
         // Min/Max envelope (optional, for pro feel?)
         // Let's keep it clean for now, maybe add later.
     };
 
     // Reactivity
     createEffect(() => {
+        cursorX(); // Track cursor position for crosshair redraw
         drawChart();
     });
+
 
     // Resize observer
     createEffect(() => {
         if (!containerRef) return;
-        const computeMaxPoints = (width: number) => {
-            const safeWidth = Math.max(120, Math.floor(width));
-            const dpr = window.devicePixelRatio || 1;
-            const points = Math.round(safeWidth * dpr);
-            return Math.min(1200, Math.max(180, points));
-        };
 
         const updateMaxPoints = () => {
             const width = containerRef?.clientWidth || 0;
             if (width <= 0) return;
-            const next = computeMaxPoints(width);
+            // Use optimized point calculation: ~1 point per 2 pixels
+            const next = calculateOptimalPoints(width, 'history');
             if (next !== maxPoints()) {
                 setMaxPoints(next);
             }
         };
+
 
         const resizeObserver = new ResizeObserver(() => {
             updateMaxPoints();
@@ -328,7 +442,15 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
 
         // Inverse getX: x = 40 + ratio * (w-40)
         // ratio = (x - 40) / (w - 40)
-        if (x < 40) return;
+        if (x < 40) {
+            setCursorX(null);
+            setHoveredPoint(null);
+            return;
+        }
+
+        // Update cursor position for crosshair line
+        setCursorX(x);
+
         const ratio = (x - 40) / (w - 40);
         const hoverTs = startTime + ratio * timeSpan;
 
@@ -358,13 +480,17 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         });
     };
 
-    const handleMouseLeave = () => setHoveredPoint(null);
+    const handleMouseLeave = () => {
+        setHoveredPoint(null);
+        setCursorX(null);
+    };
+
 
     const ranges: HistoryTimeRange[] = ['24h', '7d', '30d', '90d'];
 
     return (
-        <div class="flex flex-col h-full bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div class="flex items-center justify-between mb-4">
+        <div class={`flex flex-col h-full ${props.compact ? '' : 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4'}`}>
+            <div class={`flex items-center justify-between ${props.compact ? 'mb-2' : 'mb-4'}`}>
                 <div class="flex items-center gap-2">
                     <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{props.label || 'History'}</span>
                     <Show when={props.unit}>
@@ -372,11 +498,10 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                     </Show>
                     <Show when={source() && source() !== 'store'}>
                         <span
-                            class={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
-                                source() === 'live'
-                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                            }`}
+                            class={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${source() === 'live'
+                                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                }`}
                             title={source() === 'live' ? 'Live sample shown because history is not available yet.' : 'In-memory buffer shown while history is warming up.'}
                         >
                             {source() === 'live' ? 'Live' : 'Memory'}
@@ -402,7 +527,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                 </Show>
             </div>
 
-            <div class="relative flex-1 min-h-[200px] w-full" ref={containerRef}>
+            <div class={`relative flex-1 w-full ${props.compact ? 'min-h-[120px]' : 'min-h-[200px]'}`} ref={containerRef}>
                 <canvas
                     ref={canvasRef}
                     class="block w-full h-full cursor-crosshair"
@@ -443,7 +568,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                 </Show>
 
                 {/* Pro Lock Overlay */}
-                <Show when={isLocked()}>
+                <Show when={isLocked() && !props.hideLock}>
                     <div class="absolute inset-0 z-10 flex flex-col items-center justify-center backdrop-blur-sm bg-white/60 dark:bg-gray-900/60 rounded-lg">
                         <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full p-3 shadow-lg mb-3">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

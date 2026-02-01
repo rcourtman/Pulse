@@ -5,10 +5,12 @@
  * Optimized for rendering many sparklines simultaneously in tables.
  */
 
-import { onCleanup, createEffect, createSignal, Component, Show } from 'solid-js';
+import { onCleanup, createEffect, createSignal, Component, Show, createMemo } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { MetricSnapshot } from '@/stores/metricsHistory';
 import { scheduleSparkline } from '@/utils/canvasRenderQueue';
+import { downsampleMetricSnapshots, calculateOptimalPoints } from '@/utils/downsample';
+
 
 interface SparklineProps {
   data: MetricSnapshot[];
@@ -43,6 +45,23 @@ export const Sparkline: Component<SparklineProps> = (props) => {
   };
   const height = () => props.height || 16;
 
+  // Downsample data using LTTB algorithm for optimal rendering
+  // This reduces ~2880 points to ~60-80 points (1 per 1.5 pixels)
+  const downsampledData = createMemo(() => {
+    const data = props.data;
+    if (!data || data.length === 0) return data;
+
+    const w = width();
+    const optimalPoints = calculateOptimalPoints(w, 'sparkline');
+
+    // Only downsample if we have significantly more points than needed
+    if (data.length <= optimalPoints * 1.5) {
+      return data;
+    }
+
+    return downsampleMetricSnapshots(data, props.metric, optimalPoints);
+  });
+
   // Default thresholds based on metric type
   const getDefaultThresholds = () => {
     switch (props.metric) {
@@ -58,6 +77,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
   };
 
   const thresholds = () => props.thresholds || getDefaultThresholds();
+
 
   // Get color based on latest value and thresholds
   const getColor = (value: number): string => {
@@ -86,23 +106,38 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const data = props.data;
+    // Use downsampled data for efficient rendering
+    const data = downsampledData();
     const w = width();
     const h = height();
     const metric = props.metric;
 
-    // Set canvas size (accounting for device pixel ratio for sharp rendering)
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    // Always set explicit width style to prevent canvas from expanding beyond container
-    // When width=0, we use the calculated container width
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${h}px`;
-    ctx.scale(dpr, dpr);
 
-    // Clear canvas
-    ctx.clearRect(0, 0, w, h);
+    // Set canvas size ONLY if dimensions have changed
+    // Resizing canvas clears its content and resets transforms, which causes flickering
+    const dpr = window.devicePixelRatio || 1;
+    const targetWidth = Math.round(w * dpr);
+    const targetHeight = Math.round(h * dpr);
+
+    const needsResize = canvas.width !== targetWidth || canvas.height !== targetHeight;
+
+    if (needsResize) {
+      // Resize clears canvas and resets transform automatically
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+    }
+
+    // Reset transform and apply DPR scale before drawing
+    // This must be done on every draw since transforms can compound
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Clear canvas (if not already cleared by resize)
+    if (!needsResize) {
+      ctx.clearRect(0, 0, w, h);
+    }
+
 
     // Detect dark mode for reference line color
     const isDark = document.documentElement.classList.contains('dark');
@@ -187,10 +222,12 @@ export const Sparkline: Component<SparklineProps> = (props) => {
 
   // Redraw when data or dimensions change
   createEffect(() => {
-    void props.data;
+    // Track downsampled data for efficient re-rendering
+    void downsampledData();
     void props.metric;
     void width();
     void height();
+
 
     // Unregister previous draw callback if it exists
     if (unregister) {
@@ -209,13 +246,13 @@ export const Sparkline: Component<SparklineProps> = (props) => {
 
   // Handle mouse move to find nearest point
   const handleMouseMove = (e: MouseEvent) => {
-    if (!canvasRef || !props.data || props.data.length === 0) return;
+    const data = downsampledData();
+    if (!canvasRef || !data || data.length === 0) return;
 
     const rect = canvasRef.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const w = width();
 
-    const data = props.data;
     const values = data.map(d => d[props.metric]);
     const xStep = w / Math.max(values.length - 1, 1);
 
@@ -234,6 +271,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
       y: rect.top - 45,  // Position above the sparkline (45px above top edge)
     });
   };
+
 
   const handleMouseLeave = () => {
     setHoveredPoint(null);
