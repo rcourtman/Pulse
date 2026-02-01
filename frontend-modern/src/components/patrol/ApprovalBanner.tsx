@@ -8,7 +8,7 @@
  * - Multiple: count + "Review" button to scroll to first finding
  */
 
-import { Component, Show, createMemo, createSignal, onCleanup } from 'solid-js';
+import { Component, Show, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import type { ApprovalRequest } from '@/api/ai';
@@ -24,13 +24,17 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
   const [tick, setTick] = createSignal(Date.now());
 
-  // Tick every second to keep countdown live
-  const tickInterval = setInterval(() => setTick(Date.now()), 1000);
-  onCleanup(() => clearInterval(tickInterval));
-
   const pending = createMemo(() =>
     aiIntelligenceStore.pendingApprovals.filter((a: ApprovalRequest) => a.status === 'pending')
   );
+
+  // Only tick when there are pending approvals to avoid unnecessary work
+  createEffect(() => {
+    if (pending().length > 0) {
+      const tickInterval = setInterval(() => setTick(Date.now()), 1000);
+      onCleanup(() => clearInterval(tickInterval));
+    }
+  });
 
   const firstApproval = createMemo(() => pending()[0] ?? null);
 

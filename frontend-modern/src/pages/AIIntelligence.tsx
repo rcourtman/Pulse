@@ -101,9 +101,19 @@ export function AIIntelligence() {
   // Optimistic running state — set immediately on "Run Patrol" click to avoid race with backend
   const [manualRunRequested, setManualRunRequested] = createSignal(false);
 
+  // Safety timer ref — hoisted so onStart can clear it when SSE connects
+  let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
+
   // Live patrol streaming
   const patrolStream = usePatrolStream({
     running: () => (patrolStatus()?.running ?? false) || manualRunRequested(),
+    onStart: () => {
+      // SSE connected — clear the safety timeout
+      if (safetyTimerRef !== undefined) {
+        clearTimeout(safetyTimerRef);
+        safetyTimerRef = undefined;
+      }
+    },
     onComplete: () => {
       setManualRunRequested(false);
       loadAllData();
@@ -264,8 +274,9 @@ export function AIIntelligence() {
     setIsTriggeringPatrol(true);
     setManualRunRequested(true);
 
-    // Safety timeout: if SSE never connects within 15s, clear optimistic state
-    const safetyTimer = setTimeout(() => {
+    // Safety timeout: if SSE never connects within 15s, clear optimistic state.
+    // Cleared early via onStart callback when the SSE connection opens.
+    safetyTimerRef = setTimeout(() => {
       if (manualRunRequested() && !patrolStream.isStreaming()) {
         setManualRunRequested(false);
         notificationStore.error('Patrol run did not start — connection timed out');
@@ -280,8 +291,12 @@ export function AIIntelligence() {
       console.error('Failed to trigger patrol run:', err);
       setManualRunRequested(false);
       notificationStore.error('Failed to start patrol run');
+      // Clear safety timer on API error
+      if (safetyTimerRef !== undefined) {
+        clearTimeout(safetyTimerRef);
+        safetyTimerRef = undefined;
+      }
     } finally {
-      clearTimeout(safetyTimer);
       setIsTriggeringPatrol(false);
     }
   }

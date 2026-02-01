@@ -13,6 +13,8 @@ import { logger } from '@/utils/logger';
 export interface UsePatrolStreamOptions {
     /** Reactive boolean – stream is only open while this returns true. */
     running: Accessor<boolean>;
+    /** Called when the SSE connection opens successfully. */
+    onStart?: () => void;
     /** Called when a 'complete' event is received. */
     onComplete?: () => void;
     /** Called when an 'error' event is received or the SSE connection fails. */
@@ -106,6 +108,7 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
                 logger.info('[PatrolStream] SSE connected');
                 setIsStreaming(true);
                 reconnectAttempts = 0; // Reset on successful connection
+                opts.onStart?.();
             };
 
             es.onmessage = (msg) => {
@@ -166,9 +169,10 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
                 // Only reconnect if the close wasn't intentional and patrol is still running
                 if (!intentionalClose && opts.running()) {
                     scheduleReconnect();
-                } else {
+                } else if (!intentionalClose) {
                     opts.onError?.();
                 }
+                // If intentionalClose, do nothing — we already handled it
             };
         } catch {
             // EventSource constructor can throw in some environments
