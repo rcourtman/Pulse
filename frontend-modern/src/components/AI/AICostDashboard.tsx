@@ -224,7 +224,7 @@ export const AICostDashboard: Component = () => {
 
   return (
     <Card padding="none" class="overflow-hidden border border-gray-200 dark:border-gray-700" border={false}>
-      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div class="bg-blue-50 dark:bg-blue-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center gap-3">
           <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
             <svg class="w-5 h-5 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -1022,7 +1022,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       <Show when={!aiIntelligenceStore.findingsLoading}>
         <Card padding="none" class="overflow-hidden">
           {/* Header */}
-          <div class="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-900/30 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <div class="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

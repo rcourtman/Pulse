@@ -38,7 +38,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
   return (
     <div class="rounded-lg border border-blue-300 dark:border-blue-700 overflow-hidden shadow-md">
       {/* Header */}
-      <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-800 dark:text-blue-200 border-b border-blue-200 dark:border-blue-800">
+      <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-b border-blue-200 dark:border-blue-800">
         <div class="p-1 rounded bg-blue-100 dark:bg-blue-800/50">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -102,7 +102,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                 ? 'bg-blue-400 text-white cursor-wait'
                 : !isValid()
                 ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-sm hover:shadow-md'
+                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-md'
             }`}
           >
             <Show

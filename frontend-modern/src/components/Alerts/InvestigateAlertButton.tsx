@@ -108,14 +108,14 @@ Please:
                 onClick={handleClick}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
-                class={`${baseButtonClass} ${sizeClasses[props.size || 'sm']} 
-          bg-gradient-to-r from-purple-500/10 to-blue-500/10
-          hover:from-purple-500/20 hover:to-blue-500/20
+                class={`${baseButtonClass} ${sizeClasses[props.size || 'sm']}
+          bg-purple-500/10
+          hover:bg-purple-500/20
           text-purple-600 dark:text-purple-400
           hover:text-purple-700 dark:hover:text-purple-300
           border border-purple-200/50 dark:border-purple-700/50
           hover:border-purple-300 dark:hover:border-purple-600
-          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:from-purple-500/10 hover:to-blue-500/10' : ''}
+          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-500/10' : ''}
           ${props.class || ''}`}
                 title={isLocked() ? 'Pulse Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
                 aria-disabled={isLocked()}
@@ -146,14 +146,14 @@ Please:
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
                 class={`${baseButtonClass} px-2 py-1
-          bg-gradient-to-r from-purple-500/10 to-blue-500/10
-          hover:from-purple-500/20 hover:to-blue-500/20
+          bg-purple-500/10
+          hover:bg-purple-500/20
           text-purple-600 dark:text-purple-400
           hover:text-purple-700 dark:hover:text-purple-300
           border border-purple-200/50 dark:border-purple-700/50
           hover:border-purple-300 dark:hover:border-purple-600
           gap-1.5
-          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:from-purple-500/10 hover:to-blue-500/10' : ''}
+          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-500/10' : ''}
           ${props.class || ''}`}
                 title={isLocked() ? 'Pulse Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
                 aria-disabled={isLocked()}
@@ -179,12 +179,12 @@ Please:
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             class={`${baseButtonClass} px-3 py-1.5
-        bg-gradient-to-r from-purple-500 to-blue-500
-        hover:from-purple-600 hover:to-blue-600
+        bg-purple-500
+        hover:bg-purple-600
         text-white font-medium
         shadow-sm hover:shadow-md
         gap-2
-        ${isLocked() ? 'opacity-60 cursor-not-allowed hover:from-purple-500 hover:to-blue-500' : ''}
+        ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-500' : ''}
         ${props.class || ''}`}
             title={isLocked() ? 'Pulse Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
             aria-disabled={isLocked()}
