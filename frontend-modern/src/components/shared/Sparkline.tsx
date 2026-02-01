@@ -191,12 +191,8 @@ export const Sparkline: Component<SparklineProps> = (props) => {
       points.push({ x, y });
     });
 
-    // Draw gradient fill
-    const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, `${color}5A`); // 35% opacity at top
-    gradient.addColorStop(1, `${color}1F`); // 12% opacity at bottom
-
-    ctx.fillStyle = gradient;
+    // Draw solid fill
+    ctx.fillStyle = `${color}5A`; // 35% opacity solid fill
     ctx.beginPath();
     ctx.moveTo(points[0].x, h); // Start at bottom left
     points.forEach(p => ctx.lineTo(p.x, p.y));
