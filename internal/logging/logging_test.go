@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -43,6 +45,10 @@ func resetLoggingState() {
 	compressFn = compressAndRemove
 }
 
+func baseWriterDebugString() string {
+	return fmt.Sprintf("%#v", baseWriter)
+}
+
 func TestInitJSONFormatSetsLevelAndComponent(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 
@@ -55,8 +61,12 @@ func TestInitJSONFormatSetsLevelAndComponent(t *testing.T) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	if baseWriter != os.Stderr {
-		t.Fatalf("expected base writer to be os.Stderr, got %#v", baseWriter)
+	repr := baseWriterDebugString()
+	if !strings.Contains(repr, fmt.Sprintf("(%p)", os.Stderr)) {
+		t.Fatalf("expected base writer to include os.Stderr, got %#v", baseWriter)
+	}
+	if !strings.Contains(repr, "LogBroadcaster") {
+		t.Fatalf("expected base writer to include broadcaster, got %#v", baseWriter)
 	}
 
 	if zerolog.GlobalLevel() != zerolog.DebugLevel {
@@ -83,8 +93,12 @@ func TestInitConsoleFormatUsesConsoleWriter(t *testing.T) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	if _, ok := baseWriter.(zerolog.ConsoleWriter); !ok {
+	repr := baseWriterDebugString()
+	if !strings.Contains(repr, "zerolog.ConsoleWriter") {
 		t.Fatalf("expected console writer, got %#v", baseWriter)
+	}
+	if !strings.Contains(repr, "LogBroadcaster") {
+		t.Fatalf("expected base writer to include broadcaster, got %#v", baseWriter)
 	}
 }
 
@@ -111,8 +125,12 @@ func TestInitAutoFormatWithPipe(t *testing.T) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	if baseWriter != w {
+	repr := baseWriterDebugString()
+	if !strings.Contains(repr, fmt.Sprintf("(%p)", w)) {
 		t.Fatalf("expected base writer to use provided pipe, got %#v", baseWriter)
+	}
+	if !strings.Contains(repr, "LogBroadcaster") {
+		t.Fatalf("expected base writer to include broadcaster, got %#v", baseWriter)
 	}
 }
 

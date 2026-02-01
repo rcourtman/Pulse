@@ -521,7 +521,7 @@ func fetchAutoModels(baseURL, user, pass string) ([]string, []autoSelectionDetai
 		return nil, nil, nil, fmt.Errorf("failed to decode models response: %w", err)
 	}
 	if payload.Error != "" {
-		return nil, nil, nil, fmt.Errorf(payload.Error)
+		return nil, nil, nil, fmt.Errorf("%s", payload.Error)
 	}
 
 	providerFilter := parseProviderFilterWithDefault(os.Getenv("EVAL_MODEL_PROVIDERS"))
