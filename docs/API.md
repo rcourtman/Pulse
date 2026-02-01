@@ -69,6 +69,29 @@ Summary counts and health rollups.
 `GET /api/resources/{id}`
 Fetch a single resource by ID.
 
+### Resource Metadata
+User notes, tags, and custom URLs for resources.
+
+- `GET /api/hosts/metadata` (admin or `monitoring:read`)
+- `GET /api/hosts/metadata/{hostId}` (admin or `monitoring:read`)
+- `PUT /api/hosts/metadata/{hostId}` (admin or `monitoring:write`)
+- `DELETE /api/hosts/metadata/{hostId}` (admin or `monitoring:write`)
+
+- `GET /api/guests/metadata` (admin or `monitoring:read`)
+- `GET /api/guests/metadata/{guestId}` (admin or `monitoring:read`)
+- `PUT /api/guests/metadata/{guestId}` (admin or `monitoring:write`)
+- `DELETE /api/guests/metadata/{guestId}` (admin or `monitoring:write`)
+
+- `GET /api/docker/metadata` (admin or `monitoring:read`)
+- `GET /api/docker/metadata/{containerId}` (admin or `monitoring:read`)
+- `PUT /api/docker/metadata/{containerId}` (admin or `monitoring:write`)
+- `DELETE /api/docker/metadata/{containerId}` (admin or `monitoring:write`)
+
+- `GET /api/docker/hosts/metadata` (admin or `monitoring:read`)
+- `GET /api/docker/hosts/metadata/{hostId}` (admin or `monitoring:read`)
+- `PUT /api/docker/hosts/metadata/{hostId}` (admin or `monitoring:write`)
+- `DELETE /api/docker/hosts/metadata/{hostId}` (admin or `monitoring:write`)
+
 ### Version Info
 `GET /api/version`
 Returns version, build time, and update status.
@@ -89,6 +112,10 @@ Version fields are returned as plain semantic versions (no leading `v`).
 
 ## 🖥️ Nodes & Config
 
+### Public Config
+`GET /api/config`
+Returns a small public config payload (update channel, auto-update enabled).
+
 ### List Nodes
 `GET /api/config/nodes`
 
@@ -107,6 +134,22 @@ Version fields are returned as plain semantic versions (no leading `v`).
 ### Test Connection
 `POST /api/config/nodes/test-connection`
 Validate credentials before saving.
+
+### Test Node Config (Validation Only)
+`POST /api/config/nodes/test-config`
+Validates node config without saving.
+
+### Update Node
+`PUT /api/config/nodes/{id}`
+
+### Delete Node
+`DELETE /api/config/nodes/{id}`
+
+### Test Node (Legacy)
+`POST /api/config/nodes/{id}/test`
+
+### Refresh Cluster Nodes
+`POST /api/config/nodes/{id}/refresh-cluster`
 
 ### Export Configuration
 `POST /api/config/export` (admin or API token)
@@ -149,6 +192,20 @@ Generates an API token and install command for agent-based Proxmox setup.
 ### Discovery
 `GET /api/discover` (auth)
 Runs network discovery.
+
+### AI Discovery (Service Discovery)
+Service discovery is used by Pulse Assistant and the UI to inventory web services and enrich links.
+
+- `GET /api/discovery` (list summaries)
+- `GET /api/discovery/status`
+- `PUT /api/discovery/settings` (admin, `settings:write`)
+- `GET /api/discovery/type/{type}`
+- `GET /api/discovery/host/{host}`
+- `GET /api/discovery/{type}/{host}/{id}`
+- `POST /api/discovery/{type}/{host}/{id}` (trigger discovery, optional `force`)
+- `DELETE /api/discovery/{type}/{host}/{id}`
+- `GET /api/discovery/{type}/{host}/{id}/progress`
+- `PUT /api/discovery/{type}/{host}/{id}/notes`
 
 ### Test Notification
 `POST /api/test-notification` (auth)
@@ -216,6 +273,27 @@ Triggers a test alert to all configured channels.
 - `GET /api/notifications/dlq` (admin)
 - `POST /api/notifications/dlq/retry` (admin)
 - `POST /api/notifications/dlq/delete` (admin)
+
+---
+
+## 🚨 Alerts
+
+Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
+
+- `GET /api/alerts/config`
+- `PUT /api/alerts/config`
+- `POST /api/alerts/activate`
+- `GET /api/alerts/active`
+- `GET /api/alerts/history`
+- `DELETE /api/alerts/history`
+- `GET /api/alerts/incidents`
+- `POST /api/alerts/incidents/note`
+- `POST /api/alerts/bulk/acknowledge`
+- `POST /api/alerts/bulk/clear`
+- `POST /api/alerts/acknowledge` (body: `{ "id": "alert-id" }`)
+- `POST /api/alerts/unacknowledge` (body: `{ "id": "alert-id" }`)
+- `POST /api/alerts/clear` (body: `{ "id": "alert-id" }`)
+- Legacy path-based endpoints: `POST /api/alerts/{id}/acknowledge`, `/unacknowledge`, `/clear`
 
 ---
 
@@ -345,6 +423,10 @@ Requires a valid bootstrap token (header `X-Setup-Token`) or an authenticated se
 }
 ```
 
+### Apply Security Restart (Systemd Only)
+`POST /api/security/apply-restart`
+Applies auth changes by restarting the service (systemd deployments only).
+
 ---
 
 ## ⚙️ System Settings
@@ -357,9 +439,22 @@ Retrieve current system settings.
 `POST /api/system/settings/update`
 Update system settings. Requires admin + `settings:write`.
 
+### Legacy System Settings (Read Only)
+`GET /api/config/system`
+Legacy system settings endpoint (read-only).
+
 ### Toggle Mock Mode
+`GET /api/system/mock-mode`
 `POST /api/system/mock-mode`
 Enable or disable mock data generation (dev/demo only).
+
+### SSH Config (Temperature Monitoring)
+`POST /api/system/ssh-config`
+Writes the SSH config used for temperature collection (requires setup token or auth).
+
+### Verify Temperature SSH
+`POST /api/system/verify-temperature-ssh`
+Tests SSH connectivity for temperature collection (requires setup token or auth).
 
 ### Scheduler Health
 `GET /api/monitoring/scheduler/health`
@@ -384,6 +479,16 @@ Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
 ### Diagnostics
 - `GET /api/diagnostics` (auth)
 - `POST /api/diagnostics/docker/prepare-token` (admin, `settings:write`)
+
+### Logs (Admin)
+- `GET /api/logs/stream` (server-sent stream)
+- `GET /api/logs/download` (bundled logs)
+- `GET /api/logs/level`
+- `POST /api/logs/level` (set log level)
+
+### Server Info
+`GET /api/server/info`
+Returns minimal server info for installer scripts.
 
 ---
 
@@ -541,13 +646,14 @@ Returns stats for the persistent metrics store (SQLite-backed).
 Returns historical metric series for a resource and time range.
 
 Query params:
-- `resourceType` (required): `node`, `guest` (VM/LXC), `storage`, `docker`, `dockerHost`
+- `resourceType` (required): `node`, `vm`, `container`, `storage`, `dockerHost`, `dockerContainer`
 - `resourceId` (required)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit for all metrics
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
 - `maxPoints` (optional): Downsample to a target number of points
 
 > **License**: Requests beyond `7d` require the Pulse Pro `long_term_metrics` feature. Unlicensed requests return `402 Payment Required`.
+> **Aliases**: `guest` (VM/LXC) and `docker` (Docker container) are accepted, but persistent store data uses the canonical types above.
 
 ---
 
