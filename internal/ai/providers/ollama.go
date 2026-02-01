@@ -13,9 +13,10 @@ import (
 
 // OllamaClient implements the Provider interface for Ollama's local API
 type OllamaClient struct {
-	model   string
-	baseURL string
-	client  *http.Client
+	model        string
+	baseURL      string
+	client       *http.Client // For non-streaming requests (has overall timeout)
+	streamClient *http.Client // For streaming requests (no overall timeout — relies on context)
 }
 
 // NewOllamaClient creates a new Ollama API client
@@ -37,6 +38,15 @@ func NewOllamaClient(model, baseURL string, timeout time.Duration) *OllamaClient
 		baseURL: baseURL,
 		client: &http.Client{
 			Timeout: timeout,
+		},
+		streamClient: &http.Client{
+			// No Timeout set — http.Client.Timeout covers the entire request lifecycle
+			// including reading the response body, which kills streaming responses from
+			// slow models (e.g. CPU-only inference). Context cancellation handles timeouts
+			// for streaming instead.
+			Transport: &http.Transport{
+				ResponseHeaderTimeout: timeout, // Still timeout if server never starts responding
+			},
 		},
 	}
 }
@@ -379,7 +389,10 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.client.Do(httpReq)
+	// Use streamClient which has no overall timeout — http.Client.Timeout
+	// includes response body reading time, which kills slow streaming responses.
+	// Context cancellation (from the agentic loop) handles timeouts instead.
+	resp, err := c.streamClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}

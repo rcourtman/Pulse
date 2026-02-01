@@ -1131,22 +1131,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 
 		if singleToolEnforced && len(toolCalls) > 0 {
-			summary := firstToolResultText
-			if strings.TrimSpace(summary) == "" {
-				if preferredToolName != "" {
-					summary = fmt.Sprintf("Tool %s completed.", preferredToolName)
-				} else {
-					summary = "Tool call completed."
-				}
-			}
-			if len(resultMessages) > 0 {
-				lastIdx := len(resultMessages) - 1
-				if resultMessages[lastIdx].Role == "assistant" && strings.TrimSpace(resultMessages[lastIdx].Content) == "" {
-					resultMessages[lastIdx].Content = summary
-				}
-			}
-			jsonData, _ := json.Marshal(ContentData{Text: summary})
-			callback(StreamEvent{Type: "content", Data: jsonData})
+			// Single tool request completed - ensure we have a proper response
+			// Don't just return raw tool output, let ensureFinalTextResponse synthesize if needed
+			resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 			return resultMessages, nil
 		}
 
