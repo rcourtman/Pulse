@@ -5,3 +5,5 @@ export { InvestigationMessages } from './InvestigationMessages';
 export { RemediationStatus } from './RemediationStatus';
 export { RunToolCallTrace } from './RunToolCallTrace';
 export { PatrolStatusBar } from './PatrolStatusBar';
+export { RunHistoryEntry } from './RunHistoryEntry';
+export { RunHistoryPanel } from './RunHistoryPanel';
