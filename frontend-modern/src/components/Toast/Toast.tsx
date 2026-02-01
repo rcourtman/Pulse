@@ -107,8 +107,7 @@ const Toast: Component<ToastProps> = (props) => {
           min-w-[320px] max-w-[500px]
         `}
         style={{
-          background:
-            'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+          background: 'rgba(255,255,255,0.1)',
           'box-shadow':
             '0 8px 32px 0 rgba(31, 38, 135, 0.37), inset 0 0 0 1px rgba(255,255,255,0.1)',
         }}

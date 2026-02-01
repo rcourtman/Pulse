@@ -70,7 +70,7 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
     <div class={`relative ${props.class || ''}`}>
       {/* Left fade */}
       <Show when={showLeftFade()}>
-        <div class="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white dark:from-gray-800 to-transparent z-10 pointer-events-none" />
+        <div class="absolute left-0 top-0 bottom-0 w-8 bg-white dark:bg-gray-800 z-10 pointer-events-none" />
       </Show>
 
       {/* Scrollable container */}
@@ -89,7 +89,7 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
 
       {/* Right fade */}
       <Show when={showRightFade()}>
-        <div class="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white dark:from-gray-800 to-transparent z-10 pointer-events-none" />
+        <div class="absolute right-0 top-0 bottom-0 w-8 bg-white dark:bg-gray-800 z-10 pointer-events-none" />
       </Show>
     </div>
   );
