@@ -113,10 +113,10 @@ export interface AITestResult {
 
 // Default models for each provider
 export const DEFAULT_MODELS: Record<AIProvider, string> = {
-  anthropic: 'claude-opus-4-5-20251101',
+  anthropic: 'claude-haiku-4-5',
   openai: 'gpt-4o',
   ollama: 'llama3',
-  deepseek: 'deepseek-reasoner',
+  deepseek: 'deepseek-chat',
   gemini: 'gemini-2.5-flash',
 };
 

@@ -609,7 +609,7 @@ const Settings: Component<SettingsProps> = (props) => {
     PVE_POLLING_MIN_SECONDS,
   );
   const [pvePollingCustomSeconds, setPVEPollingCustomSeconds] = createSignal(30);
-  const [allowedOrigins, setAllowedOrigins] = createSignal('*');
+  const [allowedOrigins, setAllowedOrigins] = createSignal('');
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal(false);
   const [discoverySubnet, setDiscoverySubnet] = createSignal('auto');
   const [discoveryMode, setDiscoveryMode] = createSignal<'auto' | 'custom'>('auto');
@@ -1741,7 +1741,7 @@ const Settings: Component<SettingsProps> = (props) => {
           setPVEPollingSelection('custom');
           setPVEPollingCustomSeconds(clampedPVESecs);
         }
-        setAllowedOrigins(systemSettings.allowedOrigins || '*');
+        setAllowedOrigins(systemSettings.allowedOrigins ?? '');
         // Connection timeout is backend-only
         // Load discovery settings (default to false when unset)
         setDiscoveryEnabled(systemSettings.discoveryEnabled ?? false);

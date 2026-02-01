@@ -1,5 +1,6 @@
 import { Component, Show, createSignal, onMount, For, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { useNavigate } from '@solidjs/router';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { HelpIcon } from '@/components/shared/HelpIcon';
@@ -91,6 +92,7 @@ function groupModelsByProvider(models: { id: string; name: string; description?:
 }
 
 export const AISettings: Component = () => {
+  const navigate = useNavigate();
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
@@ -787,6 +789,27 @@ export const AISettings: Component = () => {
           </Show>
 
           <Show when={!loading()}>
+            <Show when={form.enabled}>
+              <div class="flex items-start gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
+                <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>
+                  Patrol runs automatically every{' '}
+                  {form.patrolIntervalMinutes >= 60
+                    ? `${Math.round(form.patrolIntervalMinutes / 60)} hour${Math.round(form.patrolIntervalMinutes / 60) === 1 ? '' : 's'}`
+                    : `${form.patrolIntervalMinutes} minute${form.patrolIntervalMinutes === 1 ? '' : 's'}`}{' '}
+                  to monitor your infrastructure.{' '}
+                    <button
+                      type="button"
+                      class="underline hover:text-blue-800 dark:hover:text-blue-300"
+                      onClick={() => navigate('/ai')}
+                    >
+                      Configure schedule & autonomy
+                    </button>
+                </span>
+              </div>
+            </Show>
             <div class="space-y-6">
               {/* Default Model Selection - Always visible */}
               <div class={formField}>

@@ -173,8 +173,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                         Auto (slower, full scan)
                       </p>
                       <p class="text-xs text-gray-500 dark:text-gray-400">
-                        Scans container, local, and gateway networks. Large networks may time out
-                        after two minutes.
+                        Scans all network interfaces on this host, including container bridges, local
+                        subnets, and gateways. On large or shared networks, consider using a custom
+                        subnet instead.
                       </p>
                     </div>
                   </label>
@@ -378,8 +379,8 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 </Show>
                 <Show when={!props.discoverySubnetError() && props.discoveryMode() === 'auto'}>
                   <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Auto scans every reachable network phase. Large networks may time out — switch
-                    to custom subnets to narrow the search.
+                    Auto scans all host network interfaces, which may include corporate or shared
+                    networks. Switch to a custom subnet for faster, more targeted scans.
                   </p>
                 </Show>
                 <Show when={!props.discoverySubnetError() && props.discoveryMode() === 'custom'}>
