@@ -1206,7 +1206,7 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 	}
 	cleanMessages = append(cleanMessages, providers.Message{
 		Role:    "user",
-		Content: "You've gathered information above using tools. Now provide your analysis and answer to the original question. Summarize your findings concisely.",
+		Content: "Based on what you've investigated above, provide a complete response to the user. Explain what you found or did, mention any issues or caveats they should know about, and suggest next steps if relevant.",
 	})
 
 	summaryReq := providers.ChatRequest{
