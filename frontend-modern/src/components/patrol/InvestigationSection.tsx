@@ -12,6 +12,7 @@ import {
   reinvestigateFinding,
   investigationStatusLabels,
   investigationOutcomeLabels,
+  investigationOutcomeColors,
   formatTimestamp,
 } from '@/api/patrol';
 import { InvestigationMessages } from './InvestigationMessages';
@@ -23,6 +24,7 @@ interface InvestigationSectionProps {
   findingId: string;
   investigationStatus?: string;
   investigationOutcome?: string;
+  investigationAttempts?: number;
 }
 
 const statusColors: Record<string, string> = {
@@ -33,14 +35,6 @@ const statusColors: Record<string, string> = {
   needs_attention: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
 };
 
-const outcomeColors: Record<string, string> = {
-  resolved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  fix_queued: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  fix_executed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  fix_failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-  needs_attention: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-  cannot_fix: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-};
 
 export const InvestigationSection: Component<InvestigationSectionProps> = (props) => {
   const [showThread, setShowThread] = createSignal(false);
@@ -74,7 +68,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
     const inv = investigation();
     if (!inv) return true; // No investigation yet
     if (inv.status === 'running') return false;
-    return inv.status === 'failed' || inv.status === 'needs_attention' || inv.outcome === 'cannot_fix';
+    return inv.status === 'failed' || inv.status === 'needs_attention' || inv.outcome === 'cannot_fix' || inv.outcome === 'timed_out' || inv.outcome === 'fix_verification_failed';
   };
 
   const handleReinvestigate = async (e: Event) => {
@@ -99,14 +93,23 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
           <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Investigation</span>
-          <Show when={investigation()?.status}>
-            <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${statusColors[investigation()!.status] || statusColors.pending}`}>
-              {investigationStatusLabels[investigation()!.status] || investigation()!.status}
+          {/* Show outcome badge when available, otherwise show status badge */}
+          <Show when={investigation()?.outcome}
+            fallback={
+              <Show when={investigation()?.status}>
+                <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${statusColors[investigation()!.status] || statusColors.pending}`}>
+                  {investigationStatusLabels[investigation()!.status] || investigation()!.status}
+                </span>
+              </Show>
+            }
+          >
+            <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${investigationOutcomeColors[investigation()!.outcome!] || investigationOutcomeColors.needs_attention}`}>
+              {investigationOutcomeLabels[investigation()!.outcome!] || investigation()!.outcome}
             </span>
           </Show>
-          <Show when={investigation()?.outcome}>
-            <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${outcomeColors[investigation()!.outcome!] || outcomeColors.needs_attention}`}>
-              {investigationOutcomeLabels[investigation()!.outcome!] || investigation()!.outcome}
+          <Show when={props.investigationAttempts && props.investigationAttempts > 1}>
+            <span class="text-[10px] text-gray-500 dark:text-gray-400">
+              attempt {props.investigationAttempts}
             </span>
           </Show>
         </div>

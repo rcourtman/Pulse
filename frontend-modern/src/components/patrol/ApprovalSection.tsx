@@ -2,7 +2,7 @@
  * ApprovalSection
  *
  * Shows when investigation has a proposed fix.
- * States: Pending, Expired, Executed, Denied, Failed.
+ * States: Pending, Expired, Executed, Denied, Failed, Verified, VerificationFailed.
  */
 
 import { Component, Show, createSignal, createResource, createMemo } from 'solid-js';
@@ -32,7 +32,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     () => props.findingId,
     async (findingId) => {
       // Only load if outcome indicates a fix was queued but no pending approval
-      if (props.investigationOutcome !== 'fix_queued' && props.investigationOutcome !== 'fix_executed' && props.investigationOutcome !== 'fix_failed') {
+      if (props.investigationOutcome !== 'fix_queued' && props.investigationOutcome !== 'fix_executed' && props.investigationOutcome !== 'fix_failed' && props.investigationOutcome !== 'fix_verified' && props.investigationOutcome !== 'fix_verification_failed') {
         return null;
       }
       try {
@@ -51,11 +51,11 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   );
 
   const isExecuted = createMemo(() =>
-    props.investigationOutcome === 'fix_executed' || executionResult()?.success
+    props.investigationOutcome === 'fix_executed' || props.investigationOutcome === 'fix_verified' || executionResult()?.success
   );
 
   const isFailed = createMemo(() =>
-    props.investigationOutcome === 'fix_failed' || (executionResult() && !executionResult()!.success)
+    props.investigationOutcome === 'fix_failed' || props.investigationOutcome === 'fix_verification_failed' || (executionResult() && !executionResult()!.success)
   );
 
   // Show section only when there's something to display
@@ -243,8 +243,26 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span class="text-sm font-medium">Fix executed successfully</span>
+            <span class="text-sm font-medium">{props.investigationOutcome === 'fix_verified' ? 'Fix verified — issue resolved' : 'Fix executed successfully'}</span>
           </div>
+          <Show when={investigation()?.proposed_fix}>
+            {(fix) => (
+              <div class="mt-2 space-y-1 text-sm">
+                <div class="text-gray-600 dark:text-gray-400">{fix().description}</div>
+                <Show when={fix().commands && fix().commands!.length > 0}>
+                  <div class="bg-gray-50 dark:bg-gray-800 rounded p-2 font-mono text-xs text-gray-700 dark:text-gray-300 break-all">
+                    {fix().commands![0]}
+                  </div>
+                </Show>
+                <Show when={fix().target_host}>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Target: {fix().target_host}</div>
+                </Show>
+                <Show when={fix().rationale}>
+                  <div class="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-line mt-1">{fix().rationale}</div>
+                </Show>
+              </div>
+            )}
+          </Show>
         </Show>
 
         {/* Failed (from backend state, no local result) */}
@@ -253,8 +271,26 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span class="text-sm font-medium">Fix execution failed</span>
+            <span class="text-sm font-medium">{props.investigationOutcome === 'fix_verification_failed' ? 'Fix executed but issue persists' : 'Fix execution failed'}</span>
           </div>
+          <Show when={investigation()?.proposed_fix}>
+            {(fix) => (
+              <div class="mt-2 space-y-1 text-sm">
+                <div class="text-gray-600 dark:text-gray-400">{fix().description}</div>
+                <Show when={fix().commands && fix().commands!.length > 0}>
+                  <div class="bg-gray-50 dark:bg-gray-800 rounded p-2 font-mono text-xs text-gray-700 dark:text-gray-300 break-all">
+                    {fix().commands![0]}
+                  </div>
+                </Show>
+                <Show when={fix().target_host}>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Target: {fix().target_host}</div>
+                </Show>
+                <Show when={fix().rationale}>
+                  <div class="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-line mt-1">{fix().rationale}</div>
+                </Show>
+              </div>
+            )}
+          </Show>
         </Show>
       </div>
     </Show>

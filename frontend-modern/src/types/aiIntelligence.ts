@@ -49,7 +49,7 @@ export interface UnifiedFinding {
   // Investigation fields (Patrol Autonomy)
   investigationSessionId?: string;
   investigationStatus?: 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-  investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix';
+  investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed';
   lastInvestigatedAt?: string;
   investigationAttempts?: number;
 }

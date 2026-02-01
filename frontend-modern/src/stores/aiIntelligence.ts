@@ -49,7 +49,7 @@ export interface UnifiedFinding {
   // Investigation fields (Patrol Autonomy)
   investigationSessionId?: string;
   investigationStatus?: 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-  investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix';
+  investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed';
   lastInvestigatedAt?: string;
   investigationAttempts?: number;
 }
@@ -131,11 +131,11 @@ export const aiIntelligenceStore = {
           status,
           correlatedFindingIds: item.correlated_ids,
           remediationPlanId: item.remediation_id,
-          investigationSessionId: item.investigationSessionId || '',
-          investigationStatus: item.investigationStatus as UnifiedFinding['investigationStatus'],
-          investigationOutcome: item.investigationOutcome as UnifiedFinding['investigationOutcome'],
-          lastInvestigatedAt: item.lastInvestigatedAt || undefined,
-          investigationAttempts: item.investigationAttempts || 0,
+          investigationSessionId: item.investigation_session_id || '',
+          investigationStatus: item.investigation_status as UnifiedFinding['investigationStatus'],
+          investigationOutcome: item.investigation_outcome as UnifiedFinding['investigationOutcome'],
+          lastInvestigatedAt: item.last_investigated_at || undefined,
+          investigationAttempts: item.investigation_attempts || 0,
         };
       });
 
@@ -261,6 +261,17 @@ export const aiIntelligenceStore = {
     const approvals = pendingApprovals().filter(a => a.status === 'pending');
     const findingIds = new Set(approvals.filter(a => a.toolId === 'investigation_fix').map(a => a.targetId));
     return unifiedFindings().filter(f => findingIds.has(f.id));
+  },
+
+  get findingsNeedingAttention() {
+    const actionableOutcomes = new Set(['fix_verification_failed', 'timed_out', 'needs_attention', 'cannot_fix']);
+    return unifiedFindings().filter(f =>
+      f.status === 'active' && f.investigationOutcome && actionableOutcomes.has(f.investigationOutcome)
+    );
+  },
+
+  get needsAttentionCount() {
+    return this.findingsNeedingAttention.length;
   },
 
   async loadPendingApprovals() {

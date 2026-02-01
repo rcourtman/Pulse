@@ -42,7 +42,7 @@ export interface Finding {
 }
 
 export type InvestigationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-export type InvestigationOutcome = 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix';
+export type InvestigationOutcome = 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed';
 export type PatrolAutonomyLevel = 'monitor' | 'approval' | 'assisted' | 'full';
 
 export interface PatrolAutonomySettings {
@@ -309,6 +309,24 @@ export const investigationOutcomeLabels: Record<InvestigationOutcome, string> = 
     fix_failed: 'Fix Failed',
     needs_attention: 'Needs Attention',
     cannot_fix: 'Cannot Auto-Fix',
+    timed_out: 'Timed Out — Will Retry',
+    fix_verified: 'Fix Verified',
+    fix_verification_failed: 'Verification Failed',
+};
+
+/**
+ * Investigation outcome badge colors for UI
+ */
+export const investigationOutcomeColors: Record<InvestigationOutcome, string> = {
+    resolved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    fix_queued: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    fix_executed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    fix_failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    needs_attention: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    cannot_fix: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
+    timed_out: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    fix_verified: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    fix_verification_failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 };
 
 // =============================================================================

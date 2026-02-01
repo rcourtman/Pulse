@@ -10,6 +10,7 @@ import { useNavigate } from '@solidjs/router';
 import { getPatrolStatus, type PatrolStatus } from '../../api/patrol';
 import { useAllAnomalies } from '@/hooks/useAnomalies';
 import { useLearningStatus } from '@/hooks/useLearningStatus';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import './AIStatusIndicator.css';
 
 
@@ -53,6 +54,7 @@ export function AIStatusIndicator() {
 
     const hasIssues = createMemo(() => {
         const s = status();
+        if (aiIntelligenceStore.needsAttentionCount > 0 || aiIntelligenceStore.pendingApprovalCount > 0) return true;
         if (!s) return false;
         return s.summary.critical > 0 || s.summary.warning > 0;
     });
@@ -100,6 +102,12 @@ export function AIStatusIndicator() {
             if (s.summary.warning > 0) parts.push(`${s.summary.warning} warnings`);
             if (s.summary.watch > 0) parts.push(`${s.summary.watch} watching`);
         }
+
+        // Investigation status
+        const attentionCount = aiIntelligenceStore.needsAttentionCount;
+        const approvalCount = aiIntelligenceStore.pendingApprovalCount;
+        if (attentionCount > 0) parts.push(`${attentionCount} need${attentionCount === 1 ? 's' : ''} attention`);
+        if (approvalCount > 0) parts.push(`${approvalCount} awaiting approval`);
 
         // Anomaly status
         const counts = anomalyCounts();

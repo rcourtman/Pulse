@@ -87,6 +87,7 @@ type PatrolTab = 'findings' | 'history';
 
 export function AIIntelligence() {
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
+  const [findingsFilterOverride, setFindingsFilterOverride] = createSignal<'all' | 'active' | 'resolved' | 'approvals' | 'attention' | undefined>(undefined);
   const [isRefreshing, setIsRefreshing] = createSignal(false);
   const [autonomyLevel, setAutonomyLevel] = createSignal<PatrolAutonomyLevel>('monitor');
   const [isUpdatingAutonomy, setIsUpdatingAutonomy] = createSignal(false);
@@ -638,7 +639,11 @@ export function AIIntelligence() {
     const infoCount = activeFindings.filter(f => f.severity === 'info').length;
     const investigatingCount = patrolFindings.filter(f => f.investigationStatus === 'running').length;
     const totalActive = activeFindings.length;
-    const fixedCount = resolvedFindings.length;
+    const fixedCount = patrolFindings.filter(f =>
+      f.investigationOutcome === 'fix_verified' ||
+      f.investigationOutcome === 'fix_executed' ||
+      f.investigationOutcome === 'resolved'
+    ).length;
 
     return {
       criticalFindings: criticalCount,
@@ -804,15 +809,15 @@ export function AIIntelligence() {
                   </div>
                   <div>
                     <span class="font-semibold text-gray-900 dark:text-white">Approval</span>
-                    <p class="text-gray-600 dark:text-gray-400">Patrol investigates findings. All fixes require your approval.</p>
+                    <p class="text-gray-600 dark:text-gray-400">Patrol investigates findings. All fixes require your approval. Verifies fixes post-execution.</p>
                   </div>
                   <div>
                     <span class="font-semibold text-gray-900 dark:text-white">Assisted</span>
-                    <p class="text-gray-600 dark:text-gray-400">Auto-fix warnings. Critical findings still need approval.</p>
+                    <p class="text-gray-600 dark:text-gray-400">Auto-fix warnings and verify they worked. Critical findings still need approval.</p>
                   </div>
                   <div>
                     <span class="font-semibold text-red-600 dark:text-red-400">Full</span>
-                    <p class="text-gray-600 dark:text-gray-400">Auto-fix everything, including critical. Must be enabled in ⚙️ settings first.</p>
+                    <p class="text-gray-600 dark:text-gray-400">Auto-fix everything, including critical, and verify results. Must be enabled in ⚙️ settings first.</p>
                   </div>
                 </div>
               </div>
@@ -1101,6 +1106,7 @@ export function AIIntelligence() {
                 are crossed, findings are created automatically. In <strong>Approval</strong>, <strong>Assisted</strong>, or <strong>Full</strong> mode,
                 Pulse Patrol investigates these findings - querying nodes, checking logs, and running diagnostics to
                 identify root causes. It then suggests fixes (Approval), applies safe fixes (Assisted), or applies all fixes (Full).
+                After a fix is applied, Patrol verifies the issue is actually resolved.
               </p>
               <p class="text-xs text-gray-500 dark:text-gray-400">
                 This is experimental. In Assisted mode, critical findings still require approval. Full mode (requires unlock in ⚙️) auto-fixes everything.
@@ -1124,7 +1130,8 @@ export function AIIntelligence() {
           <ApprovalBanner
             onScrollToFinding={(findingId) => {
               setActiveTab('findings');
-              // Scroll to the finding after tab switch
+              setFindingsFilterOverride('approvals');
+              // Scroll to the finding after tab switch and filter change
               requestAnimationFrame(() => {
                 const el = document.getElementById(`finding-${findingId}`);
                 el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1210,7 +1217,7 @@ export function AIIntelligence() {
                 </div>
                 <div>
                   <p class="text-xs text-gray-500 dark:text-gray-400">
-                    {autonomyLevel() === 'monitor' ? 'Investigating' : 'Investigating'}
+                    {autonomyLevel() === 'monitor' ? 'Discovering' : 'Investigating'}
                   </p>
                   <p class={`text-lg font-bold ${
                     summaryStats().investigatingCount > 0
@@ -1306,7 +1313,7 @@ export function AIIntelligence() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('history')}
+              onClick={() => { setActiveTab('history'); setFindingsFilterOverride(undefined); }}
               class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab() === 'history'
                   ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -1345,7 +1352,7 @@ export function AIIntelligence() {
               nextPatrolAt={patrolStatus()?.next_patrol_at}
               lastPatrolAt={patrolStatus()?.last_patrol_at}
               patrolIntervalMs={patrolStatus()?.interval_ms}
-              filterOverride={selectedRunFindingIds() ? 'all' : undefined}
+              filterOverride={selectedRunFindingIds() ? 'all' : findingsFilterOverride()}
               filterFindingIds={selectedRunFindingIds() ?? undefined}
               scopeResourceIds={selectedRun()?.scope_resource_ids}
               scopeResourceTypes={selectedRun()?.scope_resource_types}

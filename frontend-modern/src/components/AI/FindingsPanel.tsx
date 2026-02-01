@@ -17,7 +17,7 @@ import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligenc
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
-import { investigationStatusLabels, investigationOutcomeLabels, type InvestigationStatus } from '@/api/patrol';
+import { investigationStatusLabels, investigationOutcomeLabels, investigationOutcomeColors, type InvestigationStatus } from '@/api/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
 
 // Severity priority for sorting (lower number = higher priority)
@@ -70,7 +70,7 @@ interface FindingsPanelProps {
   showResolved?: boolean;
   maxItems?: number;
   onFindingClick?: (finding: UnifiedFinding) => void;
-  filterOverride?: 'all' | 'active' | 'resolved' | 'approvals';
+  filterOverride?: 'all' | 'active' | 'resolved' | 'approvals' | 'attention';
   filterFindingIds?: string[];
   showControls?: boolean;
   nextPatrolAt?: string;
@@ -83,7 +83,7 @@ interface FindingsPanelProps {
 
 export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const location = useLocation();
-  const [filter, setFilter] = createSignal<'all' | 'active' | 'resolved' | 'approvals'>(props.filterOverride ?? 'active');
+  const [filter, setFilter] = createSignal<'all' | 'active' | 'resolved' | 'approvals' | 'attention'>(props.filterOverride ?? 'active');
   const [sortBy, setSortBy] = createSignal<'severity' | 'time'>('severity');
   const [expandedId, setExpandedId] = createSignal<string | null>(null);
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
@@ -154,6 +154,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
   });
 
+  // Auto-reset filter when the conditional filter buttons disappear
+  createEffect(() => {
+    if (filter() === 'attention' && aiIntelligenceStore.needsAttentionCount === 0) {
+      setFilter('active');
+    }
+    if (filter() === 'approvals' && aiIntelligenceStore.pendingApprovalCount === 0) {
+      setFilter('active');
+    }
+  });
+
   // Filter and sort findings
   const filteredFindings = createMemo(() => {
     let findings = [...aiIntelligenceStore.findings];
@@ -168,6 +178,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       findings = findings.filter(f => f.status === 'active');
     } else if (filter() === 'resolved') {
       findings = findings.filter(f => f.status === 'resolved' || f.status === 'dismissed');
+    } else if (filter() === 'attention') {
+      const attentionIds = new Set(aiIntelligenceStore.findingsNeedingAttention.map(f => f.id));
+      findings = findings.filter(f => attentionIds.has(f.id));
     } else if (filter() === 'approvals') {
       const approvalFindingIds = new Set(aiIntelligenceStore.findingsWithPendingApprovals.map(f => f.id));
       findings = findings.filter(f => approvalFindingIds.has(f.id));
@@ -179,8 +192,21 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       findings = findings.filter(f => idSet.has(f.id));
     }
 
+    // Outcome priority: findings needing attention sort first
+    const outcomeOrder: Record<string, number> = {
+      fix_verification_failed: 0,
+      timed_out: 1,
+      needs_attention: 1,
+      fix_queued: 2,
+    };
+
     // Sort
     findings.sort((a, b) => {
+      // Active findings with actionable outcomes sort above others
+      const aOutcome = (a.status === 'active' && a.investigationOutcome) ? (outcomeOrder[a.investigationOutcome] ?? 3) : 3;
+      const bOutcome = (b.status === 'active' && b.investigationOutcome) ? (outcomeOrder[b.investigationOutcome] ?? 3) : 3;
+      if (aOutcome !== bOutcome) return aOutcome - bOutcome;
+
       if (sortBy() === 'severity') {
         const aPriority = severityOrder[a.severity] ?? 4;
         const bPriority = severityOrder[b.severity] ?? 4;
@@ -362,7 +388,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
 
     if (finding.source === 'ai-patrol') {
-      return `Issue no longer detected ${resolvedTime}`;
+      switch (finding.investigationOutcome) {
+        case 'fix_verified':
+          return `Fixed by Patrol ${resolvedTime}`;
+        case 'fix_executed':
+          return `Fix applied by Patrol ${resolvedTime}`;
+        case 'resolved':
+          return `Resolved by Patrol ${resolvedTime}`;
+        case 'fix_verification_failed':
+          return `Resolved after failed verification ${resolvedTime}`;
+        case 'timed_out':
+          return `Resolved after investigation timeout ${resolvedTime}`;
+        case 'cannot_fix':
+          return `Resolved manually ${resolvedTime}`;
+        default:
+          return `Issue no longer detected ${resolvedTime}`;
+      }
     }
 
     return `Resolved ${resolvedTime}`;
@@ -427,8 +468,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 Out of scope
               </span>
             </Show>
-            {/* Investigation status badge */}
-            <Show when={finding.investigationStatus}>
+            {/* Investigation status badge — only when no outcome badge will show */}
+            <Show when={finding.investigationStatus && !(finding.investigationOutcome && finding.investigationStatus !== 'running' && finding.investigationStatus !== 'pending')}>
               <span
                 class={`px-1.5 py-0.5 text-[10px] font-medium rounded flex items-center gap-1 ${investigationStatusColors[finding.investigationStatus!]}`}
                 title={`Investigation: ${investigationStatusLabels[finding.investigationStatus!]}`}
@@ -439,9 +480,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 {investigationStatusLabels[finding.investigationStatus!]}
               </span>
             </Show>
-            {/* Investigation outcome badge */}
-            <Show when={finding.investigationOutcome && finding.investigationStatus === 'completed'}>
-              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+            {/* Investigation outcome badge — replaces status badge when outcome is known */}
+            <Show when={finding.investigationOutcome && finding.investigationStatus !== 'running' && finding.investigationStatus !== 'pending'}>
+              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${investigationOutcomeColors[finding.investigationOutcome!] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
                 {investigationOutcomeLabels[finding.investigationOutcome!]}
               </span>
             </Show>
@@ -465,6 +506,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <Show when={finding.dismissedReason}>
               <span class="ml-2 text-gray-400 dark:text-gray-500">
                 ({finding.dismissedReason?.replace(/_/g, ' ')})
+              </span>
+            </Show>
+            <Show when={finding.status === 'active' && finding.lastInvestigatedAt}>
+              <span class="ml-2 text-gray-400 dark:text-gray-500">
+                last investigated {formatTime(finding.lastInvestigatedAt!)}
               </span>
             </Show>
           </div>
@@ -688,6 +734,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           findingId={finding.id}
           investigationStatus={finding.investigationStatus}
           investigationOutcome={finding.investigationOutcome}
+          investigationAttempts={finding.investigationAttempts}
         />
       </Show>
 
@@ -695,7 +742,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       <Show when={finding.status === 'active' && (
         finding.investigationOutcome === 'fix_queued' ||
         finding.investigationOutcome === 'fix_executed' ||
-        finding.investigationOutcome === 'fix_failed'
+        finding.investigationOutcome === 'fix_failed' ||
+        finding.investigationOutcome === 'fix_verified' ||
+        finding.investigationOutcome === 'fix_verification_failed'
       )}>
         <ApprovalSection
           findingId={finding.id}
@@ -833,10 +882,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               class={`px-2 py-1 border ${filter() === 'resolved'
                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                } ${aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r'}`}
+                } ${aiIntelligenceStore.needsAttentionCount > 0 || aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r'}`}
             >
               Resolved
             </button>
+            <Show when={aiIntelligenceStore.needsAttentionCount > 0}>
+              <button
+                type="button"
+                onClick={() => setFilter('attention')}
+                class={`px-2 py-1 border ${filter() === 'attention'
+                  ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  } ${aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r'}`}
+              >
+                Needs Attention ({aiIntelligenceStore.needsAttentionCount})
+              </button>
+            </Show>
             <Show when={aiIntelligenceStore.pendingApprovalCount > 0}>
               <button
                 type="button"
@@ -940,7 +1001,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     </Show>
                   </div>
                 </Show>
-                <Show when={filter() !== 'active'}>
+                <Show when={filter() === 'attention'}>
+                  No findings need attention right now.
+                </Show>
+                <Show when={filter() === 'approvals'}>
+                  No pending approvals.
+                </Show>
+                <Show when={filter() !== 'active' && filter() !== 'attention' && filter() !== 'approvals'}>
                   No Patrol findings to display
                 </Show>
               </div>

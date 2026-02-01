@@ -8,14 +8,13 @@
  * - Multiple: count + "Review" button to scroll to first finding
  */
 
-import { Component, Show, createMemo } from 'solid-js';
+import { Component, Show, createMemo, createSignal, onCleanup } from 'solid-js';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import type { ApprovalRequest } from '@/api/ai';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckIcon from 'lucide-solid/icons/check';
 import XIcon from 'lucide-solid/icons/x';
-import { createSignal } from 'solid-js';
 
 interface ApprovalBannerProps {
   onScrollToFinding?: (findingId: string) => void;
@@ -23,6 +22,11 @@ interface ApprovalBannerProps {
 
 export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
+  const [tick, setTick] = createSignal(Date.now());
+
+  // Tick every second to keep countdown live
+  const tickInterval = setInterval(() => setTick(Date.now()), 1000);
+  onCleanup(() => clearInterval(tickInterval));
 
   const pending = createMemo(() =>
     aiIntelligenceStore.pendingApprovals.filter((a: ApprovalRequest) => a.status === 'pending')
@@ -31,6 +35,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
   const firstApproval = createMemo(() => pending()[0] ?? null);
 
   const timeRemaining = (expiresAt: string) => {
+    void tick(); // subscribe to tick signal for reactivity
     const diff = new Date(expiresAt).getTime() - Date.now();
     if (diff <= 0) return 'expired';
     const mins = Math.floor(diff / 60000);
@@ -103,7 +108,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                     expires {timeRemaining(firstApproval()!.expiresAt)}
                   </span>
                 </div>
-                <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-xl truncate">
+                <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-xl truncate" title={firstApproval()!.context}>
                   {firstApproval()!.context}
                 </p>
               </Show>

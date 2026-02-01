@@ -342,12 +342,12 @@ export interface UnifiedFindingRecord {
   ai_confidence?: number;
   enhanced_by_ai?: boolean;
   ai_enhanced_at?: string;
-  // Investigation fields (camelCase from API)
-  investigationSessionId?: string;
-  investigationStatus?: string;
-  investigationOutcome?: string;
-  lastInvestigatedAt?: string;
-  investigationAttempts?: number;
+  // Investigation fields (snake_case from Go backend)
+  investigation_session_id?: string;
+  investigation_status?: string;
+  investigation_outcome?: string;
+  last_investigated_at?: string;
+  investigation_attempts?: number;
   detected_at: string;
   last_seen_at?: string;
   resolved_at?: string;
@@ -476,7 +476,7 @@ export interface ApprovalExecutionResult {
 // ============================================
 
 export type InvestigationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-export type InvestigationOutcome = 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix';
+export type InvestigationOutcome = 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed';
 
 export interface ProposedFix {
   id: string;
