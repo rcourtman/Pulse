@@ -20,6 +20,38 @@ import type {
 import { logger } from '@/utils/logger';
 
 // ============================================
+// Enum validation helpers
+// ============================================
+
+const VALID_INVESTIGATION_STATUSES = new Set<string>(['pending', 'running', 'completed', 'failed', 'needs_attention']);
+const VALID_INVESTIGATION_OUTCOMES = new Set<string>([
+  'resolved', 'fix_queued', 'fix_executed', 'fix_failed',
+  'needs_attention', 'cannot_fix', 'timed_out', 'fix_verified', 'fix_verification_failed',
+]);
+const VALID_SEVERITIES = new Set<string>(['critical', 'warning', 'info', 'watch']);
+const VALID_SOURCES = new Set<string>(['threshold', 'ai-patrol', 'ai-chat', 'anomaly', 'correlation', 'forecast']);
+
+function validateInvestigationStatus(value: string | undefined): UnifiedFinding['investigationStatus'] {
+  if (!value) return undefined;
+  return VALID_INVESTIGATION_STATUSES.has(value) ? value as UnifiedFinding['investigationStatus'] : undefined;
+}
+
+function validateInvestigationOutcome(value: string | undefined): UnifiedFinding['investigationOutcome'] {
+  if (!value) return undefined;
+  return VALID_INVESTIGATION_OUTCOMES.has(value) ? value as UnifiedFinding['investigationOutcome'] : undefined;
+}
+
+function validateSeverity(value: string | undefined): UnifiedFinding['severity'] {
+  if (value && VALID_SEVERITIES.has(value)) return value as UnifiedFinding['severity'];
+  return 'info';
+}
+
+function validateSource(value: string | undefined): UnifiedFinding['source'] {
+  if (value && VALID_SOURCES.has(value)) return value as UnifiedFinding['source'];
+  return 'ai-patrol';
+}
+
+// ============================================
 // Unified Findings
 // ============================================
 
@@ -64,12 +96,14 @@ const [findingsError, setFindingsError] = createSignal<string | null>(null);
 
 const [remediationPlans, setRemediationPlans] = createSignal<RemediationPlan[]>([]);
 const [plansLoading, setPlansLoading] = createSignal(false);
+const [plansError, setPlansError] = createSignal<string | null>(null);
 
 // ============================================
 // Pending Approvals
 // ============================================
 
 const [pendingApprovals, setPendingApprovals] = createSignal<ApprovalRequest[]>([]);
+const [approvalsError, setApprovalsError] = createSignal<string | null>(null);
 
 // ============================================
 // Circuit Breaker
@@ -93,6 +127,7 @@ export const aiIntelligenceStore = {
     setFindingsError(null);
     try {
       const resp = await AIAPI.getUnifiedFindings({ includeResolved: true });
+      if (!resp) return;
       const now = Date.now();
 
       const findings = (resp.findings || []).map((item: UnifiedFindingRecord): UnifiedFinding => {
@@ -111,14 +146,14 @@ export const aiIntelligenceStore = {
 
         return {
           id: item.id,
-          source: (item.source as UnifiedFinding['source']) || 'ai-patrol',
+          source: validateSource(item.source),
           resourceId: item.resource_id,
           resourceName: item.resource_name || item.resource_id,
           resourceType: item.resource_type || 'unknown',
           alertId: item.alert_id,
           isThreshold: Boolean(item.is_threshold || item.source === 'threshold'),
           category: item.category || 'general',
-          severity: (item.severity as UnifiedFinding['severity']) || 'info',
+          severity: validateSeverity(item.severity),
           title: item.title,
           description: item.description,
           recommendation: item.recommendation,
@@ -132,8 +167,8 @@ export const aiIntelligenceStore = {
           correlatedFindingIds: item.correlated_ids,
           remediationPlanId: item.remediation_id,
           investigationSessionId: item.investigation_session_id || '',
-          investigationStatus: item.investigation_status as UnifiedFinding['investigationStatus'],
-          investigationOutcome: item.investigation_outcome as UnifiedFinding['investigationOutcome'],
+          investigationStatus: validateInvestigationStatus(item.investigation_status),
+          investigationOutcome: validateInvestigationOutcome(item.investigation_outcome),
           lastInvestigatedAt: item.last_investigated_at || undefined,
           investigationAttempts: item.investigation_attempts || 0,
         };
@@ -151,15 +186,18 @@ export const aiIntelligenceStore = {
   // Remediation Plans
   get remediationPlans() { return remediationPlans(); },
   get plansLoading() { return plansLoading(); },
+  get plansError() { return plansError(); },
   remediationPlansSignal: remediationPlans,
 
   async loadRemediationPlans() {
     setPlansLoading(true);
+    setPlansError(null);
     try {
       const resp = await AIAPI.getRemediationPlans();
-      setRemediationPlans(resp.plans || []);
+      setRemediationPlans(resp?.plans || []);
     } catch (e) {
       logger.error('Failed to load remediation plans:', e);
+      setPlansError(e instanceof Error ? e.message : 'Failed to load remediation plans');
     } finally {
       setPlansLoading(false);
     }
@@ -251,6 +289,7 @@ export const aiIntelligenceStore = {
 
   // Pending Approvals
   get pendingApprovals() { return pendingApprovals(); },
+  get approvalsError() { return approvalsError(); },
   pendingApprovalsSignal: pendingApprovals,
 
   get pendingApprovalCount() {
@@ -264,7 +303,7 @@ export const aiIntelligenceStore = {
   },
 
   get findingsNeedingAttention() {
-    const actionableOutcomes = new Set(['fix_verification_failed', 'timed_out', 'needs_attention', 'cannot_fix']);
+    const actionableOutcomes = new Set(['fix_verification_failed', 'fix_failed', 'timed_out', 'needs_attention', 'cannot_fix']);
     return unifiedFindings().filter(f =>
       f.status === 'active' && f.investigationOutcome && actionableOutcomes.has(f.investigationOutcome)
     );
@@ -275,11 +314,13 @@ export const aiIntelligenceStore = {
   },
 
   async loadPendingApprovals() {
+    setApprovalsError(null);
     try {
       const approvals = await AIAPI.getPendingApprovals();
       setPendingApprovals(approvals);
     } catch (e) {
       logger.error('Failed to load pending approvals:', e);
+      setApprovalsError(e instanceof Error ? e.message : 'Failed to load approvals');
     }
   },
 
@@ -299,6 +340,7 @@ export const aiIntelligenceStore = {
     try {
       await AIAPI.denyInvestigationFix(approvalId, reason);
       await this.loadPendingApprovals();
+      await this.loadFindings();
       return true;
     } catch (e) {
       logger.error('Failed to deny fix:', e);

@@ -43,9 +43,9 @@ export function AIStatusIndicator() {
     // Count anomalies by severity
     const anomalyCounts = createMemo(() => {
         const anomalies = anomalyData.anomalies();
-        const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+        const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
         for (const a of anomalies) {
-            counts[a.severity]++;
+            counts[a.severity] = (counts[a.severity] || 0) + 1;
         }
         return counts;
     });
@@ -94,9 +94,9 @@ export function AIStatusIndicator() {
     const tooltipText = createMemo(() => {
         const parts: string[] = [];
 
-        // Patrol status
+        // Patrol status — show findings whenever patrol is enabled (not just when running)
         const s = status();
-        if (s?.enabled && s?.running) {
+        if (s?.enabled) {
             if (s.error_count && s.error_count > 0) parts.push(`${s.error_count} patrol errors`);
             if (s.summary.critical > 0) parts.push(`${s.summary.critical} critical findings`);
             if (s.summary.warning > 0) parts.push(`${s.summary.warning} warnings`);
@@ -138,15 +138,6 @@ export function AIStatusIndicator() {
                     return `Pulse Learning: ${resourceCount} resources baselined`;
                 }
                 return 'Pulse Baseline Learning active';
-            }
-            if (s?.license_required) {
-                if (s.license_status === 'active') {
-                    return 'Pulse Patrol is not included in this license tier';
-                }
-                if (s.license_status === 'expired') {
-                    return 'Pulse Patrol license expired';
-                }
-                return 'Pulse Patrol requires Pulse Pro';
             }
             return 'Pulse: All systems healthy';
         }

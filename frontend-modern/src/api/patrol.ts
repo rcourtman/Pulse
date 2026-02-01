@@ -243,24 +243,6 @@ export async function reinvestigateFinding(findingId: string): Promise<{ success
 }
 
 /**
- * Approve and execute a proposed fix
- */
-export async function approveFix(approvalId: string): Promise<{ success: boolean; message: string; output?: string }> {
-    return apiFetchJSON(`/api/ai/approvals/${approvalId}/approve`, {
-        method: 'POST',
-    });
-}
-
-/**
- * Deny/skip a proposed fix
- */
-export async function denyFix(approvalId: string): Promise<{ success: boolean; message: string }> {
-    return apiFetchJSON(`/api/ai/approvals/${approvalId}/deny`, {
-        method: 'POST',
-    });
-}
-
-/**
  * Severity color mapping for UI
  */
 export const severityColors: Record<FindingSeverity, { bg: string; text: string; border: string }> = {

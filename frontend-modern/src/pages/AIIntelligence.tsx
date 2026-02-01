@@ -18,6 +18,7 @@ import {
   type PatrolRunRecord,
 } from '@/api/patrol';
 import { apiFetchJSON } from '@/utils/apiClient';
+import { notificationStore } from '@/stores/notifications';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
 
 interface ModelInfo {
@@ -164,18 +165,27 @@ export function AIIntelligence() {
     }
   });
 
+  // Detect when saved patrol model is no longer in the available models list
+  const patrolModelStale = createMemo(() => {
+    const model = patrolModel();
+    const models = availableModels();
+    if (!model || models.length === 0) return false;
+    return !models.some(m => m.id === model);
+  });
+
+  // Same check for auto-fix model
+  const autoFixModelStale = createMemo(() => {
+    const model = autoFixModel();
+    const models = availableModels();
+    if (!model || models.length === 0) return false;
+    return !models.some(m => m.id === model);
+  });
+
   // License feature gates
   const alertAnalysisLocked = createMemo(() => !hasFeature('ai_alerts'));
   const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
   const [showRunAnalysis, setShowRunAnalysis] = createSignal(true);
-  // TODO: Wire up scope context and token usage display in patrol run details
-  // const scopeContext = createMemo(() => splitScopeContext(selectedRun()?.scope_context));
-  // const runTokenUsage = createMemo(() => formatTokenUsage(selectedRun()));
-  // TODO: Wire up selected run findings display
-  // const selectedRunFindings = createMemo(() => { ... });
-  // TODO: Wire up scope drift detection in patrol run details
-  // const scopeDrift = createMemo(() => { ... });
 
   const scheduleOptions = createMemo(() => {
     const current = patrolInterval();
@@ -206,6 +216,7 @@ export function AIIntelligence() {
   async function loadAISettings() {
     try {
       const data = await apiFetchJSON<AISettings>('/api/settings/ai');
+      if (!data) return;
       setPatrolModel(data.patrol_model || '');
       setDefaultModel(data.model || '');
       setPatrolInterval(data.patrol_interval_minutes ?? 360);
@@ -241,6 +252,8 @@ export function AIIntelligence() {
       }
     } catch (err) {
       console.error('Failed to toggle patrol:', err);
+      setPatrolEnabledLocal(!newValue); // Rollback
+      notificationStore.error('Failed to toggle patrol');
     } finally {
       setIsTogglingPatrol(false);
     }
@@ -255,6 +268,7 @@ export function AIIntelligence() {
     const safetyTimer = setTimeout(() => {
       if (manualRunRequested() && !patrolStream.isStreaming()) {
         setManualRunRequested(false);
+        notificationStore.error('Patrol run did not start — connection timed out');
         loadAllData();
       }
     }, 15000);
@@ -265,8 +279,9 @@ export function AIIntelligence() {
     } catch (err) {
       console.error('Failed to trigger patrol run:', err);
       setManualRunRequested(false);
-      clearTimeout(safetyTimer);
+      notificationStore.error('Failed to start patrol run');
     } finally {
+      clearTimeout(safetyTimer);
       setIsTriggeringPatrol(false);
     }
   }
@@ -283,6 +298,7 @@ export function AIIntelligence() {
       setPatrolModel(modelId);
     } catch (err) {
       console.error('Failed to update patrol model:', err);
+      notificationStore.error('Failed to update patrol model');
     } finally {
       setIsUpdatingSettings(false);
     }
@@ -301,6 +317,7 @@ export function AIIntelligence() {
       setPatrolEnabledLocal(minutes > 0);
     } catch (err) {
       console.error('Failed to update patrol interval:', err);
+      notificationStore.error('Failed to update patrol schedule');
     } finally {
       setIsUpdatingSettings(false);
     }
@@ -320,6 +337,7 @@ export function AIIntelligence() {
     } catch (err) {
       console.error('Failed to update alert-triggered analysis:', err);
       setAlertTriggeredAnalysis(previous);
+      notificationStore.error('Failed to update alert analysis setting');
     } finally {
       setIsUpdatingSettings(false);
     }
@@ -339,6 +357,7 @@ export function AIIntelligence() {
     } catch (err) {
       console.error('Failed to update auto-fix mode:', err);
       setPatrolAutoFix(previous);
+      notificationStore.error('Failed to update auto-fix setting');
     } finally {
       setIsUpdatingSettings(false);
     }
@@ -356,6 +375,7 @@ export function AIIntelligence() {
       setAutoFixModel(modelId);
     } catch (err) {
       console.error('Failed to update auto-fix model:', err);
+      notificationStore.error('Failed to update auto-fix model');
     } finally {
       setIsUpdatingSettings(false);
     }
@@ -452,7 +472,7 @@ export function AIIntelligence() {
   }
 
 
-  // Fetch patrol status to check license
+  // Fetch patrol status (license_required reflects auto-fix, not patrol access)
   const [patrolStatus, { refetch: refetchPatrolStatus }] = createResource<PatrolStatus | null>(async () => {
     try {
       return await getPatrolStatus();
@@ -533,6 +553,7 @@ export function AIIntelligence() {
   async function loadAutonomySettings() {
     try {
       const settings = await getPatrolAutonomySettings();
+      if (!settings) return;
       setAutonomyLevel(settings.autonomy_level);
       setFullModeUnlocked(settings.full_mode_unlocked);
       setInvestigationBudget(settings.investigation_budget);
@@ -559,6 +580,7 @@ export function AIIntelligence() {
     } catch (err) {
       console.error('Failed to update autonomy:', err);
       setAutonomyLevel(previousLevel); // Rollback on error
+      notificationStore.error((err as Error).message || 'Failed to update autonomy level');
     } finally {
       setIsUpdatingAutonomy(false);
     }
@@ -582,6 +604,7 @@ export function AIIntelligence() {
       setShowAdvancedSettings(false);
     } catch (err) {
       console.error('Failed to save advanced settings:', err);
+      notificationStore.error('Failed to save advanced settings');
     } finally {
       setIsSavingAdvanced(false);
     }
@@ -591,22 +614,39 @@ export function AIIntelligence() {
     await Promise.all([loadAllData(), loadAutonomySettings(), loadModels(), loadAISettings()]);
   });
 
+  // Polling intervals — paused when tab is hidden to save resources
   let refreshInterval: ReturnType<typeof setInterval>;
-  onMount(() => {
-    refreshInterval = setInterval(() => {
-      loadAllData();
-    }, 60000);
-  });
-  onCleanup(() => clearInterval(refreshInterval));
-
-  // Approval polling: 10s interval for 5-min expiry approvals
   let approvalPollInterval: ReturnType<typeof setInterval>;
+
+  function startPolling() {
+    clearInterval(refreshInterval);
+    clearInterval(approvalPollInterval);
+    refreshInterval = setInterval(() => loadAllData(), 60000);
+    // Approval polling: 10s interval for 5-min expiry approvals
+    approvalPollInterval = setInterval(() => aiIntelligenceStore.loadPendingApprovals(), 10000);
+  }
+
+  function stopPolling() {
+    clearInterval(refreshInterval);
+    clearInterval(approvalPollInterval);
+  }
+
   onMount(() => {
-    approvalPollInterval = setInterval(() => {
-      aiIntelligenceStore.loadPendingApprovals();
-    }, 10000);
+    startPolling();
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        // Refresh immediately on tab return, then resume polling
+        loadAllData();
+        startPolling();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    onCleanup(() => document.removeEventListener('visibilitychange', handleVisibility));
   });
-  onCleanup(() => clearInterval(approvalPollInterval));
+  onCleanup(() => stopPolling());
 
   async function loadAllData() {
     setIsRefreshing(true);
@@ -631,13 +671,12 @@ export function AIIntelligence() {
       f.source !== 'threshold' && !f.isThreshold && !f.alertId
     );
     const activeFindings = patrolFindings.filter(f => f.status === 'active');
-    const resolvedFindings = patrolFindings.filter(f => f.status === 'resolved');
 
     const criticalCount = activeFindings.filter(f => f.severity === 'critical').length;
     const warningCount = activeFindings.filter(f => f.severity === 'warning').length;
     const watchCount = activeFindings.filter(f => f.severity === 'watch').length;
     const infoCount = activeFindings.filter(f => f.severity === 'info').length;
-    const investigatingCount = patrolFindings.filter(f => f.investigationStatus === 'running').length;
+    const investigatingCount = patrolFindings.filter(f => f.investigationStatus === 'running' || f.investigationStatus === 'pending').length;
     const totalActive = activeFindings.length;
     const fixedCount = patrolFindings.filter(f =>
       f.investigationOutcome === 'fix_verified' ||
@@ -734,9 +773,15 @@ export function AIIntelligence() {
               value={patrolModel()}
               onChange={(e) => handleModelChange(e.currentTarget.value)}
               disabled={isUpdatingSettings() || !patrolEnabledLocal()}
-              class="text-xs bg-gray-100 dark:bg-gray-700 border-0 rounded-md py-1 pl-2 pr-6 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              class={`text-xs bg-gray-100 dark:bg-gray-700 border-0 rounded-md py-1 pl-2 pr-6 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 ${patrolModelStale() ? 'ring-1 ring-amber-400' : ''}`}
+              title={patrolModelStale() ? `Model "${patrolModel()}" is no longer available. Select a new model.` : ''}
             >
               <option value="">Default ({defaultModel().split(':').pop() || 'not set'})</option>
+              <Show when={patrolModelStale()}>
+                <option value={patrolModel()} disabled>
+                  {patrolModel().split(':').pop()} (unavailable)
+                </option>
+              </Show>
               {Array.from(groupModelsByProvider(availableModels()).entries()).map(([provider, models]) => (
                 <optgroup label={provider.charAt(0).toUpperCase() + provider.slice(1)}>
                   {models.map((model) => (
@@ -757,7 +802,7 @@ export function AIIntelligence() {
             <select
               value={patrolInterval()}
               onChange={(e) => handleIntervalChange(parseInt(e.currentTarget.value))}
-              disabled={isUpdatingSettings() || !patrolEnabledLocal() || licenseRequired()}
+              disabled={isUpdatingSettings() || !patrolEnabledLocal()}
               class="text-xs bg-gray-100 dark:bg-gray-700 border-0 rounded-md py-1 pl-2 pr-6 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
             >
               <For each={scheduleOptions()}>
@@ -777,18 +822,19 @@ export function AIIntelligence() {
               <For each={(['monitor', 'approval', 'assisted', 'full'] as PatrolAutonomyLevel[])}>
                 {(level) => {
                   const isFullLocked = () => level === 'full' && !fullModeUnlocked();
-                  const isDisabled = () => !patrolEnabledLocal() || isFullLocked();
+                  const isProLocked = () => autoFixLocked() && (level === 'assisted' || level === 'full');
+                  const isDisabled = () => !patrolEnabledLocal() || isFullLocked() || isProLocked();
                   return (
                     <button
                       onClick={() => handleAutonomyChange(level)}
                       disabled={isDisabled()}
-                      title={isFullLocked() ? 'Enable in Advanced Settings (⚙️) first' : undefined}
+                      title={isProLocked() ? 'Upgrade to Pulse Pro for auto-fix' : isFullLocked() ? 'Enable in Advanced Settings (⚙️) first' : undefined}
                       class={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
                         autonomyLevel() === level
                           ? level === 'full'
                             ? 'bg-red-500 dark:bg-red-600 text-white shadow-sm'
                             : 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                          : isFullLocked()
+                          : isFullLocked() || isProLocked()
                             ? 'text-gray-400 dark:text-gray-500'
                             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                       } ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -946,9 +992,15 @@ export function AIIntelligence() {
                             value={autoFixModel()}
                             onChange={(e) => handleAutoFixModelChange(e.currentTarget.value)}
                             disabled={isUpdatingSettings()}
-                            class="mt-1 w-full text-xs bg-gray-100 dark:bg-gray-700 border-0 rounded-md py-1.5 pl-2 pr-6 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                            class={`mt-1 w-full text-xs bg-gray-100 dark:bg-gray-700 border-0 rounded-md py-1.5 pl-2 pr-6 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 ${autoFixModelStale() ? 'ring-1 ring-amber-400' : ''}`}
+                            title={autoFixModelStale() ? `Model "${autoFixModel()}" is no longer available. Select a new model.` : ''}
                           >
                             <option value="">Use patrol model</option>
+                            <Show when={autoFixModelStale()}>
+                              <option value={autoFixModel()} disabled>
+                                {autoFixModel().split(':').pop()} (unavailable)
+                              </option>
+                            </Show>
                             {Array.from(groupModelsByProvider(availableModels()).entries()).map(([provider, models]) => (
                               <optgroup label={provider.charAt(0).toUpperCase() + provider.slice(1)}>
                                 {models.map((model) => (
@@ -1007,35 +1059,12 @@ export function AIIntelligence() {
       </Show>
 
       <Show when={licenseRequired() && !showBlockedBanner()}>
-        <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-4 py-3">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 p-1.5 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                <SparklesIcon class="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p class="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                  Pulse Patrol requires Pulse Pro
-                </p>
-                <p class="text-xs text-blue-700 dark:text-blue-300">
-                  Upgrade to enable AI analysis, investigations, and auto-fix.
-                </p>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              <a
-                href={upgradeUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-              >
-                <SparklesIcon class="w-3.5 h-3.5" />
-                Upgrade to Pulse Pro
-              </a>
-              <span class="text-[10px] text-blue-700 dark:text-blue-300">
-                Already licensed? Activate in Settings → License.
-              </span>
-            </div>
+        <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-3 py-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="text-xs text-blue-700 dark:text-blue-300">
+              <a class="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline" href={upgradeUrl()} target="_blank" rel="noopener noreferrer">Upgrade to Pro</a>
+              {' '}to unlock Assisted and Full autonomy (auto-fix).
+            </p>
           </div>
         </div>
       </Show>
@@ -1131,11 +1160,11 @@ export function AIIntelligence() {
             onScrollToFinding={(findingId) => {
               setActiveTab('findings');
               setFindingsFilterOverride('approvals');
-              // Scroll to the finding after tab switch and filter change
-              requestAnimationFrame(() => {
+              // Allow SolidJS to re-render with new filter before scrolling
+              setTimeout(() => {
                 const el = document.getElementById(`finding-${findingId}`);
                 el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              });
+              }, 100);
             }}
           />
 

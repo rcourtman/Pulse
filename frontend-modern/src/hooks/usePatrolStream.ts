@@ -3,6 +3,7 @@
  *
  * Opens an EventSource to /api/ai/patrol/stream while the patrol is running,
  * exposing reactive signals for the current phase, active tool, and token count.
+ * Automatically reconnects with exponential backoff on connection drops.
  */
 
 import { createSignal, createEffect, onCleanup, type Accessor } from 'solid-js';
@@ -31,6 +32,10 @@ export interface PatrolStreamState {
     errorMessage: Accessor<string>;
 }
 
+const MAX_RECONNECT_ATTEMPTS = 5;
+const INITIAL_RECONNECT_DELAY_MS = 1000;
+const MAX_RECONNECT_DELAY_MS = 15000;
+
 export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState {
     const [phase, setPhase] = createSignal('');
     const [currentTool, setCurrentTool] = createSignal('');
@@ -39,8 +44,21 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
     const [errorMessage, setErrorMessage] = createSignal('');
 
     let es: EventSource | undefined;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let reconnectAttempts = 0;
+    // Whether the close was intentional (complete/error event or running=false)
+    let intentionalClose = false;
+
+    function clearReconnectTimer() {
+        if (reconnectTimer !== undefined) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = undefined;
+        }
+    }
 
     function close() {
+        intentionalClose = true;
+        clearReconnectTimer();
         if (es) {
             es.close();
             es = undefined;
@@ -48,14 +66,46 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
         setIsStreaming(false);
     }
 
+    function scheduleReconnect() {
+        if (intentionalClose || !opts.running()) {
+            return;
+        }
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            logger.warn(`[PatrolStream] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached, giving up`);
+            opts.onError?.();
+            return;
+        }
+        const delay = Math.min(
+            INITIAL_RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts),
+            MAX_RECONNECT_DELAY_MS,
+        );
+        reconnectAttempts++;
+        logger.info(`[PatrolStream] Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        clearReconnectTimer();
+        reconnectTimer = setTimeout(() => {
+            if (opts.running()) {
+                open();
+            }
+        }, delay);
+    }
+
     function open() {
-        close();
+        // Close existing connection without triggering intentionalClose
+        clearReconnectTimer();
+        if (es) {
+            es.close();
+            es = undefined;
+        }
+        setIsStreaming(false);
+        intentionalClose = false;
+
         try {
             es = new EventSource('/api/ai/patrol/stream');
 
             es.onopen = () => {
                 logger.info('[PatrolStream] SSE connected');
                 setIsStreaming(true);
+                reconnectAttempts = 0; // Reset on successful connection
             };
 
             es.onmessage = (msg) => {
@@ -102,25 +152,41 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
                         setTokens(event.tokens);
                     }
                 } catch {
-                    // Ignore malformed events
+                    logger.warn('[PatrolStream] Failed to parse SSE event');
                 }
             };
 
             es.onerror = () => {
-                // Silently close on error — polling continues as fallback
-                logger.warn('[PatrolStream] SSE error, closing');
-                close();
-                opts.onError?.();
+                logger.warn('[PatrolStream] SSE connection error');
+                if (es) {
+                    es.close();
+                    es = undefined;
+                }
+                setIsStreaming(false);
+                // Only reconnect if the close wasn't intentional and patrol is still running
+                if (!intentionalClose && opts.running()) {
+                    scheduleReconnect();
+                } else {
+                    opts.onError?.();
+                }
             };
         } catch {
             // EventSource constructor can throw in some environments
-            close();
+            if (es) {
+                es.close();
+                es = undefined;
+            }
+            setIsStreaming(false);
+            if (!intentionalClose && opts.running()) {
+                scheduleReconnect();
+            }
         }
     }
 
     // Reactively open/close based on running state
     createEffect(() => {
         if (opts.running()) {
+            reconnectAttempts = 0;
             open();
         } else {
             close();

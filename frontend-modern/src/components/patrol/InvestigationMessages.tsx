@@ -14,7 +14,7 @@ interface InvestigationMessagesProps {
 
 /** Returns true if a message has no displayable content */
 function isEmptyMessage(msg: ChatMessage): boolean {
-  return !msg.content && !msg.tool_calls?.length && !msg.tool_result;
+  return !msg.content && !msg.reasoning_content && !msg.tool_calls?.length && !msg.tool_result;
 }
 
 export const InvestigationMessages: Component<InvestigationMessagesProps> = (props) => {
@@ -58,6 +58,18 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                       ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs'
                       : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200'
                   }`}>
+                    {/* Reasoning content (extended thinking) */}
+                    <Show when={msg.reasoning_content}>
+                      <details class="mb-1">
+                        <summary class="text-[10px] text-purple-600 dark:text-purple-400 cursor-pointer hover:underline">
+                          Show reasoning
+                        </summary>
+                        <div class="mt-1 text-[10px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap break-words border-l-2 border-purple-200 dark:border-purple-800 pl-2">
+                          {msg.reasoning_content}
+                        </div>
+                      </details>
+                    </Show>
+
                     {/* Text content */}
                     <Show when={msg.content}>
                       <div class="text-xs whitespace-pre-wrap break-words">{msg.content}</div>

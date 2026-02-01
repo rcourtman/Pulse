@@ -17,14 +17,19 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
   const [expandedCall, setExpandedCall] = createSignal<string | null>(null);
 
-  // Lazy-load tool calls when expanded
+  // Lazy-load tool calls when expanded — fetch small batch since the run is likely recent
   const [toolCalls] = createResource(
     () => expanded() ? props.runId : null,
     async (runId) => {
       if (!runId) return [];
       try {
-        const runs = await getPatrolRunHistoryWithToolCalls(50);
-        const run = runs.find(r => r.id === runId);
+        // Start with a small fetch; if not found, widen the search
+        let runs = await getPatrolRunHistoryWithToolCalls(10);
+        let run = runs.find(r => r.id === runId);
+        if (!run) {
+          runs = await getPatrolRunHistoryWithToolCalls(50);
+          run = runs.find(r => r.id === runId);
+        }
         return run?.tool_calls || [];
       } catch {
         return [];

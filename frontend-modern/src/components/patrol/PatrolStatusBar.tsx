@@ -7,8 +7,10 @@
 
 import { Component, createResource, createMemo, Show } from 'solid-js';
 import { getPatrolRunHistory, type PatrolRunRecord } from '@/api/patrol';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
+import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 
 interface PatrolStatusBarProps {
   enabled?: boolean;
@@ -75,10 +77,29 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
     };
   });
 
+  const circuitBreaker = () => aiIntelligenceStore.circuitBreakerStatus;
+
   return (
     <Show when={!runs.loading && stats()}>
       {(s) => (
         <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2">
+          {/* Circuit breaker warning */}
+          <Show when={circuitBreaker()?.state === 'open'}>
+            <div class="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-red-200 dark:border-red-800">
+              <AlertTriangleIcon class="w-3.5 h-3.5 text-red-500" />
+              <span class="text-red-600 dark:text-red-400 font-medium text-xs">
+                AI circuit breaker tripped — Patrol paused after {circuitBreaker()!.consecutive_failures} consecutive failures
+              </span>
+            </div>
+          </Show>
+          <Show when={circuitBreaker()?.state === 'half-open'}>
+            <div class="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-amber-200 dark:border-amber-800">
+              <AlertCircleIcon class="w-3.5 h-3.5 text-amber-500" />
+              <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">
+                AI circuit breaker recovering — testing with next patrol run
+              </span>
+            </div>
+          </Show>
           <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             {/* Status */}
             <div class="flex items-center gap-1.5">

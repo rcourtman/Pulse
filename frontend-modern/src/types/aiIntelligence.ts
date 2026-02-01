@@ -1,327 +1,44 @@
 /**
- * AI Intelligence Store
+ * AI Intelligence Types
  *
- * Central store for managing AI intelligence state:
- * - Unified findings (alerts + AI findings)
- * - Remediation plans
- * - Circuit breaker status
+ * Shared type definitions for AI intelligence features:
+ * - Anomaly detection (baseline deviation)
+ * - Learning status (baseline progress)
+ *
+ * Store logic lives in @/stores/aiIntelligence.ts
  */
 
-import { createSignal } from 'solid-js';
-import { AIAPI } from '@/api/ai';
-import { acknowledgeFinding, snoozeFinding, dismissFinding, setFindingNote } from '@/api/patrol';
-import type {
-  RemediationPlan,
-  CircuitBreakerStatus,
-  UnifiedFindingRecord,
-  ApprovalRequest,
-  ApprovalExecutionResult,
-} from '@/api/ai';
-import { logger } from '@/utils/logger';
-
 // ============================================
-// Unified Findings
+// Anomaly Detection Types
 // ============================================
 
-export interface UnifiedFinding {
-  id: string;
-  source: 'threshold' | 'ai-patrol' | 'ai-chat' | 'anomaly' | 'correlation' | 'forecast';
-  resourceId: string;
-  resourceName: string;
-  resourceType: string;
-  alertId?: string;
-  alertType?: string;
-  isThreshold?: boolean;
-  category: string;
-  severity: 'critical' | 'warning' | 'info' | 'watch';
-  title: string;
+export interface AnomalyReport {
+  resource_id: string;
+  resource_name: string;
+  resource_type: string;
+  metric: string;
+  current_value: number;
+  baseline_mean: number;
+  baseline_std_dev: number;
+  z_score: number;
+  severity: string;
   description: string;
-  recommendation?: string;
-  detectedAt: string;
-  resolvedAt?: string;
-  acknowledgedAt?: string;
-  snoozedUntil?: string;
-  dismissedReason?: string;
-  userNote?: string;
-  status: 'active' | 'resolved' | 'dismissed' | 'snoozed';
-  correlatedFindingIds?: string[];
-  remediationPlanId?: string;
-  // Investigation fields (Patrol Autonomy)
-  investigationSessionId?: string;
-  investigationStatus?: 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-  investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed';
-  lastInvestigatedAt?: string;
-  investigationAttempts?: number;
 }
 
-const [unifiedFindings, setUnifiedFindings] = createSignal<UnifiedFinding[]>([]);
-const [findingsLoading, setFindingsLoading] = createSignal(false);
-const [findingsError, setFindingsError] = createSignal<string | null>(null);
+export interface AnomaliesResponse {
+  anomalies: AnomalyReport[];
+  message?: string;
+}
 
 // ============================================
-// Remediation Plans
+// Learning Status Types
 // ============================================
 
-const [remediationPlans, setRemediationPlans] = createSignal<RemediationPlan[]>([]);
-const [plansLoading, setPlansLoading] = createSignal(false);
-
-// ============================================
-// Pending Approvals
-// ============================================
-
-const [pendingApprovals, setPendingApprovals] = createSignal<ApprovalRequest[]>([]);
-
-// ============================================
-// Circuit Breaker
-// ============================================
-
-const [circuitBreakerStatus, setCircuitBreakerStatus] = createSignal<CircuitBreakerStatus | null>(null);
-
-// ============================================
-// Store API
-// ============================================
-
-export const aiIntelligenceStore = {
-  // Unified Findings
-  get findings() { return unifiedFindings(); },
-  get findingsLoading() { return findingsLoading(); },
-  get findingsError() { return findingsError(); },
-  findingsSignal: unifiedFindings,
-
-  async loadFindings() {
-    setFindingsLoading(true);
-    setFindingsError(null);
-    try {
-      const resp = await AIAPI.getUnifiedFindings({ includeResolved: true });
-      const now = Date.now();
-
-      const findings = (resp.findings || []).map((item: UnifiedFindingRecord): UnifiedFinding => {
-        let status = item.status as UnifiedFinding['status'] | undefined;
-        if (!status) {
-          if (item.resolved_at) {
-            status = 'resolved';
-          } else if (item.snoozed_until && new Date(item.snoozed_until).getTime() > now) {
-            status = 'snoozed';
-          } else if (item.dismissed_reason || item.suppressed) {
-            status = 'dismissed';
-          } else {
-            status = 'active';
-          }
-        }
-
-        return {
-          id: item.id,
-          source: (item.source as UnifiedFinding['source']) || 'ai-patrol',
-          resourceId: item.resource_id,
-          resourceName: item.resource_name || item.resource_id,
-          resourceType: item.resource_type || 'unknown',
-          alertId: item.alert_id,
-          isThreshold: Boolean(item.is_threshold || item.source === 'threshold'),
-          category: item.category || 'general',
-          severity: (item.severity as UnifiedFinding['severity']) || 'info',
-          title: item.title,
-          description: item.description,
-          recommendation: item.recommendation,
-          detectedAt: item.detected_at,
-          resolvedAt: item.resolved_at,
-          acknowledgedAt: item.acknowledged_at,
-          snoozedUntil: item.snoozed_until,
-          dismissedReason: item.dismissed_reason,
-          userNote: item.user_note,
-          status,
-          correlatedFindingIds: item.correlated_ids,
-          remediationPlanId: item.remediation_id,
-          investigationSessionId: item.investigationSessionId || '',
-          investigationStatus: item.investigationStatus as UnifiedFinding['investigationStatus'],
-          investigationOutcome: item.investigationOutcome as UnifiedFinding['investigationOutcome'],
-          lastInvestigatedAt: item.lastInvestigatedAt || undefined,
-          investigationAttempts: item.investigationAttempts || 0,
-        };
-      });
-
-      setUnifiedFindings(findings);
-    } catch (e) {
-      logger.error('Failed to load unified findings:', e);
-      setFindingsError(e instanceof Error ? e.message : 'Failed to load findings');
-    } finally {
-      setFindingsLoading(false);
-    }
-  },
-
-  // Remediation Plans
-  get remediationPlans() { return remediationPlans(); },
-  get plansLoading() { return plansLoading(); },
-  remediationPlansSignal: remediationPlans,
-
-  async loadRemediationPlans() {
-    setPlansLoading(true);
-    try {
-      const resp = await AIAPI.getRemediationPlans();
-      setRemediationPlans(resp.plans || []);
-    } catch (e) {
-      logger.error('Failed to load remediation plans:', e);
-    } finally {
-      setPlansLoading(false);
-    }
-  },
-
-  async approvePlan(planId: string) {
-    try {
-      await AIAPI.approveRemediationPlan(planId);
-      await this.loadRemediationPlans();
-      return true;
-    } catch (e) {
-      logger.error('Failed to approve plan:', e);
-      return false;
-    }
-  },
-
-  async executePlan(planId: string) {
-    try {
-      const result = await AIAPI.executeRemediationPlan(planId);
-      await this.loadRemediationPlans();
-      return result;
-    } catch (e) {
-      logger.error('Failed to execute plan:', e);
-      throw e;
-    }
-  },
-
-  async rollbackPlan(executionId: string) {
-    try {
-      await AIAPI.rollbackRemediationPlan(executionId);
-      await this.loadRemediationPlans();
-      return true;
-    } catch (e) {
-      logger.error('Failed to rollback plan:', e);
-      return false;
-    }
-  },
-
-  async acknowledgeFinding(findingId: string) {
-    try {
-      await acknowledgeFinding(findingId);
-      await this.loadFindings();
-      return true;
-    } catch (e) {
-      logger.error('Failed to acknowledge finding:', e);
-      return false;
-    }
-  },
-
-  async snoozeFinding(findingId: string, durationHours: number) {
-    try {
-      await snoozeFinding(findingId, durationHours);
-      await this.loadFindings();
-      return true;
-    } catch (e) {
-      logger.error('Failed to snooze finding:', e);
-      return false;
-    }
-  },
-
-  async dismissFinding(
-    findingId: string,
-    reason: 'not_an_issue' | 'expected_behavior' | 'will_fix_later',
-    note?: string,
-  ) {
-    try {
-      await dismissFinding(findingId, reason, note);
-      await this.loadFindings();
-      return true;
-    } catch (e) {
-      logger.error('Failed to dismiss finding:', e);
-      return false;
-    }
-  },
-
-  async setFindingNote(findingId: string, note: string) {
-    try {
-      await setFindingNote(findingId, note);
-      // Update local state immediately for responsiveness
-      setUnifiedFindings(prev =>
-        prev.map(f => f.id === findingId ? { ...f, userNote: note } : f),
-      );
-      return true;
-    } catch (e) {
-      logger.error('Failed to set finding note:', e);
-      return false;
-    }
-  },
-
-  // Pending Approvals
-  get pendingApprovals() { return pendingApprovals(); },
-  pendingApprovalsSignal: pendingApprovals,
-
-  get pendingApprovalCount() {
-    return pendingApprovals().filter(a => a.status === 'pending').length;
-  },
-
-  get findingsWithPendingApprovals() {
-    const approvals = pendingApprovals().filter(a => a.status === 'pending');
-    const findingIds = new Set(approvals.filter(a => a.toolId === 'investigation_fix').map(a => a.targetId));
-    return unifiedFindings().filter(f => findingIds.has(f.id));
-  },
-
-  async loadPendingApprovals() {
-    try {
-      const approvals = await AIAPI.getPendingApprovals();
-      setPendingApprovals(approvals);
-    } catch (e) {
-      logger.error('Failed to load pending approvals:', e);
-    }
-  },
-
-  async approveInvestigationFix(approvalId: string): Promise<ApprovalExecutionResult | null> {
-    try {
-      const result = await AIAPI.approveInvestigationFix(approvalId);
-      await this.loadPendingApprovals();
-      await this.loadFindings();
-      return result;
-    } catch (e) {
-      logger.error('Failed to approve fix:', e);
-      return null;
-    }
-  },
-
-  async denyInvestigationFix(approvalId: string, reason?: string) {
-    try {
-      await AIAPI.denyInvestigationFix(approvalId, reason);
-      await this.loadPendingApprovals();
-      return true;
-    } catch (e) {
-      logger.error('Failed to deny fix:', e);
-      return false;
-    }
-  },
-
-  // Circuit Breaker
-  get circuitBreakerStatus() { return circuitBreakerStatus(); },
-  circuitBreakerStatusSignal: circuitBreakerStatus,
-
-  async loadCircuitBreakerStatus() {
-    try {
-      const status = await AIAPI.getCircuitBreakerStatus();
-      setCircuitBreakerStatus(status);
-    } catch (e) {
-      logger.error('Failed to load circuit breaker status:', e);
-    }
-  },
-
-  // Initialize - load all data
-  async initialize() {
-    await Promise.all([
-      this.loadFindings(),
-      this.loadRemediationPlans(),
-      this.loadCircuitBreakerStatus(),
-      this.loadPendingApprovals(),
-    ]);
-  },
-
-  // Refresh all data
-  async refresh() {
-    await this.initialize();
-  },
-};
-
-export default aiIntelligenceStore;
+export interface LearningStatusResponse {
+  resources_baselined: number;
+  total_metrics: number;
+  metric_breakdown: Record<string, number>;
+  status: 'waiting' | 'learning' | 'active';
+  message: string;
+  license_required: boolean;
+}

@@ -27,12 +27,12 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     ) ?? null;
   });
 
-  // Load investigation details for expired approvals (to show proposed fix info)
+  // Load investigation details when outcome indicates a fix was proposed/executed
+  const fixRelatedOutcomes = new Set(['fix_queued', 'fix_executed', 'fix_failed', 'fix_verified', 'fix_verification_failed']);
   const [investigation] = createResource(
-    () => props.findingId,
-    async (findingId) => {
-      // Only load if outcome indicates a fix was queued but no pending approval
-      if (props.investigationOutcome !== 'fix_queued' && props.investigationOutcome !== 'fix_executed' && props.investigationOutcome !== 'fix_failed' && props.investigationOutcome !== 'fix_verified' && props.investigationOutcome !== 'fix_verification_failed') {
+    () => ({ findingId: props.findingId, outcome: props.investigationOutcome }),
+    async ({ findingId, outcome }) => {
+      if (!outcome || !fixRelatedOutcomes.has(outcome)) {
         return null;
       }
       try {
@@ -83,6 +83,8 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
         } else {
           notificationStore.error(result.error || 'Fix execution failed');
         }
+      } else {
+        notificationStore.error('Failed to execute fix — no response from server');
       }
     } catch (err) {
       notificationStore.error((err as Error).message || 'Failed to execute fix');
@@ -117,6 +119,8 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
         } else {
           notificationStore.error(execResult.error || 'Fix execution failed');
         }
+      } else {
+        notificationStore.error('Failed to execute fix — no response from server');
       }
     } catch (err) {
       notificationStore.error((err as Error).message || 'Failed to execute fix');

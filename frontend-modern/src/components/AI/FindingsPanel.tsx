@@ -90,6 +90,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
   const [editingNoteId, setEditingNoteId] = createSignal<string | null>(null);
   const [noteText, setNoteText] = createSignal('');
+  const [dismissingId, setDismissingId] = createSignal<string | null>(null);
+  const [dismissReason, setDismissReason] = createSignal<'not_an_issue' | 'expected_behavior' | 'will_fix_later'>('will_fix_later');
+  const [dismissNote, setDismissNote] = createSignal('');
 
   // Legacy remediation plans (generic plans without real execution)
   const [remediationPlans, setRemediationPlans] = createSignal<RemediationPlan[]>([]);
@@ -177,7 +180,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     if (filter() === 'active') {
       findings = findings.filter(f => f.status === 'active');
     } else if (filter() === 'resolved') {
-      findings = findings.filter(f => f.status === 'resolved' || f.status === 'dismissed');
+      findings = findings.filter(f => f.status === 'resolved' || f.status === 'dismissed' || f.status === 'snoozed');
     } else if (filter() === 'attention') {
       const attentionIds = new Set(aiIntelligenceStore.findingsNeedingAttention.map(f => f.id));
       findings = findings.filter(f => attentionIds.has(f.id));
@@ -195,8 +198,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     // Outcome priority: findings needing attention sort first
     const outcomeOrder: Record<string, number> = {
       fix_verification_failed: 0,
+      fix_failed: 0,
       timed_out: 1,
       needs_attention: 1,
+      cannot_fix: 1,
       fix_queued: 2,
     };
 
@@ -279,17 +284,30 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
   };
 
-  const handleDismiss = async (finding: UnifiedFinding, reason: 'not_an_issue' | 'expected_behavior' | 'will_fix_later', e: Event) => {
+  const handleStartDismiss = (finding: UnifiedFinding, reason: 'not_an_issue' | 'expected_behavior' | 'will_fix_later', e: Event) => {
     e.stopPropagation();
-    const note = window.prompt('Add an optional note (for learning context):', '') ?? '';
-    setActionLoading(finding.id);
-    const ok = await aiIntelligenceStore.dismissFinding(finding.id, reason, note);
+    setDismissReason(reason);
+    setDismissNote('');
+    setDismissingId(finding.id);
+    setExpandedId(finding.id);
+  };
+
+  const handleConfirmDismiss = async (findingId: string, e: Event) => {
+    e.stopPropagation();
+    setActionLoading(findingId);
+    const ok = await aiIntelligenceStore.dismissFinding(findingId, dismissReason(), dismissNote());
     setActionLoading(null);
+    setDismissingId(null);
     if (ok) {
       notificationStore.success('Finding dismissed');
     } else {
       notificationStore.error('Failed to dismiss finding');
     }
+  };
+
+  const handleCancelDismiss = (e: Event) => {
+    e.stopPropagation();
+    setDismissingId(null);
   };
 
   const handleSnooze = async (finding: UnifiedFinding, durationHours: number, e: Event) => {
@@ -340,6 +358,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const date = new Date(isoString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
+
+    // Future dates (e.g. snoozedUntil)
+    if (diffMs < 0) {
+      const futureMins = Math.floor(Math.abs(diffMs) / 60000);
+      const futureHours = Math.floor(Math.abs(diffMs) / 3600000);
+      const futureDays = Math.floor(Math.abs(diffMs) / 86400000);
+      if (futureMins < 60) return `in ${futureMins}m`;
+      if (futureHours < 24) return `in ${futureHours}h`;
+      if (futureDays < 7) return `in ${futureDays}d`;
+      return date.toLocaleDateString();
+    }
+
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
@@ -395,12 +425,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           return `Fix applied by Patrol ${resolvedTime}`;
         case 'resolved':
           return `Resolved by Patrol ${resolvedTime}`;
+        case 'fix_failed':
+          return `Resolved after fix failed ${resolvedTime}`;
+        case 'fix_queued':
+          return `Resolved while fix was pending ${resolvedTime}`;
         case 'fix_verification_failed':
           return `Resolved after failed verification ${resolvedTime}`;
         case 'timed_out':
           return `Resolved after investigation timeout ${resolvedTime}`;
         case 'cannot_fix':
           return `Resolved manually ${resolvedTime}`;
+        case 'needs_attention':
+          return `Resolved after manual review ${resolvedTime}`;
         default:
           return `Issue no longer detected ${resolvedTime}`;
       }
@@ -436,9 +472,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
                 finding.status === 'resolved'
                   ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                  : finding.status === 'snoozed'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
                   : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
               }`}>
-                {finding.status === 'resolved' ? 'Resolved' : 'Dismissed'}
+                {finding.status === 'resolved' ? 'Resolved' : finding.status === 'snoozed' ? 'Snoozed' : 'Dismissed'}
               </span>
             </Show>
             {/* Source badge - only show when requested */}
@@ -474,8 +512,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 class={`px-1.5 py-0.5 text-[10px] font-medium rounded flex items-center gap-1 ${investigationStatusColors[finding.investigationStatus!]}`}
                 title={`Investigation: ${investigationStatusLabels[finding.investigationStatus!]}`}
               >
-                <Show when={finding.investigationStatus === 'running'}>
-                  <span class="h-2 w-2 border border-current border-t-transparent rounded-full animate-spin" />
+                <Show when={finding.investigationStatus === 'running' || finding.investigationStatus === 'pending'}>
+                  <span class={`h-2 w-2 rounded-full ${finding.investigationStatus === 'running' ? 'border border-current border-t-transparent animate-spin' : 'bg-current animate-pulse'}`} />
                 </Show>
                 {investigationStatusLabels[finding.investigationStatus!]}
               </span>
@@ -506,6 +544,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <Show when={finding.dismissedReason}>
               <span class="ml-2 text-gray-400 dark:text-gray-500">
                 ({finding.dismissedReason?.replace(/_/g, ' ')})
+              </span>
+            </Show>
+            <Show when={finding.status === 'snoozed' && finding.snoozedUntil}>
+              <span class="ml-2 text-blue-500 dark:text-blue-400">
+                snoozed until {formatTime(finding.snoozedUntil!)}
+              </span>
+            </Show>
+            <Show when={finding.acknowledgedAt && finding.status === 'active'}>
+              <span class="ml-2 text-gray-400 dark:text-gray-500">
+                acknowledged {formatTime(finding.acknowledgedAt!)}
               </span>
             </Show>
             <Show when={finding.status === 'active' && finding.lastInvestigatedAt}>
@@ -542,9 +590,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={(e) => handleDismiss(finding, 'will_fix_later', e)}
+              onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
               class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              title="Dismiss (Will fix later)"
+              title="Dismiss"
               disabled={actionLoading() === finding.id}
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -698,7 +746,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </button>
           <button
             type="button"
-            onClick={(e) => handleDismiss(finding, 'not_an_issue', e)}
+            onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
             class="px-2 py-1 rounded border border-red-200 text-red-700 dark:border-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
             disabled={actionLoading() === finding.id}
           >
@@ -706,7 +754,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </button>
           <button
             type="button"
-            onClick={(e) => handleDismiss(finding, 'expected_behavior', e)}
+            onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
             class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
             disabled={actionLoading() === finding.id}
           >
@@ -714,12 +762,47 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </button>
           <button
             type="button"
-            onClick={(e) => handleDismiss(finding, 'will_fix_later', e)}
+            onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
             class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
             disabled={actionLoading() === finding.id}
           >
             Dismiss: Later
           </button>
+        </div>
+      </Show>
+      {/* Inline dismiss confirmation */}
+      <Show when={dismissingId() === finding.id}>
+        <div class="mt-2 p-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-xs font-medium text-red-700 dark:text-red-300">
+              Dismiss as: {dismissReason().replace(/_/g, ' ')}
+            </span>
+          </div>
+          <textarea
+            class="w-full text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
+            rows={2}
+            placeholder="Optional note (for learning context)..."
+            value={dismissNote()}
+            onInput={(e) => setDismissNote(e.currentTarget.value)}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div class="flex items-center gap-2 mt-1.5">
+            <button
+              type="button"
+              onClick={(e) => handleConfirmDismiss(finding.id, e)}
+              disabled={actionLoading() === finding.id}
+              class="px-2.5 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded transition-colors"
+            >
+              Confirm Dismiss
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelDismiss}
+              class="px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </Show>
       <Show when={finding.correlatedFindingIds && finding.correlatedFindingIds.length > 0}>

@@ -976,7 +976,7 @@ export const UnifiedAgents: Component = () => {
                                     />
                                     Skip TLS certificate verification (self-signed certs; not recommended)
                                 </label>
-                                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (requires Pulse Pro)">
+                                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)">
                                     <input
                                         type="checkbox"
                                         checked={enableCommands()}

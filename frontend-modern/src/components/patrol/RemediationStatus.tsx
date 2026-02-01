@@ -1,7 +1,8 @@
 /**
  * RemediationStatus
  *
- * Post-execution display: shows command output, exit code, and rollback button.
+ * Post-execution display: shows success/failure status, command output,
+ * exit code, error details, and server message.
  */
 
 import { Component, Show, createSignal } from 'solid-js';
@@ -40,6 +41,10 @@ export const RemediationStatus: Component<RemediationStatusProps> = (props) => {
 
       <Show when={props.result.error}>
         <div class="text-red-600 dark:text-red-400 mt-1">{props.result.error}</div>
+      </Show>
+
+      <Show when={props.result.message && props.result.message !== props.result.error}>
+        <div class="text-gray-600 dark:text-gray-400 mt-1">{props.result.message}</div>
       </Show>
 
       <Show when={props.result.output}>

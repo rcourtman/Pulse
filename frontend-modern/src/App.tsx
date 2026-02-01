@@ -54,7 +54,6 @@ import type { UpdateStatus } from './api/updates';
 import { AIChat } from './components/AI/Chat';
 import { AIStatusIndicator } from './components/AI/AIStatusIndicator';
 import { aiChatStore } from './stores/aiChat';
-import { getPatrolStatus } from './api/patrol';
 import { useResourcesAsLegacy } from './hooks/useResources';
 import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
 import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode } from './utils/url';
@@ -1043,17 +1042,6 @@ function AppLayout(props: {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Track patrol license status for Pro badge
-  const [patrolLicenseRequired, setPatrolLicenseRequired] = createSignal(false);
-  onMount(async () => {
-    try {
-      const status = await getPatrolStatus();
-      setPatrolLicenseRequired(status.license_required ?? false);
-    } catch {
-      // Ignore errors - default to not showing badge
-    }
-  });
-
   const readSeenPlatforms = (): Record<string, boolean> => {
     if (typeof window === 'undefined') return {};
     try {
@@ -1265,7 +1253,7 @@ function AppLayout(props: {
           label: 'Patrol',
           route: '/ai',
           tooltip: 'Pulse Patrol monitoring and analysis',
-          badge: patrolLicenseRequired() ? 'pro' : null,
+          badge: null, // Patrol is free with BYOK; auto-fix is Pro
           count: undefined,
           breakdown: undefined,
           icon: <PulsePatrolLogo class="w-4 h-4 shrink-0" />,

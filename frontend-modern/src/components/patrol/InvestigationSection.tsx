@@ -68,7 +68,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
     const inv = investigation();
     if (!inv) return true; // No investigation yet
     if (inv.status === 'running') return false;
-    return inv.status === 'failed' || inv.status === 'needs_attention' || inv.outcome === 'cannot_fix' || inv.outcome === 'timed_out' || inv.outcome === 'fix_verification_failed';
+    return inv.status === 'failed' || inv.status === 'needs_attention' || inv.outcome === 'cannot_fix' || inv.outcome === 'timed_out' || inv.outcome === 'fix_verification_failed' || inv.outcome === 'fix_failed';
   };
 
   const handleReinvestigate = async (e: Event) => {
@@ -148,6 +148,13 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       <Show when={!investigation.loading && investigation()}>
         {(inv) => (
           <div class="space-y-2">
+            {/* Error message for failed investigations */}
+            <Show when={inv().error && (inv().status === 'failed' || inv().outcome === 'timed_out' || inv().outcome === 'fix_failed' || inv().outcome === 'fix_verification_failed' || inv().outcome === 'needs_attention' || inv().outcome === 'cannot_fix')}>
+              <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded p-2">
+                {inv().error}
+              </div>
+            </Show>
+
             {/* Summary */}
             <Show when={inv().summary}>
               <div class="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded p-2">
