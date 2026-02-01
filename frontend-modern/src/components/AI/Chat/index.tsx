@@ -43,6 +43,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [controlSaving, setControlSaving] = createSignal(false);
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
   const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
+  const [isCluster, setIsCluster] = createSignal(false);
 
   // @ mention autocomplete state
   const [mentionActive, setMentionActive] = createSignal(false);
@@ -328,6 +329,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   onMount(async () => {
     try {
       const state = await MonitoringAPI.getState();
+      setIsCluster((state.nodes?.length || 0) > 1);
       const resources: MentionResource[] = [];
 
       // Add VMs
@@ -588,16 +590,30 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   return (
     <div
-      class={`flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 ${isOpen() ? 'w-full sm:w-[480px]' : 'w-0 border-l-0 overflow-hidden'
+      class={`relative flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 ${isOpen() ? 'w-full sm:w-[480px] overflow-visible' : 'w-0 border-l-0 overflow-hidden'
         }`}
     >
       <Show when={isOpen()}>
+        {/* Floating Close Handle (Desktop only) */}
+        <button
+          onClick={props.onClose}
+          class="hidden sm:flex absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 items-center justify-center w-8 py-3 rounded-l-xl bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-md border border-r-0 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors z-50 cursor-pointer"
+          title="Collapse Pulse Assistant"
+        >
+          <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
+            />
+          </svg>
+        </button>
         {/* Header - wraps on mobile */}
         <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
           <div class="flex items-center gap-3">
             <div class="p-2 bg-blue-600 rounded-xl shadow-sm">
               <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611l-2.576.43a18.003 18.003 0 01-5.118 0l-2.576-.43c-1.717-.293-2.299-2.379-1.067-3.611L5 14.5" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
               </svg>
             </div>
             <div>
@@ -755,7 +771,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </Show>
             </div>
 
-            {/* Close button */}
+            {/* Close button (Always visible as fallback) */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -765,7 +781,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               title="Close panel"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M6 5l7 7-7 7" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
@@ -818,13 +834,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
           onSkip={handleSkip}
           onAnswerQuestion={handleAnswerQuestion}
           onSkipQuestion={handleSkipQuestion}
+          recentSessions={sessions()
+            .filter(s => s.id !== chat.sessionId() && s.message_count > 0)
+            .slice(0, 3)}
+          onLoadSession={handleLoadSession}
           emptyState={{
-            title: 'Start a conversation',
-            subtitle: 'Ask about your infrastructure, diagnose issues, or get help.',
-            suggestions: [
-              'What VMs are running?',
-              'Show me resource usage',
-              'Any issues to investigate?',
+            title: 'Pulse Assistant ready',
+            suggestions: isCluster() ? [
+              'Analyze overall cluster health',
+              'Check node load balancing',
+              'Find and fix failed services',
+            ] : [
+              'Analyze system health',
+              'Check storage usage',
+              'Scan for security vulnerabilities',
             ],
             onSuggestionClick: (s) => setInput(s),
           }}
@@ -879,7 +902,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 value={input()}
                 onInput={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about your infrastructure... (type @ to mention a resource)"
+                placeholder="Ask about your infrastructure..."
                 rows={2}
                 class="w-full px-4 py-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               />
@@ -895,6 +918,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </div>
             </div>
             <div class="flex gap-1.5 self-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setInput(s => s + (s && !s.endsWith(' ') ? ' @' : '@'));
+                  textareaRef?.focus();
+                  // Trigger manual autocomplete activation logic if needed, 
+                  // but input change handler should catch the '@' insertion
+                  // We simulate an input event to trigger the autocomplete logic:
+                  setTimeout(() => {
+                    const event = new Event('input', { bubbles: true });
+                    textareaRef?.dispatchEvent(event);
+                  }, 0);
+                }}
+                class="hidden sm:flex items-center justify-center w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all font-mono font-medium text-lg"
+                title="Mention a resource (VM, Node, Docker...)"
+              >
+                @
+              </button>
+
               <Show
                 when={!chat.isLoading()}
                 fallback={
@@ -923,11 +965,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </Show>
             </div>
           </form>
-          <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-2 text-center">
-            {chat.isLoading()
-              ? 'Generating... click Stop to interrupt'
-              : 'Press Enter to send · Shift+Enter for new line · Type @ to mention a resource'}
-          </p>
+          <div class="flex items-center justify-center gap-4 mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+            <span>Press <kbd class="font-sans px-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Enter</kbd> to send</span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+              <span>Type <span class="font-bold text-blue-600 dark:text-blue-400">@</span> to mention resources</span>
+            </span>
+          </div>
         </div>
       </Show>
     </div>

@@ -1,5 +1,6 @@
 import { Component, Show, For, createEffect, createMemo } from 'solid-js';
 import { MessageItem } from './MessageItem';
+import type { ChatSession } from '@/api/aiChat';
 import type { ChatMessage, PendingApproval, PendingQuestion } from './types';
 
 interface ChatMessagesProps {
@@ -8,9 +9,12 @@ interface ChatMessagesProps {
   onSkip: (messageId: string, toolId: string) => void;
   onAnswerQuestion: (messageId: string, question: PendingQuestion, answers: Array<{ id: string; value: string }>) => void;
   onSkipQuestion: (messageId: string, questionId: string) => void;
+  // Dashboard props
+  recentSessions?: ChatSession[];
+  onLoadSession?: (sessionId: string) => void;
   emptyState?: {
     title: string;
-    subtitle: string;
+    subtitle?: string;
     suggestions?: string[];
     onSuggestionClick?: (suggestion: string) => void;
   };
@@ -67,11 +71,11 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
     >
       {/* Empty state */}
       <Show when={props.messages.length === 0 && props.emptyState}>
-        <div class="flex flex-col items-center justify-center h-full text-center py-12">
+        <div class="flex flex-col items-center justify-center min-h-full text-center py-8">
           {/* AI Icon */}
-          <div class="w-16 h-16 mb-4 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm">
+          <div class="w-14 h-14 mb-3 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm">
             <svg
-              class="w-8 h-8 text-blue-500 dark:text-blue-400"
+              class="w-7 h-7 text-blue-500 dark:text-blue-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -80,7 +84,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 stroke-width="1.5"
-                d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611l-2.576.43a18.003 18.003 0 01-5.118 0l-2.576-.43c-1.717-.293-2.299-2.379-1.067-3.611L5 14.5"
+                d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
               />
             </svg>
           </div>
@@ -88,27 +92,66 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
           <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">
             {props.emptyState!.title}
           </h3>
-          <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs mb-6">
-            {props.emptyState!.subtitle}
-          </p>
-
-          {/* Suggestions */}
-          <Show when={props.emptyState!.suggestions && props.emptyState!.suggestions!.length > 0}>
-            <div class="space-y-2 w-full max-w-xs">
-              <For each={props.emptyState!.suggestions}>
-                {(suggestion) => (
-                  <button
-                    type="button"
-                    onClick={() => props.emptyState!.onSuggestionClick?.(suggestion)}
-                    class="w-full text-left px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700"
-                  >
-                    <span class="text-blue-500 dark:text-blue-400 mr-2">→</span>
-                    {suggestion}
-                  </button>
-                )}
-              </For>
-            </div>
+          <Show when={props.emptyState!.subtitle}>
+            <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs mb-6">
+              {props.emptyState!.subtitle}
+            </p>
           </Show>
+
+          <div class="w-full max-w-xs space-y-6">
+            {/* Recent Sessions */}
+            <Show when={props.recentSessions && props.recentSessions.length > 0}>
+              <div class="space-y-2">
+                <div class="text-xs font-medium text-slate-400 dark:text-slate-500 text-left uppercase tracking-wider pl-1">
+                  Resume conversation
+                </div>
+                <For each={props.recentSessions}>
+                  {(session) => (
+                    <button
+                      type="button"
+                      onClick={() => props.onLoadSession?.(session.id)}
+                      class="w-full text-left px-4 py-3 rounded-xl bg-white dark:bg-slate-800/50 hover:bg-blue-50 dark:hover:bg-blue-900/10 border border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-800 transition-all group flex items-center gap-3"
+                    >
+                      <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-slate-700 dark:text-slate-200 truncate group-hover:text-blue-700 dark:group-hover:text-blue-300">
+                          {session.title || 'Untitled Conversation'}
+                        </div>
+                        <div class="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                          {new Date(session.updated_at).toLocaleDateString()} · {session.message_count} messages
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                </For>
+              </div>
+            </Show>
+
+            {/* Suggestions */}
+            <Show when={props.emptyState!.suggestions && props.emptyState!.suggestions!.length > 0}>
+              <div class="space-y-2">
+                <div class="text-xs font-medium text-slate-400 dark:text-slate-500 text-left uppercase tracking-wider pl-1">
+                  Or try asking
+                </div>
+                <For each={props.emptyState!.suggestions}>
+                  {(suggestion) => (
+                    <button
+                      type="button"
+                      onClick={() => props.emptyState!.onSuggestionClick?.(suggestion)}
+                      class="w-full text-left px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/30 text-slate-600 dark:text-slate-400 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                    >
+                      <span class="text-blue-500 dark:text-blue-400 mr-2 opacity-50">→</span>
+                      {suggestion}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </div>
         </div>
       </Show>
 

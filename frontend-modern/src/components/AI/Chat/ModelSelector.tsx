@@ -1,4 +1,4 @@
-import { Component, For, Show, createSignal, createMemo } from 'solid-js';
+import { Component, For, Show, createSignal, createMemo, onMount, onCleanup } from 'solid-js';
 import { PROVIDER_DISPLAY_NAMES, getProviderFromModelId, groupModelsByProvider } from '../aiChatUtils';
 import type { ModelInfo } from './types';
 
@@ -108,6 +108,25 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
         const match = props.models.find((model) => model.id === selected);
         if (match) return match.name || match.id.split(':').pop() || match.id;
         return selected;
+    });
+
+    // Click outside handler
+    onMount(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (isOpen() && buttonRef && !buttonRef.closest('[data-dropdown]')?.contains(e.target as Node)) {
+                // Check if we are clicking inside the dropdown content itself (which isn't buttonRef)
+                // The dropdown content is rendered in a portal or just absolutely positioned?
+                // In this file, it's absolutely positioned as a sibling to the button, wrapped in the same parent div.
+                // The parent div has [data-dropdown].
+                // So checking if e.target is inside the closest [data-dropdown] works for both button and content.
+                const dropdownContainer = buttonRef.closest('[data-dropdown]');
+                if (dropdownContainer && !dropdownContainer.contains(e.target as Node)) {
+                    setIsOpen(false);
+                }
+            }
+        };
+        document.addEventListener('click', handleClickOutside);
+        onCleanup(() => document.removeEventListener('click', handleClickOutside));
     });
 
     return (

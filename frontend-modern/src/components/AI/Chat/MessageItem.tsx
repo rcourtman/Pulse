@@ -110,135 +110,141 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         </div>
       </Show>
 
-      {/* Assistant message - full width, terminal-like */}
+      {/* Assistant message - card style */}
       <Show when={!isUser()}>
-        <div class="w-full">
-          {/* Assistant indicator */}
-          <div class="flex items-center gap-2 mb-2 text-xs text-slate-500 dark:text-slate-400">
-            <div class="w-5 h-5 rounded-md bg-blue-600 flex items-center justify-center">
-              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082" />
-              </svg>
+        <div class="w-full pl-2 pr-2">
+          <div class="group relative bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-600">
+            {/* Assistant indicator */}
+            <div class="flex items-center gap-2.5 mb-3">
+              <div class="w-6 h-6 rounded-lg bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 shadow-sm flex items-center justify-center shrink-0">
+                <svg class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                </svg>
+              </div>
+              <div class="flex items-baseline gap-2">
+                <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">Assistant</span>
+                <Show when={props.message.model && !props.message.isStreaming}>
+                  <span class="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                    {props.message.model}
+                  </span>
+                </Show>
+              </div>
             </div>
-            <span class="font-medium">Assistant</span>
-            <Show when={props.message.model && !props.message.isStreaming}>
-              <span class="text-[10px] text-slate-400 dark:text-slate-500">
-                · {props.message.model}
-              </span>
-            </Show>
-          </div>
 
-          {/* Main content area */}
-          <div class="pl-7">
-            {/* Stream events - chronological display */}
-            <Show when={hasStreamEvents()}>
-              <For each={groupedEvents()}>
-                {(evt) => (
-                  <Switch>
-                    {/* Thinking block - collapsed by default */}
-                    <Match when={evt.type === 'thinking' && evt.thinking}>
-                      <ThinkingBlock
-                        content={evt.thinking || ''}
-                        isStreaming={props.message.isStreaming}
-                      />
-                    </Match>
-
-                    {/* Pending tool - hidden, we only show completed tools */}
-                    <Match when={evt.type === 'pending_tool' && evt.pendingTool}>
-                      <></>
-                    </Match>
-
-                    {/* Completed tool execution block */}
-                    <Match when={evt.type === 'tool' && evt.tool}>
-                      <ToolExecutionBlock tool={{
-                        name: evt.tool?.name || 'unknown',
-                        input: evt.tool?.input || '{}',
-                        output: evt.tool?.output || '',
-                        success: evt.tool?.success ?? true,
-                      }} />
-                    </Match>
-
-                    {/* Content/text block */}
-                    <Match when={evt.type === 'content' && evt.content}>
-                      <div
-                        class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none overflow-x-auto
-                               prose-p:leading-relaxed prose-p:my-2
-                               prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs prose-pre:overflow-x-auto prose-pre:max-w-full
-                               prose-code:text-blue-600 dark:prose-code:text-blue-400
-                               prose-code:bg-blue-50 dark:prose-code:bg-blue-900/30
-                               prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:break-all
-                               prose-code:before:content-none prose-code:after:content-none
-                               prose-headings:text-slate-900 dark:prose-headings:text-slate-100
-                               prose-strong:text-slate-900 dark:prose-strong:text-slate-100
-                               prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5"
-                        // eslint-disable-next-line solid/no-innerhtml
-                        innerHTML={renderMarkdown(evt.content || '')}
-                      />
-                    </Match>
-
-                    {/* Approval card - inline in stream */}
-                    <Match when={evt.type === 'approval' && evt.approval}>
-                      <div class="my-3">
-                        <ApprovalCard
-                          approval={evt.approval!}
-                          onApprove={() => props.onApprove(evt.approval!)}
-                          onSkip={() => props.onSkip(evt.approval!.toolId)}
+            {/* Main content area */}
+            <div class="pl-1">
+              {/* Stream events - chronological display */}
+              <Show when={hasStreamEvents()}>
+                <For each={groupedEvents()}>
+                  {(evt) => (
+                    <Switch>
+                      {/* Thinking block */}
+                      <Match when={evt.type === 'thinking' && evt.thinking}>
+                        <ThinkingBlock
+                          content={evt.thinking || ''}
+                          isStreaming={props.message.isStreaming}
                         />
-                      </div>
-                    </Match>
+                      </Match>
 
-                    {/* Question card - inline in stream */}
-                    <Match when={evt.type === 'question' && evt.question}>
-                      <div class="my-3">
-                        <QuestionCard
-                          question={evt.question!}
-                          onAnswer={(answers) => props.onAnswerQuestion(evt.question!, answers)}
-                          onSkip={() => props.onSkipQuestion(evt.question!.questionId)}
+                      <Match when={evt.type === 'pending_tool' && evt.pendingTool}>
+                        <></>
+                      </Match>
+
+                      <Match when={evt.type === 'tool' && evt.tool}>
+                        <ToolExecutionBlock tool={{
+                          name: evt.tool?.name || 'unknown',
+                          input: evt.tool?.input || '{}',
+                          output: evt.tool?.output || '',
+                          success: evt.tool?.success ?? true,
+                        }} />
+                      </Match>
+
+                      {/* Content/text block */}
+                      <Match when={evt.type === 'content' && evt.content}>
+                        <div
+                          class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none 
+                                 prose-p:leading-relaxed prose-p:my-2
+                                 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-xl prose-pre:text-xs prose-pre:border prose-pre:border-slate-800
+                                 prose-code:text-blue-700 dark:prose-code:text-blue-300
+                                 prose-code:bg-blue-50/50 dark:prose-code:bg-blue-900/20
+                                 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800/30
+                                 prose-code:before:content-none prose-code:after:content-none
+                                 prose-headings:font-semibold prose-headings:tracking-tight
+                                 prose-hr:border-slate-200 dark:prose-hr:border-slate-700
+                                 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                          // eslint-disable-next-line solid/no-innerhtml
+                          innerHTML={renderMarkdown(evt.content || '')}
                         />
-                      </div>
-                    </Match>
-                  </Switch>
-                )}
-              </For>
-            </Show>
+                      </Match>
 
-            {/* Fallback: show content if no stream events */}
-            <Show when={props.message.content && !hasStreamEvents()}>
-              <div
-                class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none overflow-x-auto
-                       prose-p:leading-relaxed prose-p:my-2
-                       prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-pre:text-xs prose-pre:overflow-x-auto prose-pre:max-w-full
-                       prose-code:text-blue-600 dark:prose-code:text-blue-400
-                       prose-code:bg-blue-50 dark:prose-code:bg-blue-900/30
-                       prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:break-all
-                       prose-code:before:content-none prose-code:after:content-none
-                       prose-headings:text-slate-900 dark:prose-headings:text-slate-100
-                       prose-strong:text-slate-900 dark:prose-strong:text-slate-100
-                       prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5"
-                // eslint-disable-next-line solid/no-innerhtml
-                innerHTML={renderMarkdown(props.message.content)}
-              />
-            </Show>
+                      <Match when={evt.type === 'approval' && evt.approval}>
+                        <div class="my-4">
+                          <ApprovalCard
+                            approval={evt.approval!}
+                            onApprove={() => props.onApprove(evt.approval!)}
+                            onSkip={() => props.onSkip(evt.approval!.toolId)}
+                          />
+                        </div>
+                      </Match>
 
-            {/* Streaming text indicator */}
-            <Show when={isStreamingText()}>
-              <span class="inline-block w-2 h-4 ml-0.5 bg-blue-500 dark:bg-blue-400 animate-pulse rounded-sm" />
-            </Show>
+                      <Match when={evt.type === 'question' && evt.question}>
+                        <div class="my-4">
+                          <QuestionCard
+                            question={evt.question!}
+                            onAnswer={(answers) => props.onAnswerQuestion(evt.question!, answers)}
+                            onSkip={() => props.onSkipQuestion(evt.question!.questionId)}
+                          />
+                        </div>
+                      </Match>
+                    </Switch>
+                  )}
+                </For>
+              </Show>
 
-            <Show when={!props.message.isStreaming && contextTools().length > 0}>
-              <div class="mt-3 text-[10px] text-slate-400 dark:text-slate-500">
-                Context used: {contextTools().map((name) => formatToolName(name)).join(', ')}
-              </div>
-            </Show>
+              {/* Fallback */}
+              <Show when={props.message.content && !hasStreamEvents()}>
+                <div
+                  class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none
+                         prose-p:leading-relaxed prose-p:my-2
+                         prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-xl prose-pre:text-xs prose-pre:border prose-pre:border-slate-800
+                         prose-code:text-blue-700 dark:prose-code:text-blue-300
+                         prose-code:bg-blue-50/50 dark:prose-code:bg-blue-900/20
+                         prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800/30
+                         prose-code:before:content-none prose-code:after:content-none
+                         prose-headings:font-semibold prose-headings:tracking-tight
+                         prose-hr:border-slate-200 dark:prose-hr:border-slate-700
+                         prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                  // eslint-disable-next-line solid/no-innerhtml
+                  innerHTML={renderMarkdown(props.message.content)}
+                />
+              </Show>
 
-            {/* Token count footer */}
-            <Show when={props.message.tokens && !props.message.isStreaming}>
-              <div class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 dark:text-slate-500">
-                {props.message.tokens!.input + props.message.tokens!.output} tokens
-                <span class="mx-1">·</span>
-                {props.message.tokens!.input} in / {props.message.tokens!.output} out
-              </div>
-            </Show>
+              {/* Streaming cursor */}
+              <Show when={isStreamingText()}>
+                <span class="inline-block w-1.5 h-4 ml-0.5 align-middle bg-blue-500 dark:bg-blue-400 animate-pulse rounded-full" />
+              </Show>
+
+              <Show when={!props.message.isStreaming && contextTools().length > 0}>
+                <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex flex-wrap gap-2">
+                  <span class="text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500 tracking-wider">Context used</span>
+                  <div class="flex flex-wrap gap-1.5">
+                    {contextTools().map((name) => (
+                      <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-600 font-medium">
+                        {formatToolName(name)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </Show>
+
+              <Show when={props.message.tokens && !props.message.isStreaming}>
+                <div class="mt-1 flex justify-end">
+                  <span class="text-[9px] text-slate-300 dark:text-slate-600 font-mono">
+                    {props.message.tokens!.input} in · {props.message.tokens!.output} out
+                  </span>
+                </div>
+              </Show>
+            </div>
           </div>
         </div>
       </Show>
