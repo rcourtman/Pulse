@@ -313,10 +313,10 @@ export const DiagnosticsPanel: Component = () => {
 
     const healthColor = () => {
         const health = systemHealth();
-        if (health === 'healthy') return 'from-green-500 to-emerald-600';
-        if (health === 'warning') return 'from-amber-500 to-orange-600';
-        if (health === 'critical') return 'from-red-500 to-rose-600';
-        return 'from-gray-400 to-gray-500';
+        if (health === 'healthy') return 'bg-green-500';
+        if (health === 'warning') return 'bg-amber-500';
+        if (health === 'critical') return 'bg-red-500';
+        return 'bg-gray-400';
     };
 
     return (
@@ -327,7 +327,7 @@ export const DiagnosticsPanel: Component = () => {
                 class="overflow-hidden border border-gray-200 dark:border-gray-700"
                 border={false}
             >
-                <div class={`bg-gradient-to-r ${healthColor()} px-4 sm:px-6 py-4 sm:py-5`}>
+                <div class={`${healthColor()} px-4 sm:px-6 py-4 sm:py-5`}>
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div class="flex items-center gap-3 sm:gap-4">
                             <div class="p-2 sm:p-3 bg-white/20 rounded-xl backdrop-blur-sm flex-shrink-0">
