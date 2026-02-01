@@ -82,11 +82,7 @@ func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Req
 		})
 	}
 
-	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
-	if locked {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-	}
+	locked := aiService == nil
 
 	count := len(result)
 	if locked {
@@ -168,11 +164,7 @@ func (h *AISettingsHandler) HandleGetPredictions(w http.ResponseWriter, r *http.
 		})
 	}
 
-	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
-	if locked {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-	}
+	locked := aiService == nil
 
 	count := len(result)
 	if locked {
@@ -258,11 +250,7 @@ func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http
 		})
 	}
 
-	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
-	if locked {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-	}
+	locked := aiService == nil
 
 	count := len(result)
 	if locked {
@@ -347,11 +335,7 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 		})
 	}
 
-	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
-	if locked {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-	}
+	locked := aiService == nil
 
 	count := len(result)
 	if locked {
@@ -433,11 +417,7 @@ func (h *AISettingsHandler) HandleGetBaselines(w http.ResponseWriter, r *http.Re
 		})
 	}
 
-	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
-	if locked {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-	}
+	locked := aiService == nil
 
 	count := len(result)
 	if locked {
@@ -932,11 +912,7 @@ func (h *AISettingsHandler) HandleGetLearningStatus(w http.ResponseWriter, r *ht
 		message = "Baselines established and anomaly detection is active"
 	}
 
-	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIPatrol)
-	if locked {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-	}
+	locked := aiService == nil
 
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
 		"resources_baselined": resourceCount,

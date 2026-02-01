@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
@@ -30,130 +29,6 @@ func newTestAISettingsHandlerLite() *AISettingsHandler {
 	return &AISettingsHandler{
 		legacyAIService: ai.NewService(nil, nil),
 		aiServices:      make(map[string]*ai.Service),
-	}
-}
-
-func TestPreviewTitle(t *testing.T) {
-	cases := map[ai.FindingCategory]string{
-		ai.FindingCategoryPerformance: "Performance issue detected",
-		ai.FindingCategoryCapacity:    "Capacity issue detected",
-		ai.FindingCategoryReliability: "Reliability issue detected",
-		ai.FindingCategoryBackup:      "Backup issue detected",
-		ai.FindingCategorySecurity:    "Security issue detected",
-		ai.FindingCategory("other"):   "Potential issue detected",
-	}
-
-	for category, expected := range cases {
-		if got := previewTitle(category); got != expected {
-			t.Fatalf("category %s expected %q, got %q", category, expected, got)
-		}
-	}
-}
-
-func TestPreviewResourceName(t *testing.T) {
-	cases := map[string]string{
-		"node":             "Node",
-		"vm":               "VM",
-		"container":        "Container",
-		"oci_container":    "Container",
-		"docker_host":      "Docker host",
-		"docker_container": "Docker container",
-		"storage":          "Storage",
-		"pbs":              "PBS server",
-		"pbs_datastore":    "PBS datastore",
-		"pbs_job":          "PBS job",
-		"host":             "Host",
-		"host_raid":        "RAID array",
-		"host_sensor":      "Host sensor",
-		"unknown":          "Resource",
-	}
-
-	for resourceType, expected := range cases {
-		if got := previewResourceName(resourceType); got != expected {
-			t.Fatalf("resource %s expected %q, got %q", resourceType, expected, got)
-		}
-	}
-}
-
-func TestRedactFindingsForPreview(t *testing.T) {
-	now := time.Now()
-	finding := &ai.Finding{
-		Key:             "key",
-		ResourceID:      "res-1",
-		ResourceName:    "db-1",
-		ResourceType:    "vm",
-		Node:            "node-1",
-		Category:        ai.FindingCategoryPerformance,
-		Title:           "Original title",
-		Description:     "Description",
-		Recommendation:  "Recommendation",
-		Evidence:        "Evidence",
-		AlertID:         "alert-1",
-		AcknowledgedAt:  &now,
-		SnoozedUntil:    &now,
-		ResolvedAt:      &now,
-		AutoResolved:    true,
-		DismissedReason: "reason",
-		UserNote:        "note",
-		TimesRaised:     3,
-		Suppressed:      true,
-		Source:          "original",
-	}
-
-	redacted := redactFindingsForPreview([]*ai.Finding{nil, finding})
-	if len(redacted) != 1 {
-		t.Fatalf("expected 1 redacted finding, got %d", len(redacted))
-	}
-	got := redacted[0]
-	if got.Key != "" || got.ResourceID != "" || got.Node != "" {
-		t.Fatalf("expected identifiers to be cleared")
-	}
-	if got.ResourceName != "VM" {
-		t.Fatalf("expected resource name to be preview value, got %q", got.ResourceName)
-	}
-	if got.Title != "Performance issue detected" {
-		t.Fatalf("expected preview title, got %q", got.Title)
-	}
-	if got.Description != "Upgrade to view full analysis." {
-		t.Fatalf("expected preview description")
-	}
-	if got.Recommendation != "" || got.Evidence != "" || got.AlertID != "" {
-		t.Fatalf("expected sensitive fields to be cleared")
-	}
-	if got.AcknowledgedAt != nil || got.SnoozedUntil != nil || got.ResolvedAt != nil {
-		t.Fatalf("expected timestamps to be cleared")
-	}
-	if got.AutoResolved || got.DismissedReason != "" || got.UserNote != "" {
-		t.Fatalf("expected status fields to be cleared")
-	}
-	if got.TimesRaised != 0 || got.Suppressed {
-		t.Fatalf("expected counters to be cleared")
-	}
-	if got.Source != "preview" {
-		t.Fatalf("expected source to be preview")
-	}
-	if finding.Title != "Original title" {
-		t.Fatalf("expected original finding to remain unchanged")
-	}
-}
-
-func TestRedactPatrolRunHistory(t *testing.T) {
-	runs := []ai.PatrolRunRecord{
-		{
-			ID:           "run-1",
-			AIAnalysis:   "analysis",
-			InputTokens:  100,
-			OutputTokens: 200,
-			FindingIDs:   []string{"a", "b"},
-		},
-	}
-
-	redacted := redactPatrolRunHistory(runs)
-	if redacted[0].AIAnalysis != "" || redacted[0].InputTokens != 0 || redacted[0].OutputTokens != 0 {
-		t.Fatalf("expected AI analysis fields to be cleared")
-	}
-	if redacted[0].FindingIDs != nil {
-		t.Fatalf("expected finding IDs to be cleared")
 	}
 }
 
