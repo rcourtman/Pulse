@@ -206,7 +206,7 @@ Keep these credentials secure!
         <div class="text-center">
             {/* Success animation */}
             <div class="mb-5">
-                <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 shadow-xl shadow-green-500/30 mb-3">
+                <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-500 shadow-xl shadow-green-500/30 mb-3">
                     <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
@@ -443,7 +443,7 @@ Keep these credentials secure!
             {/* Launch button */}
             <button
                 onClick={props.onComplete}
-                class="w-full py-2.5 px-5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-blue-500/25"
+                class="w-full py-2.5 px-5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-blue-500/25"
             >
                 {connectedAgents().length > 0 ? 'Go to Dashboard' : 'Skip for Now'}
             </button>

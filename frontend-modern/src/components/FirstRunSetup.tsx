@@ -256,7 +256,7 @@ IMPORTANT: Keep these credentials secure!
   };
 
   return (
-    <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+    <div class="min-h-screen bg-blue-50 dark:bg-gray-900 flex items-center justify-center p-4">
       <div class="w-full max-w-2xl">
         <Show when={props.showLegacyBanner}>
           <div class="mb-6 rounded-xl border border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-900/40 p-4 text-amber-900 dark:text-amber-100">

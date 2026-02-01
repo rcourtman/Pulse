@@ -311,7 +311,7 @@ export const Login: Component<LoginProps> = (props) => {
     <Show
       when={!loadingAuth()}
       fallback={
-        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900">
+        <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-900">
           <div class="text-center">
             <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
             <p class="text-gray-600 dark:text-gray-400">Checking authentication...</p>
@@ -346,7 +346,7 @@ export const Login: Component<LoginProps> = (props) => {
       >
         <Suspense
           fallback={
-            <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900">
+            <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-900">
               <div class="text-center">
                 <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
                 <p class="text-gray-600 dark:text-gray-400">Loading setup...</p>
@@ -408,13 +408,13 @@ const LoginForm: Component<{
   };
 
   return (
-    <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">
         {/* Demo Credentials Banner */}
         <Show when={isDemoServer()}>
           <div class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-4 shadow-xl border border-blue-200 dark:border-blue-800 animate-fade-in">
             <div class="flex items-center gap-3">
-              <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-cyan-600 flex items-center justify-center">
+              <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
@@ -432,7 +432,7 @@ const LoginForm: Component<{
         <div class="animate-fade-in">
           <div class="flex justify-center mb-8">
             <div class="relative group">
-              <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200 animate-pulse-slow"></div>
+              <div class="absolute -inset-1 bg-blue-600 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200 animate-pulse-slow"></div>
               <img
                 src="/logo.svg"
                 alt="Pulse Logo"
@@ -441,7 +441,7 @@ const LoginForm: Component<{
             </div>
           </div>
 
-          <h2 class="mt-6 text-center text-4xl font-extrabold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent animate-fade-in delay-100 pb-1">
+          <h2 class="mt-6 text-center text-4xl font-extrabold text-blue-600 animate-fade-in delay-100 pb-1">
             Welcome to Pulse
           </h2>
 
@@ -698,7 +698,7 @@ const LoginForm: Component<{
               <button
                 type="submit"
                 disabled={loading()}
-                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transform transition hover:scale-105 shadow-lg"
+                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transform transition hover:scale-105 shadow-lg"
               >
                 <Show when={loading()}>
                   <svg

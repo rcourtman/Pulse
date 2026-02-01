@@ -192,7 +192,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 <button
                     onClick={handleSetup}
                     disabled={isSettingUp()}
-                    class="flex-1 py-3 px-6 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 text-white font-medium rounded-xl transition-all"
+                    class="flex-1 py-3 px-6 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-medium rounded-xl transition-all"
                 >
                     {isSettingUp() ? 'Setting up...' : 'Create Account →'}
                 </button>

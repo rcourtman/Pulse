@@ -98,7 +98,7 @@ export const FeaturesStep: Component<FeaturesStepProps> = (props) => {
                 ))}
 
                 {/* Assistant info box */}
-                <div class="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-400/20 rounded-xl p-4">
+                <div class="bg-purple-500/10 border border-purple-400/20 rounded-xl p-4">
                     <div class="flex items-start gap-3">
                         <div class="text-2xl">✨</div>
                         <div>
@@ -110,7 +110,7 @@ export const FeaturesStep: Component<FeaturesStepProps> = (props) => {
                                 • Predictive failure detection
                             </p>
                             <p class="text-white/40 text-xs mt-2">
-                                Requires API key configuration in Settings → Pulse Assistant after setup
+                                Requires API key configuration in Settings → AI after setup
                             </p>
                         </div>
                     </div>
@@ -128,7 +128,7 @@ export const FeaturesStep: Component<FeaturesStepProps> = (props) => {
                 <button
                     onClick={handleContinue}
                     disabled={isSaving()}
-                    class="flex-1 py-3 px-6 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 text-white font-medium rounded-xl transition-all"
+                    class="flex-1 py-3 px-6 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-medium rounded-xl transition-all"
                 >
                     {isSaving() ? 'Saving...' : 'Continue →'}
                 </button>

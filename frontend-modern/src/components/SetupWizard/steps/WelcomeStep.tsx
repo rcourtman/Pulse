@@ -80,7 +80,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
         <div class="text-center">
             {/* Logo */}
             <div class="mb-8">
-                <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-2xl shadow-blue-500/30 mb-6">
+                <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-blue-500 shadow-2xl shadow-blue-500/30 mb-6">
                     <svg width="56" height="56" viewBox="0 0 256 256" class="text-white">
                         <circle class="fill-current opacity-20" cx="128" cy="128" r="122" />
                         <circle class="fill-none stroke-current" stroke-width="14" cx="128" cy="128" r="84" opacity="0.9" />
@@ -117,7 +117,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                     <button
                         onClick={handleUnlock}
                         disabled={isValidating() || !props.bootstrapToken.trim()}
-                        class="w-full mt-4 py-3 px-6 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all shadow-lg shadow-blue-500/25"
+                        class="w-full mt-4 py-3 px-6 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all shadow-lg shadow-blue-500/25"
                     >
                         {isValidating() ? 'Validating...' : 'Continue →'}
                     </button>
@@ -127,7 +127,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
             <Show when={props.isUnlocked}>
                 <button
                     onClick={props.onNext}
-                    class="py-4 px-8 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-lg font-medium rounded-xl transition-all shadow-lg shadow-blue-500/25"
+                    class="py-4 px-8 bg-blue-500 hover:bg-blue-600 text-white text-lg font-medium rounded-xl transition-all shadow-lg shadow-blue-500/25"
                 >
                     Get Started →
                 </button>
