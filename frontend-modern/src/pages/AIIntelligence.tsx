@@ -47,7 +47,7 @@ import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import PlayIcon from 'lucide-solid/icons/play';
 import CircleHelpIcon from 'lucide-solid/icons/circle-help';
 import XIcon from 'lucide-solid/icons/x';
-import FlaskConicalIcon from 'lucide-solid/icons/flask-conical';
+
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -69,7 +69,7 @@ import { ApprovalBanner, PatrolStatusBar, RunToolCallTrace } from '@/components/
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import { hasFeature } from '@/stores/license';
 
-const INFO_BANNER_DISMISSED_KEY = 'patrol-info-banner-dismissed';
+
 
 // Schedule presets in minutes
 const SCHEDULE_PRESETS = [
@@ -92,9 +92,7 @@ export function AIIntelligence() {
   const [isRefreshing, setIsRefreshing] = createSignal(false);
   const [autonomyLevel, setAutonomyLevel] = createSignal<PatrolAutonomyLevel>('monitor');
   const [isUpdatingAutonomy, setIsUpdatingAutonomy] = createSignal(false);
-  const [showInfoBanner, setShowInfoBanner] = createSignal(
-    localStorage.getItem(INFO_BANNER_DISMISSED_KEY) !== 'true'
-  );
+
   // Trigger to refresh patrol activity visualizations
   const [activityRefreshTrigger, setActivityRefreshTrigger] = createSignal(0);
 
@@ -162,8 +160,8 @@ export function AIIntelligence() {
   const [isTogglingPatrol, setIsTogglingPatrol] = createSignal(false);
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
   const [alertTriggeredAnalysis, setAlertTriggeredAnalysis] = createSignal<boolean>(true);
-  const [patrolAutoFix, setPatrolAutoFix] = createSignal<boolean>(false);
-  const [autoFixModel, setAutoFixModel] = createSignal<string>('');
+
+
 
   // Re-apply patrol model select value when models load after settings
   // (select value is ignored by the browser if no matching option exists yet)
@@ -183,13 +181,7 @@ export function AIIntelligence() {
     return !models.some(m => m.id === model);
   });
 
-  // Same check for auto-fix model
-  const autoFixModelStale = createMemo(() => {
-    const model = autoFixModel();
-    const models = availableModels();
-    if (!model || models.length === 0) return false;
-    return !models.some(m => m.id === model);
-  });
+
 
   // License feature gates
   const alertAnalysisLocked = createMemo(() => !hasFeature('ai_alerts'));
@@ -207,10 +199,7 @@ export function AIIntelligence() {
     return options;
   });
 
-  function dismissInfoBanner() {
-    localStorage.setItem(INFO_BANNER_DISMISSED_KEY, 'true');
-    setShowInfoBanner(false);
-  }
+
 
   // Load available models
   async function loadModels() {
@@ -232,8 +221,7 @@ export function AIIntelligence() {
       setPatrolInterval(data.patrol_interval_minutes ?? 360);
       setPatrolEnabledLocal(data.patrol_enabled ?? true);
       setAlertTriggeredAnalysis(data.alert_triggered_analysis !== false);
-      setPatrolAutoFix(data.patrol_auto_fix ?? false);
-      setAutoFixModel(data.auto_fix_model || '');
+
     } catch (err) {
       console.error('Failed to load AI settings:', err);
     }
@@ -358,51 +346,17 @@ export function AIIntelligence() {
     }
   }
 
-  // Toggle auto-fix mode
-  async function handleAutoFixChange(enabled: boolean) {
-    if (isUpdatingSettings()) return;
-    setIsUpdatingSettings(true);
-    const previous = patrolAutoFix();
-    setPatrolAutoFix(enabled);
-    try {
-      await apiFetchJSON('/api/settings/ai/update', {
-        method: 'PUT',
-        body: JSON.stringify({ patrol_auto_fix: enabled }),
-      });
-    } catch (err) {
-      console.error('Failed to update auto-fix mode:', err);
-      setPatrolAutoFix(previous);
-      notificationStore.error('Failed to update auto-fix setting');
-    } finally {
-      setIsUpdatingSettings(false);
-    }
-  }
 
-  // Update auto-fix model
-  async function handleAutoFixModelChange(modelId: string) {
-    if (isUpdatingSettings()) return;
-    setIsUpdatingSettings(true);
-    try {
-      await apiFetchJSON('/api/settings/ai/update', {
-        method: 'PUT',
-        body: JSON.stringify({ auto_fix_model: modelId }),
-      });
-      setAutoFixModel(modelId);
-    } catch (err) {
-      console.error('Failed to update auto-fix model:', err);
-      notificationStore.error('Failed to update auto-fix model');
-    } finally {
-      setIsUpdatingSettings(false);
-    }
-  }
+
+
 
   // Strip leaked provider tool-call markup (e.g. DeepSeek DSML) from AI analysis text
   function sanitizeAnalysis(text: string | undefined): string {
     if (!text) return '';
     // Remove DeepSeek DSML blocks: <｜DSML｜...>...</｜DSML｜...>
     return text.replace(/<｜DSML｜[^>]*>[\s\S]*?<\/｜DSML｜[^>]*>/g, '')
-               .replace(/<｜DSML｜[^>]*>/g, '')
-               .trim();
+      .replace(/<｜DSML｜[^>]*>/g, '')
+      .trim();
   }
 
   // Group models by provider
@@ -719,7 +673,7 @@ export function AIIntelligence() {
         <div class="flex items-center justify-between gap-4 mb-3">
           <div class="flex items-center gap-3">
             <PulsePatrolLogo class="w-6 h-6 text-gray-700 dark:text-gray-200" />
-            <div>
+            <div title="Pulse Patrol constantly monitors your infrastructure, investigates alerts, and can automatically fix issues based on your autonomy settings.">
               <h1 class="text-lg font-semibold text-gray-900 dark:text-white">Patrol</h1>
               <p class="text-sm text-gray-500 dark:text-gray-400">
                 Pulse Patrol monitoring and analysis
@@ -839,20 +793,20 @@ export function AIIntelligence() {
                   const isFullLocked = () => level === 'full' && !fullModeUnlocked();
                   const isProLocked = () => autoFixLocked() && (level === 'assisted' || level === 'full');
                   const isDisabled = () => !patrolEnabledLocal() || isFullLocked() || isProLocked();
+
                   return (
                     <button
                       onClick={() => handleAutonomyChange(level)}
                       disabled={isDisabled()}
                       title={isProLocked() ? 'Upgrade to Pulse Pro for auto-fix' : isFullLocked() ? 'Enable in Advanced Settings (⚙️) first' : undefined}
-                      class={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                        autonomyLevel() === level
-                          ? level === 'full'
-                            ? 'bg-red-500 dark:bg-red-600 text-white shadow-sm'
-                            : 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                          : isFullLocked() || isProLocked()
-                            ? 'text-gray-400 dark:text-gray-500'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                      } ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      class={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${autonomyLevel() === level
+                        ? level === 'full'
+                          ? 'bg-red-500 dark:bg-red-600 text-white shadow-sm'
+                          : 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                        : isDisabled()
+                          ? 'text-gray-400 dark:text-gray-500'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                        } ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {level === 'monitor' ? 'Monitor' : level === 'approval' ? 'Approval' : level === 'assisted' ? 'Assisted' : 'Full'}
                     </button>
@@ -886,164 +840,110 @@ export function AIIntelligence() {
 
             {/* Advanced Settings Gear */}
             <div class="relative" ref={advancedSettingsRef}>
-                <button
-                  onClick={() => setShowAdvancedSettings(!showAdvancedSettings())}
-                  disabled={!patrolEnabledLocal()}
-                  class={`p-1 rounded transition-colors ${
-                    showAdvancedSettings()
-                      ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
-                      : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+              <button
+                onClick={() => setShowAdvancedSettings(!showAdvancedSettings())}
+                disabled={!patrolEnabledLocal()}
+                class={`p-1 rounded transition-colors ${showAdvancedSettings()
+                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
                   } ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title="Advanced investigation settings"
-                >
-                  <SettingsIcon class="w-4 h-4" />
-                </button>
+                title="Advanced investigation settings"
+              >
+                <SettingsIcon class="w-4 h-4" />
+              </button>
 
-                {/* Advanced Settings Popover */}
-                <Show when={showAdvancedSettings()}>
-                  <div class="absolute right-0 top-8 z-50 w-72 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center justify-between mb-3">
-                      <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Advanced Settings</h4>
-                      <button
-                        onClick={() => setShowAdvancedSettings(false)}
-                        class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                      >
-                        <XIcon class="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div class="space-y-4">
-                      {/* Full Mode Unlock */}
-                      <div>
-                        <div class="flex items-start justify-between gap-3">
-                          <div class="flex-1">
-                            <label class="text-xs font-medium text-red-600 dark:text-red-400">Enable Full Mode</label>
-                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                              I understand that Full mode will auto-fix ALL findings including critical issues, without asking for approval.
-                            </p>
-                          </div>
-                          <Toggle
-                            checked={fullModeUnlocked()}
-                            onChange={(e) => setFullModeUnlocked(e.currentTarget.checked)}
-                          />
-                        </div>
-                        <Show when={fullModeUnlocked()}>
-                          <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
-                            <ShieldAlertIcon class="w-3 h-3 flex-shrink-0" />
-                            Full mode is available. Click Save to apply.
-                          </p>
-                        </Show>
-                        <Show when={!fullModeUnlocked() && autonomyLevel() === 'full'}>
-                          <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
-                            <ShieldAlertIcon class="w-3 h-3 flex-shrink-0" />
-                            Saving will downgrade to Assisted mode.
-                          </p>
-                        </Show>
-                      </div>
-
-                      {/* Alert-Triggered Analysis */}
-                      <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center justify-between gap-3">
-                          <div class="flex-1">
-                            <label class="text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                              Alert-Triggered Analysis
-                              <span class="px-1 py-0.5 text-[9px] font-medium bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Efficient</span>
-                            </label>
-                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                              Analyze infrastructure when alerts fire.
-                            </p>
-                          </div>
-                          <Toggle
-                            checked={alertTriggeredAnalysis()}
-                            onChange={(e) => handleAlertTriggeredAnalysisChange(e.currentTarget.checked)}
-                            disabled={isUpdatingSettings() || alertAnalysisLocked()}
-                          />
-                        </div>
-                        <Show when={alertAnalysisLocked()}>
-                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href="https://pulserelay.pro/" target="_blank" rel="noreferrer">Upgrade to Pro</a>
-                            {' '}to enable alert-triggered analysis.
-                          </p>
-                        </Show>
-                      </div>
-
-                      {/* Auto-Fix Mode */}
-                      <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center justify-between gap-3">
-                          <div class="flex-1">
-                            <label class="text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                              Auto-Fix
-                              <span class="px-1 py-0.5 text-[9px] font-medium bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">Advanced</span>
-                            </label>
-                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                              Allow Patrol to execute fixes automatically.
-                            </p>
-                          </div>
-                          <Toggle
-                            checked={patrolAutoFix()}
-                            onChange={(e) => handleAutoFixChange(e.currentTarget.checked)}
-                            disabled={isUpdatingSettings() || autoFixLocked()}
-                          />
-                        </div>
-                        <Show when={autoFixLocked()}>
-                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href="https://pulserelay.pro/" target="_blank" rel="noreferrer">Upgrade to Pro</a>
-                            {' '}to enable auto-fix.
-                          </p>
-                        </Show>
-                        <Show when={!autoFixLocked() && patrolAutoFix()}>
-                          <p class="text-[10px] text-red-600 dark:text-red-400 mt-1 flex items-center gap-1">
-                            <AlertTriangleIcon class="w-3 h-3 flex-shrink-0" />
-                            Auto-Fix is ON. Patrol will attempt automatic remediation.
-                          </p>
-                        </Show>
-                      </div>
-
-                      {/* Auto-Fix Model - only when auto-fix is enabled */}
-                      <Show when={patrolAutoFix() && !autoFixLocked()}>
-                        <div>
-                          <label class="text-xs text-gray-600 dark:text-gray-400">Fix Model</label>
-                          <select
-                            value={autoFixModel()}
-                            onChange={(e) => handleAutoFixModelChange(e.currentTarget.value)}
-                            disabled={isUpdatingSettings()}
-                            class={`mt-1 w-full text-xs bg-gray-100 dark:bg-gray-700 border-0 rounded-md py-1.5 pl-2 pr-6 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 ${autoFixModelStale() ? 'ring-1 ring-amber-400' : ''}`}
-                            title={autoFixModelStale() ? `Model "${autoFixModel()}" is no longer available. Select a new model.` : ''}
-                          >
-                            <option value="">Use patrol model</option>
-                            <Show when={autoFixModelStale()}>
-                              <option value={autoFixModel()} disabled>
-                                {autoFixModel().split(':').pop()} (unavailable)
-                              </option>
-                            </Show>
-                            {Array.from(groupModelsByProvider(availableModels()).entries()).map(([provider, models]) => (
-                              <optgroup label={provider.charAt(0).toUpperCase() + provider.slice(1)}>
-                                {models.map((model) => (
-                                  <option value={model.id}>
-                                    {model.name || model.id.split(':').pop()}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            ))}
-                          </select>
-                        </div>
-                      </Show>
-
-                      {/* Save Button (for investigation limits + full mode unlock) */}
-                      <button
-                        onClick={saveAdvancedSettings}
-                        disabled={isSavingAdvanced()}
-                        class="w-full px-3 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Show when={isSavingAdvanced()}>
-                          <div class="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
-                        </Show>
-                        <Show when={!isSavingAdvanced()}>Save</Show>
-                      </button>
-                    </div>
+              {/* Advanced Settings Popover */}
+              <Show when={showAdvancedSettings()}>
+                <div class="absolute right-0 top-8 z-50 w-72 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Advanced Settings</h4>
+                    <button
+                      onClick={() => setShowAdvancedSettings(false)}
+                      class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      <XIcon class="w-4 h-4" />
+                    </button>
                   </div>
-                </Show>
-              </div>
+
+                  <div class="space-y-4">
+                    {/* Full Mode Unlock */}
+                    <div>
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="flex-1">
+                          <label class="text-xs font-medium text-red-600 dark:text-red-400">Unlock Full Autonomy</label>
+                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                            Enable the "Full" autonomy mode, allowing the AI to automatically fix critical issues without approval.
+                          </p>
+                        </div>
+                        <Toggle
+                          checked={!autoFixLocked() && fullModeUnlocked()}
+                          onChange={(e) => setFullModeUnlocked(e.currentTarget.checked)}
+                          disabled={autoFixLocked()}
+                        />
+                      </div>
+                      <Show when={autoFixLocked()}>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                          <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href="https://pulserelay.pro/" target="_blank" rel="noreferrer">Upgrade to Pro</a>
+                          {' '}to unlock Full Autonomy.
+                        </p>
+                      </Show>
+                      <Show when={!autoFixLocked() && fullModeUnlocked()}>
+                        <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
+                          <ShieldAlertIcon class="w-3 h-3 flex-shrink-0" />
+                          Full mode is available. Click Save to apply.
+                        </p>
+                      </Show>
+                      <Show when={!autoFixLocked() && !fullModeUnlocked() && autonomyLevel() === 'full'}>
+                        <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
+                          <ShieldAlertIcon class="w-3 h-3 flex-shrink-0" />
+                          Saving will downgrade to Assisted mode.
+                        </p>
+                      </Show>
+                    </div>
+
+                    {/* Alert-Triggered Analysis */}
+                    <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <div class="flex items-center justify-between gap-3">
+                        <div class="flex-1">
+                          <label class="text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                            Alert-Triggered Analysis
+                            <span class="px-1 py-0.5 text-[9px] font-medium bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Efficient</span>
+                          </label>
+                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                            Analyze infrastructure when alerts fire.
+                          </p>
+                        </div>
+                        <Toggle
+                          checked={alertTriggeredAnalysis()}
+                          onChange={(e) => handleAlertTriggeredAnalysisChange(e.currentTarget.checked)}
+                          disabled={isUpdatingSettings() || alertAnalysisLocked()}
+                        />
+                      </div>
+                      <Show when={alertAnalysisLocked()}>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                          <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href="https://pulserelay.pro/" target="_blank" rel="noreferrer">Upgrade to Pro</a>
+                          {' '}to enable alert-triggered analysis.
+                        </p>
+                      </Show>
+                    </div>
+
+
+
+                    {/* Save Button (for investigation limits + full mode unlock) */}
+                    <button
+                      onClick={saveAdvancedSettings}
+                      disabled={isSavingAdvanced()}
+                      class="w-full px-3 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Show when={isSavingAdvanced()}>
+                        <div class="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                      </Show>
+                      <Show when={!isSavingAdvanced()}>Save</Show>
+                    </button>
+                  </div>
+                </div>
+              </Show>
+            </div>
           </div>
         </div>
       </div>
@@ -1129,43 +1029,7 @@ export function AIIntelligence() {
         </div>
       </Show>
 
-      {/* Info Banner */}
-      {showInfoBanner() && (
-        <div class="flex-shrink-0 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-          <div class="flex items-start gap-3">
-            <div class="flex-shrink-0 p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-              <FlaskConicalIcon class="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
-                  Patrol Autonomy
-                </h3>
-                <span class="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded">
-                  BETA
-                </span>
-              </div>
-              <p class="text-xs text-gray-600 dark:text-gray-300 mb-2">
-                <strong>How it works:</strong> Pulse constantly monitors your infrastructure. When alert thresholds
-                are crossed, findings are created automatically. In <strong>Approval</strong>, <strong>Assisted</strong>, or <strong>Full</strong> mode,
-                Pulse Patrol investigates these findings - querying nodes, checking logs, and running diagnostics to
-                identify root causes. It then suggests fixes (Approval), applies safe fixes (Assisted), or applies all fixes (Full).
-                After a fix is applied, Patrol verifies the issue is actually resolved.
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                This is experimental. In Assisted mode, critical findings still require approval. Full mode (requires unlock in ⚙️) auto-fixes everything.
-              </p>
-            </div>
-            <button
-              onClick={dismissInfoBanner}
-              class="flex-shrink-0 p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              title="Dismiss"
-            >
-              <XIcon class="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+
 
       {/* Content */}
       <div class={`flex-1 overflow-auto p-4 transition-opacity ${!patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -1194,24 +1058,21 @@ export function AIIntelligence() {
             {/* Critical */}
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
               <div class="flex items-center gap-2">
-                <div class={`p-1.5 rounded ${
-                  summaryStats().criticalFindings > 0
-                    ? 'bg-red-100 dark:bg-red-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
-                }`}>
-                  <ShieldAlertIcon class={`w-4 h-4 ${
-                    summaryStats().criticalFindings > 0
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`} />
+                <div class={`p-1.5 rounded ${summaryStats().criticalFindings > 0
+                  ? 'bg-red-100 dark:bg-red-900/30'
+                  : 'bg-gray-100 dark:bg-gray-700'
+                  }`}>
+                  <ShieldAlertIcon class={`w-4 h-4 ${summaryStats().criticalFindings > 0
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                    }`} />
                 </div>
                 <div>
                   <p class="text-xs text-gray-500 dark:text-gray-400">Critical</p>
-                  <p class={`text-lg font-bold ${
-                    summaryStats().criticalFindings > 0
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`}>
+                  <p class={`text-lg font-bold ${summaryStats().criticalFindings > 0
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                    }`}>
                     {summaryStats().criticalFindings}
                   </p>
                 </div>
@@ -1221,24 +1082,21 @@ export function AIIntelligence() {
             {/* Warnings */}
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
               <div class="flex items-center gap-2">
-                <div class={`p-1.5 rounded ${
-                  summaryStats().warningFindings > 0
-                    ? 'bg-amber-100 dark:bg-amber-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
-                }`}>
-                  <ActivityIcon class={`w-4 h-4 ${
-                    summaryStats().warningFindings > 0
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`} />
+                <div class={`p-1.5 rounded ${summaryStats().warningFindings > 0
+                  ? 'bg-amber-100 dark:bg-amber-900/30'
+                  : 'bg-gray-100 dark:bg-gray-700'
+                  }`}>
+                  <ActivityIcon class={`w-4 h-4 ${summaryStats().warningFindings > 0
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                    }`} />
                 </div>
                 <div>
                   <p class="text-xs text-gray-500 dark:text-gray-400">Warnings</p>
-                  <p class={`text-lg font-bold ${
-                    summaryStats().warningFindings > 0
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`}>
+                  <p class={`text-lg font-bold ${summaryStats().warningFindings > 0
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                    }`}>
                     {summaryStats().warningFindings}
                   </p>
                 </div>
@@ -1248,26 +1106,23 @@ export function AIIntelligence() {
             {/* Investigating (only meaningful in Approval/Auto mode) */}
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
               <div class="flex items-center gap-2">
-                <div class={`p-1.5 rounded ${
-                  summaryStats().investigatingCount > 0
-                    ? 'bg-blue-100 dark:bg-blue-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
-                }`}>
-                  <BrainCircuitIcon class={`w-4 h-4 ${
-                    summaryStats().investigatingCount > 0
-                      ? 'text-blue-600 dark:text-blue-400 animate-pulse'
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`} />
+                <div class={`p-1.5 rounded ${summaryStats().investigatingCount > 0
+                  ? 'bg-blue-100 dark:bg-blue-900/30'
+                  : 'bg-gray-100 dark:bg-gray-700'
+                  }`}>
+                  <BrainCircuitIcon class={`w-4 h-4 ${summaryStats().investigatingCount > 0
+                    ? 'text-blue-600 dark:text-blue-400 animate-pulse'
+                    : 'text-gray-400 dark:text-gray-500'
+                    }`} />
                 </div>
                 <div>
                   <p class="text-xs text-gray-500 dark:text-gray-400">
                     {autonomyLevel() === 'monitor' ? 'Discovering' : 'Investigating'}
                   </p>
-                  <p class={`text-lg font-bold ${
-                    summaryStats().investigatingCount > 0
-                      ? 'text-blue-600 dark:text-blue-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`}>
+                  <p class={`text-lg font-bold ${summaryStats().investigatingCount > 0
+                    ? 'text-blue-600 dark:text-blue-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                    }`}>
                     {autonomyLevel() === 'monitor' ? '—' : summaryStats().investigatingCount}
                   </p>
                 </div>
@@ -1275,30 +1130,26 @@ export function AIIntelligence() {
             </div>
 
             {/* Awaiting Approval */}
-            <div class={`rounded-lg border p-3 ${
-              aiIntelligenceStore.pendingApprovalCount > 0
-                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700'
-                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-            }`}>
+            <div class={`rounded-lg border p-3 ${aiIntelligenceStore.pendingApprovalCount > 0
+              ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700'
+              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+              }`}>
               <div class="flex items-center gap-2">
-                <div class={`p-1.5 rounded ${
-                  aiIntelligenceStore.pendingApprovalCount > 0
-                    ? 'bg-amber-100 dark:bg-amber-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
-                }`}>
-                  <ShieldAlertIcon class={`w-4 h-4 ${
-                    aiIntelligenceStore.pendingApprovalCount > 0
-                      ? 'text-amber-600 dark:text-amber-400 animate-pulse'
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`} />
+                <div class={`p-1.5 rounded ${aiIntelligenceStore.pendingApprovalCount > 0
+                  ? 'bg-amber-100 dark:bg-amber-900/30'
+                  : 'bg-gray-100 dark:bg-gray-700'
+                  }`}>
+                  <ShieldAlertIcon class={`w-4 h-4 ${aiIntelligenceStore.pendingApprovalCount > 0
+                    ? 'text-amber-600 dark:text-amber-400 animate-pulse'
+                    : 'text-gray-400 dark:text-gray-500'
+                    }`} />
                 </div>
                 <div>
                   <p class="text-xs text-gray-500 dark:text-gray-400">Awaiting Approval</p>
-                  <p class={`text-lg font-bold ${
-                    aiIntelligenceStore.pendingApprovalCount > 0
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`}>
+                  <p class={`text-lg font-bold ${aiIntelligenceStore.pendingApprovalCount > 0
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                    }`}>
                     {aiIntelligenceStore.pendingApprovalCount}
                   </p>
                 </div>
@@ -1308,24 +1159,21 @@ export function AIIntelligence() {
             {/* Fixed (issues resolved by Patrol) */}
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
               <div class="flex items-center gap-2">
-                <div class={`p-1.5 rounded ${
-                  summaryStats().fixedCount > 0
-                    ? 'bg-green-100 dark:bg-green-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
-                }`}>
-                  <CheckCircleIcon class={`w-4 h-4 ${
-                    summaryStats().fixedCount > 0
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`} />
+                <div class={`p-1.5 rounded ${summaryStats().fixedCount > 0
+                  ? 'bg-green-100 dark:bg-green-900/30'
+                  : 'bg-gray-100 dark:bg-gray-700'
+                  }`}>
+                  <CheckCircleIcon class={`w-4 h-4 ${summaryStats().fixedCount > 0
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                    }`} />
                 </div>
                 <div>
                   <p class="text-xs text-gray-500 dark:text-gray-400">Fixed</p>
-                  <p class={`text-lg font-bold ${
-                    summaryStats().fixedCount > 0
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`}>
+                  <p class={`text-lg font-bold ${summaryStats().fixedCount > 0
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                    }`}>
                     {summaryStats().fixedCount}
                   </p>
                 </div>
@@ -1338,19 +1186,17 @@ export function AIIntelligence() {
             <button
               type="button"
               onClick={() => setActiveTab('findings')}
-              class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab() === 'findings'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
+              class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab() === 'findings'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
             >
               Findings
               <Show when={summaryStats().totalActive > 0}>
-                <span class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${
-                  summaryStats().criticalFindings > 0
-                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                }`}>
+                <span class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${summaryStats().criticalFindings > 0
+                  ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                  }`}>
                   {summaryStats().totalActive}
                 </span>
               </Show>
@@ -1358,11 +1204,10 @@ export function AIIntelligence() {
             <button
               type="button"
               onClick={() => { setActiveTab('history'); setFindingsFilterOverride(undefined); }}
-              class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab() === 'history'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
+              class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab() === 'history'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
             >
               Run History
               <Show when={displayRunHistory().length > 0}>
@@ -1445,11 +1290,10 @@ export function AIIntelligence() {
                       if (run.id === '__live__') {
                         const hasError = () => !!patrolStream.errorMessage();
                         return (
-                          <div class={`rounded-md border transition-colors ${
-                            hasError()
-                              ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
-                              : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
-                          }`}>
+                          <div class={`rounded-md border transition-colors ${hasError()
+                            ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
+                            : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                            }`}>
                             <div class="px-3 py-2">
                               <div class="flex flex-wrap items-center gap-2 text-xs">
                                 <Show when={!hasError()}>
@@ -1490,31 +1334,28 @@ export function AIIntelligence() {
                       const duration = formatDurationMs(run.duration_ms);
                       const isSelected = () => selectedRun()?.id === run.id;
                       return (
-                        <div class={`rounded-md border transition-colors ${
-                          isSelected()
-                            ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
-                            : 'border-gray-200 dark:border-gray-700'
-                        }`}>
+                        <div class={`rounded-md border transition-colors ${isSelected()
+                          ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                          : 'border-gray-200 dark:border-gray-700'
+                          }`}>
                           <button
                             type="button"
                             onClick={() => setSelectedRun(isSelected() ? null : run)}
-                            class={`w-full text-left px-3 py-2 rounded-md transition-colors ${
-                              !isSelected() ? 'hover:bg-gray-50 dark:hover:bg-gray-700/40' : ''
-                            }`}
+                            class={`w-full text-left px-3 py-2 rounded-md transition-colors ${!isSelected() ? 'hover:bg-gray-50 dark:hover:bg-gray-700/40' : ''
+                              }`}
                           >
                             <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                               <span class="text-gray-900 dark:text-gray-100 font-medium">
                                 {formatRelativeTime(run.started_at)}
                               </span>
-                              <span class={`px-1.5 py-0.5 rounded ${
-                                run.status === 'critical'
-                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                                  : run.status === 'issues_found'
-                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                                    : run.status === 'error'
-                                      ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                                      : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                              }`}>
+                              <span class={`px-1.5 py-0.5 rounded ${run.status === 'critical'
+                                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                : run.status === 'issues_found'
+                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                  : run.status === 'error'
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                    : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                }`}>
                                 {run.status.replace(/_/g, ' ')}
                               </span>
                               <span>{formatTriggerReason(run.trigger_reason)}</span>
@@ -1546,9 +1387,9 @@ export function AIIntelligence() {
                                 <p>
                                   {run.resources_checked > 0
                                     ? <>Scanned <strong>{run.resources_checked}</strong> resource{run.resources_checked !== 1 ? 's' : ''}{' '}
-                                        {formatDurationMs(run.duration_ms) ? <>in <strong>{formatDurationMs(run.duration_ms)}</strong></> : ''}{' '}
-                                        {run.tool_call_count > 0 ? <>using <strong>{run.tool_call_count}</strong> tool call{run.tool_call_count !== 1 ? 's' : ''}</> : ''}.{' '}
-                                      </>
+                                      {formatDurationMs(run.duration_ms) ? <>in <strong>{formatDurationMs(run.duration_ms)}</strong></> : ''}{' '}
+                                      {run.tool_call_count > 0 ? <>using <strong>{run.tool_call_count}</strong> tool call{run.tool_call_count !== 1 ? 's' : ''}</> : ''}.{' '}
+                                    </>
                                     : <>Patrol completed{formatDurationMs(run.duration_ms) ? <> in <strong>{formatDurationMs(run.duration_ms)}</strong></> : ''}.{' '}</>
                                   }
                                   {run.new_findings > 0

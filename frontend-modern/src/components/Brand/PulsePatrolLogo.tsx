@@ -21,9 +21,8 @@ export const PulsePatrolLogo: Component<PulsePatrolLogoProps> = (props) => {
       stroke-linejoin="round"
     >
       <title>{title()}</title>
-      {/* Shield with check */}
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      <path d="m9 12 2 2 4-4" />
+      {/* Infinity loop */}
+      <path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 1 0 0-8c-2 0-4 1.33-6 4Z" />
     </svg>
   );
 };
