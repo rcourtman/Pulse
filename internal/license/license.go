@@ -235,7 +235,8 @@ func (s *Service) HasFeature(feature string) bool {
 	defer s.mu.Unlock()
 
 	if s.license == nil {
-		return false
+		// No license activated — still grant free tier features
+		return TierHasFeature(TierFree, feature)
 	}
 	if s.license.IsExpired() {
 		// If license just expired and grace period not yet set, set it now
@@ -247,7 +248,8 @@ func (s *Service) HasFeature(feature string) bool {
 		if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
 			return s.license.HasFeature(feature)
 		}
-		return false
+		// License expired and grace period over — fall back to free tier
+		return TierHasFeature(TierFree, feature)
 	}
 	return s.license.HasFeature(feature)
 }
@@ -357,6 +359,9 @@ func (s *Service) Status() *LicenseStatus {
 			status.InGracePeriod = true
 			graceEnd := s.license.GracePeriodEnd.Format(time.RFC3339)
 			status.GracePeriodEnd = &graceEnd
+		} else {
+			// Expired past grace — fall back to free tier features only
+			status.Features = TierFeatures[TierFree]
 		}
 	}
 

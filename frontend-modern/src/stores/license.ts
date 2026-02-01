@@ -27,7 +27,7 @@ export async function loadLicenseStatus(force = false): Promise<void> {
             tier: 'free',
             is_lifetime: false,
             days_remaining: 0,
-            features: [],
+            features: ['update_alerts', 'sso', 'ai_patrol'],
         });
         setLoaded(true);
     } finally {
@@ -45,10 +45,11 @@ export const isPro = createMemo(() => {
 
 /**
  * Check if a specific feature is enabled by the current license.
+ * Free tier features (e.g., ai_patrol) are available even without a valid Pro license.
  */
 export function hasFeature(feature: string): boolean {
     const current = licenseStatus();
-    if (!current?.valid) return false;
+    if (!current) return false;
     return current.features.includes(feature);
 }
 

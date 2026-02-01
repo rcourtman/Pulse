@@ -1357,7 +1357,7 @@ func (r *Router) setupRoutes() {
 	// Read endpoints (findings, history, runs) return redacted preview data when unlicensed
 	// Mutation endpoints (run, acknowledge, dismiss, etc.) return 402 to prevent unauthorized actions
 	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolStatus))
-	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandlePatrolStream)))
+	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, r.aiSettingsHandler.HandlePatrolStream))
 	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -1370,65 +1370,44 @@ func (r *Router) setupRoutes() {
 		}
 	}))
 	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, r.aiSettingsHandler.HandleGetFindingsHistory))
-	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleForcePatrol)))
-	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleAcknowledgeFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, r.aiSettingsHandler.HandleForcePatrol))
+	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleAcknowledgeFinding))
 	// Dismiss and resolve don't require Pro license - users should be able to clear findings they can see
 	// This is especially important for users who accumulated findings before fixing the patrol-without-AI bug
 	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, r.aiSettingsHandler.HandleDismissFinding))
 	r.mux.HandleFunc("/api/ai/patrol/findings/note", RequireAuth(r.config, r.aiSettingsHandler.HandleSetFindingNote))
-	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleSuppressFinding)))
-	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleSnoozeFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, r.aiSettingsHandler.HandleSuppressFinding))
+	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, r.aiSettingsHandler.HandleSnoozeFinding))
 	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, r.aiSettingsHandler.HandleResolveFinding))
 	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolRunHistory))
-	// Suppression rules management (also Pro-only since they control LLM behavior)
-	// GET returns empty array for unlicensed, POST returns 402
+	// Suppression rules management - free with patrol
 	r.mux.HandleFunc("/api/ai/patrol/suppressions", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			// GET: return empty array if unlicensed
-			if err := r.licenseHandlers.Service(req.Context()).RequireFeature(license.FeatureAIPatrol); err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.Header().Set("X-License-Required", "true")
-				w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-				w.Write([]byte("[]"))
-				return
-			}
 			r.aiSettingsHandler.HandleGetSuppressionRules(w, req)
 		case http.MethodPost:
-			// POST: return 402 if unlicensed
-			if err := r.licenseHandlers.Service(req.Context()).RequireFeature(license.FeatureAIPatrol); err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusPaymentRequired)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":       "license_required",
-					"message":     err.Error(),
-					"feature":     license.FeatureAIPatrol,
-					"upgrade_url": "https://pulserelay.pro/",
-				})
-				return
-			}
 			r.aiSettingsHandler.HandleAddSuppressionRule(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
-	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleDeleteSuppressionRule)))
-	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, LicenseGatedEmptyResponse(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleGetDismissedFindings)))
+	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, r.aiSettingsHandler.HandleDeleteSuppressionRule))
+	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, r.aiSettingsHandler.HandleGetDismissedFindings))
 
-	// Patrol Autonomy - autonomous investigation and remediation of findings (requires Pro license)
+	// Patrol Autonomy - monitor/approval free, assisted/full require Pro (enforced in handlers)
 	r.mux.HandleFunc("/api/ai/patrol/autonomy", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			r.aiSettingsHandler.HandleGetPatrolAutonomy(w, req)
 		case http.MethodPut:
-			RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, r.aiSettingsHandler.HandleUpdatePatrolAutonomy)(w, req)
+			r.aiSettingsHandler.HandleUpdatePatrolAutonomy(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
 
-	// Investigation endpoints - view and trigger investigations of findings
-	r.mux.HandleFunc("/api/ai/findings/", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIPatrol, func(w http.ResponseWriter, req *http.Request) {
+	// Investigation endpoints - viewing and reinvestigation are free, fix execution (reapprove) requires Pro
+	r.mux.HandleFunc("/api/ai/findings/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		path := req.URL.Path
 		switch {
 		case strings.HasSuffix(path, "/investigation/messages"):
@@ -1438,11 +1417,12 @@ func (r *Router) setupRoutes() {
 		case strings.HasSuffix(path, "/reinvestigate"):
 			r.aiSettingsHandler.HandleReinvestigateFinding(w, req)
 		case strings.HasSuffix(path, "/reapprove"):
-			r.aiSettingsHandler.HandleReapproveInvestigationFix(w, req)
+			// Fix execution requires Pro license
+			RequireLicenseFeature(r.licenseHandlers, license.FeatureAIAutoFix, r.aiSettingsHandler.HandleReapproveInvestigationFix)(w, req)
 		default:
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
-	})))
+	}))
 
 	// AI Intelligence endpoints - expose learned patterns, correlations, and predictions
 	// Unified intelligence endpoint - aggregates all AI subsystems into a single view
@@ -2469,6 +2449,12 @@ func (r *Router) ShutdownAIIntelligence() {
 	if alertBridge := r.aiSettingsHandler.GetAlertBridge(); alertBridge != nil {
 		alertBridge.Stop()
 		log.Debug().Msg("AI Intelligence: Alert bridge stopped")
+	}
+
+	// 2. Stop patrol service (waits for in-flight investigations, force-saves state)
+	if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
+		patrolSvc.Stop()
+		log.Debug().Msg("AI Intelligence: Patrol service stopped")
 	}
 
 	// 3. Stop trigger manager (stop event-driven patrol scheduling)

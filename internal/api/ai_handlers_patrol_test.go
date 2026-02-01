@@ -43,6 +43,9 @@ func (m *MockOrchestrator) CanStartInvestigation() bool {
 func (m *MockOrchestrator) ReinvestigateFinding(ctx context.Context, findingID, autonomyLevel string) error {
 	return nil
 }
+func (m *MockOrchestrator) Shutdown(ctx context.Context) error {
+	return nil
+}
 
 func TestHandleGetPatrolStatus_Integration(t *testing.T) {
 	// Setup temporary persistence

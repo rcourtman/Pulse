@@ -154,7 +154,7 @@ export const ProLicensePanel: Component = () => {
     <div class="space-y-6">
       <SettingsPanel
         title="Pulse Pro License"
-        description="Activate your Pulse Pro license to unlock Pulse Patrol automation features."
+        description="Activate your Pulse Pro license to unlock auto-fix, alert-triggered AI, and advanced features."
         action={
           <button
             class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-60"

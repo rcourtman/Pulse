@@ -266,6 +266,42 @@ func (h *AISettingsHandler) SetConfig(cfg *config.Config) {
 	h.legacyConfig = cfg
 }
 
+// setSSECORSHeaders validates the request origin against the configured AllowedOrigins
+// and sets CORS headers only for allowed origins. This prevents arbitrary origin reflection.
+func (h *AISettingsHandler) setSSECORSHeaders(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return
+	}
+
+	cfg := h.getConfig(r.Context())
+	if cfg == nil {
+		return
+	}
+
+	allowed := cfg.AllowedOrigins
+	if allowed == "" {
+		return
+	}
+
+	if allowed == "*" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+	} else {
+		for _, o := range strings.Split(allowed, ",") {
+			if strings.TrimSpace(o) == origin {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				break
+			}
+		}
+	}
+
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Cookie")
+	w.Header().Set("Vary", "Origin")
+}
+
 // SetStateProvider sets the state provider for infrastructure context
 func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 	h.stateProvider = sp
@@ -810,7 +846,20 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	// Wire up Prometheus metrics for investigation outcomes and fix verification
 	adapter.SetMetricsCallback()
 
+	// Wire up license checker for defense-in-depth autonomy clamping
+	// This prevents auto-fix execution even if autonomy level was somehow set to assisted/full without Pro
+	adapter.SetLicenseChecker(&licenseCheckerForOrchestrator{svc: svc})
+
 	log.Info().Str("orgID", orgID).Msg("Investigation orchestrator configured for patrol service")
+}
+
+// licenseCheckerForOrchestrator adapts *ai.Service to investigation.LicenseChecker
+type licenseCheckerForOrchestrator struct {
+	svc *ai.Service
+}
+
+func (l *licenseCheckerForOrchestrator) HasFeature(feature string) bool {
+	return l.svc.HasLicenseFeature(feature)
 }
 
 // findingsStoreWrapper wraps *ai.FindingsStore to implement investigation.AIFindingsStore
@@ -1123,18 +1172,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	if req.UseProactiveThresholds != nil {
-		// Proactive thresholds require Pro license with ai_patrol feature
-		if *req.UseProactiveThresholds && !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIPatrol) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "license_required",
-				"message":     "Proactive Thresholds requires Pulse Pro",
-				"feature":     ai.FeatureAIPatrol,
-				"upgrade_url": "https://pulserelay.pro/",
-			})
-			return
-		}
 		settings.UseProactiveThresholds = *req.UseProactiveThresholds
 	}
 
@@ -1233,19 +1270,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 			return
 		}
 
-		// Enabling background patrol requires Pro license
-		if minutes > 0 && !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIPatrol) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "license_required",
-				"message":     "Background Pulse Patrol requires Pulse Pro",
-				"feature":     ai.FeatureAIPatrol,
-				"upgrade_url": "https://pulserelay.pro/",
-			})
-			return
-		}
-
 		settings.PatrolIntervalMinutes = minutes
 		settings.PatrolSchedulePreset = "" // Clear preset when using custom minutes
 		if minutes > 0 {
@@ -1258,18 +1282,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		preset := strings.ToLower(strings.TrimSpace(*req.PatrolSchedulePreset))
 		switch preset {
 		case "15min", "1hr", "6hr", "12hr", "daily":
-			// Enabling background patrol requires Pro license
-			if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIPatrol) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusPaymentRequired)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":       "license_required",
-					"message":     "Background Pulse Patrol requires Pulse Pro",
-					"feature":     ai.FeatureAIPatrol,
-					"upgrade_url": "https://pulserelay.pro/",
-				})
-				return
-			}
 			settings.PatrolSchedulePreset = preset
 			settings.PatrolIntervalMinutes = config.PresetToMinutes(preset)
 			settings.PatrolEnabled = true // Enable patrol when setting schedule preset
@@ -1731,18 +1743,6 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 			})
 			return
 		}
-	} else if useCase == "patrol" {
-		if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIPatrol) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "license_required",
-				"message":     "Pulse Patrol reasoning requires Pulse Pro",
-				"feature":     ai.FeatureAIPatrol,
-				"upgrade_url": "https://pulserelay.pro/",
-			})
-			return
-		}
 	}
 
 	if strings.TrimSpace(req.Prompt) == "" {
@@ -1779,7 +1779,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("AI execution failed")
-		http.Error(w, "Pulse Assistant request failed: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Pulse Assistant request failed", http.StatusInternalServerError)
 		return
 	}
 
@@ -1840,7 +1840,7 @@ func (h *AISettingsHandler) HandleAnalyzeKubernetesCluster(w http.ResponseWriter
 			return
 		default:
 			log.Error().Err(err).Str("cluster_id", req.ClusterID).Msg("Kubernetes AI analysis failed")
-			http.Error(w, "Pulse Assistant request failed: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Pulse Assistant request failed", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -1862,15 +1862,7 @@ func (h *AISettingsHandler) HandleAnalyzeKubernetesCluster(w http.ResponseWriter
 // HandleExecuteStream executes an AI prompt with SSE streaming (POST /api/ai/execute/stream)
 func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.Request) {
 	// Handle CORS for dev mode (frontend on different port)
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		// Must use specific origin (not *) when credentials are included
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Cookie")
-		w.Header().Set("Vary", "Origin")
-	}
+	h.setSSECORSHeaders(w, r)
 
 	// Handle preflight
 	if r.Method == http.MethodOptions {
@@ -1913,18 +1905,6 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 				"error":       "license_required",
 				"message":     "Pulse Patrol Auto-Fix requires Pulse Pro",
 				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulserelay.pro/",
-			})
-			return
-		}
-	} else if useCase == "patrol" {
-		if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIPatrol) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "license_required",
-				"message":     "Pulse Patrol reasoning requires Pulse Pro",
-				"feature":     ai.FeatureAIPatrol,
 				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
@@ -2084,8 +2064,8 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 
 	if err != nil {
 		log.Error().Err(err).Msg("AI streaming execution failed")
-		// Send error event
-		errEvent := ai.StreamEvent{Type: "error", Data: err.Error()}
+		// Send error event — use generic message to avoid leaking internal details
+		errEvent := ai.StreamEvent{Type: "error", Data: "AI request failed. Please try again."}
 		data, _ := json.Marshal(errEvent)
 		safeWrite([]byte("data: " + string(data) + "\n\n"))
 		return
@@ -2510,14 +2490,7 @@ type AIInvestigateAlertRequest struct {
 // This is a dedicated endpoint for one-click alert investigation from the UI
 func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *http.Request) {
 	// Handle CORS
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Cookie")
-		w.Header().Set("Vary", "Origin")
-	}
+	h.setSSECORSHeaders(w, r)
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
@@ -2683,7 +2656,7 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 
 	if err != nil {
 		log.Error().Err(err).Msg("AI alert investigation failed")
-		errEvent := ai.StreamEvent{Type: "error", Data: err.Error()}
+		errEvent := ai.StreamEvent{Type: "error", Data: "Alert investigation failed. Please try again."}
 		data, _ := json.Marshal(errEvent)
 		safeWrite([]byte("data: " + string(data) + "\n\n"))
 		return
@@ -3124,8 +3097,8 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	// Determine license status for Pro feature gating
 	// GetLicenseState returns accurate state: none, active, expired, grace_period
 	licenseStatus, _ := h.GetAIService(r.Context()).GetLicenseState()
-	// Check specifically for ai_patrol feature using canonical license constant
-	hasPatrolFeature := h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIPatrol)
+	// Check for auto-fix feature - patrol itself is free, auto-fix requires Pro
+	hasAutoFixFeature := h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix)
 
 	// Get fixed count from investigation orchestrator
 	fixedCount := 0
@@ -3147,10 +3120,10 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		FixedCount:       fixedCount,
 		BlockedReason:    status.BlockedReason,
 		BlockedAt:        status.BlockedAt,
-		LicenseRequired:  !hasPatrolFeature,
+		LicenseRequired:  !hasAutoFixFeature,
 		LicenseStatus:    licenseStatus,
 	}
-	if !hasPatrolFeature {
+	if !hasAutoFixFeature {
 		response.UpgradeURL = "https://pulserelay.pro/"
 	}
 	response.Summary.Critical = summary.Critical
@@ -3235,10 +3208,10 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 	}
 
 	// Set SSE headers
+	h.setSSECORSHeaders(w, r)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -3276,99 +3249,6 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func previewTitle(category ai.FindingCategory) string {
-	switch category {
-	case ai.FindingCategoryPerformance:
-		return "Performance issue detected"
-	case ai.FindingCategoryCapacity:
-		return "Capacity issue detected"
-	case ai.FindingCategoryReliability:
-		return "Reliability issue detected"
-	case ai.FindingCategoryBackup:
-		return "Backup issue detected"
-	case ai.FindingCategorySecurity:
-		return "Security issue detected"
-	default:
-		return "Potential issue detected"
-	}
-}
-
-func previewResourceName(resourceType string) string {
-	switch resourceType {
-	case "node":
-		return "Node"
-	case "vm":
-		return "VM"
-	case "container", "oci_container":
-		return "Container"
-	case "docker_host":
-		return "Docker host"
-	case "docker_container":
-		return "Docker container"
-	case "storage":
-		return "Storage"
-	case "pbs":
-		return "PBS server"
-	case "pbs_datastore":
-		return "PBS datastore"
-	case "pbs_job":
-		return "PBS job"
-	case "host":
-		return "Host"
-	case "host_raid":
-		return "RAID array"
-	case "host_sensor":
-		return "Host sensor"
-	default:
-		return "Resource"
-	}
-}
-
-func redactFindingsForPreview(findings []*ai.Finding) []*ai.Finding {
-	redacted := make([]*ai.Finding, 0, len(findings))
-	for _, finding := range findings {
-		if finding == nil {
-			continue
-		}
-		copy := *finding
-		copy.Key = ""
-		copy.ResourceID = ""
-		copy.ResourceName = previewResourceName(finding.ResourceType)
-		copy.Node = ""
-		copy.Title = previewTitle(finding.Category)
-		copy.Description = "Upgrade to view full analysis."
-		copy.Recommendation = ""
-		copy.Evidence = ""
-		copy.AlertID = ""
-		copy.AcknowledgedAt = nil
-		copy.SnoozedUntil = nil
-		copy.ResolvedAt = nil
-		copy.AutoResolved = false
-		copy.DismissedReason = ""
-		copy.UserNote = ""
-		copy.TimesRaised = 0
-		copy.Suppressed = false
-		copy.Source = "preview"
-		redacted = append(redacted, &copy)
-	}
-	return redacted
-}
-
-func redactPatrolRunHistory(runs []ai.PatrolRunRecord) []ai.PatrolRunRecord {
-	redacted := make([]ai.PatrolRunRecord, len(runs))
-	for i, run := range runs {
-		copy := run
-		copy.AIAnalysis = ""
-		copy.InputTokens = 0
-		copy.OutputTokens = 0
-		copy.FindingIDs = nil
-		copy.ToolCalls = nil
-		copy.ToolCallCount = 0
-		redacted[i] = copy
-	}
-	return redacted
-}
-
 // HandleGetPatrolFindings returns all active findings (GET /api/ai/patrol/findings)
 func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -3392,12 +3272,6 @@ func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *ht
 		findings = patrol.GetFindingsForResource(resourceID)
 	} else {
 		findings = patrol.GetAllFindings()
-	}
-
-	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIPatrol) {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-		findings = redactFindingsForPreview(findings)
 	}
 
 	if err := utils.WriteJSONResponse(w, findings); err != nil {
@@ -4100,12 +3974,6 @@ func (h *AISettingsHandler) HandleGetFindingsHistory(w http.ResponseWriter, r *h
 
 	findings := patrol.GetFindingsHistory(startTime)
 
-	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIPatrol) {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-		findings = redactFindingsForPreview(findings)
-	}
-
 	if err := utils.WriteJSONResponse(w, findings); err != nil {
 		log.Error().Err(err).Msg("Failed to write findings history response")
 	}
@@ -4146,12 +4014,6 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 		for i := range runs {
 			runs[i].ToolCalls = nil
 		}
-	}
-
-	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIPatrol) {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-		runs = redactPatrolRunHistory(runs)
 	}
 
 	if err := utils.WriteJSONResponse(w, runs); err != nil {
@@ -5409,8 +5271,15 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 		return
 	}
 
+	autonomyLevel := cfg.GetPatrolAutonomyLevel()
+	// Clamp for free tier: assisted/full require Pro (ai_autofix)
+	hasAutoFix := aiService.HasLicenseFeature(license.FeatureAIAutoFix)
+	if !hasAutoFix && (autonomyLevel == config.PatrolAutonomyAssisted || autonomyLevel == config.PatrolAutonomyFull) {
+		autonomyLevel = config.PatrolAutonomyApproval
+	}
+
 	settings := PatrolAutonomyResponse{
-		AutonomyLevel:           cfg.GetPatrolAutonomyLevel(),
+		AutonomyLevel:           autonomyLevel,
 		FullModeUnlocked:        cfg.PatrolFullModeUnlocked,
 		InvestigationBudget:     cfg.GetPatrolInvestigationBudget(),
 		InvestigationTimeoutSec: int(cfg.GetPatrolInvestigationTimeout().Seconds()),
@@ -5437,6 +5306,19 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 	if !config.IsValidPatrolAutonomyLevel(req.AutonomyLevel) {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_autonomy_level",
 			fmt.Sprintf("Invalid autonomy level: %s. Must be 'monitor', 'approval', 'assisted', or 'full'", req.AutonomyLevel), nil)
+		return
+	}
+
+	// License-based autonomy clamping: assisted/full require Pro (ai_autofix)
+	hasAutoFix := h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix)
+	if !hasAutoFix && (req.AutonomyLevel == config.PatrolAutonomyAssisted || req.AutonomyLevel == config.PatrolAutonomyFull) {
+		writeErrorResponse(w, http.StatusPaymentRequired, "license_required",
+			"Assisted and Full autonomy require Pulse Pro. Free tier supports Monitor and Approval modes.",
+			map[string]string{
+				"feature":       license.FeatureAIAutoFix,
+				"upgrade_url":   "https://pulserelay.pro/",
+				"allowed_modes": "monitor,approval",
+			})
 		return
 	}
 

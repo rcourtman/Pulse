@@ -21,7 +21,8 @@ func TestTierHasFeature(t *testing.T) {
 		feature  string
 		expected bool
 	}{
-		{"free has no AI patrol", TierFree, FeatureAIPatrol, false},
+		{"free has AI patrol (BYOK)", TierFree, FeatureAIPatrol, true},
+		{"free has no AI autofix", TierFree, FeatureAIAutoFix, false},
 		{"pro has AI patrol", TierPro, FeatureAIPatrol, true},
 		{"pro has AI alerts", TierPro, FeatureAIAlerts, true},
 		{"pro has AI autofix", TierPro, FeatureAIAutoFix, true},
@@ -178,9 +179,12 @@ func TestLicenseExpiration(t *testing.T) {
 func TestServiceFeatureGating(t *testing.T) {
 	service := NewService()
 
-	// No license - should not have features
-	if service.HasFeature(FeatureAIPatrol) {
-		t.Error("Should not have feature without license")
+	// No license - should have free tier features but not Pro features
+	if !service.HasFeature(FeatureAIPatrol) {
+		t.Error("Should have Patrol in free tier even without license")
+	}
+	if service.HasFeature(FeatureAIAutoFix) {
+		t.Error("Should not have auto-fix without license")
 	}
 	if service.IsValid() {
 		t.Error("Should not be valid without license")

@@ -49,6 +49,7 @@ var TierFeatures = map[Tier][]string{
 		// Free tier includes update alerts (container image updates) - basic monitoring feature
 		FeatureUpdateAlerts,
 		FeatureSSO,
+		FeatureAIPatrol, // Patrol is free with BYOK - auto-fix requires Pro
 	},
 	TierPro: {
 		FeatureAIPatrol,

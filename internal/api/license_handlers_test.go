@@ -67,13 +67,25 @@ func TestHandleLicenseFeatures_NoLicense(t *testing.T) {
 		t.Fatalf("expected upgrade_url to be set")
 	}
 
-	expectedFeatures := []string{
+	// Patrol is in free tier, so it should be true even without a license
+	freeTierFeatures := []string{
 		license.FeatureAIPatrol,
+	}
+	for _, feature := range freeTierFeatures {
+		if value, ok := resp.Features[feature]; !ok {
+			t.Fatalf("expected feature %q in response", feature)
+		} else if !value {
+			t.Fatalf("expected feature %q to be true in free tier", feature)
+		}
+	}
+
+	// These Pro features should be false without a license
+	proOnlyFeatures := []string{
 		license.FeatureAIAlerts,
 		license.FeatureAIAutoFix,
 		license.FeatureKubernetesAI,
 	}
-	for _, feature := range expectedFeatures {
+	for _, feature := range proOnlyFeatures {
 		if value, ok := resp.Features[feature]; !ok {
 			t.Fatalf("expected feature %q in response", feature)
 		} else if value {
@@ -419,7 +431,8 @@ func TestRequireLicenseFeature_NoLicense(t *testing.T) {
 	handler := createTestHandler(t)
 
 	handlerCalled := false
-	wrappedHandler := RequireLicenseFeature(handler, license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
+	// Use a Pro-only feature (ai_autofix) to test that middleware blocks without license
+	wrappedHandler := RequireLicenseFeature(handler, license.FeatureAIAutoFix, func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
@@ -450,7 +463,8 @@ func TestRequireLicenseFeature_WithLicense(t *testing.T) {
 	}
 
 	handlerCalled := false
-	wrappedHandler := RequireLicenseFeature(handler, license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
+	// Use a Pro-only feature (ai_autofix) to test that middleware passes with license
+	wrappedHandler := RequireLicenseFeature(handler, license.FeatureAIAutoFix, func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
@@ -476,7 +490,8 @@ func TestLicenseGatedEmptyResponse_NoLicense(t *testing.T) {
 	handler := createTestHandler(t)
 
 	handlerCalled := false
-	wrappedHandler := LicenseGatedEmptyResponse(handler, license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
+	// Use a Pro-only feature (ai_autofix) to test gating without license
+	wrappedHandler := LicenseGatedEmptyResponse(handler, license.FeatureAIAutoFix, func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"data":"real"}`))
@@ -512,7 +527,8 @@ func TestLicenseGatedEmptyResponse_WithLicense(t *testing.T) {
 	}
 
 	handlerCalled := false
-	wrappedHandler := LicenseGatedEmptyResponse(handler, license.FeatureAIPatrol, func(w http.ResponseWriter, r *http.Request) {
+	// Use a Pro-only feature (ai_autofix) to test gating with license
+	wrappedHandler := LicenseGatedEmptyResponse(handler, license.FeatureAIAutoFix, func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"data":"real"}`))
