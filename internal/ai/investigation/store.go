@@ -404,12 +404,15 @@ func (s *Store) CountFixed() int {
 	return count
 }
 
-// Cleanup removes old completed/failed investigations
+// Cleanup removes old completed/failed investigations and stuck sessions.
+// A session is considered stuck if it has no CompletedAt and StartedAt is
+// older than 20 minutes (2x the 10-minute investigation timeout).
 func (s *Store) Cleanup(maxAge time.Duration) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	cutoff := time.Now().Add(-maxAge)
+	stuckCutoff := time.Now().Add(-20 * time.Minute)
 	removed := 0
 
 	for id, session := range s.sessions {
@@ -417,6 +420,11 @@ func (s *Store) Cleanup(maxAge time.Duration) int {
 
 		// Remove old completed/failed investigations
 		if session.CompletedAt != nil && session.CompletedAt.Before(cutoff) {
+			shouldRemove = true
+		}
+
+		// Remove stuck sessions (no CompletedAt and started more than 20min ago)
+		if session.CompletedAt == nil && session.StartedAt.Before(stuckCutoff) {
 			shouldRemove = true
 		}
 
@@ -432,6 +440,70 @@ func (s *Store) Cleanup(maxAge time.Duration) int {
 			}
 			removed++
 		}
+	}
+
+	// Clean up orphaned empty slices in byFinding
+	for findingID, sessionIDs := range s.byFinding {
+		if len(sessionIDs) == 0 {
+			delete(s.byFinding, findingID)
+		}
+	}
+
+	if removed > 0 {
+		s.scheduleSaveLocked()
+	}
+
+	return removed
+}
+
+// EnforceSizeLimit removes the oldest completed sessions when the store
+// exceeds maxSessions. Running/pending sessions are never evicted.
+func (s *Store) EnforceSizeLimit(maxSessions int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.sessions) <= maxSessions {
+		return 0
+	}
+
+	// Collect completed sessions sorted by CompletedAt (oldest first)
+	type entry struct {
+		id          string
+		completedAt time.Time
+	}
+	var completed []entry
+	for id, session := range s.sessions {
+		if session.CompletedAt != nil {
+			completed = append(completed, entry{id: id, completedAt: *session.CompletedAt})
+		}
+	}
+
+	// Sort oldest first
+	for i := 0; i < len(completed)-1; i++ {
+		for j := i + 1; j < len(completed); j++ {
+			if completed[j].completedAt.Before(completed[i].completedAt) {
+				completed[i], completed[j] = completed[j], completed[i]
+			}
+		}
+	}
+
+	toRemove := len(s.sessions) - maxSessions
+	removed := 0
+	for _, e := range completed {
+		if removed >= toRemove {
+			break
+		}
+		session := s.sessions[e.id]
+		delete(s.sessions, e.id)
+		// Clean up byFinding index
+		findingIDs := s.byFinding[session.FindingID]
+		for i, sid := range findingIDs {
+			if sid == e.id {
+				s.byFinding[session.FindingID] = append(findingIDs[:i], findingIDs[i+1:]...)
+				break
+			}
+		}
+		removed++
 	}
 
 	if removed > 0 {

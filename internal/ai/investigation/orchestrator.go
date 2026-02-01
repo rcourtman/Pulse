@@ -42,9 +42,10 @@ type Session struct {
 
 // ExecuteRequest represents a chat execution request
 type ExecuteRequest struct {
-	Prompt    string `json:"prompt"`
-	SessionID string `json:"session_id,omitempty"`
-	MaxTurns  int    `json:"max_turns,omitempty"` // Override max agentic turns (0 = use default)
+	Prompt         string `json:"prompt"`
+	SessionID      string `json:"session_id,omitempty"`
+	MaxTurns       int    `json:"max_turns,omitempty"`       // Override max agentic turns (0 = use default)
+	AutonomousMode *bool  `json:"autonomous_mode,omitempty"` // Per-request autonomous override (nil = use service default)
 }
 
 // StreamCallback is called for each streaming event
@@ -205,6 +206,18 @@ func NewOrchestrator(
 	}
 }
 
+// GetStore returns the investigation store for external cleanup/maintenance.
+func (o *Orchestrator) GetStore() *Store {
+	return o.store
+}
+
+// CleanupInvestigationStore runs periodic maintenance on the investigation store:
+// removes old/stuck sessions and enforces a size limit.
+func (o *Orchestrator) CleanupInvestigationStore(maxAge time.Duration, maxSessions int) {
+	o.store.Cleanup(maxAge)
+	o.store.EnforceSizeLimit(maxSessions)
+}
+
 // SetConfig updates the orchestrator configuration
 func (o *Orchestrator) SetConfig(config InvestigationConfig) {
 	o.mu.Lock()
@@ -353,9 +366,11 @@ func (o *Orchestrator) InvestigateFinding(ctx context.Context, finding *Finding,
 	// For all other levels, write commands (pulse_control, pulse_file_edit)
 	// must go through the normal approval gate. The investigation AI should
 	// propose fixes via PROPOSED_FIX markers, not execute them directly.
+	//
+	// NOTE: We pass autonomous mode via the ExecuteRequest rather than
+	// mutating shared chatService state, which is unsafe under concurrent
+	// investigations.
 	useAutonomous := autonomyLevel == "full"
-	o.chatService.SetAutonomousMode(useAutonomous)
-	defer o.chatService.SetAutonomousMode(false)
 
 	// Create chat session
 	session, err := o.chatService.CreateSession(ctx)
@@ -392,7 +407,7 @@ func (o *Orchestrator) InvestigateFinding(ctx context.Context, finding *Finding,
 		Msg("Starting investigation")
 
 	// Execute with timeout and turn limit
-	err = o.executeWithLimits(ctx, investigation, prompt)
+	err = o.executeWithLimits(ctx, investigation, prompt, useAutonomous)
 	if err != nil {
 		// Mark as failed
 		o.store.Fail(investigation.ID, err.Error())
@@ -521,7 +536,7 @@ func formatOptional(label, value string) string {
 }
 
 // executeWithLimits runs the investigation with turn and timeout limits
-func (o *Orchestrator) executeWithLimits(ctx context.Context, investigation *InvestigationSession, prompt string) error {
+func (o *Orchestrator) executeWithLimits(ctx context.Context, investigation *InvestigationSession, prompt string, autonomousMode bool) error {
 	// Create context with timeout. The passed-in ctx is already shutdown-aware
 	// (derived via context.AfterFunc in InvestigateFinding), so the timeout
 	// context inherits both the caller's deadline and the shutdown signal.
@@ -548,9 +563,10 @@ func (o *Orchestrator) executeWithLimits(ctx context.Context, investigation *Inv
 
 	// Execute the prompt with investigation-specific turn limit
 	req := ExecuteRequest{
-		Prompt:    prompt,
-		SessionID: investigation.SessionID,
-		MaxTurns:  maxTurns,
+		Prompt:         prompt,
+		SessionID:      investigation.SessionID,
+		MaxTurns:       maxTurns,
+		AutonomousMode: &autonomousMode,
 	}
 
 	log.Debug().
@@ -652,6 +668,14 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 	finding.LastInvestigatedAt = &now
 
 	if fix != nil {
+		// Guard: investigation produced a fix with no commands — nothing to execute
+		if len(fix.Commands) == 0 {
+			log.Warn().Str("finding_id", finding.ID).Msg("Investigation fix has no commands, marking needs_attention")
+			finding.InvestigationOutcome = string(OutcomeNeedsAttention)
+			finding.LastInvestigatedAt = &now
+			return nil
+		}
+
 		// Re-check current autonomy level before deciding on fix execution
 		// This handles cases where user changed autonomy during investigation
 		currentLevel := autonomyLevel

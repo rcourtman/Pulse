@@ -108,7 +108,7 @@ func TestOrchestrator_ExecuteWithLimits_Success(t *testing.T) {
 	orchestrator := NewOrchestrator(chatService, store, nil, nil, DefaultConfig())
 	investigation := store.Create("finding-1", "session-1")
 
-	if err := orchestrator.executeWithLimits(context.Background(), investigation, "prompt"); err != nil {
+	if err := orchestrator.executeWithLimits(context.Background(), investigation, "prompt", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if investigation.Summary == "" {
@@ -128,7 +128,7 @@ func TestOrchestrator_ExecuteWithLimits_StreamError(t *testing.T) {
 	orchestrator := NewOrchestrator(chatService, store, nil, nil, DefaultConfig())
 	investigation := store.Create("finding-1", "session-1")
 
-	if err := orchestrator.executeWithLimits(context.Background(), investigation, "prompt"); err == nil {
+	if err := orchestrator.executeWithLimits(context.Background(), investigation, "prompt", false); err == nil {
 		t.Fatalf("expected stream error")
 	}
 }

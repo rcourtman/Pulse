@@ -8,14 +8,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// capturingChatService records the boolean passed to SetAutonomousMode.
+// capturingChatService records the AutonomousMode passed via ExecuteRequest
+// and tracks any direct SetAutonomousMode calls.
 type capturingChatService struct {
 	stubChatService
-	autonomousCalls []bool
+	autonomousCalls  []bool           // direct SetAutonomousMode calls
+	capturedRequests []ExecuteRequest // requests passed to ExecuteStream
 }
 
 func (c *capturingChatService) SetAutonomousMode(enabled bool) {
 	c.autonomousCalls = append(c.autonomousCalls, enabled)
+}
+
+func (c *capturingChatService) ExecuteStream(ctx context.Context, req ExecuteRequest, callback StreamCallback) error {
+	c.capturedRequests = append(c.capturedRequests, req)
+	if c.execute != nil {
+		return c.execute(callback)
+	}
+	return nil
 }
 
 func newCapturingChat() *capturingChatService {
@@ -37,10 +47,13 @@ func TestInvestigateFinding_AutonomousMode_Full(t *testing.T) {
 	err := o.InvestigateFinding(context.Background(), findings.finding, "full")
 	require.NoError(t, err)
 
-	// First call should be SetAutonomousMode(true), then deferred false
-	require.Len(t, chat.autonomousCalls, 2, "expected two SetAutonomousMode calls (set + deferred reset)")
-	assert.True(t, chat.autonomousCalls[0], "full autonomy should set autonomous mode to true")
-	assert.False(t, chat.autonomousCalls[1], "deferred reset should set autonomous mode to false")
+	// Autonomous mode should be passed via the request, not via SetAutonomousMode
+	require.Len(t, chat.capturedRequests, 1)
+	require.NotNil(t, chat.capturedRequests[0].AutonomousMode)
+	assert.True(t, *chat.capturedRequests[0].AutonomousMode, "full autonomy should set autonomous mode to true in request")
+
+	// SetAutonomousMode should NOT be called on the chat service
+	assert.Empty(t, chat.autonomousCalls, "should not mutate shared chat service autonomous mode")
 }
 
 func TestInvestigateFinding_AutonomousMode_Approval(t *testing.T) {
@@ -52,9 +65,10 @@ func TestInvestigateFinding_AutonomousMode_Approval(t *testing.T) {
 	err := o.InvestigateFinding(context.Background(), findings.finding, "approval")
 	require.NoError(t, err)
 
-	require.Len(t, chat.autonomousCalls, 2)
-	assert.False(t, chat.autonomousCalls[0], "approval mode should set autonomous mode to false")
-	assert.False(t, chat.autonomousCalls[1], "deferred reset should set autonomous mode to false")
+	require.Len(t, chat.capturedRequests, 1)
+	require.NotNil(t, chat.capturedRequests[0].AutonomousMode)
+	assert.False(t, *chat.capturedRequests[0].AutonomousMode, "approval mode should set autonomous mode to false in request")
+	assert.Empty(t, chat.autonomousCalls)
 }
 
 func TestInvestigateFinding_AutonomousMode_Assisted(t *testing.T) {
@@ -66,14 +80,13 @@ func TestInvestigateFinding_AutonomousMode_Assisted(t *testing.T) {
 	err := o.InvestigateFinding(context.Background(), findings.finding, "assisted")
 	require.NoError(t, err)
 
-	require.Len(t, chat.autonomousCalls, 2)
-	assert.False(t, chat.autonomousCalls[0], "assisted mode should set autonomous mode to false")
-	assert.False(t, chat.autonomousCalls[1])
+	require.Len(t, chat.capturedRequests, 1)
+	require.NotNil(t, chat.capturedRequests[0].AutonomousMode)
+	assert.False(t, *chat.capturedRequests[0].AutonomousMode, "assisted mode should set autonomous mode to false in request")
+	assert.Empty(t, chat.autonomousCalls)
 }
 
 func TestInvestigateFinding_AutonomousMode_Monitor(t *testing.T) {
-	// Monitor mode normally wouldn't reach InvestigateFinding (blocked by ShouldInvestigate),
-	// but if called directly, it should still set autonomous mode to false.
 	chat := newCapturingChat()
 	store := NewStore("")
 	findings := &stubFindingsStore{finding: &Finding{ID: "f1", Severity: "warning"}}
@@ -82,9 +95,10 @@ func TestInvestigateFinding_AutonomousMode_Monitor(t *testing.T) {
 	err := o.InvestigateFinding(context.Background(), findings.finding, "monitor")
 	require.NoError(t, err)
 
-	require.Len(t, chat.autonomousCalls, 2)
-	assert.False(t, chat.autonomousCalls[0], "monitor mode should set autonomous mode to false")
-	assert.False(t, chat.autonomousCalls[1])
+	require.Len(t, chat.capturedRequests, 1)
+	require.NotNil(t, chat.capturedRequests[0].AutonomousMode)
+	assert.False(t, *chat.capturedRequests[0].AutonomousMode, "monitor mode should set autonomous mode to false in request")
+	assert.Empty(t, chat.autonomousCalls)
 }
 
 func TestInvestigateFinding_AutonomousMode_Empty(t *testing.T) {
@@ -96,7 +110,8 @@ func TestInvestigateFinding_AutonomousMode_Empty(t *testing.T) {
 	err := o.InvestigateFinding(context.Background(), findings.finding, "")
 	require.NoError(t, err)
 
-	require.Len(t, chat.autonomousCalls, 2)
-	assert.False(t, chat.autonomousCalls[0], "empty autonomy level should set autonomous mode to false")
-	assert.False(t, chat.autonomousCalls[1])
+	require.Len(t, chat.capturedRequests, 1)
+	require.NotNil(t, chat.capturedRequests[0].AutonomousMode)
+	assert.False(t, *chat.capturedRequests[0].AutonomousMode, "empty autonomy level should set autonomous mode to false in request")
+	assert.Empty(t, chat.autonomousCalls)
 }
