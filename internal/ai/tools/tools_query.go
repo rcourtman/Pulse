@@ -2212,7 +2212,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				Status: vm.Status,
 				Node:   vm.Node,
 				CPU:    vm.CPU * 100,
-				Memory: vm.Memory.Usage * 100,
+				Memory: vm.Memory.Usage, // Already 0-100 from safePercentage
 			})
 			count++
 		}
@@ -2242,7 +2242,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				Status: ct.Status,
 				Node:   ct.Node,
 				CPU:    ct.CPU * 100,
-				Memory: ct.Memory.Usage * 100,
+				Memory: ct.Memory.Usage, // Already 0-100 from safePercentage
 			})
 			count++
 		}
@@ -2449,7 +2449,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 				Name:   vm.Name,
 				Status: vm.Status,
 				CPU:    vm.CPU * 100,
-				Memory: vm.Memory.Usage * 100,
+				Memory: vm.Memory.Usage, // Already 0-100 from safePercentage
 				OS:     vm.OSName,
 				Tags:   vm.Tags,
 			})
@@ -2474,7 +2474,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 				Name:      ct.Name,
 				Status:    ct.Status,
 				CPU:       ct.CPU * 100,
-				Memory:    ct.Memory.Usage * 100,
+				Memory:    ct.Memory.Usage, // Already 0-100 from safePercentage
 				OS:        ct.OSName,
 				Tags:      ct.Tags,
 				HasDocker: ct.HasDocker,
@@ -2575,7 +2575,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 						Cores:   vm.CPUs,
 					},
 					Memory: ResourceMemory{
-						Percent: vm.Memory.Usage * 100,
+						Percent: vm.Memory.Usage, // Already 0-100 from safePercentage
 						UsedGB:  float64(vm.Memory.Used) / (1024 * 1024 * 1024),
 						TotalGB: float64(vm.Memory.Total) / (1024 * 1024 * 1024),
 					},
@@ -2632,7 +2632,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 						Cores:   ct.CPUs,
 					},
 					Memory: ResourceMemory{
-						Percent: ct.Memory.Usage * 100,
+						Percent: ct.Memory.Usage, // Already 0-100 from safePercentage
 						UsedGB:  float64(ct.Memory.Used) / (1024 * 1024 * 1024),
 						TotalGB: float64(ct.Memory.Total) / (1024 * 1024 * 1024),
 					},

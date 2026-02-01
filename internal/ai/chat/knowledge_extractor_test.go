@@ -229,13 +229,44 @@ func TestExtractFacts_Metrics(t *testing.T) {
 	assert.Equal(t, FactCategoryMetrics, f.Category)
 	assert.Equal(t, "metrics:vm101", f.Key)
 	assert.Contains(t, f.Value, "avg_cpu=12.3%")
-	assert.Contains(t, f.Value, "max=78.5%")
+	assert.Contains(t, f.Value, "max_cpu=78.5%")
+	assert.Contains(t, f.Value, "avg_mem=65.0%")
+	assert.Contains(t, f.Value, "max_mem=89.0%")
 	assert.Contains(t, f.Value, "trend=growing")
 }
 
 func TestExtractFacts_Metrics_EmptySummary(t *testing.T) {
 	input := map[string]interface{}{"action": "performance", "resource_id": "vm101"}
 	result := `{"resource_id":"vm101","period":"7d","summary":{}}`
+
+	facts := ExtractFacts("pulse_metrics", input, result)
+	assert.Empty(t, facts)
+}
+
+func TestExtractFacts_Metrics_Points(t *testing.T) {
+	input := map[string]interface{}{"action": "performance", "resource_id": "vm101"}
+	// Single-resource query returns Points array, no Summary
+	result := `{"resource_id":"vm101","period":"1h","points":[` +
+		`{"timestamp":"2025-01-01T00:00:00Z","cpu":10.0,"memory":40.0,"disk":0},` +
+		`{"timestamp":"2025-01-01T00:05:00Z","cpu":30.0,"memory":60.0,"disk":0},` +
+		`{"timestamp":"2025-01-01T00:10:00Z","cpu":20.0,"memory":80.0,"disk":0}` +
+		`]}`
+
+	facts := ExtractFacts("pulse_metrics", input, result)
+	require.Len(t, facts, 1)
+
+	f := facts[0]
+	assert.Equal(t, FactCategoryMetrics, f.Category)
+	assert.Equal(t, "metrics:vm101", f.Key)
+	assert.Contains(t, f.Value, "avg_cpu=20.0%") // (10+30+20)/3
+	assert.Contains(t, f.Value, "max_cpu=30.0%") // max of 10,30,20
+	assert.Contains(t, f.Value, "avg_mem=60.0%") // (40+60+80)/3
+	assert.Contains(t, f.Value, "max_mem=80.0%") // max of 40,60,80
+}
+
+func TestExtractFacts_Metrics_Points_Empty(t *testing.T) {
+	input := map[string]interface{}{"action": "performance", "resource_id": "vm101"}
+	result := `{"resource_id":"vm101","period":"1h","points":[]}`
 
 	facts := ExtractFacts("pulse_metrics", input, result)
 	assert.Empty(t, facts)
@@ -1728,8 +1759,10 @@ func TestPredictExtractRoundtrip(t *testing.T) {
 			`{"jobs":[{"id":"j1","type":"backup","status":"ok"}],"total":1}`},
 		{"storage:resource_disks", "pulse_storage", map[string]interface{}{"action": "resource_disks"},
 			`{"resources":[{"vmid":100,"name":"test","disks":[{"mountpoint":"/","usage_percent":50}]}],"total":1}`},
-		{"metrics:performance", "pulse_metrics", map[string]interface{}{"action": "performance", "resource_id": "vm101"},
+		{"metrics:performance:summary", "pulse_metrics", map[string]interface{}{"action": "performance", "resource_id": "vm101"},
 			`{"summary":{"vm101":{"avg_cpu":10,"max_cpu":50,"trend":"stable"}}}`},
+		{"metrics:performance:points", "pulse_metrics", map[string]interface{}{"action": "performance", "resource_id": "vm101"},
+			`{"resource_id":"vm101","period":"1h","points":[{"timestamp":"2025-01-01T00:00:00Z","cpu":10,"memory":50}]}`},
 		{"metrics:baselines", "pulse_metrics", map[string]interface{}{"action": "baselines"},
 			`{"baselines":{"n1":{"n1:100:cpu":{"mean":5,"std_dev":2,"min":0,"max":20}}}}`},
 		{"metrics:disks", "pulse_metrics", map[string]interface{}{"action": "disks"},

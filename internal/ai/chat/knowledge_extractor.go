@@ -874,6 +874,13 @@ func extractMetricsPerformanceFacts(input map[string]interface{}, resultText str
 	}
 
 	var resp struct {
+		ResourceID string `json:"resource_id"`
+		Period     string `json:"period"`
+		Points     []struct {
+			CPU    float64 `json:"cpu"`
+			Memory float64 `json:"memory"`
+			Disk   float64 `json:"disk"`
+		} `json:"points"`
 		Summary map[string]struct {
 			AvgCPU    float64 `json:"avg_cpu"`
 			MaxCPU    float64 `json:"max_cpu"`
@@ -886,18 +893,42 @@ func extractMetricsPerformanceFacts(input map[string]interface{}, resultText str
 		return nil
 	}
 
-	var avgCPU, maxCPU float64
+	var avgCPU, maxCPU, avgMem, maxMem float64
 	var trend string
-	if s, ok := resp.Summary[resourceID]; ok {
-		avgCPU = s.AvgCPU
-		maxCPU = s.MaxCPU
-		trend = s.Trend
-	} else {
-		for _, s := range resp.Summary {
+
+	// Single-resource queries return Points array; compute summary from points
+	if len(resp.Points) > 0 {
+		var sumCPU, sumMem float64
+		for _, p := range resp.Points {
+			sumCPU += p.CPU
+			sumMem += p.Memory
+			if p.CPU > maxCPU {
+				maxCPU = p.CPU
+			}
+			if p.Memory > maxMem {
+				maxMem = p.Memory
+			}
+		}
+		n := float64(len(resp.Points))
+		avgCPU = sumCPU / n
+		avgMem = sumMem / n
+	} else if len(resp.Summary) > 0 {
+		// Multi-resource queries return Summary map
+		if s, ok := resp.Summary[resourceID]; ok {
 			avgCPU = s.AvgCPU
 			maxCPU = s.MaxCPU
+			avgMem = s.AvgMemory
+			maxMem = s.MaxMemory
 			trend = s.Trend
-			break
+		} else {
+			for _, s := range resp.Summary {
+				avgCPU = s.AvgCPU
+				maxCPU = s.MaxCPU
+				avgMem = s.AvgMemory
+				maxMem = s.MaxMemory
+				trend = s.Trend
+				break
+			}
 		}
 	}
 
@@ -906,7 +937,13 @@ func extractMetricsPerformanceFacts(input map[string]interface{}, resultText str
 		parts = append(parts, fmt.Sprintf("avg_cpu=%.1f%%", avgCPU))
 	}
 	if maxCPU > 0 {
-		parts = append(parts, fmt.Sprintf("max=%.1f%%", maxCPU))
+		parts = append(parts, fmt.Sprintf("max_cpu=%.1f%%", maxCPU))
+	}
+	if avgMem > 0 {
+		parts = append(parts, fmt.Sprintf("avg_mem=%.1f%%", avgMem))
+	}
+	if maxMem > 0 {
+		parts = append(parts, fmt.Sprintf("max_mem=%.1f%%", maxMem))
 	}
 	if trend != "" {
 		parts = append(parts, "trend="+trend)
@@ -2663,23 +2700,31 @@ func extractResourceDisksFacts(resultText string) []FactEntry {
 // MarkerExpansions maps marker fact keys to the prefix used to find related per-resource facts.
 // Used by the gate to enrich marker-based cache hits with actual data.
 var MarkerExpansions = map[string]string{
-	"storage:pools:queried":   "storage:",
-	"disk_health:queried":     "disk_health:",
-	"baselines:queried":       "baseline:",
-	"physical_disks:queried":  "physical_disks:",
-	"temperatures:queried":    "temperatures:",
-	"raid:queried":            "raid:",
-	"backups:queried":         "backups:",
-	"ceph:queried":            "ceph:",
-	"ceph_details:queried":    "ceph_details:",
-	"snapshots:queried":       "snapshots:",
-	"replication:queried":     "replication:",
-	"pbs_jobs:queried":        "pbs_jobs:",
-	"resource_disks:queried":  "resource_disks:",
-	"backup_tasks:queried":    "backup:",
+	// Storage markers
+	"storage:pools:queried":  "storage:",
+	"disk_health:queried":    "disk_health:",
+	"raid:queried":           "raid:",
+	"backups:queried":        "backups:",
+	"ceph:queried":           "ceph:",
+	"ceph_details:queried":   "ceph_details:",
+	"snapshots:queried":      "snapshots:",
+	"replication:queried":    "replication:",
+	"pbs_jobs:queried":       "pbs_jobs:",
+	"resource_disks:queried": "resource_disks:",
+	"backup_tasks:queried":   "backup:",
+	// Metrics markers
+	"baselines:queried":      "baseline:",
+	"physical_disks:queried": "physical_disks:",
+	"temperatures:queried":   "temperatures:",
+	// Docker markers
 	"docker_services:queried": "docker_services:",
-	"k8s_clusters:queried":    "k8s_cluster:",
-	"pmg:queried":             "pmg:",
+	// Kubernetes markers
+	"k8s_clusters:queried": "k8s_cluster:",
+	// PMG markers
+	"pmg:queried": "pmg:",
+	// Alert & finding markers → expand to per-item facts
+	"alerts:overview":         "alert:",
+	"findings:overview":       "finding:",
 	"patrol_findings:queried": "patrol_findings:",
 }
 

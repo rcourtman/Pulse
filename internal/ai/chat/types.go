@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -320,6 +321,9 @@ const (
 //
 // This type implements tools.ResolvedContextProvider interface.
 type ResolvedContext struct {
+	// mu protects all map fields from concurrent access during parallel tool execution.
+	mu sync.RWMutex `json:"-"`
+
 	SessionID string `json:"session_id"`
 
 	// Resources maps resource names to their resolved information
@@ -491,6 +495,8 @@ func (rc *ResolvedContext) removeByID(resourceID string) {
 
 // PinResource marks a resource as pinned (won't be evicted)
 func (rc *ResolvedContext) PinResource(resourceID string) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	if rc.pinned == nil {
 		rc.pinned = make(map[string]bool)
 	}
@@ -499,16 +505,22 @@ func (rc *ResolvedContext) PinResource(resourceID string) {
 
 // UnpinResource removes the pinned status from a resource
 func (rc *ResolvedContext) UnpinResource(resourceID string) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	delete(rc.pinned, resourceID)
 }
 
 // IsPinned returns whether a resource is pinned
 func (rc *ResolvedContext) IsPinned(resourceID string) bool {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
 	return rc.pinned[resourceID]
 }
 
 // Clear removes all resources from the context (respects pinned)
 func (rc *ResolvedContext) Clear(keepPinned bool) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	if !keepPinned {
 		rc.Resources = make(map[string]*ResolvedResource)
 		rc.ResourcesByID = make(map[string]*ResolvedResource)
@@ -551,6 +563,8 @@ func (rc *ResolvedContext) Clear(keepPinned bool) {
 
 // Stats returns statistics about the context
 func (rc *ResolvedContext) Stats() ResolvedContextStats {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
 	uniqueCount := len(rc.ResourcesByID)
 	pinnedCount := 0
 	for _, isPinned := range rc.pinned {
@@ -580,6 +594,8 @@ type ResolvedContextStats struct {
 // HasAnyResources implements tools.ResolvedContextProvider interface.
 // Returns true if at least one resource has been discovered in this session.
 func (rc *ResolvedContext) HasAnyResources() bool {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
 	return len(rc.ResourcesByID) > 0
 }
 
@@ -591,6 +607,8 @@ func (rc *ResolvedContext) HasAnyResources() bool {
 // - Bulk discovery adds resources (sets lastAccessed) but should NOT trigger routing blocks
 // - Explicit get/select sets explicitlyAccessed, indicating user intent to target that resource
 func (rc *ResolvedContext) WasRecentlyAccessed(resourceID string, window time.Duration) bool {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
 	if rc.explicitlyAccessed == nil {
 		return false
 	}
@@ -605,6 +623,8 @@ func (rc *ResolvedContext) WasRecentlyAccessed(resourceID string, window time.Du
 // Uses explicitlyAccessed (not lastAccessed) to avoid false positives from bulk discovery.
 // Returns a slice of resource IDs.
 func (rc *ResolvedContext) GetRecentlyAccessedResources(window time.Duration) []string {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
 	if rc.explicitlyAccessed == nil {
 		return nil
 	}
@@ -621,6 +641,8 @@ func (rc *ResolvedContext) GetRecentlyAccessedResources(window time.Duration) []
 // GetRecentlyAccessedResourcesSorted returns recently accessed resources ordered by most recent access.
 // If max <= 0, all recent resources are returned.
 func (rc *ResolvedContext) GetRecentlyAccessedResourcesSorted(window time.Duration, max int) []string {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
 	if rc.explicitlyAccessed == nil {
 		return nil
 	}
@@ -660,12 +682,16 @@ func (rc *ResolvedContext) GetRecentlyAccessedResourcesSorted(window time.Durati
 // Use MarkExplicitAccess() when the user explicitly selects/queries a single resource.
 // This separation prevents bulk discovery operations from poisoning routing validation.
 func (rc *ResolvedContext) AddResource(name string, res *ResolvedResource) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	rc.addResourceInternal(name, res, false)
 }
 
 // AddResourceWithExplicitAccess adds a resource AND marks it as recently accessed.
 // Use this for single-resource operations where user intent is clear (e.g., pulse_query get).
 func (rc *ResolvedContext) AddResourceWithExplicitAccess(name string, res *ResolvedResource) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	rc.addResourceInternal(name, res, true)
 }
 
@@ -745,6 +771,8 @@ func (rc *ResolvedContext) addResourceInternal(name string, res *ResolvedResourc
 // If this is called incorrectly from bulk operations, routing validation will produce
 // false positives, blocking legitimate host operations.
 func (rc *ResolvedContext) MarkExplicitAccess(resourceID string) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	if rc.explicitlyAccessed == nil {
 		rc.explicitlyAccessed = make(map[string]time.Time)
 	}
@@ -754,6 +782,8 @@ func (rc *ResolvedContext) MarkExplicitAccess(resourceID string) {
 // AddResolvedResource implements tools.ResolvedContextProvider interface.
 // Called by query/discovery tools to register discovered resources.
 func (rc *ResolvedContext) AddResolvedResource(reg tools.ResourceRegistration) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	// Build the canonical resource ID with scope for global uniqueness.
 	// Format: {kind}:{host}:{provider_uid} for scoped resources
 	//         {kind}:{provider_uid} for global resources (nodes, clusters)
@@ -885,12 +915,19 @@ func (rc *ResolvedContext) AddResolvedResource(reg tools.ResourceRegistration) {
 		// Timestamps
 		ResolvedAt: time.Now(),
 	}
-	rc.AddResource(reg.Name, res)
+	rc.addResourceInternal(reg.Name, res, false)
 }
 
 // GetResource retrieves a resource by name (case-insensitive)
 // Updates LRU tracking on access.
 func (rc *ResolvedContext) GetResource(name string) (*ResolvedResource, bool) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	return rc.getResourceInternal(name)
+}
+
+// getResourceInternal is the lock-free implementation of GetResource.
+func (rc *ResolvedContext) getResourceInternal(name string) (*ResolvedResource, bool) {
 	// Evict expired on access
 	rc.evictExpired()
 
@@ -910,6 +947,13 @@ func (rc *ResolvedContext) GetResource(name string) (*ResolvedResource, bool) {
 // GetResourceByID retrieves a resource by its canonical ResourceID (internal use)
 // Updates LRU tracking on access.
 func (rc *ResolvedContext) GetResourceByID(resourceID string) (*ResolvedResource, bool) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	return rc.getResourceByIDInternal(resourceID)
+}
+
+// getResourceByIDInternal is the lock-free implementation of GetResourceByID.
+func (rc *ResolvedContext) getResourceByIDInternal(resourceID string) (*ResolvedResource, bool) {
 	// Evict expired on access
 	rc.evictExpired()
 
@@ -923,6 +967,9 @@ func (rc *ResolvedContext) GetResourceByID(resourceID string) (*ResolvedResource
 // GetResolvedResourceByID implements tools.ResolvedContextProvider interface.
 // Updates LRU tracking on access.
 func (rc *ResolvedContext) GetResolvedResourceByID(resourceID string) (tools.ResolvedResourceInfo, bool) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
 	// Evict expired on access
 	rc.evictExpired()
 
@@ -938,6 +985,9 @@ func (rc *ResolvedContext) GetResolvedResourceByID(resourceID string) (tools.Res
 // Retrieves a resource by any of its aliases (case-insensitive).
 // Updates LRU tracking on access.
 func (rc *ResolvedContext) GetResolvedResourceByAlias(alias string) (tools.ResolvedResourceInfo, bool) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
 	// Evict expired on access
 	rc.evictExpired()
 
@@ -952,7 +1002,14 @@ func (rc *ResolvedContext) GetResolvedResourceByAlias(alias string) (tools.Resol
 // ValidateResourceID checks if a resource ID exists in this context
 // and returns the resource if valid
 func (rc *ResolvedContext) ValidateResourceID(resourceID string) (*ResolvedResource, error) {
-	res, ok := rc.GetResourceByID(resourceID)
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	return rc.validateResourceIDInternal(resourceID)
+}
+
+// validateResourceIDInternal is the lock-free implementation of ValidateResourceID.
+func (rc *ResolvedContext) validateResourceIDInternal(resourceID string) (*ResolvedResource, error) {
+	res, ok := rc.getResourceByIDInternal(resourceID)
 	if !ok {
 		return nil, &ResourceNotResolvedError{ResourceID: resourceID}
 	}
@@ -961,7 +1018,14 @@ func (rc *ResolvedContext) ValidateResourceID(resourceID string) (*ResolvedResou
 
 // ValidateAction checks if an action is allowed for a resource (internal use)
 func (rc *ResolvedContext) ValidateAction(resourceID, action string) error {
-	res, err := rc.ValidateResourceID(resourceID)
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	return rc.validateActionInternal(resourceID, action)
+}
+
+// validateActionInternal is the lock-free implementation of ValidateAction.
+func (rc *ResolvedContext) validateActionInternal(resourceID, action string) error {
+	res, err := rc.validateResourceIDInternal(resourceID)
 	if err != nil {
 		return err
 	}
@@ -987,10 +1051,12 @@ func (rc *ResolvedContext) ValidateAction(resourceID, action string) error {
 // ValidateResourceForAction implements tools.ResolvedContextProvider interface.
 // Returns the resource if valid, error if not found or action not allowed.
 func (rc *ResolvedContext) ValidateResourceForAction(resourceID, action string) (tools.ResolvedResourceInfo, error) {
-	if err := rc.ValidateAction(resourceID, action); err != nil {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	if err := rc.validateActionInternal(resourceID, action); err != nil {
 		return nil, err
 	}
-	res, _ := rc.GetResourceByID(resourceID)
+	res, _ := rc.getResourceByIDInternal(resourceID)
 	return res, nil
 }
 

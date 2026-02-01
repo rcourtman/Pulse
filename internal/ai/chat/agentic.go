@@ -15,6 +15,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// parallelToolResult holds the result of a single tool execution during
+// parallel tool execution in the agentic loop. Defined at package level
+// because the executeWithTools function's `tools` parameter shadows the
+// tools package import, preventing inline type references.
+type parallelToolResult struct {
+	Result tools.CallToolResult
+	Err    error
+}
+
 // AgenticLoop handles the tool-calling loop with streaming
 type AgenticLoop struct {
 	provider         providers.StreamingProvider
@@ -110,6 +119,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	preferredToolRetried := false
 	singleToolRequested := isSingleToolRequest(providerMessages)
 	singleToolEnforced := false
+
+	// Fresh-data intent: if the user's latest message indicates they want
+	// fresh/updated data, bypass the knowledge gate so tools re-execute.
+	userWantsFresh := detectFreshDataIntent(messages)
 
 	// Loop detection: track identical tool calls (name + serialized input).
 	// After maxIdenticalCalls identical invocations, the next one is blocked.
@@ -521,27 +534,38 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			return resultMessages, nil
 		}
 
-		// Execute tool calls
+		// === Execute tool calls (three-phase pipeline) ===
+		// Phase 1: Pre-check (sequential) — FSM, loop detection, knowledge gate
+		// Phase 2: Execute (parallel) — actual tool calls via goroutines
+		// Phase 3: Post-process (sequential) — streaming, FSM transitions, KA extraction
 		if len(toolCalls) > 0 && preferredToolName != "" {
 			// Clear preferred tool once the model has used any tool.
 			preferredToolName = ""
 		}
 		firstToolResultText := ""
 		budgetBlockedThisTurn := 0
-		for _, tc := range toolCalls {
-			// Check for abort
-			a.mu.Lock()
-			if a.aborted[sessionID] {
-				a.mu.Unlock()
-				return resultMessages, fmt.Errorf("session aborted")
-			}
-			fsm := a.sessionFSM
-			a.mu.Unlock()
 
+		// --- Phase 1: Pre-check all tool calls sequentially ---
+		// Pre-checks share mutable state (FSM, loop counts) so must be sequential.
+		a.mu.Lock()
+		if a.aborted[sessionID] {
+			a.mu.Unlock()
+			return resultMessages, fmt.Errorf("session aborted")
+		}
+		fsm := a.sessionFSM
+		a.mu.Unlock()
+
+		type pendingToolExec struct {
+			tc       providers.ToolCall
+			toolKind ToolKind
+		}
+		var pendingExec []pendingToolExec
+
+		for _, tc := range toolCalls {
 			log.Debug().
 				Str("tool", tc.Name).
 				Str("id", tc.ID).
-				Msg("Executing tool")
+				Msg("Pre-checking tool call")
 
 			// === FSM ENFORCEMENT GATE 1: Check if tool is allowed in current state ===
 			toolKind := ClassifyToolCall(tc.Name, tc.Input)
@@ -655,7 +679,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 
 			// === KNOWLEDGE GATE: Return cached facts for redundant tool calls ===
-			if a.knowledgeAccumulator != nil {
+			// Skip gate on first turn if the user explicitly asked for fresh data.
+			if a.knowledgeAccumulator != nil && !(userWantsFresh && turn == 0) {
 				if keys := PredictFactKeys(tc.Name, tc.Input); len(keys) > 0 {
 					var cachedParts []string
 					for _, key := range keys {
@@ -714,8 +739,49 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				}
 			}
 
-			// Execute the tool
-			result, err := a.executor.ExecuteTool(ctx, tc.Name, tc.Input)
+			// Tool passed all pre-checks — queue for execution
+			pendingExec = append(pendingExec, pendingToolExec{tc: tc, toolKind: toolKind})
+		}
+
+		// --- Phase 2: Execute pending tools (parallel if multiple) ---
+		// Tool execution is stateless I/O — safe to parallelize.
+		// Cap concurrency at 4 to avoid overwhelming infrastructure.
+		execResults := make([]parallelToolResult, len(pendingExec))
+
+		if len(pendingExec) > 1 {
+			log.Info().
+				Int("tool_count", len(pendingExec)).
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Executing multiple tools in parallel")
+
+			var wg sync.WaitGroup
+			sem := make(chan struct{}, 4)
+
+			for j, pe := range pendingExec {
+				wg.Add(1)
+				go func(idx int, tc providers.ToolCall) {
+					defer wg.Done()
+					sem <- struct{}{}
+					defer func() { <-sem }()
+					r, e := a.executor.ExecuteTool(ctx, tc.Name, tc.Input)
+					execResults[idx] = parallelToolResult{Result: r, Err: e}
+				}(j, pe.tc)
+			}
+			wg.Wait()
+		} else if len(pendingExec) == 1 {
+			r, e := a.executor.ExecuteTool(ctx, pendingExec[0].tc.Name, pendingExec[0].tc.Input)
+			execResults[0] = parallelToolResult{Result: r, Err: e}
+		}
+
+		// --- Phase 3: Post-process results in original order (sequential) ---
+		// Streaming events, FSM transitions, KA extraction, approval flow
+		// must all be sequential and in the original tool call order.
+		for j, pe := range pendingExec {
+			tc := pe.tc
+			toolKind := pe.toolKind
+
+			result := execResults[j].Result
+			err := execResults[j].Err
 
 			var resultText string
 			var isError bool
@@ -749,13 +815,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					// to prevent the gate from re-executing the same tool call.
 					if len(facts) == 0 && !isError {
 						if predictedKeys := PredictFactKeys(tc.Name, tc.Input); len(predictedKeys) > 0 {
+							summary := summarizeForNegativeMarker(resultText)
 							for _, key := range predictedKeys {
 								if _, found := a.knowledgeAccumulator.Lookup(key); !found {
 									cat := categoryForPredictedKey(key)
-									summary := resultText
-									if len(summary) > 120 {
-										summary = summary[:120]
-									}
 									a.knowledgeAccumulator.AddFactForTool(tc.ID, cat, key, fmt.Sprintf("checked: %s", summary))
 									log.Debug().
 										Str("tool", tc.Name).
@@ -878,7 +941,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							Str("approval_id", approvalData.ApprovalID).
 							Str("command", approvalData.Command).
 							Msg("[AgenticLoop] Autonomous mode: returning approval request without waiting")
-						// Return special message indicating fix is queued for approval
 						resultText = fmt.Sprintf("FIX_QUEUED: This action requires user approval. The fix has been queued for review. Approval ID: %s, Command: %s", approvalData.ApprovalID, approvalData.Command)
 						isError = false
 					} else {
@@ -1270,6 +1332,102 @@ func (a *AgenticLoop) ResetTokenCounts() {
 // 1. Concrete system metrics/values (CPU %, memory usage, etc.)
 // 2. Infrastructure state that requires live queries (running/stopped)
 // 3. Fake tool call formatting
+// summarizeForNegativeMarker creates a concise summary of a tool result for
+// use in negative markers. Tries to extract meaningful context from JSON
+// responses rather than blindly truncating.
+func summarizeForNegativeMarker(resultText string) string {
+	if len(resultText) == 0 {
+		return "empty response"
+	}
+
+	// Try to parse as JSON and extract key indicators
+	var obj map[string]interface{}
+	if err := json.Unmarshal([]byte(resultText), &obj); err == nil {
+		var indicators []string
+
+		// Check for common empty-result patterns
+		for _, arrayKey := range []string{"points", "pools", "disks", "alerts", "findings", "jobs", "tasks", "snapshots", "resources", "containers", "vms", "nodes", "updates"} {
+			if arr, ok := obj[arrayKey]; ok {
+				if slice, ok := arr.([]interface{}); ok {
+					indicators = append(indicators, fmt.Sprintf("%s: %d items", arrayKey, len(slice)))
+				}
+			}
+		}
+
+		// Check for total field
+		if total, ok := obj["total"]; ok {
+			indicators = append(indicators, fmt.Sprintf("total=%v", total))
+		}
+
+		// Check for period/resource_id context
+		if rid, ok := obj["resource_id"]; ok {
+			indicators = append(indicators, fmt.Sprintf("resource=%v", rid))
+		}
+		if period, ok := obj["period"]; ok {
+			indicators = append(indicators, fmt.Sprintf("period=%v", period))
+		}
+
+		// Check for error field
+		if errVal, ok := obj["error"]; ok {
+			indicators = append(indicators, fmt.Sprintf("error=%v", errVal))
+		}
+
+		if len(indicators) > 0 {
+			result := strings.Join(indicators, ", ")
+			if len(result) > 200 {
+				result = result[:200]
+			}
+			return result
+		}
+	}
+
+	// Try JSON array
+	var arr []interface{}
+	if err := json.Unmarshal([]byte(resultText), &arr); err == nil {
+		return fmt.Sprintf("array with %d items", len(arr))
+	}
+
+	// Fall back to truncated text
+	summary := resultText
+	if len(summary) > 200 {
+		summary = summary[:200] + "..."
+	}
+	return summary
+}
+
+// detectFreshDataIntent returns true when the user's latest message explicitly
+// requests updated/fresh data (e.g. "check again", "refresh", "what's the
+// latest status"). This bypasses the knowledge gate for the first turn so
+// tools re-execute instead of returning cached results.
+func detectFreshDataIntent(messages []Message) bool {
+	// Walk backwards to find the last user message
+	var lastUserContent string
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" && messages[i].Content != "" {
+			lastUserContent = strings.ToLower(messages[i].Content)
+			break
+		}
+	}
+	if lastUserContent == "" {
+		return false
+	}
+
+	// Strong refresh signals — these clearly indicate the user wants re-execution
+	strongPatterns := []string{
+		"check again", "look again", "try again", "run again",
+		"refresh", "re-check", "recheck", "re check",
+		"fresh data", "fresh look", "latest data",
+		"has it changed", "did it change", "any changes",
+		"what's happening now", "what is happening now",
+	}
+	for _, p := range strongPatterns {
+		if strings.Contains(lastUserContent, p) {
+			return true
+		}
+	}
+	return false
+}
+
 func hasPhantomExecution(content string) bool {
 	if content == "" {
 		return false

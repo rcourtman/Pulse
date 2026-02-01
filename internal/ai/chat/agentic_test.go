@@ -634,3 +634,272 @@ func TestTruncateForLog(t *testing.T) {
 		})
 	}
 }
+
+func TestSummarizeForNegativeMarker(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		contains []string
+	}{
+		{
+			name:     "empty response",
+			input:    "",
+			contains: []string{"empty response"},
+		},
+		{
+			name:     "JSON with empty array",
+			input:    `{"resource_id":"105","period":"24h","points":[]}`,
+			contains: []string{"points: 0 items", "resource=105", "period=24h"},
+		},
+		{
+			name:     "JSON with populated array",
+			input:    `{"pools":[{"name":"a"},{"name":"b"}],"total":2}`,
+			contains: []string{"pools: 2 items", "total=2"},
+		},
+		{
+			name:     "JSON with error",
+			input:    `{"error":"not_found","resource_id":"999"}`,
+			contains: []string{"error=not_found", "resource=999"},
+		},
+		{
+			name:     "JSON array",
+			input:    `[{"a":1},{"b":2},{"c":3}]`,
+			contains: []string{"array with 3 items"},
+		},
+		{
+			name:     "plain text",
+			input:    "No data available for this resource",
+			contains: []string{"No data available"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := summarizeForNegativeMarker(tt.input)
+			for _, c := range tt.contains {
+				assert.Contains(t, result, c, "expected %q to contain %q", result, c)
+			}
+		})
+	}
+}
+
+func TestDetectFreshDataIntent(t *testing.T) {
+	tests := []struct {
+		name     string
+		messages []Message
+		want     bool
+	}{
+		{
+			name:     "empty messages",
+			messages: nil,
+			want:     false,
+		},
+		{
+			name: "normal question",
+			messages: []Message{
+				{Role: "user", Content: "What containers are running?"},
+			},
+			want: false,
+		},
+		{
+			name: "check again",
+			messages: []Message{
+				{Role: "user", Content: "Check again please"},
+			},
+			want: true,
+		},
+		{
+			name: "refresh",
+			messages: []Message{
+				{Role: "user", Content: "Can you refresh the data?"},
+			},
+			want: true,
+		},
+		{
+			name: "has it changed",
+			messages: []Message{
+				{Role: "user", Content: "Has it changed since last time?"},
+			},
+			want: true,
+		},
+		{
+			name: "latest data",
+			messages: []Message{
+				{Role: "user", Content: "Show me the latest data for frigate"},
+			},
+			want: true,
+		},
+		{
+			name: "uses last user message only",
+			messages: []Message{
+				{Role: "user", Content: "Check again"},
+				{Role: "assistant", Content: "OK, checking..."},
+				{Role: "user", Content: "What is the CPU usage?"},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := detectFreshDataIntent(tt.messages)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestParallelToolExecution(t *testing.T) {
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+
+	t.Run("MultipleToolCallsExecuteAndReturnInOrder", func(t *testing.T) {
+		mockProvider := &MockProvider{}
+		loop := NewAgenticLoop(mockProvider, executor, "You are a helper")
+		ctx := context.Background()
+		sessionID := "parallel-session"
+		messages := []Message{{Role: "user", Content: "Check three things"}}
+
+		// Turn 1: provider returns 3 tool calls at once
+		mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+			return len(req.Messages) == 1
+		}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+			callback := args.Get(2).(providers.StreamCallback)
+			// Emit tool_start events for each tool
+			for _, id := range []string{"call_a", "call_b", "call_c"} {
+				callback(providers.StreamEvent{
+					Type: "tool_start",
+					Data: providers.ToolStartEvent{ID: id, Name: "pulse_query"},
+				})
+			}
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{
+					ToolCalls: []providers.ToolCall{
+						{ID: "call_a", Name: "pulse_query", Input: map[string]interface{}{
+							"action": "get", "resource_type": "vm", "resource_id": "100",
+						}},
+						{ID: "call_b", Name: "pulse_query", Input: map[string]interface{}{
+							"action": "get", "resource_type": "vm", "resource_id": "200",
+						}},
+						{ID: "call_c", Name: "pulse_query", Input: map[string]interface{}{
+							"action": "get", "resource_type": "lxc", "resource_id": "300",
+						}},
+					},
+				},
+			})
+		}).Once()
+
+		// Turn 2: provider sees the 3 tool results and gives final answer
+		// Messages: 1 user + 1 assistant (with 3 tool calls) + 3 tool results = 5
+		mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+			return len(req.Messages) >= 5
+		}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+			callback := args.Get(2).(providers.StreamCallback)
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "All three checks completed."},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{},
+			})
+		}).Once()
+
+		var toolEndEvents []ToolEndData
+		results, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {
+			if event.Type == "tool_end" {
+				var data ToolEndData
+				json.Unmarshal(event.Data, &data)
+				toolEndEvents = append(toolEndEvents, data)
+			}
+		})
+
+		assert.NoError(t, err)
+
+		// Verify we got 3 tool_end events in the original order
+		require.Len(t, toolEndEvents, 3, "expected 3 tool_end events")
+		assert.Equal(t, "call_a", toolEndEvents[0].ID)
+		assert.Equal(t, "call_b", toolEndEvents[1].ID)
+		assert.Equal(t, "call_c", toolEndEvents[2].ID)
+
+		// Verify result messages contain: assistant (with tool calls) + 3 tool results + final answer
+		require.GreaterOrEqual(t, len(results), 5, "expected at least 5 result messages")
+
+		// Verify tool results are in order by checking ToolUseIDs
+		toolResultIDs := []string{}
+		for _, msg := range results {
+			if msg.ToolResult != nil {
+				toolResultIDs = append(toolResultIDs, msg.ToolResult.ToolUseID)
+			}
+		}
+		require.Len(t, toolResultIDs, 3, "expected 3 tool result messages")
+		assert.Equal(t, "call_a", toolResultIDs[0])
+		assert.Equal(t, "call_b", toolResultIDs[1])
+		assert.Equal(t, "call_c", toolResultIDs[2])
+
+		// Verify final response
+		lastMsg := results[len(results)-1]
+		assert.Equal(t, "assistant", lastMsg.Role)
+		assert.Equal(t, "All three checks completed.", lastMsg.Content)
+
+		mockProvider.AssertExpectations(t)
+	})
+
+	t.Run("SingleToolCallNoGoroutineOverhead", func(t *testing.T) {
+		// Ensure single tool calls still work correctly (no regression)
+		mockProvider := &MockProvider{}
+		loop := NewAgenticLoop(mockProvider, executor, "You are a helper")
+		ctx := context.Background()
+		sessionID := "single-tool-session"
+		messages := []Message{{Role: "user", Content: "Check one thing"}}
+
+		mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+			return len(req.Messages) == 1
+		}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+			callback := args.Get(2).(providers.StreamCallback)
+			callback(providers.StreamEvent{
+				Type: "tool_start",
+				Data: providers.ToolStartEvent{ID: "call_single", Name: "pulse_query"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{
+					ToolCalls: []providers.ToolCall{
+						{ID: "call_single", Name: "pulse_query", Input: map[string]interface{}{
+							"action": "get", "resource_type": "vm", "resource_id": "100",
+						}},
+					},
+				},
+			})
+		}).Once()
+
+		mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+			return len(req.Messages) >= 3
+		}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+			callback := args.Get(2).(providers.StreamCallback)
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "Done."},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{},
+			})
+		}).Once()
+
+		var toolEndCount int
+		results, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {
+			if event.Type == "tool_end" {
+				toolEndCount++
+			}
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, 1, toolEndCount, "expected 1 tool_end event")
+
+		// Verify final response
+		lastMsg := results[len(results)-1]
+		assert.Equal(t, "Done.", lastMsg.Content)
+
+		mockProvider.AssertExpectations(t)
+	})
+}
