@@ -77,7 +77,9 @@ func seedCorrelationDetector(now time.Time) *ai.CorrelationDetector {
 	return detector
 }
 
-func TestHandleGetPatterns_LockedWithData(t *testing.T) {
+func TestHandleGetPatterns_UnlockedWithData(t *testing.T) {
+	// License gates were removed from intelligence endpoints (9279358c).
+	// Even with allow=false, data is returned without redaction.
 	t.Setenv("PULSE_MOCK_MODE", "true")
 	handler, _ := setupAIHandlerWithIntelligence(t)
 
@@ -92,8 +94,8 @@ func TestHandleGetPatterns_LockedWithData(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	if rec.Header().Get("X-License-Required") != "true" {
-		t.Fatalf("expected license header to be set")
+	if rec.Header().Get("X-License-Required") != "" {
+		t.Fatalf("expected no license header after license gates removed, got %q", rec.Header().Get("X-License-Required"))
 	}
 
 	var resp struct {
@@ -107,11 +109,11 @@ func TestHandleGetPatterns_LockedWithData(t *testing.T) {
 	if resp.Count != 1 {
 		t.Fatalf("count = %d, want 1", resp.Count)
 	}
-	if len(resp.Patterns) != 0 {
-		t.Fatalf("expected patterns to be redacted")
+	if len(resp.Patterns) != 1 {
+		t.Fatalf("expected patterns to be returned (not redacted), got %d", len(resp.Patterns))
 	}
-	if !resp.LicenseRequired {
-		t.Fatalf("expected license_required=true")
+	if resp.LicenseRequired {
+		t.Fatalf("expected license_required=false")
 	}
 }
 

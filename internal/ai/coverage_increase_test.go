@@ -16,7 +16,7 @@ func TestPatrolService_BroadcastFullChannel(t *testing.T) {
 	// Subscribe with a small buffer
 	ch := make(chan PatrolStreamEvent, 1)
 	ps.streamMu.Lock()
-	ps.streamSubscribers[ch] = struct{}{}
+	ps.streamSubscribers[ch] = &streamSubscriber{ch: ch}
 	ps.streamMu.Unlock()
 
 	// Fill the channel
