@@ -446,6 +446,7 @@ Legacy system settings endpoint (read-only).
 ### Toggle Mock Mode
 `GET /api/system/mock-mode`
 `POST /api/system/mock-mode`
+`PUT /api/system/mock-mode`
 Enable or disable mock data generation (dev/demo only).
 
 ### SSH Config (Temperature Monitoring)
@@ -728,12 +729,33 @@ Unlinks a host agent from a node.
 `DELETE /api/agents/host/{host_id}` (admin, `host-agent:manage`)  
 Removes a host agent from state.
 
+### Host Agent Linking (Admin)
+- `POST /api/agents/host/link` (admin, `host-agent:manage`)
+- `POST /api/agents/host/unlink` (admin, `host-agent:manage`)
+
 ### Agent Remote Config
 `GET /api/agents/host/{agent_id}/config`  
 Returns the server-side config payload for an agent (used by remote config and debugging). Requires `host-agent:config:read`.
 
 `PATCH /api/agents/host/{agent_id}/config` (admin, `host-agent:manage`)  
 Updates server-side config for an agent (e.g., `commandsEnabled`).
+
+### Docker Agent Management (Admin)
+- `POST /api/agents/docker/commands/{commandId}/ack` (`docker:report`)
+- `DELETE /api/agents/docker/hosts/{hostId}` (`docker:manage`, supports `?hide=true` or `?force=true`)
+- `POST /api/agents/docker/hosts/{hostId}/allow-reenroll` (`docker:manage`)
+- `PUT /api/agents/docker/hosts/{hostId}/unhide` (`docker:manage`)
+- `PUT /api/agents/docker/hosts/{hostId}/pending-uninstall` (`docker:manage`)
+- `PUT /api/agents/docker/hosts/{hostId}/display-name` (`docker:manage`)
+- `POST /api/agents/docker/hosts/{hostId}/check-updates` (`docker:manage`)
+- `POST /api/agents/docker/containers/update` (`docker:manage`)
+
+### Kubernetes Agent Management (Admin)
+- `DELETE /api/agents/kubernetes/clusters/{clusterId}` (`kubernetes:manage`, supports `?hide=true` or `?force=true`)
+- `POST /api/agents/kubernetes/clusters/{clusterId}/allow-reenroll` (`kubernetes:manage`)
+- `PUT /api/agents/kubernetes/clusters/{clusterId}/unhide` (`kubernetes:manage`)
+- `PUT /api/agents/kubernetes/clusters/{clusterId}/pending-uninstall` (`kubernetes:manage`)
+- `PUT /api/agents/kubernetes/clusters/{clusterId}/display-name` (`kubernetes:manage`)
 
 ### Agent Profiles (Pro)
 `GET /api/admin/profiles` (admin, Pro)
@@ -752,6 +774,13 @@ Updates server-side config for an agent (e.g., `commandsEnabled`).
 `GET /api/admin/profiles/assignments` (admin, Pro)
 `POST /api/admin/profiles/assignments` (admin, Pro)
 `DELETE /api/admin/profiles/assignments/{agent_id}` (admin, Pro)
+
+---
+
+## 🔌 WebSocket Endpoints
+
+- `GET /ws` – Primary UI WebSocket (browser sessions).
+- `GET /api/agent/ws` – Agent WebSocket used for AI command execution.
 
 ---
 
