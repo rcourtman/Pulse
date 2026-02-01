@@ -9,10 +9,6 @@ import { StackedMemoryBar } from './StackedMemoryBar';
 
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
-import { GuestMetadataAPI } from '@/api/guestMetadata';
-import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
-import { showSuccess, showError } from '@/utils/toast';
-import { logger } from '@/utils/logger';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { type ColumnPriority } from '@/hooks/useBreakpoint';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
@@ -343,31 +339,26 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
   return (
     <>
       <span
-        class={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${config().bgColor} ${config().color}`}
+        class={`flex-shrink-0 cursor-help ${config().color}`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        aria-label={`Backup status: ${info().status}`}
       >
-        {/* Status icon */}
-        <Show when={info().status === 'fresh'}>
-          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-        </Show>
-        <Show when={info().status === 'stale'}>
-          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </Show>
-        <Show when={info().status === 'critical' || info().status === 'never'}>
-          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </Show>
-        {/* Status text */}
-        {info().status === 'fresh' && 'OK'}
-        {info().status === 'stale' && info().ageFormatted}
-        {info().status === 'critical' && info().ageFormatted}
-        {info().status === 'never' && 'Never'}
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          {/* Shield shape */}
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+
+          {/* Inner icon based on status */}
+          <Show when={config().icon === 'check'}>
+            <path d="m9 12 2 2 4-4" />
+          </Show>
+          <Show when={config().icon === 'warning'}>
+            <path d="M12 8v4M12 16h.01" />
+          </Show>
+          <Show when={config().icon === 'x'}>
+            <path d="M10 10l4 4M14 10l-4 4" />
+          </Show>
+        </svg>
       </span>
 
       <Show when={showTooltip()}>
@@ -522,70 +513,6 @@ export function GuestRow(props: GuestRowProps) {
   const diskAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'disk');
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
-  const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
-
-  // URL editing using shared hook
-  const urlEdit = createUrlEditState();
-
-  const handleStartEditingUrl = (event: MouseEvent) => {
-    urlEdit.startEditing(guestId(), customUrl() || '', event);
-  };
-
-  const handleSaveUrl = async () => {
-    const newUrl = urlEdit.editingValue().trim();
-    urlEdit.setIsSaving(true);
-
-    try {
-      await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: newUrl });
-
-      const hadUrl = !!customUrl();
-      if (!hadUrl && newUrl) {
-        setShouldAnimateIcon(true);
-        setTimeout(() => setShouldAnimateIcon(false), 200);
-      }
-
-      setCustomUrl(newUrl || undefined);
-
-      if (props.onCustomUrlUpdate) {
-        props.onCustomUrlUpdate(guestId(), newUrl);
-      }
-
-      if (newUrl) {
-        showSuccess('Guest URL saved');
-      } else {
-        showSuccess('Guest URL cleared');
-      }
-
-      urlEdit.finishEditing();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save guest URL';
-      logger.error('Failed to save guest URL:', err);
-      showError(message);
-      urlEdit.setIsSaving(false);
-    }
-  };
-
-  const handleDeleteUrl = async () => {
-    urlEdit.setIsSaving(true);
-
-    try {
-      await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: '' });
-
-      setCustomUrl(undefined);
-
-      if (props.onCustomUrlUpdate) {
-        props.onCustomUrlUpdate(guestId(), '');
-      }
-
-      showSuccess('Guest URL removed');
-      urlEdit.finishEditing();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to remove guest URL';
-      logger.error('Failed to remove guest URL:', err);
-      showError(message);
-      urlEdit.setIsSaving(false);
-    }
-  };
 
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
   const networkInterfaces = createMemo(() => props.guest.networkInterfaces ?? []);
@@ -615,18 +542,7 @@ export function GuestRow(props: GuestRowProps) {
 
   // Update custom URL when prop changes
   createEffect(() => {
-    const prevUrl = customUrl();
-    const newUrl = props.customUrl;
-
-    // Only animate when URL transitions from empty to having a value
-    // Use a tracking variable to prevent initial mount animation if desired, but here we want to animate on first add
-    if (prevUrl === undefined && newUrl) {
-      setShouldAnimateIcon(true);
-      // Remove animation class after it completes
-      setTimeout(() => setShouldAnimateIcon(false), 200);
-    }
-
-    setCustomUrl(newUrl);
+    setCustomUrl(props.customUrl);
   });
 
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
@@ -791,7 +707,7 @@ export function GuestRow(props: GuestRowProps) {
                     href={customUrl()}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                    class="flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                     title={`Open ${customUrl()}`}
                     onClick={(event) => event.stopPropagation()}
                   >
@@ -810,17 +726,6 @@ export function GuestRow(props: GuestRowProps) {
                     </svg>
                   </a>
                 </Show>
-                {/* Edit URL button - shows on hover */}
-                <button
-                  type="button"
-                  onClick={handleStartEditingUrl}
-                  class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
-                  title={customUrl() ? 'Edit URL' : 'Add URL'}
-                >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </button>
                 {/* Show backup indicator in name cell only if backup column is hidden */}
                 <Show when={!isColVisible('backup')}>
                   <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
@@ -1100,20 +1005,6 @@ export function GuestRow(props: GuestRowProps) {
         </Show>
       </tr>
 
-      {/* URL editing popover - using shared component */}
-      <UrlEditPopover
-        isOpen={urlEdit.isEditing() && urlEdit.editingId() === guestId()}
-        value={urlEdit.editingValue()}
-        position={urlEdit.position()}
-        isSaving={urlEdit.isSaving()}
-        hasExistingUrl={!!customUrl()}
-        placeholder="https://192.168.1.100:8080"
-        helpText="Add a URL to quickly access this guest's web interface"
-        onValueChange={urlEdit.setEditingValue}
-        onSave={handleSaveUrl}
-        onCancel={urlEdit.cancelEditing}
-        onDelete={handleDeleteUrl}
-      />
     </>
   );
 }

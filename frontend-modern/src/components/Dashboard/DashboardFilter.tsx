@@ -3,9 +3,7 @@ import { Card } from '@/components/shared/Card';
 import { SearchTipsPopover } from '@/components/shared/SearchTipsPopover';
 import { MetricsViewToggle } from '@/components/shared/MetricsViewToggle';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
-import { InvestigateProblemsButton } from './InvestigateProblemsButton';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
-import type { VM, Container } from '@/types/api';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
 
@@ -17,10 +15,6 @@ interface DashboardFilterProps {
   setViewMode: (value: 'all' | 'vm' | 'lxc') => void;
   statusMode: () => 'all' | 'running' | 'degraded' | 'stopped';
   setStatusMode: (value: 'all' | 'running' | 'degraded' | 'stopped') => void;
-  problemsMode: () => 'all' | 'problems';
-  setProblemsMode: (value: 'all' | 'problems') => void;
-  /** Guests that match the problems filter - used for AI investigation */
-  filteredProblemGuests?: () => (VM | Container)[];
   groupingMode: () => 'grouped' | 'flat';
   setGroupingMode: (value: 'grouped' | 'flat') => void;
   setSortKey: (value: string) => void;
@@ -302,34 +296,6 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 
         {/* Row 2: Filters - grouped for logical wrapping */}
         <div class="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-2">
-          {/* Problems Toggle - Prominent "Show me issues" button */}
-          <button
-            type="button"
-            onClick={() => props.setProblemsMode(props.problemsMode() === 'problems' ? 'all' : 'problems')}
-            class={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150 active:scale-95 ${props.problemsMode() === 'problems'
-              ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-md shadow-red-500/25 ring-1 ring-red-400'
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-            title="Show guests that need attention: degraded status, backup issues, or high resource usage (>90%)"
-          >
-            <svg class={`w-3.5 h-3.5 ${props.problemsMode() === 'problems' ? 'animate-pulse' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            Problems
-          </button>
-
-          {/* AI Investigation button - appears when problems mode is active */}
-          <Show when={props.filteredProblemGuests}>
-            <InvestigateProblemsButton
-              problemGuests={props.filteredProblemGuests!()}
-              isProblemsMode={props.problemsMode() === 'problems'}
-            />
-          </Show>
-
-          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-
           {/* Primary Filters Group: Type + Status */}
           <div class="flex flex-wrap items-center gap-2">
             {/* Type Filter */}
@@ -492,7 +458,6 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             props.search().trim() !== '' ||
             props.viewMode() !== 'all' ||
             props.statusMode() !== 'all' ||
-            props.problemsMode() !== 'all' ||
             props.groupingMode() !== 'grouped'
           }>
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
@@ -503,7 +468,6 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                 props.setSortDirection('asc');
                 props.setViewMode('all');
                 props.setStatusMode('all');
-                props.setProblemsMode('all');
                 props.setGroupingMode('grouped');
               }}
               title="Reset all filters"

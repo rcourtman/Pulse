@@ -8,6 +8,7 @@ import {
     getCategoryDisplayName,
     getConfidenceLevel,
 } from '../../api/discovery';
+import { GuestMetadataAPI } from '../../api/guestMetadata';
 import { eventBus } from '../../stores/events';
 
 interface DiscoveryTabProps {
@@ -15,6 +16,12 @@ interface DiscoveryTabProps {
     hostId: string;
     resourceId: string;
     hostname: string;
+    /** Canonical guest ID used for metadata API calls */
+    guestId?: string;
+    /** Current custom URL for this guest */
+    customUrl?: string;
+    /** Called after a URL is saved or deleted so the parent can update its state */
+    onCustomUrlChange?: (url: string) => void;
 }
 
 // Construct the resource ID in the same format the backend uses
@@ -25,6 +32,43 @@ const makeResourceId = (type: ResourceType, hostId: string, resourceId: string) 
 export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     const [isScanning, setIsScanning] = createSignal(false);
     const [editingNotes, setEditingNotes] = createSignal(false);
+
+    // --- Guest URL editing state ---
+    const [urlValue, setUrlValue] = createSignal(props.customUrl ?? '');
+    const [urlSaving, setUrlSaving] = createSignal(false);
+
+    // Keep local value in sync with prop changes
+    createEffect(() => {
+        setUrlValue(props.customUrl ?? '');
+    });
+
+    const handleSaveUrl = async () => {
+        if (!props.guestId) return;
+        const trimmed = urlValue().trim();
+        setUrlSaving(true);
+        try {
+            await GuestMetadataAPI.updateMetadata(props.guestId, { customUrl: trimmed });
+            props.onCustomUrlChange?.(trimmed);
+        } catch (err) {
+            console.error('Failed to save guest URL:', err);
+        } finally {
+            setUrlSaving(false);
+        }
+    };
+
+    const handleDeleteUrl = async () => {
+        if (!props.guestId) return;
+        setUrlSaving(true);
+        try {
+            await GuestMetadataAPI.updateMetadata(props.guestId, { customUrl: '' });
+            setUrlValue('');
+            props.onCustomUrlChange?.('');
+        } catch (err) {
+            console.error('Failed to remove guest URL:', err);
+        } finally {
+            setUrlSaving(false);
+        }
+    };
     const [notesText, setNotesText] = createSignal('');
     const [saveError, setSaveError] = createSignal<string | null>(null);
     const [scanProgress, setScanProgress] = createSignal<DiscoveryProgress | null>(null);
@@ -407,6 +451,48 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                     </p>
                                 </div>
                             </details>
+                        </Show>
+
+                        {/* Web Interface URL */}
+                        <Show when={props.guestId}>
+                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">
+                                    Web Interface URL
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        type="url"
+                                        class="flex-1 text-xs px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                        placeholder="https://192.168.1.100:8080"
+                                        value={urlValue()}
+                                        onInput={(e) => setUrlValue(e.currentTarget.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveUrl(); }}
+                                        disabled={urlSaving()}
+                                    />
+                                    <button
+                                        type="button"
+                                        class="px-2.5 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                        disabled={urlSaving() || urlValue().trim() === (props.customUrl ?? '')}
+                                        onClick={handleSaveUrl}
+                                    >
+                                        Save
+                                    </button>
+                                    <Show when={props.customUrl}>
+                                        <button
+                                            type="button"
+                                            class="px-2.5 py-1.5 text-xs font-medium rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+                                            disabled={urlSaving()}
+                                            onClick={handleDeleteUrl}
+                                            title="Remove URL"
+                                        >
+                                            Remove
+                                        </button>
+                                    </Show>
+                                </div>
+                                <p class="mt-1.5 text-[10px] text-gray-400 dark:text-gray-500">
+                                    Add a URL to quickly access this guest's web interface from the dashboard.
+                                </p>
+                            </div>
                         </Show>
 
                         {/* Footer with Update button */}

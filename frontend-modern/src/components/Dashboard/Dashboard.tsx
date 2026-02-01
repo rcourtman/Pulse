@@ -24,7 +24,6 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import { getBackupInfo } from '@/utils/format';
 import { aiChatStore } from '@/stores/aiChat';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 
@@ -204,8 +203,6 @@ interface DashboardProps {
 type ViewMode = 'all' | 'vm' | 'lxc';
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
-type ProblemsMode = 'all' | 'problems';
-
 export function Dashboard(props: DashboardProps) {
   const navigate = useNavigate();
   const ws = useWebSocket();
@@ -230,7 +227,32 @@ export function Dashboard(props: DashboardProps) {
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
-  const [selectedGuestId, setSelectedGuestId] = createSignal<string | null>(null);
+  const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
+
+  // Wrap setSelectedGuestId to preserve scroll position. Opening/closing the
+  // drawer mounts/unmounts GuestDrawer (which contains DiscoveryTab). The
+  // DiscoveryTab initialization triggers SolidJS to recreate the <For> row,
+  // which detaches/reattaches DOM and resets the scroll container's scrollTop.
+  // We find the scroll container, save its position, and restore it after.
+  let tableRef: HTMLDivElement | undefined;
+  const setSelectedGuestId = (id: string | null) => {
+    // Find the nearest ancestor scroll container from the table
+    let scroller: HTMLElement | null = tableRef ?? null;
+    while (scroller) {
+      const { overflowY } = getComputedStyle(scroller);
+      if ((overflowY === 'auto' || overflowY === 'scroll') && scroller.scrollHeight > scroller.clientHeight) {
+        break;
+      }
+      scroller = scroller.parentElement;
+    }
+    const scrollTop = scroller?.scrollTop ?? 0;
+    setSelectedGuestIdRaw(id);
+    // Restore scroll position — opening the drawer can cause layout changes
+    if (scroller) scroller.scrollTop = scrollTop;
+    requestAnimationFrame(() => {
+      if (scroller) scroller.scrollTop = scrollTop;
+    });
+  };
   const [guestMetadata, setGuestMetadata] = createSignal<GuestMetadataRecord>(
     readGuestMetadataCache(),
   );
@@ -266,15 +288,6 @@ export function Dashboard(props: DashboardProps) {
     'grouped',
     {
       deserialize: (raw) => (raw === 'grouped' || raw === 'flat' ? raw : 'grouped'),
-    },
-  );
-
-  // Problems mode - show only guests with issues
-  const [problemsMode, setProblemsMode] = usePersistentSignal<ProblemsMode>(
-    'dashboardProblemsMode',
-    'all',
-    {
-      deserialize: (raw) => (raw === 'all' || raw === 'problems' ? raw : 'all'),
     },
   );
 
@@ -587,8 +600,7 @@ export function Dashboard(props: DashboardProps) {
           sortDirection() !== 'asc' ||
           selectedNode() !== null ||
           viewMode() !== 'all' ||
-          statusMode() !== 'all' ||
-          problemsMode() !== 'all';
+          statusMode() !== 'all';
 
         if (hasActiveFilters) {
           // Clear ALL filters including search text, tag filters, node selection, and view modes
@@ -599,7 +611,6 @@ export function Dashboard(props: DashboardProps) {
           setSelectedNode(null);
           setViewMode('all');
           setStatusMode('all');
-          setProblemsMode('all');
 
           // Blur the search input if it's focused
           if (searchInputRef && document.activeElement === searchInputRef) {
@@ -631,32 +642,6 @@ export function Dashboard(props: DashboardProps) {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  });
-
-  // Compute guests with problems - used for AI investigation regardless of filter state
-  const problemGuests = createMemo(() => {
-    return allGuests().filter((g) => {
-      // Skip templates
-      if (g.template) return false;
-
-      // Check for degraded status
-      const status = (g.status || '').toLowerCase();
-      const isDegraded = DEGRADED_HEALTH_STATUSES.has(status) ||
-        (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status) && status !== 'stopped');
-      if (isDegraded) return true;
-
-      // Check for backup issues
-      const backupInfo = getBackupInfo(g.lastBackup, alertsActivation.getBackupThresholds());
-      if (backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never') {
-        return true;
-      }
-
-      // Check for high resource usage (>90%)
-      if (g.cpu > 0.9) return true;
-      if (g.memory && g.memory.usage && g.memory.usage > 90) return true;
-
-      return false;
-    });
   });
 
   // Filter guests based on current settings
@@ -696,32 +681,6 @@ export function Dashboard(props: DashboardProps) {
       });
     } else if (statusMode() === 'stopped') {
       guests = guests.filter((g) => g.status !== 'running');
-    }
-
-    // Filter by problems mode - show guests that need attention (includes backup issues)
-    if (problemsMode() === 'problems') {
-      guests = guests.filter((g) => {
-        // Skip templates
-        if (g.template) return false;
-
-        // Check for degraded status
-        const status = (g.status || '').toLowerCase();
-        const isDegraded = DEGRADED_HEALTH_STATUSES.has(status) ||
-          (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status) && status !== 'stopped');
-        if (isDegraded) return true;
-
-        // Check for backup issues
-        const backupInfo = getBackupInfo(g.lastBackup, alertsActivation.getBackupThresholds());
-        if (backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never') {
-          return true;
-        }
-
-        // Check for high resource usage (>90%)
-        if (g.cpu > 0.9) return true;
-        if (g.memory && g.memory.usage && g.memory.usage > 90) return true;
-
-        return false;
-      });
     }
 
     // Apply search/filter
@@ -928,9 +887,6 @@ export function Dashboard(props: DashboardProps) {
           setViewMode={setViewMode}
           statusMode={statusMode}
           setStatusMode={setStatusMode}
-          problemsMode={problemsMode}
-          setProblemsMode={setProblemsMode}
-          filteredProblemGuests={problemGuests}
           groupingMode={groupingMode}
           setGroupingMode={setGroupingMode}
           setSortKey={setSortKey}
@@ -1064,7 +1020,7 @@ export function Dashboard(props: DashboardProps) {
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
-            <div class="overflow-x-auto">
+            <div ref={tableRef} class="overflow-x-auto">
               <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "800px" : "900px" }}>
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
@@ -1156,6 +1112,8 @@ export function Dashboard(props: DashboardProps) {
                                             guest={guest}
                                             metricsKey={buildMetricKey(guest.type === 'qemu' ? 'vm' : 'container', guestId)}
                                             onClose={() => setSelectedGuestId(null)}
+                                            customUrl={getMetadata()?.customUrl}
+                                            onCustomUrlChange={handleCustomUrlUpdate}
                                           />
                                         </div>
                                       </td>
