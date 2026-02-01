@@ -79,6 +79,7 @@ import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Terminal from 'lucide-solid/icons/terminal';
+import Container from 'lucide-solid/icons/container';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
@@ -408,7 +409,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const deriveTabFromPath = (path: string): SettingsTab => {
     if (path.includes('/settings/proxmox')) return 'proxmox';
     if (path.includes('/settings/agent-hub')) return 'proxmox';
-    if (path.includes('/settings/docker')) return 'agents';
+    if (path.includes('/settings/docker')) return 'docker';
     if (path.includes('/settings/containers')) return 'agents';
     if (
       path.includes('/settings/hosts') ||
@@ -936,6 +937,7 @@ const Settings: Component<SettingsProps> = (props) => {
         items: [
           { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
           { id: 'agents', label: 'Agents', icon: Bot, iconProps: { strokeWidth: 2 } },
+          { id: 'docker', label: 'Docker', icon: Container, iconProps: { strokeWidth: 2 } },
         ],
       },
       {
@@ -3347,6 +3349,14 @@ const Settings: Component<SettingsProps> = (props) => {
               </Show>
               {/* Unified Agents Tab */}
               <Show when={activeTab() === 'agents'}>
+                <UnifiedAgents />
+
+                {/* Agent Profiles (Pro Feature) */}
+                <AgentProfilesPanel />
+              </Show>
+
+              {/* Docker Tab */}
+              <Show when={activeTab() === 'docker'}>
                 {/* Docker Settings Card */}
                 <Card padding="lg" class="mb-6">
                   <div class="space-y-4">
@@ -3404,11 +3414,6 @@ const Settings: Component<SettingsProps> = (props) => {
                     </div>
                   </div>
                 </Card>
-
-                <UnifiedAgents />
-
-                {/* Agent Profiles (Pro Feature) */}
-                <AgentProfilesPanel />
               </Show>
 
               {/* System Logs Tab */}
