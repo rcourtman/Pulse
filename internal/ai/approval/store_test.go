@@ -529,8 +529,8 @@ func TestStorePersistence(t *testing.T) {
 	}
 	store1.StoreExecution(state)
 
-	// Wait for async persistence to complete
-	time.Sleep(100 * time.Millisecond)
+	// Flush debounced writes to disk immediately
+	store1.Flush()
 
 	// Create new store from same directory
 	store2, _ := NewStore(StoreConfig{

@@ -71,6 +71,8 @@ type Store struct {
 	defaultTimeout time.Duration
 	maxApprovals   int
 	persist        bool
+	saveTimer      *time.Timer
+	savePending    bool
 }
 
 // StoreConfig configures the approval store.
@@ -470,11 +472,59 @@ func (s *Store) save() {
 	}
 }
 
+// scheduleSave debounces save operations: at most one write per 5 seconds.
+// Must be called while s.mu is held (read or write lock).
+func (s *Store) scheduleSave() {
+	if !s.persist || s.savePending {
+		return
+	}
+	s.savePending = true
+	s.saveTimer = time.AfterFunc(5*time.Second, func() {
+		s.mu.RLock()
+		s.savePending = false
+
+		approvals := make([]*ApprovalRequest, 0, len(s.approvals))
+		for _, a := range s.approvals {
+			approvals = append(approvals, a)
+		}
+		executions := make([]*ExecutionState, 0, len(s.executions))
+		for _, e := range s.executions {
+			executions = append(executions, e)
+		}
+		s.mu.RUnlock()
+
+		if data, err := json.MarshalIndent(approvals, "", "  "); err == nil {
+			if err := os.WriteFile(s.approvalsFile(), data, 0600); err != nil {
+				log.Error().Err(err).Msg("Failed to save approvals")
+			}
+		}
+		if data, err := json.MarshalIndent(executions, "", "  "); err == nil {
+			if err := os.WriteFile(s.executionsFile(), data, 0600); err != nil {
+				log.Error().Err(err).Msg("Failed to save executions")
+			}
+		}
+	})
+}
+
+// Flush triggers an immediate save, cancelling any pending debounced save.
+// Intended for shutdown paths.
+func (s *Store) Flush() {
+	s.mu.Lock()
+	if s.saveTimer != nil {
+		s.saveTimer.Stop()
+	}
+	s.savePending = false
+	s.mu.Unlock()
+
+	s.save()
+}
+
+// saveAsync is kept as a thin wrapper for backward compatibility.
 func (s *Store) saveAsync() {
 	if !s.persist {
 		return
 	}
-	go s.save()
+	s.scheduleSave()
 }
 
 // StartCleanup begins periodic cleanup of expired approvals and executions.
