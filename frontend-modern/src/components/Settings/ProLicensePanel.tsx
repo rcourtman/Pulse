@@ -4,6 +4,8 @@ import { formField, formHelpText, labelClass, controlClass } from '@/components/
 import { notificationStore } from '@/stores/notifications';
 import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
+import ShieldCheck from 'lucide-solid/icons/shield-check';
+import BadgeCheck from 'lucide-solid/icons/badge-check';
 
 const PULSE_PRO_URL = 'https://pulserelay.pro/';
 const PULSE_PRO_MANAGE_URL = 'https://pulserelay.pro/manage';
@@ -155,6 +157,7 @@ export const ProLicensePanel: Component = () => {
       <SettingsPanel
         title="Pulse Pro License"
         description="Activate your Pulse Pro license to unlock auto-fix, alert-triggered AI, and advanced features."
+        icon={<ShieldCheck class="w-5 h-5" />}
         action={
           <button
             class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-60"
@@ -202,6 +205,7 @@ export const ProLicensePanel: Component = () => {
       <SettingsPanel
         title="Current License"
         description="Review your active tier, expiry, and available features."
+        icon={<BadgeCheck class="w-5 h-5" />}
       >
         <Show when={!loading()} fallback={<p class="text-sm text-gray-500">Loading license status...</p>}>
           <div class="flex flex-wrap items-center gap-2">

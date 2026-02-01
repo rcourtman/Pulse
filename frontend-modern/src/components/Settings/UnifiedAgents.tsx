@@ -2,6 +2,9 @@ import { Component, createSignal, Show, For, onMount, createEffect, createMemo }
 import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
+import SettingsPanel from '@/components/shared/SettingsPanel';
+import Server from 'lucide-solid/icons/server';
+import Users from 'lucide-solid/icons/users';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { MonitoringAPI } from '@/api/monitoring';
@@ -811,13 +814,12 @@ export const UnifiedAgents: Component = () => {
 
     return (
         <div class="space-y-6">
-            <Card padding="lg" class="space-y-5">
-                <div class="space-y-1">
-                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Add a unified agent</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">
-                        Monitor server metrics (CPU, RAM, Disk) and Docker containers with a single agent.
-                    </p>
-                </div>
+            <SettingsPanel
+                title="Add a unified agent"
+                description="Monitor server metrics (CPU, RAM, Disk) and Docker containers with a single agent."
+                icon={<Server class="w-5 h-5" strokeWidth={2} />}
+                bodyClass="space-y-5"
+            >
 
                 <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
                     <div class="flex items-start gap-3">
@@ -1192,15 +1194,14 @@ export const UnifiedAgents: Component = () => {
                         </div>
                     </div>
                 </div>
-            </Card>
+            </SettingsPanel>
 
-            <Card padding="lg" class="space-y-4">
-                <div class="space-y-1">
-                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Managed Agents</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">
-                        All active and removed agents, including Kubernetes clusters.
-                    </p>
-                </div>
+            <SettingsPanel
+                title="Managed Agents"
+                description="All active and removed agents, including Kubernetes clusters."
+                icon={<Users class="w-5 h-5" strokeWidth={2} />}
+                bodyClass="space-y-4"
+            >
 
                 <Show when={hasLinkedAgents()}>
                     <div class="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/20">
@@ -1661,7 +1662,7 @@ export const UnifiedAgents: Component = () => {
                         </tbody>
                     </table>
                 </Card>
-            </Card>
+            </SettingsPanel>
         </div >
     );
 };
