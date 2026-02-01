@@ -8,12 +8,18 @@
 import { Component, Show, createSignal, createResource, createMemo } from 'solid-js';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
+import { aiChatStore } from '@/stores/aiChat';
+import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { RemediationStatus } from './RemediationStatus';
 
 interface ApprovalSectionProps {
   findingId: string;
   investigationOutcome?: string;
+  findingTitle?: string;
+  resourceName?: string;
+  resourceType?: string;
+  resourceId?: string;
 }
 
 export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
@@ -26,6 +32,30 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       (a: ApprovalRequest) => a.toolId === 'investigation_fix' && a.targetId === props.findingId && a.status === 'pending'
     ) ?? null;
   });
+
+  const canAutoFix = createMemo(() => hasFeature('ai_autofix'));
+
+  const handleFixWithAssistant = (approval: ApprovalRequest | null, fix: { description?: string; commands?: string[]; target_host?: string; risk_level?: string; rationale?: string } | null, e: Event) => {
+    e.stopPropagation();
+    const desc = approval?.context || fix?.description || 'No description available';
+    const command = approval?.command || (fix?.commands && fix.commands.length > 0 ? fix.commands[0] : undefined);
+    const targetHost = approval?.targetName || fix?.target_host;
+    const riskLevel = approval?.riskLevel || fix?.risk_level || 'unknown';
+    const rationale = fix?.rationale;
+
+    let prompt = `Patrol investigated a finding and proposed a fix. Please help me execute it.\n\n**Finding:** ${props.findingTitle || 'Unknown finding'} on ${props.resourceName || 'unknown resource'}\n**Proposed fix:** ${desc}`;
+    if (command) prompt += `\n**Command:** \`${command}\``;
+    if (targetHost) prompt += `\n**Target:** ${targetHost}`;
+    prompt += `\n**Risk level:** ${riskLevel}`;
+    if (rationale) prompt += `\n**Rationale:** ${rationale}`;
+    prompt += `\n\nPlease execute this fix on the target host.`;
+
+    aiChatStore.openWithPrompt(prompt, {
+      targetType: props.resourceType,
+      targetId: props.resourceId,
+      findingId: props.findingId,
+    });
+  };
 
   // Load investigation details when outcome indicates a fix was proposed/executed
   const fixRelatedOutcomes = new Set(['fix_queued', 'fix_executed', 'fix_failed', 'fix_verified', 'fix_verification_failed']);
@@ -154,30 +184,44 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                   </div>
                 </div>
                 <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                  <button
-                    type="button"
-                    onClick={(e) => handleApprove(approval, e)}
-                    disabled={actionLoading() === approval.id}
-                    class="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
-                  >
-                    <Show when={actionLoading() === approval.id}>
-                      <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    </Show>
-                    <Show when={actionLoading() !== approval.id}>
+                  <Show when={canAutoFix()}>
+                    <button
+                      type="button"
+                      onClick={(e) => handleApprove(approval, e)}
+                      disabled={actionLoading() === approval.id}
+                      class="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+                    >
+                      <Show when={actionLoading() === approval.id}>
+                        <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      </Show>
+                      <Show when={actionLoading() !== approval.id}>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </Show>
+                      Approve & Execute
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeny(approval, e)}
+                      disabled={actionLoading() === approval.id}
+                      class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50 text-gray-600 dark:text-gray-400 text-xs font-medium rounded"
+                    >
+                      Deny
+                    </button>
+                  </Show>
+                  <Show when={!canAutoFix()}>
+                    <button
+                      type="button"
+                      onClick={(e) => handleFixWithAssistant(approval, null, e)}
+                      class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+                    >
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                       </svg>
-                    </Show>
-                    Approve & Execute
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleDeny(approval, e)}
-                    disabled={actionLoading() === approval.id}
-                    class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50 text-gray-600 dark:text-gray-400 text-xs font-medium rounded"
-                  >
-                    Deny
-                  </button>
+                      Fix with Assistant
+                    </button>
+                  </Show>
                 </div>
               </>
             );
@@ -214,22 +258,36 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                   </Show>
                 </div>
                 <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                  <button
-                    type="button"
-                    onClick={handleReapprove}
-                    disabled={actionLoading() === 'reapprove'}
-                    class="flex-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
-                  >
-                    <Show when={actionLoading() === 'reapprove'}>
-                      <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    </Show>
-                    <Show when={actionLoading() !== 'reapprove'}>
+                  <Show when={canAutoFix()}>
+                    <button
+                      type="button"
+                      onClick={handleReapprove}
+                      disabled={actionLoading() === 'reapprove'}
+                      class="flex-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+                    >
+                      <Show when={actionLoading() === 'reapprove'}>
+                        <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      </Show>
+                      <Show when={actionLoading() !== 'reapprove'}>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </Show>
+                      Re-approve & Execute
+                    </button>
+                  </Show>
+                  <Show when={!canAutoFix()}>
+                    <button
+                      type="button"
+                      onClick={(e) => handleFixWithAssistant(null, fix, e)}
+                      class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+                    >
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                       </svg>
-                    </Show>
-                    Re-approve & Execute
-                  </button>
+                      Fix with Assistant
+                    </button>
+                  </Show>
                 </div>
               </>
             );

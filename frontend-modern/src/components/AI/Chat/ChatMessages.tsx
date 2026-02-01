@@ -89,7 +89,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
             </svg>
           </div>
 
-          <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">
+          <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-6">
             {props.emptyState!.title}
           </h3>
           <Show when={props.emptyState!.subtitle}>
@@ -99,37 +99,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
           </Show>
 
           <div class="w-full max-w-xs space-y-6">
-            {/* Recent Sessions */}
-            <Show when={props.recentSessions && props.recentSessions.length > 0}>
-              <div class="space-y-2">
-                <div class="text-xs font-medium text-slate-400 dark:text-slate-500 text-left uppercase tracking-wider pl-1">
-                  Resume conversation
-                </div>
-                <For each={props.recentSessions}>
-                  {(session) => (
-                    <button
-                      type="button"
-                      onClick={() => props.onLoadSession?.(session.id)}
-                      class="w-full text-left px-4 py-3 rounded-xl bg-white dark:bg-slate-800/50 hover:bg-blue-50 dark:hover:bg-blue-900/10 border border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-800 transition-all group flex items-center gap-3"
-                    >
-                      <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                        </svg>
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        <div class="text-sm font-medium text-slate-700 dark:text-slate-200 truncate group-hover:text-blue-700 dark:group-hover:text-blue-300">
-                          {session.title || 'Untitled Conversation'}
-                        </div>
-                        <div class="text-[11px] text-slate-400 dark:text-slate-500 truncate">
-                          {new Date(session.updated_at).toLocaleDateString()} · {session.message_count} messages
-                        </div>
-                      </div>
-                    </button>
-                  )}
-                </For>
-              </div>
-            </Show>
+
 
             {/* Suggestions */}
             <Show when={props.emptyState!.suggestions && props.emptyState!.suggestions!.length > 0}>

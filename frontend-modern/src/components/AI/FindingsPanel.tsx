@@ -59,7 +59,7 @@ const sourceColors: Record<string, string> = {
 // Investigation status badge colors
 const investigationStatusColors: Record<InvestigationStatus, string> = {
   pending: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-  running: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
   completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
   failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
   needs_attention: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
@@ -148,7 +148,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     // Fetch legacy remediation plans
     AIAPI.getRemediationPlans()
       .then((response: { plans: RemediationPlan[] }) => setRemediationPlans(response.plans))
-      .catch(() => {}); // Silently ignore errors
+      .catch(() => { }); // Silently ignore errors
   });
 
   createEffect(() => {
@@ -449,11 +449,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const renderFindingItem = (finding: UnifiedFinding, showSourceBadge: boolean = false) => (
     <div
       id={`finding-${finding.id}`}
-      class={`p-3 cursor-pointer transition-colors ${
-        finding.status === 'active'
-          ? 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
-          : 'opacity-60 bg-gray-50/50 dark:bg-gray-800/30 hover:opacity-80'
-      }`}
+      class={`p-3 cursor-pointer transition-colors ${finding.status === 'active'
+        ? 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+        : 'opacity-60 bg-gray-50/50 dark:bg-gray-800/30 hover:opacity-80'
+        }`}
       onClick={() => {
         if (expandedId() === finding.id) {
           setExpandedId(null);
@@ -469,13 +468,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <div class="flex items-center gap-2 flex-wrap">
             {/* Status badge for non-active findings */}
             <Show when={finding.status !== 'active'}>
-              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                finding.status === 'resolved'
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                  : finding.status === 'snoozed'
+              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${finding.status === 'resolved'
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                : finding.status === 'snoozed'
                   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
                   : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
-              }`}>
+                }`}>
                 {finding.status === 'resolved' ? 'Resolved' : finding.status === 'snoozed' ? 'Snoozed' : 'Dismissed'}
               </span>
             </Show>
@@ -525,11 +523,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </span>
             </Show>
             {/* Title */}
-            <span class={`font-medium text-sm truncate ${
-              finding.status === 'active'
-                ? 'text-gray-900 dark:text-gray-100'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}>
+            <span class={`font-medium text-sm truncate ${finding.status === 'active'
+              ? 'text-gray-900 dark:text-gray-100'
+              : 'text-gray-500 dark:text-gray-400'
+              }`}>
               {finding.title}
             </span>
           </div>
@@ -832,6 +829,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         <ApprovalSection
           findingId={finding.id}
           investigationOutcome={finding.investigationOutcome}
+          findingTitle={finding.title}
+          resourceName={finding.resourceName}
+          resourceType={finding.resourceType}
+          resourceId={finding.resourceId}
         />
       </Show>
 
@@ -844,20 +845,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
               <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Remediation Plan</span>
-              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                plan().risk_level === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
+              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${plan().risk_level === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
                 plan().risk_level === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
-                'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-              }`}>
+                  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                }`}>
                 {plan().risk_level} risk
               </span>
-              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                plan().status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
+              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${plan().status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
                 plan().status === 'approved' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
-                plan().status === 'executing' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
-                plan().status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
-                'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-              }`}>
+                  plan().status === 'executing' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
+                    plan().status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
+                      'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                }`}>
                 {plan().status}
               </span>
             </div>
@@ -1023,15 +1022,15 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       <Show when={!aiIntelligenceStore.findingsLoading}>
         <Card padding="none" class="overflow-hidden">
           {/* Header */}
-          <div class="bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-900/30 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <div class="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-900/30 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
                 <span class="font-medium text-gray-900 dark:text-gray-100">Pulse Patrol Findings</span>
                 <Show when={patrolFindings().length > 0}>
-                  <span class="px-2 py-0.5 text-xs font-medium bg-purple-200 dark:bg-purple-700 text-purple-800 dark:text-purple-200 rounded-full">
+                  <span class="px-2 py-0.5 text-xs font-medium bg-blue-200 dark:bg-blue-700 text-blue-800 dark:text-blue-200 rounded-full">
                     {patrolFindings().length}
                   </span>
                 </Show>
@@ -1064,7 +1063,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                             </div>
                           </Show>
                           <Show when={props.nextPatrolAt}>
-                            <div class="flex items-center gap-1.5 text-purple-600 dark:text-purple-400">
+                            <div class="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
                               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                               </svg>
