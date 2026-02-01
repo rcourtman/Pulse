@@ -61,12 +61,13 @@ import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
 import Shield from 'lucide-solid/icons/shield';
+import ShieldCheck from 'lucide-solid/icons/shield-check';
 import Lock from 'lucide-solid/icons/lock';
 import Key from 'lucide-solid/icons/key';
 import Activity from 'lucide-solid/icons/activity';
 import Loader from 'lucide-solid/icons/loader';
 import Network from 'lucide-solid/icons/network';
-import Monitor from 'lucide-solid/icons/monitor';
+import Bot from 'lucide-solid/icons/bot';
 import Users from 'lucide-solid/icons/users';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
@@ -75,6 +76,7 @@ import Sparkles from 'lucide-solid/icons/sparkles';
 import FileText from 'lucide-solid/icons/file-text';
 import Globe from 'lucide-solid/icons/globe';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
+import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Terminal from 'lucide-solid/icons/terminal';
 import type { NodeConfig } from '@/types/nodes';
@@ -306,8 +308,8 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     description: 'Control how often Pulse queries Proxmox for backup tasks and snapshots.',
   },
   'system-ai': {
-    title: 'Pulse Assistant',
-    description: 'Configure Pulse Assistant and Patrol analysis and remediation suggestions.',
+    title: 'AI',
+    description: 'Configure AI providers, models, Pulse Assistant, and Patrol.',
   },
   'system-pro': {
     title: 'Pulse Pro',
@@ -933,7 +935,7 @@ const Settings: Component<SettingsProps> = (props) => {
         label: 'Platforms',
         items: [
           { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
-          { id: 'agents', label: 'Agents', icon: Monitor, iconProps: { strokeWidth: 2 } },
+          { id: 'agents', label: 'Agents', icon: Bot, iconProps: { strokeWidth: 2 } },
         ],
       },
       {
@@ -979,15 +981,14 @@ const Settings: Component<SettingsProps> = (props) => {
           },
           {
             id: 'system-ai',
-            label: 'Pulse Assistant',
+            label: 'AI',
             icon: Sparkles,
             iconProps: { strokeWidth: 2 },
           },
           {
             id: 'system-pro',
             label: 'Pulse Pro',
-            icon: BadgeCheck,
-            iconProps: { strokeWidth: 2 },
+            icon: PulseLogoIcon,
           },
           {
             id: 'reporting',
@@ -1029,7 +1030,7 @@ const Settings: Component<SettingsProps> = (props) => {
           {
             id: 'security-roles',
             label: 'Roles',
-            icon: Shield,
+            icon: ShieldCheck,
             iconProps: { strokeWidth: 2 },
           },
           {
@@ -2380,7 +2381,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 <Show when={!sidebarCollapsed()}>
                                   <span class="truncate">{item.label}</span>
                                   <Show when={item.badge && !isPro()}>
-                                    <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-md shadow-sm">
+                                    <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white rounded-md shadow-sm">
                                       {item.badge}
                                     </span>
                                   </Show>
@@ -3273,7 +3274,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={discoveredNodes().filter((n) => n.type === 'pmg')}>
                           {(server) => (
                             <div
-                              class="bg-gradient-to-r from-purple-50 to-transparent dark:from-purple-900/20 dark:to-transparent border-l-4 border-purple-500 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
+                              class="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
                               onClick={() => {
                                 setEditingNode(null);
                                 setCurrentNodeType('pmg');
