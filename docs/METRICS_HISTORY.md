@@ -58,7 +58,7 @@ These endpoints require authentication with the `monitoring:read` scope.
 
 `GET /api/metrics-store/history` supports:
 
-- `resourceType` (required): `node`, `guest` (VM/LXC), `storage`, `docker`, `dockerHost`
+- `resourceType` (required): `node`, `vm`, `container`, `storage`, `dockerHost`, `dockerContainer`
 - `resourceId` (required): resource identifier (for guests use `instance:node:vmid`)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit to return all metrics for the resource.
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
@@ -68,10 +68,11 @@ Example:
 
 ```bash
 curl -H "X-API-Token: $TOKEN" \
-  "http://localhost:7655/api/metrics-store/history?resourceType=guest&resourceId=pve1:node1:100&range=7d&metric=cpu"
+  "http://localhost:7655/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:100&range=7d&metric=cpu"
 ```
 
 > **License**: Requests beyond `7d` require the Pulse Pro `long_term_metrics` feature. Unlicensed requests return `402 Payment Required`.
+> **Aliases**: `guest` (VM/LXC) and `docker` (Docker container) are accepted, but persistent store data uses the canonical types above.
 
 ## Troubleshooting
 

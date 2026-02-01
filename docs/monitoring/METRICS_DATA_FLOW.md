@@ -19,7 +19,7 @@
 - In-memory retention is `NewMetricsHistory(1000, 24h)` (`monitor.go`). At 30s samples, 1000 points is ~8.3h, so sparklines now cap at 8h to avoid over-promising.
 - Sparkline UI ranges (`15m/1h/4h/8h`) are a subset of `TimeRange` support (`5m/15m/30m/1h/4h/8h/12h/7d`) and differ from History tab ranges (`24h/7d/30d/90d`).
 - Sparkline ring buffer keeps 7d locally, but server seeding is effectively ~8h at 30s sampling (1000-point cap); longer spans require staying in sparklines mode without reload.
-- Docker resource keys differ: in-memory uses `docker:<id>` (via `handleCharts`), persistent store uses `resourceType=dockerContainer`. Mapping is handled client-side when building metric keys; keep consistent when adding resource types.
+- Docker resource keys differ: in-memory uses `docker:<id>` (via `handleCharts`), persistent store uses `resourceType=dockerContainer`. Mapping is handled client-side when building metric keys; keep consistent when adding resource types. The history API accepts `docker` as an alias for short-range fallback, but persistent data uses `dockerContainer`.
 
 ## DB-backed `/api/charts` assessment
 - Feasible approach: add a `source=metrics-store` param to `/api/charts`, enumerate resources from state, then query `metrics.Store` per resource.
