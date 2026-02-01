@@ -43,7 +43,9 @@ func (p *PatrolService) Start(ctx context.Context) {
 	go p.patrolLoop(ctx)
 }
 
-// Stop stops the patrol service
+// Stop stops the patrol service. It signals the patrol loop to exit, then
+// waits up to 15 seconds for in-flight investigations to finish and
+// force-saves findings/investigation state to disk.
 func (p *PatrolService) Stop() {
 	p.mu.Lock()
 	if !p.running {
@@ -52,9 +54,44 @@ func (p *PatrolService) Stop() {
 	}
 	p.running = false
 	close(p.stopCh)
+	orchestrator := p.investigationOrchestrator
+	findings := p.findings
 	p.mu.Unlock()
 
 	log.Info().Msg("Stopping AI Patrol Service")
+
+	// Give investigations 15 seconds to finish (leaves headroom within server's 30s budget)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer shutdownCancel()
+
+	// Signal orchestrator to cancel running investigations and persist state
+	if orchestrator != nil {
+		if err := orchestrator.Shutdown(shutdownCtx); err != nil {
+			log.Warn().Err(err).Msg("AI Patrol: Investigation orchestrator shutdown returned error")
+		}
+	}
+
+	// Wait for investigation goroutines tracked by PatrolService
+	done := make(chan struct{})
+	go func() {
+		p.investigationWg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// All investigation goroutines finished
+	case <-shutdownCtx.Done():
+		log.Warn().Msg("AI Patrol: Timed out waiting for investigation goroutines to finish")
+	}
+
+	// Force-save findings store
+	if findings != nil {
+		if err := findings.ForceSave(); err != nil {
+			log.Error().Err(err).Msg("AI Patrol: Failed to force-save findings during shutdown")
+		}
+	}
+
+	log.Info().Msg("AI Patrol Service stopped")
 }
 
 // patrolLoop is the main background loop
@@ -236,16 +273,15 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.hostsChecked +
 		runStats.kubernetesChecked
 
-	// Determine if we can run LLM analysis (requires AI service + license + circuit breaker not open)
+	// Determine if we can run LLM analysis (requires AI service + circuit breaker not open)
 	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
-	hasPatrolFeature := aiServiceEnabled && p.aiService.HasLicenseFeature(FeatureAIPatrol)
-	canRunLLM := hasPatrolFeature && llmAllowed
+	canRunLLM := aiServiceEnabled && llmAllowed
 
 	// Check if we can run LLM analysis (AI-only patrol)
 	if !canRunLLM {
-		reason := "requires Pulse Pro license for LLM analysis"
+		reason := "AI not configured - set up a provider in Settings > Pulse Assistant"
 		if !aiServiceEnabled {
-			reason = "Pulse Assistant service not configured - configure a provider in Settings > Pulse Assistant"
+			reason = "AI not configured - set up a provider in Settings > Pulse Assistant"
 		} else if !llmAllowed {
 			reason = "circuit breaker is open"
 			GetPatrolMetrics().RecordCircuitBlock()
@@ -357,6 +393,9 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	if cleaned > 0 {
 		log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
 	}
+
+	// Recover investigations stuck in "running" state (goroutine panicked or was killed)
+	p.recoverStuckInvestigations()
 
 	// Retry investigations that failed due to timeout (shorter cooldown than permanent failures)
 	p.retryTimedOutInvestigations()
@@ -631,13 +670,12 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 
 	// Determine if we can run LLM analysis
 	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
-	hasPatrolFeature := aiServiceEnabled && p.aiService.HasLicenseFeature(FeatureAIPatrol)
-	canRunLLM := hasPatrolFeature && llmAllowed
+	canRunLLM := aiServiceEnabled && llmAllowed
 
 	if !canRunLLM {
-		reason := "requires Pulse Pro license for LLM analysis"
+		reason := "AI not configured - set up a provider in Settings > Pulse Assistant"
 		if !aiServiceEnabled {
-			reason = "Pulse Assistant service not configured - configure a provider in Settings > Pulse Assistant"
+			reason = "AI not configured - set up a provider in Settings > Pulse Assistant"
 		} else if !llmAllowed {
 			reason = "circuit breaker is open"
 			GetPatrolMetrics().RecordCircuitBlock()

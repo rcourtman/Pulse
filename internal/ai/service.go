@@ -696,11 +696,9 @@ func (s *Service) StartPatrol(ctx context.Context) {
 		return
 	}
 
-	// Check license for AI Patrol feature (Pro only)
-	if licenseChecker != nil && !licenseChecker.HasFeature(FeatureAIPatrol) {
-		log.Info().Msg("AI Patrol requires Pulse Pro license - patrol will not run LLM analysis")
-		// Note: We still configure patrol but it won't have LLM capability
-		// The patrol service itself should check HasLicenseFeature before LLM calls
+	// Check license for auto-fix feature (Pro only) - patrol itself is free with BYOK
+	if licenseChecker != nil && !licenseChecker.HasFeature(FeatureAIAutoFix) {
+		log.Info().Msg("AI Patrol Auto-Fix requires Pulse Pro license - fixes will require manual approval")
 	}
 
 	// Configure patrol from AI config (preserve defaults for resource types not in AI config)

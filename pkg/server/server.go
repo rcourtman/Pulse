@@ -352,6 +352,9 @@ shutdown:
 		log.Error().Err(err).Msg("Server shutdown error")
 	}
 
+	// Gracefully stop AI intelligence services (patrol, investigations, triggers)
+	router.ShutdownAIIntelligence()
+
 	// Stop AI chat service (kills sidecar process group)
 	router.StopAIChat(shutdownCtx)
 

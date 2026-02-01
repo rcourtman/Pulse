@@ -177,6 +177,9 @@ type InvestigationOrchestrator interface {
 	CanStartInvestigation() bool
 	// ReinvestigateFinding triggers a re-investigation of a finding
 	ReinvestigateFinding(ctx context.Context, findingID, autonomyLevel string) error
+	// Shutdown signals all running investigations to stop, persists state,
+	// and waits for them to finish (up to the context deadline).
+	Shutdown(ctx context.Context) error
 }
 
 // InvestigationFinding is the finding type expected by the orchestrator
@@ -268,6 +271,7 @@ type PatrolService struct {
 
 	// Investigation orchestrator for autonomous investigation of findings
 	investigationOrchestrator InvestigationOrchestrator
+	investigationWg           sync.WaitGroup // Tracks in-flight investigation goroutines
 
 	// Unified findings callback - pushes findings to unified store
 	unifiedFindingCallback UnifiedFindingCallback

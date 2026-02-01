@@ -168,12 +168,20 @@ type Orchestrator struct {
 	// Fix verifier for post-fix verification
 	fixVerifier FixVerifier
 
+	// License checker for defense-in-depth autonomy clamping
+	licenseChecker LicenseChecker
+
 	// Optional metrics callback for recording investigation outcomes
 	metricsCallback MetricsCallback
 
 	// Track running investigations
 	runningCount int
 	runningMu    sync.Mutex
+
+	// Shutdown coordination
+	shutdownCtx context.Context    // Cancelled on Shutdown() to signal all investigations
+	shutdownFn  context.CancelFunc // Triggers shutdownCtx cancellation
+	wg          sync.WaitGroup     // Tracks in-flight InvestigateFinding calls
 }
 
 // NewOrchestrator creates a new investigation orchestrator
@@ -184,6 +192,7 @@ func NewOrchestrator(
 	approvalStore ApprovalStore,
 	config InvestigationConfig,
 ) *Orchestrator {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Orchestrator{
 		chatService:   chatService,
 		store:         store,
@@ -191,6 +200,8 @@ func NewOrchestrator(
 		approvalStore: approvalStore,
 		guardrails:    NewGuardrails(),
 		config:        config,
+		shutdownCtx:   ctx,
+		shutdownFn:    cancel,
 	}
 }
 
@@ -239,6 +250,18 @@ func (o *Orchestrator) SetFixVerifier(fv FixVerifier) {
 	o.fixVerifier = fv
 }
 
+// LicenseChecker provides license feature checking for defense-in-depth validation
+type LicenseChecker interface {
+	HasFeature(feature string) bool
+}
+
+// SetLicenseChecker sets the license checker for defense-in-depth autonomy clamping
+func (o *Orchestrator) SetLicenseChecker(checker LicenseChecker) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.licenseChecker = checker
+}
+
 // GetConfig returns the current configuration
 func (o *Orchestrator) GetConfig() InvestigationConfig {
 	o.mu.RLock()
@@ -253,12 +276,57 @@ func (o *Orchestrator) CanStartInvestigation() bool {
 	return o.runningCount < o.config.MaxConcurrent
 }
 
+// Shutdown signals all running investigations to stop, persists state,
+// and waits for them to finish up to the context deadline.
+func (o *Orchestrator) Shutdown(ctx context.Context) error {
+	log.Info().Msg("Investigation orchestrator: starting shutdown")
+
+	// Signal all running investigations to cancel
+	o.shutdownFn()
+
+	// Force-save investigation state before waiting
+	if o.store != nil {
+		if err := o.store.ForceSave(); err != nil {
+			log.Error().Err(err).Msg("Investigation orchestrator: failed to force-save store during shutdown")
+		}
+	}
+
+	// Wait for in-flight investigations to finish (or context to expire)
+	done := make(chan struct{})
+	go func() {
+		o.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Info().Msg("Investigation orchestrator: all investigations completed")
+		return nil
+	case <-ctx.Done():
+		o.runningMu.Lock()
+		remaining := o.runningCount
+		o.runningMu.Unlock()
+		log.Warn().Int("remaining", remaining).Msg("Investigation orchestrator: shutdown timed out with running investigations")
+		return fmt.Errorf("shutdown timed out with %d investigations still running", remaining)
+	}
+}
+
 // InvestigateFinding starts an investigation for a finding
 func (o *Orchestrator) InvestigateFinding(ctx context.Context, finding *Finding, autonomyLevel string) error {
+	// Check if shutdown is in progress
+	select {
+	case <-o.shutdownCtx.Done():
+		return fmt.Errorf("orchestrator is shutting down")
+	default:
+	}
+
 	// Check if we can start a new investigation
 	if !o.CanStartInvestigation() {
 		return fmt.Errorf("maximum concurrent investigations reached (%d)", o.config.MaxConcurrent)
 	}
+
+	// Track this investigation for graceful shutdown
+	o.wg.Add(1)
 
 	// Increment running count
 	o.runningMu.Lock()
@@ -270,7 +338,16 @@ func (o *Orchestrator) InvestigateFinding(ctx context.Context, finding *Finding,
 		o.runningMu.Lock()
 		o.runningCount--
 		o.runningMu.Unlock()
+		o.wg.Done()
 	}()
+
+	// Make ctx shutdown-aware: if the orchestrator's shutdownCtx is cancelled,
+	// ctx will also be cancelled, propagating to all downstream operations
+	// (session creation, LLM calls, tool execution).
+	ctx, ctxCancel := context.WithCancel(ctx)
+	defer ctxCancel()
+	stop := context.AfterFunc(o.shutdownCtx, func() { ctxCancel() })
+	defer stop()
 
 	// Only enable autonomous mode if patrol autonomy is "full".
 	// For all other levels, write commands (pulse_control, pulse_file_edit)
@@ -445,7 +522,9 @@ func formatOptional(label, value string) string {
 
 // executeWithLimits runs the investigation with turn and timeout limits
 func (o *Orchestrator) executeWithLimits(ctx context.Context, investigation *InvestigationSession, prompt string) error {
-	// Create context with timeout
+	// Create context with timeout. The passed-in ctx is already shutdown-aware
+	// (derived via context.AfterFunc in InvestigateFinding), so the timeout
+	// context inherits both the caller's deadline and the shutdown signal.
 	timeoutCtx, cancel := context.WithTimeout(ctx, o.config.Timeout)
 	defer cancel()
 
@@ -581,6 +660,14 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 			// Also check if full mode is still unlocked
 			if currentLevel == "full" && !o.autonomyProvider.IsFullModeUnlocked() {
 				currentLevel = "assisted" // Downgrade if full mode was locked
+			}
+		}
+
+		// Defense-in-depth: clamp autonomy if no auto-fix license
+		if o.licenseChecker != nil && !o.licenseChecker.HasFeature("ai_autofix") {
+			if currentLevel == "assisted" || currentLevel == "full" {
+				currentLevel = "approval"
+				log.Warn().Str("finding_id", finding.ID).Msg("Auto-fix requires Pro license - clamping to approval mode")
 			}
 		}
 

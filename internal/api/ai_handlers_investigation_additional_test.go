@@ -62,6 +62,10 @@ func (s *stubInvestigationOrchestrator) ReinvestigateFinding(ctx context.Context
 	return nil
 }
 
+func (s *stubInvestigationOrchestrator) Shutdown(ctx context.Context) error {
+	return nil
+}
+
 type stubChatService struct {
 	messages []ai.ChatMessage
 }
@@ -83,6 +87,10 @@ func (s *stubChatService) ExecutePatrolStream(ctx context.Context, req ai.Patrol
 }
 
 func (s *stubChatService) DeleteSession(ctx context.Context, sessionID string) error {
+	return nil
+}
+
+func (s *stubChatService) ReloadConfig(ctx context.Context, cfg *config.AIConfig) error {
 	return nil
 }
 

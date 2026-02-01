@@ -101,6 +101,11 @@ func (a *InvestigationOrchestratorAdapter) ReinvestigateFinding(ctx context.Cont
 	return a.orchestrator.ReinvestigateFinding(ctx, findingID, autonomyLevel)
 }
 
+// Shutdown delegates to the underlying orchestrator's Shutdown method.
+func (a *InvestigationOrchestratorAdapter) Shutdown(ctx context.Context) error {
+	return a.orchestrator.Shutdown(ctx)
+}
+
 // SetFixVerifier registers a PatrolService as the fix verifier on the underlying orchestrator.
 func (a *InvestigationOrchestratorAdapter) SetFixVerifier(patrol *PatrolService) {
 	a.orchestrator.SetFixVerifier(&patrolFixVerifier{patrol: patrol})
@@ -109,6 +114,11 @@ func (a *InvestigationOrchestratorAdapter) SetFixVerifier(patrol *PatrolService)
 // SetMetricsCallback wires patrol Prometheus metrics into the orchestrator.
 func (a *InvestigationOrchestratorAdapter) SetMetricsCallback() {
 	a.orchestrator.SetMetricsCallback(&patrolMetricsCallback{})
+}
+
+// SetLicenseChecker wires license checking into the orchestrator for defense-in-depth.
+func (a *InvestigationOrchestratorAdapter) SetLicenseChecker(checker investigation.LicenseChecker) {
+	a.orchestrator.SetLicenseChecker(checker)
 }
 
 // patrolMetricsCallback adapts PatrolMetrics to the investigation.MetricsCallback interface.
