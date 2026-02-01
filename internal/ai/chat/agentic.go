@@ -267,6 +267,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			switch event.Type {
 			case "content":
 				if data, ok := event.Data.(providers.ContentEvent); ok {
+					// Check for DeepSeek DSML marker - if detected, stop streaming this chunk
+					// The DSML format indicates the model is outputting internal function call
+					// formatting instead of using the proper tool calling API
+					if containsDeepSeekMarker(data.Text) {
+						// Don't append or stream this content
+						return
+					}
+					// Also check if the accumulated content already has the marker
+					// (in case it arrived in a previous chunk)
+					if containsDeepSeekMarker(contentBuilder.String()) {
+						return
+					}
 					contentBuilder.WriteString(data.Text)
 					// Forward to callback - send ContentData struct
 					jsonData, _ := json.Marshal(ContentData{Text: data.Text})
@@ -388,10 +400,12 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 
 		// Create assistant message
+		// Clean DeepSeek artifacts from the content before storing
+		cleanedContent := cleanDeepSeekArtifacts(contentBuilder.String())
 		assistantMsg := Message{
 			ID:               uuid.New().String(),
 			Role:             "assistant",
-			Content:          contentBuilder.String(),
+			Content:          cleanedContent,
 			ReasoningContent: thinkingBuilder.String(),
 			Timestamp:        time.Now(),
 		}
@@ -1225,7 +1239,7 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 		summaryMsg := Message{
 			ID:        uuid.New().String(),
 			Role:      "assistant",
-			Content:   summaryBuilder.String(),
+			Content:   cleanDeepSeekArtifacts(summaryBuilder.String()),
 			Timestamp: time.Now(),
 		}
 		resultMessages = append(resultMessages, summaryMsg)
@@ -2225,4 +2239,50 @@ func formatKeyParams(input map[string]interface{}) string {
 	}
 
 	return strings.Join(parts, ", ")
+}
+
+// cleanDeepSeekArtifacts removes DeepSeek's internal tool call format leakage.
+// When DeepSeek doesn't properly use the function calling API, it may output
+// its internal markup like <｜DSML｜function_calls>, <｜DSML｜invoke>, etc.
+// These patterns can appear with Unicode pipe (｜) or ASCII pipe (|).
+// This is applied to chat responses to prevent the artifacts from being shown to users.
+func cleanDeepSeekArtifacts(content string) string {
+	if content == "" {
+		return content
+	}
+
+	// DeepSeek internal function call format markers
+	markers := []string{
+		"<｜DSML｜",  // Unicode pipe variant (opening)
+		"</｜DSML｜", // Unicode pipe variant (closing)
+		"<|DSML|",  // ASCII pipe variant (opening)
+		"</|DSML|", // ASCII pipe variant (closing)
+		"<｜/DSML｜", // Alternative Unicode closing
+		"<|/DSML|", // Alternative ASCII closing
+	}
+
+	for _, marker := range markers {
+		if idx := strings.Index(content, marker); idx >= 0 {
+			// DeepSeek function call blocks typically appear at the end of responses
+			// Remove everything from the marker to the end
+			content = strings.TrimSpace(content[:idx])
+		}
+	}
+
+	return content
+}
+
+// containsDeepSeekMarker checks if the content contains any DeepSeek internal function call markers.
+// This is used during streaming to detect when we should stop forwarding content.
+func containsDeepSeekMarker(content string) bool {
+	markers := []string{
+		"<｜DSML｜", // Unicode pipe variant
+		"<|DSML|", // ASCII pipe variant
+	}
+	for _, marker := range markers {
+		if strings.Contains(content, marker) {
+			return true
+		}
+	}
+	return false
 }

@@ -328,6 +328,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		configuredModel = strings.TrimSpace(s.cfg.GetChatModel())
 	}
 	s.mu.RUnlock()
+
+	// Per-request autonomous mode override (used by investigation to avoid
+	// mutating shared service state from concurrent goroutines).
+	if req.AutonomousMode != nil {
+		autonomousMode = *req.AutonomousMode
+	}
 	selectedModel = configuredModel
 	if overrideModel != "" {
 		selectedModel = overrideModel
@@ -480,6 +486,11 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		loop.SetMaxTurns(req.MaxTurns)
 		defer loop.SetMaxTurns(MaxAgenticTurns)
 	}
+
+	// Apply per-request autonomous mode to the loop. For investigation requests
+	// with AutonomousMode set, this uses the per-request value instead of
+	// mutating shared service state from concurrent goroutines.
+	loop.SetAutonomousMode(autonomousMode)
 
 	resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
 

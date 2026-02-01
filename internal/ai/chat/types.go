@@ -67,11 +67,12 @@ type StructuredMention struct {
 
 // ExecuteRequest represents a chat execution request
 type ExecuteRequest struct {
-	Prompt    string              `json:"prompt"`
-	SessionID string              `json:"session_id,omitempty"`
-	Model     string              `json:"model,omitempty"`
-	Mentions  []StructuredMention `json:"mentions,omitempty"`
-	MaxTurns  int                 `json:"max_turns,omitempty"` // Override max agentic turns (0 = use default)
+	Prompt         string              `json:"prompt"`
+	SessionID      string              `json:"session_id,omitempty"`
+	Model          string              `json:"model,omitempty"`
+	Mentions       []StructuredMention `json:"mentions,omitempty"`
+	MaxTurns       int                 `json:"max_turns,omitempty"`       // Override max agentic turns (0 = use default)
+	AutonomousMode *bool               `json:"autonomous_mode,omitempty"` // Per-request autonomous override (nil = use service default)
 }
 
 // QuestionAnswer represents a user's answer to a question
