@@ -1052,9 +1052,10 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 // SubscribeToStream returns a channel that will receive streaming patrol events
 func (p *PatrolService) SubscribeToStream() chan PatrolStreamEvent {
 	ch := make(chan PatrolStreamEvent, 100) // Buffered to prevent blocking
+	sub := &streamSubscriber{ch: ch}
 
 	p.streamMu.Lock()
-	p.streamSubscribers[ch] = struct{}{}
+	p.streamSubscribers[ch] = sub
 	// Send current state to new subscriber
 	if p.streamPhase != "idle" {
 		ch <- PatrolStreamEvent{
@@ -1071,18 +1072,13 @@ func (p *PatrolService) SubscribeToStream() chan PatrolStreamEvent {
 // UnsubscribeFromStream removes a subscriber
 func (p *PatrolService) UnsubscribeFromStream(ch chan PatrolStreamEvent) {
 	p.streamMu.Lock()
-	_, exists := p.streamSubscribers[ch]
+	sub, exists := p.streamSubscribers[ch]
 	delete(p.streamSubscribers, ch)
 	p.streamMu.Unlock()
 
-	// Only close if we actually removed it from the map
-	// (broadcast may have already removed and closed it)
-	if exists {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().Interface("error", r).Msg("panic recovered in UnsubscribeFromStream")
-			}
-		}()
+	// Use atomic CAS to ensure exactly one goroutine closes the channel,
+	// even if broadcast and unsubscribe race.
+	if exists && sub.closed.CompareAndSwap(false, true) {
 		close(ch)
 	}
 }
@@ -1104,18 +1100,13 @@ func (p *PatrolService) broadcast(event PatrolStreamEvent) {
 		}
 	}
 
-	// Clean up stale subscribers
+	// Clean up stale subscribers using atomic CAS for safe close
 	for _, ch := range staleChannels {
+		sub := p.streamSubscribers[ch]
 		delete(p.streamSubscribers, ch)
-		// Close in a goroutine to avoid blocking if receiver is stuck
-		go func(c chan PatrolStreamEvent) {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().Interface("error", r).Msg("panic recovered in broadcast channel close")
-				}
-			}()
-			close(c)
-		}(ch)
+		if sub != nil && sub.closed.CompareAndSwap(false, true) {
+			close(ch)
+		}
 	}
 }
 
@@ -1482,16 +1473,29 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 func (p *PatrolService) tryStartRun(kind string) bool {
 	p.mu.Lock()
 	if p.runInProgress {
-		p.mu.Unlock()
-		if kind == "scoped" {
-			GetPatrolMetrics().RecordScopedDropped()
-			log.Warn().Str("kind", kind).Msg("AI Patrol: Run already in progress, dropping scoped patrol")
+		// Detect stuck runs: if the current run has been going for >20 minutes,
+		// force-clear the flag so a new run can proceed.
+		if !p.runStartedAt.IsZero() && time.Since(p.runStartedAt) > 20*time.Minute {
+			log.Warn().
+				Str("kind", kind).
+				Time("started_at", p.runStartedAt).
+				Dur("elapsed", time.Since(p.runStartedAt)).
+				Msg("AI Patrol: Previous run appears stuck (>20min), force-clearing runInProgress")
+			p.runInProgress = false
+			// Fall through to start new run
 		} else {
-			log.Debug().Str("kind", kind).Msg("AI Patrol: Run already in progress, skipping")
+			p.mu.Unlock()
+			if kind == "scoped" {
+				GetPatrolMetrics().RecordScopedDropped()
+				log.Warn().Str("kind", kind).Msg("AI Patrol: Run already in progress, dropping scoped patrol")
+			} else {
+				log.Debug().Str("kind", kind).Msg("AI Patrol: Run already in progress, skipping")
+			}
+			return false
 		}
-		return false
 	}
 	p.runInProgress = true
+	p.runStartedAt = time.Now()
 	p.mu.Unlock()
 	return true
 }
@@ -1499,7 +1503,13 @@ func (p *PatrolService) tryStartRun(kind string) bool {
 func (p *PatrolService) endRun() {
 	p.mu.Lock()
 	p.runInProgress = false
+	orch := p.investigationOrchestrator
 	p.mu.Unlock()
+
+	// Periodic investigation store maintenance after each run
+	if maintainer, ok := orch.(InvestigationStoreMaintainer); ok {
+		maintainer.CleanupInvestigationStore(24*time.Hour, 1000)
+	}
 }
 
 // runTargetedPatrol executes a focused patrol for a specific alert

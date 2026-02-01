@@ -41,6 +41,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
@@ -182,6 +183,12 @@ type InvestigationOrchestrator interface {
 	Shutdown(ctx context.Context) error
 }
 
+// InvestigationStoreMaintainer is an optional interface for orchestrators that
+// expose their investigation store for periodic maintenance.
+type InvestigationStoreMaintainer interface {
+	CleanupInvestigationStore(maxAge time.Duration, maxSessions int)
+}
+
 // InvestigationFinding is the finding type expected by the orchestrator
 type InvestigationFinding struct {
 	ID                     string
@@ -285,6 +292,7 @@ type PatrolService struct {
 	// Runtime state
 	running           bool
 	runInProgress     bool
+	runStartedAt      time.Time
 	stopCh            chan struct{}
 	configChanged     chan struct{} // Signal when config changes to reset ticker
 	lastPatrol        time.Time
@@ -302,7 +310,7 @@ type PatrolService struct {
 
 	// Live streaming support
 	streamMu          sync.RWMutex
-	streamSubscribers map[chan PatrolStreamEvent]struct{}
+	streamSubscribers map[chan PatrolStreamEvent]*streamSubscriber
 	currentOutput     strings.Builder // Buffer for current streaming output
 	streamPhase       string          // "idle", "analyzing", "complete"
 }
@@ -317,6 +325,13 @@ type ToolCallRecord struct {
 	StartTime int64  `json:"start_time"`
 	EndTime   int64  `json:"end_time"`
 	Duration  int64  `json:"duration_ms"`
+}
+
+// streamSubscriber wraps a stream channel with an atomic close flag
+// to prevent double-close panics when both broadcast and unsubscribe race.
+type streamSubscriber struct {
+	ch     chan PatrolStreamEvent
+	closed atomic.Bool
 }
 
 // PatrolStreamEvent represents a streaming update from the patrol
@@ -344,7 +359,7 @@ func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolSe
 		thresholds:        DefaultPatrolThresholds(),
 		stopCh:            make(chan struct{}),
 		runHistoryStore:   NewPatrolRunHistoryStore(MaxPatrolRunHistory),
-		streamSubscribers: make(map[chan PatrolStreamEvent]struct{}),
+		streamSubscribers: make(map[chan PatrolStreamEvent]*streamSubscriber),
 		streamPhase:       "idle",
 		adHocTrigger:      make(chan *alerts.Alert, 10), // Buffer triggers
 	}

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
@@ -866,18 +867,18 @@ func (e *Engine) loadFromDisk() error {
 var planCounter, executionCounter, ruleCounter int64
 
 func generatePlanID() string {
-	planCounter++
-	return fmt.Sprintf("plan-%s-%d", time.Now().Format("20060102150405"), planCounter%1000)
+	n := atomic.AddInt64(&planCounter, 1)
+	return fmt.Sprintf("plan-%s-%d", time.Now().Format("20060102150405"), n%1000)
 }
 
 func generateExecutionID() string {
-	executionCounter++
-	return fmt.Sprintf("exec-%s-%d", time.Now().Format("20060102150405"), executionCounter%1000)
+	n := atomic.AddInt64(&executionCounter, 1)
+	return fmt.Sprintf("exec-%s-%d", time.Now().Format("20060102150405"), n%1000)
 }
 
 func generateRuleID() string {
-	ruleCounter++
-	return fmt.Sprintf("rule-%s-%d", time.Now().Format("20060102150405"), ruleCounter%1000)
+	n := atomic.AddInt64(&ruleCounter, 1)
+	return fmt.Sprintf("rule-%s-%d", time.Now().Format("20060102150405"), n%1000)
 }
 
 func containsIgnoreCase(s, substr string) bool {

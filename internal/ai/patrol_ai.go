@@ -40,14 +40,40 @@ const (
 	patrolQuickMaxTurns     = 30
 )
 
-// cleanThinkingTokens removes model-specific thinking markers from AI responses.
+// CleanThinkingTokens removes model-specific thinking markers from AI responses.
 // Different AI models use different markers for their internal reasoning:
 // - DeepSeek: <｜end▁of▁thinking｜> or similar unicode variants
+// - DeepSeek: <｜DSML｜...> internal function call format (hallucinated tool calls)
 // - Generic: <think>...</think>, <thought>...</thought>
-// - Reasoning: <|reasoning|>...<|/reasoning|>
-func cleanThinkingTokens(content string) string {
+// - Reasoning: <|reasoning|>...</|/reasoning|>
+//
+// This function is exported so it can be used by both patrol and chat responses.
+func CleanThinkingTokens(content string) string {
 	if content == "" {
 		return content
+	}
+
+	// Phase 0: Remove DeepSeek internal function call format leakage.
+	// When DeepSeek doesn't properly use the function calling API, it may output
+	// its internal markup like <｜DSML｜function_calls>, <｜DSML｜invoke>, etc.
+	// These patterns can appear with Unicode pipe (｜) or ASCII pipe (|).
+	deepseekFunctionMarkers := []string{
+		"<｜DSML｜",  // Unicode pipe variant (opening)
+		"</｜DSML｜", // Unicode pipe variant (closing)
+		"<|DSML|",  // ASCII pipe variant (opening)
+		"</|DSML|", // ASCII pipe variant (closing)
+		"<｜/DSML｜", // Alternative Unicode closing
+		"<|/DSML|", // Alternative ASCII closing
+	}
+	for _, marker := range deepseekFunctionMarkers {
+		if strings.Contains(content, marker) {
+			// Find the start of the block and remove everything from there to the end
+			// DeepSeek function call blocks typically appear at the end of responses
+			idx := strings.Index(content, marker)
+			if idx >= 0 {
+				content = strings.TrimSpace(content[:idx])
+			}
+		}
 	}
 
 	// Phase 1: Remove entire block-level tags (opening + content + closing).
@@ -410,7 +436,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	outputTokens = chatResp.OutputTokens
 
 	// Clean thinking tokens
-	finalContent = cleanThinkingTokens(finalContent)
+	finalContent = CleanThinkingTokens(finalContent)
 
 	log.Debug().
 		Int("input_tokens", inputTokens).
