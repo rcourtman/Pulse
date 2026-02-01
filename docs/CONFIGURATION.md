@@ -6,6 +6,7 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | ------ | --------- | ---------------- |
 | `.env` | Authentication & Secrets | 🔒 **Critical** (Read-only by owner) |
 | `.encryption.key` | Encryption key for `.enc` files | 🔒 **Critical** |
+| `.audit-signing.key` | Audit log signing key (Pulse Pro, encrypted) | 🔒 **Sensitive** |
 | `system.json` | General Settings | 📝 Standard |
 | `nodes.enc` | Node Credentials | 🔒 **Encrypted** (AES-256-GCM) |
 | `alerts.json` | Alert Rules | 📝 Standard |
@@ -25,6 +26,9 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `guest_metadata.json` | Guest notes and metadata | 📝 Standard |
 | `agent_profiles.json` | Agent configuration profiles (Pulse Pro) | 📝 Standard |
 | `agent_profile_assignments.json` | Agent profile assignments (Pulse Pro) | 📝 Standard |
+| `profile-versions.json` | Agent profile version history (Pulse Pro) | 📝 Standard |
+| `profile-deployments.json` | Agent profile deployment status (Pulse Pro) | 📝 Standard |
+| `profile-changelog.json` | Agent profile change log (Pulse Pro) | 📝 Standard |
 | `recovery_tokens.json` | Recovery tokens (short-lived) | 🔒 **Sensitive** |
 | `sessions.json` | Persistent sessions (includes OIDC refresh tokens) | 🔒 **Sensitive** |
 | `update-history.jsonl` | Update history log (in-app updates) | 📝 Standard |
@@ -35,6 +39,7 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `ai_patterns.json` | AI pattern detection data | 📝 Standard |
 | `ai_remediations.json` | AI remediation suggestions | 📝 Standard |
 | `ai_incidents.json` | AI incident tracking | 📝 Standard |
+| `org.json` | Organization metadata (multi-tenant) | 📝 Standard |
 
 Guest metadata entries are keyed by the canonical guest ID format `instance:node:vmid` (for example, `pve1:node1:100`). Legacy dash-separated keys are migrated automatically.
 
@@ -42,6 +47,11 @@ All files are located in `/etc/pulse/` (Systemd) or `/data/` (Docker/Kubernetes)
 
 Path overrides:
 - `PULSE_DATA_DIR` sets the base directory for `system.json`, encrypted files, and the bootstrap token.
+
+Multi-tenant layout:
+- Default org uses the root data directory for backward compatibility.
+- Non-default orgs store data under `/orgs/<org-id>/`.
+- Migration may create `/orgs/default/` and symlinks in the root data directory.
 
 ---
 
@@ -141,6 +151,54 @@ Controls runtime behavior like logging, polling intervals, and UI preferences. L
 > **Note**: `logFormat` is only configurable via the `LOG_FORMAT` environment variable, not in `system.json`.
 > **Note**: `autoUpdateTime` is stored by the UI, but the systemd timer uses its own schedule.
 </details>
+
+### Supported system.json Keys
+
+Numeric intervals are **seconds** unless noted otherwise.
+
+| Key | Description |
+| ----- | ----------- |
+| `pvePollingInterval` | PVE polling interval |
+| `pbsPollingInterval` | PBS polling interval |
+| `pmgPollingInterval` | PMG polling interval |
+| `backupPollingInterval` | Backup polling interval (`0` = auto) |
+| `backupPollingEnabled` | Enable backup polling |
+| `adaptivePollingEnabled` | Enable adaptive polling |
+| `adaptivePollingBaseInterval` | Base interval for adaptive polling |
+| `adaptivePollingMinInterval` | Minimum adaptive polling interval |
+| `adaptivePollingMaxInterval` | Maximum adaptive polling interval |
+| `connectionTimeout` | API connection timeout |
+| `logLevel` | Server log level (`debug`, `info`, `warn`, `error`) |
+| `allowedOrigins` | CORS allowlist (single origin or `*`) |
+| `allowEmbedding` | Allow iframe embedding |
+| `allowedEmbedOrigins` | Comma-separated `frame-ancestors` allowlist |
+| `webhookAllowedPrivateCIDRs` | Allowlist for private webhook targets |
+| `updateChannel` | Update channel (`stable` or `rc`) |
+| `autoUpdateEnabled` | Allow one-click updates |
+| `autoUpdateCheckInterval` | Update check interval (hours) |
+| `autoUpdateTime` | UI-stored preferred update time |
+| `publicURL` | Public URL used in links/notifications |
+| `hideLocalLogin` | Hide username/password login form |
+| `temperatureMonitoringEnabled` | Enable temperature monitoring (where supported) |
+| `dnsCacheTimeout` | DNS cache timeout |
+| `sshPort` | Default SSH port for temperature collection |
+| `discoveryEnabled` | Enable auto-discovery |
+| `discoverySubnet` | CIDR or `auto` |
+| `discoveryConfig` | Discovery tuning object (see below) |
+| `theme` | UI theme (`light`, `dark`, or empty for system) |
+| `fullWidthMode` | UI layout preference |
+| `metricsRetentionRawHours` | Raw metrics retention (hours) |
+| `metricsRetentionMinuteHours` | Minute metrics retention (hours) |
+| `metricsRetentionHourlyDays` | Hourly metrics retention (days) |
+| `metricsRetentionDailyDays` | Daily metrics retention (days) |
+| `disableDockerUpdateActions` | Hide Docker update actions in UI |
+| `backendPort` | Legacy (unused) |
+| `frontendPort` | Legacy (ignored; use `FRONTEND_PORT`) |
+
+`discoveryConfig` supports:
+- `environment_override`, `subnet_allowlist`, `subnet_blocklist`, `ip_blocklist`
+- `max_hosts_per_scan`, `max_concurrent`, `enable_reverse_dns`, `scan_gateways`
+- `dial_timeout_ms`, `http_timeout_ms`
 
 ### Common Overrides (Environment Variables)
 Environment variables take precedence over `system.json`.

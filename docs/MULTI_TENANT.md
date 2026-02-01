@@ -66,6 +66,15 @@ All user-facing data endpoints use `getTenantMonitor(ctx)`:
 
 ---
 
+## Storage Layout and Migration
+
+- The **default** org uses the root data dir for backward compatibility.
+- Non-default orgs store data in `/orgs/<org-id>/`.
+- When multi-tenant is enabled, legacy single-tenant data is migrated into `/orgs/default/` and symlinks are created in the root data dir for compatibility.
+- Organization metadata is stored in `org.json` inside each org directory.
+
+---
+
 ## Intentionally Global (Admin-Level)
 
 These endpoints show system-wide data regardless of tenant context:
@@ -159,13 +168,10 @@ Legacy tokens (empty `OrgID`) have wildcard access during migration period.
 
 ### High Priority (Before GA)
 
-- [ ] **Config deep copy**: `multi_tenant_monitor.go:59` does shallow copy; credential slices may be shared
-- [ ] **Migration script**: Move existing data to `/orgs/default/` with symlinks for backward compatibility
 - [ ] **UI integration**: Org switcher, org management screens
 
 ### Medium Priority
 
-- [ ] **Per-tenant node credentials**: Load tenant-specific `nodes.enc` instead of inheriting base config
 - [ ] **Org CRUD endpoints**: Create/update/delete organizations via API
 - [ ] **Member management**: Add/remove users from organizations
 

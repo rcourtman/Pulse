@@ -84,6 +84,11 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 
 **Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → `/var/lib/pulse-agent/token`.
 
+### Advanced Flags
+
+- `--version`: Print the agent version and exit.
+- `--self-test`: Perform a self-test and exit (used during auto-update).
+
 ## Auto-Detection
 
 Auto-detection behavior:

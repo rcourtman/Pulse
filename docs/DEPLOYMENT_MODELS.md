@@ -24,6 +24,7 @@ Pulse uses a split config model:
 
 - **Local auth and secrets**: `.env` (managed by Quick Security Setup or environment overrides, not shown in the UI)
 - **Encryption key**: `.encryption.key` (required to decrypt `.enc` files)
+- **Audit signing key**: `.audit-signing.key` (Pulse Pro, encrypted)
 - **System settings**: `system.json` (editable in the UI unless locked by env)
 - **Nodes and credentials**: `nodes.enc` (encrypted)
 - **Notification config**: `email.enc`, `webhooks.enc`, `apprise.enc` (encrypted)
@@ -43,15 +44,24 @@ Pulse uses a split config model:
 - **Guest metadata**: `guest_metadata.json`
 - **Agent profiles**: `agent_profiles.json`
 - **Agent profile assignments**: `agent_profile_assignments.json`
+- **Agent profile versions**: `profile-versions.json`
+- **Agent profile deployments**: `profile-deployments.json`
+- **Agent profile changelog**: `profile-changelog.json`
 - **Sessions**: `sessions.json` (persistent sessions, sensitive)
 - **Recovery tokens**: `recovery_tokens.json`
 - **Update history**: `update-history.jsonl`
 - **Metrics history**: `metrics.db` (SQLite)
+- **Organization metadata**: `org.json` (multi-tenant)
 
 Path mapping:
 
 - systemd/LXC: `/etc/pulse/*`
 - Docker/Helm: `/data/*`
+
+Multi-tenant layout:
+- Default org uses the root data dir for backward compatibility.
+- Non-default orgs use `/orgs/<org-id>/`.
+- Migration may create `/orgs/default/` and symlinks in the root data dir.
 
 ## Updates by Model
 

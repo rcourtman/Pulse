@@ -208,8 +208,8 @@ Triggers a test alert to all configured channels.
 - `POST /api/admin/webhooks/audit` (admin, `settings:write`)
 
 ### Advanced Reporting (Pro)
-- `GET /api/admin/reports/generate` (admin, `node:read`)
-  - Query params: `format` (pdf/csv), `id` (resource ID), `type` (node/vm/container/storage), `metric` (cpu/mem/avg), `range` (1h/24h/7d)
+- `GET /api/admin/reports/generate` (admin, `settings:read`)
+  - Query params: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
 
 ### Queue and Dead-Letter Tools
 - `GET /api/notifications/queue/stats` (admin)
@@ -541,10 +541,13 @@ Returns stats for the persistent metrics store (SQLite-backed).
 Returns historical metric series for a resource and time range.
 
 Query params:
-- `resourceType` (required): `node`, `vm`, `container`, `storage`, `dockerHost`, `dockerContainer`
+- `resourceType` (required): `node`, `guest` (VM/LXC), `storage`, `docker`, `dockerHost`
 - `resourceId` (required)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit for all metrics
-- `range` (optional): `1h`, `6h`, `12h`, `24h`, `7d`, `30d`, `90d` (default `24h`)
+- `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
+- `maxPoints` (optional): Downsample to a target number of points
+
+> **License**: Requests beyond `7d` require the Pulse Pro `long_term_metrics` feature. Unlicensed requests return `402 Payment Required`.
 
 ---
 
@@ -555,7 +558,7 @@ Query params:
 Downloads the unified agent binary. Without `arch`, Pulse serves the local binary on the server host.
 
 Optional query:
-- `?arch=linux-amd64` (supported: `linux-amd64`, `linux-arm64`, `linux-armv7`, `linux-armv6`, `linux-386`, `darwin-amd64`, `darwin-arm64`, `windows-amd64`, `windows-arm64`, `windows-386`)
+- `?arch=linux-amd64` (supported: `linux-amd64`, `linux-arm64`, `linux-armv7`, `linux-armv6`, `linux-386`, `darwin-amd64`, `darwin-arm64`, `freebsd-amd64`, `freebsd-arm64`, `windows-amd64`, `windows-arm64`, `windows-386`)
 
 The response includes `X-Checksum-Sha256` for verification.
 
@@ -571,9 +574,19 @@ Returns the current server version for agent update checks.
 `GET /install.sh`
 Serves the universal `install.sh` used to install `pulse-agent` on target machines.
 
+`GET /api/install/install.sh`
+API-prefixed alias for the unified agent installer script.
+
 ### Unified Agent Installer (Windows)
 `GET /install.ps1`
 Serves the PowerShell installer for Windows.
+
+`GET /api/install/install.ps1`
+API-prefixed alias for the unified agent PowerShell installer.
+
+### Docker Server Installer Script
+`GET /api/install/install-docker.sh`
+Serves the turnkey Docker installer script that generates a `docker-compose.yml` and `.env`.
 
 ### Legacy Agents (Deprecated)
 `GET /download/pulse-host-agent` - *Deprecated, use pulse-agent*
@@ -619,8 +632,17 @@ Updates server-side config for an agent (e.g., `commandsEnabled`).
 ### Agent Profiles (Pro)
 `GET /api/admin/profiles` (admin, Pro)
 `POST /api/admin/profiles` (admin, Pro)
+`GET /api/admin/profiles/{id}` (admin, Pro)
 `PUT /api/admin/profiles/{id}` (admin, Pro)
 `DELETE /api/admin/profiles/{id}` (admin, Pro)
+`GET /api/admin/profiles/schema` (admin, Pro)
+`POST /api/admin/profiles/validate` (admin, Pro)
+`POST /api/admin/profiles/suggestions` (admin, Pro)
+`GET /api/admin/profiles/changelog` (admin, Pro)
+`GET /api/admin/profiles/deployments` (admin, Pro)
+`POST /api/admin/profiles/deployments` (admin, Pro)
+`GET /api/admin/profiles/{id}/versions` (admin, Pro)
+`POST /api/admin/profiles/{id}/rollback/{version}` (admin, Pro)
 `GET /api/admin/profiles/assignments` (admin, Pro)
 `POST /api/admin/profiles/assignments` (admin, Pro)
 `DELETE /api/admin/profiles/assignments/{agent_id}` (admin, Pro)
