@@ -358,6 +358,9 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
 	}
 
+	// Retry investigations that failed due to timeout (shorter cooldown than permanent failures)
+	p.retryTimedOutInvestigations()
+
 	// AI-based alert review: check active alerts against current state and auto-resolve fixed issues
 	// Pass llmAllowed so it knows whether AI calls are allowed.
 	alertsResolved := p.reviewAndResolveAlerts(ctx, state, llmAllowed)

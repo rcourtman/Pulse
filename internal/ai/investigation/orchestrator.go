@@ -3,6 +3,7 @@ package investigation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -318,6 +319,10 @@ func (o *Orchestrator) InvestigateFinding(ctx context.Context, finding *Finding,
 	if err != nil {
 		// Mark as failed
 		o.store.Fail(investigation.ID, err.Error())
+		if isTimeoutError(err) {
+			o.store.SetOutcome(investigation.ID, OutcomeTimedOut)
+			finding.InvestigationOutcome = string(OutcomeTimedOut)
+		}
 		finding.InvestigationStatus = string(StatusFailed)
 		now := time.Now()
 		finding.LastInvestigatedAt = &now
@@ -853,6 +858,15 @@ func stripMarkdownCodeFences(s string) string {
 	}
 
 	return s
+}
+
+// isTimeoutError returns true if the error is caused by a context deadline or timeout.
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(err.Error(), "context deadline exceeded")
 }
 
 func (o *Orchestrator) updateFinding(finding *Finding) {

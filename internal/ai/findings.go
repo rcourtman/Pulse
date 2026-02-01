@@ -10,8 +10,9 @@ import (
 
 // Investigation limits for automatic finding investigation.
 const (
-	investigationCooldown    = 1 * time.Hour // Minimum time between investigation attempts
-	maxInvestigationAttempts = 3             // Maximum number of investigation retries
+	investigationCooldown        = 1 * time.Hour    // Minimum time between investigation attempts
+	investigationTimeoutCooldown = 10 * time.Minute // Shorter cooldown for timeout failures
+	maxInvestigationAttempts     = 3                // Maximum number of investigation retries
 )
 
 // FindingSeverity represents how urgent a finding is
@@ -59,6 +60,7 @@ const (
 	InvestigationOutcomeFixQueued      InvestigationOutcome = "fix_queued"      // Fix identified, awaiting approval
 	InvestigationOutcomeNeedsAttention InvestigationOutcome = "needs_attention" // Requires user intervention
 	InvestigationOutcomeCannotFix      InvestigationOutcome = "cannot_fix"      // AI determined it cannot fix this
+	InvestigationOutcomeTimedOut       InvestigationOutcome = "timed_out"       // Transient timeout, will retry sooner
 )
 
 // Finding represents an AI-discovered insight about infrastructure
@@ -166,9 +168,14 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 		return false
 	}
 
-	// Don't re-investigate within cooldown period (1 hour)
+	// Don't re-investigate within cooldown period
+	// Timeout failures use a shorter cooldown (10min) since they're transient
 	if f.LastInvestigatedAt != nil {
-		if time.Since(*f.LastInvestigatedAt) < investigationCooldown {
+		cooldown := investigationCooldown
+		if f.InvestigationOutcome == string(InvestigationOutcomeTimedOut) {
+			cooldown = investigationTimeoutCooldown
+		}
+		if time.Since(*f.LastInvestigatedAt) < cooldown {
 			return false
 		}
 	}
@@ -233,8 +240,13 @@ func (f *Finding) CanRetryInvestigation() bool {
 		return false
 	}
 	// Can't retry if still in cooldown
+	// Timeout failures use a shorter cooldown (10min) since they're transient
 	if f.LastInvestigatedAt != nil {
-		if time.Since(*f.LastInvestigatedAt) < investigationCooldown {
+		cooldown := investigationCooldown
+		if f.InvestigationOutcome == string(InvestigationOutcomeTimedOut) {
+			cooldown = investigationTimeoutCooldown
+		}
+		if time.Since(*f.LastInvestigatedAt) < cooldown {
 			return false
 		}
 	}

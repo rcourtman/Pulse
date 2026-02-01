@@ -49,6 +49,7 @@ const (
 	OutcomeFixVerificationFailed Outcome = "fix_verification_failed" // Fix ran but issue persists
 	OutcomeNeedsAttention        Outcome = "needs_attention"
 	OutcomeCannotFix             Outcome = "cannot_fix"
+	OutcomeTimedOut              Outcome = "timed_out" // Transient timeout, will retry sooner
 )
 
 // Fix represents a proposed remediation action
@@ -68,23 +69,25 @@ var DestructivePatterns = safety.DestructivePatterns
 
 // InvestigationConfig holds configuration for investigations
 type InvestigationConfig struct {
-	MaxTurns              int           // Maximum agentic turns per investigation
-	Timeout               time.Duration // Maximum duration per investigation
-	MaxConcurrent         int           // Maximum concurrent investigations
-	MaxAttemptsPerFinding int           // Maximum investigation attempts per finding
-	CooldownDuration      time.Duration // Cooldown before re-investigating
-	VerificationDelay     time.Duration // Wait before verifying fix (default: 30s)
+	MaxTurns                int           // Maximum agentic turns per investigation
+	Timeout                 time.Duration // Maximum duration per investigation
+	MaxConcurrent           int           // Maximum concurrent investigations
+	MaxAttemptsPerFinding   int           // Maximum investigation attempts per finding
+	CooldownDuration        time.Duration // Cooldown before re-investigating
+	TimeoutCooldownDuration time.Duration // Shorter cooldown for timeout failures (default: 10min)
+	VerificationDelay       time.Duration // Wait before verifying fix (default: 30s)
 }
 
 // DefaultConfig returns the default investigation configuration
 func DefaultConfig() InvestigationConfig {
 	return InvestigationConfig{
-		MaxTurns:              15,
-		Timeout:               5 * time.Minute,
-		MaxConcurrent:         3,
-		MaxAttemptsPerFinding: 3,
-		CooldownDuration:      1 * time.Hour,
-		VerificationDelay:     30 * time.Second,
+		MaxTurns:                15,
+		Timeout:                 10 * time.Minute,
+		MaxConcurrent:           3,
+		MaxAttemptsPerFinding:   3,
+		CooldownDuration:        1 * time.Hour,
+		TimeoutCooldownDuration: 10 * time.Minute,
+		VerificationDelay:       30 * time.Second,
 	}
 }
 

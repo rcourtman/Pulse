@@ -326,6 +326,21 @@ func (s *Store) Fail(id string, errorMsg string) bool {
 	return true
 }
 
+// SetOutcome updates just the outcome of an investigation
+func (s *Store) SetOutcome(id string, outcome Outcome) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	session, exists := s.sessions[id]
+	if !exists {
+		return false
+	}
+
+	session.Outcome = outcome
+	s.scheduleSaveLocked()
+	return true
+}
+
 // IncrementTurnCount increments the turn count for an investigation
 func (s *Store) IncrementTurnCount(id string) int {
 	s.mu.Lock()

@@ -814,6 +814,31 @@ func normalizeFindingKey(key string) string {
 	return strings.Trim(b.String(), "-")
 }
 
+// retryTimedOutInvestigations re-triggers investigation for findings that failed due to timeout.
+// Called at the end of each patrol run to give timed-out investigations another chance
+// without waiting for the full 1-hour cooldown.
+func (p *PatrolService) retryTimedOutInvestigations() {
+	if p.findings == nil {
+		return
+	}
+	active := p.findings.GetActive(FindingSeverityWarning)
+	retried := 0
+	for _, f := range active {
+		if f.InvestigationStatus != string(InvestigationStatusFailed) {
+			continue
+		}
+		if f.InvestigationOutcome != string(InvestigationOutcomeTimedOut) {
+			continue
+		}
+		p.MaybeInvestigateFinding(f)
+		retried++
+	}
+	if retried > 0 {
+		log.Info().Int("retried", retried).
+			Msg("AI Patrol: Retried timed-out investigations")
+	}
+}
+
 // MaybeInvestigateFinding checks if a finding should be investigated and triggers investigation if so
 // This is called both during scheduled patrol runs and when alert-triggered findings are created
 func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
