@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -96,7 +97,8 @@ func DefaultContextStoreConfig() ContextStoreConfig {
 
 // ContextStore stores and manages persistent AI context
 type ContextStore struct {
-	mu sync.RWMutex
+	mu     sync.RWMutex
+	saveMu sync.Mutex // serializes disk writes to prevent .tmp file races
 
 	config ContextStoreConfig
 
@@ -165,7 +167,6 @@ func NewContextStore(cfg ContextStoreConfig) *ContextStore {
 // Remember stores a new memory
 func (s *ContextStore) Remember(resourceID, content, source string, memType MemoryType, tags ...string) string {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	memory := &Memory{
 		ID:         generateMemoryID(),
@@ -191,15 +192,18 @@ func (s *ContextStore) Remember(resourceID, content, source string, memType Memo
 	}
 
 	s.dirty = true
+	memoryID := memory.ID
+	s.mu.Unlock()
+
 	go s.saveIfDirty()
 
 	log.Debug().
-		Str("memory_id", memory.ID).
+		Str("memory_id", memoryID).
 		Str("type", string(memType)).
 		Str("resource", resourceID).
 		Msg("Stored new memory")
 
-	return memory.ID
+	return memoryID
 }
 
 // addResourceNoteLocked adds a note to a resource's memory (must hold lock)
@@ -236,7 +240,6 @@ func (s *ContextStore) addResourceNoteLocked(resourceID, note string) {
 // AddResourceNote adds a note about a specific resource
 func (s *ContextStore) AddResourceNote(resourceID, resourceName, resourceType, note string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	s.addResourceNoteLocked(resourceID, note)
 
@@ -251,13 +254,14 @@ func (s *ContextStore) AddResourceNote(resourceID, resourceName, resourceType, n
 	}
 
 	s.dirty = true
+	s.mu.Unlock()
+
 	go s.saveIfDirty()
 }
 
 // AddIncidentMemory stores a learning from an incident
 func (s *ContextStore) AddIncidentMemory(incident *IncidentMemory) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if incident.ID == "" {
 		incident.ID = generateIncidentMemoryID()
@@ -291,13 +295,14 @@ func (s *ContextStore) AddIncidentMemory(incident *IncidentMemory) {
 	s.memories[MemoryTypeIncident][memory.ID] = memory
 
 	s.dirty = true
+	s.mu.Unlock()
+
 	go s.saveIfDirty()
 }
 
 // AddPatternMemory stores a learned pattern
 func (s *ContextStore) AddPatternMemory(pattern *PatternMemory) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if pattern.ID == "" {
 		pattern.ID = generatePatternMemoryID()
@@ -310,6 +315,7 @@ func (s *ContextStore) AddPatternMemory(pattern *PatternMemory) {
 			existing.LastSeen = time.Now()
 			existing.Confidence = calculatePatternConfidence(existing.Occurrences)
 			s.dirty = true
+			s.mu.Unlock()
 			go s.saveIfDirty()
 			return
 		}
@@ -320,6 +326,8 @@ func (s *ContextStore) AddPatternMemory(pattern *PatternMemory) {
 	s.patternMemories[pattern.ID] = pattern
 
 	s.dirty = true
+	s.mu.Unlock()
+
 	go s.saveIfDirty()
 }
 
@@ -404,6 +412,11 @@ func (s *ContextStore) GetRecentIncidents(limit int) []*IncidentMemory {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	return s.getRecentIncidentsLocked(limit)
+}
+
+// getRecentIncidentsLocked retrieves recent incidents without acquiring the lock (caller must hold it).
+func (s *ContextStore) getRecentIncidentsLocked(limit int) []*IncidentMemory {
 	var result []*IncidentMemory
 	for _, incident := range s.incidentMemories {
 		copy := *incident
@@ -427,6 +440,11 @@ func (s *ContextStore) GetPatterns(minConfidence float64) []*PatternMemory {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	return s.getPatternsLocked(minConfidence)
+}
+
+// getPatternsLocked retrieves patterns without acquiring the lock (caller must hold it).
+func (s *ContextStore) getPatternsLocked(minConfidence float64) []*PatternMemory {
 	var result []*PatternMemory
 	for _, pattern := range s.patternMemories {
 		if pattern.Confidence >= minConfidence {
@@ -478,7 +496,6 @@ func (s *ContextStore) DecayRelevance() {
 // Cleanup removes old and low-relevance memories
 func (s *ContextStore) Cleanup() int {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	removed := 0
 	cutoff := time.Now().AddDate(0, 0, -s.config.RetentionDays)
@@ -512,8 +529,13 @@ func (s *ContextStore) Cleanup() int {
 		}
 	}
 
-	if removed > 0 {
+	needsSave := removed > 0
+	if needsSave {
 		s.dirty = true
+	}
+	s.mu.Unlock()
+
+	if needsSave {
 		go s.saveIfDirty()
 	}
 
@@ -552,7 +574,7 @@ func (s *ContextStore) FormatForPatrol() string {
 	}
 
 	// Add recent incidents
-	incidents := s.GetRecentIncidents(5)
+	incidents := s.getRecentIncidentsLocked(5)
 	if len(incidents) > 0 {
 		result += "\n## Recent Incidents\n"
 		result += "Past incidents that may be relevant:\n\n"
@@ -567,7 +589,7 @@ func (s *ContextStore) FormatForPatrol() string {
 	}
 
 	// Add learned patterns
-	patterns := s.GetPatterns(0.5)
+	patterns := s.getPatternsLocked(0.5)
 	if len(patterns) > 0 {
 		result += "\n## Learned Patterns\n"
 		result += "Operational patterns observed over time:\n\n"
@@ -635,6 +657,9 @@ func (s *ContextStore) saveToDisk() error {
 		return nil
 	}
 
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
 	s.mu.RLock()
 	data := struct {
 		Memories         map[MemoryType]map[string]*Memory `json:"memories"`
@@ -647,9 +672,8 @@ func (s *ContextStore) saveToDisk() error {
 		IncidentMemories: s.incidentMemories,
 		PatternMemories:  s.patternMemories,
 	}
-	s.mu.RUnlock()
-
 	jsonData, err := json.MarshalIndent(data, "", "  ")
+	s.mu.RUnlock()
 	if err != nil {
 		return err
 	}
@@ -719,21 +743,21 @@ func (s *ContextStore) ForceSave() error {
 
 // Helper functions
 
-var memoryCounter, incidentMemCounter, patternMemCounter int64
+var memoryCounter, incidentMemCounter, patternMemCounter atomic.Int64
 
 func generateMemoryID() string {
-	memoryCounter++
-	return fmt.Sprintf("mem-%s-%d", time.Now().Format("20060102150405"), memoryCounter%1000)
+	n := memoryCounter.Add(1)
+	return fmt.Sprintf("mem-%s-%d", time.Now().Format("20060102150405"), n%1000)
 }
 
 func generateIncidentMemoryID() string {
-	incidentMemCounter++
-	return fmt.Sprintf("inc-mem-%s-%d", time.Now().Format("20060102150405"), incidentMemCounter%1000)
+	n := incidentMemCounter.Add(1)
+	return fmt.Sprintf("inc-mem-%s-%d", time.Now().Format("20060102150405"), n%1000)
 }
 
 func generatePatternMemoryID() string {
-	patternMemCounter++
-	return fmt.Sprintf("pat-mem-%s-%d", time.Now().Format("20060102150405"), patternMemCounter%1000)
+	n := patternMemCounter.Add(1)
+	return fmt.Sprintf("pat-mem-%s-%d", time.Now().Format("20060102150405"), n%1000)
 }
 
 func calculatePatternConfidence(occurrences int) float64 {
