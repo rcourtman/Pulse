@@ -1,6 +1,6 @@
 # 🚀 Pulse Pro (Technical Overview)
 
-Pulse Pro unlocks advanced AI automation features on top of the free Pulse platform. It keeps the same self-hosted model while adding continuous, context-aware analysis and remediation workflows.
+Pulse Pro unlocks advanced AI automation features on top of the free Pulse platform. Pulse Patrol is available to all users with BYOK, while Pro adds auto-fix, autonomy, and deeper analysis.
 
 ## What You Get
 
@@ -25,7 +25,7 @@ Pulse Pro unlocks advanced AI automation features on top of the free Pulse platf
 - Customizable time ranges and metric aggregation.
 - Access via **Settings → System → Reporting**.
 
-### AI Patrol (LLM-Backed)
+### Pulse Patrol (BYOK)
 Scheduled background analysis that correlates live state + metrics history to produce actionable findings.
 
 **Inputs:**
@@ -39,7 +39,6 @@ Scheduled background analysis that correlates live state + metrics history to pr
 - Cross-system correlation (e.g., backups failing because a datastore is full).
 
 ### Pro-Only Automations
-- **LLM-backed patrol analysis**: full AI analysis instead of heuristic-only findings.
 - **Alert-triggered analysis**: on-demand deep analysis when alerts fire.
 - **Autonomous mode**: optional diagnostic/fix commands through connected agents.
 - **Auto-fix**: guarded remediations when enabled.
@@ -49,7 +48,7 @@ Scheduled background analysis that correlates live state + metrics history to pr
 - **Agent Profiles**: centralized configuration profiles for fleets of agents.
 
 ### What Free Users Still Get
-- **Heuristic Patrol**: local rule-based checks that surface common issues without any external AI provider.
+- **Pulse Patrol (BYOK)**: background findings with your own provider.
 - **AI Chat (BYOK)**: interactive troubleshooting with your own API keys.
 - **Update alerts**: container/package update signals remain available in the free tier.
 
@@ -63,7 +62,6 @@ Scheduled background analysis that correlates live state + metrics history to pr
 
 Pulse Pro licenses enable specific server-side features. These are enforced at the API layer and in the UI:
 
-- `ai_patrol`: LLM-backed patrol findings and live patrol stream.
 - `ai_alerts`: alert-triggered analysis runs.
 - `ai_autofix`: autonomous mode and auto-fix workflows.
 - `kubernetes_ai`: AI analysis for Kubernetes clusters (not basic monitoring).
@@ -105,7 +103,7 @@ You can inspect license feature gates via:
 
 - `GET /api/license/features` (authenticated)
 
-This returns a feature map like `ai_patrol`, `ai_alerts`, `ai_autofix`, and `kubernetes_ai` so you can automate Pro-only workflows safely.
+This returns a feature map like `ai_alerts`, `ai_autofix`, and `kubernetes_ai` so you can automate Pro-only workflows safely.
 
 ## Under The Hood (Technical)
 
@@ -141,10 +139,10 @@ This returns a feature map like `ai_patrol`, `ai_alerts`, `ai_autofix`, and `kub
 }
 ```
 
-Heuristic (free-tier) findings omit `source: "ai-analysis"` and include the same schema for consistent automations.
+Findings include `source: "ai-analysis"` when AI is enabled (BYOK).
 
 ## Privacy and Data Handling
 
-Patrol runs on your Pulse server. When Pro is enabled, only the minimal context needed for analysis is sent to the configured AI provider. No telemetry is sent to Pulse by default.
+Patrol runs on your Pulse server. When AI is enabled, only the minimal context needed for analysis is sent to the configured AI provider. No telemetry is sent to Pulse by default.
 
 For a deeper AI walkthrough, see [AI.md](AI.md).

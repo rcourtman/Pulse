@@ -41,12 +41,12 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 ## 🚀 Pulse Pro
 
-Pulse Pro unlocks **LLM-backed AI Patrol** — automated background monitoring that spots issues before they become incidents.
+Pulse Pro unlocks **Auto-Fix and advanced AI analysis** — **Pulse Patrol is available to all with BYOK**.
 
 - **[Learn more at pulserelay.pro](https://pulserelay.pro)**
 - **[AI Patrol deep dive](AI.md)**
 - **[Pulse Pro technical overview](PULSE_PRO.md)**
-- **What you actually get**: LLM-backed patrol analysis, alert-triggered deep dives, Kubernetes AI analysis, and optional auto-fix workflows.
+- **What you actually get**: Auto-fix + autonomous mode, alert-triggered deep dives, Kubernetes AI analysis, reporting, and agent profiles.
 - **Technical highlights**: correlation across nodes/VMs/backups/containers, trend-based capacity predictions, and findings you can resolve/suppress.
 - **Scheduling**: 10 minutes to 7 days (default 6 hours).
 - **Agent Profiles (Pro)**: centralized agent configuration profiles. See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md).

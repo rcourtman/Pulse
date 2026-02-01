@@ -32,9 +32,9 @@ Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" wit
 - **Backup Explorer**: Visualize backup jobs and storage usage
 
 ### AI-Powered
-- **Chat Assistant**: Ask questions about your infrastructure in natural language
-- **Patrol**: Background health checks that generate findings on a schedule
-- **Alert Analysis**: Optional AI analysis when alerts fire
+- **Chat Assistant (BYOK)**: Ask questions about your infrastructure in natural language
+- **Patrol (BYOK)**: Background health checks that generate findings on a schedule
+- **Alert Analysis (Pro)**: Optional AI analysis when alerts fire
 - **Cost Tracking**: Track usage and costs per provider/model
 
 ### Multi-Platform
@@ -91,15 +91,14 @@ Community-maintained integrations and addons:
 
 ## 🚀 Pulse Pro
 
-**[Pulse Pro](https://pulserelay.pro)** unlocks **LLM-backed AI Patrol** — automated background monitoring that catches issues before they become outages.
+**[Pulse Pro](https://pulserelay.pro)** unlocks **Auto-Fix and advanced AI analysis** — **Pulse Patrol is available to everyone with BYOK**.
 
 | Feature | Free | Pro |
 |---------|------|-----|
 | Real-time dashboard | ✅ | ✅ |
 | Threshold alerts | ✅ | ✅ |
 | AI Chat (BYOK) | ✅ | ✅ |
-| Heuristic Patrol (local rules) | ✅ | ✅ |
-| **LLM-backed AI Patrol** | — | ✅ |
+| **Pulse Patrol (BYOK)** | ✅ | ✅ |
 | Alert-triggered AI analysis | — | ✅ |
 | Kubernetes AI analysis | — | ✅ |
 | Auto-fix + autonomous mode | — | ✅ |
@@ -108,16 +107,18 @@ Community-maintained integrations and addons:
 | **Audit Webhooks (SIEM integration)** | — | ✅ |
 | Priority support | — | ✅ |
 
-AI Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 hours) and finds:
+Pulse Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 hours) and finds:
 - ZFS pools approaching capacity
 - Backup jobs that silently failed
 - VMs stuck in restart loops
 - Clock drift across cluster nodes
 - Container health check failures
 
+Pulse Patrol uses your configured provider (BYOK) and runs entirely on your server.
+
 Technical highlights:
 - Cross-system context (nodes, VMs, backups, containers, and metrics history)
-- LLM analysis for high-impact findings + alert-triggered deep dives
+- LLM analysis with your provider + alert-triggered deep dives (Pro)
 - Optional auto-fix with command safety policies and audit trail
 - Centralized agent profiles for consistent fleet settings
 

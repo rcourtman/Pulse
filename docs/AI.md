@@ -1,6 +1,6 @@
 # Pulse AI
 
-Pulse Pro unlocks **AI Patrol** for continuous, automated health checks. Learn more at <https://pulserelay.pro> or see the technical overview in [PULSE_PRO.md](PULSE_PRO.md).
+Pulse Patrol is available to everyone with BYOK (your own AI provider). Pulse Pro unlocks auto-fix and advanced analysis. Learn more at <https://pulserelay.pro> or see the technical overview in [PULSE_PRO.md](PULSE_PRO.md).
 
 ## What Patrol Actually Does (Technical)
 
@@ -20,7 +20,7 @@ Patrol is a scheduled analysis pipeline that builds a rich, system-wide snapshot
 **Outputs:**
 - Findings with severity, category, and remediation hints.
 - Summary stats for coverage and risk level.
-- Optional AI analysis on the highest impact issues (Pro).
+- Optional auto-fix and remediation workflows (Pro).
 
 ## Why Patrol Is Different From Traditional Alerts
 
@@ -41,11 +41,11 @@ Alerts are threshold-based and narrow. Patrol is context-based and cross-system.
 - **Schedule**: from 10 minutes to 7 days (default 6 hours).
 - **Scope**: only configured resources and connected agents.
 - **Safety**: command execution remains disabled by default.
-- **Cost control**: Pro uses model selection and rate limits; free tier uses heuristic-only Patrol.
+- **Cost control**: BYOK only — use provider limits and budgets to control spend.
 
 ## Privacy
 
-Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when Pro is enabled). No telemetry is sent to Pulse by default.
+Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). No telemetry is sent to Pulse by default.
 
 Pulse AI adds an optional assistant for troubleshooting and proactive monitoring. It is **off by default** and can be enabled per instance.
 
@@ -211,11 +211,11 @@ scripts/eval/run_model_matrix.sh
 - Test provider connectivity: `POST /api/ai/test` and `POST /api/ai/test/{provider}`
 - List available models: `GET /api/ai/models`
 
-## Patrol Service (Pro Feature)
+## Patrol Service (BYOK)
 
 Patrol runs automated health checks on a configurable schedule (default: every 6 hours). It passes comprehensive infrastructure context to the LLM (see "Context Patrol Receives" above) and generates findings when issues are detected.
 
-Pulse Pro users get full LLM-powered analysis. Free users still benefit from **Heuristic Patrol**, which uses local rule-based logic to detect common issues (offline nodes, disk exhaustion, etc.) without requiring an external AI provider. Free users also get full access to the AI Chat assistant (BYOK).
+Patrol runs with your configured provider (BYOK). Auto-fix and assisted/full autonomy require Pulse Pro.
 
 ### Finding Severity
 
@@ -239,7 +239,7 @@ Dismissed and resolved findings persist across Pulse restarts.
 When chatting with AI about a patrol finding, the AI can:
 - Run diagnostic commands on connected agents
 - Propose fixes with explanations
-- Automatically resolve findings after successful remediation
+- Automatically resolve findings after successful remediation (Pro auto-fix)
 
 ## Safety Controls
 

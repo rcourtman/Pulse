@@ -39,7 +39,7 @@ If a setting is disabled with an amber warning, it's being overridden by an envi
 ## 🔍 Monitoring & Metrics
 
 ### What is Pulse Pro, and what does it actually do?
-Pulse Pro unlocks **AI Patrol** — scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
+Pulse Pro unlocks **Auto-Fix and advanced AI analysis**. Pulse Patrol is available to everyone with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
 
 Example output includes trend-based capacity warnings, backup regressions, Kubernetes AI cluster analysis, and correlated container failures that simple threshold alerts miss.
 See [AI Patrol](AI.md), [Pulse Pro technical overview](PULSE_PRO.md), and <https://pulserelay.pro>.
