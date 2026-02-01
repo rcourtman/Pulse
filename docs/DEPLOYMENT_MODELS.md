@@ -28,10 +28,13 @@ Pulse uses a split config model:
 - **System settings**: `system.json` (editable in the UI unless locked by env)
 - **Nodes and credentials**: `nodes.enc` (encrypted)
 - **Notification config**: `email.enc`, `webhooks.enc`, `apprise.enc` (encrypted)
+- **OIDC config**: `oidc.enc` (encrypted)
+- **SSO config**: `sso.enc` (encrypted)
 - **API tokens**: `api_tokens.json`
 - **Legacy token suppressions**: `env_token_suppressions.json`
 - **AI config**: `ai.enc` (encrypted)
 - **AI patrol data**: `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`
+- **AI chat sessions**: `ai_chat_sessions.json` (legacy UI sync)
 - **AI baseline data**: `baselines.json`
 - **AI correlation data**: `ai_correlations.json`
 - **AI pattern data**: `ai_patterns.json`

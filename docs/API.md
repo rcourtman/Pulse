@@ -22,6 +22,15 @@ curl -H "Authorization: Bearer your-token" http://localhost:7655/api/health
 ### Session Cookie
 Standard browser session cookie (used by the UI).
 
+Session endpoints:
+- `POST /api/login` (sets `pulse_session` + `pulse_csrf`)
+- `POST /api/logout` (clears session)
+
+Login body:
+```json
+{ "username": "admin", "password": "secret", "rememberMe": true }
+```
+
 Public endpoints include:
 - `GET /api/health`
 - `GET /api/version`
@@ -58,6 +67,10 @@ Check if Pulse is running.
 ### System State
 `GET /api/state`
 Returns the complete state of your infrastructure (Nodes, VMs, Containers, Storage, Alerts). This is the main endpoint used by the dashboard.
+
+### Simple Stats (HTML)
+`GET /simple-stats`
+Lightweight HTML status page for quick checks.
 
 ### Unified Resources
 `GET /api/resources`
@@ -237,6 +250,10 @@ Other backup endpoints:
 - `GET /api/backups/pve`
 - `GET /api/backups/pbs`
 
+### Snapshots
+`GET /api/snapshots`
+Returns guest snapshot history for the current tenant.
+
 ---
 
 ## 🔔 Notifications
@@ -302,6 +319,13 @@ Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
 ### Security Status
 `GET /api/security/status`
 Returns authentication status, proxy auth state, and security posture flags.
+
+### Change Password
+`POST /api/security/change-password`
+```json
+{ "currentPassword": "old-pass", "newPassword": "new-pass" }
+```
+In Docker installs, the response includes a restart notice.
 
 ### List API Tokens
 `GET /api/security/tokens`
@@ -590,6 +614,10 @@ Configure AI providers, API keys, and preferences. Requires admin + `settings:wr
 `GET /api/ai/models`
 Lists models available to the configured providers (queried live from provider APIs).
 
+### Provider Tests (Admin)
+- `POST /api/ai/test`
+- `POST /api/ai/test/{provider}`
+
 ### OAuth (Anthropic)
 - `POST /api/ai/oauth/start` (admin)
 - `POST /api/ai/oauth/exchange` (admin, manual code input)
@@ -604,6 +632,29 @@ Runs an AI request which may return tool calls, findings, or suggested actions.
 `POST /api/ai/execute/stream`
 Streaming variant of execute (used by the UI for incremental responses).
 
+### Assistant Chat & Sessions
+- `GET /api/ai/status`
+- `POST /api/ai/chat` (streaming)
+- `GET /api/ai/sessions`
+- `POST /api/ai/sessions`
+- `DELETE /api/ai/sessions/{id}`
+- `GET /api/ai/sessions/{id}/messages`
+- `POST /api/ai/sessions/{id}/abort`
+- `POST /api/ai/sessions/{id}/summarize`
+- `GET /api/ai/sessions/{id}/diff`
+- `POST /api/ai/sessions/{id}/fork`
+- `POST /api/ai/sessions/{id}/revert`
+- `POST /api/ai/sessions/{id}/unrevert`
+
+### Legacy Chat Sessions (UI Sync)
+- `GET /api/ai/chat/sessions`
+- `GET /api/ai/chat/sessions/{id}`
+- `PUT /api/ai/chat/sessions/{id}`
+- `DELETE /api/ai/chat/sessions/{id}`
+
+### Question Answers
+- `POST /api/ai/question/{id}/answer`
+
 ### Kubernetes AI Analysis (Pro)
 `POST /api/ai/kubernetes/analyze`
 ```json
@@ -611,7 +662,13 @@ Streaming variant of execute (used by the UI for incremental responses).
 ```
 Requires a Pulse Pro license with the `kubernetes_ai` feature enabled.
 
+### Alert Investigation (Pro)
+`POST /api/ai/investigate-alert`
+Runs a focused investigation for an alert payload (used by the UI).
+
 ### Patrol
+- `GET /api/ai/patrol/autonomy`
+- `PUT /api/ai/patrol/autonomy`
 - `GET /api/ai/patrol/status`
 - `GET /api/ai/patrol/findings`
 - `DELETE /api/ai/patrol/findings` (clear all findings)
@@ -621,6 +678,7 @@ Requires a Pulse Pro license with the `kubernetes_ai` feature enabled.
 - `POST /api/ai/patrol/run` (admin, Pro)
 - `POST /api/ai/patrol/acknowledge` (Pro)
 - `POST /api/ai/patrol/dismiss`
+- `POST /api/ai/patrol/findings/note`
 - `POST /api/ai/patrol/resolve`
 - `POST /api/ai/patrol/snooze` (Pro)
 - `POST /api/ai/patrol/suppress` (Pro)
@@ -628,6 +686,63 @@ Requires a Pulse Pro license with the `kubernetes_ai` feature enabled.
 - `POST /api/ai/patrol/suppressions` (Pro)
 - `DELETE /api/ai/patrol/suppressions/{id}` (Pro)
 - `GET /api/ai/patrol/dismissed` (Pro)
+
+### Findings & Investigations
+- `GET /api/ai/unified/findings`
+- `GET /api/ai/findings/{id}/investigation`
+- `GET /api/ai/findings/{id}/investigation/messages`
+- `POST /api/ai/findings/{id}/reinvestigate`
+- `POST /api/ai/findings/{id}/reapprove` (Pro)
+
+### Approvals & Command Execution (Pro)
+- `GET /api/ai/approvals`
+- `GET /api/ai/approvals/{id}`
+- `POST /api/ai/approvals/{id}/approve`
+- `POST /api/ai/approvals/{id}/deny`
+- `POST /api/ai/run-command` (execute an approved command)
+- `GET /api/ai/agents` (connected agents via `/api/agent/ws`)
+
+### Remediation Plans (Pro)
+- `GET /api/ai/remediation/plans`
+- `GET /api/ai/remediation/plan?plan_id=<id>`
+- `POST /api/ai/remediation/approve`
+- `POST /api/ai/remediation/execute`
+- `POST /api/ai/remediation/rollback`
+
+Request bodies:
+- `approve`: `{ "plan_id": "...", "approved_by": "api" }`
+- `execute`: `{ "execution_id": "...", "plan_id": "..." }`
+- `rollback`: `{ "execution_id": "..." }`
+
+### Intelligence & Forecasting
+- `GET /api/ai/intelligence`
+- `GET /api/ai/intelligence/patterns`
+- `GET /api/ai/intelligence/predictions`
+- `GET /api/ai/intelligence/correlations`
+- `GET /api/ai/intelligence/changes`
+- `GET /api/ai/intelligence/baselines`
+- `GET /api/ai/intelligence/remediations`
+- `GET /api/ai/intelligence/anomalies`
+- `GET /api/ai/intelligence/learning`
+- `GET /api/ai/forecast` (params: `resource_id`, `metric`, optional `resource_name`, `horizon_hours`, `threshold`)
+- `GET /api/ai/forecasts/overview` (params: `metric`, `horizon_hours`, `threshold`)
+- `GET /api/ai/learning/preferences` (optional `resource_id`)
+- `GET /api/ai/proxmox/events`
+- `GET /api/ai/proxmox/correlations`
+- `GET /api/ai/incidents` (optional `resource_id`, `limit`)
+- `GET /api/ai/incidents/{resourceId}` (optional `limit`)
+- `GET /api/ai/circuit/status`
+
+### Knowledge Base
+- `GET /api/ai/knowledge?guest_id=<id>`
+- `POST /api/ai/knowledge/save`
+- `POST /api/ai/knowledge/delete`
+- `GET /api/ai/knowledge/export?guest_id=<id>`
+- `POST /api/ai/knowledge/import`
+- `POST /api/ai/knowledge/clear`
+
+### Debug
+- `GET /api/ai/debug/context` (admin)
 
 ### Cost Tracking
 - `GET /api/ai/cost/summary`
@@ -780,6 +895,7 @@ Updates server-side config for an agent (e.g., `commandsEnabled`).
 ## 🔌 WebSocket Endpoints
 
 - `GET /ws` – Primary UI WebSocket (browser sessions).
+- `GET /socket.io/` – Legacy Socket.IO compatibility endpoint.
 - `GET /api/agent/ws` – Agent WebSocket used for AI command execution.
 
 ---

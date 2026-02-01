@@ -188,5 +188,8 @@ Profiles and assignments are stored in the Pulse config directory:
 
 - `agent_profiles.json`
 - `agent_profile_assignments.json`
+- `profile-versions.json`
+- `profile-changelog.json`
+- `profile-deployments.json`
 
 Deleting a profile automatically removes its assignments.

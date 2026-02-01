@@ -14,12 +14,14 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `webhooks.enc` | Webhook URLs + headers | 🔒 **Encrypted** |
 | `apprise.enc` | Apprise notification config | 🔒 **Encrypted** |
 | `oidc.enc` | OIDC provider config | 🔒 **Encrypted** |
+| `sso.enc` | SAML/SSO provider config | 🔒 **Encrypted** |
 | `api_tokens.json` | API token records (hashed) | 🔒 **Sensitive** |
 | `env_token_suppressions.json` | Suppressed legacy env tokens (migration aid) | 📝 Standard |
 | `ai.enc` | AI settings and credentials | 🔒 **Encrypted** |
 | `ai_findings.json` | AI Patrol findings | 📝 Standard |
 | `ai_patrol_runs.json` | AI Patrol run history | 📝 Standard |
 | `ai_usage_history.json` | AI usage history | 📝 Standard |
+| `ai_chat_sessions.json` | Legacy AI chat sessions (UI sync) | 📝 Standard |
 | `license.enc` | Pulse Pro license key | 🔒 **Encrypted** |
 | `host_metadata.json` | Host notes, tags, and AI command overrides | 📝 Standard |
 | `docker_metadata.json` | Docker metadata cache | 📝 Standard |
