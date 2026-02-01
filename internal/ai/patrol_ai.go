@@ -1017,7 +1017,7 @@ func (p *PatrolService) buildSeedContext(state models.StateSnapshot, scope *Patr
 	sb.WriteString(p.seedBackupAnalysis(state, now))
 	sb.WriteString(p.seedHealthAndAlerts(state, scopedSet, cfg, now))
 	sb.WriteString(p.seedIntelligenceContext(intel, now))
-	findingsCtx, seededFindingIDs := p.seedFindingsAndContext(scope)
+	findingsCtx, seededFindingIDs := p.seedFindingsAndContext(scope, state)
 	sb.WriteString(findingsCtx)
 
 	if scope != nil {
@@ -1852,7 +1852,7 @@ func (p *PatrolService) seedIntelligenceContext(intel seedIntelligence, now time
 }
 
 // seedFindingsAndContext builds the thresholds, active findings, dismissed findings, and user notes sections.
-func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope) (string, []string) {
+func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope, state models.StateSnapshot) (string, []string) {
 	var sb strings.Builder
 
 	// --- Alert Thresholds ---
@@ -1867,6 +1867,26 @@ func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope) (string, []st
 	sb.WriteString(fmt.Sprintf("- Storage warning: %.0f%%, critical: %.0f%%\n", thresholds.StorageWarning, thresholds.StorageCritical))
 	sb.WriteString("Note: The real-time alerting system monitors these thresholds continuously. Do NOT report findings for threshold breaches — focus on trends, capacity planning, and issues alerts cannot detect.\n\n")
 
+	// Build set of known resource IDs/names for existence checks
+	knownResources := make(map[string]bool)
+	for _, n := range state.Nodes {
+		knownResources[n.ID] = true
+		knownResources[n.Name] = true
+	}
+	for _, vm := range state.VMs {
+		knownResources[vm.ID] = true
+		knownResources[vm.Name] = true
+	}
+	for _, ct := range state.Containers {
+		knownResources[ct.ID] = true
+		knownResources[ct.Name] = true
+	}
+	for _, s := range state.Storage {
+		knownResources[s.ID] = true
+		knownResources[s.Name] = true
+	}
+	stateHasResources := len(knownResources) > 0
+
 	// --- Active Findings to Re-check ---
 	activeFindings := p.findings.GetActive(FindingSeverityInfo)
 	var seededFindingIDs []string
@@ -1874,6 +1894,25 @@ func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope) (string, []st
 		sb.WriteString("# Active Findings to Re-check\n")
 		sb.WriteString("Verify whether these findings are still valid. Resolve any that are no longer issues.\n\n")
 		for _, f := range activeFindings {
+			// Auto-resolve findings for resources that no longer exist
+			if stateHasResources && !knownResources[f.ResourceID] && !knownResources[f.ResourceName] {
+				if ok := p.findings.ResolveWithReason(f.ID, "Resource no longer exists in infrastructure"); ok {
+					// Notify unified store
+					p.mu.RLock()
+					resolveUnified := p.unifiedFindingResolver
+					p.mu.RUnlock()
+					if resolveUnified != nil {
+						resolveUnified(f.ID)
+					}
+					log.Info().
+						Str("finding_id", f.ID).
+						Str("resource_id", f.ResourceID).
+						Str("resource_name", f.ResourceName).
+						Msg("AI Patrol: Auto-resolved finding for deleted resource")
+				}
+				continue
+			}
+
 			sb.WriteString(fmt.Sprintf("- [%s] %s on %s (ID: %s, Severity: %s, Detected: %s)\n",
 				f.ID, f.Title, f.ResourceName, f.ResourceID, f.Severity, f.DetectedAt.Format("2006-01-02 15:04")))
 			if f.UserNote != "" {

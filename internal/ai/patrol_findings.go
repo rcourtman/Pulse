@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -612,18 +613,77 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 	return id, isNew, nil
 }
 
-// isActionable validates a finding against current metrics (inline version of the old
-// validateAIFindings + isActionableFinding logic).
-func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
-	// Always allow critical findings
-	if f.Severity == FindingSeverityCritical {
-		return true
+// actionabilityThreshold returns the threshold below which a metric finding is rejected as noise.
+// It reads user-configured PatrolThresholds (Watch level = lowest alarm tier) and falls back
+// to hardcoded defaults (50/60/70) if the threshold is zero or unset.
+// The resourceType parameter selects between node-level and guest-level thresholds where both exist.
+func (a *patrolFindingCreatorAdapter) actionabilityThreshold(metric, resourceType string) float64 {
+	a.patrol.mu.RLock()
+	thresholds := a.patrol.thresholds
+	a.patrol.mu.RUnlock()
+
+	isNode := resourceType == "node"
+
+	switch metric {
+	case "cpu":
+		// Only node-level CPU threshold exists; used for all resource types.
+		if thresholds.NodeCPUWatch > 0 {
+			return thresholds.NodeCPUWatch
+		}
+		return 50.0
+	case "memory":
+		if isNode {
+			if thresholds.NodeMemWatch > 0 {
+				return thresholds.NodeMemWatch
+			}
+		} else {
+			if thresholds.GuestMemWatch > 0 {
+				return thresholds.GuestMemWatch
+			}
+		}
+		return 60.0
+	case "disk":
+		if thresholds.GuestDiskWatch > 0 {
+			return thresholds.GuestDiskWatch
+		}
+		return 70.0
+	case "storage":
+		if thresholds.StorageWatch > 0 {
+			return thresholds.StorageWatch
+		}
+		return 70.0
+	default:
+		return 50.0
 	}
-	// Always allow backup and reliability findings
-	if f.Category == FindingCategoryBackup || f.Category == FindingCategoryReliability {
-		return true
+}
+
+// isBaselineAnomaly checks if the given value is anomalously high compared to the learned
+// baseline for this resource/metric. Returns true only for upward anomalies (rising above
+// baseline), since dropping usage is not concerning. Returns false if baseline data is
+// unavailable or insufficient.
+func (a *patrolFindingCreatorAdapter) isBaselineAnomaly(resourceID, metric string, value float64) bool {
+	a.patrol.mu.RLock()
+	store := a.patrol.baselineStore
+	a.patrol.mu.RUnlock()
+
+	if store == nil {
+		return false
 	}
 
+	severity, _, bl := store.CheckAnomaly(resourceID, metric, value)
+	if severity == baseline.AnomalyNone || bl == nil {
+		return false
+	}
+
+	// Only flag upward anomalies (value above baseline mean)
+	return value > bl.Mean
+}
+
+// isActionable validates a finding against current metrics (inline version of the old
+// validateAIFindings + isActionableFinding logic).
+// Uses user-configured thresholds from PatrolThresholds and baseline anomaly detection
+// as a second-chance check for findings below the threshold but statistically anomalous.
+func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 	// Build resource metrics lookup from current state
 	resourceMetrics := make(map[string]map[string]float64)
 	for _, n := range a.state.Nodes {
@@ -653,12 +713,29 @@ func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 		resourceMetrics[s.Name] = m
 	}
 
+	// Reject findings for resources that no longer exist in the current infrastructure.
+	// Only enforce when we have state data (avoid rejecting during empty/error states).
 	metrics, hasMetrics := resourceMetrics[f.ResourceID]
 	if !hasMetrics {
 		metrics, hasMetrics = resourceMetrics[f.ResourceName]
 	}
+	stateHasResources := len(a.state.Nodes) > 0 || len(a.state.VMs) > 0 || len(a.state.Containers) > 0 || len(a.state.Storage) > 0
+	if !hasMetrics && stateHasResources {
+		// Resource not found — it may have been deleted. Reject the finding.
+		return false
+	}
+
+	// Allow critical findings without metric threshold checks
+	if f.Severity == FindingSeverityCritical {
+		return true
+	}
+	// Allow backup and reliability findings without metric threshold checks
+	if f.Category == FindingCategoryBackup || f.Category == FindingCategoryReliability {
+		return true
+	}
+
 	if !hasMetrics {
-		return true // benefit of doubt
+		return true // empty state — benefit of doubt
 	}
 
 	key := strings.ToLower(f.Key)
@@ -666,22 +743,35 @@ func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 
 	// CPU check
 	if strings.Contains(key, "cpu") || strings.Contains(titleLower, "cpu") {
-		if cpu, ok := metrics["cpu"]; ok && cpu < 50.0 {
+		if cpu, ok := metrics["cpu"]; ok && cpu < a.actionabilityThreshold("cpu", f.ResourceType) {
+			// Below threshold — check if anomalous (statistically unusual spike)
+			if a.isBaselineAnomaly(f.ResourceID, "cpu", cpu) {
+				return true
+			}
 			return false
 		}
 	}
 	// Memory check
 	if strings.Contains(key, "memory") || strings.Contains(key, "mem") || strings.Contains(titleLower, "memory") {
-		if mem, ok := metrics["memory"]; ok && mem < 60.0 {
+		if mem, ok := metrics["memory"]; ok && mem < a.actionabilityThreshold("memory", f.ResourceType) {
+			if a.isBaselineAnomaly(f.ResourceID, "memory", mem) {
+				return true
+			}
 			return false
 		}
 	}
 	// Disk/storage check
 	if strings.Contains(key, "disk") || strings.Contains(key, "storage") || strings.Contains(titleLower, "disk") {
-		if disk, ok := metrics["disk"]; ok && disk < 70.0 {
+		if disk, ok := metrics["disk"]; ok && disk < a.actionabilityThreshold("disk", f.ResourceType) {
+			if a.isBaselineAnomaly(f.ResourceID, "disk", disk) {
+				return true
+			}
 			return false
 		}
-		if usage, ok := metrics["usage"]; ok && usage < 70.0 {
+		if usage, ok := metrics["usage"]; ok && usage < a.actionabilityThreshold("storage", f.ResourceType) {
+			if a.isBaselineAnomaly(f.ResourceID, "storage", usage) {
+				return true
+			}
 			return false
 		}
 	}
@@ -814,6 +904,49 @@ func normalizeFindingKey(key string) string {
 	return strings.Trim(b.String(), "-")
 }
 
+// recoverStuckInvestigations detects findings stuck in "running" state for longer than
+// the investigation timeout and resets them to "failed/timed_out" so they can be retried.
+// This handles the case where an investigation goroutine panics or is killed without
+// properly updating the finding status.
+func (p *PatrolService) recoverStuckInvestigations() {
+	if p.findings == nil {
+		return
+	}
+	const stuckThreshold = 15 * time.Minute // investigation timeout is 10min; allow 5min grace
+	active := p.findings.GetActive(FindingSeverityWarning)
+	recovered := 0
+	for _, f := range active {
+		if f.InvestigationStatus != string(InvestigationStatusRunning) {
+			continue
+		}
+		if f.LastInvestigatedAt == nil {
+			continue
+		}
+		if time.Since(*f.LastInvestigatedAt) < stuckThreshold {
+			continue
+		}
+		// This finding has been "running" for too long — reset it
+		p.findings.UpdateInvestigation(
+			f.ID,
+			f.InvestigationSessionID,
+			string(InvestigationStatusFailed),
+			string(InvestigationOutcomeTimedOut),
+			f.LastInvestigatedAt,
+			f.InvestigationAttempts,
+		)
+		recovered++
+		log.Warn().
+			Str("finding_id", f.ID).
+			Str("resource", f.ResourceName).
+			Time("last_investigated", *f.LastInvestigatedAt).
+			Msg("AI Patrol: Recovered stuck investigation (exceeded timeout)")
+	}
+	if recovered > 0 {
+		log.Info().Int("recovered", recovered).
+			Msg("AI Patrol: Recovered stuck investigations")
+	}
+}
+
 // retryTimedOutInvestigations re-triggers investigation for findings that failed due to timeout.
 // Called at the end of each patrol run to give timed-out investigations another chance
 // without waiting for the full 1-hour cooldown.
@@ -895,11 +1028,24 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 		InvestigationAttempts:  f.InvestigationAttempts,
 	}
 
-	// Trigger investigation in background with a timeout to prevent indefinite runs
+	// Trigger investigation in background with a timeout to prevent indefinite runs.
+	// Track with WaitGroup so graceful shutdown can wait for completion.
+	p.investigationWg.Add(1)
 	go func() {
+		defer p.investigationWg.Done()
+
+		// Re-read autonomy level at execution time to avoid using a stale value
+		// captured before the goroutine was scheduled.
+		currentCfg := aiService.GetConfig()
+		if currentCfg == nil {
+			log.Warn().Str("finding_id", f.ID).Msg("AI config unavailable at investigation start, aborting")
+			return
+		}
+		currentAutonomy := currentCfg.GetPatrolAutonomyLevel()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		if err := orchestrator.InvestigateFinding(ctx, invFinding, autonomyLevel); err != nil {
+		if err := orchestrator.InvestigateFinding(ctx, invFinding, currentAutonomy); err != nil {
 			log.Error().
 				Err(err).
 				Str("finding_id", f.ID).
