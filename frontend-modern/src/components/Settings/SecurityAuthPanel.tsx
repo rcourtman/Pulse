@@ -1,5 +1,6 @@
 import { Component, Show, Accessor, Setter } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import SettingsPanel from '@/components/shared/SettingsPanel';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
@@ -48,7 +49,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           border={false}
         >
           {/* Header */}
-          <div class="bg-gradient-to-r from-amber-50 to-amber-50 dark:from-amber-900/20 dark:to-amber-900/20 px-6 py-4 border-b border-amber-200 dark:border-amber-700">
+          <div class="bg-amber-50 dark:bg-amber-900/20 px-6 py-4 border-b border-amber-200 dark:border-amber-700">
             <div class="flex items-center gap-3">
               <div class="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
                 <svg
@@ -125,91 +126,74 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           (props.securityStatus()?.hasAuthentication || props.securityStatus()?.apiTokenConfigured)
         }
       >
-        <Card
-          padding="none"
-          class="overflow-hidden border border-gray-200 dark:border-gray-700"
-          border={false}
+        <SettingsPanel
+          title="Authentication"
+          description="Password management and credential rotation"
+          icon={<Lock class="w-5 h-5" strokeWidth={2} />}
         >
-          {/* Header */}
-          <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <div class="flex items-center gap-3">
-              <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                <Lock class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
-              </div>
-              <SectionHeader
-                title="Authentication"
-                description="Password management and credential rotation"
-                size="sm"
-                class="flex-1"
-              />
-            </div>
-          </div>
-
           {/* Content */}
-          <div class="p-6">
-            <div class="flex flex-wrap items-center gap-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                props.setShowPasswordModal(true);
+              }}
+              class="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Change password
+            </button>
+            <Show
+              when={!props.authDisabledByEnv()}
+              fallback={
+                <span class="px-4 py-2 text-sm font-semibold border border-amber-300 text-amber-800 bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 rounded-lg">
+                  Remove DISABLE_AUTH to rotate credentials
+                </span>
+              }
+            >
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  props.setShowPasswordModal(true);
-                }}
-                class="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                onClick={() => props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard())}
+                class="px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
-                Change password
+                Rotate credentials
               </button>
-              <Show
-                when={!props.authDisabledByEnv()}
-                fallback={
-                  <span class="px-4 py-2 text-sm font-semibold border border-amber-300 text-amber-800 bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 rounded-lg">
-                    Remove DISABLE_AUTH to rotate credentials
-                  </span>
-                }
-              >
-                <button
-                  type="button"
-                  onClick={() => props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard())}
-                  class="px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                  Rotate credentials
-                </button>
-              </Show>
-              <div class="flex-1"></div>
-              <div class="text-xs text-gray-600 dark:text-gray-400">
-                <span class="font-medium text-gray-800 dark:text-gray-200">User:</span>{' '}
-                {props.securityStatus()?.authUsername || 'Not configured'}
-              </div>
+            </Show>
+            <div class="flex-1"></div>
+            <div class="text-xs text-gray-600 dark:text-gray-400">
+              <span class="font-medium text-gray-800 dark:text-gray-200">User:</span>{' '}
+              {props.securityStatus()?.authUsername || 'Not configured'}
             </div>
+          </div>
 
+          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <Toggle
+              label="Hide local login form"
+              description="Hide the username/password form on the login page. Users will only see SSO options unless ?show_local=true is used."
+              checked={props.hideLocalLogin()}
+              onChange={(e: ToggleChangeEvent) =>
+                props.handleHideLocalLoginChange(e.currentTarget.checked)
+              }
+              disabled={props.hideLocalLoginLocked() || props.savingHideLocalLogin()}
+              locked={props.hideLocalLoginLocked()}
+              lockedMessage="This setting is managed by the PULSE_AUTH_HIDE_LOCAL_LOGIN environment variable"
+            />
+          </div>
+
+          <Show when={!props.authDisabledByEnv() && props.showQuickSecurityWizard()}>
             <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <Toggle
-                label="Hide local login form"
-                description="Hide the username/password form on the login page. Users will only see SSO options unless ?show_local=true is used."
-                checked={props.hideLocalLogin()}
-                onChange={(e: ToggleChangeEvent) =>
-                  props.handleHideLocalLoginChange(e.currentTarget.checked)
-                }
-                disabled={props.hideLocalLoginLocked() || props.savingHideLocalLogin()}
-                locked={props.hideLocalLoginLocked()}
-                lockedMessage="This setting is managed by the PULSE_AUTH_HIDE_LOCAL_LOGIN environment variable"
+              <QuickSecuritySetup
+                mode="rotate"
+                defaultUsername={props.securityStatus()?.authUsername || 'admin'}
+                onConfigured={() => {
+                  props.setShowQuickSecurityWizard(false);
+                  props.loadSecurityStatus();
+                }}
               />
             </div>
-
-            <Show when={!props.authDisabledByEnv() && props.showQuickSecurityWizard()}>
-              <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <QuickSecuritySetup
-                  mode="rotate"
-                  defaultUsername={props.securityStatus()?.authUsername || 'admin'}
-                  onConfigured={() => {
-                    props.setShowQuickSecurityWizard(false);
-                    props.loadSecurityStatus();
-                  }}
-                />
-              </div>
-            </Show>
-          </div>
-        </Card>
+          </Show>
+        </SettingsPanel>
       </Show>
 
       {/* Show pending restart message if configured but not loaded */}
