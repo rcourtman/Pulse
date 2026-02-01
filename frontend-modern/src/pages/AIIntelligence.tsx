@@ -1534,7 +1534,7 @@ export function AIIntelligence() {
                                   </div>
                                   <Show when={showRunAnalysis()}>
                                     <div
-                                      class="mt-2 p-3 rounded bg-white dark:bg-gray-900 text-sm leading-relaxed text-gray-700 dark:text-gray-200 max-h-64 overflow-auto prose prose-sm dark:prose-invert prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
+                                      class="mt-2 p-3 rounded bg-white dark:bg-gray-900 text-sm leading-relaxed text-gray-700 dark:text-gray-200 max-h-64 overflow-auto prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
                                       innerHTML={renderMarkdown(sanitizeAnalysis(run.ai_analysis))}
                                     />
                                   </Show>
