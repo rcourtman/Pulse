@@ -1,7 +1,6 @@
 import { Component, Show, createSignal, onMount, For, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { Card } from '@/components/shared/Card';
-import { SectionHeader } from '@/components/shared/SectionHeader';
+import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
@@ -718,79 +717,68 @@ export const AISettings: Component = () => {
 
   return (
     <>
-      <Card
-        padding="none"
-        class="overflow-hidden border border-gray-200 dark:border-gray-700"
-        border={false}
-      >
-        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div class="flex items-center gap-3">
-            <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-              <svg
-                class="w-5 h-5 text-blue-600 dark:text-blue-300"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.8"
-                  d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611l-2.576.43a18.003 18.003 0 01-5.118 0l-2.576-.43c-1.717-.293-2.299-2.379-1.067-3.611L5 14.5"
-                />
-              </svg>
-            </div>
-            <SectionHeader
-              title="Pulse Assistant"
-              description="Configure Pulse Assistant and Patrol analysis"
-              size="sm"
-              class="flex-1"
+      <SettingsPanel
+        title="AI"
+        description="Configure AI providers, models, Pulse Assistant, and Patrol"
+        icon={
+          <svg
+            class="w-5 h-5 text-blue-600 dark:text-blue-300"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.8"
+              d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611l-2.576.43a18.003 18.003 0 01-5.118 0l-2.576-.43c-1.717-.293-2.299-2.379-1.067-3.611L5 14.5"
             />
-            {/* Toggle with first-time setup flow */}
-            {(() => {
-              const s = settings();
-              const hasConfiguredProvider = s && (s.anthropic_configured || s.openai_configured || s.deepseek_configured || s.ollama_configured);
+          </svg>
+        }
+        action={
+          (() => {
+            const s = settings();
+            const hasConfiguredProvider = s && (s.anthropic_configured || s.openai_configured || s.deepseek_configured || s.ollama_configured);
 
-              return (
-                <Toggle
-                  checked={form.enabled}
-                  onChange={async (event) => {
-                    const newValue = event.currentTarget.checked;
-                    // Show setup modal if trying to enable without a configured provider
-                    if (newValue && !hasConfiguredProvider) {
-                      event.currentTarget.checked = false;
-                      setShowSetupModal(true);
-                      return;
-                    }
-                    setForm('enabled', newValue);
-                    // Auto-save the enabled toggle immediately
-                    try {
-                      const updated = await AIAPI.updateSettings({ enabled: newValue });
-                      setSettings(updated);
-                      notificationStore.success(newValue ? 'Pulse Assistant enabled' : 'Pulse Assistant disabled');
-                      aiChatStore.notifySettingsChanged();
-                    } catch (error) {
-                      // Revert on failure
-                      setForm('enabled', !newValue);
-                      logger.error('[AISettings] Failed to toggle AI:', error);
-                      const message = error instanceof Error ? error.message : 'Failed to update Pulse Assistant setting';
-                      notificationStore.error(message);
-                    }
-                  }}
-                  disabled={loading() || saving()}
-                  containerClass="items-center gap-2"
-                  label={
-                    <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
-                      {form.enabled ? 'Enabled' : 'Disabled'}
-                    </span>
+            return (
+              <Toggle
+                checked={form.enabled}
+                onChange={async (event) => {
+                  const newValue = event.currentTarget.checked;
+                  // Show setup modal if trying to enable without a configured provider
+                  if (newValue && !hasConfiguredProvider) {
+                    event.currentTarget.checked = false;
+                    setShowSetupModal(true);
+                    return;
                   }
-                />
-              );
-            })()}
-          </div>
-        </div>
-
-        <form class="p-6 space-y-6" onSubmit={handleSave}>
+                  setForm('enabled', newValue);
+                  // Auto-save the enabled toggle immediately
+                  try {
+                    const updated = await AIAPI.updateSettings({ enabled: newValue });
+                    setSettings(updated);
+                    notificationStore.success(newValue ? 'Pulse Assistant enabled' : 'Pulse Assistant disabled');
+                    aiChatStore.notifySettingsChanged();
+                  } catch (error) {
+                    // Revert on failure
+                    setForm('enabled', !newValue);
+                    logger.error('[AISettings] Failed to toggle AI:', error);
+                    const message = error instanceof Error ? error.message : 'Failed to update Pulse Assistant setting';
+                    notificationStore.error(message);
+                  }
+                }}
+                disabled={loading() || saving()}
+                containerClass="items-center gap-2"
+                label={
+                  <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    {form.enabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                }
+              />
+            );
+          })()
+        }
+      >
+        <form class="space-y-6" onSubmit={handleSave}>
           <Show when={loading()}>
             <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
               <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -908,7 +896,8 @@ export const AISettings: Component = () => {
                     </p>
                     {/* Chat Model */}
                     <div>
-                      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Chat Model (Interactive)</label>
+                      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Chat Model (Interactive)</label>
+                      <p class="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Used for chat and fix execution — a more capable model is recommended.</p>
                       <Show when={availableModels().length > 0} fallback={
                         <input
                           type="text"
@@ -944,7 +933,8 @@ export const AISettings: Component = () => {
                     </div>
                     {/* Patrol Model */}
                     <div>
-                      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Patrol Model (Background)</label>
+                      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Patrol Model (Background)</label>
+                      <p class="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Runs frequently for detection — a smaller, cheaper model keeps costs low.</p>
                       <Show when={availableModels().length > 0} fallback={
                         <input
                           type="text"
@@ -1503,10 +1493,10 @@ export const AISettings: Component = () => {
                   <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Pulse Permission Level</span>
                   <Show when={form.controlLevel !== 'read_only'}>
                     <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${form.controlLevel === 'autonomous'
-                        ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                        : form.controlLevel === 'controlled'
-                          ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
-                          : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                      ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                      : form.controlLevel === 'controlled'
+                        ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
+                        : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
                       }`}>
                       {form.controlLevel}
                     </span>
@@ -1745,7 +1735,7 @@ export const AISettings: Component = () => {
             </div>
           </Show>
         </form>
-      </Card>
+      </SettingsPanel>
 
       {/* Session Diff Modal */}
       <Show when={showDiffModal()}>
@@ -1806,7 +1796,7 @@ export const AISettings: Component = () => {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
             {/* Header */}
-            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+            <div class="bg-blue-600 px-6 py-4">
               <h3 class="text-lg font-semibold text-white">Set Up Pulse Assistant</h3>
               <p class="text-blue-100 text-sm mt-1">Choose a provider to get started</p>
             </div>
