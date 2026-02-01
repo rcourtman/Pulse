@@ -5313,7 +5313,7 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 	hasAutoFix := h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix)
 	if !hasAutoFix && (req.AutonomyLevel == config.PatrolAutonomyAssisted || req.AutonomyLevel == config.PatrolAutonomyFull) {
 		writeErrorResponse(w, http.StatusPaymentRequired, "license_required",
-			"Assisted and Full autonomy require Pulse Pro. Free tier supports Monitor and Approval modes.",
+			"Auto-fix requires Pulse Pro. Free tier supports Monitor and Investigate modes.",
 			map[string]string{
 				"feature":       license.FeatureAIAutoFix,
 				"upgrade_url":   "https://pulserelay.pro/",
@@ -5363,7 +5363,7 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 	// Validate the FINAL level: can't use "full" mode unless unlocked
 	if finalAutonomyLevel == config.PatrolAutonomyFull && !effectiveUnlocked {
 		writeErrorResponse(w, http.StatusForbidden, "full_mode_locked",
-			"Full mode requires acknowledgment. Enable 'full_mode_unlocked' first.", nil)
+			"Auto-fixing critical issues requires acknowledgment. Enable 'Auto-fix critical issues' in settings first.", nil)
 		return
 	}
 
