@@ -1008,25 +1008,8 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 		return
 	}
 
-	// Convert Finding to InvestigationFinding
-	invFinding := &InvestigationFinding{
-		ID:                     f.ID,
-		Key:                    f.Key,
-		Severity:               string(f.Severity),
-		Category:               string(f.Category),
-		ResourceID:             f.ResourceID,
-		ResourceName:           f.ResourceName,
-		ResourceType:           f.ResourceType,
-		Title:                  f.Title,
-		Description:            f.Description,
-		Recommendation:         f.Recommendation,
-		Evidence:               f.Evidence,
-		InvestigationSessionID: f.InvestigationSessionID,
-		InvestigationStatus:    f.InvestigationStatus,
-		InvestigationOutcome:   f.InvestigationOutcome,
-		LastInvestigatedAt:     f.LastInvestigatedAt,
-		InvestigationAttempts:  f.InvestigationAttempts,
-	}
+	// Convert Finding to shared finding type for the investigation orchestrator
+	invFinding := f.ToCoreFinding()
 
 	// Trigger investigation in background with a timeout to prevent indefinite runs.
 	// Track with WaitGroup so graceful shutdown can wait for completion.

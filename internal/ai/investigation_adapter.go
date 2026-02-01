@@ -16,29 +16,11 @@ func NewInvestigationOrchestratorAdapter(o *investigation.Orchestrator) *Investi
 	return &InvestigationOrchestratorAdapter{orchestrator: o}
 }
 
-// InvestigateFinding starts an investigation for a finding
-func (a *InvestigationOrchestratorAdapter) InvestigateFinding(ctx context.Context, finding *InvestigationFinding, autonomyLevel string) error {
-	// Convert to investigation package's Finding type
-	invFinding := &investigation.Finding{
-		ID:                     finding.ID,
-		Key:                    finding.Key,
-		Severity:               finding.Severity,
-		Category:               finding.Category,
-		ResourceID:             finding.ResourceID,
-		ResourceName:           finding.ResourceName,
-		ResourceType:           finding.ResourceType,
-		Title:                  finding.Title,
-		Description:            finding.Description,
-		Recommendation:         finding.Recommendation,
-		Evidence:               finding.Evidence,
-		InvestigationSessionID: finding.InvestigationSessionID,
-		InvestigationStatus:    finding.InvestigationStatus,
-		InvestigationOutcome:   finding.InvestigationOutcome,
-		LastInvestigatedAt:     finding.LastInvestigatedAt,
-		InvestigationAttempts:  finding.InvestigationAttempts,
-	}
-
-	return a.orchestrator.InvestigateFinding(ctx, invFinding, autonomyLevel)
+// InvestigateFinding starts an investigation for a finding.
+// Both *InvestigationFinding and *investigation.Finding are type aliases for
+// *finding.Finding, so no conversion is needed.
+func (a *InvestigationOrchestratorAdapter) InvestigateFinding(ctx context.Context, f *InvestigationFinding, autonomyLevel string) error {
+	return a.orchestrator.InvestigateFinding(ctx, f, autonomyLevel)
 }
 
 // GetInvestigationByFinding returns the latest investigation for a finding

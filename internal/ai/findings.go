@@ -257,6 +257,30 @@ func (f *Finding) CanRetryInvestigation() bool {
 	return true
 }
 
+// ToCoreFinding converts to the shared finding.Finding type used by the
+// investigation orchestrator. Centralised here so a field added to
+// finding.Finding causes a compile error in exactly one place.
+func (f *Finding) ToCoreFinding() *InvestigationFinding {
+	return &InvestigationFinding{
+		ID:                     f.ID,
+		Key:                    f.Key,
+		Severity:               string(f.Severity),
+		Category:               string(f.Category),
+		ResourceID:             f.ResourceID,
+		ResourceName:           f.ResourceName,
+		ResourceType:           f.ResourceType,
+		Title:                  f.Title,
+		Description:            f.Description,
+		Recommendation:         f.Recommendation,
+		Evidence:               f.Evidence,
+		InvestigationSessionID: f.InvestigationSessionID,
+		InvestigationStatus:    f.InvestigationStatus,
+		InvestigationOutcome:   f.InvestigationOutcome,
+		LastInvestigatedAt:     f.LastInvestigatedAt,
+		InvestigationAttempts:  f.InvestigationAttempts,
+	}
+}
+
 // Getter methods for investigation.AIFinding interface
 
 func (f *Finding) GetID() string                     { return f.ID }

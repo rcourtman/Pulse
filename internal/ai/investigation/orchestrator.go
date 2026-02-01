@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/finding"
 	"github.com/rs/zerolog/log"
 )
 
@@ -88,25 +89,10 @@ type FindingsStore interface {
 	Update(f *Finding) bool
 }
 
-// Finding represents a patrol finding (simplified for this package)
-type Finding struct {
-	ID                     string     `json:"id"`
-	Key                    string     `json:"key,omitempty"` // Stable issue key for matching
-	Severity               string     `json:"severity"`
-	Category               string     `json:"category"`
-	ResourceID             string     `json:"resource_id"`
-	ResourceName           string     `json:"resource_name"`
-	ResourceType           string     `json:"resource_type"`
-	Title                  string     `json:"title"`
-	Description            string     `json:"description"`
-	Recommendation         string     `json:"recommendation,omitempty"`
-	Evidence               string     `json:"evidence,omitempty"`
-	InvestigationSessionID string     `json:"investigation_session_id,omitempty"`
-	InvestigationStatus    string     `json:"investigation_status,omitempty"`
-	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`
-	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`
-	InvestigationAttempts  int        `json:"investigation_attempts"`
-}
+// Finding is the shared finding type from the finding package.
+// Type alias ensures full backwards compatibility — *investigation.Finding
+// and *finding.Finding are the same type.
+type Finding = finding.Finding
 
 // ApprovalStore interface for queuing fixes for approval
 type ApprovalStore interface {
