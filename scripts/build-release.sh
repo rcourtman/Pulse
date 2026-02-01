@@ -44,24 +44,30 @@ cp -r frontend-modern/dist internal/api/frontend-modern/
 
 # Build host agents for every supported platform/architecture so download endpoints work offline
 echo "Building host agents for all platforms..."
-declare -A host_agent_builds=(
-    ["linux-amd64"]="GOOS=linux GOARCH=amd64"
-    ["linux-arm64"]="GOOS=linux GOARCH=arm64"
-    ["linux-armv7"]="GOOS=linux GOARCH=arm GOARM=7"
-    ["linux-armv6"]="GOOS=linux GOARCH=arm GOARM=6"
-    ["linux-386"]="GOOS=linux GOARCH=386"
-    ["darwin-amd64"]="GOOS=darwin GOARCH=amd64"
-    ["darwin-arm64"]="GOOS=darwin GOARCH=arm64"
-    ["freebsd-amd64"]="GOOS=freebsd GOARCH=amd64"
-    ["freebsd-arm64"]="GOOS=freebsd GOARCH=arm64"
-    ["windows-amd64"]="GOOS=windows GOARCH=amd64"
-    ["windows-arm64"]="GOOS=windows GOARCH=arm64"
-    ["windows-386"]="GOOS=windows GOARCH=386"
-)
 host_agent_order=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386 darwin-amd64 darwin-arm64 freebsd-amd64 freebsd-arm64 windows-amd64 windows-arm64 windows-386)
+host_agent_envs=(
+    "GOOS=linux GOARCH=amd64"
+    "GOOS=linux GOARCH=arm64"
+    "GOOS=linux GOARCH=arm GOARM=7"
+    "GOOS=linux GOARCH=arm GOARM=6"
+    "GOOS=linux GOARCH=386"
+    "GOOS=darwin GOARCH=amd64"
+    "GOOS=darwin GOARCH=arm64"
+    "GOOS=freebsd GOARCH=amd64"
+    "GOOS=freebsd GOARCH=arm64"
+    "GOOS=windows GOARCH=amd64"
+    "GOOS=windows GOARCH=arm64"
+    "GOOS=windows GOARCH=386"
+)
 
-for target in "${host_agent_order[@]}"; do
-    build_env="${host_agent_builds[$target]}"
+if [[ ${#host_agent_order[@]} -ne ${#host_agent_envs[@]} ]]; then
+    echo "Host agent build config mismatch." >&2
+    exit 1
+fi
+
+for i in "${!host_agent_order[@]}"; do
+    target="${host_agent_order[$i]}"
+    build_env="${host_agent_envs[$i]}"
     output_path="$BUILD_DIR/pulse-host-agent-$target"
     if [[ "$target" == windows-* ]]; then
         output_path="${output_path}.exe"
@@ -76,8 +82,9 @@ done
 
 # Build unified agents for every supported platform/architecture
 echo "Building unified agents for all platforms..."
-for target in "${host_agent_order[@]}"; do
-    build_env="${host_agent_builds[$target]}"
+for i in "${!host_agent_order[@]}"; do
+    target="${host_agent_order[$i]}"
+    build_env="${host_agent_envs[$i]}"
     output_path="$BUILD_DIR/pulse-agent-$target"
     if [[ "$target" == windows-* ]]; then
         output_path="${output_path}.exe"
@@ -91,19 +98,25 @@ for target in "${host_agent_order[@]}"; do
 done
 
 # Build for different architectures (server + agents)
-declare -A builds=(
-    ["linux-amd64"]="GOOS=linux GOARCH=amd64"
-    ["linux-arm64"]="GOOS=linux GOARCH=arm64"
-    ["linux-armv7"]="GOOS=linux GOARCH=arm GOARM=7"
-    ["linux-armv6"]="GOOS=linux GOARCH=arm GOARM=6"
-    ["linux-386"]="GOOS=linux GOARCH=386"
-)
 build_order=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386)
+build_envs=(
+    "GOOS=linux GOARCH=amd64"
+    "GOOS=linux GOARCH=arm64"
+    "GOOS=linux GOARCH=arm GOARM=7"
+    "GOOS=linux GOARCH=arm GOARM=6"
+    "GOOS=linux GOARCH=386"
+)
 
-for build_name in "${build_order[@]}"; do
+if [[ ${#build_order[@]} -ne ${#build_envs[@]} ]]; then
+    echo "Build target config mismatch." >&2
+    exit 1
+fi
+
+for i in "${!build_order[@]}"; do
+    build_name="${build_order[$i]}"
     echo "Building for $build_name..."
-    
-    build_env="${builds[$build_name]}"
+
+    build_env="${build_envs[$i]}"
     
     build_time=$(date -u '+%Y-%m-%d_%H:%M:%S')
     git_commit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
