@@ -375,7 +375,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     <div class="space-y-5">
       <Card
         padding="lg"
-        class="border border-gray-200/80 bg-gradient-to-r from-gray-50 via-white to-gray-50 shadow-sm dark:border-gray-700/80 dark:from-gray-900/60 dark:via-gray-900/40 dark:to-gray-900/60"
+        class="border border-gray-200/80 bg-gray-50 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/60"
       >
         <div class="flex flex-col gap-6">
           <div class="flex flex-wrap items-center justify-between gap-4">

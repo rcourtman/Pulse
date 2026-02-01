@@ -508,7 +508,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
     <div class="space-y-6">
       {/* License banner */}
       <Show when={licenseLoaded() && !hasAdvancedSSO() && !loading()}>
-        <Card padding="md" class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800">
+        <Card padding="md" class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
               <h4 class="text-base font-semibold text-gray-900 dark:text-white">Advanced SSO</h4>
@@ -535,7 +535,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
         border={false}
       >
         {/* Header */}
-        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="bg-blue-50 dark:bg-blue-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-3">
               <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">

@@ -472,7 +472,7 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
                 <Show when={props.agentType === 'pmg'}>
                   {/* PMG style */}
                   <div
-                    class="bg-gradient-to-r from-purple-50 to-transparent dark:from-purple-900/20 dark:to-transparent border-l-4 border-purple-500 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
+                    class="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
                     onClick={() => handleDiscoveredNodeClick(server)}
                   >
                     <div class="flex items-start justify-between">

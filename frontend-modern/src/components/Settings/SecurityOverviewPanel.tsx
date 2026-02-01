@@ -38,7 +38,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
           class="overflow-hidden border border-gray-200 dark:border-gray-700"
           border={false}
         >
-          <div class="bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 px-6 py-5 animate-pulse">
+          <div class="bg-gray-100 dark:bg-gray-800 px-6 py-5 animate-pulse">
             <div class="flex items-center gap-4">
               <div class="w-12 h-12 bg-gray-300 dark:bg-gray-600 rounded-xl"></div>
               <div class="flex-1 space-y-2">
@@ -76,7 +76,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
           class="overflow-hidden border border-blue-200 dark:border-blue-800"
           border={false}
         >
-          <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-blue-200 dark:border-blue-700">
+          <div class="bg-blue-50 dark:bg-blue-900/20 px-6 py-4 border-b border-blue-200 dark:border-blue-700">
             <div class="flex items-center gap-3">
               <div class="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
                 <Shield class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />

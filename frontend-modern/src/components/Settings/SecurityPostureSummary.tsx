@@ -97,9 +97,9 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
 
   const scoreColor = () => {
     const score = securityScore();
-    if (score >= 80) return 'from-green-500 to-emerald-600';
-    if (score >= 50) return 'from-amber-500 to-orange-600';
-    return 'from-red-500 to-rose-600';
+    if (score >= 80) return 'bg-green-500';
+    if (score >= 50) return 'bg-amber-500';
+    return 'bg-red-500';
   };
 
   const scoreLabel = () => {
@@ -123,7 +123,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
       border={false}
     >
       {/* Header with Security Score */}
-      <div class={`bg-gradient-to-r ${scoreColor()} px-6 py-5`}>
+      <div class={`${scoreColor()} px-6 py-5`}>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4">
             <div class="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
