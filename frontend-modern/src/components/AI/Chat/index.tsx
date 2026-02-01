@@ -43,6 +43,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [controlSaving, setControlSaving] = createSignal(false);
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
   const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
+  const [autonomousBannerDismissed, setAutonomousBannerDismissed] = createSignal(false);
   const [isCluster, setIsCluster] = createSignal(false);
 
   // @ mention autocomplete state
@@ -210,6 +211,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const updated = await AIAPI.updateSettings({ control_level: nextLevel });
       const resolved = normalizeControlLevel(updated.control_level || nextLevel);
       setControlLevel(resolved);
+      if (resolved === 'autonomous') setAutonomousBannerDismissed(false);
       aiChatStore.notifySettingsChanged();
       notificationStore.success(`Control mode set to ${labelForControlLevel(resolved)}`, 2000);
     } catch (error) {
@@ -787,19 +789,30 @@ export const AIChat: Component<AIChatProps> = (props) => {
           </div>
         </div>
 
-        <Show when={controlLevel() === 'autonomous'}>
+        <Show when={controlLevel() === 'autonomous' && !autonomousBannerDismissed()}>
           <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
             <div class="flex items-center gap-2">
               <span class="inline-flex h-2 w-2 rounded-full bg-red-500" />
-              <span class="font-medium">Autonomous mode active</span>
+              <span class="font-medium">Autonomous mode</span>
               <span class="text-red-600 dark:text-red-300">Commands execute without approval.</span>
             </div>
-            <button
-              onClick={() => updateControlLevel('controlled')}
-              class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-white/80 dark:bg-red-900/30 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-white dark:hover:bg-red-900/40"
-            >
-              Switch to Approval
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                onClick={() => updateControlLevel('controlled')}
+                class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-white/80 dark:bg-red-900/30 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-white dark:hover:bg-red-900/40"
+              >
+                Switch to Approval
+              </button>
+              <button
+                onClick={() => setAutonomousBannerDismissed(true)}
+                class="p-1 rounded-md text-red-400 hover:text-red-600 dark:hover:text-red-200 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                title="Dismiss"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         </Show>
 
@@ -917,33 +930,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 />
               </div>
             </div>
-            <div class="flex gap-1.5 self-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setInput(s => s + (s && !s.endsWith(' ') ? ' @' : '@'));
-                  textareaRef?.focus();
-                  // Trigger manual autocomplete activation logic if needed, 
-                  // but input change handler should catch the '@' insertion
-                  // We simulate an input event to trigger the autocomplete logic:
-                  setTimeout(() => {
-                    const event = new Event('input', { bubbles: true });
-                    textareaRef?.dispatchEvent(event);
-                  }, 0);
-                }}
-                class="hidden sm:flex items-center justify-center w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all font-mono font-medium text-lg"
-                title="Mention a resource (VM, Node, Docker...)"
-              >
-                @
-              </button>
-
+            <div class="flex gap-1.5 self-stretch">
               <Show
                 when={!chat.isLoading()}
                 fallback={
                   <button
                     type="button"
                     onClick={chat.stop}
-                    class="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors shadow-lg shadow-red-500/20"
+                    class="px-4 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors shadow-lg shadow-red-500/20"
                     title="Stop"
                   >
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -955,7 +949,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <button
                   type="submit"
                   disabled={!input().trim()}
-                  class="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                  class="px-4 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                   title="Send"
                 >
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -965,12 +959,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </Show>
             </div>
           </form>
-          <div class="flex items-center justify-center gap-4 mt-2 text-[10px] text-slate-400 dark:text-slate-500">
-            <span>Press <kbd class="font-sans px-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Enter</kbd> to send</span>
-            <span class="flex items-center gap-1.5">
-              <span class="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
-              <span>Type <span class="font-bold text-blue-600 dark:text-blue-400">@</span> to mention resources</span>
-            </span>
+          <div class="flex items-center justify-center gap-3 mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+            <span><kbd class="font-sans px-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Enter</kbd> to send</span>
+            <span class="text-slate-300 dark:text-slate-600">&middot;</span>
+            <span><span class="font-semibold text-slate-500 dark:text-slate-400">@</span> to mention resources</span>
           </div>
         </div>
       </Show>
