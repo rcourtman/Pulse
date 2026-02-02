@@ -216,3 +216,65 @@ func TestReevaluateActiveAlertsStillAboveThreshold(t *testing.T) {
 		t.Errorf("Expected alert to remain active since value (96%%) is still above new threshold (90%%)")
 	}
 }
+
+// TestReevaluateActiveAlertsGuestNotMisclassifiedAsNode tests that guest alerts
+// are not misclassified as node alerts when Instance == Node (single-node setups).
+// This is the root cause of GitHub #1145.
+func TestReevaluateActiveAlertsGuestNotMisclassifiedAsNode(t *testing.T) {
+	manager := NewManager()
+
+	manager.mu.Lock()
+	manager.activeAlerts = make(map[string]*Alert)
+	manager.mu.Unlock()
+
+	// Configure: guest memory disabled (trigger=0), node memory enabled
+	config := AlertConfig{
+		Enabled: true,
+		GuestDefaults: ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory: &HysteresisThreshold{Trigger: 0, Clear: 0}, // Disabled
+		},
+		NodeDefaults: ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory: &HysteresisThreshold{Trigger: 85, Clear: 80}, // Enabled
+		},
+		StorageDefault: HysteresisThreshold{Trigger: 85, Clear: 80},
+		Overrides:      make(map[string]ThresholdConfig),
+	}
+	manager.UpdateConfig(config)
+
+	// Create a guest alert where Instance == Node (single-node setup).
+	// Guest resource IDs contain ":" (format instance:node:vmid).
+	alertID := "pve1:pve1:101-memory"
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "memory",
+		Level:        AlertLevelWarning,
+		ResourceID:   "pve1:pve1:101",
+		ResourceName: "test-vm",
+		Node:         "pve1",
+		Instance:     "pve1", // Same as Node — triggers the bug
+		Message:      "Memory usage is 90%",
+		Value:        90.0,
+		Threshold:    85.0,
+		StartTime:    time.Now().Add(-5 * time.Minute),
+		LastSeen:     time.Now(),
+	}
+
+	manager.mu.Lock()
+	manager.activeAlerts[alertID] = alert
+	manager.mu.Unlock()
+
+	// Re-apply same config to trigger reevaluation
+	manager.UpdateConfig(config)
+	time.Sleep(100 * time.Millisecond)
+
+	// The guest alert should be resolved because GuestDefaults.Memory is disabled
+	manager.mu.RLock()
+	_, alertStillActive := manager.activeAlerts[alertID]
+	manager.mu.RUnlock()
+
+	if alertStillActive {
+		t.Errorf("Guest alert should have been resolved when guest memory threshold is disabled, but it was misclassified as a node alert")
+	}
+}

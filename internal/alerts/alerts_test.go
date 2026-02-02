@@ -112,6 +112,59 @@ func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
 	}
 }
 
+func TestCheckMetricClearsAlertWhenThresholdDisabled(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.config.SuppressionWindow = 0
+	m.config.MinimumDelta = 0
+	m.mu.Unlock()
+
+	// First, create an active alert with an enabled threshold
+	threshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
+	m.checkMetric("res1", "Resource", "node1", "inst1", "guest", "memory", 90, threshold, nil)
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts["res1-memory"]
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected alert to be created")
+	}
+
+	// Now call checkMetric with a disabled threshold (Trigger=0) — should clear the alert
+	disabledThreshold := &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.checkMetric("res1", "Resource", "node1", "inst1", "guest", "memory", 90, disabledThreshold, nil)
+
+	m.mu.RLock()
+	_, stillExists := m.activeAlerts["res1-memory"]
+	m.mu.RUnlock()
+	if stillExists {
+		t.Errorf("expected alert to be cleared when threshold is disabled (Trigger=0)")
+	}
+
+	// Also test with nil threshold
+	// Re-create the alert
+	m.checkMetric("res1", "Resource", "node1", "inst1", "guest", "memory", 90, threshold, nil)
+	m.mu.RLock()
+	_, exists = m.activeAlerts["res1-memory"]
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected alert to be re-created")
+	}
+
+	// Call with nil threshold — should also clear
+	m.checkMetric("res1", "Resource", "node1", "inst1", "guest", "memory", 90, nil, nil)
+
+	m.mu.RLock()
+	_, stillExists = m.activeAlerts["res1-memory"]
+	m.mu.RUnlock()
+	if stillExists {
+		t.Errorf("expected alert to be cleared when threshold is nil")
+	}
+}
+
 func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 	m := newTestManager(t)
 

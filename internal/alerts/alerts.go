@@ -1059,6 +1059,10 @@ func ensureValidHysteresis(threshold *HysteresisThreshold, metricName string) {
 	if threshold == nil {
 		return
 	}
+	// Disabled thresholds don't need hysteresis validation
+	if threshold.Trigger <= 0 {
+		return
+	}
 	if threshold.Clear >= threshold.Trigger {
 		log.Warn().
 			Str("metric", metricName).
@@ -1786,7 +1790,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 
 		// Determine the resource type from the alert's metadata or instance
 		// We need to check what kind of resource this is
-		if threshold == nil && (alert.Instance == "Node" || alert.Instance == alert.Node) {
+		if threshold == nil && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node) {
 			// This is a node alert
 			// Check if all node alerts are disabled
 			if m.config.DisableAllNodes {
@@ -6006,6 +6010,8 @@ type metricOptions struct {
 
 func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
 	if threshold == nil || threshold.Trigger <= 0 {
+		alertID := fmt.Sprintf("%s-%s", resourceID, metricType)
+		m.clearAlert(alertID)
 		return
 	}
 

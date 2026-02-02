@@ -1619,20 +1619,20 @@ func TestEnsureValidHysteresis(t *testing.T) {
 			expectChange: true,
 		},
 		{
-			name:         "zero trigger with positive clear is fixed",
+			name:         "zero trigger with positive clear is skipped (disabled)",
 			threshold:    &HysteresisThreshold{Trigger: 0, Clear: 5},
 			metricName:   "zero",
 			wantTrigger:  0,
-			wantClear:    0, // 0 - 5 = -5, clamped to 0
-			expectChange: true,
+			wantClear:    5,     // Disabled thresholds are left as-is
+			expectChange: false, // No change — disabled threshold skipped
 		},
 		{
-			name:         "both zero triggers auto-fix (clear >= trigger)",
+			name:         "both zero triggers skipped (disabled)",
 			threshold:    &HysteresisThreshold{Trigger: 0, Clear: 0},
 			metricName:   "disabled",
 			wantTrigger:  0,
-			wantClear:    0,     // 0 - 5 = -5, clamped to 0 (same value, but fix attempted)
-			expectChange: false, // Result same as input, even though fix was attempted
+			wantClear:    0,
+			expectChange: false, // No change — disabled threshold skipped
 		},
 		{
 			name:         "large trigger with equal clear",
