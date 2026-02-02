@@ -511,7 +511,7 @@ export function ResourceTable(props: ResourceTableProps) {
           </div>
 
           <div class="grid grid-cols-2 gap-2">
-            <For each={props.columns}>
+            <For each={props.columns.filter((c) => { const m = normalizeMetricKey(c); return m !== 'backup' && m !== 'snapshot'; })}>
               {(column) => {
                 const metric = normalizeMetricKey(column);
                 const bounds = metricBounds(metric);

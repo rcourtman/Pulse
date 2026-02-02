@@ -2062,6 +2062,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     } else {
       delete hysteresisThresholds.note;
     }
+    if (previousRaw?.backup) {
+      hysteresisThresholds.backup = previousRaw.backup;
+    }
+    if (previousRaw?.snapshot) {
+      hysteresisThresholds.snapshot = previousRaw.snapshot;
+    }
     newRawConfig[resourceId] = hysteresisThresholds;
     props.setRawOverridesConfig(newRawConfig);
 
