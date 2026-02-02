@@ -725,20 +725,21 @@ type Monitor struct {
 	incidentStore              *memory.IncidentStore
 	notificationMgr            *notifications.NotificationManager
 	configPersist              *config.ConfigPersistence
-	discoveryService           *discovery.Service        // Background discovery service
-	activePollCount            int32                     // Number of active polling operations
-	pollCounter                int64                     // Counter for polling cycles
-	authFailures               map[string]int            // Track consecutive auth failures per node
-	lastAuthAttempt            map[string]time.Time      // Track last auth attempt time
-	lastClusterCheck           map[string]time.Time      // Track last cluster check for standalone nodes
-	lastPhysicalDiskPoll       map[string]time.Time      // Track last physical disk poll time per instance
-	lastPVEBackupPoll          map[string]time.Time      // Track last PVE backup poll per instance
-	lastPBSBackupPoll          map[string]time.Time      // Track last PBS backup poll per instance
-	persistence                *config.ConfigPersistence // Add persistence for saving updated configs
-	pbsBackupPollers           map[string]bool           // Track PBS backup polling goroutines per instance
-	runtimeCtx                 context.Context           // Context used while monitor is running
-	wsHub                      *websocket.Hub            // Hub used for broadcasting state
-	diagMu                     sync.RWMutex              // Protects diagnostic snapshot maps
+	discoveryService           *discovery.Service                         // Background discovery service
+	activePollCount            int32                                      // Number of active polling operations
+	pollCounter                int64                                      // Counter for polling cycles
+	authFailures               map[string]int                             // Track consecutive auth failures per node
+	lastAuthAttempt            map[string]time.Time                       // Track last auth attempt time
+	lastClusterCheck           map[string]time.Time                       // Track last cluster check for standalone nodes
+	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
+	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
+	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
+	persistence                *config.ConfigPersistence                  // Add persistence for saving updated configs
+	pbsBackupPollers           map[string]bool                            // Track PBS backup polling goroutines per instance
+	pbsBackupCacheTime         map[string]map[pbsBackupGroupKey]time.Time // Track when each PBS backup group was last fetched
+	runtimeCtx                 context.Context                            // Context used while monitor is running
+	wsHub                      *websocket.Hub                             // Hub used for broadcasting state
+	diagMu                     sync.RWMutex                               // Protects diagnostic snapshot maps
 	nodeSnapshots              map[string]NodeMemorySnapshot
 	guestSnapshots             map[string]GuestMemorySnapshot
 	rrdCacheMu                 sync.RWMutex // Protects RRD memavailable cache
@@ -3612,6 +3613,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		lastPBSBackupPoll:          make(map[string]time.Time),
 		persistence:                config.NewConfigPersistence(cfg.DataPath),
 		pbsBackupPollers:           make(map[string]bool),
+		pbsBackupCacheTime:         make(map[string]map[pbsBackupGroupKey]time.Time),
 		nodeSnapshots:              make(map[string]NodeMemorySnapshot),
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
@@ -6392,6 +6394,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 					// Run backup polling in a separate goroutine to avoid blocking real-time stats
 					go func(startTime time.Time, inst string, pveClient PVEClientInterface) {
+						defer recoverFromPanic(fmt.Sprintf("pollPVEBackups-%s", inst))
 						timeout := m.calculateBackupOperationTimeout(inst)
 						log.Info().
 							Str("instance", inst).
@@ -8043,6 +8046,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 					m.mu.Unlock()
 
 					go func(ds []models.PBSDatastore, inst string, start time.Time, pbsClient *pbs.Client) {
+						defer recoverFromPanic(fmt.Sprintf("pollPBSBackups-%s", inst))
 						defer func() {
 							m.mu.Lock()
 							delete(m.pbsBackupPollers, inst)
@@ -8055,10 +8059,13 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 							Int("datastores", len(ds)).
 							Msg("Starting background PBS backup polling")
 
-						// Detached background poll: parent ctx may be cancelled when the main
-						// poll cycle finishes, so use a fresh context to let PBS polling
-						// complete unless the explicit timeout is reached.
-						backupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+						// The per-cycle ctx is canceled as soon as the main polling loop finishes,
+						// so derive the backup poll context from the long-lived runtime context instead.
+						parentCtx := m.runtimeCtx
+						if parentCtx == nil {
+							parentCtx = context.Background()
+						}
+						backupCtx, cancel := context.WithTimeout(parentCtx, 5*time.Minute)
 						defer cancel()
 
 						m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
@@ -9902,6 +9909,11 @@ func (m *Monitor) removeFailedPMGInstance(instanceName string) {
 	m.state.SetConnectionHealth("pmg-"+instanceName, false)
 }
 
+// pbsBackupCacheTTL controls how long cached PBS backup snapshots are reused
+// before forcing a re-fetch. This ensures verification status changes (which
+// don't alter backup count or timestamp) are picked up periodically.
+const pbsBackupCacheTTL = 10 * time.Minute
+
 type pbsBackupGroupKey struct {
 	datastore  string
 	namespace  string
@@ -9993,8 +10005,15 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 				lastBackupTime := time.Unix(group.LastBackup, 0)
 				hasCachedData := len(cached.snapshots) > 0
-				// Only re-fetch when the backup count changes or the most recent backup is newer.
+
+				// Check if the cached data is still within its TTL.
+				cacheAge := time.Since(m.pbsBackupCacheTimeFor(instanceName, key))
+				cacheStillFresh := cacheAge < pbsBackupCacheTTL
+
+				// Only re-fetch when the backup count changes, the most recent backup
+				// is newer, or the cache TTL has expired (to pick up verification changes).
 				if hasCachedData &&
+					cacheStillFresh &&
 					len(cached.snapshots) == group.BackupCount &&
 					!lastBackupTime.After(cached.latest) {
 
@@ -10019,6 +10038,21 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			fetched := m.fetchPBSBackupSnapshots(ctx, client, instanceName, requests)
 			if len(fetched) > 0 {
 				allBackups = append(allBackups, fetched...)
+			}
+
+			// Record fetch time for each requested group so the TTL tracks freshness.
+			// We record for all requested groups — on fetch failure, fetchPBSBackupSnapshots
+			// falls back to cached data, so the timestamp prevents hammering a failing
+			// endpoint. The TTL ensures we retry within a bounded window.
+			fetchedAt := time.Now()
+			for _, req := range requests {
+				reqKey := pbsBackupGroupKey{
+					datastore:  req.datastore,
+					namespace:  req.namespace,
+					backupType: req.group.BackupType,
+					backupID:   req.group.BackupID,
+				}
+				m.setPBSBackupCacheTime(instanceName, reqKey, fetchedAt)
 			}
 		}
 
@@ -10111,6 +10145,29 @@ func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey
 		cache[key] = entry
 	}
 	return cache
+}
+
+// pbsBackupCacheTimeFor returns the last fetch time for a PBS backup group.
+func (m *Monitor) pbsBackupCacheTimeFor(instanceName string, key pbsBackupGroupKey) time.Time {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if perGroup, ok := m.pbsBackupCacheTime[instanceName]; ok {
+		return perGroup[key]
+	}
+	return time.Time{}
+}
+
+// setPBSBackupCacheTime records when a PBS backup group was last fetched.
+func (m *Monitor) setPBSBackupCacheTime(instanceName string, key pbsBackupGroupKey, t time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pbsBackupCacheTime == nil {
+		m.pbsBackupCacheTime = make(map[string]map[pbsBackupGroupKey]time.Time)
+	}
+	if m.pbsBackupCacheTime[instanceName] == nil {
+		m.pbsBackupCacheTime[instanceName] = make(map[pbsBackupGroupKey]time.Time)
+	}
+	m.pbsBackupCacheTime[instanceName][key] = t
 }
 
 func normalizePBSNamespacePath(ns string) string {
