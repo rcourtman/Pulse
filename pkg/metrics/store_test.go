@@ -113,8 +113,14 @@ func TestStoreQueryFallbacksToRaw(t *testing.T) {
 	defer store.Close()
 
 	ts := time.Now()
-	store.WriteWithTier("vm", "vm-101", "cpu", 42.0, ts, TierRaw)
-	store.Flush()
+	store.WriteBatchSync([]WriteMetric{{
+		ResourceType: "vm",
+		ResourceID:   "vm-101",
+		MetricType:   "cpu",
+		Value:        42.0,
+		Timestamp:    ts,
+		Tier:         TierRaw,
+	}})
 
 	points, err := store.Query("vm", "vm-101", "cpu", ts.Add(-24*time.Hour), ts.Add(time.Second), 0)
 	if err != nil {
