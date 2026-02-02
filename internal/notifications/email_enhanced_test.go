@@ -372,7 +372,7 @@ func TestSendTLS_ConnectionError(t *testing.T) {
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err := manager.sendTLS("invalid.host.test:465", nil, []byte("test"))
+	err := manager.sendTLS("invalid.host.test:465", []byte("test"))
 
 	if err == nil {
 		t.Error("expected TLS dial error")
@@ -393,7 +393,7 @@ func TestSendStartTLS_ConnectionError(t *testing.T) {
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err := manager.sendStartTLS("invalid.host.test:587", nil, []byte("test"))
+	err := manager.sendStartTLS("invalid.host.test:587", []byte("test"))
 
 	if err == nil {
 		t.Error("expected TCP dial error")
@@ -414,7 +414,7 @@ func TestSendPlain_ConnectionError(t *testing.T) {
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err := manager.sendPlain("invalid.host.test:25", nil, []byte("test"))
+	err := manager.sendPlain("invalid.host.test:25", []byte("test"))
 
 	if err == nil {
 		t.Error("expected TCP dial error")
@@ -534,7 +534,7 @@ func TestSendPlain_Success(t *testing.T) {
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err = manager.sendPlain(addr, nil, []byte("Test Message"))
+	err = manager.sendPlain(addr, []byte("Test Message"))
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -568,7 +568,7 @@ func TestSendTLS_Success(t *testing.T) {
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err = manager.sendTLS(addr, nil, []byte("test"))
+	err = manager.sendTLS(addr, []byte("test"))
 	// It will still fail because we aren't running a real TLS server here,
 	// but we can verify it reaches the TLS dialer.
 	if err == nil {
@@ -626,7 +626,7 @@ func TestSendStartTLS_Success(t *testing.T) {
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err = manager.sendStartTLS(addr, nil, []byte("Test Message"))
+	err = manager.sendStartTLS(addr, []byte("Test Message"))
 	// Should fail at TLS upgrade because mock server doesn't actually do TLS
 	if err == nil {
 		t.Error("expected STARTTLS upgrade error")

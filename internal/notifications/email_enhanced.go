@@ -17,15 +17,18 @@ import (
 // Many mail servers (notably Microsoft 365) advertise only AUTH LOGIN
 // and reject AUTH PLAIN with "504 5.7.4 Unrecognized authentication type".
 type loginAuth struct {
-	username, password string
+	username, password, host string
 }
 
 // LoginAuth returns an Auth that implements the LOGIN authentication mechanism.
-func LoginAuth(username, password string) smtp.Auth {
-	return &loginAuth{username, password}
+func LoginAuth(username, password, host string) smtp.Auth {
+	return &loginAuth{username, password, host}
 }
 
 func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	if !server.TLS {
+		return "", nil, fmt.Errorf("LOGIN auth requires TLS connection to %s", a.host)
+	}
 	return "LOGIN", nil, nil
 }
 
@@ -44,18 +47,34 @@ func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
 	}
 }
 
-// smtpAuth returns the appropriate smtp.Auth for the configured provider.
-// Microsoft 365 requires LOGIN auth; most other providers use PLAIN.
-func (e *EnhancedEmailManager) smtpAuth() smtp.Auth {
+// negotiateAuth queries the server for supported AUTH mechanisms after EHLO
+// and returns the best smtp.Auth to use. Prefers PLAIN, falls back to LOGIN.
+// Returns nil if auth is not configured.
+func (e *EnhancedEmailManager) negotiateAuth(client *smtp.Client) (smtp.Auth, error) {
 	if !e.config.AuthRequired || e.config.Username == "" || e.config.Password == "" {
-		return nil
+		return nil, nil
 	}
-	switch e.config.Provider {
-	case "Microsoft 365 / Outlook":
-		return LoginAuth(e.config.Username, e.config.Password)
-	default:
-		return smtp.PlainAuth("", e.config.Username, e.config.Password, e.config.SMTPHost)
+
+	// Check what the server advertises after EHLO.
+	// Extension returns (ok bool, params string).
+	hasAuth, mechanismsRaw := client.Extension("AUTH")
+	mechanisms := strings.ToUpper(mechanismsRaw)
+
+	if strings.Contains(mechanisms, "PLAIN") {
+		return smtp.PlainAuth("", e.config.Username, e.config.Password, e.config.SMTPHost), nil
 	}
+	if strings.Contains(mechanisms, "LOGIN") {
+		return LoginAuth(e.config.Username, e.config.Password, e.config.SMTPHost), nil
+	}
+
+	// Server didn't advertise AUTH at all — try PLAIN as a default since
+	// it's the most widely supported. This handles servers that don't
+	// properly advertise their capabilities.
+	if !hasAuth || mechanisms == "" {
+		return smtp.PlainAuth("", e.config.Username, e.config.Password, e.config.SMTPHost), nil
+	}
+
+	return nil, fmt.Errorf("server advertises AUTH mechanisms [%s] but none are supported (PLAIN, LOGIN)", mechanisms)
 }
 
 // EnhancedEmailManager extends email functionality with provider support
@@ -220,22 +239,18 @@ func (e *EnhancedEmailManager) sendViaProvider(msg []byte) error {
 		}
 	}
 
-	// Configure authentication
-	auth := e.smtpAuth()
-
-	// Send with TLS configuration
+	// Send with TLS configuration — auth is negotiated after connection
 	if e.config.TLS || e.config.SMTPPort == 465 {
-		return e.sendTLS(addr, auth, msg)
+		return e.sendTLS(addr, msg)
 	} else if e.config.StartTLS {
-		return e.sendStartTLS(addr, auth, msg)
+		return e.sendStartTLS(addr, msg)
 	} else {
-		// Use sendPlain for non-TLS connections with timeout
-		return e.sendPlain(addr, auth, msg)
+		return e.sendPlain(addr, msg)
 	}
 }
 
 // sendTLS sends email over TLS connection
-func (e *EnhancedEmailManager) sendTLS(addr string, auth smtp.Auth, msg []byte) error {
+func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte) error {
 	tlsConfig := &tls.Config{
 		ServerName:         e.config.SMTPHost,
 		InsecureSkipVerify: e.config.SkipTLSVerify,
@@ -262,6 +277,10 @@ func (e *EnhancedEmailManager) sendTLS(addr string, auth smtp.Auth, msg []byte) 
 	}
 	defer client.Close()
 
+	auth, err := e.negotiateAuth(client)
+	if err != nil {
+		return fmt.Errorf("SMTP auth negotiation failed: %w", err)
+	}
 	if auth != nil {
 		if err = client.Auth(auth); err != nil {
 			return fmt.Errorf("SMTP auth failed: %w", err)
@@ -297,7 +316,7 @@ func (e *EnhancedEmailManager) sendTLS(addr string, auth smtp.Auth, msg []byte) 
 }
 
 // sendStartTLS sends email using STARTTLS
-func (e *EnhancedEmailManager) sendStartTLS(addr string, auth smtp.Auth, msg []byte) error {
+func (e *EnhancedEmailManager) sendStartTLS(addr string, msg []byte) error {
 	// Use DialTimeout to prevent hanging on unreachable servers
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
@@ -326,6 +345,12 @@ func (e *EnhancedEmailManager) sendStartTLS(addr string, auth smtp.Auth, msg []b
 		return fmt.Errorf("STARTTLS failed: %w", err)
 	}
 
+	// Negotiate auth after STARTTLS — the server re-advertises capabilities
+	// and we can now see what AUTH mechanisms are available
+	auth, err := e.negotiateAuth(client)
+	if err != nil {
+		return fmt.Errorf("SMTP auth negotiation failed: %w", err)
+	}
 	if auth != nil {
 		if err = client.Auth(auth); err != nil {
 			return fmt.Errorf("SMTP auth failed: %w", err)
@@ -401,7 +426,11 @@ func (e *EnhancedEmailManager) TestConnection() error {
 	}
 
 	// Test authentication if configured
-	if auth := e.smtpAuth(); auth != nil {
+	auth, authErr := e.negotiateAuth(client)
+	if authErr != nil {
+		return fmt.Errorf("auth negotiation failed: %w", authErr)
+	}
+	if auth != nil {
 		if err = client.Auth(auth); err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
 		}
@@ -411,7 +440,7 @@ func (e *EnhancedEmailManager) TestConnection() error {
 }
 
 // sendPlain sends email over plain SMTP connection with timeout
-func (e *EnhancedEmailManager) sendPlain(addr string, auth smtp.Auth, msg []byte) error {
+func (e *EnhancedEmailManager) sendPlain(addr string, msg []byte) error {
 	// Use DialTimeout to prevent hanging on unreachable servers
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
@@ -430,6 +459,10 @@ func (e *EnhancedEmailManager) sendPlain(addr string, auth smtp.Auth, msg []byte
 	}
 	defer client.Close()
 
+	auth, err := e.negotiateAuth(client)
+	if err != nil {
+		return fmt.Errorf("SMTP auth negotiation failed: %w", err)
+	}
 	if auth != nil {
 		if err = client.Auth(auth); err != nil {
 			return fmt.Errorf("SMTP auth failed: %w", err)
