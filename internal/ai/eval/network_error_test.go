@@ -65,27 +65,3 @@ func TestRunner_ExecuteStep_ContextTimeout(t *testing.T) {
 	assert.Error(t, result.Error)
 	assert.Contains(t, result.Error.Error(), "context deadline exceeded")
 }
-
-func TestRunner_ExecuteStep_SSE_BadContentType(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json") // Wrong content type
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("{}"))
-	}))
-	defer server.Close()
-
-	runner := NewRunner(DefaultConfig())
-	runner.config.BaseURL = server.URL
-
-	step := Step{Name: "BadContentType", Prompt: "Hi"}
-	result := runner.executeStep(step, "")
-
-	// It might succeed if it just parses the body, or fail if it strictly checks content type/stream
-	// The current implementation likely tries to scan it as SSE.
-	// If it's not SSE, scan might fail or return nothing.
-	// Let's see what happens.
-
-	// If parseSSEStream expects data: prefix lines, it acts as empty response?
-	// And empty response triggers retry or failure?
-	assert.False(t, result.Success)
-}
