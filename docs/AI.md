@@ -2,58 +2,75 @@
 
 Pulse Patrol is available to everyone with BYOK (your own AI provider). Pulse Pro unlocks auto-fix and advanced analysis. Learn more at <https://pulserelay.pro> or see the technical overview in [PULSE_PRO.md](PULSE_PRO.md).
 
-## What Patrol Actually Does (Technical)
+---
+
+## Overview
+
+Pulse includes two AI-powered systems:
+
+1. **Pulse Assistant** — An interactive chat interface for ad-hoc troubleshooting, investigations, and infrastructure control.
+2. **Pulse Patrol** — A scheduled, context-aware analysis service that continuously monitors your infrastructure, learns what's normal, predicts issues, and generates actionable findings.
+
+Both systems are built on the same tool-driven architecture where the LLM acts as a proposer and Go code enforces safety gates.
+
+### Not Just Another Chatbot
+
+Pulse Assistant is a **protocol-driven, safety-gated agentic system** that:
+
+- **Proactively gathers context** — understands resources before you ask (context prefetcher)
+- **Learns within sessions** — extracts and caches facts to avoid redundant queries (knowledge accumulator)
+- **Enforces workflow invariants** — FSM prevents dangerous state transitions
+- **Supports parallel tool execution** — efficient batch operations with concurrency control
+- **Detects and prevents hallucinations** — phantom execution detection
+- **Auto-recovers from errors** — structured error envelopes enable self-correction
+
+📖 **For a deep technical dive into the Assistant architecture, see [architecture/pulse-assistant-deep-dive.md](architecture/pulse-assistant-deep-dive.md).**
+
+### Not Just Another Alerting System
+
+Pulse Patrol is a **multi-layered intelligence platform** that:
+
+- **Learns** what's normal for your environment (baseline engine)
+- **Predicts** issues before they become critical (pattern detection + forecasting)
+- **Correlates** events across your entire infrastructure (root cause analysis)
+- **Remembers** past incidents and successful remediations (incident memory)
+- **Investigates** issues autonomously when configured (investigation orchestrator)
+- **Verifies** fixes and tracks remediation effectiveness (verification loops)
+
+All while running entirely on your infrastructure with BYOK for complete privacy.
+
+📖 **For a deep technical dive into the intelligence subsystems, see [architecture/pulse-patrol-deep-dive.md](architecture/pulse-patrol-deep-dive.md).**
+
+See [architecture/pulse-assistant.md](architecture/pulse-assistant.md) for the original safety architecture documentation.
+
+---
+
+## Pulse Patrol
 
 Patrol is a scheduled analysis pipeline that builds a rich, system-wide snapshot and produces actionable findings.
 
-**Inputs (real data, not guesses):**
-- Live state: nodes, VMs/CTs, storages, backups, docker, kubernetes.
-- Recent metrics history (trends + rate of change).
-- Alert state and recent failures.
-- Diagnostics (connectivity, permissions, agent status).
+### How Patrol Works
 
-**Enrichment:**
-- Normalizes metrics across resource types.
-- Applies context rules (e.g., ignore idle test nodes, de-noise transient blips).
-- Correlates related issues to avoid duplicate noise.
+```
+Scheduled/Event Trigger
+        │
+        ▼
+buildSeedContext()  ── infrastructure snapshot
+        │
+        ▼
+LLM analysis (with tools) ← pulse_storage, pulse_metrics, pulse_alerts, etc.
+        │
+        ▼
+DetectSignals() ── deterministic signal detection from tool outputs
+        │
+        ▼
+createFinding() ── validated, deduplicated findings stored
+        │
+        ▼ (if configured)
+MaybeInvestigateFinding() ── automatic investigation + remediation
+```
 
-**Outputs:**
-- Findings with severity, category, and remediation hints.
-- Summary stats for coverage and risk level.
-- Optional auto-fix and remediation workflows (Pro).
-
-## Why Patrol Is Different From Traditional Alerts
-
-Alerts are threshold-based and narrow. Patrol is context-based and cross-system.
-
-- **Alerts**: "Disk > 90%."  
-- **Patrol**: "ZFS pool is 86% but trending +4%/day; projected to hit 95% within a week. Largest consumer is datastore X. Recommend prune or expand."
-
-## Examples of Patrol Findings (Realistic)
-
-- Backup jobs succeeded but datastore usage jumped 20% since last run.
-- Node health is OK but cluster clock drift is growing.
-- Multiple VMs in the same storage pool are all retrying snapshots.
-- Docker host is healthy but containers in one stack are flapping.
-
-## Controls and Limits
-
-- **Schedule**: from 10 minutes to 7 days (default 6 hours).
-- **Scope**: only configured resources and connected agents.
-- **Safety**: command execution remains disabled by default.
-- **Cost control**: BYOK only — use provider limits and budgets to control spend.
-
-## Privacy
-
-Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). No telemetry is sent to Pulse by default.
-
-Pulse AI adds an optional assistant for troubleshooting and proactive monitoring. It is **off by default** and can be enabled per instance.
-
-## What Makes AI Patrol Different
-
-Unlike chatting with a generic AI where you manually describe your infrastructure, Patrol runs automatically and sees **your entire infrastructure at once** - every node, VM, container, storage pool, backup job, and Kubernetes cluster. It's not just a static checklist; it's an LLM analyzing real-time data enriched with historical context.
-
-### Context Patrol Receives (That Generic LLMs Can't See)
+### What Patrol Sees
 
 Every patrol run passes the LLM comprehensive context about your environment:
 
@@ -68,22 +85,36 @@ Every patrol run passes the LLM comprehensive context about your environment:
 | **Ceph** | Cluster health, OSD states, PG status |
 | **Agent Hosts** | Load averages, memory, disk, RAID status, temperatures |
 
-### Enriched Context (The Real Differentiator)
+### Enriched Context
 
-Beyond raw metrics, Patrol enriches the context with intelligence that transforms raw data into actionable insights:
+Beyond raw metrics, Patrol enriches the context with intelligence:
 
-- **Trend analysis** - 24h and 7d patterns showing `growing`, `stable`, `declining`, or `volatile` behavior
-- **Learned baselines** - Z-score anomaly detection based on what's *normal for your environment*
-- **Capacity predictions** - "Storage pool will be full in 12 days at current growth rate"
-- **Infrastructure changes** - Detected config changes, VM migrations, new deployments  
-- **Resource correlations** - Pattern detection across related resources (e.g., containers on same host)
-- **User notes** - Your annotations explaining expected behavior ("runs hot for transcoding")
-- **Dismissed findings** - Respects your feedback and suppressed alerts
-- **Incident memory** - Learns from past investigations and successful remediations
+- **Trend analysis** — 24h and 7d patterns showing `growing`, `stable`, `declining`, or `volatile` behavior
+- **Learned baselines** — Z-score anomaly detection based on what's *normal for your environment*
+- **Capacity predictions** — "Storage pool will be full in 12 days at current growth rate"
+- **Infrastructure changes** — Detected config changes, VM migrations, new deployments
+- **Resource correlations** — Pattern detection across related resources
+- **User notes** — Your annotations explaining expected behavior
+- **Dismissed findings** — Respects your feedback and suppressed alerts
+- **Incident memory** — Learns from past investigations and successful remediations
+
+### Deterministic Signal Detection
+
+Patrol doesn't rely solely on LLM judgment. It parses tool call outputs and fires deterministic signals for known problems:
+
+| Signal Type | Trigger | Default Threshold |
+|------------|---------|-------------------|
+| `smart_failure` | SMART health status not OK/PASSED | N/A |
+| `high_cpu` | Average CPU usage | 70% |
+| `high_memory` | Average memory usage | 80% |
+| `high_disk` | Storage pool usage | 75% (warning), 95% (critical) |
+| `backup_failed` | Recent backup task with error status | Within 48h |
+| `backup_stale` | No backup completed for VM/CT | 48+ hours |
+| `active_alert` | Critical/warning alert in list | N/A |
+
+Thresholds can be configured via alert settings to match user-defined values.
 
 ### Examples of What Patrol Catches
-
-Because it's an LLM with full context, Patrol catches issues that static threshold-based alerting misses:
 
 | Issue | Severity | Example |
 |-------|----------|---------|
@@ -95,9 +126,7 @@ Because it's an LLM with full context, Patrol catches issues that static thresho
 | **Storage issues** | Critical | PBS datastore errors, ZFS pool degraded |
 | **Ceph problems** | Warning/Critical | Degraded OSDs, unhealthy PGs |
 | **Kubernetes issues** | Warning | Pods stuck in Pending/CrashLoopBackOff |
-| **Restart loops** | Warning | VMs that keep restarting without errors |
-| **Clock drift** | Warning | Node time drift affecting Ceph/HA |
-| **Unusual patterns** | Varies | Any anomaly the LLM identifies as unusual for your setup |
+| **SMART failures** | Critical | Disk health check failed |
 
 ### What Patrol Ignores (by design)
 
@@ -111,54 +140,155 @@ Patrol is **intentionally conservative** to avoid noise:
 
 > **Philosophy**: If a finding wouldn't be worth waking someone up at 3am, Patrol won't create it.
 
-## Features
+### Finding Severity
 
-- **Interactive chat**: Ask questions about current cluster state and get AI-assisted troubleshooting.
-- **Patrol**: Background checks periodically (default: 6 hours) that generate findings. Interval is configurable from 10 minutes to 7 days, or set to 0 to disable.
-- **Alert-triggered analysis (Pro)**: Optional token-efficient analysis when alerts fire.
-- **Kubernetes AI analysis (Pro)**: Deep cluster analysis beyond basic monitoring.
-- **Command execution**: When enabled, AI can run commands via connected agents.
-- **Finding management**: Dismiss, resolve, or suppress findings to prevent recurrence.
-- **Cost tracking**: Tracks token usage and supports monthly budget limits.
+- **Critical**: Immediate attention required (service down, data at risk)
+- **Warning**: Should be addressed soon (disk filling, backup stale)
 
-Alert-triggered analysis runs attach a timeline event to the alert, so investigations remain auditable alongside acknowledgements and remediation steps.
+Note: `info` and `watch` level findings are filtered out to reduce noise.
 
-> **License note**: Kubernetes AI analysis is gated by the `kubernetes_ai` Pulse Pro feature.
+### Managing Findings
 
-## Pulse Assistant (Chat): How It Works
+Findings can be managed via the UI or API:
 
-Pulse Assistant is **tool-driven**. It does not "guess" system state — it calls live tools and reports their outputs.
+- **Get help**: Chat with AI to troubleshoot the issue
+- **Resolve**: Mark as fixed (finding will reappear if the issue resurfaces)
+- **Dismiss**: Mark as expected behavior (creates suppression rule)
+
+Dismissed and resolved findings persist across Pulse restarts.
+
+---
+
+## Autonomy Levels
+
+Patrol supports three autonomy modes that control how much action it can take:
+
+| Mode | Behavior | License |
+|------|----------|---------|
+| **Monitor** | Detect issues only. No investigation or fixes. | Free (BYOK) |
+| **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Free (BYOK) |
+| **Auto-fix** | Automatically fixes issues and verifies results. Critical findings still require approval by default. | Pro |
+
+### Investigation Flow
+
+When a finding is created in Investigate or Auto-fix mode:
+
+```
+Finding created
+      │
+      ▼
+MaybeInvestigateFinding()
+      │
+      ├─ Has orch + chatService?
+      │        │
+      │        ▼
+      │   InvestigateFinding()
+      │        │
+      │        ▼
+      │   Create chat session
+      │        │
+      │        ▼
+      │   AI analysis (with tools)
+      │        │
+      │        ▼
+      │   [Fix proposed?] ──Yes──► Queue approval (or auto-execute in full mode)
+      │        │
+      │        No
+      │        ▼
+      │   Update finding with outcome
+      │
+      └─ Skip investigation
+```
+
+### Investigation Configuration
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `MaxTurns` | 15 | Maximum agentic turns per investigation |
+| `Timeout` | 10 min | Maximum duration per investigation |
+| `MaxConcurrent` | 3 | Maximum concurrent investigations |
+| `MaxAttemptsPerFinding` | 3 | Maximum investigation attempts per finding |
+| `CooldownDuration` | 1 hour | Cooldown before re-investigating |
+| `TimeoutCooldownDuration` | 10 min | Shorter cooldown for timeout failures |
+| `VerificationDelay` | 30 sec | Wait before verifying fix |
+
+### Investigation Outcomes
+
+| Outcome | Meaning |
+|---------|---------|
+| `resolved` | Issue resolved during investigation |
+| `fix_queued` | Fix proposed, awaiting approval |
+| `fix_executed` | Fix auto-executed successfully |
+| `fix_failed` | Fix attempted but failed |
+| `fix_verified` | Fix worked, issue confirmed resolved |
+| `fix_verification_failed` | Fix ran but issue persists |
+| `needs_attention` | Requires human intervention |
+| `cannot_fix` | Issue cannot be automatically fixed |
+| `timed_out` | Investigation timed out (will retry sooner) |
+
+---
+
+## Pulse Assistant (Chat)
+
+Pulse Assistant is a **tool-driven** chat interface. It does not "guess" system state — it calls live tools and reports their outputs.
 
 ### The Model's Workflow (Discover → Investigate → Act)
-- **Discover**: Uses `pulse_query` (or `pulse_discovery`) to find real resources and IDs.
-- **Investigate**: Uses `pulse_read` to run bounded, read-only commands and check status/logs.
-- **Act** (optional): Uses `pulse_control` for changes, then verifies with a read.
 
-### Safety Gates That Make It Trustworthy
-- **Strict Resolution (optional)**: When enabled, the assistant must discover a resource before it can act on it. This prevents fabricated IDs.
-- **Read/Write separation**: Read-only commands go through `pulse_read`; write actions go through `pulse_control`. This keeps the workflow state machine honest.
-- **Verification after writes**: After any write, the assistant must perform a read check before it can finish the response.
-- **Non‑interactive guardrails**: Commands that could hang (e.g., `tail -f`) are rewritten into bounded, safe forms.
-- **Approval mode**: In Controlled mode, every write requires explicit user approval. Autonomous mode is available only with Pro.
+1. **Discover**: Uses `pulse_query` or `pulse_discovery` to find real resources and IDs
+2. **Investigate**: Uses `pulse_read` to run bounded, read-only commands and check status/logs
+3. **Act** (optional): Uses `pulse_control` for changes, then verifies with a read
 
-### What You See As a User
-- **Clear tool usage**: Each step shows which tool ran and what it returned.
-- **Structured recovery**: If a tool is blocked, the assistant adapts (e.g., runs discovery, switches tools, or asks for approval).
-- **Verified outcomes**: Changes are followed by a read check before the assistant claims success.
+### Available Tools
 
-## Why It's Impressive (and Reliable)
+| Tool | Classification | Purpose |
+|------|---------------|---------|
+| `pulse_query`, `pulse_discovery` | Resolve | Resource discovery and query |
+| `pulse_read` | Read | Read-only operations: exec, file, find, tail, logs |
+| `pulse_metrics` | Read | Performance metrics |
+| `pulse_storage` | Read | Storage information |
+| `pulse_kubernetes` | Read | Kubernetes cluster info |
+| `pulse_pmg` | Read | Proxmox Mail Gateway stats |
+| `pulse_alerts` | Read/Write | Alert management (resolve/dismiss are writes) |
+| `pulse_docker` | Read/Write | Docker operations (control/update are writes) |
+| `pulse_knowledge` | Read/Write | Knowledge persistence (remember/note/save are writes) |
+| `pulse_file_edit` | Read/Write | File operations (write/append are writes) |
+| `pulse_control` | Write | Guest control, service management |
+| `pulse_patrol` | Read | Patrol findings and status |
 
-Pulse Assistant behaves like a careful operator:
-- It **grounds answers in live data** instead of assumptions.
-- It **adapts** when guardrails block an action.
-- It **verifies** changes before reporting success.
-- It **keeps you in control** with explicit approval gates.
+### Safety Gates
+
+The assistant enforces multiple safety gates:
+
+1. **Discovery Before Action** — Action tools cannot operate on resources that weren't first discovered
+2. **Verification After Write** — After any write, the model must perform a read/status check before providing a final answer
+3. **Read/Write Separation** — Read operations route through `pulse_read` (stays in READING state); write operations route through `pulse_control` (enters VERIFYING state)
+4. **Phantom Detection** — Detects when the model claims execution without tool calls
+5. **Approval Mode** — In Controlled mode, every write requires explicit user approval
+6. **Execution Context Binding** — Commands execute within the resolved resource's context, not on parent hosts
+
+### Control Levels
+
+| Level | Behavior | License |
+|-------|----------|---------|
+| **Read-only** | AI can observe and query data only | Free |
+| **Controlled** | AI asks for approval before executing commands | Free |
+| **Autonomous** | AI executes actions without prompting | Pro |
+
+### Using Approvals (Controlled Mode)
+
+When control level is **Controlled**, write actions pause for approval:
+
+1. Tool returns `APPROVAL_REQUIRED: { approval_id, command, ... }`
+2. Agentic loop emits `approval_needed` SSE event
+3. UI shows approval card with the proposed command
+4. **Approve** to execute and verify, or **Deny** to cancel
+5. Only users with admin privileges can approve/deny
+
+---
 
 ## Configuration
 
 Configure in the UI: **Settings → System → AI Assistant**
-
-AI settings are stored encrypted at rest in `ai.enc` under the Pulse config directory. Patrol findings and history are stored in `ai_findings.json`, `ai_patrol_runs.json`, and usage data in `ai_usage_history.json`. These files are located in `/etc/pulse` for systemd installs, or `/data` for Docker/Kubernetes.
 
 ### Supported Providers
 
@@ -178,11 +308,74 @@ You can set separate models for:
 - Patrol (`patrol_model`)
 - Auto-fix remediation (`auto_fix_model`)
 
+### Storage
+
+AI settings are stored encrypted at rest in `ai.enc` under the Pulse config directory. Related files:
+
+| File | Purpose |
+|------|---------|
+| `ai.enc` | Encrypted AI configuration and credentials |
+| `ai_findings.json` | Patrol findings |
+| `ai_patrol_runs.json` | Patrol run history |
+| `ai_usage_history.json` | Token usage data |
+| `ai_chat_sessions.json` | Legacy chat sessions (UI sync) |
+| `baselines.json` | Learned resource baselines |
+| `ai_correlations.json` | Resource correlation data |
+| `ai_patterns.json` | Detected patterns |
+
+Config directory: `/etc/pulse` (systemd) or `/data` (Docker/Kubernetes)
+
+### Testing
+
+- Test provider connectivity: `POST /api/ai/test` and `POST /api/ai/test/{provider}`
+- List available models: `GET /api/ai/models`
+
+---
+
+## Schedule and Triggers
+
+Patrol runs on a configurable schedule:
+
+| Interval | Description |
+|----------|-------------|
+| Disabled | Patrol runs only when manually triggered |
+| 10 min – 7 days | Configurable interval (default: 6 hours) |
+
+Patrol can also be triggered by:
+- **Manual run**: Click "Run Patrol" in the UI
+- **Alert-triggered analysis (Pro)**: Runs when an alert fires
+- **API call**: `POST /api/ai/patrol/run`
+
+---
+
+## AI Intelligence Layer
+
+Pulse includes a unified intelligence system that aggregates data from all AI subsystems:
+
+### Components
+
+| Component | Purpose |
+|-----------|---------|
+| **Baseline Engine** | Learns normal behavior, detects anomalies via z-score |
+| **Pattern Detector** | Identifies recurring issues and trends |
+| **Correlation Engine** | Links related issues across resources |
+| **Incident Memory** | Tracks past incidents and successful remediations |
+| **Knowledge Store** | Persists user annotations and learned preferences |
+| **Forecast Engine** | Predicts capacity issues and resource exhaustion |
+
+### Health Scoring
+
+Each resource receives a health score (A–F) based on:
+- Current metrics vs baseline
+- Active findings and alerts
+- Recent incidents
+- Trend direction (improving/stable/declining)
+
+---
+
 ## Model Matrix (Pulse Assistant)
 
-This table summarizes the most recent **Pulse Assistant** eval runs per model. Patrol is still in development and is not scored yet.
-Time/tokens reflect the combined **Smoke + Read-only** matrix run.
-Transient provider errors (rate limits, unavailable chat endpoints) are skipped when rendering the table.
+This table summarizes the most recent **Pulse Assistant** eval runs per model.
 
 Update the table from eval reports:
 ```
@@ -206,74 +399,53 @@ scripts/eval/run_model_matrix.sh
 | openai:gpt-5.2-chat-latest | ✅ | ✅ | 8s | 12,595 | 2026-01-29 |
 <!-- MODEL_MATRIX_END -->
 
-### Testing
-
-- Test provider connectivity: `POST /api/ai/test` and `POST /api/ai/test/{provider}`
-- List available models: `GET /api/ai/models`
-
-## Patrol Service (BYOK)
-
-Patrol runs automated health checks on a configurable schedule (default: every 6 hours). It passes comprehensive infrastructure context to the LLM (see "Context Patrol Receives" above) and generates findings when issues are detected.
-
-Patrol runs with your configured provider (BYOK). Auto-fix and assisted/full autonomy require Pulse Pro.
-
-### Finding Severity
-
-- **Critical**: Immediate attention required (service down, data at risk)
-- **Warning**: Should be addressed soon (disk filling, backup stale)
-
-Note: `info` and `watch` level findings are filtered out to reduce noise.
-
-### Managing Findings
-
-Findings can be managed via the UI or API:
-
-- **Get help**: Chat with AI to troubleshoot the issue
-- **Resolve**: Mark as fixed (finding will reappear if the issue resurfaces)
-- **Dismiss**: Mark as expected behavior (creates suppression rule)
-
-Dismissed and resolved findings persist across Pulse restarts.
-
-### AI-Assisted Remediation
-
-When chatting with AI about a patrol finding, the AI can:
-- Run diagnostic commands on connected agents
-- Propose fixes with explanations
-- Automatically resolve findings after successful remediation (Pro auto-fix)
+---
 
 ## Safety Controls
 
 Pulse includes settings that control how "active" AI features are:
 
-- **Autonomous mode (Pro)**: When enabled, AI may execute safe commands without approval.
-- **Patrol auto-fix (Pro)**: Allows patrol to attempt automatic remediation.
-- **Alert-triggered analysis (Pro)**: Limits AI to analyzing specific events when alerts occur.
+- **Autonomous mode (Pro)**: When enabled, AI may execute safe commands without approval
+- **Patrol auto-fix (Pro)**: Allows patrol to attempt automatic remediation
+- **Alert-triggered analysis (Pro)**: Limits AI to analyzing specific events when alerts occur
+- **Full autonomy unlock (Pro)**: Enables auto-fix for critical findings without approval (requires explicit toggle)
 
 If you enable execution features, ensure agent tokens and scopes are appropriately restricted.
 
-### Control Levels
-
-Pulse uses three AI permission levels for infrastructure control:
-
-- **Read-only**: AI can observe and query data only.
-- **Controlled**: AI asks for approval before executing commands or control actions.
-- **Autonomous (Pro)**: AI executes actions without prompting.
-
-### Using Approvals (Controlled Mode)
-
-When control level is **Controlled**, write actions pause for approval:
-
-- In chat, you’ll see an approval card with the proposed command.
-- **Approve** to execute and verify the change, or **Deny** to cancel it.
-- Only users with admin privileges can approve/deny.
-
 ### Advanced Network Restrictions
 
-Pulse blocks AI tool HTTP fetches to loopback and link-local addresses by default. For local development, you can allow loopback targets:
+Pulse blocks AI tool HTTP fetches to loopback and link-local addresses by default. For local development:
 
 - `PULSE_AI_ALLOW_LOOPBACK=true`
 
 Use this only in trusted environments.
+
+---
+
+## Privacy
+
+Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). No telemetry is sent to Pulse by default.
+
+---
+
+## Why Patrol Is Different From Traditional Alerts
+
+Alerts are threshold-based and narrow. Patrol is context-based and cross-system.
+
+- **Alerts**: "Disk > 90%"
+- **Patrol**: "ZFS pool is 86% but trending +4%/day; projected to hit 95% within a week. Largest consumer is datastore X. Recommend prune or expand."
+
+---
+
+## Cost Tracking
+
+Pulse tracks token usage and costs:
+
+- View usage summary: `GET /api/ai/cost/summary`
+- Reset counters: `POST /api/ai/cost/reset` (admin)
+- Set monthly budget limits in AI settings
+
+---
 
 ## Troubleshooting
 
@@ -282,4 +454,19 @@ Use this only in trusted environments.
 | AI not responding | Verify provider credentials in **Settings → System → AI Assistant** |
 | No execution capability | Confirm at least one agent is connected |
 | Findings not persisting | Check Pulse has write access to `ai_findings.json` in the config directory |
-| Too many findings | This shouldn't happen - please report if it does |
+| Too many findings | This shouldn't happen — please report if it does |
+| Investigation stuck | Check circuit breaker status at `/api/ai/circuit/status`; may auto-reset after cooldown |
+| Model not available | Ensure provider API key is valid and model ID matches provider format |
+
+## Related Documentation
+
+### Deep Dives (Recommended for Technical Audiences)
+
+- **[Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md)** — Complete technical breakdown of the agentic architecture: context prefetching, knowledge accumulation, FSM enforcement, parallel execution, phantom detection, auto-recovery
+- **[Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md)** — Full intelligence layer documentation: baseline learning, pattern detection, forecasting, correlation analysis, incident memory, investigation orchestration
+
+### Reference Documentation
+
+- [Architecture: Pulse Assistant (Safety Gates)](architecture/pulse-assistant.md) — Detailed FSM states, tool protocol, and invariants
+- [API Reference](API.md) — Complete API endpoint documentation
+- [Pulse Pro](PULSE_PRO.md) — Pro features and licensing

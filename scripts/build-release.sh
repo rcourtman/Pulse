@@ -397,9 +397,31 @@ cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
 # Generate checksums (include tarballs, zip files, helm chart, and install.sh)
 cd "$RELEASE_DIR"
 shopt -s nullglob extglob
+checksum_files=()
 # Match all tarballs, zip files, exe files, and install scripts
+if compgen -G "pulse-*.tar.gz" > /dev/null; then
+    checksum_files+=( pulse-*.tar.gz )
+fi
 if compgen -G "pulse-*.tgz" > /dev/null; then
     checksum_files+=( pulse-*.tgz )
+fi
+if compgen -G "pulse-*.zip" > /dev/null; then
+    checksum_files+=( pulse-*.zip )
+fi
+if compgen -G "pulse-*.exe" > /dev/null; then
+    checksum_files+=( pulse-*.exe )
+fi
+if [ -f "install.sh" ]; then
+    checksum_files+=( install.sh )
+fi
+if [ -f "install-docker.sh" ]; then
+    checksum_files+=( install-docker.sh )
+fi
+if [ -f "pulse-auto-update.sh" ]; then
+    checksum_files+=( pulse-auto-update.sh )
+fi
+if compgen -G "install*.ps1" > /dev/null; then
+    checksum_files+=( install*.ps1 )
 fi
 if [ ${#checksum_files[@]} -eq 0 ]; then
     echo "Warning: no release artifacts found to checksum."

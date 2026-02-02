@@ -22,6 +22,18 @@ type mockPatrolHistoryPersistence struct {
 	loadCalls atomic.Int32
 }
 
+type errorPatrolHistoryPersistence struct {
+	err error
+}
+
+func (e *errorPatrolHistoryPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
+	return e.err
+}
+
+func (e *errorPatrolHistoryPersistence) LoadPatrolRunHistory() ([]PatrolRunRecord, error) {
+	return nil, nil
+}
+
 func (m *mockPatrolHistoryPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 	m.saveCalls.Add(1)
 	m.mu.Lock()
@@ -201,6 +213,76 @@ func TestPatrolRunHistoryStore_SetPersistence(t *testing.T) {
 	runs := store.GetAll()
 	if runs[0].ID != "persisted-1" {
 		t.Errorf("Expected persisted-1, got %s", runs[0].ID)
+	}
+}
+
+func TestPatrolRunHistoryStore_PersistenceStatusAndErrors(t *testing.T) {
+	store := NewPatrolRunHistoryStore(5)
+	store.saveDebounce = 0
+
+	saveErr := errors.New("save failed")
+	errPersistence := &errorPatrolHistoryPersistence{err: saveErr}
+
+	if err := store.SetPersistence(errPersistence); err != nil {
+		t.Fatalf("SetPersistence failed: %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	store.SetOnSaveError(func(err error) {
+		errCh <- err
+	})
+
+	store.Add(PatrolRunRecord{ID: "run-1"})
+
+	select {
+	case err := <-errCh:
+		if err == nil || err.Error() != "save failed" {
+			t.Fatalf("unexpected error callback: %v", err)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for save error callback")
+	}
+
+	lastErr, lastSaveTime, hasPersistence := store.GetPersistenceStatus()
+	if lastErr == nil {
+		t.Fatal("expected last save error to be recorded")
+	}
+	if !lastSaveTime.IsZero() {
+		t.Fatalf("expected last save time to be zero on failure, got %v", lastSaveTime)
+	}
+	if !hasPersistence {
+		t.Fatal("expected persistence to be configured")
+	}
+}
+
+func TestConvertPatrolToolCalls(t *testing.T) {
+	aiCalls := []ToolCallRecord{
+		{
+			ID:        "call-1",
+			ToolName:  "pulse_query",
+			Input:     `{"action":"get"}`,
+			Output:    `{"status":"ok"}`,
+			Success:   true,
+			StartTime: 123,
+			EndTime:   456,
+			Duration:  333,
+		},
+	}
+
+	cfgCalls := convertAIToolCallsToConfig(aiCalls)
+	if len(cfgCalls) != 1 {
+		t.Fatalf("expected 1 config tool call, got %d", len(cfgCalls))
+	}
+	if cfgCalls[0].ToolName != "pulse_query" || cfgCalls[0].Duration != 333 {
+		t.Fatalf("unexpected config tool call: %+v", cfgCalls[0])
+	}
+
+	roundTrip := convertConfigToolCallsToAI(cfgCalls)
+	if len(roundTrip) != 1 {
+		t.Fatalf("expected 1 AI tool call, got %d", len(roundTrip))
+	}
+	if roundTrip[0].ID != "call-1" || roundTrip[0].Output != `{"status":"ok"}` {
+		t.Fatalf("unexpected AI tool call: %+v", roundTrip[0])
 	}
 }
 

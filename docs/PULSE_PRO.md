@@ -40,22 +40,53 @@ Scheduled background analysis that correlates live state + metrics history to pr
 
 ### Pro-Only Automations
 - **Alert-triggered analysis**: on-demand deep analysis when alerts fire.
-- **Autonomous mode**: optional diagnostic/fix commands through connected agents.
-- **Auto-fix**: guarded remediations when enabled.
-- **Kubernetes AI analysis**: deep cluster analysis beyond basic monitoring (Pro-only).
+- **Auto-fix mode**: automatic remediation with verification loops (see Autonomy Levels below).
+- **Full autonomy unlock**: auto-fix for critical findings without requiring approval.
+- **Kubernetes AI analysis**: deep cluster analysis beyond basic monitoring.
 - **Audit-triggered webhooks**: real-time delivery of security events to external systems.
 - **Advanced Reporting**: scheduled or on-demand PDF/CSV infrastructure health reports.
 - **Agent Profiles**: centralized configuration profiles for fleets of agents.
 
+### Autonomy Levels
+
+Patrol and the Assistant support tiered autonomy:
+
+| Mode | Behavior | License |
+|------|----------|--------|
+| **Monitor** | Detect issues only. No investigation or fixes. | Free (BYOK) |
+| **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Free (BYOK) |
+| **Auto-fix** | Automatically fixes issues and verifies. Critical findings require approval by default. | **Pro** |
+| **Full autonomy** | Auto-fix for all findings including critical, without approval. | **Pro** (explicit toggle) |
+
+### Investigation Orchestration
+
+When Patrol creates a finding, the investigation orchestrator can:
+
+1. **Create a chat session** dedicated to the finding.
+2. **AI analyzes** the issue using available tools (metrics, logs, storage, etc.).
+3. **Propose a fix** with risk assessment (low/medium/high/critical).
+4. **Queue for approval** or **auto-execute** based on autonomy level.
+5. **Verify the fix** with a follow-up read after execution.
+
+Investigation outcomes include:
+- `resolved` — Issue resolved during investigation
+- `fix_queued` — Fix proposed, awaiting approval
+- `fix_executed` — Fix auto-executed successfully
+- `fix_verified` — Fix worked, issue confirmed resolved
+- `needs_attention` — Requires human intervention
+- `cannot_fix` — Issue cannot be automatically fixed
+
 ### What Free Users Still Get
-- **Pulse Patrol (BYOK)**: background findings with your own provider.
+- **Pulse Patrol (BYOK)**: background findings and investigation proposals with your own provider.
 - **AI Chat (BYOK)**: interactive troubleshooting with your own API keys.
 - **Update alerts**: container/package update signals remain available in the free tier.
 
 ### What You See In The UI
 - **Patrol findings**: a prioritized list with severity, evidence, and recommended fixes.
+- **Investigation status**: progress indicators showing investigation state and outcome.
+- **Approval cards**: pending fixes await your review with one-click approve/deny.
 - **Alert timelines**: AI analysis events attached to the alert history for auditability.
-- **Remediation controls**: explicit toggles for autonomous mode and auto-fix workflows.
+- **Remediation controls**: explicit toggles for autonomy mode in Patrol settings.
 - **Agent profiles**: create, edit, and assign profiles in **Settings → Agents → Agent Profiles**.
 
 ## Pro Feature Gates (License-Enforced)
@@ -111,6 +142,10 @@ This returns a feature map like `ai_alerts`, `ai_autofix`, and `kubernetes_ai` s
 - **Findings storage**: findings persist in `ai_findings.json` with run history in `ai_patrol_runs.json`.
 - **Alert-triggered analysis**: runs per alert event and writes analysis into the alert timeline for auditability.
 - **Auto-fix safety**: requires explicit toggles and uses the same agent command scopes you configure for manual runs.
+
+📖 **For complete technical details on the AI subsystems:**
+- [Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md) — Baseline learning, pattern detection, forecasting, correlation analysis, incident memory
+- [Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md) — Context prefetching, FSM enforcement, knowledge accumulation, safety gates
 
 ## Example Finding Payload (API)
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -481,5 +482,118 @@ func TestIsActionable_EscapeHatchesPreserved(t *testing.T) {
 	}
 	if !adapter.isActionable(reliability) {
 		t.Fatal("reliability finding should always pass")
+	}
+}
+
+func TestPatrolService_GenerateRemediationSteps(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	cases := []struct {
+		name     string
+		category FindingCategory
+		title    string
+		wantLen  int
+	}{
+		{name: "performance-cpu", category: FindingCategoryPerformance, title: "High CPU usage", wantLen: 4},
+		{name: "capacity-disk", category: FindingCategoryCapacity, title: "Disk space low", wantLen: 4},
+		{name: "reliability-offline", category: FindingCategoryReliability, title: "Service offline", wantLen: 4},
+		{name: "backup-failed", category: FindingCategoryBackup, title: "Backup failed", wantLen: 4},
+		{name: "security", category: FindingCategorySecurity, title: "Vulnerability detected", wantLen: 4},
+		{name: "general", category: FindingCategoryGeneral, title: "Config drift detected", wantLen: 4},
+	}
+
+	for _, c := range cases {
+		finding := &Finding{
+			ID:         "f-" + c.name,
+			ResourceID: "res-1",
+			Category:   c.category,
+			Title:      c.title,
+		}
+		steps := ps.generateRemediationSteps(finding)
+		if len(steps) != c.wantLen {
+			t.Fatalf("%s: expected %d steps, got %d", c.name, c.wantLen, len(steps))
+		}
+	}
+
+	unknown := &Finding{
+		ID:         "f-unknown",
+		ResourceID: "res-1",
+		Category:   FindingCategory("mystery"),
+		Title:      "Unknown issue",
+	}
+	steps := ps.generateRemediationSteps(unknown)
+	if len(steps) != 3 {
+		t.Fatalf("unknown category: expected 3 generic steps, got %d", len(steps))
+	}
+}
+
+func TestPatrolService_GenerateRemediationPlan(t *testing.T) {
+	engine := remediation.NewEngine(remediation.DefaultEngineConfig())
+	ps := NewPatrolService(nil, nil)
+	ps.SetRemediationEngine(engine)
+
+	finding := &Finding{
+		ID:             "finding-1",
+		Key:            "service-restart",
+		Severity:       FindingSeverityWarning,
+		Category:       FindingCategoryReliability,
+		ResourceID:     "vm-101",
+		ResourceName:   "web",
+		ResourceType:   "vm",
+		Title:          "Unexpected restart detected",
+		Description:    "Service restarted unexpectedly",
+		Recommendation: "Investigate restart cause",
+	}
+
+	ps.generateRemediationPlan(finding)
+
+	plan := engine.GetPlanForFinding(finding.ID)
+	if plan == nil {
+		t.Fatal("expected remediation plan to be created")
+	}
+	if plan.RiskLevel == "" {
+		t.Fatal("expected risk level to be set on plan")
+	}
+	if len(plan.Warnings) == 0 {
+		t.Fatal("expected warnings to be added to plan")
+	}
+}
+
+func TestPatrolFindingCreatorAdapter_ResolveFindingAndChecks(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	finding := &Finding{
+		ID:           "resolve-1",
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		ResourceType: "node",
+		Title:        "High CPU",
+	}
+	ps.findings.Add(finding)
+
+	var resolvedID string
+	ps.unifiedFindingResolver = func(id string) {
+		resolvedID = id
+	}
+
+	adapter := newPatrolFindingCreatorAdapter(ps, models.StateSnapshot{})
+	if err := adapter.ResolveFinding(finding.ID, "resolved in test"); err != nil {
+		t.Fatalf("ResolveFinding failed: %v", err)
+	}
+	if resolvedID != finding.ID {
+		t.Fatalf("expected unified resolver to be called with %s, got %s", finding.ID, resolvedID)
+	}
+	if len(adapter.getResolvedIDs()) != 1 {
+		t.Fatalf("expected resolved IDs to be tracked")
+	}
+
+	if adapter.HasCheckedFindings() {
+		t.Fatal("expected HasCheckedFindings to be false before GetActiveFindings")
+	}
+	_ = adapter.GetActiveFindings("", "warning")
+	if !adapter.HasCheckedFindings() {
+		t.Fatal("expected HasCheckedFindings to be true after GetActiveFindings")
 	}
 }

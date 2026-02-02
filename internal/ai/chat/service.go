@@ -78,6 +78,7 @@ type Service struct {
 	sessions          *SessionStore
 	agenticLoop       *AgenticLoop
 	provider          providers.StreamingProvider
+	providerFactory   func(modelStr string) (providers.StreamingProvider, error)
 	started           bool
 	autonomousMode    bool
 	contextPrefetcher *ContextPrefetcher
@@ -701,6 +702,9 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 
 // createProviderForModel creates a streaming provider for a specific model string (provider:model format).
 func (s *Service) createProviderForModel(modelStr string) (providers.StreamingProvider, error) {
+	if s.providerFactory != nil {
+		return s.providerFactory(modelStr)
+	}
 	if s.cfg == nil {
 		return nil, fmt.Errorf("no Pulse Assistant config")
 	}
@@ -1147,51 +1151,7 @@ func (s *Service) createProvider() (providers.StreamingProvider, error) {
 		return nil, fmt.Errorf("no chat model configured")
 	}
 
-	// Parse provider:model format
-	parts := strings.SplitN(chatModel, ":", 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid model format: %s (expected provider:model)", chatModel)
-	}
-	providerName := parts[0]
-	modelName := parts[1]
-
-	timeout := 5 * time.Minute
-
-	switch providerName {
-	case "anthropic":
-		if s.cfg.AnthropicAPIKey == "" {
-			return nil, fmt.Errorf("Anthropic API key not configured")
-		}
-		return providers.NewAnthropicClient(s.cfg.AnthropicAPIKey, modelName, timeout), nil
-
-	case "openai":
-		if s.cfg.OpenAIAPIKey == "" {
-			return nil, fmt.Errorf("OpenAI API key not configured")
-		}
-		return providers.NewOpenAIClient(s.cfg.OpenAIAPIKey, modelName, "", timeout), nil
-
-	case "deepseek":
-		if s.cfg.DeepSeekAPIKey == "" {
-			return nil, fmt.Errorf("DeepSeek API key not configured")
-		}
-		return providers.NewOpenAIClient(s.cfg.DeepSeekAPIKey, modelName, "https://api.deepseek.com", timeout), nil
-
-	case "gemini":
-		if s.cfg.GeminiAPIKey == "" {
-			return nil, fmt.Errorf("Gemini API key not configured")
-		}
-		return providers.NewGeminiClient(s.cfg.GeminiAPIKey, modelName, "", timeout), nil
-
-	case "ollama":
-		baseURL := s.cfg.OllamaBaseURL
-		if baseURL == "" {
-			baseURL = "http://localhost:11434"
-		}
-		return providers.NewOllamaClient(modelName, baseURL, timeout), nil
-
-	default:
-		return nil, fmt.Errorf("unsupported provider: %s", providerName)
-	}
+	return s.createProviderForModel(chatModel)
 }
 
 func (s *Service) applyChatContextSettings() {
