@@ -102,6 +102,7 @@ type Router struct {
 	bootstrapTokenPath   string
 	checksumMu           sync.RWMutex
 	checksumCache        map[string]checksumCacheEntry
+	installScriptClient  *http.Client
 }
 
 func pulseBinDir() string {

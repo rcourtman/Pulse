@@ -192,8 +192,11 @@ func (r *Router) proxyInstallScriptFromGitHub(w http.ResponseWriter, req *http.R
 	// Use raw.githubusercontent.com to fetch from main branch
 	githubURL := "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/" + scriptName
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
+	client := r.installScriptClient
+	if client == nil {
+		client = &http.Client{
+			Timeout: 30 * time.Second,
+		}
 	}
 
 	resp, err := client.Get(githubURL)
