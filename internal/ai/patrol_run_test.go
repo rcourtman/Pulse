@@ -598,10 +598,10 @@ func TestGetStatus_Running(t *testing.T) {
 func TestGetStatus_NextPatrolAt(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
-	// Set lastPatrol so nextPatrolAt is calculated
-	now := time.Now()
+	// Set nextScheduledAt so nextPatrolAt is returned
+	nextTime := time.Now().Add(30 * time.Minute)
 	ps.mu.Lock()
-	ps.lastPatrol = now
+	ps.nextScheduledAt = nextTime
 	ps.mu.Unlock()
 
 	status := ps.GetStatus()
@@ -609,9 +609,46 @@ func TestGetStatus_NextPatrolAt(t *testing.T) {
 		t.Fatal("expected NextPatrolAt to be calculated")
 	}
 
-	expected := now.Add(ps.config.GetInterval())
-	if !status.NextPatrolAt.Equal(expected) {
-		t.Errorf("expected NextPatrolAt %v, got %v", expected, *status.NextPatrolAt)
+	if !status.NextPatrolAt.Equal(nextTime) {
+		t.Errorf("expected NextPatrolAt %v, got %v", nextTime, *status.NextPatrolAt)
+	}
+}
+
+func TestGetStatus_NextPatrolAt_IndependentOfLastPatrol(t *testing.T) {
+	// nextScheduledAt should drive NextPatrolAt, not lastPatrol + interval.
+	// This is the scenario that was previously broken: user changes interval
+	// mid-cycle, lastPatrol is old, so lastPatrol+newInterval could be in the past.
+	ps := NewPatrolService(nil, nil)
+
+	// Simulate: patrol ran 45 min ago
+	ps.mu.Lock()
+	ps.lastPatrol = time.Now().Add(-45 * time.Minute)
+	// But the ticker was just reset with a 15-min interval, so next fire is ~15 min from now
+	expectedNext := time.Now().Add(15 * time.Minute)
+	ps.nextScheduledAt = expectedNext
+	ps.mu.Unlock()
+
+	status := ps.GetStatus()
+	if status.NextPatrolAt == nil {
+		t.Fatal("expected NextPatrolAt to be set")
+	}
+	// NextPatrolAt must be the tracked nextScheduledAt (in the future),
+	// NOT lastPatrol + interval (which would be 30 min in the past).
+	if !status.NextPatrolAt.Equal(expectedNext) {
+		t.Errorf("expected NextPatrolAt = %v, got %v", expectedNext, *status.NextPatrolAt)
+	}
+	if status.NextPatrolAt.Before(time.Now()) {
+		t.Errorf("NextPatrolAt should be in the future, got %v", *status.NextPatrolAt)
+	}
+}
+
+func TestGetStatus_NextPatrolAt_NilWhenNotScheduled(t *testing.T) {
+	// Before the patrol loop starts, nextScheduledAt is zero — no NextPatrolAt should be returned.
+	ps := NewPatrolService(nil, nil)
+
+	status := ps.GetStatus()
+	if status.NextPatrolAt != nil {
+		t.Errorf("expected NextPatrolAt to be nil before patrol loop starts, got %v", *status.NextPatrolAt)
 	}
 }
 
@@ -619,6 +656,11 @@ func TestGetStatus_Disabled(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
 	ps.SetConfig(PatrolConfig{Enabled: false})
+
+	// Even if nextScheduledAt is set, disabled patrol should not report NextPatrolAt
+	ps.mu.Lock()
+	ps.nextScheduledAt = time.Now().Add(10 * time.Minute)
+	ps.mu.Unlock()
 
 	status := ps.GetStatus()
 	if status.Enabled {

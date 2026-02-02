@@ -96,6 +96,14 @@ func (p *PatrolService) Stop() {
 
 // patrolLoop is the main background loop
 func (p *PatrolService) patrolLoop(ctx context.Context) {
+	// Seed lastPatrol from persisted run history so the API can return
+	// last_patrol_at immediately (before the first in-process patrol completes).
+	if history := p.GetRunHistory(1); len(history) > 0 && !history[0].CompletedAt.IsZero() {
+		p.mu.Lock()
+		p.lastPatrol = history[0].CompletedAt
+		p.mu.Unlock()
+	}
+
 	// Run initial patrol shortly after startup, but only if one hasn't run recently
 	initialDelay := initialPatrolStartDelay
 	select {
@@ -132,9 +140,19 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	p.mu.Lock()
+	p.nextScheduledAt = time.Now().Add(interval)
+	p.mu.Unlock()
+
 	for {
 		select {
 		case <-ticker.C:
+			// Update next scheduled time before the run starts — time.Now() closely
+			// matches the tick time here, and the ticker will fire again at roughly
+			// this moment + interval regardless of how long the run takes.
+			p.mu.Lock()
+			p.nextScheduledAt = time.Now().Add(interval)
+			p.mu.Unlock()
 			p.runPatrolWithTrigger(ctx, TriggerReasonScheduled, nil)
 
 		case alert := <-p.adHocTrigger:
@@ -151,6 +169,9 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 			if newInterval != interval {
 				interval = newInterval
 				ticker.Reset(interval)
+				p.mu.Lock()
+				p.nextScheduledAt = time.Now().Add(interval)
+				p.mu.Unlock()
 				log.Info().
 					Dur("interval", interval).
 					Msg("Patrol ticker reset to new interval")
@@ -1037,9 +1058,9 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 		status.BlockedAt = &p.lastBlockedAt
 	}
 
-	// Calculate next patrol time only when patrol is enabled
-	if p.config.Enabled && interval > 0 && !p.lastPatrol.IsZero() {
-		next := p.lastPatrol.Add(interval)
+	// Use the tracked next scheduled time (accounts for ticker resets on interval changes)
+	if p.config.Enabled && interval > 0 && !p.nextScheduledAt.IsZero() {
+		next := p.nextScheduledAt
 		status.NextPatrolAt = &next
 	}
 

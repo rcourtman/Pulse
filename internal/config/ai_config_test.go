@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -731,9 +732,9 @@ func TestAIConfig_GetPatrolInterval(t *testing.T) {
 			expected: 30 * time.Minute,
 		},
 		{
-			name:     "old 15min default migrated to 6hr",
+			name:     "explicit 15min should stay 15min",
 			config:   AIConfig{PatrolIntervalMinutes: 15},
-			expected: 6 * time.Hour,
+			expected: 15 * time.Minute,
 		},
 		{
 			name:     "default 6hr",
@@ -749,6 +750,38 @@ func TestAIConfig_GetPatrolInterval(t *testing.T) {
 				t.Errorf("GetPatrolInterval() = %v, want %v", result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestAIConfig_IntervalSurvivesRoundTrip(t *testing.T) {
+	// This test catches the bug where setting patrol_interval_minutes via the API
+	// clears PatrolSchedulePreset to "", but omitempty caused "" to be dropped
+	// from the JSON. On reload, NewDefaultAIConfig() re-introduced "6hr" as the
+	// preset, which took priority over the custom minutes.
+	cfg := NewDefaultAIConfig()
+	cfg.PatrolIntervalMinutes = 15
+	cfg.PatrolSchedulePreset = "" // Cleared by API handler when user sets custom minutes
+
+	// Simulate save → load round-trip via JSON
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	loaded := NewDefaultAIConfig()
+	if err := json.Unmarshal(data, loaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	// The preset must be empty after round-trip, not the default "6hr"
+	if loaded.PatrolSchedulePreset != "" {
+		t.Errorf("PatrolSchedulePreset should be empty after round-trip, got %q", loaded.PatrolSchedulePreset)
+	}
+
+	// The interval must be the user's 15 minutes, not the default 6 hours
+	interval := loaded.GetPatrolInterval()
+	if interval != 15*time.Minute {
+		t.Errorf("GetPatrolInterval() = %v after round-trip, want 15m", interval)
 	}
 }
 

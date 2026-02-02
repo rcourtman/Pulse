@@ -42,8 +42,8 @@ type AIConfig struct {
 
 	// Patrol settings for background AI monitoring
 	PatrolEnabled          bool   `json:"patrol_enabled"`                     // Enable background AI health patrol
-	PatrolIntervalMinutes  int    `json:"patrol_interval_minutes,omitempty"`  // How often to run quick patrols (default: 360 = 6 hours)
-	PatrolSchedulePreset   string `json:"patrol_schedule_preset,omitempty"`   // User-friendly preset: "15min", "1hr", "6hr", "12hr", "daily", "disabled"
+	PatrolIntervalMinutes  int    `json:"patrol_interval_minutes"`            // How often to run quick patrols (default: 360 = 6 hours)
+	PatrolSchedulePreset   string `json:"patrol_schedule_preset"`             // User-friendly preset: "15min", "1hr", "6hr", "12hr", "daily", "disabled"
 	PatrolAnalyzeNodes     bool   `json:"patrol_analyze_nodes"`               // Include Proxmox nodes in patrol
 	PatrolAnalyzeGuests    bool   `json:"patrol_analyze_guests"`              // Include VMs/containers in patrol
 	PatrolAnalyzeDocker    bool   `json:"patrol_analyze_docker"`              // Include Docker hosts in patrol
@@ -477,9 +477,7 @@ func (c *AIConfig) GetPatrolInterval() time.Duration {
 	// This provides better token efficiency for existing installations
 	if c.PatrolIntervalMinutes > 0 {
 		// Migrate old 15-minute default to new 6-hour default
-		if c.PatrolIntervalMinutes == 15 && c.PatrolSchedulePreset == "" {
-			return 6 * time.Hour
-		}
+
 		return time.Duration(c.PatrolIntervalMinutes) * time.Minute
 	}
 

@@ -287,6 +287,7 @@ type PatrolService struct {
 	errorCount        int
 	lastBlockedReason string
 	lastBlockedAt     time.Time
+	nextScheduledAt   time.Time // Tracks actual next patrol time (accounts for ticker resets)
 
 	// Patrol run history with persistence support
 	runHistoryStore *PatrolRunHistoryStore
