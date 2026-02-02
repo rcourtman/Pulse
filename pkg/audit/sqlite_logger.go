@@ -3,6 +3,7 @@ package audit
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,26 +47,25 @@ func NewSQLiteLogger(cfg SQLiteLoggerConfig) (*SQLiteLogger, error) {
 
 	dbPath := filepath.Join(auditDir, "audit.db")
 
-	db, err := sql.Open("sqlite", dbPath)
+	// Open database with pragmas in DSN so every pool connection is configured
+	dsn := dbPath + "?" + url.Values{
+		"_pragma": []string{
+			"busy_timeout(30000)",
+			"journal_mode(WAL)",
+			"synchronous(NORMAL)",
+			"foreign_keys(ON)",
+			"cache_size(-64000)",
+		},
+	}.Encode()
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open audit database: %w", err)
 	}
 
-	// Configure SQLite for better concurrency and durability
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA synchronous=NORMAL",
-		"PRAGMA busy_timeout=5000",
-		"PRAGMA foreign_keys=ON",
-		"PRAGMA cache_size=-64000", // 64MB cache
-	}
-
-	for _, pragma := range pragmas {
-		if _, err := db.Exec(pragma); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("failed to set pragma %s: %w", pragma, err)
-		}
-	}
+	// SQLite works best with a single writer connection
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
 
 	// Initialize signer
 	signer, err := NewSigner(auditDir, cfg.CryptoMgr)

@@ -5,6 +5,7 @@ package metrics
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -101,15 +102,18 @@ func NewStore(config StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("failed to create metrics directory: %w", err)
 	}
 
-	// Open database
-	db, err := sql.Open("sqlite", config.DBPath)
+	// Open database with pragmas in DSN so every pool connection is configured
+	dsn := config.DBPath + "?" + url.Values{
+		"_pragma": []string{
+			"busy_timeout(30000)",
+			"journal_mode(WAL)",
+			"synchronous(NORMAL)",
+		},
+	}.Encode()
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open metrics database: %w", err)
 	}
-
-	// Set busy timeout and WAL mode explicitly
-	_, _ = db.Exec("PRAGMA busy_timeout = 5000")
-	_, _ = db.Exec("PRAGMA journal_mode = WAL")
 
 	// Configure connection pool (SQLite works best with single writer)
 	db.SetMaxOpenConns(1)

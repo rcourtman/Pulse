@@ -14,17 +14,18 @@ const (
 )
 
 type circuitBreaker struct {
-	mu             sync.Mutex
-	state          breakerState
-	failureCount   int
-	openedAt       time.Time
-	lastAttempt    time.Time
-	retryInterval  time.Duration
-	maxDelay       time.Duration
-	openThreshold  int
-	halfOpenWindow time.Duration
-	stateSince     time.Time
-	lastTransition time.Time
+	mu                sync.Mutex
+	state             breakerState
+	failureCount      int
+	openedAt          time.Time
+	lastAttempt       time.Time
+	retryInterval     time.Duration
+	baseRetryInterval time.Duration
+	maxDelay          time.Duration
+	openThreshold     int
+	halfOpenWindow    time.Duration
+	stateSince        time.Time
+	lastTransition    time.Time
 }
 
 func newCircuitBreaker(openThreshold int, retryInterval, maxDelay, halfOpenWindow time.Duration) *circuitBreaker {
@@ -42,13 +43,14 @@ func newCircuitBreaker(openThreshold int, retryInterval, maxDelay, halfOpenWindo
 	}
 	now := time.Now()
 	return &circuitBreaker{
-		state:          breakerClosed,
-		retryInterval:  retryInterval,
-		maxDelay:       maxDelay,
-		openThreshold:  openThreshold,
-		halfOpenWindow: halfOpenWindow,
-		stateSince:     now,
-		lastTransition: now,
+		state:             breakerClosed,
+		retryInterval:     retryInterval,
+		baseRetryInterval: retryInterval,
+		maxDelay:          maxDelay,
+		openThreshold:     openThreshold,
+		halfOpenWindow:    halfOpenWindow,
+		stateSince:        now,
+		lastTransition:    now,
 	}
 }
 
@@ -86,6 +88,7 @@ func (b *circuitBreaker) recordSuccess() {
 		now := time.Now()
 		b.state = breakerClosed
 		b.failureCount = 0
+		b.retryInterval = b.baseRetryInterval
 		b.stateSince = now
 		b.lastTransition = now
 	}

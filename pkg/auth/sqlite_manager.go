@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -43,26 +44,25 @@ func NewSQLiteManager(cfg SQLiteManagerConfig) (*SQLiteManager, error) {
 
 	dbPath := filepath.Join(rbacDir, "rbac.db")
 
-	db, err := sql.Open("sqlite", dbPath)
+	// Open database with pragmas in DSN so every pool connection is configured
+	dsn := dbPath + "?" + url.Values{
+		"_pragma": []string{
+			"busy_timeout(30000)",
+			"journal_mode(WAL)",
+			"synchronous(NORMAL)",
+			"foreign_keys(ON)",
+			"cache_size(-32000)",
+		},
+	}.Encode()
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open rbac database: %w", err)
 	}
 
-	// Configure SQLite for better concurrency and durability
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA synchronous=NORMAL",
-		"PRAGMA busy_timeout=5000",
-		"PRAGMA foreign_keys=ON",
-		"PRAGMA cache_size=-32000", // 32MB cache
-	}
-
-	for _, pragma := range pragmas {
-		if _, err := db.Exec(pragma); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("failed to set pragma %s: %w", pragma, err)
-		}
-	}
+	// SQLite works best with a single writer connection
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
 
 	retention := cfg.ChangeLogRetention
 	if retention == 0 {
@@ -256,8 +256,9 @@ func (m *SQLiteManager) GetRoles() []Role {
 		log.Error().Err(err).Msg("Failed to query roles")
 		return nil
 	}
-	defer rows.Close()
 
+	// Collect roles first, then close rows before loading permissions
+	// (avoids holding the connection during nested queries with MaxOpenConns=1)
 	var roles []Role
 	for rows.Next() {
 		var role Role
@@ -275,10 +276,13 @@ func (m *SQLiteManager) GetRoles() []Role {
 		role.CreatedAt = time.Unix(createdAt, 0)
 		role.UpdatedAt = time.Unix(updatedAt, 0)
 
-		// Load permissions
-		role.Permissions = m.loadRolePermissions(role.ID)
-
 		roles = append(roles, role)
+	}
+	rows.Close()
+
+	// Load permissions after releasing the connection
+	for i := range roles {
+		roles[i].Permissions = m.loadRolePermissions(roles[i].ID)
 	}
 
 	return roles
@@ -518,21 +522,26 @@ func (m *SQLiteManager) GetUserAssignments() []UserRoleAssignment {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Get unique usernames
+	// Collect usernames first, then close rows before nested queries
+	// (avoids holding the connection during nested queries with MaxOpenConns=1)
 	rows, err := m.db.Query("SELECT DISTINCT username FROM rbac_user_assignments")
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to query user assignments")
 		return nil
 	}
-	defer rows.Close()
 
-	var assignments []UserRoleAssignment
+	var usernames []string
 	for rows.Next() {
 		var username string
 		if err := rows.Scan(&username); err != nil {
 			continue
 		}
+		usernames = append(usernames, username)
+	}
+	rows.Close()
 
+	var assignments []UserRoleAssignment
+	for _, username := range usernames {
 		assignment := m.getUserAssignmentUnsafe(username)
 		if len(assignment.RoleIDs) > 0 {
 			assignments = append(assignments, assignment)
