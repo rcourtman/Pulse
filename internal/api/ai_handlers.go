@@ -3664,6 +3664,12 @@ func (h *AISettingsHandler) HandleSetFindingNote(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Mirror the note to the unified store immediately so it's visible
+	// without waiting for the next patrol sync cycle
+	if unifiedStore := h.GetUnifiedStore(); unifiedStore != nil {
+		unifiedStore.SetUserNote(req.FindingID, req.Note)
+	}
+
 	response := map[string]interface{}{
 		"success": true,
 		"message": "Note updated",

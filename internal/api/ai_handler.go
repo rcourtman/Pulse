@@ -8,9 +8,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"fmt"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -77,6 +80,8 @@ type AIHandler struct {
 	servicesMu        sync.RWMutex
 	stateProviders    map[string]AIStateProvider
 	stateProvidersMu  sync.RWMutex
+	unifiedStoreMu    sync.RWMutex
+	unifiedStore      *unified.UnifiedStore
 }
 
 // newChatService is the factory function for creating the AI service.
@@ -110,6 +115,13 @@ func NewAIHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.MultiTenan
 		services:          make(map[string]AIService),
 		stateProviders:    make(map[string]AIStateProvider),
 	}
+}
+
+// SetUnifiedStore sets the unified store for finding context lookup in the "Discuss" flow
+func (h *AIHandler) SetUnifiedStore(store *unified.UnifiedStore) {
+	h.unifiedStoreMu.Lock()
+	h.unifiedStore = store
+	h.unifiedStoreMu.Unlock()
 }
 
 // GetService returns the AI service for the current context
@@ -380,6 +392,7 @@ type ChatRequest struct {
 	SessionID string        `json:"session_id,omitempty"`
 	Model     string        `json:"model,omitempty"`
 	Mentions  []ChatMention `json:"mentions,omitempty"`
+	FindingID string        `json:"finding_id,omitempty"`
 }
 
 // HandleChat handles POST /api/ai/chat - streaming chat
@@ -510,12 +523,49 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Augment prompt with finding context when discussing a specific finding
+	prompt := req.Prompt
+	if req.FindingID != "" {
+		h.unifiedStoreMu.RLock()
+		store := h.unifiedStore
+		h.unifiedStoreMu.RUnlock()
+		if store != nil {
+			if f := store.Get(req.FindingID); f != nil {
+				findingCtx := fmt.Sprintf("[Finding Context]\nID: %s\nTitle: %s\nSeverity: %s\nCategory: %s\nResource: %s (%s)\nDescription: %s",
+					f.ID, f.Title, f.Severity, f.Category, f.ResourceName, f.ResourceType, f.Description)
+				if f.Recommendation != "" {
+					findingCtx += fmt.Sprintf("\nRecommendation: %s", f.Recommendation)
+				}
+				if f.Evidence != "" {
+					findingCtx += fmt.Sprintf("\nEvidence: %s", f.Evidence)
+				}
+				if f.InvestigationStatus != "" {
+					findingCtx += fmt.Sprintf("\nInvestigation Status: %s", f.InvestigationStatus)
+				}
+				if f.InvestigationOutcome != "" {
+					findingCtx += fmt.Sprintf("\nInvestigation Outcome: %s", f.InvestigationOutcome)
+				}
+				if f.UserNote != "" {
+					findingCtx += fmt.Sprintf("\nUser Note: %s", f.UserNote)
+				}
+				if f.AcknowledgedAt != nil {
+					findingCtx += fmt.Sprintf("\nAcknowledged At: %s", f.AcknowledgedAt.Format(time.RFC3339))
+				}
+				if f.Node != "" {
+					findingCtx += fmt.Sprintf("\nNode: %s", f.Node)
+				}
+				prompt = findingCtx + "\n\n---\nUser message: " + prompt
+			}
+		}
+	}
+
 	// Stream from AI chat service
 	err := svc.ExecuteStream(ctx, chat.ExecuteRequest{
-		Prompt:    req.Prompt,
+		Prompt:    prompt,
 		SessionID: req.SessionID,
 		Model:     req.Model,
 		Mentions:  chatMentions,
+		FindingID: req.FindingID,
 	}, func(event chat.StreamEvent) {
 		writeEvent(event)
 	})

@@ -176,7 +176,8 @@ export class AIChatAPI {
     model: string | undefined,
     onEvent: (event: StreamEvent) => void,
     signal?: AbortSignal,
-    mentions?: Array<{ id: string; name: string; type: string; node?: string }>
+    mentions?: Array<{ id: string; name: string; type: string; node?: string }>,
+    findingId?: string
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
 
@@ -187,6 +188,9 @@ export class AIChatAPI {
     };
     if (mentions && mentions.length > 0) {
       body.mentions = mentions;
+    }
+    if (findingId) {
+      body.finding_id = findingId;
     }
 
     const response = await apiFetch(`${this.baseUrl}/chat`, {

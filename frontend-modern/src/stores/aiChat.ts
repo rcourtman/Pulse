@@ -421,6 +421,15 @@ export const aiChatStore = {
     });
   },
 
+  // Clear the findingId after first message is sent
+  clearFindingId() {
+    setAIChatContext(prev => {
+      if (!prev.findingId) return prev;
+      const { findingId: _, ...rest } = prev;
+      return rest;
+    });
+  },
+
   // Register the AI input element (called by AIChat component)
   registerInput(ref: HTMLTextAreaElement | null) {
     aiInputRef = ref;

@@ -71,6 +71,7 @@ type ExecuteRequest struct {
 	SessionID      string              `json:"session_id,omitempty"`
 	Model          string              `json:"model,omitempty"`
 	Mentions       []StructuredMention `json:"mentions,omitempty"`
+	FindingID      string              `json:"finding_id,omitempty"`      // Pre-populate finding context for "Discuss" flow
 	MaxTurns       int                 `json:"max_turns,omitempty"`       // Override max agentic turns (0 = use default)
 	AutonomousMode *bool               `json:"autonomous_mode,omitempty"` // Per-request autonomous override (nil = use service default)
 }

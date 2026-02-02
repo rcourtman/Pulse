@@ -322,7 +322,7 @@ export function useChat(options: UseChatOptions = {}) {
   };
 
   // Send a message - allows sending mid-stream (aborts current response like Pulse AI TUI)
-  const sendMessage = async (prompt: string, mentions?: Array<{ id: string; name: string; type: string; node?: string }>) => {
+  const sendMessage = async (prompt: string, mentions?: Array<{ id: string; name: string; type: string; node?: string }>, findingId?: string) => {
     if (!prompt.trim()) return;
 
     // If already streaming, abort the current request first
@@ -391,7 +391,8 @@ export function useChat(options: UseChatOptions = {}) {
           processEvent(assistantId, event);
         },
         abortControllerRef?.signal,
-        mentions
+        mentions,
+        findingId
       );
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {

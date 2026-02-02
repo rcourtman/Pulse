@@ -713,6 +713,23 @@ func (s *UnifiedStore) Acknowledge(findingID string) bool {
 	return true
 }
 
+// SetUserNote sets or updates the user note on a finding
+func (s *UnifiedStore) SetUserNote(findingID string, note string) bool {
+	s.mu.Lock()
+
+	f, ok := s.findings[findingID]
+	if !ok {
+		s.mu.Unlock()
+		return false
+	}
+
+	f.UserNote = note
+
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
 // Resolve marks a finding as resolved
 func (s *UnifiedStore) Resolve(findingID string) bool {
 	s.mu.Lock()

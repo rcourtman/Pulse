@@ -216,7 +216,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         const aPriority = severityOrder[a.severity] ?? 4;
         const bPriority = severityOrder[b.severity] ?? 4;
         if (aPriority !== bPriority) return aPriority - bPriority;
+
+        // Within same severity, sort acknowledged findings below unacknowledged
+        const aAcked = a.acknowledgedAt ? 1 : 0;
+        const bAcked = b.acknowledgedAt ? 1 : 0;
+        if (aAcked !== bAcked) return aAcked - bAcked;
       }
+
       return new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
     });
 
@@ -450,7 +456,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     <div
       id={`finding-${finding.id}`}
       class={`p-3 cursor-pointer transition-colors ${finding.status === 'active'
-        ? 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+        ? finding.acknowledgedAt
+          ? 'opacity-60 hover:opacity-80 bg-gray-50/30 dark:bg-gray-800/20'
+          : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
         : 'opacity-60 bg-gray-50/50 dark:bg-gray-800/30 hover:opacity-80'
         }`}
       onClick={() => {
@@ -494,6 +502,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 title={finding.alertType ? `Alert: ${finding.alertType}` : `Alert ID: ${finding.alertId}`}
               >
                 Alert-triggered
+              </span>
+            </Show>
+            <Show when={finding.acknowledgedAt && finding.status === 'active'}>
+              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300">
+                Acknowledged
               </span>
             </Show>
             <Show when={isOutOfScope(finding)}>
@@ -563,17 +576,19 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         {/* Actions */}
         <div class="flex items-center gap-1 shrink-0">
           <Show when={finding.status === 'active'}>
-            <button
-              type="button"
-              onClick={(e) => handleAcknowledge(finding, e)}
-              class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              title="Acknowledge"
-              disabled={actionLoading() === finding.id}
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
-              </svg>
-            </button>
+            <Show when={!finding.acknowledgedAt}>
+              <button
+                type="button"
+                onClick={(e) => handleAcknowledge(finding, e)}
+                class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                title="Acknowledge"
+                disabled={actionLoading() === finding.id}
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+                </svg>
+              </button>
+            </Show>
             <button
               type="button"
               onClick={(e) => handleSnooze(finding, 24, e)}
@@ -709,14 +724,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
       <Show when={finding.status === 'active'}>
         <div class="mt-3 flex flex-wrap gap-2 text-xs">
-          <button
-            type="button"
-            onClick={(e) => handleAcknowledge(finding, e)}
-            class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
-            disabled={actionLoading() === finding.id}
-          >
-            Acknowledge
-          </button>
+          <Show when={!finding.acknowledgedAt}>
+            <button
+              type="button"
+              onClick={(e) => handleAcknowledge(finding, e)}
+              class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+              disabled={actionLoading() === finding.id}
+            >
+              Acknowledge
+            </button>
+          </Show>
           <button
             type="button"
             onClick={(e) => handleSnooze(finding, 1, e)}

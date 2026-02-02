@@ -410,7 +410,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const prompt = input().trim();
     if (!prompt) return;
     const mentions = accumulatedMentions();
-    chat.sendMessage(prompt, mentions.length > 0 ? mentions : undefined);
+    // Pass findingId from context on the first message, clear after success
+    const ctx = aiChatStore.context;
+    const findingId = ctx.findingId;
+    chat.sendMessage(prompt, mentions.length > 0 ? mentions : undefined, findingId)
+      .then(() => {
+        if (findingId) {
+          aiChatStore.clearFindingId?.();
+        }
+      });
     setInput('');
     setAccumulatedMentions([]);
     setMentionActive(false);

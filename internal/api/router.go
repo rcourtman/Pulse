@@ -2120,6 +2120,12 @@ func (r *Router) StartPatrol(ctx context.Context) {
 						InvestigationOutcome:   f.InvestigationOutcome,
 						LastInvestigatedAt:     f.LastInvestigatedAt,
 						InvestigationAttempts:  f.InvestigationAttempts,
+						AcknowledgedAt:         f.AcknowledgedAt,
+						SnoozedUntil:           f.SnoozedUntil,
+						DismissedReason:        f.DismissedReason,
+						UserNote:               f.UserNote,
+						Suppressed:             f.Suppressed,
+						TimesRaised:            f.TimesRaised,
 					}
 					_, isNew := unifiedStore.AddFromAI(uf)
 					return isNew
@@ -2157,6 +2163,12 @@ func (r *Router) StartPatrol(ctx context.Context) {
 							InvestigationOutcome:   f.InvestigationOutcome,
 							LastInvestigatedAt:     f.LastInvestigatedAt,
 							InvestigationAttempts:  f.InvestigationAttempts,
+							AcknowledgedAt:         f.AcknowledgedAt,
+							SnoozedUntil:           f.SnoozedUntil,
+							DismissedReason:        f.DismissedReason,
+							UserNote:               f.UserNote,
+							Suppressed:             f.Suppressed,
+							TimesRaised:            f.TimesRaised,
 						}
 						// Copy resolution timestamp if resolved
 						if f.ResolvedAt != nil || f.AutoResolved {
@@ -2171,6 +2183,9 @@ func (r *Router) StartPatrol(ctx context.Context) {
 					}
 					log.Info().Int("count", len(existingFindings)).Msg("AI Intelligence: Synced existing patrol findings to unified store")
 				}
+
+				// Wire unified store for "Discuss with Assistant" finding context lookup
+				r.aiHandler.SetUnifiedStore(unifiedStore)
 			}
 		}
 
