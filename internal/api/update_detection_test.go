@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
@@ -214,6 +215,143 @@ func TestContainerUpdateInfo_JSONSerialization(t *testing.T) {
 	}
 	if decoded.ResourceType != "docker" {
 		t.Errorf("Expected ResourceType 'docker', got %q", decoded.ResourceType)
+	}
+}
+
+func TestUpdateDetectionHandlers_WithMonitorState(t *testing.T) {
+	now := time.Now().UTC()
+	state := models.NewState()
+	state.DockerHosts = []models.DockerHost{
+		{
+			ID:          "host-1",
+			DisplayName: "Host One",
+			Containers: []models.DockerContainer{
+				{
+					ID:    "c1",
+					Name:  "/web",
+					Image: "nginx:latest",
+					UpdateStatus: &models.DockerContainerUpdateStatus{
+						UpdateAvailable: true,
+						CurrentDigest:   "sha256:old",
+						LatestDigest:    "sha256:new",
+						LastChecked:     now,
+					},
+				},
+				{
+					ID:    "c2",
+					Name:  "/ok",
+					Image: "redis:latest",
+					UpdateStatus: &models.DockerContainerUpdateStatus{
+						UpdateAvailable: false,
+					},
+				},
+				{
+					ID:    "c3",
+					Name:  "/err",
+					Image: "mysql:latest",
+					UpdateStatus: &models.DockerContainerUpdateStatus{
+						UpdateAvailable: false,
+						Error:           "rate limited",
+					},
+				},
+			},
+		},
+		{
+			ID:          "host-2",
+			DisplayName: "Host Two",
+			Containers: []models.DockerContainer{
+				{
+					ID:    "c2b",
+					Name:  "/api",
+					Image: "postgres:latest",
+					UpdateStatus: &models.DockerContainerUpdateStatus{
+						UpdateAvailable: true,
+						CurrentDigest:   "sha256:old2",
+						LatestDigest:    "sha256:new2",
+						LastChecked:     now,
+					},
+				},
+			},
+		},
+	}
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", state)
+	handler := NewUpdateDetectionHandlers(monitor)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/infra-updates?hostId=host-1", nil)
+	rr := httptest.NewRecorder()
+	handler.HandleGetInfraUpdates(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	var updatesResp struct {
+		Updates []ContainerUpdateInfo `json:"updates"`
+		Total   int                   `json:"total"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&updatesResp); err != nil {
+		t.Fatalf("decode updates response: %v", err)
+	}
+	if updatesResp.Total != 2 {
+		t.Fatalf("expected 2 updates, got %d", updatesResp.Total)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/infra-updates/summary", nil)
+	rr = httptest.NewRecorder()
+	handler.HandleGetInfraUpdatesSummary(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+	var summaryResp struct {
+		Summaries    map[string]map[string]any `json:"summaries"`
+		TotalUpdates int                       `json:"totalUpdates"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&summaryResp); err != nil {
+		t.Fatalf("decode summary response: %v", err)
+	}
+	if summaryResp.TotalUpdates != 3 {
+		t.Fatalf("expected 3 total updates, got %d", summaryResp.TotalUpdates)
+	}
+	if _, ok := summaryResp.Summaries["host-1"]; !ok {
+		t.Fatalf("expected summary for host-1")
+	}
+	if _, ok := summaryResp.Summaries["host-2"]; !ok {
+		t.Fatalf("expected summary for host-2")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/infra-updates/docker:host-1/c1", nil)
+	rr = httptest.NewRecorder()
+	handler.HandleGetInfraUpdateForResource(rr, req, "docker:host-1/c1")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	var update ContainerUpdateInfo
+	if err := json.NewDecoder(rr.Body).Decode(&update); err != nil {
+		t.Fatalf("decode update response: %v", err)
+	}
+	if update.ContainerID != "c1" {
+		t.Fatalf("expected container c1, got %q", update.ContainerID)
+	}
+	if update.ContainerName != "web" {
+		t.Fatalf("expected container name stripped, got %q", update.ContainerName)
+	}
+
+	body := strings.NewReader(`{"hostId":"host-1"}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/infra-updates/check", body)
+	rr = httptest.NewRecorder()
+	handler.HandleTriggerInfraUpdateCheck(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	body = strings.NewReader(`{"resourceId":"docker:host-2/c2b"}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/infra-updates/check", body)
+	rr = httptest.NewRecorder()
+	handler.HandleTriggerInfraUpdateCheck(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
 	}
 }
 
