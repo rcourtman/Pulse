@@ -70,6 +70,7 @@ format-frontend:
 	npm --prefix $(FRONTEND_DIR) run format
 
 test:
+	@./scripts/ensure_test_assets.sh
 	@echo "Running backend tests (excluding tmp tooling)..."
 	go test $$(go list ./... | grep -v '/tmp$$')
 
