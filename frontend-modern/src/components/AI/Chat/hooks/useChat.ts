@@ -322,8 +322,8 @@ export function useChat(options: UseChatOptions = {}) {
   };
 
   // Send a message - allows sending mid-stream (aborts current response like Pulse AI TUI)
-  const sendMessage = async (prompt: string, mentions?: Array<{ id: string; name: string; type: string; node?: string }>, findingId?: string) => {
-    if (!prompt.trim()) return;
+  const sendMessage = async (prompt: string, mentions?: Array<{ id: string; name: string; type: string; node?: string }>, findingId?: string): Promise<boolean> => {
+    if (!prompt.trim()) return false;
 
     // If already streaming, abort the current request first
     if (isLoading() && abortControllerRef) {
@@ -352,7 +352,7 @@ export function useChat(options: UseChatOptions = {}) {
       } catch (error) {
         logger.error('[useChat] Failed to create session:', error);
         notificationStore.error('Failed to create chat session');
-        return;
+        return false;
       }
     }
 
@@ -394,10 +394,11 @@ export function useChat(options: UseChatOptions = {}) {
         mentions,
         findingId
       );
+      return true;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         logger.debug('[useChat] Request aborted');
-        return;
+        return false;
       }
       logger.error('[useChat] Chat failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to get Pulse Assistant response';
@@ -410,6 +411,7 @@ export function useChat(options: UseChatOptions = {}) {
             : msg
         )
       );
+      return false;
     } finally {
       abortControllerRef = null;
       setIsLoading(false);

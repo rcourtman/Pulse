@@ -414,8 +414,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const ctx = aiChatStore.context;
     const findingId = ctx.findingId;
     chat.sendMessage(prompt, mentions.length > 0 ? mentions : undefined, findingId)
-      .then(() => {
-        if (findingId) {
+      .then((ok) => {
+        if (ok && findingId) {
           aiChatStore.clearFindingId?.();
         }
       });
