@@ -910,7 +910,6 @@ function App() {
                     {/* AI Panel - slides in from right, pushes content */}
                     <AIChat onClose={() => aiChatStore.close()} />
                   </div>
-                  <ToastContainer />
                   <TokenRevealDialog />
                   {/* Fixed AI Assistant Button - only shows when chat is CLOSED */}
                   <Show when={aiChatStore.enabled === true && !aiChatStore.isOpenSignal()}>
@@ -942,6 +941,7 @@ function App() {
             </Show>
           </ErrorBoundary>
         </Show>
+        <ToastContainer />
       </Show>
     );
   };

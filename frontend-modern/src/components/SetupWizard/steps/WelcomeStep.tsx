@@ -44,18 +44,19 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
         setIsValidating(true);
         try {
-            await apiFetch('/api/security/validate-bootstrap-token', {
+            const response = await apiFetch('/api/security/validate-bootstrap-token', {
                 method: 'POST',
                 body: JSON.stringify({ token: props.bootstrapToken.trim() }),
             });
+
+            if (!response.ok) {
+                throw new Error('Invalid bootstrap token');
+            }
 
             props.setIsUnlocked(true);
             showSuccess('Token verified!');
             props.onNext();
         } catch (_error) {
-            if (_error instanceof Error && _error.message !== 'Invalid bootstrap token') {
-                // In case apiFetch throws other errors
-            }
             showError('Invalid bootstrap token. Please check and try again.');
         } finally {
             setIsValidating(false);

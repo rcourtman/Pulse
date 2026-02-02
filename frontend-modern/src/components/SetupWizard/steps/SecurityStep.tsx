@@ -40,6 +40,10 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 showError('Please enter a password');
                 return;
             }
+            if (password().length < 12) {
+                showError('Password must be at least 12 characters');
+                return;
+            }
             if (password() !== confirmPassword()) {
                 showError('Passwords do not match');
                 return;
