@@ -4238,9 +4238,9 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 		m.offlineConfirmations[storage.ID] = 3
 		m.mu.Unlock()
 
-		var resolvedID string
+		resolvedCh := make(chan string, 1)
 		m.SetResolvedCallback(func(id string) {
-			resolvedID = id
+			resolvedCh <- id
 		})
 
 		m.clearStorageOfflineAlert(storage)
@@ -4256,8 +4256,13 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 		if confirmExists {
 			t.Error("expected offline confirmation to be cleared")
 		}
-		if resolvedID != alertID {
-			t.Errorf("expected resolved callback with %q, got %q", alertID, resolvedID)
+		select {
+		case resolvedID := <-resolvedCh:
+			if resolvedID != alertID {
+				t.Errorf("expected resolved callback with %q, got %q", alertID, resolvedID)
+			}
+		case <-time.After(2 * time.Second):
+			t.Error("expected resolved callback to be called")
 		}
 	})
 
@@ -7173,9 +7178,9 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 	t.Run("clears existing alert and adds to resolved", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
-		var resolvedCalled bool
+		resolvedCh := make(chan struct{}, 1)
 		m.SetResolvedCallback(func(alertID string) {
-			resolvedCalled = true
+			resolvedCh <- struct{}{}
 		})
 
 		m.mu.Lock()
@@ -7209,10 +7214,130 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 		if resolved == nil {
 			t.Error("expected alert to be added to recently resolved")
 		}
-		if !resolvedCalled {
+		select {
+		case <-resolvedCh:
+		case <-time.After(2 * time.Second):
 			t.Error("expected resolved callback to be called")
 		}
 	})
+}
+
+// TestClearOfflineAlertNoDeadlock is a regression test for a deadlock introduced
+// by commit 07b4765b. The resolved callback (handleAlertResolved) calls
+// ShouldSuppressResolvedNotification which acquires m.mu.RLock(). If the
+// clear*OfflineAlert functions call the callback synchronously while holding
+// m.mu.Lock(), Go's non-reentrant RWMutex deadlocks.
+func TestClearOfflineAlertNoDeadlock(t *testing.T) {
+	// t.Parallel()
+
+	type testCase struct {
+		name    string
+		setupFn func(m *Manager)
+		clearFn func(m *Manager)
+	}
+
+	cases := []testCase{
+		{
+			name: "clearNodeOfflineAlert",
+			setupFn: func(m *Manager) {
+				m.mu.Lock()
+				m.activeAlerts["node-offline-node1"] = &Alert{
+					ID:        "node-offline-node1",
+					Type:      "offline",
+					StartTime: time.Now().Add(-5 * time.Minute),
+				}
+				m.mu.Unlock()
+			},
+			clearFn: func(m *Manager) {
+				m.clearNodeOfflineAlert(models.Node{ID: "node1", Name: "Node 1", Instance: "pve1"})
+			},
+		},
+		{
+			name: "clearPBSOfflineAlert",
+			setupFn: func(m *Manager) {
+				m.mu.Lock()
+				m.activeAlerts["pbs-offline-pbs1"] = &Alert{
+					ID:        "pbs-offline-pbs1",
+					Type:      "offline",
+					StartTime: time.Now().Add(-5 * time.Minute),
+				}
+				m.mu.Unlock()
+			},
+			clearFn: func(m *Manager) {
+				m.clearPBSOfflineAlert(models.PBSInstance{ID: "pbs1", Name: "PBS 1", Host: "host1"})
+			},
+		},
+		{
+			name: "clearPMGOfflineAlert",
+			setupFn: func(m *Manager) {
+				m.mu.Lock()
+				m.activeAlerts["pmg-offline-pmg1"] = &Alert{
+					ID:        "pmg-offline-pmg1",
+					Type:      "offline",
+					StartTime: time.Now().Add(-5 * time.Minute),
+				}
+				m.mu.Unlock()
+			},
+			clearFn: func(m *Manager) {
+				m.clearPMGOfflineAlert(models.PMGInstance{ID: "pmg1", Name: "PMG 1", Host: "host1"})
+			},
+		},
+		{
+			name: "clearStorageOfflineAlert",
+			setupFn: func(m *Manager) {
+				m.mu.Lock()
+				m.activeAlerts["storage-offline-stor1"] = &Alert{
+					ID:        "storage-offline-stor1",
+					Type:      "offline",
+					StartTime: time.Now().Add(-5 * time.Minute),
+				}
+				m.mu.Unlock()
+			},
+			clearFn: func(m *Manager) {
+				m.clearStorageOfflineAlert(models.Storage{ID: "stor1", Name: "Storage 1", Node: "node1"})
+			},
+		},
+		{
+			name: "clearGuestPoweredOffAlert",
+			setupFn: func(m *Manager) {
+				m.mu.Lock()
+				m.activeAlerts["guest-powered-off-vm100"] = &Alert{
+					ID:        "guest-powered-off-vm100",
+					Type:      "powered-off",
+					StartTime: time.Now().Add(-5 * time.Minute),
+				}
+				m.mu.Unlock()
+			},
+			clearFn: func(m *Manager) {
+				m.clearGuestPoweredOffAlert("vm100", "TestVM")
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+
+			// Simulate what handleAlertResolved does in production:
+			// it calls ShouldSuppressResolvedNotification which acquires m.mu.RLock().
+			// Before the fix, this deadlocked because the caller held m.mu.Lock().
+			done := make(chan struct{})
+			m.SetResolvedCallback(func(alertID string) {
+				_ = m.ShouldSuppressResolvedNotification(&Alert{ID: alertID})
+				close(done)
+			})
+
+			tc.setupFn(m)
+			tc.clearFn(m)
+
+			select {
+			case <-done:
+				// Callback completed without deadlock
+			case <-time.After(3 * time.Second):
+				t.Fatal("deadlock: resolved callback did not complete within 3 seconds")
+			}
+		})
+	}
 }
 
 func TestClearPBSOfflineAlert(t *testing.T) {
@@ -7254,9 +7379,9 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 	t.Run("clears existing alert and adds to resolved", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
-		var resolvedCalled bool
+		resolvedCh := make(chan struct{}, 1)
 		m.SetResolvedCallback(func(alertID string) {
-			resolvedCalled = true
+			resolvedCh <- struct{}{}
 		})
 
 		m.mu.Lock()
@@ -7290,7 +7415,9 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 		if resolved == nil {
 			t.Error("expected alert to be added to recently resolved")
 		}
-		if !resolvedCalled {
+		select {
+		case <-resolvedCh:
+		case <-time.After(2 * time.Second):
 			t.Error("expected resolved callback to be called")
 		}
 	})
@@ -7335,9 +7462,9 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 	t.Run("clears existing alert and adds to resolved", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
-		var resolvedCalled bool
+		resolvedCh := make(chan struct{}, 1)
 		m.SetResolvedCallback(func(alertID string) {
-			resolvedCalled = true
+			resolvedCh <- struct{}{}
 		})
 
 		m.mu.Lock()
@@ -7371,7 +7498,9 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 		if resolved == nil {
 			t.Error("expected alert to be added to recently resolved")
 		}
-		if !resolvedCalled {
+		select {
+		case <-resolvedCh:
+		case <-time.After(2 * time.Second):
 			t.Error("expected resolved callback to be called")
 		}
 	})

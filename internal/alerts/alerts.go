@@ -6802,8 +6802,9 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	}
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
-	// Send recovery notification
-	m.safeCallResolvedCallback(alertID, false)
+	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
+	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
+	m.safeCallResolvedCallback(alertID, true)
 
 	// Log recovery
 	log.Info().
@@ -6920,8 +6921,9 @@ func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
 	}
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
-	// Send recovery notification
-	m.safeCallResolvedCallback(alertID, false)
+	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
+	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
+	m.safeCallResolvedCallback(alertID, true)
 
 	// Log recovery
 	log.Info().
@@ -7038,8 +7040,9 @@ func (m *Manager) clearPMGOfflineAlert(pmg models.PMGInstance) {
 	}
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
-	// Send recovery notification
-	m.safeCallResolvedCallback(alertID, false)
+	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
+	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
+	m.safeCallResolvedCallback(alertID, true)
 
 	// Log recovery
 	log.Info().
@@ -8158,8 +8161,9 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 	}
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
-	// Send recovery notification
-	m.safeCallResolvedCallback(alertID, false)
+	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
+	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
+	m.safeCallResolvedCallback(alertID, true)
 
 	// Log recovery
 	log.Info().
@@ -8306,8 +8310,9 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 	}
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
-	// Send recovery notification
-	m.safeCallResolvedCallback(alertID, false)
+	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
+	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
+	m.safeCallResolvedCallback(alertID, true)
 
 	// Log recovery
 	log.Info().
