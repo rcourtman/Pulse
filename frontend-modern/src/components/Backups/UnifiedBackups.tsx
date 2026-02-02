@@ -1256,7 +1256,12 @@ const UnifiedBackups: Component = () => {
       </Show>
 
       {/* Removed old PBS table */}
-      <Show when={false && sortedPBSInstances().length > 0}>
+      <Show
+        when={
+          // eslint-disable-next-line no-constant-binary-expression
+          false && sortedPBSInstances().length > 0
+        }
+      >
         <Card padding="none" class="overflow-hidden">
           <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
             <style>{`
