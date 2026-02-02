@@ -13,6 +13,51 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// loginAuth implements the SMTP LOGIN authentication mechanism.
+// Many mail servers (notably Microsoft 365) advertise only AUTH LOGIN
+// and reject AUTH PLAIN with "504 5.7.4 Unrecognized authentication type".
+type loginAuth struct {
+	username, password string
+}
+
+// LoginAuth returns an Auth that implements the LOGIN authentication mechanism.
+func LoginAuth(username, password string) smtp.Auth {
+	return &loginAuth{username, password}
+}
+
+func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	return "LOGIN", nil, nil
+}
+
+func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if !more {
+		return nil, nil
+	}
+	prompt := strings.TrimSpace(strings.ToLower(string(fromServer)))
+	switch prompt {
+	case "username:":
+		return []byte(a.username), nil
+	case "password:":
+		return []byte(a.password), nil
+	default:
+		return nil, fmt.Errorf("unexpected LOGIN prompt: %s", fromServer)
+	}
+}
+
+// smtpAuth returns the appropriate smtp.Auth for the configured provider.
+// Microsoft 365 requires LOGIN auth; most other providers use PLAIN.
+func (e *EnhancedEmailManager) smtpAuth() smtp.Auth {
+	if !e.config.AuthRequired || e.config.Username == "" || e.config.Password == "" {
+		return nil
+	}
+	switch e.config.Provider {
+	case "Microsoft 365 / Outlook":
+		return LoginAuth(e.config.Username, e.config.Password)
+	default:
+		return smtp.PlainAuth("", e.config.Username, e.config.Password, e.config.SMTPHost)
+	}
+}
+
 // EnhancedEmailManager extends email functionality with provider support
 type EnhancedEmailManager struct {
 	config    EmailProviderConfig
@@ -176,10 +221,7 @@ func (e *EnhancedEmailManager) sendViaProvider(msg []byte) error {
 	}
 
 	// Configure authentication
-	var auth smtp.Auth
-	if e.config.AuthRequired && e.config.Username != "" && e.config.Password != "" {
-		auth = smtp.PlainAuth("", e.config.Username, e.config.Password, e.config.SMTPHost)
-	}
+	auth := e.smtpAuth()
 
 	// Send with TLS configuration
 	if e.config.TLS || e.config.SMTPPort == 465 {
@@ -359,8 +401,7 @@ func (e *EnhancedEmailManager) TestConnection() error {
 	}
 
 	// Test authentication if configured
-	if e.config.AuthRequired && e.config.Username != "" && e.config.Password != "" {
-		auth := smtp.PlainAuth("", e.config.Username, e.config.Password, e.config.SMTPHost)
+	if auth := e.smtpAuth(); auth != nil {
 		if err = client.Auth(auth); err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
 		}
