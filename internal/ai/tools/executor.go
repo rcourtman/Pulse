@@ -481,6 +481,11 @@ func (e *PulseToolExecutor) SetProtectedGuests(vmids []string) {
 	e.protectedGuests = vmids
 }
 
+// RegisterTool allows tests or extensions to add tools at runtime.
+func (e *PulseToolExecutor) RegisterTool(tool RegisteredTool) {
+	e.registry.Register(tool)
+}
+
 // Runtime setter methods for updating providers after creation
 
 // SetMetadataUpdater sets the metadata updater
