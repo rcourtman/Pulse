@@ -72,6 +72,7 @@ PROXMOX_TYPE=""
 UNINSTALL="false"
 INSECURE="false"
 AGENT_ID=""
+HOSTNAME_OVERRIDE=""
 ENABLE_COMMANDS="false"
 KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
@@ -117,6 +118,7 @@ Options:
   --kube-include-all-deployments Include all deployments
   --enable-proxmox        Force enable Proxmox integration
   --agent-id <id>         Custom agent identifier
+  --hostname <name>       Override hostname reported to Pulse
   --disk-exclude <path>   Exclude mount point (repeatable)
   --insecure              Skip TLS verification
   --enable-commands       Enable AI command execution
@@ -272,6 +274,7 @@ build_exec_args() {
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-pods"; fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
+    if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS="$EXEC_ARGS --hostname ${HOSTNAME_OVERRIDE}"; fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"
@@ -300,6 +303,7 @@ build_exec_args_array() {
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-pods); fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-deployments); fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
+    if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS_ARRAY+=(--hostname "$HOSTNAME_OVERRIDE"); fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARGS_ARRAY+=(--disk-exclude "$pattern")
@@ -327,6 +331,7 @@ while [[ $# -gt 0 ]]; do
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
+        --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
         --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
@@ -1446,6 +1451,7 @@ if command -v systemctl >/dev/null 2>&1; then
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
+    if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS="$EXEC_ARGS --hostname ${HOSTNAME_OVERRIDE}"; fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"

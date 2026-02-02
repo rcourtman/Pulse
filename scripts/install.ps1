@@ -12,7 +12,8 @@ param (
     [bool]$EnableKubernetes = $false,
     [bool]$Insecure = $false,
     [bool]$Uninstall = $false,
-    [string]$AgentId = ""
+    [string]$AgentId = "",
+    [string]$Hostname = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -379,6 +380,7 @@ if ($EnableDocker) { $ServiceArgs += "--enable-docker" }
 if ($EnableKubernetes) { $ServiceArgs += "--enable-kubernetes" }
 if ($Insecure) { $ServiceArgs += "--insecure" }
 if (-not [string]::IsNullOrWhiteSpace($AgentId)) { $ServiceArgs += @("--agent-id", "`"$AgentId`"") }
+if (-not [string]::IsNullOrWhiteSpace($Hostname)) { $ServiceArgs += @("--hostname", "`"$Hostname`"") }
 
 $BinPath = "`"$DestPath`" $($ServiceArgs -join ' ')"
 
