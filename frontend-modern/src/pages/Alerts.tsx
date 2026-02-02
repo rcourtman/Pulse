@@ -826,6 +826,25 @@ export function Alerts() {
           return;
         }
 
+        // Host disk override stored as host:<hostId>/disk:<mountpoint>
+        const diskMatch = key.match(/^host:(.+)\/disk:(.+)$/);
+        if (diskMatch) {
+          const [, hostId, diskLabel] = diskMatch;
+          const host = hostAgentMap.get(hostId);
+          const displayName = diskLabel.replace(/-/g, '/');
+
+          overridesList.push({
+            id: key,
+            name: displayName,
+            type: 'hostDisk',
+            resourceType: 'Host Disk',
+            node: host?.displayName?.trim() || host?.hostname || hostId,
+            disabled: thresholds.disabled || false,
+            thresholds: extractTriggerValues(thresholds),
+          });
+          return;
+        }
+
         // Host agent override stored by host ID
         const hostAgent = hostAgentMap.get(key);
         if (hostAgent) {
@@ -933,7 +952,7 @@ export function Alerts() {
               newOverride.type === 'dockerContainer') &&
             newOverride.disableConnectivity !== existing.disableConnectivity;
           const disabledChanged =
-            (newOverride.type === 'guest' || newOverride.type === 'storage') &&
+            (newOverride.type === 'guest' || newOverride.type === 'storage' || newOverride.type === 'hostDisk') &&
             newOverride.disabled !== existing.disabled;
           const severityChanged =
             (newOverride.type === 'guest' || newOverride.type === 'dockerContainer') &&
@@ -1230,7 +1249,21 @@ export function Alerts() {
       setDisableAllPMGOffline(config.disableAllPMGOffline ?? false);
       setDisableAllDockerHostsOffline(config.disableAllDockerHostsOffline ?? false);
 
-      setRawOverridesConfig(config.overrides || {});
+      // Clean up any host disk override keys that used old underscore sanitization.
+      // The old frontend incorrectly used '_' but the backend uses '-', so old keys
+      // were never functional for alert evaluation. Drop them silently on load.
+      const rawOverrides = config.overrides || {};
+      const cleanedOverrides: typeof rawOverrides = {};
+      for (const [key, value] of Object.entries(rawOverrides)) {
+        const diskMatch = key.match(/^(host:.+\/disk:)(.+)$/);
+        if (diskMatch) {
+          const normalized = diskMatch[2].toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '') || 'unknown';
+          cleanedOverrides[diskMatch[1] + normalized] = value;
+        } else {
+          cleanedOverrides[key] = value;
+        }
+      }
+      setRawOverridesConfig(cleanedOverrides);
 
       if (config.schedule) {
         if (config.schedule.quietHours) {

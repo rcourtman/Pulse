@@ -884,12 +884,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return hosts;
   }, []);
 
-  // Helper function to create host disk resource ID (matches backend format)
+  // Helper function to create host disk resource ID (matches backend sanitizeHostComponent)
   const hostDiskResourceID = (hostId: string, mountpoint: string, device?: string): string => {
     // Use mountpoint if available, otherwise device
-    let label = mountpoint?.trim() || device?.trim() || 'disk';
-    // Sanitize the label (replace slashes with underscores, similar to backend sanitizeHostComponent)
-    label = label.replace(/\//g, '_').replace(/^_/, '');
+    let label = (mountpoint?.trim() || device?.trim() || 'disk').toLowerCase();
+    // Replicate backend sanitizeHostComponent: keep a-z 0-9, replace everything else with '-', collapse consecutive hyphens
+    label = label.replace(/[^a-z0-9]/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
+    if (!label) label = 'unknown';
     return `host:${hostId}/disk:${label}`;
   };
 
