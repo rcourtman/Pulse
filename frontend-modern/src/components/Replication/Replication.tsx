@@ -483,14 +483,14 @@ const Replication: Component = () => {
               }
             >
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[900px]">
+                <table class="w-full">
                   <thead class="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
                     <tr>
-                      <th class={`${thClass} pl-4`}>Guest</th>
-                      <th class={thClass}>Job</th>
-                      <th class={thClass}>Source → Target</th>
-                      <th class={thClass}>Last Sync</th>
-                      <th class={thClass}>Next Sync</th>
+                      <th class={`${thClass} pl-4 w-[160px] sm:w-[220px]`}>Guest</th>
+                      <th class={`${thClass} hidden sm:table-cell`}>Job</th>
+                      <th class={`${thClass} hidden md:table-cell`}>Source → Target</th>
+                      <th class={`${thClass} hidden lg:table-cell`}>Last Sync</th>
+                      <th class={`${thClass} hidden sm:table-cell`}>Next Sync</th>
                       <th class={thClass}>Status</th>
                     </tr>
                   </thead>
@@ -509,7 +509,7 @@ const Replication: Component = () => {
                               : 'hover:bg-gray-50/80 dark:hover:bg-gray-800/50'
                             }`}>
                             <td class="px-3 py-3 pl-4">
-                              <div class="font-medium text-sm text-gray-900 dark:text-gray-100">
+                              <div class="font-medium text-sm text-gray-900 dark:text-gray-100 truncate max-w-[140px] sm:max-w-[200px]" title={job.guestName || `VM ${job.guestId ?? ''}`}>
                                 {job.guestName || `VM ${job.guestId ?? ''}`}
                               </div>
                               <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
@@ -519,13 +519,13 @@ const Replication: Component = () => {
                                 <span>· ID {job.guestId ?? '—'}</span>
                               </div>
                             </td>
-                            <td class="px-3 py-3">
+                            <td class="px-3 py-3 hidden sm:table-cell">
                               <div class="font-mono text-sm text-gray-700 dark:text-gray-300">{job.jobId || '—'}</div>
                               <div class="text-xs text-gray-500 dark:text-gray-400">
                                 {job.schedule || '*/15'}
                               </div>
                             </td>
-                            <td class="px-3 py-3">
+                            <td class="px-3 py-3 hidden md:table-cell">
                               <div class="flex items-center gap-2 text-sm">
                                 <span class="text-gray-700 dark:text-gray-300">{job.sourceNode || '—'}</span>
                                 <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -534,7 +534,7 @@ const Replication: Component = () => {
                                 <span class="text-gray-700 dark:text-gray-300">{job.targetNode || '—'}</span>
                               </div>
                             </td>
-                            <td class="px-3 py-3">
+                            <td class="px-3 py-3 hidden lg:table-cell">
                               <Show when={job.lastSyncTime} fallback={
                                 <span class="text-gray-400 text-sm">Never</span>
                               }>
@@ -549,7 +549,7 @@ const Replication: Component = () => {
                                 </div>
                               </Show>
                             </td>
-                            <td class="px-3 py-3">
+                            <td class="px-3 py-3 hidden sm:table-cell">
                               <div class={`text-sm font-medium ${nextSyncInfo.isOverdue
                                 ? 'text-red-600 dark:text-red-400'
                                 : nextSyncInfo.isImminent

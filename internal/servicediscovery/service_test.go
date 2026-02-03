@@ -626,6 +626,7 @@ func TestService_FingerprintLoop_StopAndCancel(t *testing.T) {
 
 		done := make(chan struct{})
 		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel() // Always cancel to prevent context leak
 		go func() {
 			service.discoveryLoop(ctx)
 			close(done)

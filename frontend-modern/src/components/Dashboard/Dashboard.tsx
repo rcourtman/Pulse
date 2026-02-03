@@ -1039,7 +1039,7 @@ export function Dashboard(props: DashboardProps) {
                             style={{
                               ...((['cpu', 'memory', 'disk'].includes(col.id))
                                 ? { "width": isMobile() ? "60px" : "140px" }
-                                : (col.width && (!isMobile() || col.id !== 'name') ? { "width": col.width } : {})),
+                                : (col.width ? { "width": col.width } : {})),
                               "vertical-align": 'middle'
                             }}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
@@ -1103,6 +1103,7 @@ export function Dashboard(props: DashboardProps) {
                                     isGroupedView={groupingMode() === 'grouped'}
                                     visibleColumnIds={visibleColumnIds()}
                                     onClick={() => setSelectedGuestId(selectedGuestId() === guestId ? null : guestId)}
+                                    isExpanded={selectedGuestId() === guestId}
                                   />
                                   <Show when={selectedGuestId() === guestId}>
                                     <tr>

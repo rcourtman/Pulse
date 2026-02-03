@@ -423,7 +423,7 @@ export interface GuestColumnDef {
 
 export const GUEST_COLUMNS: GuestColumnDef[] = [
   // Essential - always visible (fixed widths ensure no overlap)
-  { id: 'name', label: 'Name', priority: 'essential', width: '120px', sortKey: 'name' },
+  { id: 'name', label: 'Name', priority: 'essential', width: '200px', sortKey: 'name' },
 
   // Secondary - visible on md+ (Now essential for mobile scroll)
   { id: 'type', label: 'Type', priority: 'essential', width: '40px', sortKey: 'type' },
@@ -449,6 +449,9 @@ export const GUEST_COLUMNS: GuestColumnDef[] = [
   { id: 'diskWrite', label: 'D Write', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'diskWrite' },
   { id: 'netIn', label: 'Net In', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'networkIn' },
   { id: 'netOut', label: 'Net Out', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'networkOut' },
+
+  // Link column - at the end like NodeSummaryTable
+  { id: 'link', label: '', priority: 'essential', width: '28px' },
 ];
 
 interface GuestRowProps {
@@ -477,6 +480,8 @@ interface GuestRowProps {
   visibleColumnIds?: string[];
   /** Click handler for the row */
   onClick?: () => void;
+  /** Whether the row details are expanded */
+  isExpanded?: boolean;
 }
 
 export function GuestRow(props: GuestRowProps) {
@@ -688,6 +693,11 @@ export function GuestRow(props: GuestRowProps) {
         {/* Name - always visible */}
         <td class={`pr-2 py-1 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
           <div class="flex items-center gap-2 min-w-0">
+            <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
+              <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
             <div class="flex items-center gap-1.5 min-w-0">
               <StatusDot
                 variant={guestStatus().variant}
@@ -697,35 +707,11 @@ export function GuestRow(props: GuestRowProps) {
               />
               <div class="flex items-center gap-1.5 min-w-0 group/name">
                 <span
-                  class="text-xs font-medium text-gray-900 dark:text-gray-100 select-none whitespace-nowrap"
+                  class="text-xs font-medium text-gray-900 dark:text-gray-100 select-none truncate"
                   title={props.guest.name}
                 >
                   {props.guest.name}
                 </span>
-                <Show when={customUrl() && customUrl() !== ''}>
-                  <a
-                    href={customUrl()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                    title={`Open ${customUrl()}`}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <svg
-                      class="w-3.5 h-3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                      />
-                    </svg>
-                  </a>
-                </Show>
                 {/* Show backup indicator in name cell only if backup column is hidden */}
                 <Show when={!isColVisible('backup')}>
                   <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
@@ -1001,6 +987,26 @@ export function GuestRow(props: GuestRowProps) {
                 <span class={`text-xs ${getIOColorClass(networkOut())}`}>{formatSpeed(networkOut())}</span>
               </Show>
             </div>
+          </td>
+        </Show>
+
+        {/* Link Column - at the end like NodeSummaryTable */}
+        <Show when={isColVisible('link')}>
+          <td class="px-0 py-1 align-middle text-center">
+            <Show when={customUrl() && customUrl() !== ''} fallback={<span class="text-xs text-gray-300 dark:text-gray-700">-</span>}>
+              <a
+                href={customUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                title={`Open ${customUrl()}`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </Show>
           </td>
         </Show>
       </tr>

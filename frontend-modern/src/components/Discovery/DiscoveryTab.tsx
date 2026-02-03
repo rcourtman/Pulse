@@ -33,6 +33,10 @@ const makeResourceId = (type: ResourceType, hostId: string, resourceId: string) 
 export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     const [isScanning, setIsScanning] = createSignal(false);
     const [editingNotes, setEditingNotes] = createSignal(false);
+    // Track if initial fetch has completed to prevent flash of "no data" state
+    const [hasFetched, setHasFetched] = createSignal(false);
+    // Delayed loading spinner - only show after 150ms to prevent flash
+    const [showLoadingSpinner, setShowLoadingSpinner] = createSignal(false);
 
     // --- Guest URL editing state ---
     const [urlValue, setUrlValue] = createSignal(props.customUrl ?? '');
@@ -95,12 +99,29 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         () => ({ type: props.resourceType, host: props.hostId, id: props.resourceId }),
         async (params) => {
             try {
-                return await getDiscovery(params.type, params.host, params.id);
+                const result = await getDiscovery(params.type, params.host, params.id);
+                setHasFetched(true);
+                return result;
             } catch {
+                setHasFetched(true);
                 return null;
             }
         }
     );
+
+    // Delay showing loading spinner to prevent flash for fast API calls
+    createEffect(() => {
+        if (discovery.loading) {
+            const timer = setTimeout(() => {
+                if (discovery.loading) {
+                    setShowLoadingSpinner(true);
+                }
+            }, 150);
+            onCleanup(() => clearTimeout(timer));
+        } else {
+            setShowLoadingSpinner(false);
+        }
+    });
 
     // Handle triggering a new discovery
     const handleTriggerDiscovery = async (force = false) => {
@@ -194,6 +215,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     });
 
     const confidenceInfo = () => {
+        if (discovery.loading) return null;
         const d = discovery();
         if (!d || d.confidence === undefined || d.confidence === null) return null;
         return getConfidenceLevel(d.confidence);
@@ -220,12 +242,12 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     };
 
     // Accessor that returns discovery only when valid (for use with Show component)
-    const validDiscovery = () => hasValidDiscovery() ? discovery() : null;
+    const validDiscovery = () => (!discovery.loading && hasValidDiscovery()) ? discovery() : null;
 
     return (
         <div class="space-y-4">
             {/* AI Provider Badge - Always visible when AI is configured */}
-            <Show when={discoveryInfo()?.ai_provider}>
+            <Show when={!discoveryInfo.loading && discoveryInfo()?.ai_provider}>
                 <div class="flex items-center gap-2">
                     <Show
                         when={discoveryInfo()?.ai_provider?.is_local}
@@ -251,7 +273,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             </Show>
 
             {/* "What Discovery Does" Explanation - Shown when no discovery yet */}
-            <Show when={!discovery() && !discovery.loading && showExplanation()}>
+            <Show when={hasFetched() && !discovery() && !discovery.loading && showExplanation()}>
                 <div class="rounded border border-amber-200 bg-amber-50/80 p-3 shadow-sm dark:border-amber-800/50 dark:bg-amber-900/20">
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex items-start gap-2.5">
@@ -280,7 +302,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             </Show>
 
             {/* Commands Preview - Expandable before first scan */}
-            <Show when={!discovery() && !discovery.loading && discoveryInfo()?.commands && discoveryInfo()!.commands!.length > 0}>
+            <Show when={hasFetched() && !discovery() && !discovery.loading && !discoveryInfo.loading && discoveryInfo()?.commands && discoveryInfo()!.commands!.length > 0}>
                 <details class="rounded border border-gray-200 bg-white/70 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30" open={showCommandsPreview()}>
                     <summary
                         class="p-2.5 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 flex items-center gap-2"
@@ -310,8 +332,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </details>
             </Show>
 
-            {/* Loading state */}
-            <Show when={discovery.loading}>
+            {/* Loading state - delayed to prevent flash for fast loads */}
+            <Show when={showLoadingSpinner()}>
                 <div class="flex items-center justify-center py-8">
                     <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
                     <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">Loading discovery...</span>
@@ -386,8 +408,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </div>
             </Show>
 
-            {/* No discovery yet */}
-            <Show when={!discovery.loading && !discovery() && !isScanning()}>
+            {/* No discovery yet - only show after initial fetch completes to prevent flash */}
+            <Show when={hasFetched() && !discovery.loading && !discovery() && !isScanning()}>
                 <div class="text-center py-8">
                     <div class="text-gray-500 dark:text-gray-400 mb-4">
                         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -416,7 +438,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             </Show>
 
             {/* Discovery exists but has no meaningful data - show re-scan option */}
-            <Show when={!discovery.loading && discovery() && !hasValidDiscovery() && !isScanning()}>
+            <Show when={hasFetched() && !discovery.loading && discovery() && !hasValidDiscovery() && !isScanning()}>
                 <div class="text-center py-8">
                     <div class="text-gray-500 dark:text-gray-400 mb-4">
                         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">

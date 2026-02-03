@@ -21,6 +21,12 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { formatRelativeTime, formatBytes } from '@/utils/format';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES, type StatusIndicator } from '@/utils/status';
+import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { HistoryChart } from '@/components/shared/HistoryChart';
+import type { HistoryTimeRange } from '@/api/charts';
+
+// Global state for expanded row
+const [expandedRowId, setExpandedRowId] = createSignal<string | null>(null);
 
 interface KubernetesClustersProps {
   clusters: KubernetesCluster[];
@@ -144,6 +150,225 @@ const POD_COLUMNS: ColumnDef[] = [
   { id: 'image', label: 'Image', priority: 'secondary', toggleable: true },
   { id: 'age', label: 'Age', priority: 'primary', toggleable: true },
 ];
+
+const PodRow: Component<{
+  cluster: KubernetesCluster;
+  pod: KubernetesPod;
+  columns: { isColumnVisible: (id: string) => boolean };
+}> = (props) => {
+  const rowId = `${props.cluster.id}:${props.pod.uid}`;
+  const isExpanded = createMemo(() => expandedRowId() === rowId);
+  const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
+  const [customUrl, setCustomUrl] = createSignal<string | undefined>(undefined);
+  const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>('1h');
+
+  const toggle = (e: MouseEvent) => {
+    if ((e.target as HTMLElement).closest('a, button, input')) return;
+    setExpandedRowId(prev => prev === rowId ? null : rowId);
+  };
+
+  const statusBadge = () => getPodStatusBadge(props.pod);
+  const containers = () => props.pod.containers ?? [];
+  const readyContainers = () => containers().filter(c => c.ready).length;
+
+  return (
+    <>
+      <tr
+        class={`transition-colors cursor-pointer ${isExpanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-900/20'}`}
+        onClick={toggle}
+      >
+        <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+          <div class="font-medium truncate max-w-[200px]" title={props.pod.name}>{props.pod.name}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
+            {props.pod.nodeName || 'unscheduled'}
+          </div>
+        </td>
+        <Show when={props.columns.isColumnVisible('namespace')}>
+          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+            <span class="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono">
+              {props.pod.namespace}
+            </span>
+          </td>
+        </Show>
+        <Show when={props.columns.isColumnVisible('cluster')}>
+          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+            {getClusterDisplayName(props.cluster)}
+          </td>
+        </Show>
+        <td class="px-4 py-3 text-sm">
+          <span class={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge().class}`}>
+            {statusBadge().label}
+          </span>
+        </td>
+        <Show when={props.columns.isColumnVisible('ready')}>
+          <td class="px-4 py-3 text-sm">
+            <span class={readyContainers() === containers().length ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}>
+              {readyContainers()}/{containers().length}
+            </span>
+          </td>
+        </Show>
+        <Show when={props.columns.isColumnVisible('restarts')}>
+          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+            <Show when={(props.pod.restarts ?? 0) > 0} fallback={<span class="text-gray-400">0</span>}>
+              <span class="text-amber-600 dark:text-amber-400 font-medium">{props.pod.restarts}</span>
+            </Show>
+          </td>
+        </Show>
+        <Show when={props.columns.isColumnVisible('image')}>
+          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+            <span class="font-mono text-xs truncate max-w-[150px] block" title={(props.pod.containers ?? [])[0]?.image}>
+              {getPrimaryImage(props.pod)}
+            </span>
+          </td>
+        </Show>
+        <Show when={props.columns.isColumnVisible('age')}>
+          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            {formatAge(props.pod.createdAt)}
+          </td>
+        </Show>
+      </tr>
+
+      <Show when={isExpanded()}>
+        <tr>
+          <td colspan={8} class="p-0">
+            <div class="w-0 min-w-full bg-gray-50 dark:bg-gray-900/60 px-4 py-3 overflow-hidden">
+              {/* Tabs Header */}
+              <div class="flex border-b border-gray-200 dark:border-gray-700/50 mb-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm sticky top-0 z-10 -mx-4 px-4 pt-2">
+                <button
+                  type="button"
+                  class={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab() === 'overview' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+                  onClick={(e) => { e.stopPropagation(); setActiveTab('overview'); }}
+                >
+                  Overview
+                </button>
+                <button
+                  type="button"
+                  class={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab() === 'discovery' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+                  onClick={(e) => { e.stopPropagation(); setActiveTab('discovery'); }}
+                >
+                  Discovery
+                </button>
+              </div>
+
+              <div class={activeTab() === 'overview' ? '' : 'hidden'}>
+                {/* Overview Content */}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card>
+                    <div class="p-4 space-y-3">
+                      <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">Details</h3>
+                      <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="text-gray-500 dark:text-gray-400">ID</div>
+                        <div class="font-mono truncate" title={props.pod.uid}>{props.pod.uid}</div>
+                        <div class="text-gray-500 dark:text-gray-400">QoS Class</div>
+                        <div>{props.pod.qosClass || '—'}</div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card>
+                    <div class="p-4 space-y-3">
+                      <div class="flex justify-between items-center">
+                        <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">Containers</h3>
+                        <span class="text-xs text-gray-500">{containers().length}</span>
+                      </div>
+                      <div class="space-y-2 max-h-[300px] overflow-y-auto">
+                        <For each={containers()}>
+                          {(container) => (
+                            <div class="border rounded p-2 text-xs bg-gray-50 dark:bg-gray-800">
+                              <div class="flex justify-between font-medium">
+                                <span>{container.name}</span>
+                                <span class={container.ready ? 'text-green-600' : 'text-amber-600'}>{container.state}</span>
+                              </div>
+                              <div class="font-mono text-gray-500 truncate" title={container.image}>{container.image}</div>
+                              <div class="mt-1 flex gap-2 text-[10px] text-gray-400">
+                                <span>Restarts: {container.restartCount}</span>
+                              </div>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+                <div class="mt-3 space-y-3">
+                  <div class="flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <path stroke-linecap="round" d="M12 6v6l4 2" />
+                    </svg>
+                    <select
+                      value={historyRange()}
+                      onChange={(e) => setHistoryRange(e.currentTarget.value as HistoryTimeRange)}
+                      class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                      style={{ "background-image": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", "background-repeat": "no-repeat", "background-position": "right 6px center" }}
+                    >
+                      <option value="1h">Last 1 hour</option>
+                      <option value="6h">Last 6 hours</option>
+                      <option value="12h">Last 12 hours</option>
+                      <option value="24h">Last 24 hours</option>
+                      <option value="7d">Last 7 days</option>
+                      <option value="30d">Last 30 days</option>
+                      <option value="90d">Last 90 days</option>
+                    </select>
+                  </div>
+
+                  <div class="relative">
+                    <div class="space-y-3">
+                      <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.5rem)] [&>*]:min-w-[250px]">
+                        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                          <HistoryChart
+                            resourceType="k8s"
+                            resourceId={props.pod.uid}
+                            metric="cpu"
+                            height={120}
+                            color="#8b5cf6"
+                            label="CPU"
+                            unit="%"
+                            range={historyRange()}
+                            hideSelector={true}
+                            compact={true}
+                            hideLock={true}
+                          />
+                        </div>
+                        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                          <HistoryChart
+                            resourceType="k8s"
+                            resourceId={props.pod.uid}
+                            metric="memory"
+                            height={120}
+                            color="#f59e0b"
+                            label="Memory"
+                            unit="%"
+                            range={historyRange()}
+                            hideSelector={true}
+                            compact={true}
+                            hideLock={true}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class={activeTab() === 'discovery' ? '' : 'hidden'}>
+                <DiscoveryTab
+                  resourceType="k8s"
+                  hostId={props.cluster.id}
+                  resourceId={props.pod.uid}
+                  guestId={props.pod.uid}
+                  hostname={props.pod.name}
+                  customUrl={customUrl()}
+                  onCustomUrlChange={setCustomUrl}
+                />
+              </div>
+            </div>
+          </td>
+        </tr>
+      </Show>
+    </>
+  );
+};
 
 export const KubernetesClusters: Component<KubernetesClustersProps> = (props) => {
   const [search, setSearch] = createSignal('');
@@ -1071,62 +1296,12 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                     <tr><td colSpan={8} class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No pods match the current filters.</td></tr>
                   }>
                     {({ cluster, pod }) => {
-                      const statusBadge = () => getPodStatusBadge(pod);
-                      const containers = () => pod.containers ?? [];
-                      const readyContainers = () => containers().filter(c => c.ready).length;
-
                       return (
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/20">
-                          <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                            <div class="font-medium truncate max-w-[200px]" title={pod.name}>{pod.name}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {pod.nodeName || 'unscheduled'}
-                            </div>
-                          </td>
-                          <Show when={podColumns.isColumnVisible('namespace')}>
-                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                              <span class="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono">
-                                {pod.namespace}
-                              </span>
-                            </td>
-                          </Show>
-                          <Show when={podColumns.isColumnVisible('cluster')}>
-                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                              {getClusterDisplayName(cluster)}
-                            </td>
-                          </Show>
-                          <td class="px-4 py-3 text-sm">
-                            <span class={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge().class}`}>
-                              {statusBadge().label}
-                            </span>
-                          </td>
-                          <Show when={podColumns.isColumnVisible('ready')}>
-                            <td class="px-4 py-3 text-sm">
-                              <span class={readyContainers() === containers().length ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}>
-                                {readyContainers()}/{containers().length}
-                              </span>
-                            </td>
-                          </Show>
-                          <Show when={podColumns.isColumnVisible('restarts')}>
-                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                              <Show when={(pod.restarts ?? 0) > 0} fallback={<span class="text-gray-400">0</span>}>
-                                <span class="text-amber-600 dark:text-amber-400 font-medium">{pod.restarts}</span>
-                              </Show>
-                            </td>
-                          </Show>
-                          <Show when={podColumns.isColumnVisible('image')}>
-                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                              <span class="font-mono text-xs truncate max-w-[150px] block" title={(pod.containers ?? [])[0]?.image}>
-                                {getPrimaryImage(pod)}
-                              </span>
-                            </td>
-                          </Show>
-                          <Show when={podColumns.isColumnVisible('age')}>
-                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                              {formatAge(pod.createdAt)}
-                            </td>
-                          </Show>
-                        </tr>
+                        <PodRow
+                          cluster={cluster}
+                          pod={pod}
+                          columns={podColumns}
+                        />
                       );
                     }}
                   </For>

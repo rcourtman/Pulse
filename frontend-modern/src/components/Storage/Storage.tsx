@@ -71,7 +71,7 @@ const Storage: Component = () => {
     { id: 'content', label: 'Content', priority: 'supplementary', toggleable: true },
     { id: 'status', label: 'Status', priority: 'primary', toggleable: true },
     { id: 'shared', label: 'Shared', priority: 'detailed', toggleable: true },
-    { id: 'free', label: 'Free', priority: 'supplementary', toggleable: true },
+    { id: 'free', label: 'Free', priority: 'secondary', toggleable: true },
     { id: 'total', label: 'Total', priority: 'secondary', toggleable: true },
   ];
 
@@ -81,7 +81,7 @@ const Storage: Component = () => {
     STORAGE_COLUMNS
   );
 
-  const isColumnVisible = (id: string) => !columnVisibility.isHiddenByUser(id);
+  const isColumnVisible = (id: string) => columnVisibility.isColumnVisible(id);
 
   // PERFORMANCE: Debounce search term to prevent jank during rapid typing
   const debouncedSearchTerm = useDebouncedValue(() => searchTerm(), 200);
@@ -812,10 +812,10 @@ const Storage: Component = () => {
                 <style>{`
                 .overflow-x-auto::-webkit-scrollbar { display: none; }
               `}</style>
-                <table class="w-full" style={{ "min-width": "800px" }}>
+                <table class="w-full">
                   <thead>
                     <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-auto">
+                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style={{ width: '200px' }}>
                         Storage
                       </th>
                       <Show when={isColumnVisible('type')}>

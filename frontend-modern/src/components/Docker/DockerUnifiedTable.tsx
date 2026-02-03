@@ -12,11 +12,11 @@ import {
   formatAbsoluteTime,
 } from '@/utils/format';
 import type { DockerMetadata } from '@/api/dockerMetadata';
-import { DockerMetadataAPI } from '@/api/dockerMetadata';
 import type { DockerHostMetadata } from '@/api/dockerHostMetadata';
 import { resolveHostRuntime } from './runtimeDisplay';
-import { showSuccess, showError } from '@/utils/toast';
-import { logger } from '@/utils/logger';
+
+// ... (other imports remain) ...
+
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
@@ -32,17 +32,22 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
-import { UrlEditPopover } from '@/components/shared/UrlEditPopover';
+
 import { UpdateButton } from '@/components/Docker/UpdateBadge';
 import type { ColumnConfig } from '@/types/responsive';
+import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { HistoryChart } from '@/components/shared/HistoryChart';
+import type { HistoryTimeRange } from '@/api/charts';
 
-const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
+const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'dockerHost' | 'unknown') => {
   switch (type) {
     case 'container':
       return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200';
     case 'service':
       return 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-200';
     case 'task':
+      return 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200';
+    case 'dockerHost':
       return 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200';
     default:
       return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
@@ -72,6 +77,7 @@ type DockerRow =
     tasks: DockerTask[];
   };
 
+
 interface DockerUnifiedTableProps {
   hosts: DockerHost[];
   searchTerm?: string;
@@ -80,6 +86,7 @@ interface DockerUnifiedTableProps {
   dockerMetadata?: Record<string, DockerMetadata>;
   dockerHostMetadata?: Record<string, DockerHostMetadata>;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
+  onHostCustomUrlUpdate?: (hostId: string, url: string) => void;
   batchUpdateState?: Record<string, 'updating' | 'queued' | 'error'>;
   groupingMode?: 'grouped' | 'flat';
 }
@@ -152,11 +159,7 @@ export const DOCKER_COLUMNS: DockerColumnDef[] = [
 // Global state for currently expanded drawer (only one drawer open at a time)
 const [currentlyExpandedRowId, setCurrentlyExpandedRowId] = createSignal<string | null>(null);
 
-// Global editing state for Docker resource URLs
-const [currentlyEditingDockerResourceId, setCurrentlyEditingDockerResourceId] = createSignal<string | null>(null);
-const dockerEditingValues = new Map<string, string>();
-const [dockerEditingValuesVersion, setDockerEditingValuesVersion] = createSignal(0);
-const [dockerPopoverPosition, setDockerPopoverPosition] = createSignal<{ top: number; left: number } | null>(null);
+
 
 const toLower = (value?: string | null) => value?.toLowerCase() ?? '';
 
@@ -758,10 +761,12 @@ const DockerHostGroupHeader: Component<{
   host: DockerHost;
   columnCount: number;
   customUrl?: string;
+  onCustomUrlUpdate?: (hostId: string, url: string) => void;
 }> = (props) => {
   const displayName = getHostDisplayName(props.host);
   const hostStatus = () => getDockerHostStatusIndicator(props.host);
   const isOnline = () => hostStatus().variant === 'success';
+
   return (
     <tr class="bg-gray-50 dark:bg-gray-900/40">
       <td colspan={props.columnCount} class="py-0.5 pr-2 pl-4">
@@ -785,19 +790,16 @@ const DockerHostGroupHeader: Component<{
               rel="noopener noreferrer"
               class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
               title={`Open ${props.customUrl}`}
-              onClick={(e) => e.stopPropagation()}
             >
               <span>{displayName}</span>
               <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
             </a>
           </Show>
-          <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
-            <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-              ({props.host.hostname})
-            </span>
-          </Show>
+          <span class="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">
+            ({props.host.hostname})
+          </span>
         </div>
       </td>
     </tr>
@@ -819,18 +821,15 @@ const DockerContainerRow: Component<{
   const hostStatus = createMemo(() => getDockerHostStatusIndicator(host));
   const hostDisplayName = () => getHostDisplayName(host);
   const rowId = buildRowId(host, props.row);
-  const resourceId = () => `${host.id}:container:${container.id || container.name}`;
-  const isEditingUrl = createMemo(() => currentlyEditingDockerResourceId() === resourceId());
+
   const resourceIndent = () => props.resourceIndentClass ?? GROUPED_RESOURCE_INDENT;
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
+  const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
+  const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>('1h');
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
   const expanded = createMemo(() => currentlyExpandedRowId() === rowId);
-  const editingUrlValue = createMemo(() => {
-    dockerEditingValuesVersion(); // Subscribe to changes
-    return dockerEditingValues.get(resourceId()) || '';
-  });
-  let urlInputRef: HTMLInputElement | undefined;
+
 
   const batchState = createMemo(() => {
     if (!props.batchUpdateState) return undefined;
@@ -910,29 +909,22 @@ const DockerContainerRow: Component<{
     );
   });
 
-  // Update custom URL when prop changes, but only if we're not currently editing
+  // Update custom URL when prop changes
   createEffect(() => {
-    if (currentlyEditingDockerResourceId() !== resourceId()) {
-      const prevUrl = customUrl();
-      const newUrl = props.customUrl;
+    const prevUrl = customUrl();
+    const newUrl = props.customUrl;
 
-      // Only animate when URL transitions from empty to having a value
-      if (!prevUrl && newUrl) {
-        setShouldAnimateIcon(true);
-        setTimeout(() => setShouldAnimateIcon(false), 200);
-      }
-
-      setCustomUrl(newUrl);
+    // Only animate when URL transitions from empty to having a value
+    if (!prevUrl && newUrl) {
+      setShouldAnimateIcon(true);
+      setTimeout(() => setShouldAnimateIcon(false), 200);
     }
+
+    setCustomUrl(newUrl);
   });
 
   // Auto-focus the input when editing starts
-  createEffect(() => {
-    if (isEditingUrl() && urlInputRef) {
-      urlInputRef.focus();
-      urlInputRef.select();
-    }
-  });
+
 
   const toggle = (event: MouseEvent) => {
     const target = event.target as HTMLElement;
@@ -943,151 +935,12 @@ const DockerContainerRow: Component<{
     setCurrentlyExpandedRowId(prev => prev === rowId ? null : rowId);
   };
 
-  const startEditingUrl = (event: MouseEvent) => {
-    event.stopPropagation();
-    event.preventDefault();
 
-    // Calculate popover position from the button
-    const button = event.currentTarget as HTMLElement;
-    const rect = button.getBoundingClientRect();
-    setDockerPopoverPosition({ top: rect.bottom + 4, left: Math.max(8, rect.left - 100) });
-
-    // If another resource is being edited, save it first
-    const currentEditing = currentlyEditingDockerResourceId();
-    if (currentEditing !== null && currentEditing !== resourceId()) {
-      const currentInput = document.querySelector(`input[data-resource-id="${currentEditing}"]`) as HTMLInputElement;
-      if (currentInput) {
-        currentInput.blur();
-      }
-    }
-
-    dockerEditingValues.set(resourceId(), customUrl() || '');
-    setDockerEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingDockerResourceId(resourceId());
-  };
 
   // Add global click handler to close editor
-  createEffect(() => {
-    if (isEditingUrl()) {
-      const handleGlobalClick = (e: MouseEvent) => {
-        if (currentlyEditingDockerResourceId() !== resourceId()) return;
 
-        const target = e.target as HTMLElement;
-        const isClickingResourceName = target.closest('[data-resource-name-editable]');
 
-        if (!target.closest('[data-url-editor]') && !isClickingResourceName) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          cancelEditingUrl();
-        }
-      };
 
-      const handleGlobalMouseDown = (e: MouseEvent) => {
-        if (currentlyEditingDockerResourceId() !== resourceId()) return;
-
-        const target = e.target as HTMLElement;
-        const isClickingResourceName = target.closest('[data-resource-name-editable]');
-
-        if (!target.closest('[data-url-editor]') && !isClickingResourceName) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-        }
-      };
-
-      document.addEventListener('mousedown', handleGlobalMouseDown, true);
-      document.addEventListener('click', handleGlobalClick, true);
-      return () => {
-        document.removeEventListener('mousedown', handleGlobalMouseDown, true);
-        document.removeEventListener('click', handleGlobalClick, true);
-      };
-    }
-  });
-
-  const saveUrl = async () => {
-    if (currentlyEditingDockerResourceId() !== resourceId()) return;
-
-    const newUrl = (dockerEditingValues.get(resourceId()) || '').trim();
-
-    // Clear global editing state
-    dockerEditingValues.delete(resourceId());
-    setDockerEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingDockerResourceId(null);
-    setDockerPopoverPosition(null);
-
-    // If URL hasn't changed, don't save
-    if (newUrl === (customUrl() || '')) return;
-
-    // Animate if transitioning from no URL to having a URL
-    const hadUrl = !!customUrl();
-    if (!hadUrl && newUrl) {
-      setShouldAnimateIcon(true);
-      setTimeout(() => setShouldAnimateIcon(false), 200);
-    }
-
-    // Optimistically update local and parent state immediately
-    setCustomUrl(newUrl || undefined);
-    if (props.onCustomUrlUpdate) {
-      props.onCustomUrlUpdate(resourceId(), newUrl);
-    }
-
-    try {
-      await DockerMetadataAPI.updateMetadata(resourceId(), { customUrl: newUrl });
-
-      if (newUrl) {
-        showSuccess('Container URL saved');
-      } else {
-        showSuccess('Container URL cleared');
-      }
-    } catch (err: any) {
-      logger.error('Failed to save container URL:', err);
-      showError(err.message || 'Failed to save container URL');
-      // Revert on error
-      setCustomUrl(hadUrl ? customUrl() : undefined);
-      if (props.onCustomUrlUpdate) {
-        props.onCustomUrlUpdate(resourceId(), hadUrl ? customUrl() || '' : '');
-      }
-    }
-  };
-
-  const deleteUrl = async () => {
-    if (currentlyEditingDockerResourceId() !== resourceId()) return;
-
-    // Clear global editing state
-    dockerEditingValues.delete(resourceId());
-    setDockerEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingDockerResourceId(null);
-    setDockerPopoverPosition(null);
-
-    // If there was a URL set, delete it
-    if (customUrl()) {
-      try {
-        await DockerMetadataAPI.updateMetadata(resourceId(), { customUrl: '' });
-        setCustomUrl(undefined);
-
-        // Notify parent to update metadata
-        if (props.onCustomUrlUpdate) {
-          props.onCustomUrlUpdate(resourceId(), '');
-        }
-
-        showSuccess('Container URL removed');
-      } catch (err: any) {
-        logger.error('Failed to remove container URL:', err);
-        showError(err.message || 'Failed to remove container URL');
-      }
-    }
-  };
-
-  const cancelEditingUrl = () => {
-    if (currentlyEditingDockerResourceId() !== resourceId()) return;
-
-    // Just close without saving
-    dockerEditingValues.delete(resourceId());
-    setDockerEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingDockerResourceId(null);
-    setDockerPopoverPosition(null);
-  };
 
   const cpuPercent = () => Math.max(0, Math.min(100, container.cpuPercent ?? 0));
   const metricsKey = buildMetricKey('dockerContainer', container.id);
@@ -1133,6 +986,11 @@ const DockerContainerRow: Component<{
         return (
           <div class={`${resourceIndent()} pr-2 py-0.5 overflow-hidden`}>
             <div class="flex items-center gap-1.5 min-w-0">
+              <div class={`transition-transform duration-200 ${expanded() ? 'rotate-90' : ''} ${!hasDrawerContent() ? 'invisible' : ''}`}>
+                <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
               <StatusDot
                 variant={containerStatusIndicator().variant}
                 title={statusLabel()}
@@ -1174,16 +1032,7 @@ const DockerContainerRow: Component<{
                     </a>
                   </Show>
                   {/* Edit URL button - shows on hover */}
-                  <button
-                    type="button"
-                    onClick={startEditingUrl}
-                    class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
-                    title={customUrl() ? 'Edit URL' : 'Add URL'}
-                  >
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
+
                   <Show when={props.showHostContext}>
                     <span
                       class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0 max-w-[120px]"
@@ -1336,396 +1185,473 @@ const DockerContainerRow: Component<{
       </tr>
 
       {/* URL editing popover - using shared component */}
-      <UrlEditPopover
-        isOpen={isEditingUrl()}
-        value={editingUrlValue()}
-        position={dockerPopoverPosition()}
-        isSaving={false}
-        hasExistingUrl={!!customUrl()}
-        placeholder="https://example.com:8080"
-        helpText="Add a URL to quickly access this container's web interface"
-        onValueChange={(value) => { dockerEditingValues.set(resourceId(), value); setDockerEditingValuesVersion(v => v + 1); }}
-        onSave={saveUrl}
-        onCancel={cancelEditingUrl}
-        onDelete={deleteUrl}
-      />
+
 
       <Show when={expanded() && hasDrawerContent()}>
         <tr>
           <td colspan={DOCKER_COLUMNS.length} class="p-0">
             <div class="w-0 min-w-full bg-gray-50 dark:bg-gray-900/50 px-4 py-3 overflow-hidden">
-              <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full">
-                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                    Summary
-                  </div>
-                  <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">Runtime</span>
-                      <span
-                        class={`inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${runtimeInfo.badgeClass}`}
-                        title={runtimeInfo.raw || runtimeInfo.label}
-                      >
-                        {runtimeInfo.label}
-                        <Show when={runtimeVersion()}>
-                          {(version) => (
-                            <span class="text-[10px] text-gray-500 dark:text-gray-400">{version()}</span>
-                          )}
-                        </Show>
-                      </span>
-                    </div>
-                    <div class="flex items-start justify-between gap-2">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">Image</span>
-                      <span class="flex-1 truncate text-right text-gray-600 dark:text-gray-300" title={container.image}>
-                        {container.image || '—'}
-                      </span>
-                    </div>
-                    <Show when={podName()}>
-                      {(name) => (
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="font-medium text-gray-700 dark:text-gray-200">Pod</span>
-                          <span class="text-right text-gray-600 dark:text-gray-300">
-                            {name()}
-                            <Show when={isPodInfra()}>
-                              <span class="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                                infra
-                              </span>
-                            </Show>
-                          </span>
-                        </div>
-                      )}
-                    </Show>
-                    <Show when={podmanMetadata()?.composeProject}>
-                      {(project) => (
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="font-medium text-gray-700 dark:text-gray-200">Compose Project</span>
-                          <span class="text-right text-gray-600 dark:text-gray-300">{project()}</span>
-                        </div>
-                      )}
-                    </Show>
-                    <Show when={podmanMetadata()?.composeService}>
-                      {(service) => (
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="font-medium text-gray-700 dark:text-gray-200">Compose Service</span>
-                          <span class="text-right text-gray-600 dark:text-gray-300">{service()}</span>
-                        </div>
-                      )}
-                    </Show>
-                    <Show when={podmanMetadata()?.autoUpdatePolicy}>
-                      {(policy) => (
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="font-medium text-gray-700 dark:text-gray-200">Auto Update</span>
-                          <span class="text-right text-gray-600 dark:text-gray-300">
-                            {policy()}
-                            <Show when={podmanMetadata()?.autoUpdateRestart}>
-                              {(restart) => (
-                                <span class="ml-2 text-[10px] text-gray-500 dark:text-gray-400">restart: {restart()}</span>
-                              )}
-                            </Show>
-                          </span>
-                        </div>
-                      )}
-                    </Show>
-                    <Show when={podmanMetadata()?.userNamespace}>
-                      {(userns) => (
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="font-medium text-gray-700 dark:text-gray-200">User Namespace</span>
-                          <span class="text-right text-gray-600 dark:text-gray-300">{userns()}</span>
-                        </div>
-                      )}
-                    </Show>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
-                      <span class="text-right text-gray-600 dark:text-gray-300">{statusLabel()}</span>
-                    </div>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">Restarts</span>
-                      <span class="text-right text-gray-600 dark:text-gray-300">{restarts()}</span>
-                    </div>
-                    <Show when={createdRelative()}>
-                      {(created) => (
-                        <div class="flex flex-col gap-0.5">
-                          <span class="font-medium text-gray-700 dark:text-gray-200">Created</span>
-                          <div class="text-right text-gray-600 dark:text-gray-300">
-                            {created()}
-                            <Show when={createdAbsolute()}>
-                              {(abs) => (
-                                <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
-                              )}
-                            </Show>
-                          </div>
-                        </div>
-                      )}
-                    </Show>
-                    <Show when={startedRelative()}>
-                      {(started) => (
-                        <div class="flex flex-col gap-0.5">
-                          <span class="font-medium text-gray-700 dark:text-gray-200">Started</span>
-                          <div class="text-right text-gray-600 dark:text-gray-300">
-                            {started()}
-                            <Show when={startedAbsolute()}>
-                              {(abs) => (
-                                <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
-                              )}
-                            </Show>
-                          </div>
-                        </div>
-                      )}
-                    </Show>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">Uptime</span>
-                      <span class="text-right text-gray-600 dark:text-gray-300">{uptime()}</span>
-                    </div>
-                  </div>
-                  <Show when={runtimeInfo.id === 'podman'}>
-                    <div class="mt-3 rounded border border-dashed border-purple-200 px-2 py-1 text-[10px] text-purple-700 dark:border-purple-700/60 dark:text-purple-200">
-                      Podman hosts report container metrics, but Swarm services and tasks are unavailable. Runtime annotations and compose metadata appear below when present.
-                    </div>
-                  </Show>
-                </div>
-                <Show when={container.ports && container.ports.length > 0}>
+              <div class="flex border-b border-gray-200 dark:border-gray-700/50 mb-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm sticky top-0 z-10 -mx-4 px-4 pt-2">
+                <button
+                  type="button"
+                  class={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab() === 'overview' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+                  onClick={(e) => { e.stopPropagation(); setActiveTab('overview'); }}
+                >
+                  Overview
+                </button>
+                <button
+                  type="button"
+                  class={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab() === 'discovery' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+                  onClick={(e) => { e.stopPropagation(); setActiveTab('discovery'); }}
+                >
+                  Discovery
+                </button>
+              </div>
+
+              <div class={activeTab() === 'overview' ? '' : 'hidden'}>
+                <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full">
                   <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                     <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                      Ports
+                      Summary
                     </div>
-                    <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
-                      {container.ports!.map((port) => {
-                        const label = port.publicPort
-                          ? `${port.publicPort}:${port.privatePort}/${port.protocol}`
-                          : `${port.privatePort}/${port.protocol}`;
-                        return (
-                          <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                            {label}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </Show>
-
-                <Show when={container.networks && container.networks.length > 0}>
-                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                      Networks
-                    </div>
-                    <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                      {container.networks!.map((network) => (
-                        <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
-                          <div class="font-medium text-gray-700 dark:text-gray-200">{network.name}</div>
-                          <div class="mt-0.5 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
-                            <Show when={network.ipv4}>
-                              <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                                {network.ipv4}
-                              </span>
-                            </Show>
-                            <Show when={network.ipv6}>
-                              <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                                {network.ipv6}
-                              </span>
-                            </Show>
+                    <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Runtime</span>
+                        <span
+                          class={`inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${runtimeInfo.badgeClass}`}
+                          title={runtimeInfo.raw || runtimeInfo.label}
+                        >
+                          {runtimeInfo.label}
+                          <Show when={runtimeVersion()}>
+                            {(version) => (
+                              <span class="text-[10px] text-gray-500 dark:text-gray-400">{version()}</span>
+                            )}
+                          </Show>
+                        </span>
+                      </div>
+                      <div class="flex items-start justify-between gap-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Image</span>
+                        <span class="flex-1 truncate text-right text-gray-600 dark:text-gray-300" title={container.image}>
+                          {container.image || '—'}
+                        </span>
+                      </div>
+                      <Show when={podName()}>
+                        {(name) => (
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="font-medium text-gray-700 dark:text-gray-200">Pod</span>
+                            <span class="text-right text-gray-600 dark:text-gray-300">
+                              {name()}
+                              <Show when={isPodInfra()}>
+                                <span class="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                                  infra
+                                </span>
+                              </Show>
+                            </span>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </Show>
-
-                <Show when={hasPodmanMetadata()}>
-                  <div class="rounded border border-purple-200 bg-white/70 p-3 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-purple-700 dark:text-purple-200">
-                      Podman Metadata
-                    </div>
-                    <div class="mt-1 space-y-2 text-[11px] text-gray-600 dark:text-gray-300">
-                      <For each={podmanMetadataSections()}>
-                        {(section) => (
-                          <div class="space-y-1 border-b border-purple-100 pb-1 last:border-b-0 last:pb-0 dark:border-purple-800/30">
-                            <div class="text-[10px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">
-                              {section.title}
-                            </div>
-                            <div class="space-y-1">
-                              <For each={section.items}>
-                                {(item) => (
-                                  <div class="flex items-start justify-between gap-2">
-                                    <span class="font-medium text-gray-700 dark:text-gray-200">{item.label}</span>
-                                    <span
-                                      class="max-w-[220px] break-all text-right text-gray-600 dark:text-gray-300"
-                                      title={item.value || '—'}
-                                    >
-                                      {item.value || '—'}
-                                    </span>
-                                  </div>
+                        )}
+                      </Show>
+                      <Show when={podmanMetadata()?.composeProject}>
+                        {(project) => (
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="font-medium text-gray-700 dark:text-gray-200">Compose Project</span>
+                            <span class="text-right text-gray-600 dark:text-gray-300">{project()}</span>
+                          </div>
+                        )}
+                      </Show>
+                      <Show when={podmanMetadata()?.composeService}>
+                        {(service) => (
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="font-medium text-gray-700 dark:text-gray-200">Compose Service</span>
+                            <span class="text-right text-gray-600 dark:text-gray-300">{service()}</span>
+                          </div>
+                        )}
+                      </Show>
+                      <Show when={podmanMetadata()?.autoUpdatePolicy}>
+                        {(policy) => (
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="font-medium text-gray-700 dark:text-gray-200">Auto Update</span>
+                            <span class="text-right text-gray-600 dark:text-gray-300">
+                              {policy()}
+                              <Show when={podmanMetadata()?.autoUpdateRestart}>
+                                {(restart) => (
+                                  <span class="ml-2 text-[10px] text-gray-500 dark:text-gray-400">restart: {restart()}</span>
                                 )}
-                              </For>
+                              </Show>
+                            </span>
+                          </div>
+                        )}
+                      </Show>
+                      <Show when={podmanMetadata()?.userNamespace}>
+                        {(userns) => (
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="font-medium text-gray-700 dark:text-gray-200">User Namespace</span>
+                            <span class="text-right text-gray-600 dark:text-gray-300">{userns()}</span>
+                          </div>
+                        )}
+                      </Show>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
+                        <span class="text-right text-gray-600 dark:text-gray-300">{statusLabel()}</span>
+                      </div>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Restarts</span>
+                        <span class="text-right text-gray-600 dark:text-gray-300">{restarts()}</span>
+                      </div>
+                      <Show when={createdRelative()}>
+                        {(created) => (
+                          <div class="flex flex-col gap-0.5">
+                            <span class="font-medium text-gray-700 dark:text-gray-200">Created</span>
+                            <div class="text-right text-gray-600 dark:text-gray-300">
+                              {created()}
+                              <Show when={createdAbsolute()}>
+                                {(abs) => (
+                                  <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
+                                )}
+                              </Show>
                             </div>
                           </div>
                         )}
-                      </For>
-                    </div>
-                  </div>
-                </Show>
-
-                <Show when={hasBlockIo()}>
-                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                      Block I/O
-                    </div>
-                    <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                      <div class="flex items-center justify-between">
-                        <span>Read</span>
-                        <div class="text-right">
-                          <div class="font-semibold text-gray-900 dark:text-gray-100">
-                            {formatBytes(blockIoReadBytes())}
-                          </div>
-                          <Show when={blockIoReadRateLabel()}>
-                            <div class="text-[10px] text-gray-500 dark:text-gray-400">
-                              {blockIoReadRateLabel()}
-                            </div>
-                          </Show>
-                        </div>
-                      </div>
-                      <div class="flex items-center justify-between">
-                        <span>Write</span>
-                        <div class="text-right">
-                          <div class="font-semibold text-gray-900 dark:text-gray-100">
-                            {formatBytes(blockIoWriteBytes())}
-                          </div>
-                          <Show when={blockIoWriteRateLabel()}>
-                            <div class="text-[10px] text-gray-500 dark:text-gray-400">
-                              {blockIoWriteRateLabel()}
-                            </div>
-                          </Show>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Show>
-
-                <Show when={hasMounts()}>
-                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                      Mounts
-                    </div>
-                    <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                      <For each={mounts()}>
-                        {(mount) => {
-                          const destination = mount.destination || mount.source || mount.name || 'mount';
-                          const rw = mount.rw === false ? 'read-only' : 'read-write';
-                          return (
-                            <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="truncate font-medium text-gray-700 dark:text-gray-200" title={destination}>
-                                  {destination}
-                                </span>
-                                <Show when={mount.type}>
-                                  <span class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                    {mount.type}
-                                  </span>
-                                </Show>
-                              </div>
-                              <Show when={mount.source}>
-                                <div class="mt-1 truncate text-[11px] text-gray-600 dark:text-gray-300" title={mount.source}>
-                                  {mount.source}
-                                </div>
+                      </Show>
+                      <Show when={startedRelative()}>
+                        {(started) => (
+                          <div class="flex flex-col gap-0.5">
+                            <span class="font-medium text-gray-700 dark:text-gray-200">Started</span>
+                            <div class="text-right text-gray-600 dark:text-gray-300">
+                              {started()}
+                              <Show when={startedAbsolute()}>
+                                {(abs) => (
+                                  <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
+                                )}
                               </Show>
-                              <div class="mt-1 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
-                                <span
-                                  class={`rounded px-1.5 py-0.5 ${mount.rw === false
-                                    ? 'bg-gray-200 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200'
-                                    : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                    }`}
-                                >
-                                  {rw}
+                            </div>
+                          </div>
+                        )}
+                      </Show>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Uptime</span>
+                        <span class="text-right text-gray-600 dark:text-gray-300">{uptime()}</span>
+                      </div>
+                    </div>
+                    <Show when={runtimeInfo.id === 'podman'}>
+                      <div class="mt-3 rounded border border-dashed border-purple-200 px-2 py-1 text-[10px] text-purple-700 dark:border-purple-700/60 dark:text-purple-200">
+                        Podman hosts report container metrics, but Swarm services and tasks are unavailable. Runtime annotations and compose metadata appear below when present.
+                      </div>
+                    </Show>
+                  </div>
+                  <Show when={container.ports && container.ports.length > 0}>
+                    <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                        Ports
+                      </div>
+                      <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
+                        {container.ports!.map((port) => {
+                          const label = port.publicPort
+                            ? `${port.publicPort}:${port.privatePort}/${port.protocol}`
+                            : `${port.privatePort}/${port.protocol}`;
+                          return (
+                            <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={container.networks && container.networks.length > 0}>
+                    <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                        Networks
+                      </div>
+                      <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                        {container.networks!.map((network) => (
+                          <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
+                            <div class="font-medium text-gray-700 dark:text-gray-200">{network.name}</div>
+                            <div class="mt-0.5 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                              <Show when={network.ipv4}>
+                                <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                  {network.ipv4}
                                 </span>
-                                <Show when={mount.mode}>
-                                  <span class="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
-                                    mode: {mount.mode}
-                                  </span>
-                                </Show>
-                                <Show when={mount.driver}>
-                                  <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                                    {mount.driver}
-                                  </span>
-                                </Show>
-                                <Show when={mount.name}>
-                                  <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                                    {mount.name}
-                                  </span>
-                                </Show>
-                                <Show when={mount.propagation}>
-                                  <span class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300">
-                                    {mount.propagation}
-                                  </span>
-                                </Show>
+                              </Show>
+                              <Show when={network.ipv6}>
+                                <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                                  {network.ipv6}
+                                </span>
+                              </Show>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={hasPodmanMetadata()}>
+                    <div class="rounded border border-purple-200 bg-white/70 p-3 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-purple-700 dark:text-purple-200">
+                        Podman Metadata
+                      </div>
+                      <div class="mt-1 space-y-2 text-[11px] text-gray-600 dark:text-gray-300">
+                        <For each={podmanMetadataSections()}>
+                          {(section) => (
+                            <div class="space-y-1 border-b border-purple-100 pb-1 last:border-b-0 last:pb-0 dark:border-purple-800/30">
+                              <div class="text-[10px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">
+                                {section.title}
+                              </div>
+                              <div class="space-y-1">
+                                <For each={section.items}>
+                                  {(item) => (
+                                    <div class="flex items-start justify-between gap-2">
+                                      <span class="font-medium text-gray-700 dark:text-gray-200">{item.label}</span>
+                                      <span
+                                        class="max-w-[220px] break-all text-right text-gray-600 dark:text-gray-300"
+                                        title={item.value || '—'}
+                                      >
+                                        {item.value || '—'}
+                                      </span>
+                                    </div>
+                                  )}
+                                </For>
                               </div>
                             </div>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={hasBlockIo()}>
+                    <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                        Block I/O
+                      </div>
+                      <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                        <div class="flex items-center justify-between">
+                          <span>Read</span>
+                          <div class="text-right">
+                            <div class="font-semibold text-gray-900 dark:text-gray-100">
+                              {formatBytes(blockIoReadBytes())}
+                            </div>
+                            <Show when={blockIoReadRateLabel()}>
+                              <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                                {blockIoReadRateLabel()}
+                              </div>
+                            </Show>
+                          </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                          <span>Write</span>
+                          <div class="text-right">
+                            <div class="font-semibold text-gray-900 dark:text-gray-100">
+                              {formatBytes(blockIoWriteBytes())}
+                            </div>
+                            <Show when={blockIoWriteRateLabel()}>
+                              <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                                {blockIoWriteRateLabel()}
+                              </div>
+                            </Show>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={hasMounts()}>
+                    <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                        Mounts
+                      </div>
+                      <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                        <For each={mounts()}>
+                          {(mount) => {
+                            const destination = mount.destination || mount.source || mount.name || 'mount';
+                            const rw = mount.rw === false ? 'read-only' : 'read-write';
+                            return (
+                              <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
+                                <div class="flex items-center justify-between gap-2">
+                                  <span class="truncate font-medium text-gray-700 dark:text-gray-200" title={destination}>
+                                    {destination}
+                                  </span>
+                                  <Show when={mount.type}>
+                                    <span class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                      {mount.type}
+                                    </span>
+                                  </Show>
+                                </div>
+                                <Show when={mount.source}>
+                                  <div class="mt-1 truncate text-[11px] text-gray-600 dark:text-gray-300" title={mount.source}>
+                                    {mount.source}
+                                  </div>
+                                </Show>
+                                <div class="mt-1 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                                  <span
+                                    class={`rounded px-1.5 py-0.5 ${mount.rw === false
+                                      ? 'bg-gray-200 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200'
+                                      : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                      }`}
+                                  >
+                                    {rw}
+                                  </span>
+                                  <Show when={mount.mode}>
+                                    <span class="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
+                                      mode: {mount.mode}
+                                    </span>
+                                  </Show>
+                                  <Show when={mount.driver}>
+                                    <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                      {mount.driver}
+                                    </span>
+                                  </Show>
+                                  <Show when={mount.name}>
+                                    <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                                      {mount.name}
+                                    </span>
+                                  </Show>
+                                  <Show when={mount.propagation}>
+                                    <span class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300">
+                                      {mount.propagation}
+                                    </span>
+                                  </Show>
+                                </div>
+                              </div>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={container.labels && Object.keys(container.labels).length > 0}>
+                    <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                        Labels
+                      </div>
+                      <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
+                        {Object.entries(container.labels!).map(([key, value]) => {
+                          const fullLabel = value ? `${key}: ${value}` : key;
+                          return (
+                            <span
+                              class="max-w-full truncate rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200"
+                              title={fullLabel}
+                            >
+                              {key}
+                              <Show when={value}>: {value}</Show>
+                            </span>
                           );
-                        }}
-                      </For>
+                        })}
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={container.env && container.env.length > 0}>
+                    <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                        Environment
+                      </div>
+                      <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
+                        {container.env!.map((envVar) => {
+                          const eqIndex = envVar.indexOf('=');
+                          if (eqIndex === -1) return null;
+                          const name = envVar.substring(0, eqIndex);
+                          const value = envVar.substring(eqIndex + 1);
+                          const isMasked = value === '***';
+                          return (
+                            <span
+                              class={`max-w-full truncate rounded px-1.5 py-0.5 ${isMasked
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
+                                : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200'
+                                }`}
+                              title={isMasked ? `${name} (masked for security)` : `${name}=${value}`}
+                            >
+                              {name}
+                              <Show when={!isMasked && value}>
+                                <span class="text-green-600 dark:text-green-300">={value}</span>
+                              </Show>
+                              <Show when={isMasked}>
+                                <span class="text-amber-500 dark:text-amber-400 ml-0.5">🔒</span>
+                              </Show>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </Show>
+                </div>
+
+                <div class="mt-3 space-y-3">
+                  <div class="flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <path stroke-linecap="round" d="M12 6v6l4 2" />
+                    </svg>
+                    <select
+                      value={historyRange()}
+                      onChange={(e) => setHistoryRange(e.currentTarget.value as HistoryTimeRange)}
+                      class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                      style={{ "background-image": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", "background-repeat": "no-repeat", "background-position": "right 6px center" }}
+                    >
+                      <option value="1h">Last 1 hour</option>
+                      <option value="6h">Last 6 hours</option>
+                      <option value="12h">Last 12 hours</option>
+                      <option value="24h">Last 24 hours</option>
+                      <option value="7d">Last 7 days</option>
+                      <option value="30d">Last 30 days</option>
+                      <option value="90d">Last 90 days</option>
+                    </select>
+                  </div>
+
+                  <div class="relative">
+                    <div class="space-y-3">
+                      <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.5rem)] [&>*]:min-w-[250px]">
+                        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                          <HistoryChart
+                            resourceType="docker"
+                            resourceId={container.id}
+                            metric="cpu"
+                            height={120}
+                            color="#8b5cf6"
+                            label="CPU"
+                            unit="%"
+                            range={historyRange()}
+                            hideSelector={true}
+                            compact={true}
+                            hideLock={true}
+                          />
+                        </div>
+                        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                          <HistoryChart
+                            resourceType="docker"
+                            resourceId={container.id}
+                            metric="memory"
+                            height={120}
+                            color="#f59e0b"
+                            label="Memory"
+                            unit="%"
+                            range={historyRange()}
+                            hideSelector={true}
+                            compact={true}
+                            hideLock={true}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </Show>
-
-                <Show when={container.labels && Object.keys(container.labels).length > 0}>
-                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                      Labels
-                    </div>
-                    <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
-                      {Object.entries(container.labels!).map(([key, value]) => {
-                        const fullLabel = value ? `${key}: ${value}` : key;
-                        return (
-                          <span
-                            class="max-w-full truncate rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200"
-                            title={fullLabel}
-                          >
-                            {key}
-                            <Show when={value}>: {value}</Show>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </Show>
-
-                <Show when={container.env && container.env.length > 0}>
-                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                      Environment
-                    </div>
-                    <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
-                      {container.env!.map((envVar) => {
-                        const eqIndex = envVar.indexOf('=');
-                        if (eqIndex === -1) return null;
-                        const name = envVar.substring(0, eqIndex);
-                        const value = envVar.substring(eqIndex + 1);
-                        const isMasked = value === '***';
-                        return (
-                          <span
-                            class={`max-w-full truncate rounded px-1.5 py-0.5 ${isMasked
-                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
-                              : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200'
-                              }`}
-                            title={isMasked ? `${name} (masked for security)` : `${name}=${value}`}
-                          >
-                            {name}
-                            <Show when={!isMasked && value}>
-                              <span class="text-green-600 dark:text-green-300">={value}</span>
-                            </Show>
-                            <Show when={isMasked}>
-                              <span class="text-amber-500 dark:text-amber-400 ml-0.5">🔒</span>
-                            </Show>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </Show>
-
-
-
-
-
+                </div>
               </div>
+
+              <Show when={activeTab() === 'discovery'}>
+                <DiscoveryTab
+                  resourceType="docker"
+                  hostId={host.id}
+                  resourceId={container.id}
+                  hostname={container.name}
+                  guestId={container.id}
+                  customUrl={customUrl()}
+                  onCustomUrlChange={(url) => {
+                    setCustomUrl(url || undefined);
+                    props.onCustomUrlUpdate?.(container.id, url);
+                  }}
+                />
+              </Show>
             </div>
           </td>
         </tr>
@@ -1745,7 +1671,8 @@ const DockerServiceRow: Component<{
   const { host, service, tasks } = props.row;
   const rowId = buildRowId(host, props.row);
   const resourceId = () => `${host.id}:service:${service.id || service.name}`;
-  const isEditingUrl = createMemo(() => currentlyEditingDockerResourceId() === resourceId());
+  const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
+  const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>('1h');
   const hostStatus = createMemo(() => getDockerHostStatusIndicator(host));
   const hostDisplayName = () => getHostDisplayName(host);
   const resourceIndent = () => props.resourceIndentClass ?? GROUPED_RESOURCE_INDENT;
@@ -1753,194 +1680,37 @@ const DockerServiceRow: Component<{
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
   const expanded = createMemo(() => currentlyExpandedRowId() === rowId);
-  const editingUrlValue = createMemo(() => {
-    dockerEditingValuesVersion(); // Subscribe to changes
-    return dockerEditingValues.get(resourceId()) || '';
-  });
-  let urlInputRef: HTMLInputElement | undefined;
+
 
   const hasTasks = () => tasks.length > 0;
 
 
 
-  // Update custom URL when prop changes, but only if we're not currently editing
+  // Update custom URL when prop changes
   createEffect(() => {
-    if (currentlyEditingDockerResourceId() !== resourceId()) {
-      const prevUrl = customUrl();
-      const newUrl = props.customUrl;
+    const prevUrl = customUrl();
+    const newUrl = props.customUrl;
 
-      // Only animate when URL transitions from empty to having a value
-      if (!prevUrl && newUrl) {
-        setShouldAnimateIcon(true);
-        setTimeout(() => setShouldAnimateIcon(false), 200);
-      }
-
-      setCustomUrl(newUrl);
+    // Only animate when URL transitions from empty to having a value
+    if (!prevUrl && newUrl) {
+      setShouldAnimateIcon(true);
+      setTimeout(() => setShouldAnimateIcon(false), 200);
     }
+
+    setCustomUrl(newUrl);
   });
 
-  // Auto-focus the input when editing starts
-  createEffect(() => {
-    if (isEditingUrl() && urlInputRef) {
-      urlInputRef.focus();
-      urlInputRef.select();
-    }
-  });
+
 
   const toggle = (event: MouseEvent) => {
     const target = event.target as HTMLElement;
     if (target.closest('a, button, input, [data-prevent-toggle]')) return;
 
     // Standard drawer toggle
-    if (!hasTasks()) return;
     setCurrentlyExpandedRowId(prev => prev === rowId ? null : rowId);
   };
 
-  const startEditingUrl = (event: MouseEvent) => {
-    event.stopPropagation();
-    event.preventDefault();
 
-    // Calculate popover position from the button
-    const button = event.currentTarget as HTMLElement;
-    const rect = button.getBoundingClientRect();
-    setDockerPopoverPosition({ top: rect.bottom + 4, left: Math.max(8, rect.left - 100) });
-
-    // If another resource is being edited, save it first
-    const currentEditing = currentlyEditingDockerResourceId();
-    if (currentEditing !== null && currentEditing !== resourceId()) {
-      const currentInput = document.querySelector(`input[data-resource-id="${currentEditing}"]`) as HTMLInputElement;
-      if (currentInput) {
-        currentInput.blur();
-      }
-    }
-
-    dockerEditingValues.set(resourceId(), customUrl() || '');
-    setDockerEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingDockerResourceId(resourceId());
-  };
-
-  // Add global click handler to close editor
-  createEffect(() => {
-    if (isEditingUrl()) {
-      const handleGlobalClick = (e: MouseEvent) => {
-        if (currentlyEditingDockerResourceId() !== resourceId()) return;
-
-        const target = e.target as HTMLElement;
-        const isClickingResourceName = target.closest('[data-resource-name-editable]');
-
-        if (!target.closest('[data-url-editor]') && !isClickingResourceName) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          cancelEditingUrl();
-        }
-      };
-
-      const handleGlobalMouseDown = (e: MouseEvent) => {
-        if (currentlyEditingDockerResourceId() !== resourceId()) return;
-
-        const target = e.target as HTMLElement;
-        const isClickingResourceName = target.closest('[data-resource-name-editable]');
-
-        if (!target.closest('[data-url-editor]') && !isClickingResourceName) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-        }
-      };
-
-      document.addEventListener('mousedown', handleGlobalMouseDown, true);
-      document.addEventListener('click', handleGlobalClick, true);
-      return () => {
-        document.removeEventListener('mousedown', handleGlobalMouseDown, true);
-        document.removeEventListener('click', handleGlobalClick, true);
-      };
-    }
-  });
-
-  const saveUrl = async () => {
-    if (currentlyEditingDockerResourceId() !== resourceId()) return;
-
-    const newUrl = (dockerEditingValues.get(resourceId()) || '').trim();
-
-    // Clear global editing state
-    dockerEditingValues.delete(resourceId());
-    setDockerEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingDockerResourceId(null);
-    setDockerPopoverPosition(null);
-
-    // If URL hasn't changed, don't save
-    if (newUrl === (customUrl() || '')) return;
-
-    // Animate if transitioning from no URL to having a URL
-    const hadUrl = !!customUrl();
-    if (!hadUrl && newUrl) {
-      setShouldAnimateIcon(true);
-      setTimeout(() => setShouldAnimateIcon(false), 200);
-    }
-
-    // Optimistically update local and parent state immediately
-    setCustomUrl(newUrl || undefined);
-    if (props.onCustomUrlUpdate) {
-      props.onCustomUrlUpdate(resourceId(), newUrl);
-    }
-
-    try {
-      await DockerMetadataAPI.updateMetadata(resourceId(), { customUrl: newUrl });
-
-      if (newUrl) {
-        showSuccess('Service URL saved');
-      } else {
-        showSuccess('Service URL cleared');
-      }
-    } catch (err: any) {
-      logger.error('Failed to save service URL:', err);
-      showError(err.message || 'Failed to save service URL');
-      // Revert on error
-      setCustomUrl(hadUrl ? customUrl() : undefined);
-      if (props.onCustomUrlUpdate) {
-        props.onCustomUrlUpdate(resourceId(), hadUrl ? customUrl() || '' : '');
-      }
-    }
-  };
-
-  const deleteUrl = async () => {
-    if (currentlyEditingDockerResourceId() !== resourceId()) return;
-
-    // Clear global editing state
-    dockerEditingValues.delete(resourceId());
-    setDockerEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingDockerResourceId(null);
-    setDockerPopoverPosition(null);
-
-    // If there was a URL set, delete it
-    if (customUrl()) {
-      try {
-        await DockerMetadataAPI.updateMetadata(resourceId(), { customUrl: '' });
-        setCustomUrl(undefined);
-
-        // Notify parent to update metadata
-        if (props.onCustomUrlUpdate) {
-          props.onCustomUrlUpdate(resourceId(), '');
-        }
-
-        showSuccess('Service URL removed');
-      } catch (err: any) {
-        logger.error('Failed to remove service URL:', err);
-        showError(err.message || 'Failed to remove service URL');
-      }
-    }
-  };
-
-  const cancelEditingUrl = () => {
-    if (currentlyEditingDockerResourceId() !== resourceId()) return;
-
-    // Just close without saving
-    dockerEditingValues.delete(resourceId());
-    setDockerEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingDockerResourceId(null);
-    setDockerPopoverPosition(null);
-  };
 
   const badge = serviceHealthBadge(service);
   const updatedAt = ensureMs(service.updatedAt ?? service.createdAt);
@@ -1964,6 +1734,11 @@ const DockerServiceRow: Component<{
         return (
           <div class={`${resourceIndent()} pr-2 py-0.5`}>
             <div class="flex items-center gap-1.5 min-w-0">
+              <div class={`transition-transform duration-200 ${expanded() ? 'rotate-90' : ''}`}>
+                <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
               <StatusDot
                 variant={serviceStatusIndicator().variant}
                 title={badge.label}
@@ -1993,16 +1768,7 @@ const DockerServiceRow: Component<{
                     </a>
                   </Show>
                   {/* Edit URL button - shows on hover */}
-                  <button
-                    type="button"
-                    onClick={startEditingUrl}
-                    class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
-                    title={customUrl() ? 'Edit URL' : 'Add URL'}
-                  >
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
+
                   <Show when={service.stack}>
                     <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
                       Stack: {service.stack}
@@ -2085,7 +1851,7 @@ const DockerServiceRow: Component<{
   return (
     <>
       <tr
-        class={`transition-all duration-200 ${hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
+        class={`transition-all duration-200 cursor-pointer ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
@@ -2105,144 +1871,220 @@ const DockerServiceRow: Component<{
         </For>
       </tr>
 
-      {/* URL editing popover - using shared component */}
-      <UrlEditPopover
-        isOpen={isEditingUrl()}
-        value={editingUrlValue()}
-        position={dockerPopoverPosition()}
-        isSaving={false}
-        hasExistingUrl={!!customUrl()}
-        placeholder="https://example.com:8080"
-        helpText="Add a URL to quickly access this service's web interface"
-        onValueChange={(value) => { dockerEditingValues.set(resourceId(), value); setDockerEditingValuesVersion(v => v + 1); }}
-        onSave={saveUrl}
-        onCancel={cancelEditingUrl}
-        onDelete={deleteUrl}
-      />
-
-      <Show when={expanded() && hasTasks()}>
+      <Show when={expanded()}>
         <tr>
           <td colspan={DOCKER_COLUMNS.length} class="p-0">
             <div class="w-0 min-w-full bg-gray-50 dark:bg-gray-900/60 px-4 py-3 overflow-hidden">
-              <div class="space-y-3">
-                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                    <span>Tasks</span>
-                    <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
-                      {tasks.length} {tasks.length === 1 ? 'entry' : 'entries'}
-                    </span>
-                  </div>
-                  <div class="mt-2 overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800/60 text-xs">
-                      <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
-                        <tr>
-                          <th class="py-1 pr-2 text-left font-medium">Task</th>
-                          <th class="py-1 px-2 text-left font-medium w-[80px]">Type</th>
-                          <th class="py-1 px-2 text-left font-medium">Node</th>
-                          <th class="py-1 px-2 text-left font-medium">State</th>
-                          <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
-                          <th class="py-1 px-2 text-left font-medium w-[140px]">Memory</th>
-                          <th class="py-1 px-2 text-left font-medium">Updated</th>
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y divide-gray-100 dark:divide-gray-800/50">
-                        <For each={tasks}>
-                          {(task) => {
-                            const container = findContainerForTask(host.containers || [], task);
-                            const cpu = container?.cpuPercent ?? 0;
-                            const mem = container?.memoryPercent ?? 0;
-                            const updated = ensureMs(task.updatedAt ?? task.createdAt ?? task.startedAt);
-                            const taskLabel = () => {
-                              if (task.containerName) return task.containerName;
-                              if (task.containerId) return task.containerId.slice(0, 12);
-                              if (task.slot !== undefined) return `slot-${task.slot}`;
-                              return task.id ?? 'Task';
-                            };
-                            const taskTitle = () => {
-                              const label = taskLabel();
-                              if (task.containerId && task.containerId !== label) {
-                                return `${label} \u2014 ${task.containerId}`;
-                              }
-                              if (task.id && task.id !== label) {
-                                return `${label} \u2014 ${task.id}`;
-                              }
-                              return label;
-                            };
-                            const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
-                            const taskMetricsKey = container?.id ? buildMetricKey('dockerContainer', container.id) : undefined;
-                            const stateClass = () => {
-                              if (state === 'running') {
-                                return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-                              }
-                              if (state === 'failed' || state === 'error') {
-                                return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-                              }
-                              return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
-                            };
-                            return (
-                              <tr class="hover:bg-gray-100 dark:hover:bg-gray-800/40">
-                                <td class="py-1 pr-2">
-                                  <div class="flex items-center gap-1 text-sm text-gray-900 dark:text-gray-100">
-                                    <span class="truncate font-medium" title={taskTitle()}>
-                                      {taskLabel()}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td class="py-1 px-2">
-                                  <span
-                                    class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
-                                      'task',
-                                    )}`}
-                                  >
-                                    Task
-                                  </span>
-                                </td>
-                                <td class="py-1 px-2 text-gray-600 dark:text-gray-400">
-                                  {task.nodeName || task.nodeId || '—'}
-                                </td>
-                                <td class="py-1 px-2">
-                                  <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${stateClass()}`}>
-                                    {task.currentState || task.desiredState || 'Unknown'}
-                                  </span>
-                                </td>
-                                <td class="py-1 px-2 w-[120px]">
-                                  <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
-                                    <MetricBar
-                                      value={Math.min(100, cpu)}
-                                      label={formatPercent(cpu)}
-                                      type="cpu"
-                                      resourceId={taskMetricsKey}
-                                    />
-                                  </Show>
-                                </td>
-                                <td class="py-1 px-2 w-[140px]">
-                                  <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
-                                    <MetricBar
-                                      value={Math.min(100, mem)}
-                                      label={formatPercent(mem)}
-                                      type="memory"
-                                      resourceId={taskMetricsKey}
-                                    />
-                                  </Show>
-                                </td>
-                                <td class="py-1 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                                  <Show when={updated} fallback="—">
-                                    {(timestamp) => (
-                                      <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
-                                        {formatRelativeTime(timestamp())}
+              <div class="flex border-b border-gray-200 dark:border-gray-700/50 mb-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm sticky top-0 z-10 -mx-4 px-4 pt-2">
+                <button
+                  type="button"
+                  class={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab() === 'overview' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+                  onClick={(e) => { e.stopPropagation(); setActiveTab('overview'); }}
+                >
+                  Overview
+                </button>
+                <button
+                  type="button"
+                  class={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab() === 'discovery' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+                  onClick={(e) => { e.stopPropagation(); setActiveTab('discovery'); }}
+                >
+                  Discovery
+                </button>
+              </div>
+
+              <div class={activeTab() === 'overview' ? 'space-y-3' : 'hidden'}>
+                <Show when={hasTasks()} fallback={<div class="p-4 text-center text-sm text-gray-500 dark:text-gray-400">No tasks running.</div>}>
+                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                      <span>Tasks</span>
+                      <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
+                        {tasks.length} {tasks.length === 1 ? 'entry' : 'entries'}
+                      </span>
+                    </div>
+                    <div class="mt-2 overflow-x-auto">
+                      <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800/60 text-xs">
+                        <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
+                          <tr>
+                            <th class="py-1 pr-2 text-left font-medium">Task</th>
+                            <th class="py-1 px-2 text-left font-medium w-[80px]">Type</th>
+                            <th class="py-1 px-2 text-left font-medium">Node</th>
+                            <th class="py-1 px-2 text-left font-medium">State</th>
+                            <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
+                            <th class="py-1 px-2 text-left font-medium w-[140px]">Memory</th>
+                            <th class="py-1 px-2 text-left font-medium">Updated</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-800/50">
+                          <For each={tasks}>
+                            {(task) => {
+                              const container = findContainerForTask(host.containers || [], task);
+                              const cpu = container?.cpuPercent ?? 0;
+                              const mem = container?.memoryPercent ?? 0;
+                              const updated = ensureMs(task.updatedAt ?? task.createdAt ?? task.startedAt);
+                              const taskLabel = () => {
+                                if (task.containerName) return task.containerName;
+                                if (task.containerId) return task.containerId.slice(0, 12);
+                                if (task.slot !== undefined) return `slot-${task.slot}`;
+                                return task.id ?? 'Task';
+                              };
+                              const taskTitle = () => {
+                                const label = taskLabel();
+                                if (task.containerId && task.containerId !== label) {
+                                  return `${label} \u2014 ${task.containerId}`;
+                                }
+                                if (task.id && task.id !== label) {
+                                  return `${label} \u2014 ${task.id}`;
+                                }
+                                return label;
+                              };
+                              const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
+                              const taskMetricsKey = container?.id ? buildMetricKey('dockerContainer', container.id) : undefined;
+                              const stateClass = () => {
+                                if (state === 'running') {
+                                  return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+                                }
+                                if (state === 'failed' || state === 'error') {
+                                  return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+                                }
+                                return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+                              };
+                              return (
+                                <tr class="hover:bg-gray-100 dark:hover:bg-gray-800/40">
+                                  <td class="py-1 pr-2">
+                                    <div class="flex items-center gap-1 text-sm text-gray-900 dark:text-gray-100">
+                                      <span class="truncate font-medium" title={taskTitle()}>
+                                        {taskLabel()}
                                       </span>
-                                    )}
-                                  </Show>
-                                </td>
-                              </tr>
-                            );
-                          }}
-                        </For>
-                      </tbody>
-                    </table>
+                                    </div>
+                                  </td>
+                                  <td class="py-1 px-2">
+                                    <span
+                                      class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
+                                        'task',
+                                      )}`}
+                                    >
+                                      Task
+                                    </span>
+                                  </td>
+                                  <td class="py-1 px-2 text-gray-600 dark:text-gray-400">
+                                    {task.nodeName || task.nodeId || '—'}
+                                  </td>
+                                  <td class="py-1 px-2">
+                                    <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${stateClass()}`}>
+                                      {task.currentState || task.desiredState || 'Unknown'}
+                                    </span>
+                                  </td>
+                                  <td class="py-1 px-2 w-[120px]">
+                                    <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
+                                      <MetricBar
+                                        value={Math.min(100, cpu)}
+                                        label={formatPercent(cpu)}
+                                        type="cpu"
+                                        resourceId={taskMetricsKey}
+                                      />
+                                    </Show>
+                                  </td>
+                                  <td class="py-1 px-2 w-[140px]">
+                                    <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
+                                      <MetricBar
+                                        value={Math.min(100, mem)}
+                                        label={formatPercent(mem)}
+                                        type="memory"
+                                        resourceId={taskMetricsKey}
+                                      />
+                                    </Show>
+                                  </td>
+                                  <td class="py-1 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                                    <Show when={updated} fallback="—">
+                                      {(timestamp) => (
+                                        <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
+                                          {formatRelativeTime(timestamp())}
+                                        </span>
+                                      )}
+                                    </Show>
+                                  </td>
+                                </tr>
+                              );
+                            }}
+                          </For>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </Show>
+              </div>
+
+              <div class="mt-3 space-y-3">
+                <div class="flex items-center gap-2">
+                  <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <path stroke-linecap="round" d="M12 6v6l4 2" />
+                  </svg>
+                  <select
+                    value={historyRange()}
+                    onChange={(e) => setHistoryRange(e.currentTarget.value as HistoryTimeRange)}
+                    class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                    style={{ "background-image": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", "background-repeat": "no-repeat", "background-position": "right 6px center" }}
+                  >
+                    <option value="1h">Last 1 hour</option>
+                    <option value="6h">Last 6 hours</option>
+                    <option value="12h">Last 12 hours</option>
+                    <option value="24h">Last 24 hours</option>
+                  </select>
+                </div>
+
+                <div class="relative">
+                  <div class="space-y-3">
+                    <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.5rem)] [&>*]:min-w-[250px]">
+                      <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                        <HistoryChart
+                          resourceType="docker"
+                          resourceId={service.id || ''}
+                          metric="cpu"
+                          height={120}
+                          color="#8b5cf6"
+                          label="CPU"
+                          unit="%"
+                          range={historyRange()}
+                          hideSelector={true}
+                          compact={true}
+                          hideLock={true}
+                        />
+                      </div>
+                      <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                        <HistoryChart
+                          resourceType="docker"
+                          resourceId={service.id || ''}
+                          metric="memory"
+                          height={120}
+                          color="#f59e0b"
+                          label="Memory"
+                          unit="%"
+                          range={historyRange()}
+                          hideSelector={true}
+                          compact={true}
+                          hideLock={true}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
+
+              <Show when={activeTab() === 'discovery'}>
+                <DiscoveryTab
+                  resourceType="docker"
+                  hostId={host.id}
+                  resourceId={service.id || service.name || ''}
+                  hostname={service.name || service.id || 'Service'}
+                  guestId={resourceId()}
+                  customUrl={customUrl()}
+                  onCustomUrlChange={(url) => {
+                    setCustomUrl(url || undefined);
+                    props.onCustomUrlUpdate?.(resourceId(), url);
+                  }}
+                />
+              </Show>
             </div>
           </td>
         </tr>
@@ -2707,16 +2549,23 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                   }
                 >
                   <For each={orderedGroups()}>
-                    {(group) => (
-                      <>
-                        <DockerHostGroupHeader
-                          host={group.host}
-                          columnCount={DOCKER_COLUMNS.length}
-                          customUrl={props.dockerHostMetadata?.[group.host.id]?.customUrl}
-                        />
-                        <For each={group.rows}>{(row) => renderRow(row, true)}</For>
-                      </>
-                    )}
+                    {(group) => {
+                      const hostId = group.host.id;
+                      const metadata = props.dockerHostMetadata?.[hostId];
+                      return (
+                        <>
+                          <DockerHostGroupHeader
+                            host={group.host}
+                            columnCount={DOCKER_COLUMNS.length}
+                            customUrl={metadata?.customUrl}
+                            onCustomUrlUpdate={props.onHostCustomUrlUpdate}
+                          />
+                          <For each={group.rows}>
+                            {(row) => renderRow(row, true)}
+                          </For>
+                        </>
+                      );
+                    }}
                   </For>
                 </Show>
               </tbody>

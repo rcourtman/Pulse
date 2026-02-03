@@ -21,10 +21,10 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourcesAsLegacy } from '@/hooks/useResources';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { HostMetadataAPI, type HostMetadata } from '@/api/hostMetadata';
-import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
-import { showSuccess, showError } from '@/utils/toast';
+
 import { logger } from '@/utils/logger';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { HostDrawer } from './HostDrawer';
 
 // Column definition for hosts table
 export interface HostColumnDef {
@@ -661,6 +661,12 @@ export const HostsOverview: Component = () => {
   // This fixes the issue where props.hosts would not update when the underlying data changes
   const { asHosts } = useResourcesAsLegacy();
 
+  const [expandedHostId, setExpandedHostId] = createSignal<string | null>(null);
+
+  const toggleHostExpand = (hostId: string) => {
+    setExpandedHostId(prev => prev === hostId ? null : hostId);
+  };
+
   // Column visibility management
   const columnVisibility = useColumnVisibility(
     STORAGE_KEYS.HOSTS_HIDDEN_COLUMNS,
@@ -1047,7 +1053,20 @@ export const HostsOverview: Component = () => {
                       </thead>
                       <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         <For each={filteredHosts()}>
-                          {(host) => <HostRow host={host} isColVisible={isColVisible} isMobile={isMobile} getDiskStats={getDiskStats} customUrl={getHostCustomUrl(host.id)} onUpdateCustomUrl={updateHostCustomUrl} onDeleteCustomUrl={deleteHostCustomUrl} />}
+                          {(host) => (
+                            <HostRow
+                              host={host}
+                              isColVisible={isColVisible}
+                              isMobile={isMobile}
+                              getDiskStats={getDiskStats}
+                              customUrl={getHostCustomUrl(host.id)}
+                              onUpdateCustomUrl={updateHostCustomUrl}
+                              onDeleteCustomUrl={deleteHostCustomUrl}
+                              isExpanded={expandedHostId() === host.id}
+                              onToggleExpand={() => toggleHostExpand(host.id)}
+                              totalColumns={visibleColumnIds().length}
+                            />
+                          )}
                         </For>
                       </tbody>
                     </table>
@@ -1087,7 +1106,7 @@ export const HostsOverview: Component = () => {
           </Card>
         </Show>
       </Show>
-    </div>
+    </div >
   );
 };
 
@@ -1100,6 +1119,9 @@ interface HostRowProps {
   customUrl?: string;
   onUpdateCustomUrl: (hostId: string, url: string) => Promise<boolean>;
   onDeleteCustomUrl: (hostId: string) => Promise<boolean>;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  totalColumns: number;
 }
 
 const HostRow: Component<HostRowProps> = (props) => {
@@ -1107,44 +1129,7 @@ const HostRow: Component<HostRowProps> = (props) => {
   // Always access props.host directly to ensure updates flow through.
 
 
-  // URL editing using shared hook
-  const urlEdit = createUrlEditState();
 
-  const handleStartEditingUrl = (e: MouseEvent) => {
-    urlEdit.startEditing(props.host.id, props.customUrl || '', e);
-  };
-
-  const handleSaveUrl = async () => {
-    const url = urlEdit.editingValue().trim();
-    urlEdit.setIsSaving(true);
-    try {
-      if (url) {
-        await props.onUpdateCustomUrl(props.host.id, url);
-        showSuccess('Host URL saved');
-      } else {
-        await props.onDeleteCustomUrl(props.host.id);
-        showSuccess('Host URL removed');
-      }
-      urlEdit.finishEditing();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to save URL';
-      showError(message);
-      urlEdit.setIsSaving(false);
-    }
-  };
-
-  const handleDeleteUrl = async () => {
-    urlEdit.setIsSaving(true);
-    try {
-      await props.onDeleteCustomUrl(props.host.id);
-      showSuccess('Host URL removed');
-      urlEdit.finishEditing();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to remove URL';
-      showError(message);
-      urlEdit.setIsSaving(false);
-    }
-  };
 
 
 
@@ -1155,18 +1140,24 @@ const HostRow: Component<HostRowProps> = (props) => {
   const diskStats = () => props.getDiskStats(props.host);
 
   const rowClass = () => {
-    const base = 'transition-all duration-200';
+    const base = 'transition-all duration-200 cursor-pointer';
     const hover = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
     const offline = !isOnline() ? 'opacity-60' : '';
-    return `${base} ${hover} ${offline}`;
+    const expanded = props.isExpanded ? 'bg-blue-50/50 dark:bg-blue-900/20' : '';
+    return `${base} ${hover} ${offline} ${expanded}`;
   };
 
   return (
     <>
-      <tr class={rowClass()}>
+      <tr class={rowClass()} onClick={props.onToggleExpand}>
         {/* Host Name - always visible */}
         <td class="pl-4 pr-2 py-1 align-middle overflow-hidden">
           <div class="flex items-center gap-2 min-w-0">
+            <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
+              <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
             <StatusDot
               variant={hostStatus().variant}
               title={hostStatus().label}
@@ -1218,16 +1209,7 @@ const HostRow: Component<HostRowProps> = (props) => {
                 </a>
               </Show>
               {/* Edit URL button - shows on hover */}
-              <button
-                type="button"
-                onClick={handleStartEditingUrl}
-                class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
-                title={props.customUrl ? 'Edit URL' : 'Add URL'}
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-              </button>
+
 
             </div>
           </div>
@@ -1377,19 +1359,27 @@ const HostRow: Component<HostRowProps> = (props) => {
       </tr>
 
       {/* URL editing popover - using shared component */}
-      <UrlEditPopover
-        isOpen={urlEdit.isEditing() && urlEdit.editingId() === props.host.id}
-        value={urlEdit.editingValue()}
-        position={urlEdit.position()}
-        isSaving={urlEdit.isSaving()}
-        hasExistingUrl={!!props.customUrl}
-        placeholder="https://192.168.1.100:8080"
-        helpText="Add a URL to quickly access this host's web interface"
-        onValueChange={urlEdit.setEditingValue}
-        onSave={handleSaveUrl}
-        onCancel={urlEdit.cancelEditing}
-        onDelete={handleDeleteUrl}
-      />
+
+
+      {/* Drawer Row */}
+      <Show when={props.isExpanded}>
+        <tr>
+          <td colspan={props.totalColumns} class="p-0 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+            <div class="p-4 cursor-default" onClick={(e) => e.stopPropagation()}>
+              <HostDrawer
+                host={props.host}
+                onClose={props.onToggleExpand}
+                customUrl={props.customUrl}
+                onCustomUrlChange={(hostId, url) => {
+                  // Optimistic update via the parent handler, which calls the metadata API
+                  // We don't need to await here as the UI will update from the prop change
+                  props.onUpdateCustomUrl(hostId, url);
+                }}
+              />
+            </div>
+          </td>
+        </tr>
+      </Show>
     </>
   );
 };

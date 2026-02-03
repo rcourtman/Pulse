@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, lazy, Suspense } from 'solid-js';
 import type { Node, VM, Container, Storage, PBSInstance } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { useWebSocket } from '@/App';
@@ -17,6 +17,9 @@ import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
+
+// Lazy load NodeDrawer to avoid circular dependencies and reduce bundle size
+const NodeDrawer = lazy(() => import('./NodeDrawer').then(m => ({ default: m.NodeDrawer })));
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -52,7 +55,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   type TableItem = Node | PBSInstance;
 
   const isPVE = (item: TableItem): item is Node => {
-    return (item as Node).pveVersion !== undefined;
+    // Check for pveVersion OR if type is specifically 'node' (from API)
+    return (item as Node).pveVersion !== undefined || (item as any).type === 'node';
   };
 
   type CountSortKey = 'vmCount' | 'containerCount' | 'storageCount' | 'diskCount' | 'backupCount';
@@ -68,6 +72,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
   const [sortKey, setSortKey] = createSignal<SortKey>('default');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
+
+  const [expandedNodeId, setExpandedNodeId] = createSignal<string | null>(null);
+
+  const toggleNodeExpand = (nodeId: string, e: MouseEvent) => {
+    e.stopPropagation();
+    setExpandedNodeId(prev => prev === nodeId ? null : nodeId);
+  };
 
   const hasAnyTemperatureData = createMemo(() => {
     return (
@@ -354,12 +365,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
         <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+
               <th
                 class={`${thClassBase} text-left pl-3`}
                 onClick={() => handleSort('name')}
               >
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'} {renderSortIndicator('name')}
               </th>
+
               <th class={thClass} style={{ width: '80px', "min-width": '80px', "max-width": '80px' }} onClick={() => handleSort('uptime')}>
                 Uptime {renderSortIndicator('uptime')}
               </th>
@@ -398,6 +411,10 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   Backups {renderSortIndicator('backupCount')}
                 </th>
               </Show>
+              {/* Link icon column moved to end */}
+              <th class={thClass} style={{ width: '28px', "min-width": '28px', "max-width": '28px' }}>
+                {/* Link icon column */}
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -426,6 +443,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                 const nodeId = isPVEItem ? node!.id : pbs!.name;
                 const isSelected = () => props.selectedNode === nodeId;
+                const isExpanded = () => expandedNodeId() === nodeId;
                 const resourceId = isPVEItem ? node!.id || node!.name : pbs!.id || pbs!.name;
                 const metricsKey = buildMetricKey('node', resourceId);
                 const alertStyles = createMemo(() =>
@@ -484,310 +502,352 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 });
 
                 return (
-                  <tr
-                    class={rowClass()}
-                    style={{ ...rowStyle(), 'min-height': '36px' }}
-                    onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
-                  >
-                    {/* Name */}
-                    <td class={`pr-2 py-1 align-middle overflow-hidden ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
-                      <div class="flex items-center gap-1.5 min-w-0">
-                        <StatusDot
-                          variant={statusIndicator().variant}
-                          title={statusIndicator().label}
-                          ariaLabel={statusIndicator().label}
-                          size="xs"
-                        />
-                        <a
-                          href={
-                            isPVEItem
-                              ? node!.guestURL || node!.host || `https://${node!.name}:8006`
-                              : pbs!.guestURL || pbs!.host || `https://${pbs!.name}:8007`
-                          }
-                          target="_blank"
-                          onClick={(e) => e.stopPropagation()}
-                          class="font-medium text-[11px] text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 whitespace-nowrap"
-                          title={displayName()}
-                        >
-                          {displayName()}
-                        </a>
-                        <Show when={showActualName()}>
-                          <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                            ({(node as Node).name})
-                          </span>
-                        </Show>
-                        <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
+                  <>
+                    <tr
+                      class={rowClass()}
+                      style={{ ...rowStyle(), 'min-height': '36px' }}
+                      onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
+                    >
+                      {/* Name */}
+                      <td class={`pr-2 py-1 align-middle overflow-hidden ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
+                        <div class="flex items-center gap-1.5 min-w-0">
                           <Show when={isPVEItem}>
-                            <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
-                              PVE
-                            </span>
-                          </Show>
-                          <Show when={isPVEItem && node!.pveVersion}>
-                            <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                              v{node!.pveVersion.split('/')[1] || node!.pveVersion}
-                            </span>
-                          </Show>
-                          <Show when={isPVEItem && node!.isClusterMember !== undefined}>
-                            <span
-                              class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${node!.isClusterMember
-                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
-                                }`}
+                            <div
+                              class={`cursor-pointer transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
+                              onClick={(e) => toggleNodeExpand(nodeId, e)}
                             >
-                              {node!.isClusterMember ? node!.clusterName : 'Standalone'}
-                            </span>
+                              <svg class="w-3.5 h-3.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
                           </Show>
-                          <Show when={isPVEItem && node!.linkedHostAgentId}>
-                            <span
-                              class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-                              title="Pulse host agent installed for enhanced metrics"
-                            >
-                              +Agent
-                            </span>
-                          </Show>
-                          <Show when={isPVEItem && online && node!.pendingUpdates !== undefined && node!.pendingUpdates > 0}>
-                            <span
-                              class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${(node!.pendingUpdates ?? 0) >= 10
-                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-                                : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                }`}
-                              title={`${node!.pendingUpdates} pending apt update${node!.pendingUpdates !== 1 ? 's' : ''}`}
-                            >
-                              {node!.pendingUpdates} updates
-                            </span>
-                          </Show>
-                          <Show when={isPBSItem}>
-                            <span class="text-[9px] px-1 py-0 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                              PBS
-                            </span>
-                          </Show>
-                          <Show when={isPBSItem && pbs!.version}>
-                            <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                              v{pbs!.version}
-                            </span>
-                          </Show>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Uptime */}
-                    <td class={tdClass}>
-                      <div class="flex justify-center">
-                        <span
-                          class={`text-xs whitespace-nowrap ${isPVEItem && (node?.uptime ?? 0) < 3600
-                            ? 'text-orange-500'
-                            : 'text-gray-600 dark:text-gray-400'
-                            }`}
-                        >
-                          <Show when={online && uptimeValue} fallback="-">
-                            <Show when={isMobile()} fallback={formatUptime(uptimeValue)}>
-                              {formatUptime(uptimeValue, true)}
-                            </Show>
-                          </Show>
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* CPU */}
-                    <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
-                      <div class="h-5">
-                        <EnhancedCPUBar
-                          usage={cpuPercentValue}
-                          loadAverage={isPVEItem ? node!.loadAverage?.[0] : undefined}
-                          cores={isMobile() ? undefined : (isPVEItem ? node!.cpuInfo?.cores : undefined)}
-                          model={isPVEItem ? node!.cpuInfo?.model : undefined}
-                          resourceId={metricsKey}
-                        />
-                      </div>
-                    </td>
-
-                    {/* Memory */}
-                    <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
-                      <div class="h-5">
-                        <Show when={isPVEItem} fallback={
-                          <ResponsiveMetricCell
-                            value={memoryPercentValue}
-                            type="memory"
-                            resourceId={metricsKey}
-                            sublabel={pbs!.memoryTotal ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}` : undefined}
-                            isRunning={online}
-                            showMobile={false}
+                          <StatusDot
+                            variant={statusIndicator().variant}
+                            title={statusIndicator().label}
+                            ariaLabel={statusIndicator().label}
+                            size="xs"
                           />
-                        }>
-                          <Show
-                            when={viewMode() === 'sparklines'}
-                            fallback={
-                              <StackedMemoryBar
-                                used={node!.memory?.used || 0}
-                                total={node!.memory?.total || 0}
-                                balloon={node!.memory?.balloon || 0}
-                                swapUsed={node!.memory?.swapUsed || 0}
-                                swapTotal={node!.memory?.swapTotal || 0}
-                                resourceId={metricsKey}
-                              />
-                            }
+                          <span
+                            class="font-medium text-[11px] text-gray-900 dark:text-gray-100 whitespace-nowrap select-text"
+                            title={displayName()}
                           >
+                            {displayName()}
+                          </span>
+                          <Show when={showActualName()}>
+                            <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                              ({(node as Node).name})
+                            </span>
+                          </Show>
+                          <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
+                            <Show when={isPVEItem}>
+                              <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                                PVE
+                              </span>
+                            </Show>
+                            <Show when={isPVEItem && node!.pveVersion}>
+                              <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                v{node!.pveVersion.split('/')[1] || node!.pveVersion}
+                              </span>
+                            </Show>
+                            <Show when={isPVEItem && node!.isClusterMember !== undefined}>
+                              <span
+                                class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${node!.isClusterMember
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
+                                  }`}
+                              >
+                                {node!.isClusterMember ? node!.clusterName : 'Standalone'}
+                              </span>
+                            </Show>
+                            <Show when={isPVEItem && node!.linkedHostAgentId}>
+                              <span
+                                class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                                title="Pulse host agent installed for enhanced metrics"
+                              >
+                                +Agent
+                              </span>
+                            </Show>
+                            <Show when={isPVEItem && online && node!.pendingUpdates !== undefined && node!.pendingUpdates > 0}>
+                              <span
+                                class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${(node!.pendingUpdates ?? 0) >= 10
+                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                  }`}
+                                title={`${node!.pendingUpdates} pending apt update${node!.pendingUpdates !== 1 ? 's' : ''}`}
+                              >
+                                {node!.pendingUpdates} updates
+                              </span>
+                            </Show>
+                            <Show when={isPBSItem}>
+                              <span class="text-[9px] px-1 py-0 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                                PBS
+                              </span>
+                            </Show>
+                            <Show when={isPBSItem && pbs!.version}>
+                              <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                v{pbs!.version}
+                              </span>
+                            </Show>
+                          </div>
+                        </div>
+                      </td>
+
+
+
+                      {/* Uptime */}
+                      <td class={tdClass}>
+                        <div class="flex justify-center">
+                          <span
+                            class={`text-xs whitespace-nowrap ${isPVEItem && (node?.uptime ?? 0) < 3600
+                              ? 'text-orange-500'
+                              : 'text-gray-600 dark:text-gray-400'
+                              }`}
+                          >
+                            <Show when={online && uptimeValue} fallback="-">
+                              <Show when={isMobile()} fallback={formatUptime(uptimeValue)}>
+                                {formatUptime(uptimeValue, true)}
+                              </Show>
+                            </Show>
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* CPU */}
+                      <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                        <div class="h-5">
+                          <EnhancedCPUBar
+                            usage={cpuPercentValue}
+                            loadAverage={isPVEItem ? node!.loadAverage?.[0] : undefined}
+                            cores={isMobile() ? undefined : (isPVEItem ? node!.cpuInfo?.cores : undefined)}
+                            model={isPVEItem ? node!.cpuInfo?.model : undefined}
+                            resourceId={metricsKey}
+                          />
+                        </div>
+                      </td>
+
+                      {/* Memory */}
+                      <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                        <div class="h-5">
+                          <Show when={isPVEItem} fallback={
                             <ResponsiveMetricCell
                               value={memoryPercentValue}
                               type="memory"
                               resourceId={metricsKey}
+                              sublabel={pbs!.memoryTotal ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}` : undefined}
                               isRunning={online}
                               showMobile={false}
                             />
-                          </Show>
-                        </Show>
-                      </div>
-                    </td>
-
-                    {/* Disk */}
-                    <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
-                      <div class="h-5">
-                        <Show when={isPVEItem} fallback={
-                          <ResponsiveMetricCell
-                            value={diskPercentValue}
-                            type="disk"
-                            resourceId={metricsKey}
-                            sublabel={diskSublabel}
-                            isRunning={online}
-                            showMobile={false}
-                          />
-                        }>
-                          <Show
-                            when={viewMode() === 'sparklines'}
-                            fallback={
-                              <StackedDiskBar
-                                aggregateDisk={{
-                                  total: node!.disk?.total || 0,
-                                  used: node!.disk?.used || 0,
-                                  free: (node!.disk?.total || 0) - (node!.disk?.used || 0),
-                                  usage: node!.disk?.total ? (node!.disk.used / node!.disk.total) : 0
-                                }}
+                          }>
+                            <Show
+                              when={viewMode() === 'sparklines'}
+                              fallback={
+                                <StackedMemoryBar
+                                  used={node!.memory?.used || 0}
+                                  total={node!.memory?.total || 0}
+                                  balloon={node!.memory?.balloon || 0}
+                                  swapUsed={node!.memory?.swapUsed || 0}
+                                  swapTotal={node!.memory?.swapTotal || 0}
+                                  resourceId={metricsKey}
+                                />
+                              }
+                            >
+                              <ResponsiveMetricCell
+                                value={memoryPercentValue}
+                                type="memory"
+                                resourceId={metricsKey}
+                                isRunning={online}
+                                showMobile={false}
                               />
-                            }
-                          >
+                            </Show>
+                          </Show>
+                        </div>
+                      </td>
+
+                      {/* Disk */}
+                      <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                        <div class="h-5">
+                          <Show when={isPVEItem} fallback={
                             <ResponsiveMetricCell
                               value={diskPercentValue}
                               type="disk"
                               resourceId={metricsKey}
+                              sublabel={diskSublabel}
                               isRunning={online}
                               showMobile={false}
                             />
+                          }>
+                            <Show
+                              when={viewMode() === 'sparklines'}
+                              fallback={
+                                <StackedDiskBar
+                                  aggregateDisk={{
+                                    total: node!.disk?.total || 0,
+                                    used: node!.disk?.used || 0,
+                                    free: (node!.disk?.total || 0) - (node!.disk?.used || 0),
+                                    usage: node!.disk?.total ? (node!.disk.used / node!.disk.total) : 0
+                                  }}
+                                />
+                              }
+                            >
+                              <ResponsiveMetricCell
+                                value={diskPercentValue}
+                                type="disk"
+                                resourceId={metricsKey}
+                                isRunning={online}
+                                showMobile={false}
+                              />
+                            </Show>
                           </Show>
-                        </Show>
-                      </div>
-                    </td>
+                        </div>
+                      </td>
 
-                    {/* Temperature */}
-                    <Show when={hasAnyTemperatureData()}>
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <Show
-                            when={
-                              online &&
-                              isPVEItem &&
-                              cpuTemperatureValue !== null &&
-                              (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
-                              isTemperatureMonitoringEnabled(node!)
-                            }
-                            fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
-                          >
-                            {(() => {
-                              const value = cpuTemperatureValue as number;
-                              const temp = node!.temperature;
-                              const cpuMinValue =
-                                typeof temp?.cpuMin === 'number' && temp.cpuMin > 0 ? temp.cpuMin : null;
-                              const cpuMaxValue =
-                                typeof temp?.cpuMaxRecord === 'number' && temp.cpuMaxRecord > 0
-                                  ? temp.cpuMaxRecord
-                                  : null;
-                              const hasMinMax = cpuMinValue !== null && cpuMaxValue !== null;
+                      {/* Temperature */}
+                      <Show when={hasAnyTemperatureData()}>
+                        <td class={tdClass}>
+                          <div class="flex justify-center">
+                            <Show
+                              when={
+                                online &&
+                                isPVEItem &&
+                                cpuTemperatureValue !== null &&
+                                (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
+                                isTemperatureMonitoringEnabled(node!)
+                              }
+                              fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
+                            >
+                              {(() => {
+                                const value = cpuTemperatureValue as number;
+                                const temp = node!.temperature;
+                                const cpuMinValue =
+                                  typeof temp?.cpuMin === 'number' && temp.cpuMin > 0 ? temp.cpuMin : null;
+                                const cpuMaxValue =
+                                  typeof temp?.cpuMaxRecord === 'number' && temp.cpuMaxRecord > 0
+                                    ? temp.cpuMaxRecord
+                                    : null;
+                                const hasMinMax = cpuMinValue !== null && cpuMaxValue !== null;
 
-                              const gpus = temp?.gpu ?? [];
-                              const hasGPU = gpus.length > 0;
+                                const gpus = temp?.gpu ?? [];
+                                const hasGPU = gpus.length > 0;
 
-                              if (hasMinMax || hasGPU) {
-                                const min = typeof cpuMinValue === 'number' ? Math.round(cpuMinValue) : undefined;
-                                const max = typeof cpuMaxValue === 'number' ? Math.round(cpuMaxValue) : undefined;
+                                if (hasMinMax || hasGPU) {
+                                  const min = typeof cpuMinValue === 'number' ? Math.round(cpuMinValue) : undefined;
+                                  const max = typeof cpuMaxValue === 'number' ? Math.round(cpuMaxValue) : undefined;
+
+                                  return (
+                                    <div title={`Min: ${min !== undefined ? formatTemperature(min) : '-'}, Max: ${max !== undefined ? formatTemperature(max) : '-'}${hasGPU ? `\nGPU: ${gpus.map(g => formatTemperature(g.edge ?? g.junction ?? g.mem)).join(', ')}` : ''}`}>
+                                      <TemperatureGauge
+                                        value={value}
+                                        min={min}
+                                        max={max}
+                                        critical={temperatureThreshold()}
+                                        warning={Math.max(0, temperatureThreshold() - 5)}
+                                      />
+                                    </div>
+                                  );
+                                }
 
                                 return (
-                                  <div title={`Min: ${min !== undefined ? formatTemperature(min) : '-'}, Max: ${max !== undefined ? formatTemperature(max) : '-'}${hasGPU ? `\nGPU: ${gpus.map(g => formatTemperature(g.edge ?? g.junction ?? g.mem)).join(', ')}` : ''}`}>
-                                    <TemperatureGauge
-                                      value={value}
-                                      min={min}
-                                      max={max}
-                                      critical={temperatureThreshold()}
-                                      warning={Math.max(0, temperatureThreshold() - 5)}
-                                    />
-                                  </div>
+                                  <TemperatureGauge
+                                    value={value}
+                                    critical={temperatureThreshold()}
+                                    warning={Math.max(0, temperatureThreshold() - 5)}
+                                  />
                                 );
-                              }
+                              })()}
+                            </Show>
+                          </div>
+                        </td>
+                      </Show>
 
-                              return (
-                                <TemperatureGauge
-                                  value={value}
-                                  critical={temperatureThreshold()}
-                                  warning={Math.max(0, temperatureThreshold() - 5)}
-                                />
-                              );
-                            })()}
-                          </Show>
-                        </div>
-                      </td>
-                    </Show>
+                      {/* Dashboard tab: VMs and CTs */}
+                      <Show when={props.currentTab === 'dashboard'}>
+                        <td class={tdClass}>
+                          <div class="flex justify-center">
+                            <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
+                              {online ? getCountValue(item, 'vmCount') ?? '-' : '-'}
+                            </span>
+                          </div>
+                        </td>
+                        <td class={tdClass}>
+                          <div class="flex justify-center">
+                            <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
+                              {online ? getCountValue(item, 'containerCount') ?? '-' : '-'}
+                            </span>
+                          </div>
+                        </td>
+                      </Show>
 
-                    {/* Dashboard tab: VMs and CTs */}
-                    <Show when={props.currentTab === 'dashboard'}>
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
-                            {online ? getCountValue(item, 'vmCount') ?? '-' : '-'}
-                          </span>
-                        </div>
-                      </td>
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
-                            {online ? getCountValue(item, 'containerCount') ?? '-' : '-'}
-                          </span>
-                        </div>
-                      </td>
-                    </Show>
+                      {/* Storage tab: Storage and Disks */}
+                      <Show when={props.currentTab === 'storage'}>
+                        <td class={tdClass}>
+                          <div class="flex justify-center">
+                            <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
+                              {online ? getCountValue(item, 'storageCount') ?? '-' : '-'}
+                            </span>
+                          </div>
+                        </td>
+                        <td class={tdClass}>
+                          <div class="flex justify-center">
+                            <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
+                              {online ? getCountValue(item, 'diskCount') ?? '-' : '-'}
+                            </span>
+                          </div>
+                        </td>
+                      </Show>
 
-                    {/* Storage tab: Storage and Disks */}
-                    <Show when={props.currentTab === 'storage'}>
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
-                            {online ? getCountValue(item, 'storageCount') ?? '-' : '-'}
-                          </span>
-                        </div>
-                      </td>
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
-                            {online ? getCountValue(item, 'diskCount') ?? '-' : '-'}
-                          </span>
-                        </div>
-                      </td>
-                    </Show>
+                      {/* Backups tab: Backups */}
+                      <Show when={props.currentTab === 'backups'}>
+                        <td class={tdClass}>
+                          <div class="flex justify-center">
+                            <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
+                              {online ? getCountValue(item, 'backupCount') ?? '-' : '-'}
+                            </span>
+                          </div>
+                        </td>
+                      </Show>
 
-                    {/* Backups tab: Backups */}
-                    <Show when={props.currentTab === 'backups'}>
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
-                            {online ? getCountValue(item, 'backupCount') ?? '-' : '-'}
-                          </span>
-                        </div>
+                      {/* Link Column (Moved to end) */}
+                      <td class="px-0 py-1 align-middle text-center">
+                        <Show when={
+                          isPVEItem
+                            ? (node!.guestURL || node!.host)
+                            : (pbs!.guestURL || pbs!.host)
+                        }>
+                          <a
+                            href={
+                              isPVEItem
+                                ? node!.guestURL || node!.host || `https://${node!.name}:8006`
+                                : pbs!.guestURL || pbs!.host || `https://${pbs!.name}:8007`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                            title={`Open ${displayName()} web interface`}
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                        </Show>
                       </td>
+                    </tr>
+                    <Show when={isExpanded() && isPVEItem}>
+                      <tr>
+                        <td colspan={11} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
+                          <Suspense fallback={<div class="flex justify-center p-4">Loading stats...</div>}>
+                            <NodeDrawer node={node!} />
+                          </Suspense>
+                        </td>
+                      </tr>
                     </Show>
-                  </tr>
+                  </>
                 );
               }}
             </For>
           </tbody>
         </table>
       </div>
-    </Card>
+    </Card >
   );
 };
