@@ -118,6 +118,18 @@ func TestNormalizeAppriseConfig(t *testing.T) {
 	}
 }
 
+func TestNormalizeAppriseConfig_ForcesCLIPath(t *testing.T) {
+	normalized := NormalizeAppriseConfig(AppriseConfig{
+		Enabled: true,
+		Targets: []string{"discord://token"},
+		CLIPath: "/bin/sh",
+	})
+
+	if normalized.CLIPath != "apprise" {
+		t.Fatalf("expected CLI path to be forced to 'apprise', got %q", normalized.CLIPath)
+	}
+}
+
 func TestSetCooldownClampsNegativeValues(t *testing.T) {
 	nm := NewNotificationManager("")
 	nm.SetCooldown(-10)
@@ -830,6 +842,24 @@ func TestSendTestNotificationAppriseHTTP(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timeout waiting for Apprise HTTP request")
+	}
+}
+
+func TestSendAppriseViaHTTPRejectsUnsafeServerURL(t *testing.T) {
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	cfg := AppriseConfig{
+		ServerURL:      "http://127.0.0.1:12345",
+		TimeoutSeconds: 1,
+	}
+
+	err := nm.sendAppriseViaHTTP(cfg, "title", "body", "info")
+	if err == nil {
+		t.Fatalf("expected apprise server URL validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "apprise server URL validation failed") {
+		t.Fatalf("expected validation error, got: %v", err)
 	}
 }
 

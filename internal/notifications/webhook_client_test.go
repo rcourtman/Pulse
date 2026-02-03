@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -83,8 +84,8 @@ func TestSecureWebhookClientBlocksUnsafeRedirect(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from unsafe redirect, got nil")
 	}
-	if !strings.Contains(err.Error(), "redirect to unsafe URL blocked") {
-		t.Errorf("expected 'redirect to unsafe URL blocked' error, got: %v", err)
+	if !strings.Contains(err.Error(), "private IP") {
+		t.Errorf("expected private IP validation error, got: %v", err)
 	}
 }
 
@@ -119,8 +120,8 @@ func TestSecureWebhookClientBlocksPrivateNetworkRedirect(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error from redirect to %s, got nil", privateURL)
 			}
-			if !strings.Contains(err.Error(), "redirect to unsafe URL blocked") {
-				t.Errorf("expected 'redirect to unsafe URL blocked' error for %s, got: %v", privateURL, err)
+			if !strings.Contains(err.Error(), "private IP") {
+				t.Errorf("expected private IP validation error for %s, got: %v", privateURL, err)
 			}
 		})
 	}
@@ -180,7 +181,132 @@ func TestSecureWebhookClientBlocksLinkLocalRedirect(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from redirect to link-local/metadata address, got nil")
 	}
-	if !strings.Contains(err.Error(), "redirect to unsafe URL blocked") {
-		t.Errorf("expected 'redirect to unsafe URL blocked' error, got: %v", err)
+	if !strings.Contains(err.Error(), "link-local") {
+		t.Errorf("expected link-local validation error, got: %v", err)
+	}
+}
+
+func TestSecureWebhookClientDialContextBlocksPrivateIP(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	nm := &NotificationManager{
+		lastNotified:      make(map[string]notificationRecord),
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+	}
+	client := nm.createSecureWebhookClient(WebhookTimeout)
+
+	_, err := client.Get(server.URL)
+	if err == nil {
+		t.Fatal("expected error from blocked private IP, got nil")
+	}
+	if !strings.Contains(err.Error(), "blocked private IP") {
+		t.Fatalf("expected blocked private IP error, got: %v", err)
+	}
+}
+
+func TestSecureWebhookClientDialContextBlocksHostnameWithoutAllowlist(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Rewrite URL to use hostname to exercise DNS resolution path.
+	hostedURL := strings.Replace(server.URL, "127.0.0.1", "localhost", 1)
+
+	nm := &NotificationManager{
+		lastNotified:      make(map[string]notificationRecord),
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+	}
+	client := nm.createSecureWebhookClient(WebhookTimeout)
+
+	_, err := client.Get(hostedURL)
+	if err == nil {
+		t.Fatal("expected error from blocked hostname, got nil")
+	}
+	if !strings.Contains(err.Error(), "resolves to blocked private IPs") {
+		t.Fatalf("expected blocked hostname error, got: %v", err)
+	}
+}
+
+func TestSecureWebhookClientDialContextAllowsHostnameWithAllowlist(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Rewrite URL to use hostname to exercise DNS resolution path.
+	hostedURL := strings.Replace(server.URL, "127.0.0.1", "localhost", 1)
+
+	nm := &NotificationManager{
+		lastNotified:      make(map[string]notificationRecord),
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+	}
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("failed to set allowlist: %v", err)
+	}
+
+	client := nm.createSecureWebhookClient(WebhookTimeout)
+	resp, err := client.Get(hostedURL)
+	if err != nil {
+		t.Fatalf("expected request to succeed with allowlist, got: %v", err)
+	}
+	resp.Body.Close()
+}
+
+func TestSecureWebhookClientDialContextAllowsPublicIP(t *testing.T) {
+	nm := &NotificationManager{
+		lastNotified:      make(map[string]notificationRecord),
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+	}
+	client := nm.createSecureWebhookClient(WebhookTimeout)
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport == nil {
+		t.Fatalf("expected transport to be *http.Transport")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Use TEST-NET-3 address to exercise non-private IP branch.
+	_, err := transport.DialContext(ctx, "tcp", "203.0.113.1:80")
+	if err == nil {
+		t.Fatalf("expected dial to fail due to canceled context")
+	}
+}
+
+func TestSecureWebhookClientDialContextRejectsBadAddress(t *testing.T) {
+	nm := &NotificationManager{
+		lastNotified:      make(map[string]notificationRecord),
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+	}
+	client := nm.createSecureWebhookClient(WebhookTimeout)
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport == nil {
+		t.Fatalf("expected transport to be *http.Transport")
+	}
+
+	_, err := transport.DialContext(context.Background(), "tcp", "badaddress")
+	if err == nil {
+		t.Fatalf("expected dial to fail for invalid address")
+	}
+}
+
+func TestSecureWebhookClientDialContextLookupFailure(t *testing.T) {
+	nm := &NotificationManager{
+		lastNotified:      make(map[string]notificationRecord),
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+	}
+	client := nm.createSecureWebhookClient(WebhookTimeout)
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport == nil {
+		t.Fatalf("expected transport to be *http.Transport")
+	}
+
+	_, err := transport.DialContext(context.Background(), "tcp", "bad host:80")
+	if err == nil {
+		t.Fatalf("expected lookup failure for invalid hostname")
 	}
 }

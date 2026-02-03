@@ -311,9 +311,7 @@ func (h *HostAgentHandlers) resolveConfigHost(ctx context.Context, hostID string
 
 	for _, candidate := range state.Hosts {
 		if candidate.TokenID != "" && candidate.TokenID == record.ID {
-			if candidate.ID == hostID {
-				return candidate, true
-			}
+			return candidate, true
 		}
 	}
 

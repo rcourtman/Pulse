@@ -119,8 +119,8 @@ func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *
 		Timeout:   timeout,
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
+			if len(via) >= WebhookMaxRedirects {
+				return fmt.Errorf("stopped after %d redirects", WebhookMaxRedirects)
 			}
 			// Re-validate strictly on redirect
 			return n.ValidateWebhookURL(req.URL.String())
@@ -254,9 +254,6 @@ func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
 	}
 
 	normalized.CLIPath = "apprise" // Force default binary for security
-	if normalized.CLIPath == "" {
-		normalized.CLIPath = "apprise"
-	}
 
 	if normalized.TimeoutSeconds <= 0 {
 		normalized.TimeoutSeconds = 15

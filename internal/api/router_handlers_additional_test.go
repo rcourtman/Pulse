@@ -209,7 +209,7 @@ func TestHandleSimpleStats(t *testing.T) {
 }
 
 func TestHandleSocketIO_RedirectsForJS(t *testing.T) {
-	router := &Router{}
+	router := &Router{config: &config.Config{}}
 	req := httptest.NewRequest(http.MethodGet, "/socket.io/socket.io.js", nil)
 	rec := httptest.NewRecorder()
 
@@ -224,7 +224,7 @@ func TestHandleSocketIO_RedirectsForJS(t *testing.T) {
 }
 
 func TestHandleSocketIO_PollingHandshake(t *testing.T) {
-	router := &Router{}
+	router := &Router{config: &config.Config{}}
 	req := httptest.NewRequest(http.MethodGet, "/socket.io/?transport=polling", nil)
 	rec := httptest.NewRecorder()
 
@@ -243,7 +243,7 @@ func TestHandleSocketIO_PollingHandshake(t *testing.T) {
 }
 
 func TestHandleSocketIO_PollingConnected(t *testing.T) {
-	router := &Router{}
+	router := &Router{config: &config.Config{}}
 	req := httptest.NewRequest(http.MethodGet, "/socket.io/?transport=polling&sid=abc", nil)
 	rec := httptest.NewRecorder()
 
@@ -258,7 +258,7 @@ func TestHandleSocketIO_PollingConnected(t *testing.T) {
 }
 
 func TestHandleSocketIO_DefaultRedirect(t *testing.T) {
-	router := &Router{}
+	router := &Router{config: &config.Config{}}
 	req := httptest.NewRequest(http.MethodGet, "/socket.io/?foo=bar", nil)
 	rec := httptest.NewRecorder()
 
