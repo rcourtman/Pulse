@@ -8649,35 +8649,40 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 	if m.wsHub != nil {
 		m.wsHub.BroadcastAlertResolved(alertID)
 	}
-	if m.notificationMgr != nil {
-		m.notificationMgr.CancelAlert(alertID)
-		if m.notificationMgr.GetNotifyOnResolve() {
-			if resolved := m.alertManager.GetResolvedAlert(alertID); resolved != nil {
-				resolvedAlert = resolved
-				// Check if recovery notification should be suppressed during quiet hours
-				if m.alertManager.ShouldSuppressResolvedNotification(resolved.Alert) {
-					return
-				}
-				go m.notificationMgr.SendResolvedAlert(resolved)
-			}
-		}
-	}
 
+	// Always record incident timeline, regardless of notification suppression.
+	// This ensures we have a complete history even during quiet hours.
 	if m.incidentStore != nil {
-		if resolvedAlert == nil {
-			resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
-		}
+		resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
 		if resolvedAlert != nil && resolvedAlert.Alert != nil {
 			m.incidentStore.RecordAlertResolved(resolvedAlert.Alert, resolvedAlert.ResolvedTime)
 		}
 	}
 
+	// Always trigger AI callback, regardless of notification suppression.
 	if m.alertResolvedAICallback != nil {
 		if resolvedAlert == nil {
 			resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
 		}
 		if resolvedAlert != nil && resolvedAlert.Alert != nil {
 			go m.alertResolvedAICallback(resolvedAlert.Alert)
+		}
+	}
+
+	// Handle notifications (may be suppressed by quiet hours)
+	if m.notificationMgr != nil {
+		m.notificationMgr.CancelAlert(alertID)
+		if m.notificationMgr.GetNotifyOnResolve() {
+			if resolvedAlert == nil {
+				resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
+			}
+			if resolvedAlert != nil {
+				// Check if recovery notification should be suppressed during quiet hours
+				if m.alertManager.ShouldSuppressResolvedNotification(resolvedAlert.Alert) {
+					return
+				}
+				go m.notificationMgr.SendResolvedAlert(resolvedAlert)
+			}
 		}
 	}
 }

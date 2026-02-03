@@ -279,7 +279,7 @@ interface ThresholdsTableProps {
   factoryHostDefaults?: Record<string, number | undefined>;
   factoryDockerDefaults?: Record<string, number | undefined>;
   factoryStorageDefault?: number;
-  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
+  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number; host: number };
   metricTimeThresholds: () => Record<string, Record<string, number>>;
   setMetricTimeThresholds: (
     value:
@@ -2085,7 +2085,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
 
   const updateMetricDelay = (
-    typeKey: 'guest' | 'node' | 'storage' | 'pbs',
+    typeKey: 'guest' | 'node' | 'storage' | 'pbs' | 'host',
     metricKey: string,
     value: number | null,
   ) => {
@@ -3401,6 +3401,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 onToggleGlobalDisableOffline={() =>
                   props.setDisableAllHostsOffline(!props.disableAllHostsOffline())
                 }
+                showDelayColumn={true}
+                globalDelaySeconds={props.timeThresholds().host}
+                metricDelaySeconds={props.metricTimeThresholds().host ?? {}}
+                onMetricDelayChange={(metric, value) => updateMetricDelay('host', metric, value)}
                 factoryDefaults={props.factoryHostDefaults}
                 onResetDefaults={props.resetHostDefaults}
               />

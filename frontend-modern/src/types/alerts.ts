@@ -145,6 +145,7 @@ export interface AlertConfig {
     node?: number;
     storage?: number;
     pbs?: number;
+    host?: number;
   };
   metricTimeThresholds?: Record<string, Record<string, number>>;
   aggregation?: {

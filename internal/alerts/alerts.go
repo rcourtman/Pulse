@@ -1475,6 +1475,7 @@ func normalizeTimeThresholds(config *AlertConfig) {
 	ensureDelay("node")
 	ensureDelay("storage")
 	ensureDelay("pbs")
+	ensureDelay("host")
 	if delay, ok := config.TimeThresholds["all"]; ok && delay < 0 {
 		config.TimeThresholds["all"] = defaultDelaySeconds
 	}

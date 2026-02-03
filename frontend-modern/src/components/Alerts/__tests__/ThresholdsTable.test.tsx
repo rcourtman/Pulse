@@ -154,7 +154,7 @@ const baseProps = () => ({
     criticalSizeGiB: 0,
   } as SnapshotAlertConfig,
   resetSnapshotDefaults: vi.fn(),
-  timeThresholds: () => ({ guest: 5, node: 5, storage: 5, pbs: 5 }),
+  timeThresholds: () => ({ guest: 5, node: 5, storage: 5, pbs: 5, host: 5 }),
   metricTimeThresholds: () => ({}),
   setMetricTimeThresholds: vi.fn(),
   activeAlerts: {},

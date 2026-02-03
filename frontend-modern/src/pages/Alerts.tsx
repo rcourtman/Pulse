@@ -1001,6 +1001,7 @@ export function Alerts() {
       node: DEFAULT_DELAY_SECONDS,
       storage: DEFAULT_DELAY_SECONDS,
       pbs: DEFAULT_DELAY_SECONDS,
+      host: DEFAULT_DELAY_SECONDS,
     });
     setMetricTimeThresholds({});
     setScheduleQuietHours(createDefaultQuietHours());
@@ -1136,6 +1137,7 @@ export function Alerts() {
           node: config.timeThresholds.node ?? DEFAULT_DELAY_SECONDS,
           storage: config.timeThresholds.storage ?? DEFAULT_DELAY_SECONDS,
           pbs: config.timeThresholds.pbs ?? DEFAULT_DELAY_SECONDS,
+          host: config.timeThresholds.host ?? DEFAULT_DELAY_SECONDS,
         });
       } else {
         const fallback = config.timeThreshold && config.timeThreshold > 0 ? config.timeThreshold : DEFAULT_DELAY_SECONDS;
@@ -1144,6 +1146,7 @@ export function Alerts() {
           node: fallback,
           storage: fallback,
           pbs: fallback,
+          host: fallback,
         });
       }
       if (config.metricTimeThresholds) {
@@ -1615,6 +1618,7 @@ export function Alerts() {
     node: DEFAULT_DELAY_SECONDS,
     storage: DEFAULT_DELAY_SECONDS,
     pbs: DEFAULT_DELAY_SECONDS,
+    host: DEFAULT_DELAY_SECONDS,
   });
   const [metricTimeThresholds, setMetricTimeThresholds] =
     createSignal<Record<string, Record<string, number>>>({});
@@ -2907,7 +2911,7 @@ interface ThresholdsTabProps {
   guestTagWhitelist: () => string[];
   guestTagBlacklist: () => string[];
   storageDefault: () => number;
-  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
+  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number; host: number };
   metricTimeThresholds: () => Record<string, Record<string, number>>;
   overrides: () => Override[];
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;
