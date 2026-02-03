@@ -2355,3 +2355,41 @@ func TestPersistence_EnvConfigSuppressions(t *testing.T) {
 		t.Fatal("Expected error on invalid JSON")
 	}
 }
+
+func TestLoadNodesConfig_PVEMonitorBackupsMigration(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Save PVE instance with MonitorBackups=false (simulating old config or missing field)
+	pveInstances := []config.PVEInstance{
+		{
+			Name:           "pve-no-backups",
+			Host:           "https://pve.local:8006",
+			User:           "root@pam",
+			Password:       "secret",
+			MonitorBackups: false, // This should be migrated to true
+		},
+	}
+
+	if err := cp.SaveNodesConfig(pveInstances, nil, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+
+	if len(loaded.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(loaded.PVEInstances))
+	}
+
+	pve := loaded.PVEInstances[0]
+	// MonitorBackups should be migrated to true
+	if !pve.MonitorBackups {
+		t.Errorf("expected MonitorBackups to be migrated to true, got false")
+	}
+}

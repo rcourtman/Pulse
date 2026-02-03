@@ -1387,6 +1387,16 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 				migrationApplied = true
 			}
 		}
+
+		// Migration: Ensure MonitorBackups is enabled for PVE instances
+		// This fixes issue #1139 where PVE backups weren't showing
+		if !config.PVEInstances[i].MonitorBackups {
+			log.Info().
+				Str("instance", config.PVEInstances[i].Name).
+				Msg("Enabling MonitorBackups for PVE instance (was disabled)")
+			config.PVEInstances[i].MonitorBackups = true
+			migrationApplied = true
+		}
 	}
 
 	// Fix for bug where TokenName was incorrectly set when using password auth
