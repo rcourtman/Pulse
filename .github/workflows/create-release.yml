@@ -61,7 +61,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          sparse-checkout: VERSION
+          sparse-checkout: |
+            VERSION
 
       - name: Validate VERSION file
         run: |
