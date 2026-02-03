@@ -448,7 +448,20 @@ func TestSubscribeToStream_ReceivesCurrentState(t *testing.T) {
 	ch := ps.SubscribeToStream()
 	defer ps.UnsubscribeFromStream(ch)
 
-	// New subscriber should receive current state
+	// New subscriber should receive current phase first
+	select {
+	case event := <-ch:
+		if event.Type != "phase" {
+			t.Errorf("expected phase event first, got %s", event.Type)
+		}
+		if event.Phase != "analyzing" {
+			t.Errorf("expected phase 'analyzing', got %q", event.Phase)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("expected to receive phase event on subscribe")
+	}
+
+	// Then receive accumulated content
 	select {
 	case event := <-ch:
 		if event.Type != "content" {
@@ -457,11 +470,8 @@ func TestSubscribeToStream_ReceivesCurrentState(t *testing.T) {
 		if event.Content != "some output" {
 			t.Errorf("expected 'some output', got %q", event.Content)
 		}
-		if event.Phase != "analyzing" {
-			t.Errorf("expected phase 'analyzing', got %q", event.Phase)
-		}
 	case <-time.After(100 * time.Millisecond):
-		t.Error("expected to receive current state on subscribe")
+		t.Error("expected to receive content event on subscribe")
 	}
 }
 

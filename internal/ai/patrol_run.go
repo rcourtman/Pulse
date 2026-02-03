@@ -1077,12 +1077,19 @@ func (p *PatrolService) SubscribeToStream() chan PatrolStreamEvent {
 
 	p.streamMu.Lock()
 	p.streamSubscribers[ch] = sub
-	// Send current state to new subscriber
+	// Send current state to new subscriber (late joiner)
 	if p.streamPhase != "idle" {
+		// First send the current phase so UI can update its phase display
 		ch <- PatrolStreamEvent{
-			Type:    "content",
-			Content: p.currentOutput.String(),
-			Phase:   p.streamPhase,
+			Type:  "phase",
+			Phase: p.streamPhase,
+		}
+		// Then send any accumulated content
+		if p.currentOutput.Len() > 0 {
+			ch <- PatrolStreamEvent{
+				Type:    "content",
+				Content: p.currentOutput.String(),
+			}
 		}
 	}
 	p.streamMu.Unlock()
@@ -1143,17 +1150,26 @@ func (p *PatrolService) appendStreamContent(content string) {
 	})
 }
 
-// setStreamPhase updates the current phase (internal state tracking only)
-// Does not broadcast phase changes - those are explicit via broadcast()
+// setStreamPhase updates the current phase and broadcasts it to all subscribers.
+// The frontend only updates its phase display when it receives a 'phase' event,
+// so we must broadcast phase changes to keep the UI in sync.
 func (p *PatrolService) setStreamPhase(phase string) {
 	p.streamMu.Lock()
+	oldPhase := p.streamPhase
 	p.streamPhase = phase
 	if phase == "idle" {
 		p.currentOutput.Reset()
 	}
 	p.streamMu.Unlock()
-	// Note: We don't broadcast phase changes automatically
-	// The patrol explicitly broadcasts "start" and "complete" events
+
+	// Broadcast phase change (except for idle which just clears state)
+	// This ensures late joiners and continuous watchers see the current phase
+	if phase != "idle" && phase != oldPhase {
+		p.broadcast(PatrolStreamEvent{
+			Type:  "phase",
+			Phase: phase,
+		})
+	}
 }
 
 // GetCurrentStreamOutput returns the current buffered output (for late joiners)

@@ -339,20 +339,30 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	if overrideModel != "" {
 		selectedModel = overrideModel
 	}
-	loop := agenticLoop
+	// Create a per-request AgenticLoop to ensure complete isolation between
+	// concurrent sessions. This prevents race conditions where concurrent
+	// ExecuteStream calls would overwrite each other's FSM, knowledge accumulator,
+	// autonomous mode, budget checker, and provider info on a shared loop.
+	var loop *AgenticLoop
 	if overrideModel != "" && overrideModel != configuredModel {
 		provider, err := s.createProviderForModel(overrideModel)
 		if err != nil {
 			return fmt.Errorf("failed to create provider for model override %q: %w", overrideModel, err)
 		}
 		systemPrompt := s.buildSystemPrompt()
-		tempLoop := NewAgenticLoop(provider, executor, systemPrompt)
-		tempLoop.SetAutonomousMode(autonomousMode)
-		loop = tempLoop
+		loop = NewAgenticLoop(provider, executor, systemPrompt)
+	} else {
+		// Create a fresh loop with the configured provider for this request
+		s.mu.RLock()
+		provider := s.provider
+		s.mu.RUnlock()
+		if provider == nil {
+			return fmt.Errorf("provider not initialized")
+		}
+		systemPrompt := s.buildSystemPrompt()
+		loop = NewAgenticLoop(provider, executor, systemPrompt)
 	}
-
-	// Reset token counts so per-request usage is accurate.
-	loop.ResetTokenCounts()
+	loop.SetAutonomousMode(autonomousMode)
 
 	// Proactively gather context for mentioned resources
 	s.mu.RLock()

@@ -415,11 +415,11 @@ func (tm *TriggerManager) GetPendingCount() int {
 
 // TriggerStatus returns the current status of the trigger manager
 type TriggerStatus struct {
-	Running         bool          `json:"running"`
-	PendingTriggers int           `json:"pending_triggers"`
-	CurrentInterval time.Duration `json:"current_interval_ms"`
-	RecentEvents    int           `json:"recent_events"`
-	IsBusyMode      bool          `json:"is_busy_mode"`
+	Running         bool  `json:"running"`
+	PendingTriggers int   `json:"pending_triggers"`
+	CurrentInterval int64 `json:"current_interval_ms"` // Milliseconds (converted from time.Duration)
+	RecentEvents    int   `json:"recent_events"`
+	IsBusyMode      bool  `json:"is_busy_mode"`
 }
 
 // GetStatus returns the current status
@@ -428,11 +428,15 @@ func (tm *TriggerManager) GetStatus() TriggerStatus {
 	defer tm.mu.Unlock()
 
 	tm.cleanupOldEvents()
+	// Recompute the adaptive interval after pruning old events.
+	// Without this, currentInterval can remain stuck in busy/quiet mode
+	// after events age out of the window.
+	tm.updateAdaptiveInterval()
 
 	return TriggerStatus{
 		Running:         tm.running,
 		PendingTriggers: len(tm.pendingTriggers),
-		CurrentInterval: tm.currentInterval,
+		CurrentInterval: int64(tm.currentInterval / time.Millisecond),
 		RecentEvents:    len(tm.recentEvents),
 		IsBusyMode:      len(tm.recentEvents) >= tm.busyThreshold,
 	}

@@ -384,8 +384,10 @@ func TestGetStatus(t *testing.T) {
 	if status.PendingTriggers != 1 {
 		t.Errorf("expected 1 pending trigger, got %d", status.PendingTriggers)
 	}
-	if status.CurrentInterval != 15*time.Minute {
-		t.Errorf("expected current interval 15m, got %v", status.CurrentInterval)
+	// CurrentInterval is now in milliseconds (15 minutes = 900000ms)
+	expectedMs := int64(15 * time.Minute / time.Millisecond)
+	if status.CurrentInterval != expectedMs {
+		t.Errorf("expected current interval %dms, got %dms", expectedMs, status.CurrentInterval)
 	}
 }
 

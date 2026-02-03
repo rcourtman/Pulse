@@ -60,6 +60,7 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 		sessions:    store,
 		executor:    executor,
 		agenticLoop: loop,
+		provider:    provider, // Required: per-request loops need a provider to create new instances
 		started:     true,
 	}
 
