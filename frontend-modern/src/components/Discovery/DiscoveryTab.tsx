@@ -99,11 +99,12 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 force,
                 hostname: props.hostname,
             });
-            // Scan complete - hide progress bar
-            setIsScanning(false);
-            // Refetch to get the saved discovery data (shows brief loading state)
+            // Scan complete - show loading state while we fetch results
+            setScanProgress({ current_step: 'Loading results...', percent_complete: 100 } as DiscoveryProgress);
+            // Refetch to get the saved discovery data
             await refetch();
-            // Now show success - data is already visible
+            // Now everything is ready - hide scanning state and show success
+            setIsScanning(false);
             setScanSuccess(true);
             // Clear success after user has seen it
             setTimeout(() => setScanSuccess(false), 2000);
@@ -285,7 +286,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             </Show>
 
             {/* No discovery yet */}
-            <Show when={!discovery.loading && !discovery()}>
+            <Show when={!discovery.loading && !discovery() && !isScanning()}>
                 <div class="text-center py-8">
                     <div class="text-gray-500 dark:text-gray-400 mb-4">
                         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -314,7 +315,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             </Show>
 
             {/* Discovery exists but has no meaningful data - show re-scan option */}
-            <Show when={!discovery.loading && discovery() && !hasValidDiscovery()}>
+            <Show when={!discovery.loading && discovery() && !hasValidDiscovery() && !isScanning()}>
                 <div class="text-center py-8">
                     <div class="text-gray-500 dark:text-gray-400 mb-4">
                         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
