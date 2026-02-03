@@ -493,7 +493,6 @@ jobs:
           # Users can now use: curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
           # This ensures scripts are version-locked to the release, not pulled from main branch
           gh release upload "${TAG}" release/install.sh --clobber
-          gh release upload "${TAG}" release/install-sensor-proxy.sh --clobber
           gh release upload "${TAG}" release/install-docker.sh --clobber
           gh release upload "${TAG}" release/pulse-auto-update.sh --clobber
 
