@@ -279,8 +279,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleLookup)))
 	r.mux.HandleFunc("/api/agents/host/uninstall", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleUninstall)))
-	r.mux.HandleFunc("/api/agents/host/unlink", RequireAdmin(r.config, RequireScope(config.ScopeHostManage, r.hostAgentHandlers.HandleUnlink)))
-	r.mux.HandleFunc("/api/agents/host/link", RequireAdmin(r.config, RequireScope(config.ScopeHostManage, r.hostAgentHandlers.HandleLink)))
+	// SECURITY: Use settings:write (not just host_manage) to prevent compromised host tokens from manipulating other hosts
+	r.mux.HandleFunc("/api/agents/host/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.hostAgentHandlers.HandleUnlink)))
+	r.mux.HandleFunc("/api/agents/host/link", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.hostAgentHandlers.HandleLink)))
 	// Host agent management routes - config endpoint is accessible by agents (GET) and admins (PATCH)
 	r.mux.HandleFunc("/api/agents/host/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		// Route /api/agents/host/{id}/config to HandleConfig
@@ -295,9 +296,10 @@ func (r *Router) setupRoutes() {
 			r.hostAgentHandlers.HandleConfig(w, req)
 			return
 		}
-		// Route DELETE /api/agents/host/{id} to HandleDeleteHost (host_manage scope)
+		// Route DELETE /api/agents/host/{id} to HandleDeleteHost
+		// SECURITY: Require settings:write (not just host_manage) to prevent compromised host tokens from deleting other hosts
 		if req.Method == http.MethodDelete {
-			if !ensureScope(w, req, config.ScopeHostManage) {
+			if !ensureScope(w, req, config.ScopeSettingsWrite) {
 				return
 			}
 			r.hostAgentHandlers.HandleDeleteHost(w, req)
@@ -1274,34 +1276,36 @@ func (r *Router) setupRoutes() {
 
 	// Notification queue/DLQ routes
 	// Security tokens are handled later in the setup with RBAC
-	r.mux.HandleFunc("/api/notifications/dlq", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+	// SECURITY: DLQ endpoints require settings:read/write scope because DLQ entries may contain
+	// notification configs with webhook URLs, SMTP credentials, or other sensitive data
+	r.mux.HandleFunc("/api/notifications/dlq", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			r.notificationQueueHandlers.GetDLQ(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
-	r.mux.HandleFunc("/api/notifications/queue/stats", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+	})))
+	r.mux.HandleFunc("/api/notifications/queue/stats", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			r.notificationQueueHandlers.GetQueueStats(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
-	r.mux.HandleFunc("/api/notifications/dlq/retry", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+	})))
+	r.mux.HandleFunc("/api/notifications/dlq/retry", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
 			r.notificationQueueHandlers.RetryDLQItem(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
-	r.mux.HandleFunc("/api/notifications/dlq/delete", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+	})))
+	r.mux.HandleFunc("/api/notifications/dlq/delete", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost || req.Method == http.MethodDelete {
 			r.notificationQueueHandlers.DeleteDLQItem(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
+	})))
 
 	// System settings and API token management
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.mtMonitor, r.monitor, r.reloadSystemSettings, r.reloadFunc)
@@ -1497,7 +1501,8 @@ func (r *Router) setupRoutes() {
 	})))
 
 	// Investigation endpoints - viewing and reinvestigation are free, fix execution (reapprove) requires Pro
-	r.mux.HandleFunc("/api/ai/findings/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+	// SECURITY: Require ai:execute scope to prevent low-privilege tokens from reading investigation details
+	r.mux.HandleFunc("/api/ai/findings/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
 		path := req.URL.Path
 		switch {
 		case strings.HasSuffix(path, "/investigation/messages"):
@@ -1512,7 +1517,7 @@ func (r *Router) setupRoutes() {
 		default:
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
-	}))
+	})))
 
 	// AI Intelligence endpoints - expose learned patterns, correlations, and predictions
 	// SECURITY: Require ai:execute scope to prevent low-privilege tokens from reading sensitive intelligence
