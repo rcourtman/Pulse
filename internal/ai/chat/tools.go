@@ -14,26 +14,25 @@ func ConvertMCPToolsToProvider(mcpTools []tools.Tool) []providers.Tool {
 		inputSchema := make(map[string]interface{})
 		inputSchema["type"] = "object"
 
-		// Convert properties
-		if len(t.InputSchema.Properties) > 0 {
-			props := make(map[string]interface{})
-			for name, prop := range t.InputSchema.Properties {
-				propDef := map[string]interface{}{
-					"type": prop.Type,
-				}
-				if prop.Description != "" {
-					propDef["description"] = prop.Description
-				}
-				if len(prop.Enum) > 0 {
-					propDef["enum"] = prop.Enum
-				}
-				if prop.Default != nil {
-					propDef["default"] = prop.Default
-				}
-				props[name] = propDef
+		// Convert properties - always include "properties" even if empty
+		// OpenAI API requires "properties" to be present as an object
+		props := make(map[string]interface{})
+		for name, prop := range t.InputSchema.Properties {
+			propDef := map[string]interface{}{
+				"type": prop.Type,
 			}
-			inputSchema["properties"] = props
+			if prop.Description != "" {
+				propDef["description"] = prop.Description
+			}
+			if len(prop.Enum) > 0 {
+				propDef["enum"] = prop.Enum
+			}
+			if prop.Default != nil {
+				propDef["default"] = prop.Default
+			}
+			props[name] = propDef
 		}
+		inputSchema["properties"] = props
 
 		// Add required fields
 		if len(t.InputSchema.Required) > 0 {

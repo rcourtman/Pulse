@@ -728,7 +728,7 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 		if s.cfg.OpenAIAPIKey == "" {
 			return nil, fmt.Errorf("OpenAI API key not configured")
 		}
-		return providers.NewOpenAIClient(s.cfg.OpenAIAPIKey, modelName, "", timeout), nil
+		return providers.NewOpenAIClient(s.cfg.OpenAIAPIKey, modelName, s.cfg.OpenAIBaseURL, timeout), nil
 	case "deepseek":
 		if s.cfg.DeepSeekAPIKey == "" {
 			return nil, fmt.Errorf("DeepSeek API key not configured")
