@@ -205,7 +205,7 @@ jobs:
     needs:
       - prepare
       - backend_tests
-    if: needs.prepare.outputs.is_prerelease != 'true'
+    if: ${{ needs.prepare.outputs.is_prerelease != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -287,7 +287,7 @@ jobs:
       - docker_build
       - integration_tests
     # Run if integration_tests passed OR was skipped (prereleases)
-    if: always() && needs.frontend_checks.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped')
+    if: ${{ always() && needs.frontend_checks.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
