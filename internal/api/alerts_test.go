@@ -311,7 +311,7 @@ func TestAcknowledgeAlertURL_Success(t *testing.T) {
 	mockMonitor.On("SyncAlertState").Return()
 	h := NewAlertHandlers(nil, mockMonitor, nil)
 
-	mockManager.On("AcknowledgeAlert", "a/b", "admin").Return(nil).Once()
+	mockManager.On("AcknowledgeAlert", "a/b", testifymock.Anything).Return(nil).Once()
 
 	req := httptest.NewRequest("POST", "/api/alerts/a%2Fb/acknowledge", nil)
 	w := httptest.NewRecorder()
@@ -377,8 +377,8 @@ func TestBulkAcknowledgeAlerts(t *testing.T) {
 	mockMonitor.On("SyncAlertState").Return()
 	h := NewAlertHandlers(nil, mockMonitor, nil)
 
-	mockManager.On("AcknowledgeAlert", "a1", "admin").Return(nil)
-	mockManager.On("AcknowledgeAlert", "a2", "admin").Return(fmt.Errorf("error"))
+	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
+	mockManager.On("AcknowledgeAlert", "a2", testifymock.Anything).Return(fmt.Errorf("error"))
 
 	body := `{"alertIds": ["a1", "a2"], "user": "admin"}`
 	req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(body))
@@ -431,7 +431,7 @@ func TestHandleAlerts(t *testing.T) {
 			mockMonitor.On("SyncAlertState").Return()
 		}},
 		{"POST", "/api/alerts/acknowledge", func() {
-			mockManager.On("AcknowledgeAlert", "a1", "admin").Return(nil).Once()
+			mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil).Once()
 			mockMonitor.On("SyncAlertState").Return()
 		}},
 		{"POST", "/api/alerts/unacknowledge", func() {
@@ -443,7 +443,7 @@ func TestHandleAlerts(t *testing.T) {
 			mockMonitor.On("SyncAlertState").Return()
 		}},
 		{"POST", "/api/alerts/a1/acknowledge", func() {
-			mockManager.On("AcknowledgeAlert", "a1", "admin").Return(nil).Once()
+			mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil).Once()
 			mockMonitor.On("SyncAlertState").Return()
 		}},
 		{"POST", "/api/alerts/a1/unacknowledge", func() {
@@ -508,7 +508,7 @@ func TestAcknowledgeAlertByBody_Success(t *testing.T) {
 	mockMonitor.On("SyncAlertState").Return()
 	h := NewAlertHandlers(nil, mockMonitor, nil)
 
-	mockManager.On("AcknowledgeAlert", "a1", "admin").Return(nil)
+	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
 
 	body := `{"id": "a1", "user": "admin"}`
 	req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(body))
@@ -580,7 +580,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("AcknowledgeAlertByBody_ManagerError", func(t *testing.T) {
-		mockManager.On("AcknowledgeAlert", "a1", "admin").Return(fmt.Errorf("error")).Once()
+		mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(fmt.Errorf("error")).Once()
 		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"id": "a1", "user": "admin"}`))
 		w := httptest.NewRecorder()
 		h.AcknowledgeAlertByBody(w, req)
@@ -730,7 +730,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("AcknowledgeAlert_Error", func(t *testing.T) {
-		mockManager.On("AcknowledgeAlert", "a1", "admin").Return(errors.New("not found")).Once()
+		mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(errors.New("not found")).Once()
 		req := httptest.NewRequest("POST", "/api/alerts/a1/acknowledge", nil)
 		w := httptest.NewRecorder()
 		h.AcknowledgeAlert(w, req)

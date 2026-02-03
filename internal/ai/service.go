@@ -3000,13 +3000,39 @@ func (s *Service) fetchURL(ctx context.Context, urlStr string) (string, error) {
 		return "", err
 	}
 
-	// Create HTTP client with timeout
+	// Create HTTP client with timeout and safe transport to prevent SSRF/DNS rebinding
 	client := &http.Client{
 		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				// Use a dialer with reasonable timeout
+				d := net.Dialer{
+					Timeout: 10 * time.Second,
+				}
+				conn, err := d.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+
+				// Validate the actual connected IP address
+				// This prevents DNS rebinding attacks
+				if tcpConn, ok := conn.(*net.TCPConn); ok {
+					remoteAddr := tcpConn.RemoteAddr().(*net.TCPAddr)
+					if isBlockedFetchIP(remoteAddr.IP) {
+						conn.Close()
+						return nil, fmt.Errorf("URL resolves to blocked IP address: %s", remoteAddr.IP)
+					}
+				}
+
+				return conn, nil
+			},
+			DisableKeepAlives: true, // One-off requests
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 3 {
 				return fmt.Errorf("too many redirects")
 			}
+			// Still validate the URL structure and initial resolution for failsafe
 			if _, err := parseAndValidateFetchURL(ctx, req.URL.String()); err != nil {
 				return err
 			}
@@ -3117,13 +3143,23 @@ func isBlockedFetchIP(ip net.IP) bool {
 		return true
 	}
 	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		// Allow loopback only if explicitly permitted (for local development)
 		if ip.IsLoopback() && os.Getenv("PULSE_AI_ALLOW_LOOPBACK") == "true" {
 			return false
 		}
 		return true
 	}
+	// SECURITY: Block private IP ranges (RFC1918) to prevent SSRF attacks
+	// Private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+	if ip.IsPrivate() {
+		// Allow private IPs only if explicitly permitted
+		if os.Getenv("PULSE_AI_ALLOW_PRIVATE_IPS") == "true" {
+			return false
+		}
+		return true
+	}
 	// Block multicast and other non-unicast targets.
-	if !ip.IsGlobalUnicast() && !ip.IsPrivate() {
+	if !ip.IsGlobalUnicast() {
 		return true
 	}
 	return false

@@ -23,6 +23,8 @@ const (
 	ScopeHostManage       = "host-agent:manage"
 	ScopeSettingsRead     = "settings:read"
 	ScopeSettingsWrite    = "settings:write"
+	ScopeAIExecute        = "ai:execute" // Allows executing AI commands and remediation plans
+	ScopeAgentExec        = "agent:exec" // Allows agent execution WebSocket connections
 )
 
 // AllKnownScopes enumerates scopes recognized by the backend (excluding the wildcard sentinel).
@@ -38,6 +40,8 @@ var AllKnownScopes = []string{
 	ScopeHostManage,
 	ScopeSettingsRead,
 	ScopeSettingsWrite,
+	ScopeAIExecute,
+	ScopeAgentExec,
 }
 
 var scopeLookup = func() map[string]struct{} {

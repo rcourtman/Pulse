@@ -585,3 +585,18 @@ func InvalidateUserSessions(user string) {
 		Int("sessions_invalidated", len(sessionIDs)).
 		Msg("Invalidated all user sessions")
 }
+
+// UntrackUserSession removes a single session from a user's session list
+// (used for single session logout, not password change which clears all)
+func UntrackUserSession(user, sessionID string) {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+
+	sessions := allSessions[user]
+	for i, sid := range sessions {
+		if sid == sessionID {
+			allSessions[user] = append(sessions[:i], sessions[i+1:]...)
+			break
+		}
+	}
+}

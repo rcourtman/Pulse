@@ -1055,6 +1055,20 @@ func (r *Router) setupRoutes() {
 				}
 			}
 
+			// SECURITY: Check settings:read scope for API token auth
+			if hasValidAPIToken && token != "" {
+				record, _ := r.config.ValidateAPIToken(token)
+				if record != nil && !record.HasScope(config.ScopeSettingsRead) {
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Str("path", req.URL.Path).
+						Str("token_id", record.ID).
+						Msg("API token missing settings:read scope for export")
+					http.Error(w, "API token missing required scope: settings:read", http.StatusForbidden)
+					return
+				}
+			}
+
 			// Log successful export attempt
 			log.Info().
 				Str("ip", req.RemoteAddr).
@@ -1152,6 +1166,20 @@ func (r *Router) setupRoutes() {
 						Str("ip", req.RemoteAddr).
 						Msg("Import allowed - private network with no auth")
 					// Continue - allow import on private networks for homelab users
+				}
+			}
+
+			// SECURITY: Check settings:write scope for API token auth
+			if hasValidAPIToken && token != "" {
+				record, _ := r.config.ValidateAPIToken(token)
+				if record != nil && !record.HasScope(config.ScopeSettingsWrite) {
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Str("path", req.URL.Path).
+						Str("token_id", record.ID).
+						Msg("API token missing settings:write scope for import")
+					http.Error(w, "API token missing required scope: settings:write", http.StatusForbidden)
+					return
 				}
 			}
 
@@ -1255,15 +1283,22 @@ func (r *Router) setupRoutes() {
 
 	// Agent execution server for AI tool use
 	r.agentExecServer = agentexec.NewServer(func(token string) bool {
-		// Validate agent tokens using the API tokens system
+		// Validate agent tokens using the API tokens system with scope check
 		if r.config == nil {
 			return false
 		}
-		// First check the new API tokens system
-		if _, ok := r.config.ValidateAPIToken(token); ok {
+		// Check the new API tokens system with scope validation
+		if record, ok := r.config.ValidateAPIToken(token); ok {
+			// SECURITY: Require agent:exec scope for WebSocket connections
+			if !record.HasScope(config.ScopeAgentExec) {
+				log.Warn().
+					Str("token_id", record.ID).
+					Msg("Agent exec token missing required scope: agent:exec")
+				return false
+			}
 			return true
 		}
-		// Fall back to legacy single token if set
+		// Fall back to legacy single token if set (legacy tokens have wildcard access)
 		if r.config.APIToken != "" {
 			return auth.CompareAPIToken(token, r.config.APIToken)
 		}
@@ -1344,12 +1379,12 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/test", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
 	r.mux.HandleFunc("/api/ai/test/{provider}", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestProvider)))
 	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, r.aiSettingsHandler.HandleListModels))
-	r.mux.HandleFunc("/api/ai/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecute))
-	r.mux.HandleFunc("/api/ai/execute/stream", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteStream))
-	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureKubernetesAI, r.aiSettingsHandler.HandleAnalyzeKubernetesCluster)))
-	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIAlerts, r.aiSettingsHandler.HandleInvestigateAlert)))
+	r.mux.HandleFunc("/api/ai/execute", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecute)))
+	r.mux.HandleFunc("/api/ai/execute/stream", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecuteStream)))
+	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, RequireLicenseFeature(r.licenseHandlers, license.FeatureKubernetesAI, r.aiSettingsHandler.HandleAnalyzeKubernetesCluster))))
+	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, RequireLicenseFeature(r.licenseHandlers, license.FeatureAIAlerts, r.aiSettingsHandler.HandleInvestigateAlert))))
 
-	r.mux.HandleFunc("/api/ai/run-command", RequireAuth(r.config, r.aiSettingsHandler.HandleRunCommand))
+	r.mux.HandleFunc("/api/ai/run-command", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleRunCommand)))
 	r.mux.HandleFunc("/api/ai/knowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleGetGuestKnowledge))
 	r.mux.HandleFunc("/api/ai/knowledge/save", RequireAuth(r.config, r.aiSettingsHandler.HandleSaveGuestNote))
 	r.mux.HandleFunc("/api/ai/knowledge/delete", RequireAuth(r.config, r.aiSettingsHandler.HandleDeleteGuestNote))
@@ -1470,8 +1505,8 @@ func (r *Router) setupRoutes() {
 	}))
 	r.mux.HandleFunc("/api/ai/remediation/plan", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRemediationPlan))
 	r.mux.HandleFunc("/api/ai/remediation/approve", RequireAuth(r.config, r.aiSettingsHandler.HandleApproveRemediationPlan))
-	r.mux.HandleFunc("/api/ai/remediation/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteRemediationPlan))
-	r.mux.HandleFunc("/api/ai/remediation/rollback", RequireAuth(r.config, r.aiSettingsHandler.HandleRollbackRemediationPlan))
+	r.mux.HandleFunc("/api/ai/remediation/execute", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecuteRemediationPlan)))
+	r.mux.HandleFunc("/api/ai/remediation/rollback", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleRollbackRemediationPlan)))
 	r.mux.HandleFunc("/api/ai/circuit/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetCircuitBreakerStatus))
 
 	// Phase 7: Incident Recording API
@@ -4035,6 +4070,44 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	// SECURITY: Require authentication before allowing password change attempts
+	// This prevents brute-force attacks on the current password
+	if !CheckAuth(r.config, w, req) {
+		log.Warn().
+			Str("ip", req.RemoteAddr).
+			Str("path", req.URL.Path).
+			Msg("Unauthenticated password change attempt blocked")
+		// CheckAuth already wrote the error response
+		return
+	}
+
+	// Apply rate limiting to password change attempts to prevent brute-force
+	clientIP := GetClientIP(req)
+	if !authLimiter.Allow(clientIP) {
+		log.Warn().
+			Str("ip", clientIP).
+			Msg("Rate limit exceeded for password change")
+		writeErrorResponse(w, http.StatusTooManyRequests, "rate_limited",
+			"Too many password change attempts. Please try again later.", nil)
+		return
+	}
+
+	// Check lockout status for the client IP
+	_, lockedUntil, isLocked := GetLockoutInfo(clientIP)
+	if isLocked {
+		remainingMinutes := int(time.Until(lockedUntil).Minutes())
+		if remainingMinutes < 1 {
+			remainingMinutes = 1
+		}
+		log.Warn().
+			Str("ip", clientIP).
+			Time("locked_until", lockedUntil).
+			Msg("Password change blocked - IP locked out")
+		writeErrorResponse(w, http.StatusForbidden, "locked_out",
+			fmt.Sprintf("Too many failed attempts. Try again in %d minutes.", remainingMinutes), nil)
+		return
+	}
+
 	// Check if using proxy auth and if so, verify admin status
 	if r.config.ProxyAuthSecret != "" {
 		if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid {
@@ -4109,6 +4182,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 								Str("ip", req.RemoteAddr).
 								Str("username", username).
 								Msg("Failed password change attempt - incorrect current password in auth header")
+							RecordFailedLogin(clientIP)
 							writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 								"Current password is incorrect", nil)
 							return
@@ -4128,6 +4202,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 				Str("ip", req.RemoteAddr).
 				Str("username", username).
 				Msg("Failed password change attempt - incorrect current password")
+			RecordFailedLogin(clientIP)
 			writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 				"Current password is incorrect", nil)
 			return

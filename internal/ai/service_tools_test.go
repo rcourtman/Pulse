@@ -93,9 +93,11 @@ func TestIsBlockedFetchIP(t *testing.T) {
 		{"::1", true},
 		{"0.0.0.0", true},
 		{"169.254.1.1", true},
-		{"192.168.1.1", false}, // Private is allowed
-		{"8.8.8.8", false},     // Global is allowed
-		{"224.0.0.1", true},    // Multicast
+		{"192.168.1.1", true}, // Private IPs are blocked by default for security (SSRF prevention)
+		{"10.0.0.1", true},    // Private range 10.x.x.x blocked
+		{"172.16.0.1", true},  // Private range 172.16.x.x blocked
+		{"8.8.8.8", false},    // Global is allowed
+		{"224.0.0.1", true},   // Multicast
 	}
 
 	for _, tt := range tests {
@@ -107,6 +109,15 @@ func TestIsBlockedFetchIP(t *testing.T) {
 
 	if !isBlockedFetchIP(nil) {
 		t.Error("nil IP should be blocked")
+	}
+
+	// Test that private IPs can be allowed via environment variable
+	os.Setenv("PULSE_AI_ALLOW_PRIVATE_IPS", "true")
+	defer os.Unsetenv("PULSE_AI_ALLOW_PRIVATE_IPS")
+
+	privateIP := net.ParseIP("192.168.1.1")
+	if isBlockedFetchIP(privateIP) {
+		t.Error("Private IP should be allowed when PULSE_AI_ALLOW_PRIVATE_IPS=true")
 	}
 }
 
