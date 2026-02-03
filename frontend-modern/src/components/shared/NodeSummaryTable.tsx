@@ -88,6 +88,16 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     );
   });
 
+  // Calculate total column count for colspan in expanded rows
+  const totalColumnCount = createMemo(() => {
+    let count = 6; // Base: Name, Uptime, CPU, Memory, Disk, Link
+    if (hasAnyTemperatureData()) count += 1;
+    if (props.currentTab === 'dashboard') count += 2; // VMs, CTs
+    else if (props.currentTab === 'storage') count += 2; // Storage, Disks
+    else if (props.currentTab === 'backups') count += 1; // Backups
+    return count;
+  });
+
   const nodeKey = (instance?: string, nodeName?: string) => `${instance ?? ''}::${nodeName ?? ''}`;
 
   const vmCountsByNode = createMemo<Record<string, number>>(() => {
@@ -834,7 +844,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </tr>
                     <Show when={isExpanded() && isPVEItem}>
                       <tr>
-                        <td colspan={11} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
+                        <td colspan={totalColumnCount()} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
                           <Suspense fallback={<div class="flex justify-center p-4">Loading stats...</div>}>
                             <NodeDrawer node={node!} />
                           </Suspense>
