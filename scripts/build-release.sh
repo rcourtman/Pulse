@@ -27,12 +27,6 @@ else
     echo "Warning: PULSE_LICENSE_PUBLIC_KEY not set; Pulse Pro license activation will fail for release binaries."
 fi
 
-# Optional legacy public key for dual-key verification during key rotation
-if [[ -n "${PULSE_LICENSE_LEGACY_PUBLIC_KEY:-}" ]]; then
-    LICENSE_LDFLAGS="${LICENSE_LDFLAGS} -X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedLegacyPublicKey=${PULSE_LICENSE_LEGACY_PUBLIC_KEY}"
-    echo "Legacy public key configured for dual-key verification."
-fi
-
 # Clean previous builds
 rm -rf $BUILD_DIR $RELEASE_DIR
 mkdir -p $BUILD_DIR $RELEASE_DIR

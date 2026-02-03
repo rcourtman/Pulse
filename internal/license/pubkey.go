@@ -14,79 +14,41 @@ import (
 // Example: go build -ldflags "-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=BASE64_KEY"
 var EmbeddedPublicKey string = ""
 
-// EmbeddedLegacyPublicKey is the previous production public key (base64 encoded).
-// Used for dual-key verification during key rotation to validate old licenses.
-// Set at build time via -ldflags alongside EmbeddedPublicKey.
-var EmbeddedLegacyPublicKey string = ""
-
-// InitPublicKey initializes the public key(s) for license validation.
-// Primary key priority:
+// InitPublicKey initializes the public key for license validation.
+// Priority:
 //  1. PULSE_LICENSE_PUBLIC_KEY environment variable (base64 encoded)
 //  2. EmbeddedPublicKey (set at compile time via -ldflags)
+//  3. If PULSE_LICENSE_DEV_MODE=true, skip validation (development only)
 //
-// Legacy key priority (for dual-key verification during key rotation):
-//  1. PULSE_LICENSE_LEGACY_PUBLIC_KEY environment variable (base64 encoded)
-//  2. EmbeddedLegacyPublicKey (set at compile time via -ldflags)
-//
-// If PULSE_LICENSE_DEV_MODE=true, skip validation (development only).
 // Call this during application startup before any license operations.
 func InitPublicKey() {
-	devMode := os.Getenv("PULSE_LICENSE_DEV_MODE") == "true"
-	primaryLoaded := false
-	legacyLoaded := false
-
-	// Load primary public key
+	// Priority 1: Environment variable
 	if envKey := os.Getenv("PULSE_LICENSE_PUBLIC_KEY"); envKey != "" {
 		key, err := decodePublicKey(envKey)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to decode PULSE_LICENSE_PUBLIC_KEY")
+			log.Error().Err(err).Msg("Failed to decode PULSE_LICENSE_PUBLIC_KEY, trying embedded key")
+			// Fall through to try embedded key instead of returning
 		} else {
 			SetPublicKey(key)
 			log.Info().Msg("License public key loaded from environment")
-			primaryLoaded = true
+			return
 		}
 	}
-	if !primaryLoaded && EmbeddedPublicKey != "" {
+
+	// Priority 2: Embedded key (set at compile time)
+	if EmbeddedPublicKey != "" {
 		key, err := decodePublicKey(EmbeddedPublicKey)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to decode embedded public key")
 		} else {
 			SetPublicKey(key)
 			log.Info().Msg("License public key loaded from embedded key")
-			primaryLoaded = true
+			return
 		}
 	}
 
-	// Load legacy public key (for dual-key verification)
-	if envKey := os.Getenv("PULSE_LICENSE_LEGACY_PUBLIC_KEY"); envKey != "" {
-		key, err := decodePublicKey(envKey)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to decode PULSE_LICENSE_LEGACY_PUBLIC_KEY")
-		} else {
-			SetLegacyPublicKey(key)
-			log.Info().Msg("Legacy license public key loaded from environment")
-			legacyLoaded = true
-		}
-	}
-	if !legacyLoaded && EmbeddedLegacyPublicKey != "" {
-		key, err := decodePublicKey(EmbeddedLegacyPublicKey)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to decode embedded legacy public key")
-		} else {
-			SetLegacyPublicKey(key)
-			log.Info().Msg("Legacy license public key loaded from embedded key")
-			legacyLoaded = true
-		}
-	}
-
-	// Log status
-	if primaryLoaded && legacyLoaded {
-		log.Info().Msg("Dual-key license verification enabled (primary + legacy)")
-	} else if primaryLoaded {
-		log.Info().Msg("Single-key license verification enabled")
-	} else if legacyLoaded {
-		log.Warn().Msg("Only legacy key loaded - new licenses will not validate")
-	} else if devMode {
+	// No key available
+	if os.Getenv("PULSE_LICENSE_DEV_MODE") == "true" {
 		log.Warn().Msg("License validation running in DEV MODE - signatures not verified")
 	} else {
 		log.Warn().Msg("No license public key configured - license activation will fail")

@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1.7-labs
 ARG BUILD_AGENT=1
 ARG PULSE_LICENSE_PUBLIC_KEY
-ARG PULSE_LICENSE_LEGACY_PUBLIC_KEY
 
 # Build stage for frontend (must be built first for embedding)
 # Force amd64 platform to avoid slow QEMU emulation during multi-arch builds
@@ -28,7 +27,6 @@ FROM --platform=linux/amd64 golang:1.24-alpine AS backend-builder
 
 ARG BUILD_AGENT
 ARG PULSE_LICENSE_PUBLIC_KEY
-ARG PULSE_LICENSE_LEGACY_PUBLIC_KEY
 ARG VERSION
 WORKDIR /app
 
@@ -60,9 +58,6 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     LICENSE_LDFLAGS="" && \
     if [ -n "${PULSE_LICENSE_PUBLIC_KEY}" ]; then \
       LICENSE_LDFLAGS="-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"; \
-    fi && \
-    if [ -n "${PULSE_LICENSE_LEGACY_PUBLIC_KEY}" ]; then \
-      LICENSE_LDFLAGS="${LICENSE_LDFLAGS} -X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedLegacyPublicKey=${PULSE_LICENSE_LEGACY_PUBLIC_KEY}"; \
     fi && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION} ${LICENSE_LDFLAGS}" \

@@ -17,20 +17,10 @@ import (
 // For development, leave empty to skip validation.
 var publicKey ed25519.PublicKey
 
-// Legacy public key for validating licenses signed with the previous key.
-// Used during key rotation to maintain compatibility with existing licenses.
-var legacyPublicKey ed25519.PublicKey
-
 // SetPublicKey sets the public key for license validation.
 // This should be called during initialization with the production key.
 func SetPublicKey(key ed25519.PublicKey) {
 	publicKey = key
-}
-
-// SetLegacyPublicKey sets the legacy public key for validating old licenses.
-// This enables dual-key verification during key rotation periods.
-func SetLegacyPublicKey(key ed25519.PublicKey) {
-	legacyPublicKey = key
 }
 
 // License errors
@@ -427,24 +417,11 @@ func ValidateLicense(licenseKey string) (*License, error) {
 
 	// Verify signature
 	// In production, public key MUST be set. In dev mode, we skip signature validation.
-	// Dual-key support: try primary key first, then legacy key for old licenses.
 	devMode := os.Getenv("PULSE_LICENSE_DEV_MODE") == "true"
 	signedData := []byte(parts[0] + "." + parts[1])
 
-	if len(publicKey) > 0 || len(legacyPublicKey) > 0 {
-		verified := false
-
-		// Try primary key first (new licenses)
-		if len(publicKey) > 0 && ed25519.Verify(publicKey, signedData, signature) {
-			verified = true
-		}
-
-		// Fall back to legacy key (old licenses signed before key rotation)
-		if !verified && len(legacyPublicKey) > 0 && ed25519.Verify(legacyPublicKey, signedData, signature) {
-			verified = true
-		}
-
-		if !verified {
+	if len(publicKey) > 0 {
+		if !ed25519.Verify(publicKey, signedData, signature) {
 			return nil, ErrSignatureInvalid
 		}
 	} else if !devMode {
