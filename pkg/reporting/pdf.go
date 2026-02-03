@@ -483,18 +483,18 @@ func (g *PDFGenerator) generateObservations(data *ReportData) []observation {
 		})
 	}
 
-	// Physical disk wear level check
+	// Physical disk health check (WearLevel = SSD life remaining, 100% = healthy, 0% = end of life)
 	for _, disk := range data.Disks {
-		if disk.WearLevel >= 90 {
+		if disk.WearLevel > 0 && disk.WearLevel <= 10 {
 			obs = append(obs, observation{
 				icon:  "-",
-				text:  fmt.Sprintf("CRITICAL: Disk %s at %d%% wear - replace immediately", disk.Device, disk.WearLevel),
+				text:  fmt.Sprintf("CRITICAL: Disk %s has only %d%% life remaining - replace immediately", disk.Device, disk.WearLevel),
 				color: colorDanger,
 			})
-		} else if disk.WearLevel >= 70 {
+		} else if disk.WearLevel > 0 && disk.WearLevel <= 30 {
 			obs = append(obs, observation{
 				icon:  "-",
-				text:  fmt.Sprintf("Disk %s at %d%% wear - plan replacement", disk.Device, disk.WearLevel),
+				text:  fmt.Sprintf("Disk %s has %d%% life remaining - plan replacement", disk.Device, disk.WearLevel),
 				color: colorWarning,
 			})
 		}
@@ -570,12 +570,12 @@ func (g *PDFGenerator) calculateTrend(data *ReportData, metricType string) strin
 func (g *PDFGenerator) generateRecommendations(data *ReportData, criticalAlerts, warningAlerts int) []string {
 	var recs []string
 
-	// Critical disk wear - highest priority
+	// Critical disk health - highest priority (WearLevel = life remaining, 100% = healthy)
 	for _, disk := range data.Disks {
-		if disk.WearLevel >= 90 {
-			recs = append(recs, fmt.Sprintf("Replace disk %s immediately (wear level at %d%%)", disk.Device, disk.WearLevel))
-		} else if disk.WearLevel >= 70 {
-			recs = append(recs, fmt.Sprintf("Schedule replacement for disk %s within 3-6 months", disk.Device))
+		if disk.WearLevel > 0 && disk.WearLevel <= 10 {
+			recs = append(recs, fmt.Sprintf("Replace disk %s immediately (only %d%% life remaining)", disk.Device, disk.WearLevel))
+		} else if disk.WearLevel > 0 && disk.WearLevel <= 30 {
+			recs = append(recs, fmt.Sprintf("Schedule replacement for disk %s within 3-6 months (%d%% life remaining)", disk.Device, disk.WearLevel))
 		}
 		if disk.Health == "FAILED" {
 			recs = append(recs, fmt.Sprintf("Investigate and replace disk %s - SMART health check failed", disk.Device))
@@ -1436,7 +1436,7 @@ func (g *PDFGenerator) writeDisksSection(pdf *fpdf.Fpdf, data *ReportData) {
 
 	// Table header
 	colWidths := []float64{25, 50, 25, 25, 20, 25}
-	headers := []string{"Device", "Model", "Size", "Health", "Temp", "Wear"}
+	headers := []string{"Device", "Model", "Size", "Health", "Temp", "Life"}
 
 	pdf.SetFillColor(colorTableHeader[0], colorTableHeader[1], colorTableHeader[2])
 	pdf.SetTextColor(255, 255, 255)
@@ -1494,17 +1494,19 @@ func (g *PDFGenerator) writeDisksSection(pdf *fpdf.Fpdf, data *ReportData) {
 		pdf.CellFormat(colWidths[4], 6, tempStr, "1", 0, "C", fill, 0, "")
 		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
 
-		// Wear level
-		wearStr := "-"
-		if disk.WearLevel >= 0 && disk.WearLevel <= 100 {
-			wearStr = fmt.Sprintf("%d%%", disk.WearLevel)
-			if disk.WearLevel >= 80 {
+		// SSD Life remaining (100% = healthy, 0% = end of life)
+		lifeStr := "-"
+		if disk.WearLevel > 0 && disk.WearLevel <= 100 {
+			lifeStr = fmt.Sprintf("%d%%", disk.WearLevel)
+			if disk.WearLevel <= 10 {
 				pdf.SetTextColor(colorDanger[0], colorDanger[1], colorDanger[2])
-			} else if disk.WearLevel >= 50 {
+			} else if disk.WearLevel <= 30 {
 				pdf.SetTextColor(colorWarning[0], colorWarning[1], colorWarning[2])
+			} else {
+				pdf.SetTextColor(colorAccent[0], colorAccent[1], colorAccent[2])
 			}
 		}
-		pdf.CellFormat(colWidths[5], 6, wearStr, "1", 0, "C", fill, 0, "")
+		pdf.CellFormat(colWidths[5], 6, lifeStr, "1", 0, "C", fill, 0, "")
 		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
 
 		pdf.Ln(-1)
