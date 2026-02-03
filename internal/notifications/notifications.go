@@ -57,33 +57,73 @@ const (
 
 // createSecureWebhookClient creates an HTTP client with security controls
 func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *http.Client {
+	// dedicated transport that pins DNS resolution to prevent rebinding
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			// Extract hostname and port
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, err
+			}
+
+			// Validate IP if it's already an IP
+			if ip := net.ParseIP(host); ip != nil {
+				if isPrivateIP(ip) && !n.isIPInAllowlist(ip) {
+					return nil, fmt.Errorf("blocked private IP: %s", ip)
+				}
+				// It's an IP, dial directly
+				d := net.Dialer{Timeout: 10 * time.Second}
+				return d.DialContext(ctx, network, addr)
+			}
+
+			// Resolve hostname
+			ips, err := net.LookupIP(host)
+			if err != nil {
+				return nil, err
+			}
+
+			// Find first permitted IP
+			var permittedIP net.IP
+			for _, ip := range ips {
+				if !isPrivateIP(ip) || n.isIPInAllowlist(ip) {
+					permittedIP = ip
+					break
+				}
+			}
+
+			if permittedIP == nil {
+				return nil, fmt.Errorf("hostname %s resolves to blocked private IPs", host)
+			}
+
+			// Log if we filtered some IPs
+			if len(ips) > 1 {
+				log.Debug().
+					Str("host", host).
+					Str("selected_ip", permittedIP.String()).
+					Msg("DNS resolution pinned for webhook security")
+			}
+
+			// Dial the permitted IP
+			d := net.Dialer{Timeout: 10 * time.Second}
+			return d.DialContext(ctx, network, net.JoinHostPort(permittedIP.String(), port))
+		},
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
 	return &http.Client{
-		Timeout: timeout,
+		Timeout:   timeout,
+		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			// Limit number of redirects to prevent redirect loops
-			if len(via) >= WebhookMaxRedirects {
-				return fmt.Errorf("stopped after %d redirects", WebhookMaxRedirects)
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
 			}
-
-			newURL := req.URL.String()
-
-			// Prevent redirects to localhost or private networks (SSRF protection)
-			if err := n.ValidateWebhookURL(newURL); err != nil {
-				log.Warn().
-					Str("original", via[0].URL.String()).
-					Str("redirect", newURL).
-					Err(err).
-					Msg("Blocked webhook redirect to unsafe URL")
-				return fmt.Errorf("redirect to unsafe URL blocked: %w", err)
-			}
-
-			log.Debug().
-				Str("from", via[len(via)-1].URL.String()).
-				Str("to", newURL).
-				Int("redirectCount", len(via)).
-				Msg("Following webhook redirect")
-
-			return nil
+			// Re-validate strictly on redirect
+			return n.ValidateWebhookURL(req.URL.String())
 		},
 	}
 }
@@ -213,7 +253,7 @@ func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
 		normalized.Mode = AppriseModeCLI
 	}
 
-	normalized.CLIPath = strings.TrimSpace(normalized.CLIPath)
+	normalized.CLIPath = "apprise" // Force default binary for security
 	if normalized.CLIPath == "" {
 		normalized.CLIPath = "apprise"
 	}
