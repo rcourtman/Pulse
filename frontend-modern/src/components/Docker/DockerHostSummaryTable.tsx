@@ -1,7 +1,6 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
-import { renderDockerStatusBadge } from './DockerStatusBadge';
 import { resolveHostRuntime } from './runtimeDisplay';
 import { formatUptime } from '@/utils/format';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
@@ -12,10 +11,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { isAgentOutdated, getAgentVersionTooltip } from '@/utils/agentVersion';
-import { DockerHostMetadataAPI, type DockerHostMetadata } from '@/api/dockerHostMetadata';
-import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
-import { showSuccess, showError } from '@/utils/toast';
-import { logger } from '@/utils/logger';
+
 
 export interface DockerHostSummary {
   host: DockerHost;
@@ -38,8 +34,6 @@ interface DockerHostSummaryTableProps {
   summaries: () => DockerHostSummary[];
   selectedHostId: () => string | null;
   onSelect: (hostId: string) => void;
-  dockerHostMetadata?: Record<string, DockerHostMetadata>;
-  onHostCustomUrlUpdate?: (hostId: string, url: string) => void;
 }
 
 type SortKey = 'name' | 'uptime' | 'cpu' | 'memory' | 'disk' | 'running' | 'lastSeen' | 'agent';
@@ -60,9 +54,6 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
   const [sortDirection, setSortDirection] = createSignal<SortDirection>('asc');
   const { isMobile } = useBreakpoint();
 
-  // URL editing state using shared hook
-  const urlEdit = createUrlEditState();
-
   const handleSort = (key: SortKey) => {
     if (sortKey() === key) {
       setSortDirection(sortDirection() === 'asc' ? 'desc' : 'asc');
@@ -76,8 +67,6 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
     if (!lastSeen) return 0;
     return lastSeen;
   };
-
-
 
   const sortedSummaries = createMemo(() => {
     const list = [...props.summaries()];
@@ -133,68 +122,6 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
     return list;
   });
 
-  // URL editing functions
-  const getHostCustomUrl = (hostId: string) => {
-    return props.dockerHostMetadata?.[hostId]?.customUrl;
-  };
-
-  const handleStartEditingUrl = (hostId: string, event: MouseEvent) => {
-    const currentUrl = getHostCustomUrl(hostId) || '';
-    urlEdit.startEditing(hostId, currentUrl, event);
-  };
-
-  const handleSaveUrl = async () => {
-    const hostId = urlEdit.editingId();
-    if (!hostId) return;
-
-    const newUrl = urlEdit.editingValue().trim();
-    urlEdit.setIsSaving(true);
-
-    try {
-      await DockerHostMetadataAPI.updateMetadata(hostId, { customUrl: newUrl });
-
-      if (props.onHostCustomUrlUpdate) {
-        props.onHostCustomUrlUpdate(hostId, newUrl);
-      }
-
-      if (newUrl) {
-        showSuccess('Host URL saved');
-      } else {
-        showSuccess('Host URL cleared');
-      }
-
-      urlEdit.finishEditing();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save host URL';
-      logger.error('Failed to save host URL:', err);
-      showError(message);
-      urlEdit.setIsSaving(false);
-    }
-  };
-
-  const handleDeleteUrl = async () => {
-    const hostId = urlEdit.editingId();
-    if (!hostId) return;
-
-    urlEdit.setIsSaving(true);
-
-    try {
-      await DockerHostMetadataAPI.updateMetadata(hostId, { customUrl: '' });
-
-      if (props.onHostCustomUrlUpdate) {
-        props.onHostCustomUrlUpdate(hostId, '');
-      }
-
-      showSuccess('Host URL removed');
-      urlEdit.finishEditing();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to remove host URL';
-      logger.error('Failed to remove host URL:', err);
-      showError(message);
-      urlEdit.setIsSaving(false);
-    }
-  };
-
   const renderSortIndicator = (key: SortKey) => {
     if (sortKey() !== key) return null;
     return sortDirection() === 'asc' ? '▲' : '▼';
@@ -204,7 +131,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
 
   return (
     <>
-      <Card padding="none" tone="glass" class={`mb-4 ${urlEdit.isEditing() ? 'overflow-visible' : 'overflow-hidden'}`}>
+      <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
         <ScrollableTable persistKey="docker-host-summary" minWidth={isMobile() ? '100%' : '800px'}>
           <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed" }}>
             <thead>
@@ -221,10 +148,11 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                   Host {renderSortIndicator('name')}
                 </th>
                 <th
-                  class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap"
-                  style={{ width: "70px" }}
+                  class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  style={{ width: "80px" }}
+                  onClick={() => handleSort('uptime')}
                 >
-                  Status
+                  Uptime {renderSortIndicator('uptime')}
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
@@ -253,13 +181,6 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                   onClick={() => handleSort('running')}
                 >
                   Containers {renderSortIndicator('running')}
-                </th>
-                <th
-                  class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                  style={{ width: "80px" }}
-                  onClick={() => handleSort('uptime')}
-                >
-                  Uptime {renderSortIndicator('uptime')}
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
@@ -338,32 +259,6 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                           <span class="font-medium text-[11px] text-gray-900 dark:text-gray-100 truncate" title={getDisplayName(summary.host)}>
                             {getDisplayName(summary.host)}
                           </span>
-                          {/* URL icon and link */}
-                          <Show when={getHostCustomUrl(summary.host.id)}>
-                            <a
-                              href={getHostCustomUrl(summary.host.id)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              class="flex-shrink-0 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-                              title={`Open ${getHostCustomUrl(summary.host.id)}`}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                              </svg>
-                            </a>
-                          </Show>
-                          <button
-                            type="button"
-                            class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                            classList={{ 'opacity-100': urlEdit.editingId() === summary.host.id }}
-                            title={getHostCustomUrl(summary.host.id) ? 'Edit URL' : 'Add URL'}
-                            onClick={(e) => handleStartEditingUrl(summary.host.id, e)}
-                          >
-                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                          </button>
                           <Show when={getDisplayName(summary.host) !== summary.host.hostname}>
                             <span class="hidden sm:inline text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
                               ({summary.host.hostname})
@@ -384,9 +279,11 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                           </div>
                         </div>
                       </td>
-                      <td class="px-2 py-1 align-middle">
-                        <div class="flex justify-center items-center h-full w-full whitespace-nowrap">
-                          {renderDockerStatusBadge(summary.host.status)}
+                      <td class="px-2 py-1 align-middle whitespace-nowrap">
+                        <div class="flex justify-center items-center h-full">
+                          <span class="text-xs text-gray-600 dark:text-gray-400">
+                            {uptimeLabel}
+                          </span>
                         </div>
                       </td>
                       <td class="px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
@@ -433,13 +330,6 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                               {summary.totalCount}
                             </span>
                           </Show>
-                        </div>
-                      </td>
-                      <td class="px-2 py-1 align-middle whitespace-nowrap">
-                        <div class="flex justify-center items-center h-full">
-                          <span class="text-xs text-gray-600 dark:text-gray-400">
-                            {uptimeLabel}
-                          </span>
                         </div>
                       </td>
                       <td class="px-2 py-1 align-middle">
@@ -493,21 +383,6 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
           </table>
         </ScrollableTable>
       </Card>
-
-      {/* URL editing popover - using shared component */}
-      <UrlEditPopover
-        isOpen={urlEdit.isEditing()}
-        value={urlEdit.editingValue()}
-        position={urlEdit.position()}
-        isSaving={urlEdit.isSaving()}
-        hasExistingUrl={!!getHostCustomUrl(urlEdit.editingId() || '')}
-        placeholder="https://portainer.local:9000"
-        helpText="Add a URL to quickly access this host's management interface (e.g., Portainer)"
-        onValueChange={urlEdit.setEditingValue}
-        onSave={handleSaveUrl}
-        onCancel={urlEdit.cancelEditing}
-        onDelete={handleDeleteUrl}
-      />
     </>
   );
 };

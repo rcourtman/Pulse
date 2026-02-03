@@ -11,8 +11,6 @@ import {
   getShortImageName,
   formatAbsoluteTime,
 } from '@/utils/format';
-import type { DockerMetadata } from '@/api/dockerMetadata';
-import type { DockerHostMetadata } from '@/api/dockerHostMetadata';
 import { resolveHostRuntime } from './runtimeDisplay';
 
 // ... (other imports remain) ...
@@ -78,15 +76,11 @@ type DockerRow =
   };
 
 
-interface DockerUnifiedTableProps {
+export interface DockerUnifiedTableProps {
   hosts: DockerHost[];
   searchTerm?: string;
   statsFilter?: StatsFilter;
   selectedHostId?: () => string | null;
-  dockerMetadata?: Record<string, DockerMetadata>;
-  dockerHostMetadata?: Record<string, DockerHostMetadata>;
-  onCustomUrlUpdate?: (resourceId: string, url: string) => void;
-  onHostCustomUrlUpdate?: (hostId: string, url: string) => void;
   batchUpdateState?: Record<string, 'updating' | 'queued' | 'error'>;
   groupingMode?: 'grouped' | 'flat';
 }
@@ -760,8 +754,6 @@ const UNGROUPED_RESOURCE_INDENT = 'pl-4 sm:pl-5 lg:pl-6';
 const DockerHostGroupHeader: Component<{
   host: DockerHost;
   columnCount: number;
-  customUrl?: string;
-  onCustomUrlUpdate?: (hostId: string, url: string) => void;
 }> = (props) => {
   const displayName = getHostDisplayName(props.host);
   const hostStatus = () => getDockerHostStatusIndicator(props.host);
@@ -780,23 +772,7 @@ const DockerHostGroupHeader: Component<{
             ariaLabel={hostStatus().label}
             size="xs"
           />
-          <Show
-            when={props.customUrl}
-            fallback={<span>{displayName}</span>}
-          >
-            <a
-              href={props.customUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
-              title={`Open ${props.customUrl}`}
-            >
-              <span>{displayName}</span>
-              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </a>
-          </Show>
+          <span>{displayName}</span>
           <span class="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">
             ({props.host.hostname})
           </span>
@@ -809,8 +785,6 @@ const DockerHostGroupHeader: Component<{
 const DockerContainerRow: Component<{
   row: Extract<DockerRow, { kind: 'container' }>;
   isMobile: Accessor<boolean>;
-  customUrl?: string;
-  onCustomUrlUpdate?: (resourceId: string, url: string) => void;
   showHostContext?: boolean;
   resourceIndentClass?: string;
   batchUpdateState?: Record<string, 'updating' | 'queued' | 'error'>;
@@ -824,10 +798,8 @@ const DockerContainerRow: Component<{
 
   const resourceIndent = () => props.resourceIndentClass ?? GROUPED_RESOURCE_INDENT;
 
-  const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>('1h');
-  const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
   const expanded = createMemo(() => currentlyExpandedRowId() === rowId);
 
 
@@ -909,19 +881,7 @@ const DockerContainerRow: Component<{
     );
   });
 
-  // Update custom URL when prop changes
-  createEffect(() => {
-    const prevUrl = customUrl();
-    const newUrl = props.customUrl;
 
-    // Only animate when URL transitions from empty to having a value
-    if (!prevUrl && newUrl) {
-      setShouldAnimateIcon(true);
-      setTimeout(() => setShouldAnimateIcon(false), 200);
-    }
-
-    setCustomUrl(newUrl);
-  });
 
   // Auto-focus the input when editing starts
 
@@ -1017,21 +977,6 @@ const DockerContainerRow: Component<{
                       </span>
                     )}
                   </Show>
-                  <Show when={customUrl()}>
-                    <a
-                      href={customUrl()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                      title="Open in new tab"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-                  </Show>
-                  {/* Edit URL button - shows on hover */}
 
                   <Show when={props.showHostContext}>
                     <span
@@ -1045,7 +990,7 @@ const DockerContainerRow: Component<{
                 </div>
               </div>
             </div>
-          </div>
+          </div >
         );
       case 'type':
         return (
@@ -1645,11 +1590,6 @@ const DockerContainerRow: Component<{
                   resourceId={container.id}
                   hostname={container.name}
                   guestId={container.id}
-                  customUrl={customUrl()}
-                  onCustomUrlChange={(url) => {
-                    setCustomUrl(url || undefined);
-                    props.onCustomUrlUpdate?.(container.id, url);
-                  }}
                 />
               </Show>
             </div>
@@ -1663,7 +1603,6 @@ const DockerContainerRow: Component<{
 const DockerServiceRow: Component<{
   row: Extract<DockerRow, { kind: 'service' }>;
   isMobile: Accessor<boolean>;
-  customUrl?: string;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
   showHostContext?: boolean;
   resourceIndentClass?: string;
@@ -1677,8 +1616,6 @@ const DockerServiceRow: Component<{
   const hostDisplayName = () => getHostDisplayName(host);
   const resourceIndent = () => props.resourceIndentClass ?? GROUPED_RESOURCE_INDENT;
 
-  const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
-  const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
   const expanded = createMemo(() => currentlyExpandedRowId() === rowId);
 
 
@@ -1686,19 +1623,7 @@ const DockerServiceRow: Component<{
 
 
 
-  // Update custom URL when prop changes
-  createEffect(() => {
-    const prevUrl = customUrl();
-    const newUrl = props.customUrl;
 
-    // Only animate when URL transitions from empty to having a value
-    if (!prevUrl && newUrl) {
-      setShouldAnimateIcon(true);
-      setTimeout(() => setShouldAnimateIcon(false), 200);
-    }
-
-    setCustomUrl(newUrl);
-  });
 
 
 
@@ -1753,21 +1678,6 @@ const DockerServiceRow: Component<{
                   >
                     {service.name || service.id || 'Service'}
                   </span>
-                  <Show when={customUrl()}>
-                    <a
-                      href={customUrl()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                      title="Open in new tab"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-                  </Show>
-                  {/* Edit URL button - shows on hover */}
 
                   <Show when={service.stack}>
                     <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
@@ -1787,7 +1697,7 @@ const DockerServiceRow: Component<{
                 </div>
               </div>
             </div>
-          </div>
+          </div >
         );
       case 'type':
         return (
@@ -2078,11 +1988,6 @@ const DockerServiceRow: Component<{
                   resourceId={service.id || service.name || ''}
                   hostname={service.name || service.id || 'Service'}
                   guestId={resourceId()}
-                  customUrl={customUrl()}
-                  onCustomUrlChange={(url) => {
-                    setCustomUrl(url || undefined);
-                    props.onCustomUrlUpdate?.(resourceId(), url);
-                  }}
                 />
               </Show>
             </div>
@@ -2433,18 +2338,12 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
   );
 
   const renderRow = (row: DockerRow, grouped: boolean) => {
-    const resourceId =
-      row.kind === 'container'
-        ? `${row.host.id}:container:${row.container.id || row.container.name}`
-        : `${row.host.id}:service:${row.service.id || row.service.name}`;
-    const metadata = props.dockerMetadata?.[resourceId];
+
 
     return row.kind === 'container' ? (
       <DockerContainerRow
         row={row}
         isMobile={isMobile}
-        customUrl={metadata?.customUrl}
-        onCustomUrlUpdate={props.onCustomUrlUpdate}
         showHostContext={!grouped}
         resourceIndentClass={grouped ? GROUPED_RESOURCE_INDENT : UNGROUPED_RESOURCE_INDENT}
         batchUpdateState={props.batchUpdateState}
@@ -2454,8 +2353,6 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
       <DockerServiceRow
         row={row}
         isMobile={isMobile}
-        customUrl={metadata?.customUrl}
-        onCustomUrlUpdate={props.onCustomUrlUpdate}
         showHostContext={!grouped}
         resourceIndentClass={grouped ? GROUPED_RESOURCE_INDENT : UNGROUPED_RESOURCE_INDENT}
       />
@@ -2549,23 +2446,17 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                   }
                 >
                   <For each={orderedGroups()}>
-                    {(group) => {
-                      const hostId = group.host.id;
-                      const metadata = props.dockerHostMetadata?.[hostId];
-                      return (
-                        <>
-                          <DockerHostGroupHeader
-                            host={group.host}
-                            columnCount={DOCKER_COLUMNS.length}
-                            customUrl={metadata?.customUrl}
-                            onCustomUrlUpdate={props.onHostCustomUrlUpdate}
-                          />
-                          <For each={group.rows}>
-                            {(row) => renderRow(row, true)}
-                          </For>
-                        </>
-                      );
-                    }}
+                    {(group) => (
+                      <>
+                        <DockerHostGroupHeader
+                          host={group.host}
+                          columnCount={DOCKER_COLUMNS.length}
+                        />
+                        <For each={group.rows}>
+                          {(row) => renderRow(row, true)}
+                        </For>
+                      </>
+                    )}
                   </For>
                 </Show>
               </tbody>
@@ -2592,7 +2483,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
           </span>
         </div>
       </Show>
-    </div>
+    </div >
   );
 };
 
