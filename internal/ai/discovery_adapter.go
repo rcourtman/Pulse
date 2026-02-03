@@ -114,11 +114,12 @@ func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 	vms := make([]servicediscovery.VM, len(state.VMs))
 	for i, vm := range state.VMs {
 		vms[i] = servicediscovery.VM{
-			VMID:     vm.VMID,
-			Name:     vm.Name,
-			Node:     vm.Node,
-			Status:   vm.Status,
-			Instance: vm.Instance,
+			VMID:        vm.VMID,
+			Name:        vm.Name,
+			Node:        vm.Node,
+			Status:      vm.Status,
+			Instance:    vm.Instance,
+			IPAddresses: vm.IPAddresses,
 		}
 	}
 
@@ -126,11 +127,12 @@ func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 	containers := make([]servicediscovery.Container, len(state.Containers))
 	for i, c := range state.Containers {
 		containers[i] = servicediscovery.Container{
-			VMID:     c.VMID,
-			Name:     c.Name,
-			Node:     c.Node,
-			Status:   c.Status,
-			Instance: c.Instance,
+			VMID:        c.VMID,
+			Name:        c.Name,
+			Node:        c.Node,
+			Status:      c.Status,
+			Instance:    c.Instance,
+			IPAddresses: c.IPAddresses,
 		}
 	}
 
