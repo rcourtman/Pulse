@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
@@ -755,20 +756,25 @@ func attachUserContext(r *http.Request, username string) *http.Request {
 // This should run early in the middleware chain so subsequent middleware can access auth context.
 // Note: This middleware does NOT enforce authentication - it only populates context.
 // Use RequireAuth for enforcement.
-func AuthContextMiddleware(cfg *config.Config, next http.Handler) http.Handler {
+// AuthContextMiddleware creates a middleware that extracts auth info and stores it in context.
+// This should run early in the middleware chain so subsequent middleware can access auth context.
+// Note: This middleware does NOT enforce authentication - it only populates context.
+// Use RequireAuth for enforcement.
+func AuthContextMiddleware(cfg *config.Config, mtm *monitoring.MultiTenantMonitor, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Try to extract auth info and store in context WITHOUT enforcing auth
 		// This allows tenant middleware to check authorization later
-		r = extractAndStoreAuthContext(cfg, r)
+		r = extractAndStoreAuthContext(cfg, mtm, r)
 		next.ServeHTTP(w, r)
 	})
 }
 
 // extractAndStoreAuthContext extracts user/token info from the request and stores in context.
 // Returns the request with updated context. Does not enforce auth.
-func extractAndStoreAuthContext(cfg *config.Config, r *http.Request) *http.Request {
-	config.Mu.RLock()
-	defer config.Mu.RUnlock()
+func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantMonitor, r *http.Request) *http.Request {
+	// Use Lock (Write) instead of RLock because ValidateAPIToken mutates LastUsedAt
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
 
 	// Dev mode bypass
 	if adminBypassEnabled() {
@@ -794,41 +800,68 @@ func extractAndStoreAuthContext(cfg *config.Config, r *http.Request) *http.Reque
 	}
 
 	// Check API tokens
-	if cfg.HasAPITokens() {
-		// Header
-		if token := r.Header.Get("X-API-Token"); token != "" {
-			if record, ok := cfg.ValidateAPIToken(token); ok {
+	// Check API tokens
+	// We need to check if EITHER the global config has tokens OR if we have a tenant monitor (which might have tokens)
+	if cfg.HasAPITokens() || mtm != nil {
+		// Determine which config to use for validation (Global vs Tenant)
+		targetConfig := cfg
+
+		if mtm != nil {
+			// Check for Tenant ID in header or cookie
+			orgID := "default"
+			if id := r.Header.Get("X-Pulse-Org-ID"); id != "" {
+				orgID = id
+			} else if cookie, err := r.Cookie("pulse_org_id"); err == nil && cookie.Value != "" {
+				orgID = cookie.Value
+			}
+
+			// If targeting a specific tenant, try to load that tenant's config
+			if orgID != "default" {
+				// Prevent DoS: Check if org exists before loading (which triggers directory creation)
+				if mtm.OrgExists(orgID) {
+					if m, err := mtm.GetMonitor(orgID); err == nil && m != nil {
+						targetConfig = m.GetConfig()
+					}
+				}
+			}
+		}
+
+		// Helper to validate against the selected config (and return updated request if valid)
+		validateToken := func(token string) (*http.Request, bool) {
+			if token == "" {
+				return nil, false
+			}
+			// Use targetConfig instead of global cfg
+			if record, ok := targetConfig.ValidateAPIToken(token); ok {
 				attachAPITokenRecord(r, record)
 				tokenID := record.ID
 				if tokenID == "" && len(record.Hash) >= 8 {
 					tokenID = "legacy-" + record.Hash[:8]
 				}
-				return attachUserContext(r, fmt.Sprintf("token:%s", tokenID))
+				return attachUserContext(r, fmt.Sprintf("token:%s", tokenID)), true
+			}
+			return nil, false
+		}
+
+		// Header
+		if token := r.Header.Get("X-API-Token"); token != "" {
+			if req, ok := validateToken(token); ok {
+				return req
 			}
 		}
 		// Bearer
 		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
 			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
 				token := strings.TrimSpace(authHeader[7:])
-				if record, ok := cfg.ValidateAPIToken(token); ok {
-					attachAPITokenRecord(r, record)
-					tokenID := record.ID
-					if tokenID == "" && len(record.Hash) >= 8 {
-						tokenID = "legacy-" + record.Hash[:8]
-					}
-					return attachUserContext(r, fmt.Sprintf("token:%s", tokenID))
+				if req, ok := validateToken(token); ok {
+					return req
 				}
 			}
 		}
 		// Query param (for WebSocket)
 		if queryToken := r.URL.Query().Get("token"); queryToken != "" {
-			if record, ok := cfg.ValidateAPIToken(queryToken); ok {
-				attachAPITokenRecord(r, record)
-				tokenID := record.ID
-				if tokenID == "" && len(record.Hash) >= 8 {
-					tokenID = "legacy-" + record.Hash[:8]
-				}
-				return attachUserContext(r, fmt.Sprintf("token:%s", tokenID))
+			if req, ok := validateToken(queryToken); ok {
+				return req
 			}
 		}
 	}

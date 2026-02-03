@@ -71,16 +71,17 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 		}
 
 		// 2. Validate Organization Exists (only for non-default orgs)
-		// Default org is always valid for backward compatibility
+		// This must check existence WITHOUT creating directories to prevent DoS.
+		// It also must run BEFORE feature checks to ensure invalid org IDs return 400 (Bad Request)
+		// rather than 501/402 (feature disabled/unlicensed).
 		if orgID != "default" && m.persistence != nil {
-			_, err := m.persistence.GetPersistence(orgID)
-			if err != nil {
+			if !m.persistence.OrgExists(orgID) {
 				writeJSONError(w, http.StatusBadRequest, "invalid_org", "Invalid Organization ID")
 				return
 			}
 		}
 
-		// 2.5 Feature flag and License Check for multi-tenant access
+		// 3. Feature flag and License Check for multi-tenant access
 		// Non-default orgs require:
 		// 1. Feature flag enabled (PULSE_MULTI_TENANT_ENABLED=true) - returns 501 if disabled
 		// 2. Enterprise license - returns 402 if unlicensed
@@ -98,7 +99,7 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// 3. Authorization Check
+		// 4. Authorization Check
 		// Check if the authenticated user/token is allowed to access this organization
 		// Note: This runs AFTER AuthContextMiddleware, so auth context is available
 		if m.authChecker != nil && orgID != "default" {
@@ -137,7 +138,7 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// 4. Inject into Context
+		// 5. Inject into Context
 		ctx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
 
 		// Also store a mock organization object for now

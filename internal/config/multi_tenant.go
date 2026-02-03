@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -75,6 +76,22 @@ func (mtp *MultiTenantPersistence) GetPersistence(orgID string) (*ConfigPersiste
 
 	mtp.tenants[orgID] = cp
 	return cp, nil
+}
+
+// OrgExists checks if an organization exists (directory exists) without creating it.
+func (mtp *MultiTenantPersistence) OrgExists(orgID string) bool {
+	if orgID == "default" {
+		return true
+	}
+
+	// Validate to prevent traversal
+	if filepath.Base(orgID) != orgID || orgID == "" || orgID == "." || orgID == ".." {
+		return false
+	}
+
+	orgDir := filepath.Join(mtp.baseDataDir, "orgs", orgID)
+	stat, err := os.Stat(orgDir)
+	return err == nil && stat.IsDir()
 }
 
 // LoadOrganization loads the organization metadata including members.

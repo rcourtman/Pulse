@@ -140,3 +140,11 @@ func (mtm *MultiTenantMonitor) RemoveTenant(orgID string) {
 		delete(mtm.monitors, orgID)
 	}
 }
+
+// OrgExists checks if an organization exists (directory exists) without creating it.
+func (mtm *MultiTenantMonitor) OrgExists(orgID string) bool {
+	if mtm.persistence == nil {
+		return false
+	}
+	return mtm.persistence.OrgExists(orgID)
+}

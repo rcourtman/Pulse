@@ -212,13 +212,17 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 
 	// Create tenant middleware with authorization checker
 	tenantMiddleware := NewTenantMiddleware(r.multiTenant)
-	// Wire authorization checker for org access control
-	authChecker := NewAuthorizationChecker(nil) // No org loader yet - uses token binding only
+	// Wire authorization checker for org access control with org loader for membership checks
+	var orgLoader OrganizationLoader
+	if r.multiTenant != nil {
+		orgLoader = NewMultiTenantOrganizationLoader(r.multiTenant)
+	}
+	authChecker := NewAuthorizationChecker(orgLoader)
 	tenantMiddleware.SetAuthChecker(authChecker)
 	handler = tenantMiddleware.Middleware(handler)
 
 	// Auth context middleware extracts user/token info BEFORE tenant middleware
-	handler = AuthContextMiddleware(cfg, handler)
+	handler = AuthContextMiddleware(cfg, r.mtMonitor, handler)
 
 	handler = UniversalRateLimitMiddleware(handler)
 	r.wrapped = handler
@@ -2529,11 +2533,10 @@ func (r *Router) ShutdownAIIntelligence() {
 		log.Debug().Msg("AI Intelligence: Alert bridge stopped")
 	}
 
-	// 2. Stop patrol service (waits for in-flight investigations, force-saves state)
-	if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
-		patrolSvc.Stop()
-		log.Debug().Msg("AI Intelligence: Patrol service stopped")
-	}
+	// 2. Stop patrol service for all tenants (waits for in-flight investigations, force-saves state)
+	// Use StopPatrol() which stops patrol for both legacy and all tenant services
+	r.aiSettingsHandler.StopPatrol()
+	log.Debug().Msg("AI Intelligence: All patrol services stopped")
 
 	// 3. Stop trigger manager (stop event-driven patrol scheduling)
 	if triggerManager := r.aiSettingsHandler.GetTriggerManager(); triggerManager != nil {
@@ -2664,9 +2667,10 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire findings provider from patrol service
+	// Wire findings provider from patrol service (default org for legacy wiring)
+	defaultOrgCtx := context.WithValue(context.Background(), OrgIDContextKey, "default")
 	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx).GetPatrolService(); patrolSvc != nil {
 			if findingsStore := patrolSvc.GetFindings(); findingsStore != nil {
 				findingsAdapter := ai.NewFindingsMCPAdapter(findingsStore)
 				if findingsAdapter != nil {
@@ -2744,9 +2748,9 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire baseline provider
+	// Wire baseline provider (default org for legacy wiring)
 	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx).GetPatrolService(); patrolSvc != nil {
 			if baselineStore := patrolSvc.GetBaselineStore(); baselineStore != nil {
 				baselineAdapter := tools.NewBaselineMCPAdapter(&baselineSourceWrapper{store: baselineStore})
 				if baselineAdapter != nil {
@@ -2757,9 +2761,9 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire pattern provider
+	// Wire pattern provider (default org for legacy wiring)
 	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx).GetPatrolService(); patrolSvc != nil {
 			if patternDetector := patrolSvc.GetPatternDetector(); patternDetector != nil {
 				patternAdapter := tools.NewPatternMCPAdapter(
 					&patternSourceWrapper{detector: patternDetector},
@@ -2773,9 +2777,9 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire findings manager
+	// Wire findings manager (default org for legacy wiring)
 	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
+		if patrolSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx).GetPatrolService(); patrolSvc != nil {
 			findingsManagerAdapter := tools.NewFindingsManagerMCPAdapter(patrolSvc)
 			if findingsManagerAdapter != nil {
 				service.SetFindingsManager(findingsManagerAdapter)
@@ -2784,9 +2788,9 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire metadata updater
+	// Wire metadata updater (default org for legacy wiring)
 	if r.aiSettingsHandler != nil {
-		metadataAdapter := tools.NewMetadataUpdaterMCPAdapter(r.aiSettingsHandler.GetAIService(context.Background()))
+		metadataAdapter := tools.NewMetadataUpdaterMCPAdapter(r.aiSettingsHandler.GetAIService(defaultOrgCtx))
 		if metadataAdapter != nil {
 			service.SetMetadataUpdater(metadataAdapter)
 			log.Debug().Msg("AI chat: Metadata updater wired")
@@ -2815,9 +2819,9 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire knowledge store provider for notes (pulse_remember, pulse_recall)
+	// Wire knowledge store provider for notes (pulse_remember, pulse_recall) (default org for legacy wiring)
 	if r.aiSettingsHandler != nil {
-		if aiSvc := r.aiSettingsHandler.GetAIService(context.Background()); aiSvc != nil {
+		if aiSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx); aiSvc != nil {
 			if patrolSvc := aiSvc.GetPatrolService(); patrolSvc != nil {
 				if knowledgeStore := patrolSvc.GetKnowledgeStore(); knowledgeStore != nil {
 					service.SetKnowledgeStoreProvider(&knowledgeStoreProviderWrapper{store: knowledgeStore})
@@ -2827,9 +2831,9 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire discovery provider for AI-powered infrastructure discovery (pulse_get_discovery, pulse_list_discoveries)
+	// Wire discovery provider for AI-powered infrastructure discovery (pulse_get_discovery, pulse_list_discoveries) (default org for legacy wiring)
 	if r.aiSettingsHandler != nil {
-		if aiSvc := r.aiSettingsHandler.GetAIService(context.Background()); aiSvc != nil {
+		if aiSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx); aiSvc != nil {
 			if discoverySvc := aiSvc.GetDiscoveryService(); discoverySvc != nil {
 				adapter := servicediscovery.NewToolsAdapter(discoverySvc)
 				if adapter != nil {
