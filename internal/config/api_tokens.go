@@ -77,6 +77,10 @@ type APITokenRecord struct {
 	// If set, the token can access resources within any of these organizations.
 	// Takes precedence over OrgID if both are set.
 	OrgIDs []string `json:"orgIds,omitempty"`
+
+	// Metadata stores arbitrary key-value pairs for token binding.
+	// Used to bind tokens to specific resources (e.g., bound_agent_id).
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // ensureScopes normalizes the scope slice, applying legacy defaults.

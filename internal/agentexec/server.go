@@ -32,7 +32,7 @@ type Server struct {
 	mu            sync.RWMutex
 	agents        map[string]*agentConn                // agentID -> connection
 	pendingReqs   map[string]chan CommandResultPayload // requestID -> response channel
-	validateToken func(token string) bool
+	validateToken func(token string, agentID string) bool
 }
 
 type agentConn struct {
@@ -43,7 +43,7 @@ type agentConn struct {
 }
 
 // NewServer creates a new agent execution server
-func NewServer(validateToken func(token string) bool) *Server {
+func NewServer(validateToken func(token string, agentID string) bool) *Server {
 	return &Server{
 		agents:        make(map[string]*agentConn),
 		pendingReqs:   make(map[string]chan CommandResultPayload),
@@ -116,7 +116,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate token
-	if s.validateToken != nil && !s.validateToken(reg.Token) {
+	if s.validateToken != nil && !s.validateToken(reg.Token, reg.AgentID) {
 		log.Warn().Str("agent_id", reg.AgentID).Msg("Agent registration rejected: invalid token")
 		s.sendMessage(conn, Message{
 			Type:      MsgTypeRegistered,

@@ -89,7 +89,7 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
 }
 
 func TestHandleWebSocket_RegistrationSuccessAndDisconnectRemovesAgent(t *testing.T) {
-	s := NewServer(func(token string) bool { return token == "ok" })
+	s := NewServer(func(token string, agentID string) bool { return token == "ok" })
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -126,7 +126,7 @@ func TestHandleWebSocket_RegistrationSuccessAndDisconnectRemovesAgent(t *testing
 }
 
 func TestHandleWebSocket_InvalidTokenRejected(t *testing.T) {
-	s := NewServer(func(string) bool { return false })
+	s := NewServer(func(string, string) bool { return false })
 	ts := newWSServer(t, s)
 	defer ts.Close()
 

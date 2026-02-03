@@ -635,7 +635,7 @@ func registerAgent(t *testing.T, url, agentID, hostname string) *websocket.Conn 
 }
 
 func TestFindAgentForTarget(t *testing.T) {
-	server := agentexec.NewServer(func(string) bool { return true })
+	server := agentexec.NewServer(func(string, string) bool { return true })
 	ts := httptest.NewServer(http.HandlerFunc(server.HandleWebSocket))
 	defer ts.Close()
 

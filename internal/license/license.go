@@ -17,10 +17,20 @@ import (
 // For development, leave empty to skip validation.
 var publicKey ed25519.PublicKey
 
+// Legacy public key for validating licenses signed with the previous key.
+// Used during key rotation to maintain compatibility with existing licenses.
+var legacyPublicKey ed25519.PublicKey
+
 // SetPublicKey sets the public key for license validation.
 // This should be called during initialization with the production key.
 func SetPublicKey(key ed25519.PublicKey) {
 	publicKey = key
+}
+
+// SetLegacyPublicKey sets the legacy public key for validating old licenses.
+// This enables dual-key verification during key rotation periods.
+func SetLegacyPublicKey(key ed25519.PublicKey) {
+	legacyPublicKey = key
 }
 
 // License errors

@@ -1317,7 +1317,8 @@ func (r *Router) setupRoutes() {
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
 	// Agent execution server for AI tool use
-	r.agentExecServer = agentexec.NewServer(func(token string) bool {
+	// Agent execution server for AI tool use
+	r.agentExecServer = agentexec.NewServer(func(token string, agentID string) bool {
 		// Validate agent tokens using the API tokens system with scope check
 		if r.config == nil {
 			return false
@@ -1331,6 +1332,19 @@ func (r *Router) setupRoutes() {
 					Msg("Agent exec token missing required scope: agent:exec")
 				return false
 			}
+
+			// SECURITY: Check if token is bound to a specific agent
+			if boundID, ok := record.Metadata["bound_agent_id"]; ok && boundID != "" {
+				if boundID != agentID {
+					log.Warn().
+						Str("token_id", record.ID).
+						Str("bound_id", boundID).
+						Str("requested_id", agentID).
+						Msg("Agent token mismatch: token is bound to a different agent ID")
+					return false
+				}
+			}
+
 			return true
 		}
 		// Fall back to legacy single token if set (legacy tokens have wildcard access)
@@ -6279,6 +6293,11 @@ func (r *Router) handleSnapshots(w http.ResponseWriter, req *http.Request) {
 func (r *Router) handleWebSocket(w http.ResponseWriter, req *http.Request) {
 	// Check authentication before allowing WebSocket upgrade
 	if !CheckAuth(r.config, w, req) {
+		return
+	}
+	// SECURITY: Ensure monitoring:read scope for WebSocket connections
+	// This prevents tokens with only agent scopes from accessing full infra state via requestData
+	if !ensureScope(w, req, config.ScopeMonitoringRead) {
 		return
 	}
 	r.wsHub.HandleWebSocket(w, req)
