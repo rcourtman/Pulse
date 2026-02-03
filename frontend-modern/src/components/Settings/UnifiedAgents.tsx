@@ -336,6 +336,16 @@ export const UnifiedAgents: Component = () => {
         return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --uninstall --url ${url}${insecure}`;
     };
 
+    const getWindowsUninstallCommand = () => {
+        const url = customAgentUrl() || agentUrl();
+        const token = currentToken() || latestRecord()?.id;
+        // Include URL and token for server notification (removes agent from dashboard)
+        if (token) {
+            return `$env:PULSE_URL="${url}"; $env:PULSE_TOKEN="${token}"; $env:PULSE_UNINSTALL="true"; irm $env:PULSE_URL/install.ps1 | iex`;
+        }
+        return `$env:PULSE_UNINSTALL="true"; irm ${url}/install.ps1 | iex`;
+    };
+
     // Track previously seen host types to prevent flapping when one source temporarily has no data
     // This preserves types we've seen before even if one array briefly becomes empty
     let previousHostTypes = new Map<string, Set<'host' | 'docker'>>();
@@ -1163,33 +1173,64 @@ export const UnifiedAgents: Component = () => {
 
                     {/* Uninstall section - always visible */}
                     <div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-                        <div class="space-y-2">
+                        <div class="space-y-3">
                             <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Uninstall agent</h4>
                             <p class="text-xs text-gray-600 dark:text-gray-400">
-                                Run this command on any host to remove the Pulse agent:
+                                Run the appropriate command on your host to remove the Pulse agent:
                             </p>
-                            <div class="relative">
-                                <button
-                                    type="button"
-                                    onClick={async () => {
-                                        const success = await copyToClipboard(getUninstallCommand());
-                                        if (success) {
-                                            notificationStore.success('Copied to clipboard');
-                                        } else {
-                                            notificationStore.error('Failed to copy');
-                                        }
-                                    }}
-                                    class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700/50 hover:bg-gray-700 rounded-md transition-colors"
-                                    title="Copy command"
-                                >
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                    </svg>
-                                </button>
-                                <pre class="overflow-x-auto rounded-md bg-gray-950 p-3 pr-12 font-mono text-xs text-red-400">
-                                    <code>{getUninstallCommand()}</code>
-                                </pre>
+                            {/* Linux/macOS uninstall */}
+                            <div class="space-y-1">
+                                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Linux / macOS / FreeBSD</span>
+                                <div class="relative">
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            const success = await copyToClipboard(getUninstallCommand());
+                                            if (success) {
+                                                notificationStore.success('Copied to clipboard');
+                                            } else {
+                                                notificationStore.error('Failed to copy');
+                                            }
+                                        }}
+                                        class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700/50 hover:bg-gray-700 rounded-md transition-colors"
+                                        title="Copy command"
+                                    >
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                        </svg>
+                                    </button>
+                                    <pre class="overflow-x-auto rounded-md bg-gray-950 p-3 pr-12 font-mono text-xs text-red-400">
+                                        <code>{getUninstallCommand()}</code>
+                                    </pre>
+                                </div>
+                            </div>
+                            {/* Windows uninstall */}
+                            <div class="space-y-1">
+                                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Windows (PowerShell as Administrator)</span>
+                                <div class="relative">
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            const success = await copyToClipboard(getWindowsUninstallCommand());
+                                            if (success) {
+                                                notificationStore.success('Copied to clipboard');
+                                            } else {
+                                                notificationStore.error('Failed to copy');
+                                            }
+                                        }}
+                                        class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700/50 hover:bg-gray-700 rounded-md transition-colors"
+                                        title="Copy command"
+                                    >
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                        </svg>
+                                    </button>
+                                    <pre class="overflow-x-auto rounded-md bg-gray-950 p-3 pr-12 font-mono text-xs text-red-400">
+                                        <code>{getWindowsUninstallCommand()}</code>
+                                    </pre>
+                                </div>
                             </div>
                         </div>
                     </div>
