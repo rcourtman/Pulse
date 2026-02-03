@@ -185,10 +185,22 @@ type Client struct {
 
 // safeSend attempts to send data to the client's send channel.
 // Returns false if the client is closed or the channel buffer is full.
-func (c *Client) safeSend(data []byte) bool {
+// Uses defer/recover to handle the race between close(c.send) and send.
+func (c *Client) safeSend(data []byte) (sent bool) {
+	// Early check to avoid most attempts on closed clients.
 	if c.closed.Load() {
 		return false
 	}
+
+	// Recover from panic if the channel was closed between the check above
+	// and the send below. This is a defensive pattern to prevent server crashes.
+	defer func() {
+		if r := recover(); r != nil {
+			// Channel was closed concurrently; mark as not sent.
+			sent = false
+		}
+	}()
+
 	select {
 	case c.send <- data:
 		return true

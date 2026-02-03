@@ -560,9 +560,16 @@ type dockerRestartRecord struct {
 	lastChecked time.Time
 }
 
-// NewManager creates a new alert manager
+// NewManager creates a new alert manager using the global data directory.
+// For multi-tenant deployments, use NewManagerWithDataDir instead.
 func NewManager() *Manager {
-	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
+	return NewManagerWithDataDir(utils.GetDataDir())
+}
+
+// NewManagerWithDataDir creates a new alert manager with a custom data directory.
+// This enables tenant-scoped alert persistence in multi-tenant deployments.
+func NewManagerWithDataDir(dataDir string) *Manager {
+	alertsDir := filepath.Join(dataDir, "alerts")
 	alertOrphaned := true
 	m := &Manager{
 		activeAlerts:          make(map[string]*Alert),

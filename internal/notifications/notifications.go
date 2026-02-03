@@ -343,8 +343,16 @@ type AppriseConfig struct {
 	SkipTLSVerify  bool        `json:"skipTlsVerify,omitempty"`
 }
 
-// NewNotificationManager creates a new notification manager
+// NewNotificationManager creates a new notification manager using the global data directory.
+// For multi-tenant deployments, use NewNotificationManagerWithDataDir instead.
 func NewNotificationManager(publicURL string) *NotificationManager {
+	return NewNotificationManagerWithDataDir(publicURL, "")
+}
+
+// NewNotificationManagerWithDataDir creates a new notification manager with a custom data directory.
+// This enables tenant-scoped notification queue persistence in multi-tenant deployments.
+// If dataDir is empty, it uses the global data directory.
+func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *NotificationManager {
 	cleanURL := strings.TrimRight(strings.TrimSpace(publicURL), "/")
 	if cleanURL != "" {
 		log.Info().Str("publicURL", cleanURL).Msg("NotificationManager initialized with public URL")
@@ -352,8 +360,8 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 		log.Info().Msg("NotificationManager initialized without public URL - webhook links may not work")
 	}
 
-	// Initialize persistent queue
-	queue, err := NewNotificationQueue("")
+	// Initialize persistent queue with tenant-specific data directory
+	queue, err := NewNotificationQueue(dataDir)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize notification queue, notifications will be in-memory only")
 		queue = nil

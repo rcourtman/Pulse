@@ -2662,6 +2662,41 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		m.alertManager.CheckHost(host)
 	}
 
+	// Record Host metrics for sparkline charts
+	now := time.Now()
+	hostMetricKey := fmt.Sprintf("host:%s", host.ID)
+
+	// Record host CPU usage
+	m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
+
+	// Record host Memory usage
+	m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
+
+	// Record host Disk usage (use first disk or calculate aggregate)
+	var hostDiskPercent float64
+	if len(host.Disks) > 0 {
+		hostDiskPercent = host.Disks[0].Usage
+	}
+	m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
+
+	// Record host Network I/O (sum across all interfaces)
+	var totalRXBytes, totalTXBytes uint64
+	for _, nic := range host.NetworkInterfaces {
+		totalRXBytes += nic.RXBytes
+		totalTXBytes += nic.TXBytes
+	}
+	m.metricsHistory.AddGuestMetric(hostMetricKey, "netin", float64(totalRXBytes), now)
+	m.metricsHistory.AddGuestMetric(hostMetricKey, "netout", float64(totalTXBytes), now)
+
+	// Also write to persistent SQLite store
+	if m.metricsStore != nil {
+		m.metricsStore.Write("host", host.ID, "cpu", host.CPUUsage, now)
+		m.metricsStore.Write("host", host.ID, "memory", host.Memory.Usage, now)
+		m.metricsStore.Write("host", host.ID, "disk", hostDiskPercent, now)
+		m.metricsStore.Write("host", host.ID, "netin", float64(totalRXBytes), now)
+		m.metricsStore.Write("host", host.ID, "netout", float64(totalTXBytes), now)
+	}
+
 	return host, nil
 }
 
@@ -3600,9 +3635,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
 		metricsStore:               metricsStore,                          // Persistent SQLite storage
-		alertManager:               alerts.NewManager(),
+		alertManager:               alerts.NewManagerWithDataDir(cfg.DataPath),
 		incidentStore:              incidentStore,
-		notificationMgr:            notifications.NewNotificationManager(cfg.PublicURL),
+		notificationMgr:            notifications.NewNotificationManagerWithDataDir(cfg.PublicURL, cfg.DataPath),
 		configPersist:              config.NewConfigPersistence(cfg.DataPath),
 		discoveryService:           nil, // Will be initialized in Start()
 		authFailures:               make(map[string]int),
