@@ -87,6 +87,20 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 	}
 	webhook.URL = renderedURL
 
+	// Validate webhook URL to prevent SSRF/DNS rebinding attacks
+	if err := n.ValidateWebhookURL(webhook.URL); err != nil {
+		return fmt.Errorf("webhook URL validation failed: %w", err)
+	}
+
+	// Check rate limit
+	if !n.checkWebhookRateLimit(webhook.URL) {
+		log.Warn().
+			Str("webhook", webhook.Name).
+			Str("url", webhook.URL).
+			Msg("Webhook request dropped due to rate limiting")
+		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
+	}
+
 	// Service-specific enrichment
 	switch webhook.Service {
 	case "telegram":

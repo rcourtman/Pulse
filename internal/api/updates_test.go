@@ -295,36 +295,6 @@ func TestHandleGetUpdateHistoryEntry(t *testing.T) {
 	}
 }
 
-func TestGetClientIP(t *testing.T) {
-	// Re-include the IP tests as they were useful
-	tests := []struct {
-		name       string
-		remoteAddr string
-		headers    map[string]string
-		expected   string
-	}{
-		{"RemoteAddr", "1.2.3.4:1234", nil, "1.2.3.4"},
-		{"XFF", "1.1.1.1:1234", map[string]string{"X-Forwarded-For": "2.2.2.2"}, "2.2.2.2"},
-		{"X-Real-IP", "1.1.1.1:1234", map[string]string{"X-Real-IP": "3.3.3.3"}, "3.3.3.3"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := httptest.NewRequest("GET", "/", nil)
-			r.RemoteAddr = tt.remoteAddr
-			for k, v := range tt.headers {
-				r.Header.Set(k, v)
-			}
-
-			// getClientIP is strict internal but exposed via tests in same package
-			ip := getClientIP(r)
-			if ip != tt.expected {
-				t.Errorf("Expected %s, got %s", tt.expected, ip)
-			}
-		})
-	}
-}
-
 func TestDoCleanupRateLimits(t *testing.T) {
 	h := NewUpdateHandlers(nil, nil)
 	now := time.Now()

@@ -135,15 +135,16 @@ func (mh *MetricsHistory) appendMetric(metrics []MetricPoint, point MetricPoint)
 
 	// Remove old points beyond retention time
 	cutoffTime := time.Now().Add(-mh.retentionTime)
-	startIdx := 0
+	found := false
 	for i, p := range metrics {
 		if p.Timestamp.After(cutoffTime) {
-			startIdx = i
+			metrics = metrics[i:]
+			found = true
 			break
 		}
 	}
-	if startIdx > 0 {
-		metrics = metrics[startIdx:]
+	if !found {
+		metrics = metrics[:0]
 	}
 
 	// Ensure we don't exceed max data points
@@ -367,15 +368,10 @@ func (mh *MetricsHistory) Cleanup() {
 
 // cleanupMetrics removes points older than cutoff time
 func (mh *MetricsHistory) cleanupMetrics(metrics []MetricPoint, cutoffTime time.Time) []MetricPoint {
-	startIdx := 0
 	for i, p := range metrics {
 		if p.Timestamp.After(cutoffTime) {
-			startIdx = i
-			break
+			return metrics[i:]
 		}
 	}
-	if startIdx > 0 {
-		return metrics[startIdx:]
-	}
-	return metrics
+	return metrics[:0]
 }

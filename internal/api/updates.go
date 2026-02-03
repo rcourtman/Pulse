@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -140,7 +139,7 @@ func (h *UpdateHandlers) HandleUpdateStatus(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Extract client IP for rate limiting
-	clientIP := getClientIP(r)
+	clientIP := GetClientIP(r)
 
 	// Check rate limit (5 seconds minimum between requests per client)
 	h.statusMu.Lock()
@@ -199,7 +198,7 @@ func (h *UpdateHandlers) HandleUpdateStream(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	// Generate client ID
-	clientIP := getClientIP(r)
+	clientIP := GetClientIP(r)
 	clientID := fmt.Sprintf("%s-%d", clientIP, time.Now().UnixNano())
 
 	// Register client with SSE broadcaster
@@ -254,34 +253,6 @@ func (h *UpdateHandlers) doCleanupRateLimits(now time.Time) {
 			delete(h.statusRateLimits, ip)
 		}
 	}
-}
-
-// getClientIP extracts the client IP from the request
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header first
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		// Take the first IP if multiple are present
-		if ip := net.ParseIP(xff); ip != nil {
-			return xff
-		}
-	}
-
-	// Check X-Real-IP header
-	xri := r.Header.Get("X-Real-IP")
-	if xri != "" {
-		if ip := net.ParseIP(xri); ip != nil {
-			return xri
-		}
-	}
-
-	// Fall back to RemoteAddr
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-
-	return host
 }
 
 // HandleGetUpdatePlan returns update plan for current deployment

@@ -3818,7 +3818,8 @@ func (r *Router) capturePublicURLFromRequest(req *http.Request) {
 	}
 
 	current := strings.TrimRight(strings.TrimSpace(r.config.PublicURL), "/")
-	if current != "" && current == normalizedCandidate {
+	if current != "" {
+		// If explicitly configured, never overwrite from request
 		r.publicURLDetected = true
 		r.publicURLMu.Unlock()
 		return

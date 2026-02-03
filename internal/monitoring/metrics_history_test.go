@@ -203,7 +203,7 @@ func TestCleanupMetrics(t *testing.T) {
 				{Value: 20.0, Timestamp: now.Add(-2 * time.Hour)},
 			},
 			cutoffTime: now.Add(-time.Hour),
-			wantLen:    2, // cleanupMetrics doesn't remove all - keeps slice if nothing after cutoff
+			wantLen:    0,
 		},
 		{
 			name: "boundary - point exactly at cutoff",
