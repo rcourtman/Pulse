@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,11 +12,14 @@ import (
 // mockDockerChecker is a test implementation of DockerChecker
 type mockDockerChecker struct {
 	results map[int]bool // vmid -> hasDocker
-	calls   []int        // records vmids that were checked
+	mu      sync.Mutex
+	calls   []int // records vmids that were checked
 }
 
 func (m *mockDockerChecker) CheckDockerInContainer(ctx context.Context, node string, vmid int) (bool, error) {
+	m.mu.Lock()
 	m.calls = append(m.calls, vmid)
+	m.mu.Unlock()
 	if hasDocker, ok := m.results[vmid]; ok {
 		return hasDocker, nil
 	}
