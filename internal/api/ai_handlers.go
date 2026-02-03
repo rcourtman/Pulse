@@ -4763,6 +4763,11 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// SECURITY: Validating command execution scope
+	if !ensureScope(w, r, config.ScopeAIExecute) {
+		return
+	}
+
 	// Extract ID from path: /api/ai/approvals/{id}/approve
 	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
 	path = strings.TrimSuffix(path, "/approve")

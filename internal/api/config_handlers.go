@@ -3400,6 +3400,11 @@ func (h *ConfigHandlers) HandleExportConfig(w http.ResponseWriter, r *http.Reque
 	// Limit request body to 8KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 
+	// SECURITY: Validating scope for config export
+	if !ensureScope(w, r, config.ScopeSettingsRead) {
+		return
+	}
+
 	var req ExportConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode export request")
@@ -3441,6 +3446,11 @@ func (h *ConfigHandlers) HandleExportConfig(w http.ResponseWriter, r *http.Reque
 func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Request) {
 	// Limit request body to 1MB to prevent memory exhaustion (config imports can be large)
 	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
+
+	// SECURITY: Validating scope for config import
+	if !ensureScope(w, r, config.ScopeSettingsWrite) {
+		return
+	}
 
 	var req ImportConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
