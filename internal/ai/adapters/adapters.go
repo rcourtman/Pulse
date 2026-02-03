@@ -399,7 +399,12 @@ func (s *KnowledgeStore) saveToDisk() {
 	}
 
 	path := filepath.Join(s.dataDir, "knowledge_store.json")
-	_ = os.WriteFile(path, data, 0644)
+	// Use atomic write (temp file + rename) to prevent corruption from concurrent saves.
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return
+	}
+	_ = os.Rename(tmp, path)
 }
 
 func (s *KnowledgeStore) loadFromDisk() error {

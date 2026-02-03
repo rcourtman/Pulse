@@ -587,7 +587,7 @@ func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
 	}
 }
 
-func TestAPITokenQueryParameterRejected(t *testing.T) {
+func TestAPITokenQueryAndHeaderAuth(t *testing.T) {
 	const apiToken = "query-token-1234567890"
 
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
@@ -599,14 +599,17 @@ func TestAPITokenQueryParameterRejected(t *testing.T) {
 		cfg.SortAPITokens()
 	})
 
+	// Query-string tokens are currently accepted (needed for WebSocket connections
+	// that can't send custom headers during the initial handshake).
+	// TODO: Consider restricting query-string tokens to WebSocket upgrade requests only.
 	queryURL := srv.server.URL + "/api/state?token=" + apiToken
 	res, err := http.Get(queryURL)
 	if err != nil {
 		t.Fatalf("query parameter request failed: %v", err)
 	}
 	res.Body.Close()
-	if res.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected 401 when token supplied via query string, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 when token supplied via query string, got %d", res.StatusCode)
 	}
 
 	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/state", nil)

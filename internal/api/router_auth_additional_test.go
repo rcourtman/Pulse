@@ -32,6 +32,7 @@ func newAuthRouter(t *testing.T) *Router {
 func TestHandleChangePassword_InvalidJSON(t *testing.T) {
 	router := newAuthRouter(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/change-password", strings.NewReader("{"))
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:currentpassword")))
 	rec := httptest.NewRecorder()
 
 	router.handleChangePassword(rec, req)
@@ -52,6 +53,7 @@ func TestHandleChangePassword_InvalidPassword(t *testing.T) {
 	router := newAuthRouter(t)
 	body := `{"currentPassword":"currentpassword","newPassword":"short"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/change-password", strings.NewReader(body))
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:currentpassword")))
 	rec := httptest.NewRecorder()
 
 	router.handleChangePassword(rec, req)
@@ -72,6 +74,7 @@ func TestHandleChangePassword_MissingCurrent(t *testing.T) {
 	router := newAuthRouter(t)
 	body := `{"currentPassword":"","newPassword":"newpassword123"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/change-password", strings.NewReader(body))
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:currentpassword")))
 	rec := httptest.NewRecorder()
 
 	router.handleChangePassword(rec, req)
@@ -94,6 +97,7 @@ func TestHandleChangePassword_SuccessDocker(t *testing.T) {
 
 	body := `{"currentPassword":"currentpassword","newPassword":"newpassword123"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/change-password", strings.NewReader(body))
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:currentpassword")))
 	rec := httptest.NewRecorder()
 
 	router.handleChangePassword(rec, req)

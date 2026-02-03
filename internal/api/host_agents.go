@@ -300,7 +300,7 @@ func (h *HostAgentHandlers) canReadConfig(record *config.APITokenRecord) bool {
 func (h *HostAgentHandlers) resolveConfigHost(ctx context.Context, hostID string, record *config.APITokenRecord) (models.Host, bool) {
 	state := h.getMonitor(ctx).GetState()
 
-	if record == nil || record.HasScope(config.ScopeSettingsWrite) {
+	if record == nil || record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostManage) {
 		for _, candidate := range state.Hosts {
 			if candidate.ID == hostID {
 				return candidate, true

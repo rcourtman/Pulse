@@ -103,17 +103,23 @@ func TestClearSession(t *testing.T) {
 	router.clearSession(rec, req)
 
 	cookies := rec.Result().Cookies()
-	if len(cookies) != 1 {
-		t.Fatalf("expected 1 cookie, got %d", len(cookies))
+	if len(cookies) != 2 {
+		t.Fatalf("expected 2 cookies (pulse_session + pulse_csrf), got %d", len(cookies))
 	}
-	cookie := cookies[0]
-	if cookie.Name != "session" {
-		t.Fatalf("expected session cookie name, got %q", cookie.Name)
+	var sessionCookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "pulse_session" {
+			sessionCookie = c
+			break
+		}
 	}
-	if cookie.MaxAge != -1 {
-		t.Fatalf("expected MaxAge -1, got %d", cookie.MaxAge)
+	if sessionCookie == nil {
+		t.Fatalf("expected pulse_session cookie to be cleared")
 	}
-	if !cookie.HttpOnly {
+	if sessionCookie.MaxAge != -1 {
+		t.Fatalf("expected MaxAge -1, got %d", sessionCookie.MaxAge)
+	}
+	if !sessionCookie.HttpOnly {
 		t.Fatalf("expected HttpOnly cookie")
 	}
 }
