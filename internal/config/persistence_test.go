@@ -511,8 +511,8 @@ func TestAppriseConfigPersistence(t *testing.T) {
 		t.Fatalf("unexpected targets: got %v want %v", loaded.Targets, expectedTargets)
 	}
 
-	if loaded.CLIPath != "/usr/local/bin/apprise" {
-		t.Fatalf("expected CLI path to be trimmed, got %q", loaded.CLIPath)
+	if loaded.CLIPath != "apprise" {
+		t.Fatalf("expected CLI path to be hardcoded to 'apprise' (security fix), got %q", loaded.CLIPath)
 	}
 
 	if loaded.TimeoutSeconds != 5 {

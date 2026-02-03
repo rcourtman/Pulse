@@ -39,10 +39,9 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		return "", fmt.Errorf("passphrase is required for export")
 	}
 
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// Load all configurations
+	// Each Load function handles its own locking. Do NOT hold an outer lock
+	// here: LoadNodesConfig may need to acquire a write lock to persist
+	// migrations, which would deadlock against an outer read lock.
 	nodes, err := c.LoadNodesConfig()
 	if err != nil {
 		return "", fmt.Errorf("failed to load nodes config: %w", err)
