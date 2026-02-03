@@ -259,6 +259,9 @@ func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (str
 	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "role", "add", "PulseMonitor", "-privs", "Sys.Audit,VM.Monitor,Datastore.Audit")
 	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", "PulseMonitor")
 
+	// Add PVEDatastoreAdmin on /storage for backup visibility (issue #1139)
+	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/storage", "-user", proxmoxUserPVE, "-role", "PVEDatastoreAdmin")
+
 	// Create token with privilege separation disabled
 	output, err := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "0")
 	if err != nil {
