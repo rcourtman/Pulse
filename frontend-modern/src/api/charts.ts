@@ -41,6 +41,7 @@ export interface ChartsResponse {
     storageData: Record<string, ChartData>; // Storage data keyed by ID
     dockerData?: Record<string, ChartData>; // Docker container data keyed by container ID
     dockerHostData?: Record<string, ChartData>; // Docker host data keyed by host ID
+    hostData?: Record<string, ChartData>; // Unified host agent data keyed by host ID
     guestTypes?: Record<string, 'vm' | 'container'>; // Maps guest ID to type
     timestamp: number;
     stats: ChartStats;

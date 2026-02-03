@@ -23,6 +23,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { HostMetadataAPI, type HostMetadata } from '@/api/hostMetadata';
 
 import { logger } from '@/utils/logger';
+import { buildMetricKey } from '@/utils/metricsKeys';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 import { HostDrawer } from './HostDrawer';
 
@@ -1237,6 +1238,7 @@ const HostRow: Component<HostRowProps> = (props) => {
                 usage={cpuPercent()}
                 loadAverage={props.host.loadAverage?.[0]}
                 cores={props.isMobile() ? undefined : props.host.cpuCount}
+                resourceId={buildMetricKey('host', props.host.id)}
               />
             </Show>
           </td>
@@ -1252,6 +1254,7 @@ const HostRow: Component<HostRowProps> = (props) => {
                 balloon={props.host.memory?.balloon || 0}
                 swapUsed={props.host.memory?.swapUsed || 0}
                 swapTotal={props.host.memory?.swapTotal || 0}
+                resourceId={buildMetricKey('host', props.host.id)}
               />
             </Show>
           </td>

@@ -5328,12 +5328,62 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	// Process unified host agents - get historical data
+	hostData := make(map[string]VMChartData)
+	for _, host := range state.Hosts {
+		if host.ID == "" {
+			continue
+		}
+
+		if hostData[host.ID] == nil {
+			hostData[host.ID] = make(VMChartData)
+		}
+
+		// Get historical metrics using the host: prefix key
+		metricKey := fmt.Sprintf("host:%s", host.ID)
+		metrics := monitor.GetGuestMetrics(metricKey, duration)
+
+		// Convert metric points to API format
+		for metricType, points := range metrics {
+			hostData[host.ID][metricType] = make([]MetricPoint, len(points))
+			for i, point := range points {
+				ts := point.Timestamp.Unix() * 1000
+				if ts < oldestTimestamp {
+					oldestTimestamp = ts
+				}
+				hostData[host.ID][metricType][i] = MetricPoint{
+					Timestamp: ts,
+					Value:     point.Value,
+				}
+			}
+		}
+
+		// If no historical data, add current value
+		if len(hostData[host.ID]["cpu"]) == 0 {
+			hostData[host.ID]["cpu"] = []MetricPoint{
+				{Timestamp: currentTime, Value: host.CPUUsage},
+			}
+			hostData[host.ID]["memory"] = []MetricPoint{
+				{Timestamp: currentTime, Value: host.Memory.Usage},
+			}
+			// Use first disk for host disk percentage
+			var diskPercent float64
+			if len(host.Disks) > 0 {
+				diskPercent = host.Disks[0].Usage
+			}
+			hostData[host.ID]["disk"] = []MetricPoint{
+				{Timestamp: currentTime, Value: diskPercent},
+			}
+		}
+	}
+
 	response := ChartResponse{
 		ChartData:      chartData,
 		NodeData:       nodeData,
 		StorageData:    storageData,
 		DockerData:     dockerData,
 		DockerHostData: dockerHostData,
+		HostData:       hostData,
 		GuestTypes:     guestTypes,
 		Timestamp:      currentTime,
 		Stats: ChartStats{
@@ -5353,6 +5403,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		Int("nodes", len(nodeData)).
 		Int("storage", len(storageData)).
 		Int("dockerContainers", len(dockerData)).
+		Int("hosts", len(hostData)).
 		Str("range", timeRange).
 		Msg("Chart data response sent")
 }

@@ -5,7 +5,7 @@
  * across different resource types.
  */
 
-export type MetricResourceKind = 'node' | 'vm' | 'container' | 'dockerHost' | 'dockerContainer';
+export type MetricResourceKind = 'node' | 'vm' | 'container' | 'host' | 'dockerHost' | 'dockerContainer';
 
 /**
  * Build a namespaced metric key for a resource

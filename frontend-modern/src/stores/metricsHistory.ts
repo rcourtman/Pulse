@@ -411,6 +411,16 @@ export async function seedFromBackend(range: TimeRange = '1h'): Promise<void> {
         });
       }
 
+      // Process unified host agents
+      if (response.hostData) {
+        for (const [id, chartData] of Object.entries(response.hostData)) {
+          const resourceKey = buildMetricKey('host', id);
+          processChartData(resourceKey, chartData as ChartData);
+        }
+        logger.debug('[MetricsHistory] Processed unified host agent data', {
+          count: Object.keys(response.hostData).length
+        });
+      }
 
       hasSeededFromBackend = true;
       logger.info('[MetricsHistory] Seeded from backend', { seededCount, totalResources: metricsHistoryMap.size });

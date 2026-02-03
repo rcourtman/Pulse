@@ -20,6 +20,8 @@ export const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
   { value: '1h', label: '1h' },
   { value: '4h', label: '4h' },
   { value: '24h', label: '24h' },
+  { value: '7d', label: '7d' },
+  { value: '30d', label: '30d' },
 ];
 
 // Read initial view mode from localStorage
@@ -44,7 +46,7 @@ const getInitialTimeRange = (): TimeRange => {
 
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.METRICS_TIME_RANGE);
-    if (stored && ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '7d'].includes(stored)) {
+    if (stored && ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '7d', '30d'].includes(stored)) {
       return stored as TimeRange;
     }
   } catch (_err) {

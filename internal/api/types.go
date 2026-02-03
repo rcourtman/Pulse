@@ -67,6 +67,7 @@ type ChartResponse struct {
 	StorageData    map[string]StorageChartData `json:"storageData"`
 	DockerData     map[string]VMChartData      `json:"dockerData"`     // Docker container metrics (keyed by container ID)
 	DockerHostData map[string]VMChartData      `json:"dockerHostData"` // Docker host metrics (keyed by host ID)
+	HostData       map[string]VMChartData      `json:"hostData"`       // Unified host agent metrics (keyed by host ID)
 	GuestTypes     map[string]string           `json:"guestTypes"`     // Maps guest ID to type ("vm" or "container")
 	Timestamp      int64                       `json:"timestamp"`
 	Stats          ChartStats                  `json:"stats"`
