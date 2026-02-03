@@ -1,12 +1,15 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, For } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useWebSocket } from '@/App';
 import UnifiedBackups from './UnifiedBackups';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
+import { useInstanceWarnings } from '@/hooks/useInstanceWarnings';
+import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 
 const Backups: Component = () => {
   const { state, connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
+  const { warnings } = useInstanceWarnings();
 
   const hasBackupData = () =>
     Boolean(
@@ -16,9 +19,41 @@ const Backups: Component = () => {
         state.backups?.pmg?.length,
     );
 
+  const allWarnings = () => {
+    const result: { instance: string; warning: string }[] = [];
+    warnings().forEach((instanceWarnings, instance) => {
+      for (const warning of instanceWarnings) {
+        result.push({ instance, warning });
+      }
+    });
+    return result;
+  };
+
   return (
     <div class="space-y-3">
       <ProxmoxSectionNav current="backups" />
+
+      {/* Permission Warnings Banner */}
+      <Show when={allWarnings().length > 0}>
+        <Card padding="md" tone="warning">
+          <div class="flex items-start gap-3">
+            <AlertTriangle class="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div class="space-y-2">
+              <p class="font-medium text-amber-800 dark:text-amber-200">
+                Backup permission issue detected
+              </p>
+              <For each={allWarnings()}>
+                {(item) => (
+                  <div class="text-sm text-amber-700 dark:text-amber-300">
+                    <span class="font-medium">{item.instance}:</span>{' '}
+                    <span>{item.warning}</span>
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+        </Card>
+      </Show>
 
       {/* Loading State */}
       <Show

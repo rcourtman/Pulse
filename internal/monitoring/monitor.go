@@ -676,6 +676,7 @@ type InstanceHealth struct {
 	PollStatus  InstancePollStatus `json:"pollStatus"`
 	Breaker     InstanceBreaker    `json:"breaker"`
 	DeadLetter  InstanceDLQ        `json:"deadLetter"`
+	Warnings    []string           `json:"warnings,omitempty"`
 }
 
 func schedulerKey(instanceType InstanceType, name string) string {
@@ -734,6 +735,7 @@ type Monitor struct {
 	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
 	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
 	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
+	backupPermissionWarnings   map[string]string                          // Track backup permission issues per instance (instance -> warning message)
 	persistence                *config.ConfigPersistence                  // Add persistence for saving updated configs
 	pbsBackupPollers           map[string]bool                            // Track PBS backup polling goroutines per instance
 	pbsBackupCacheTime         map[string]map[pbsBackupGroupKey]time.Time // Track when each PBS backup group was last fetched
@@ -3654,6 +3656,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		lastPhysicalDiskPoll:       make(map[string]time.Time),
 		lastPVEBackupPoll:          make(map[string]time.Time),
 		lastPBSBackupPoll:          make(map[string]time.Time),
+		backupPermissionWarnings:   make(map[string]string),
 		persistence:                config.NewConfigPersistence(cfg.DataPath),
 		pbsBackupPollers:           make(map[string]bool),
 		pbsBackupCacheTime:         make(map[string]map[pbsBackupGroupKey]time.Time),
@@ -5552,6 +5555,14 @@ func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
 				dlqInfo.NextRetry = timePtr(dlq.NextRetry)
 			}
 
+			// Collect any warnings for this instance
+			var warnings []string
+			if instType == "pve" {
+				if warning, ok := m.backupPermissionWarnings[instName]; ok {
+					warnings = append(warnings, warning)
+				}
+			}
+
 			instances = append(instances, InstanceHealth{
 				Key:         key,
 				Type:        instType,
@@ -5561,6 +5572,7 @@ func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
 				PollStatus:  instanceStatus,
 				Breaker:     breakerInfo,
 				DeadLetter:  dlqInfo,
+				Warnings:    warnings,
 			})
 		}
 
@@ -9034,16 +9046,36 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
 			if err != nil {
 				monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_content", instanceName, err).WithNode(node.Node)
-				log.Debug().Err(monErr).
-					Str("node", node.Node).
-					Str("storage", storage.Storage).
-					Msg("Failed to get storage content")
+				errStr := strings.ToLower(err.Error())
+
+				// Check if this is a permission error
+				if strings.Contains(errStr, "403") || strings.Contains(errStr, "401") ||
+					strings.Contains(errStr, "permission") || strings.Contains(errStr, "forbidden") {
+					m.mu.Lock()
+					m.backupPermissionWarnings[instanceName] = "Missing PVEDatastoreAdmin permission on /storage. Run: pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin"
+					m.mu.Unlock()
+					log.Warn().
+						Str("instance", instanceName).
+						Str("node", node.Node).
+						Str("storage", storage.Storage).
+						Msg("Backup permission denied - PVEDatastoreAdmin role may be missing on /storage")
+				} else {
+					log.Debug().Err(monErr).
+						Str("node", node.Node).
+						Str("storage", storage.Storage).
+						Msg("Failed to get storage content")
+				}
 				if _, ok := storageSuccess[storage.Storage]; !ok {
 					storagePreserveNeeded[storage.Storage] = struct{}{}
 				}
 				contentFailures++
 				continue
 			}
+
+			// Clear any previous permission warning on success
+			m.mu.Lock()
+			delete(m.backupPermissionWarnings, instanceName)
+			m.mu.Unlock()
 
 			contentSuccess++
 			storageSuccess[storage.Storage] = struct{}{}
