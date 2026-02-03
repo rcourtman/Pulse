@@ -248,12 +248,34 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 	// API-only mode: when only API token is configured (no password auth)
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.HasAPITokens() {
-		// Check if an API token was provided
-		providedToken := r.Header.Get("X-API-Token")
+		// Check if an API token was provided (via header, bearer, or query)
+		var providedToken string
+		if t := r.Header.Get("X-API-Token"); t != "" {
+			providedToken = t
+		} else if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			providedToken = strings.TrimSpace(authHeader[7:])
+		} else if t := r.URL.Query().Get("token"); t != "" {
+			providedToken = t
+		}
 
 		// If a token was provided, validate it
 		if providedToken != "" {
-			if record, ok := cfg.ValidateAPIToken(providedToken); ok {
+			// Optimistically check validity with RLock to avoid write lock overhead for invalid tokens
+			if !cfg.IsValidAPIToken(providedToken) {
+				if w != nil {
+					http.Error(w, "Invalid API token", http.StatusUnauthorized)
+				}
+				return false
+			}
+
+			// Token appears valid, upgrade to Write lock to update stats
+			config.Mu.RUnlock()
+			config.Mu.Lock()
+			record, ok := cfg.ValidateAPIToken(providedToken)
+			config.Mu.Unlock()
+			config.Mu.RLock() // Restore Read lock for the defer at end of function
+
+			if ok {
 				attachAPITokenRecord(r, record)
 				tokenID := record.ID
 				if tokenID == "" && len(record.Hash) >= 8 {
@@ -263,7 +285,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 				w.Header().Set("X-Auth-Method", "api_token")
 				return true
 			}
-			// Invalid token provided
+			// Should not happen if IsValidAPIToken returned true, unless race/expiration occurred
 			if w != nil {
 				http.Error(w, "Invalid API token", http.StatusUnauthorized)
 			}
@@ -289,7 +311,19 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		if token == "" {
 			return false
 		}
-		if record, ok := cfg.ValidateAPIToken(token); ok {
+		// Optimistically check validity with RLock
+		if !cfg.IsValidAPIToken(token) {
+			return false
+		}
+
+		// Upgrade to Write lock for stats update
+		config.Mu.RUnlock()
+		config.Mu.Lock()
+		record, ok := cfg.ValidateAPIToken(token)
+		config.Mu.Unlock()
+		config.Mu.RLock() // Restore Read lock
+
+		if ok {
 			attachAPITokenRecord(r, record)
 			tokenID := record.ID
 			if tokenID == "" && len(record.Hash) >= 8 {
@@ -772,9 +806,9 @@ func AuthContextMiddleware(cfg *config.Config, mtm *monitoring.MultiTenantMonito
 // extractAndStoreAuthContext extracts user/token info from the request and stores in context.
 // Returns the request with updated context. Does not enforce auth.
 func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantMonitor, r *http.Request) *http.Request {
-	// Use Lock (Write) instead of RLock because ValidateAPIToken mutates LastUsedAt
-	config.Mu.Lock()
-	defer config.Mu.Unlock()
+	// Use RLock for common case, upgrade to Lock only if we need to update token stats
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
 
 	// Dev mode bypass
 	if adminBypassEnabled() {
@@ -831,7 +865,34 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			if token == "" {
 				return nil, false
 			}
-			// Use targetConfig instead of global cfg
+
+			// If using global config, we need to handle locking carefully
+			if targetConfig == cfg {
+				// Optimistic check with RLock
+				if !cfg.IsValidAPIToken(token) {
+					return nil, false
+				}
+
+				// Upgrade to Write lock for stats update
+				config.Mu.RUnlock()
+				config.Mu.Lock()
+				record, ok := cfg.ValidateAPIToken(token)
+				config.Mu.Unlock()
+				config.Mu.RLock() // Restore Read lock
+
+				if ok {
+					attachAPITokenRecord(r, record)
+					tokenID := record.ID
+					if tokenID == "" && len(record.Hash) >= 8 {
+						tokenID = "legacy-" + record.Hash[:8]
+					}
+					return attachUserContext(r, fmt.Sprintf("token:%s", tokenID)), true
+				}
+				return nil, false
+			}
+
+			// For tenant configs or other non-global configs, assume they handle their own locking
+			// or don't use the global config.Mu
 			if record, ok := targetConfig.ValidateAPIToken(token); ok {
 				attachAPITokenRecord(r, record)
 				tokenID := record.ID

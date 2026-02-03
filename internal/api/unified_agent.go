@@ -117,6 +117,13 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 	w.Header().Set("Expires", "0")
 
 	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
+
+	// Validate architecture if provided
+	if archParam != "" && normalizeUnifiedAgentArch(archParam) == "" {
+		http.Error(w, "Invalid architecture specified", http.StatusBadRequest)
+		return
+	}
+
 	searchPaths := make([]string, 0, 6)
 
 	// If a specific architecture is requested, only look for that architecture

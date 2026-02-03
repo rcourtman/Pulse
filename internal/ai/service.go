@@ -158,6 +158,7 @@ type Service struct {
 
 	// Infrastructure discovery service - detects apps running on hosts
 	infraDiscoveryService *infradiscovery.Service
+	infraDiscoveryCancel  context.CancelFunc
 
 	// AI-powered deep discovery store - detailed service analysis with commands
 	discoveryStore *servicediscovery.Store
@@ -323,8 +324,16 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		)
 		// Wire the AI service as the analyzer (implements infradiscovery.AIAnalyzer)
 		s.infraDiscoveryService.SetAIAnalyzer(s)
-		s.infraDiscoveryService.Start(context.Background())
-		log.Info().Msg("AI-powered infrastructure discovery service started")
+
+		// Only start if AI is enabled
+		if s.cfg != nil && s.cfg.Enabled {
+			ctx, cancel := context.WithCancel(context.Background())
+			s.infraDiscoveryCancel = cancel
+			s.infraDiscoveryService.Start(ctx)
+			log.Info().Msg("AI-powered infrastructure discovery service started")
+		} else {
+			log.Info().Msg("AI-powered infrastructure discovery initialized (stopped - AI disabled)")
+		}
 	}
 
 	// Initialize AI-powered deep discovery service if not already done
@@ -746,6 +755,22 @@ func (s *Service) StopPatrol() {
 	}
 	if alertAnalyzer != nil {
 		alertAnalyzer.Stop()
+	}
+}
+
+// Stop stops all background services
+func (s *Service) Stop() {
+	s.StopPatrol()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.infraDiscoveryCancel != nil {
+		s.infraDiscoveryCancel()
+		s.infraDiscoveryCancel = nil
+	}
+	if s.discoveryService != nil {
+		s.discoveryService.Stop()
 	}
 }
 
