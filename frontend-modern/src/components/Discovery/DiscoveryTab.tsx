@@ -38,6 +38,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     const [editingNotes, setEditingNotes] = createSignal(false);
     // Track if initial fetch has completed to prevent flash of "no data" state
     const [hasFetched, setHasFetched] = createSignal(false);
+    // Live elapsed time counter (updates every second while scanning)
+    const [liveElapsedSeconds, setLiveElapsedSeconds] = createSignal(0);
+    const [scanStartTime, setScanStartTime] = createSignal<number | null>(null);
     // Delayed loading spinner - only show after 150ms to prevent flash
     const [showLoadingSpinner, setShowLoadingSpinner] = createSignal(false);
 
@@ -165,6 +168,17 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         }
     });
 
+    // Live elapsed time timer - updates every second while scanning
+    createEffect(() => {
+        if (isScanning() && scanStartTime()) {
+            const interval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - scanStartTime()!) / 1000);
+                setLiveElapsedSeconds(elapsed);
+            }, 1000);
+            onCleanup(() => clearInterval(interval));
+        }
+    });
+
     // Handle triggering a new discovery
     const handleTriggerDiscovery = async (force = false) => {
         setIsScanning(true);
@@ -172,6 +186,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         setScanProgress(null);
         setScanError(null);
         setScanSuccess(false);
+        setScanStartTime(Date.now()); // Start the live timer
+        setLiveElapsedSeconds(0);
         try {
             // triggerDiscovery runs the discovery and returns the result directly
             const result = await triggerDiscovery(props.resourceType, props.hostId, props.resourceId, {
@@ -186,6 +202,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             setHttpScanInProgress(false);
             setIsScanning(false);
             setScanProgress(null);
+            setScanStartTime(null); // Stop the live timer
             setScanSuccess(true);
             // Clear success after user has seen it
             setTimeout(() => setScanSuccess(false), 2000);
@@ -211,6 +228,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             setHttpScanInProgress(false);
             setIsScanning(false);
             setScanProgress(null);
+            setScanStartTime(null); // Stop the live timer
         }
     };
 
@@ -422,11 +440,25 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             Running: <code class="font-mono">{scanProgress()?.current_command}</code>
                         </div>
                     </Show>
-                    <Show when={scanProgress()?.elapsed_ms}>
-                        <div class="mt-1 text-xs text-blue-500 dark:text-blue-500">
-                            Elapsed: {((scanProgress()?.elapsed_ms || 0) / 1000).toFixed(1)}s
-                        </div>
-                    </Show>
+                    {/* Live elapsed time - always show while scanning */}
+                    <div class="mt-1 text-xs text-blue-500 dark:text-blue-500">
+                        Elapsed: {liveElapsedSeconds()}s
+                    </div>
+                </div>
+            </Show>
+
+            {/* Scanning state without WebSocket progress - show live timer */}
+            <Show when={isScanning() && !scanProgress()}>
+                <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900/30">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                        <span class="text-sm font-medium text-blue-700 dark:text-blue-300">
+                            Running discovery...
+                        </span>
+                    </div>
+                    <div class="text-xs text-blue-500 dark:text-blue-500">
+                        Elapsed: {liveElapsedSeconds()}s
+                    </div>
                 </div>
             </Show>
 

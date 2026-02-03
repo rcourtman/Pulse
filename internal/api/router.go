@@ -1238,8 +1238,8 @@ func (r *Router) setupRoutes() {
 		json.NewEncoder(w).Encode(map[string]string{"status": "notification sent"})
 	})
 
-	// Alert routes
-	r.mux.HandleFunc("/api/alerts/", RequireAuth(r.config, r.alertHandlers.HandleAlerts))
+	// Alert routes - require monitoring:read scope to view alerts
+	r.mux.HandleFunc("/api/alerts/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.alertHandlers.HandleAlerts)))
 
 	// Notification routes
 	r.mux.HandleFunc("/api/notifications/", RequireAdmin(r.config, r.notificationHandlers.HandleNotifications))
@@ -1380,7 +1380,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/settings/ai/update", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
 	r.mux.HandleFunc("/api/ai/test", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
 	r.mux.HandleFunc("/api/ai/test/{provider}", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestProvider)))
-	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, r.aiSettingsHandler.HandleListModels))
+	// AI models list - require ai:chat scope (needed to select a model for chat)
+	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleListModels)))
 	r.mux.HandleFunc("/api/ai/execute", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecute)))
 	r.mux.HandleFunc("/api/ai/execute/stream", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecuteStream)))
 	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, RequireLicenseFeature(r.licenseHandlers, license.FeatureKubernetesAI, r.aiSettingsHandler.HandleAnalyzeKubernetesCluster))))
@@ -1396,8 +1397,10 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/knowledge/clear", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleClearGuestKnowledge)))
 	// SECURITY: Debug context leaks system prompt and infra details - require settings:read scope
 	r.mux.HandleFunc("/api/ai/debug/context", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleDebugContext)))
-	r.mux.HandleFunc("/api/ai/agents", RequireAuth(r.config, r.aiSettingsHandler.HandleGetConnectedAgents))
-	r.mux.HandleFunc("/api/ai/cost/summary", RequireAuth(r.config, r.aiSettingsHandler.HandleGetAICostSummary))
+	// SECURITY: Connected agents list could reveal fleet topology - require ai:execute scope
+	r.mux.HandleFunc("/api/ai/agents", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetConnectedAgents)))
+	// SECURITY: Cost summary could reveal usage patterns - require settings:read scope
+	r.mux.HandleFunc("/api/ai/cost/summary", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAICostSummary)))
 	r.mux.HandleFunc("/api/ai/cost/reset", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleResetAICostHistory)))
 	r.mux.HandleFunc("/api/ai/cost/export", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleExportAICostHistory)))
 	// OAuth endpoints for Claude Pro/Max subscription authentication
@@ -1411,9 +1414,10 @@ func (r *Router) setupRoutes() {
 	// Note: Status remains accessible so UI can show license/upgrade state
 	// Read endpoints (findings, history, runs) return redacted preview data when unlicensed
 	// Mutation endpoints (run, acknowledge, dismiss, etc.) return 402 to prevent unauthorized actions
-	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolStatus))
-	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, r.aiSettingsHandler.HandlePatrolStream))
-	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+	// SECURITY: Patrol status and stream require ai:execute scope to access findings
+	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolStatus)))
+	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolStream)))
+	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			r.aiSettingsHandler.HandleGetPatrolFindings(w, req)
@@ -1423,7 +1427,7 @@ func (r *Router) setupRoutes() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
+	})))
 	// SECURITY: AI Patrol read endpoints - require ai:execute scope
 	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetFindingsHistory)))
 	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleForcePatrol)))
@@ -1504,23 +1508,26 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/learning/preferences", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetLearningPreferences)))
 	r.mux.HandleFunc("/api/ai/proxmox/events", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetProxmoxEvents)))
 	r.mux.HandleFunc("/api/ai/proxmox/correlations", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetProxmoxCorrelations)))
-	r.mux.HandleFunc("/api/ai/remediation/plans", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+	// SECURITY: Remediation endpoints require ai:execute scope to prevent unauthorized access to remediation plans
+	r.mux.HandleFunc("/api/ai/remediation/plans", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			r.aiSettingsHandler.HandleGetRemediationPlans(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
-	r.mux.HandleFunc("/api/ai/remediation/plan", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRemediationPlan))
-	r.mux.HandleFunc("/api/ai/remediation/approve", RequireAuth(r.config, r.aiSettingsHandler.HandleApproveRemediationPlan))
+	})))
+	r.mux.HandleFunc("/api/ai/remediation/plan", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetRemediationPlan)))
+	// Approving a remediation plan is a mutation - keep with ai:execute scope
+	r.mux.HandleFunc("/api/ai/remediation/approve", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleApproveRemediationPlan)))
 	r.mux.HandleFunc("/api/ai/remediation/execute", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecuteRemediationPlan)))
 	r.mux.HandleFunc("/api/ai/remediation/rollback", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleRollbackRemediationPlan)))
-	r.mux.HandleFunc("/api/ai/circuit/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetCircuitBreakerStatus))
+	// SECURITY: Circuit breaker status could reveal operational state - require ai:execute scope
+	r.mux.HandleFunc("/api/ai/circuit/status", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetCircuitBreakerStatus)))
 
-	// Phase 7: Incident Recording API
-	r.mux.HandleFunc("/api/ai/incidents", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRecentIncidents))
-	r.mux.HandleFunc("/api/ai/incidents/", RequireAuth(r.config, r.aiSettingsHandler.HandleGetIncidentData))
+	// Phase 7: Incident Recording API - require ai:execute scope to protect incident data
+	r.mux.HandleFunc("/api/ai/incidents", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetRecentIncidents)))
+	r.mux.HandleFunc("/api/ai/incidents/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetIncidentData)))
 
 	// AI Chat Sessions - sync across devices (legacy endpoints)
 	r.mux.HandleFunc("/api/ai/chat/sessions", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleListAIChatSessions)))
@@ -1557,8 +1564,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleListApprovals)))
 	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.routeApprovals)))
 
-	// AI question endpoints
-	r.mux.HandleFunc("/api/ai/question/", RequireAuth(r.config, r.routeQuestions))
+	// AI question endpoints - require ai:chat scope for interactive AI features
+	r.mux.HandleFunc("/api/ai/question/", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.routeQuestions)))
 
 	// AI-powered infrastructure discovery endpoints
 	r.mux.HandleFunc("/api/discovery", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListDiscoveries)))

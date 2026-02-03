@@ -1177,7 +1177,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	s.broadcastProgress(&DiscoveryProgress{
 		ResourceID:  resourceID,
 		Status:      DiscoveryStatusRunning,
-		CurrentStep: "Analyzing with AI...",
+		CurrentStep: "Analyzing with Pulse Assistant...",
 	})
 
 	response, err := analyzer.AnalyzeForDiscovery(ctx, prompt)
