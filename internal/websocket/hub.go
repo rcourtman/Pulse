@@ -95,23 +95,13 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 	allowedOrigins := h.allowedOrigins
 	h.mu.RUnlock()
 
-	// Determine the actual origin based on proxy headers
+	// Determine the actual origin
 	scheme := "http"
-	host := r.Host
-
-	// Check if we're behind a reverse proxy
-	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
-		scheme = normalizeForwardedProto(forwardedProto, scheme)
-	} else if forwardedScheme := r.Header.Get("X-Forwarded-Scheme"); forwardedScheme != "" {
-		scheme = normalizeForwardedProto(forwardedScheme, scheme)
-	} else if r.TLS != nil {
+	if r.TLS != nil {
 		scheme = "https"
 	}
 
-	// Use X-Forwarded-Host if available (for reverse proxy scenarios)
-	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
-		host = forwardedHost
-	}
+	host := r.Host
 
 	requestOrigin := scheme + "://" + host
 
@@ -1104,13 +1094,14 @@ func (c *Client) writePump() {
 
 			// Send any queued messages
 			n := len(c.send)
+		flushLoop:
 			for i := 0; i < n; i++ {
 				select {
 				case msg := <-c.send:
 					if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 						log.Warn().Err(err).Str("client", c.id).Int("msgSize", len(msg)).Msg("Failed to flush queued message")
 						// Don't disconnect on queued message failure, just break the flush loop
-						break
+						break flushLoop
 					}
 				default:
 					// No more messages

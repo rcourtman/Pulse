@@ -311,7 +311,9 @@ func (h *HostAgentHandlers) resolveConfigHost(ctx context.Context, hostID string
 
 	for _, candidate := range state.Hosts {
 		if candidate.TokenID != "" && candidate.TokenID == record.ID {
-			return candidate, true
+			if candidate.ID == hostID {
+				return candidate, true
+			}
 		}
 	}
 
@@ -526,6 +528,11 @@ func (h *HostAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Reque
 	}
 
 	log.Info().Str("hostId", hostID).Msg("Received unregistration request from agent uninstaller")
+
+	// Ensure the token can manage this specific host
+	if !h.ensureHostTokenMatch(w, r, hostID) {
+		return
+	}
 
 	// Remove the host from state
 	_, err := h.getMonitor(r.Context()).RemoveHostAgent(hostID)

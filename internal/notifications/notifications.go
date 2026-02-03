@@ -1533,7 +1533,11 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		return fmt.Errorf("no alerts to send")
 	}
 
-	primaryAlert := alertList[0]
+	// Create a shallow copy of the primary alert to avoid mutating the original memory
+	// when we modify the message for grouped summaries.
+	originalPrimary := alertList[0]
+	alertCopy := *originalPrimary
+	primaryAlert := &alertCopy
 	customFields := convertWebhookCustomFields(webhook.CustomFields)
 
 	var templateData WebhookPayloadData

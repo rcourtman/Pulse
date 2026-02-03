@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,6 +20,7 @@ type SessionStore struct {
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
+	crypto     *crypto.CryptoManager
 }
 
 func sessionHash(token string) string {
@@ -68,10 +70,16 @@ type SessionData struct {
 
 // NewSessionStore creates a new persistent session store
 func NewSessionStore(dataPath string) *SessionStore {
+	cm, err := crypto.NewCryptoManagerAt(dataPath)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize crypto manager for session store")
+	}
+
 	store := &SessionStore{
 		sessions: make(map[string]*SessionData),
 		dataPath: dataPath,
 		stopChan: make(chan bool),
+		crypto:   cm,
 	}
 
 	// Load existing sessions from disk
@@ -340,6 +348,18 @@ func (s *SessionStore) saveUnsafe() {
 	// Marshal sessions
 	persisted := make([]sessionPersisted, 0, len(s.sessions))
 	for key, session := range s.sessions {
+		refreshToken := session.OIDCRefreshToken
+		// Encrypt refresh token if crypto is available and token exists
+		if refreshToken != "" && s.crypto != nil {
+			if encrypted, err := s.crypto.EncryptString(refreshToken); err == nil {
+				refreshToken = encrypted
+			} else {
+				log.Error().Err(err).Msg("Failed to encrypt refresh token")
+				// Don't persist if encryption fails to prevent leak
+				refreshToken = ""
+			}
+		}
+
 		persisted = append(persisted, sessionPersisted{
 			Key:                key,
 			Username:           session.Username,
@@ -348,7 +368,7 @@ func (s *SessionStore) saveUnsafe() {
 			UserAgent:          session.UserAgent,
 			IP:                 session.IP,
 			OriginalDuration:   session.OriginalDuration,
-			OIDCRefreshToken:   session.OIDCRefreshToken,
+			OIDCRefreshToken:   refreshToken,
 			OIDCAccessTokenExp: session.OIDCAccessTokenExp,
 			OIDCIssuer:         session.OIDCIssuer,
 			OIDCClientID:       session.OIDCClientID,
@@ -401,6 +421,15 @@ func (s *SessionStore) load() {
 			if now.After(entry.ExpiresAt) {
 				continue
 			}
+			refreshToken := entry.OIDCRefreshToken
+			// Decrypt refresh token if needed (handles migration from plaintext)
+			if refreshToken != "" && s.crypto != nil {
+				if decrypted, err := s.crypto.DecryptString(refreshToken); err == nil {
+					refreshToken = decrypted
+				}
+				// If decryption fails, assume it's legacy plaintext and leave as is
+			}
+
 			s.sessions[entry.Key] = &SessionData{
 				Username:           entry.Username,
 				ExpiresAt:          entry.ExpiresAt,
@@ -408,7 +437,7 @@ func (s *SessionStore) load() {
 				UserAgent:          entry.UserAgent,
 				IP:                 entry.IP,
 				OriginalDuration:   entry.OriginalDuration,
-				OIDCRefreshToken:   entry.OIDCRefreshToken,
+				OIDCRefreshToken:   refreshToken,
 				OIDCAccessTokenExp: entry.OIDCAccessTokenExp,
 				OIDCIssuer:         entry.OIDCIssuer,
 				OIDCClientID:       entry.OIDCClientID,

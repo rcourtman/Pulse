@@ -316,8 +316,10 @@ func (h *UpdateHandlers) HandleListUpdateHistory(w http.ResponseWriter, r *http.
 	}
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		// Parse limit (simple implementation)
-		filter.Limit = 50
+		var limit int
+		if _, err := fmt.Sscanf(limitStr, "%d", &limit); err == nil && limit > 0 {
+			filter.Limit = limit
+		}
 	}
 
 	if status := r.URL.Query().Get("status"); status != "" {

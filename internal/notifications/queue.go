@@ -108,6 +108,11 @@ func NewNotificationQueue(dataDir string) (*NotificationQueue, error) {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	// Reset any stuck "sending" items to "pending" (crash recovery)
+	if _, err := nq.db.Exec(`UPDATE notification_queue SET status = 'pending' WHERE status = 'sending'`); err != nil {
+		log.Error().Err(err).Msg("Failed to recover stuck sending notifications")
+	}
+
 	// Start background processors
 	nq.wg.Add(2)
 	go nq.processQueue()
