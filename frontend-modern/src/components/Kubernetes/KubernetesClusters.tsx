@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { For, Show, createMemo, createSignal, createEffect, onMount } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, onMount, Accessor } from 'solid-js';
 import { AIAPI } from '@/api/ai';
 import Sparkles from 'lucide-solid/icons/sparkles';
 import ExternalLink from 'lucide-solid/icons/external-link';
@@ -24,6 +24,21 @@ import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES, type StatusIndicator
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { HistoryChart } from '@/components/shared/HistoryChart';
 import type { HistoryTimeRange } from '@/api/charts';
+import { GuestMetadataAPI, type GuestMetadata } from '@/api/guestMetadata';
+import { logger } from '@/utils/logger';
+
+type GuestMetadataRecord = Record<string, GuestMetadata>;
+
+// Module-level cache for guest metadata to persist across component remounts
+let cachedK8sGuestMetadata: GuestMetadataRecord | null = null;
+
+const getK8sGuestMetadataCache = (): GuestMetadataRecord => {
+  return cachedK8sGuestMetadata ?? {};
+};
+
+const setK8sGuestMetadataCache = (metadata: GuestMetadataRecord) => {
+  cachedK8sGuestMetadata = metadata;
+};
 
 // Global state for expanded row
 const [expandedRowId, setExpandedRowId] = createSignal<string | null>(null);
@@ -155,11 +170,12 @@ const PodRow: Component<{
   cluster: KubernetesCluster;
   pod: KubernetesPod;
   columns: { isColumnVisible: (id: string) => boolean };
+  guestMetadata: Accessor<GuestMetadataRecord>;
+  onCustomUrlChange: (guestId: string, url: string) => void;
 }> = (props) => {
   const rowId = `${props.cluster.id}:${props.pod.uid}`;
   const isExpanded = createMemo(() => expandedRowId() === rowId);
   const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
-  const [customUrl, setCustomUrl] = createSignal<string | undefined>(undefined);
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>('1h');
 
   const toggle = (e: MouseEvent) => {
@@ -358,8 +374,8 @@ const PodRow: Component<{
                   resourceId={props.pod.uid}
                   guestId={props.pod.uid}
                   hostname={props.pod.name}
-                  customUrl={customUrl()}
-                  onCustomUrlChange={setCustomUrl}
+                  customUrl={props.guestMetadata()[props.pod.uid]?.customUrl}
+                  onCustomUrlChange={(url) => props.onCustomUrlChange(props.pod.uid, url)}
                 />
               </div>
             </div>
@@ -390,6 +406,9 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
   // Column visibility for pods table
   const podColumns = useColumnVisibility('k8s-pod-columns', POD_COLUMNS);
+
+  // Guest metadata for tracking custom URLs
+  const [guestMetadata, setGuestMetadata] = createSignal<GuestMetadataRecord>(getK8sGuestMetadataCache());
 
   // Sorting state with persistence
   type SortKey = 'name' | 'status' | 'namespace' | 'cluster' | 'age' | 'restarts' | 'ready' | 'replicas';
@@ -478,6 +497,28 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
   onMount(() => {
     void loadLicenseStatus();
     void loadAiSettings();
+
+    // Load guest metadata
+    GuestMetadataAPI.getAllMetadata().then((metadata) => {
+      setGuestMetadata(metadata ?? {});
+      setK8sGuestMetadataCache(metadata ?? {});
+    }).catch((err) => {
+      logger.debug('Failed to load guest metadata for K8s', err);
+    });
+
+    // Listen for metadata changes from other sources
+    const handleMetadataChanged = async () => {
+      try {
+        const metadata = await GuestMetadataAPI.getAllMetadata();
+        setGuestMetadata(metadata ?? {});
+        setK8sGuestMetadataCache(metadata ?? {});
+      } catch (err) {
+        logger.debug('Failed to refresh guest metadata', err);
+      }
+    };
+
+    window.addEventListener('pulse:metadata-changed', handleMetadataChanged);
+    return () => window.removeEventListener('pulse:metadata-changed', handleMetadataChanged);
   });
 
   createEffect(() => {
@@ -774,6 +815,26 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
     setShowHidden(false);
     setNamespaceFilter('all');
     setViewMode('clusters');
+  };
+
+  // Handle custom URL changes from discovery tab
+  const handleK8sCustomUrlChange = (guestId: string, url: string) => {
+    const trimmed = url.trim();
+    setGuestMetadata((prev) => {
+      const updated = { ...prev };
+      if (trimmed) {
+        updated[guestId] = { ...updated[guestId], id: guestId, customUrl: trimmed };
+      } else if (updated[guestId]) {
+        const { customUrl: _, ...rest } = updated[guestId];
+        if (Object.keys(rest).length > 1) {
+          updated[guestId] = rest as GuestMetadata;
+        } else {
+          delete updated[guestId];
+        }
+      }
+      setK8sGuestMetadataCache(updated);
+      return updated;
+    });
   };
 
   return (
@@ -1295,15 +1356,15 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                   <For each={filteredPods()} fallback={
                     <tr><td colSpan={8} class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No pods match the current filters.</td></tr>
                   }>
-                    {({ cluster, pod }) => {
-                      return (
-                        <PodRow
-                          cluster={cluster}
-                          pod={pod}
-                          columns={podColumns}
-                        />
-                      );
-                    }}
+                    {({ cluster, pod }) => (
+                      <PodRow
+                        cluster={cluster}
+                        pod={pod}
+                        columns={podColumns}
+                        guestMetadata={guestMetadata}
+                        onCustomUrlChange={handleK8sCustomUrlChange}
+                      />
+                    )}
                   </For>
                 </tbody>
               </table>

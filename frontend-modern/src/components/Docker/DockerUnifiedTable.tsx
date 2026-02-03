@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal, createEffect, Accessor } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, createEffect, Accessor, onMount } from 'solid-js';
 import type { DockerHost, DockerContainer, DockerService, DockerTask } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -36,6 +36,21 @@ import type { ColumnConfig } from '@/types/responsive';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { HistoryChart } from '@/components/shared/HistoryChart';
 import type { HistoryTimeRange } from '@/api/charts';
+import { GuestMetadataAPI, type GuestMetadata } from '@/api/guestMetadata';
+import { logger } from '@/utils/logger';
+
+type GuestMetadataRecord = Record<string, GuestMetadata>;
+
+// Module-level cache for guest metadata to persist across component remounts
+let cachedDockerGuestMetadata: GuestMetadataRecord | null = null;
+
+const getDockerGuestMetadataCache = (): GuestMetadataRecord => {
+  return cachedDockerGuestMetadata ?? {};
+};
+
+const setDockerGuestMetadataCache = (metadata: GuestMetadataRecord) => {
+  cachedDockerGuestMetadata = metadata;
+};
 
 const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'dockerHost' | 'unknown') => {
   switch (type) {
@@ -788,6 +803,8 @@ const DockerContainerRow: Component<{
   showHostContext?: boolean;
   resourceIndentClass?: string;
   batchUpdateState?: Record<string, 'updating' | 'queued' | 'error'>;
+  guestMetadata?: GuestMetadataRecord;
+  onCustomUrlChange?: (guestId: string, url: string) => void;
 }> = (props) => {
   const { host, container } = props.row;
   const runtimeInfo = resolveHostRuntime(host);
@@ -1590,6 +1607,8 @@ const DockerContainerRow: Component<{
                   resourceId={container.id}
                   hostname={container.name}
                   guestId={container.id}
+                  customUrl={props.guestMetadata?.[container.id]?.customUrl}
+                  onCustomUrlChange={(url) => props.onCustomUrlChange?.(container.id, url)}
                 />
               </Show>
             </div>
@@ -1603,9 +1622,10 @@ const DockerContainerRow: Component<{
 const DockerServiceRow: Component<{
   row: Extract<DockerRow, { kind: 'service' }>;
   isMobile: Accessor<boolean>;
-  onCustomUrlUpdate?: (resourceId: string, url: string) => void;
   showHostContext?: boolean;
   resourceIndentClass?: string;
+  guestMetadata?: GuestMetadataRecord;
+  onCustomUrlChange?: (guestId: string, url: string) => void;
 }> = (props) => {
   const { host, service, tasks } = props.row;
   const rowId = buildRowId(host, props.row);
@@ -1940,6 +1960,9 @@ const DockerServiceRow: Component<{
                     <option value="6h">Last 6 hours</option>
                     <option value="12h">Last 12 hours</option>
                     <option value="24h">Last 24 hours</option>
+                    <option value="7d">Last 7 days</option>
+                    <option value="30d">Last 30 days</option>
+                    <option value="90d">Last 90 days</option>
                   </select>
                 </div>
 
@@ -1988,6 +2011,8 @@ const DockerServiceRow: Component<{
                   resourceId={service.id || service.name || ''}
                   hostname={service.name || service.id || 'Service'}
                   guestId={resourceId()}
+                  customUrl={props.guestMetadata?.[resourceId()]?.customUrl}
+                  onCustomUrlChange={(url) => props.onCustomUrlChange?.(resourceId(), url)}
                 />
               </Show>
             </div>
@@ -2009,6 +2034,54 @@ const areTasksEqual = (a: DockerTask[], b: DockerTask[]) => {
 const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
   // Use the breakpoint hook for responsive behavior
   const { isMobile } = useBreakpoint();
+
+  // Guest metadata for tracking custom URLs
+  const [guestMetadata, setGuestMetadata] = createSignal<GuestMetadataRecord>(getDockerGuestMetadataCache());
+
+  // Load guest metadata on mount
+  onMount(async () => {
+    try {
+      const metadata = await GuestMetadataAPI.getAllMetadata();
+      setGuestMetadata(metadata ?? {});
+      setDockerGuestMetadataCache(metadata ?? {});
+    } catch (err) {
+      logger.debug('Failed to load guest metadata for Docker', err);
+    }
+
+    // Listen for metadata changes from other sources (e.g., AI, other tabs)
+    const handleMetadataChanged = async () => {
+      try {
+        const metadata = await GuestMetadataAPI.getAllMetadata();
+        setGuestMetadata(metadata ?? {});
+        setDockerGuestMetadataCache(metadata ?? {});
+      } catch (err) {
+        logger.debug('Failed to refresh guest metadata', err);
+      }
+    };
+
+    window.addEventListener('pulse:metadata-changed', handleMetadataChanged);
+    return () => window.removeEventListener('pulse:metadata-changed', handleMetadataChanged);
+  });
+
+  // Handle custom URL changes from discovery tab
+  const handleCustomUrlChange = (guestId: string, url: string) => {
+    const trimmed = url.trim();
+    setGuestMetadata((prev) => {
+      const updated = { ...prev };
+      if (trimmed) {
+        updated[guestId] = { ...updated[guestId], id: guestId, customUrl: trimmed };
+      } else if (updated[guestId]) {
+        const { customUrl: _, ...rest } = updated[guestId];
+        if (Object.keys(rest).length > 1) {
+          updated[guestId] = rest as GuestMetadata;
+        } else {
+          delete updated[guestId];
+        }
+      }
+      setDockerGuestMetadataCache(updated);
+      return updated;
+    });
+  };
 
   // Caches for stable object references to prevent re-animations
   const rowCache = new Map<string, DockerRow>();
@@ -2347,6 +2420,8 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         showHostContext={!grouped}
         resourceIndentClass={grouped ? GROUPED_RESOURCE_INDENT : UNGROUPED_RESOURCE_INDENT}
         batchUpdateState={props.batchUpdateState}
+        guestMetadata={guestMetadata()}
+        onCustomUrlChange={handleCustomUrlChange}
       />
 
     ) : (
@@ -2355,6 +2430,8 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         isMobile={isMobile}
         showHostContext={!grouped}
         resourceIndentClass={grouped ? GROUPED_RESOURCE_INDENT : UNGROUPED_RESOURCE_INDENT}
+        guestMetadata={guestMetadata()}
+        onCustomUrlChange={handleCustomUrlChange}
       />
     );
   };
