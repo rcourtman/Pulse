@@ -212,6 +212,7 @@ func TestTimeRangeConversion(t *testing.T) {
 		{"12h", 12 * time.Hour},
 		{"24h", 24 * time.Hour},
 		{"7d", 7 * 24 * time.Hour},
+		{"30d", 30 * 24 * time.Hour},
 		{"", time.Hour},        // default
 		{"invalid", time.Hour}, // fallback
 	}
@@ -237,6 +238,8 @@ func TestTimeRangeConversion(t *testing.T) {
 				duration = 24 * time.Hour
 			case "7d":
 				duration = 7 * 24 * time.Hour
+			case "30d":
+				duration = 30 * 24 * time.Hour
 			default:
 				duration = time.Hour
 			}

@@ -23,11 +23,11 @@ interface RingBuffer {
 }
 
 // Configuration
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days (to support all time ranges)
+const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (to support all time ranges)
 const SAMPLE_INTERVAL_MS = 30 * 1000;   // 30 seconds
-const MAX_POINTS = Math.ceil(MAX_AGE_MS / SAMPLE_INTERVAL_MS); // ~2880 points
+const MAX_POINTS = Math.ceil(MAX_AGE_MS / SAMPLE_INTERVAL_MS); // ~86400 points
 const STORAGE_KEY = 'pulse_metrics_history';
-const STORAGE_VERSION = 2; // Bumped version due to increased buffer size
+const STORAGE_VERSION = 3; // Bumped version due to increased buffer size
 
 /**
  * Convert TimeRange string to milliseconds
@@ -42,6 +42,7 @@ function timeRangeToMs(range: TimeRange): number {
     case '12h': return 12 * 60 * 60 * 1000;
     case '24h': return 24 * 60 * 60 * 1000;
     case '7d': return 7 * 24 * 60 * 60 * 1000;
+    case '30d': return 30 * 24 * 60 * 60 * 1000;
     default: return 60 * 60 * 1000; // Default 1h
   }
 }

@@ -3643,8 +3643,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 		hostMetadataStore:          config.NewHostMetadataStore(cfg.DataPath, nil),
 		startTime:                  time.Now(),
 		rateTracker:                NewRateTracker(),
-		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
-		metricsStore:               metricsStore,                          // Persistent SQLite storage
+		metricsHistory:             NewMetricsHistory(86400, 30*24*time.Hour), // Keep up to 86400 points (30 days @ 30s)
+		metricsStore:               metricsStore,                              // Persistent SQLite storage
 		alertManager:               alerts.NewManagerWithDataDir(cfg.DataPath),
 		incidentStore:              incidentStore,
 		notificationMgr:            notifications.NewNotificationManagerWithDataDir(cfg.PublicURL, cfg.DataPath),

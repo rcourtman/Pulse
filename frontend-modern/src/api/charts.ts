@@ -79,7 +79,7 @@ export interface AllMetricsHistoryResponse {
     source?: 'store' | 'memory' | 'live';
 }
 
-export type TimeRange = '5m' | '15m' | '30m' | '1h' | '4h' | '12h' | '24h' | '7d';
+export type TimeRange = '5m' | '15m' | '30m' | '1h' | '4h' | '12h' | '24h' | '7d' | '30d';
 
 export class ChartsAPI {
     private static baseUrl = '/api';

@@ -5024,6 +5024,8 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		duration = 24 * time.Hour
 	case "7d":
 		duration = 7 * 24 * time.Hour
+	case "30d":
+		duration = 30 * 24 * time.Hour
 	default:
 		duration = time.Hour
 	}
