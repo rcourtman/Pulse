@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"sync"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 )
@@ -104,4 +105,20 @@ func (rt *RateTracker) Clear() {
 	defer rt.mu.Unlock()
 	rt.previous = make(map[string]IOMetrics)
 	rt.lastRates = make(map[string]RateCache)
+}
+
+// Cleanup removes entries for resources that haven't reported data since the cutoff time.
+// This prevents unbounded memory growth when containers/VMs are deleted.
+func (rt *RateTracker) Cleanup(cutoff time.Time) (removed int) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
+	for guestID, metrics := range rt.previous {
+		if metrics.Timestamp.Before(cutoff) {
+			delete(rt.previous, guestID)
+			delete(rt.lastRates, guestID)
+			removed++
+		}
+	}
+	return removed
 }

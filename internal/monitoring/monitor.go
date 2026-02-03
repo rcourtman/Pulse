@@ -3010,6 +3010,29 @@ func (m *Monitor) cleanupRRDCache(now time.Time) {
 	}
 }
 
+// cleanupMetricsHistory removes stale entries from the metrics history.
+// This prevents unbounded memory growth when containers/VMs are deleted.
+func (m *Monitor) cleanupMetricsHistory() {
+	if m.metricsHistory != nil {
+		m.metricsHistory.Cleanup()
+	}
+}
+
+// cleanupRateTracker removes stale entries from the rate tracker.
+// Entries older than 24 hours are removed to prevent unbounded memory growth.
+func (m *Monitor) cleanupRateTracker(now time.Time) {
+	const staleThreshold = 24 * time.Hour
+	cutoff := now.Add(-staleThreshold)
+
+	if m.rateTracker != nil {
+		if removed := m.rateTracker.Cleanup(cutoff); removed > 0 {
+			log.Debug().
+				Int("entriesRemoved", removed).
+				Msg("Cleaned up stale rate tracker entries")
+		}
+	}
+}
+
 // evaluateDockerAgents updates health for Docker hosts based on last report time.
 func (m *Monitor) evaluateDockerAgents(now time.Time) {
 	hosts := m.state.GetDockerHosts()
@@ -4432,6 +4455,8 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			m.cleanupDiagnosticSnapshots(now)
 			m.cleanupRRDCache(now)
 			m.cleanupTrackingMaps(now)
+			m.cleanupMetricsHistory()
+			m.cleanupRateTracker(now)
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
 				go m.checkMockAlerts()

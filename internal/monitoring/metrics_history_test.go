@@ -1126,3 +1126,88 @@ func TestRetentionTimeEnforced(t *testing.T) {
 		t.Errorf("got %d points, expected <= 3 recent points after retention enforcement", len(result))
 	}
 }
+
+func TestCleanupRemovesStaleEntries(t *testing.T) {
+	now := time.Now()
+	retentionTime := 30 * time.Minute
+	mh := NewMetricsHistory(100, retentionTime)
+
+	// Add data for three guests:
+	// - "active-guest" has recent data
+	// - "stale-guest" has only old data (will be removed)
+	// - "mixed-guest" has both old and recent data
+
+	mh.AddGuestMetric("active-guest", "cpu", 50.0, now.Add(-10*time.Minute))
+	mh.AddGuestMetric("active-guest", "memory", 60.0, now.Add(-10*time.Minute))
+
+	mh.AddGuestMetric("stale-guest", "cpu", 30.0, now.Add(-2*time.Hour))
+	mh.AddGuestMetric("stale-guest", "memory", 40.0, now.Add(-2*time.Hour))
+
+	mh.AddGuestMetric("mixed-guest", "cpu", 10.0, now.Add(-2*time.Hour)) // old, will be removed
+	mh.AddGuestMetric("mixed-guest", "cpu", 70.0, now.Add(-5*time.Minute))
+
+	// Add similar for nodes and storage
+	mh.AddNodeMetric("active-node", "cpu", 50.0, now.Add(-10*time.Minute))
+	mh.AddNodeMetric("stale-node", "cpu", 30.0, now.Add(-2*time.Hour))
+
+	mh.AddStorageMetric("active-storage", "usage", 50.0, now.Add(-10*time.Minute))
+	mh.AddStorageMetric("stale-storage", "usage", 30.0, now.Add(-2*time.Hour))
+
+	// Run cleanup
+	mh.Cleanup()
+
+	// Verify stale entries were removed
+	mh.mu.RLock()
+	defer mh.mu.RUnlock()
+
+	// active-guest should still exist
+	if _, exists := mh.guestMetrics["active-guest"]; !exists {
+		t.Error("active-guest should still exist after cleanup")
+	}
+
+	// stale-guest should be removed (all data expired)
+	if _, exists := mh.guestMetrics["stale-guest"]; exists {
+		t.Error("stale-guest should be removed after cleanup")
+	}
+
+	// mixed-guest should still exist (has recent data)
+	if _, exists := mh.guestMetrics["mixed-guest"]; !exists {
+		t.Error("mixed-guest should still exist after cleanup")
+	}
+
+	// Verify node entries
+	if _, exists := mh.nodeMetrics["active-node"]; !exists {
+		t.Error("active-node should still exist after cleanup")
+	}
+	if _, exists := mh.nodeMetrics["stale-node"]; exists {
+		t.Error("stale-node should be removed after cleanup")
+	}
+
+	// Verify storage entries
+	if _, exists := mh.storageMetrics["active-storage"]; !exists {
+		t.Error("active-storage should still exist after cleanup")
+	}
+	if _, exists := mh.storageMetrics["stale-storage"]; exists {
+		t.Error("stale-storage should be removed after cleanup")
+	}
+}
+
+func TestCleanupMetricsReturnsNilForExpiredData(t *testing.T) {
+	retentionTime := 30 * time.Minute
+	mh := NewMetricsHistory(100, retentionTime)
+	now := time.Now()
+	cutoff := now.Add(-retentionTime)
+
+	// Create slice with only old data
+	oldData := []MetricPoint{
+		{Value: 10.0, Timestamp: now.Add(-2 * time.Hour)},
+		{Value: 20.0, Timestamp: now.Add(-1 * time.Hour)},
+	}
+
+	result := mh.cleanupMetrics(oldData, cutoff)
+
+	// Should return nil (not empty slice) to release backing array
+	if result != nil {
+		t.Errorf("cleanupMetrics should return nil for fully expired data, got slice with len=%d cap=%d", len(result), cap(result))
+	}
+}

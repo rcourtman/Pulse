@@ -519,3 +519,70 @@ func TestClear(t *testing.T) {
 		t.Errorf("after Clear, first call should return -1s: got (%v, %v, %v, %v)", diskRead, diskWrite, netIn, netOut)
 	}
 }
+
+func TestRateTrackerCleanup(t *testing.T) {
+	rt := NewRateTracker()
+	now := time.Now()
+
+	// Add metrics for three guests:
+	// - "active-guest" has recent data
+	// - "stale-guest" has old data (will be removed)
+	// - "mixed-guest" has recent data (last update is recent)
+
+	activeMetrics := types.IOMetrics{
+		DiskRead:   1000,
+		DiskWrite:  2000,
+		NetworkIn:  3000,
+		NetworkOut: 4000,
+		Timestamp:  now.Add(-1 * time.Hour), // Recent
+	}
+
+	staleMetrics := types.IOMetrics{
+		DiskRead:   1000,
+		DiskWrite:  2000,
+		NetworkIn:  3000,
+		NetworkOut: 4000,
+		Timestamp:  now.Add(-48 * time.Hour), // Old
+	}
+
+	rt.CalculateRates("active-guest", activeMetrics)
+	rt.CalculateRates("stale-guest", staleMetrics)
+
+	// Verify both entries exist
+	if len(rt.previous) != 2 {
+		t.Fatalf("expected 2 entries in previous, got %d", len(rt.previous))
+	}
+
+	// Run cleanup with 24-hour cutoff
+	cutoff := now.Add(-24 * time.Hour)
+	removed := rt.Cleanup(cutoff)
+
+	// Verify stale entry was removed
+	if removed != 1 {
+		t.Errorf("expected 1 entry removed, got %d", removed)
+	}
+
+	if len(rt.previous) != 1 {
+		t.Errorf("expected 1 entry remaining in previous, got %d", len(rt.previous))
+	}
+
+	if _, exists := rt.previous["active-guest"]; !exists {
+		t.Error("active-guest should still exist after cleanup")
+	}
+
+	if _, exists := rt.previous["stale-guest"]; exists {
+		t.Error("stale-guest should be removed after cleanup")
+	}
+}
+
+func TestRateTrackerCleanupEmpty(t *testing.T) {
+	rt := NewRateTracker()
+	cutoff := time.Now().Add(-24 * time.Hour)
+
+	// Cleanup on empty tracker should not panic
+	removed := rt.Cleanup(cutoff)
+
+	if removed != 0 {
+		t.Errorf("expected 0 entries removed from empty tracker, got %d", removed)
+	}
+}

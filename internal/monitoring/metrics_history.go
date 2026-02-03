@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
+	"github.com/rs/zerolog/log"
 )
 
 // Use MetricPoint from types package
@@ -332,15 +333,18 @@ func (mh *MetricsHistory) GetAllStorageMetrics(storageID string, duration time.D
 	return result
 }
 
-// Cleanup removes old data points beyond retention time
+// Cleanup removes old data points beyond retention time and deletes
+// map entries for resources that have no remaining data points.
+// This prevents unbounded memory growth when containers/VMs are deleted.
 func (mh *MetricsHistory) Cleanup() {
 	mh.mu.Lock()
 	defer mh.mu.Unlock()
 
 	cutoffTime := time.Now().Add(-mh.retentionTime)
+	var guestsRemoved, nodesRemoved, storageRemoved int
 
-	// Cleanup guest metrics
-	for _, metrics := range mh.guestMetrics {
+	// Cleanup guest metrics and remove empty entries
+	for key, metrics := range mh.guestMetrics {
 		metrics.CPU = mh.cleanupMetrics(metrics.CPU, cutoffTime)
 		metrics.Memory = mh.cleanupMetrics(metrics.Memory, cutoffTime)
 		metrics.Disk = mh.cleanupMetrics(metrics.Disk, cutoffTime)
@@ -348,30 +352,63 @@ func (mh *MetricsHistory) Cleanup() {
 		metrics.DiskWrite = mh.cleanupMetrics(metrics.DiskWrite, cutoffTime)
 		metrics.NetworkIn = mh.cleanupMetrics(metrics.NetworkIn, cutoffTime)
 		metrics.NetworkOut = mh.cleanupMetrics(metrics.NetworkOut, cutoffTime)
+
+		// If all slices are empty, remove the map entry entirely to free memory
+		if len(metrics.CPU) == 0 && len(metrics.Memory) == 0 && len(metrics.Disk) == 0 &&
+			len(metrics.DiskRead) == 0 && len(metrics.DiskWrite) == 0 &&
+			len(metrics.NetworkIn) == 0 && len(metrics.NetworkOut) == 0 {
+			delete(mh.guestMetrics, key)
+			guestsRemoved++
+		}
 	}
 
-	// Cleanup node metrics
-	for _, metrics := range mh.nodeMetrics {
+	// Cleanup node metrics and remove empty entries
+	for key, metrics := range mh.nodeMetrics {
 		metrics.CPU = mh.cleanupMetrics(metrics.CPU, cutoffTime)
 		metrics.Memory = mh.cleanupMetrics(metrics.Memory, cutoffTime)
 		metrics.Disk = mh.cleanupMetrics(metrics.Disk, cutoffTime)
+
+		if len(metrics.CPU) == 0 && len(metrics.Memory) == 0 && len(metrics.Disk) == 0 {
+			delete(mh.nodeMetrics, key)
+			nodesRemoved++
+		}
 	}
 
-	// Cleanup storage metrics
-	for _, metrics := range mh.storageMetrics {
+	// Cleanup storage metrics and remove empty entries
+	for key, metrics := range mh.storageMetrics {
 		metrics.Usage = mh.cleanupMetrics(metrics.Usage, cutoffTime)
 		metrics.Used = mh.cleanupMetrics(metrics.Used, cutoffTime)
 		metrics.Total = mh.cleanupMetrics(metrics.Total, cutoffTime)
 		metrics.Avail = mh.cleanupMetrics(metrics.Avail, cutoffTime)
+
+		if len(metrics.Usage) == 0 && len(metrics.Used) == 0 &&
+			len(metrics.Total) == 0 && len(metrics.Avail) == 0 {
+			delete(mh.storageMetrics, key)
+			storageRemoved++
+		}
+	}
+
+	// Log cleanup activity at debug level
+	if guestsRemoved > 0 || nodesRemoved > 0 || storageRemoved > 0 {
+		log.Debug().
+			Int("guestsRemoved", guestsRemoved).
+			Int("nodesRemoved", nodesRemoved).
+			Int("storageRemoved", storageRemoved).
+			Int("guestsRemaining", len(mh.guestMetrics)).
+			Int("nodesRemaining", len(mh.nodeMetrics)).
+			Int("storageRemaining", len(mh.storageMetrics)).
+			Msg("Cleaned up stale metrics history entries")
 	}
 }
 
-// cleanupMetrics removes points older than cutoff time
+// cleanupMetrics removes points older than cutoff time.
+// Returns nil (not empty slice) when all points are expired to release backing array memory.
 func (mh *MetricsHistory) cleanupMetrics(metrics []MetricPoint, cutoffTime time.Time) []MetricPoint {
 	for i, p := range metrics {
 		if p.Timestamp.After(cutoffTime) {
 			return metrics[i:]
 		}
 	}
-	return metrics[:0]
+	// Return nil instead of metrics[:0] to release the backing array
+	return nil
 }
