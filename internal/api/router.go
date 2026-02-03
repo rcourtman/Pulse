@@ -1245,7 +1245,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/discover", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleDiscoverServers)))
 
 	// Test endpoint for WebSocket notifications
-	r.mux.HandleFunc("/api/test-notification", func(w http.ResponseWriter, req *http.Request) {
+	// SECURITY: Require settings:write scope for test notifications to prevent unauthenticated broadcasting
+	r.mux.HandleFunc("/api/test-notification", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -1266,7 +1267,7 @@ func (r *Router) setupRoutes() {
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "notification sent"})
-	})
+	})))
 
 	// Alert routes - require monitoring:read scope to view alerts
 	r.mux.HandleFunc("/api/alerts/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.alertHandlers.HandleAlerts)))
@@ -1725,8 +1726,8 @@ func (r *Router) setupRoutes() {
 	// Socket.io compatibility endpoints
 	r.mux.HandleFunc("/socket.io/", r.handleSocketIO)
 
-	// Simple stats page
-	r.mux.HandleFunc("/simple-stats", r.handleSimpleStats)
+	// Simple stats page - requires authentication
+	r.mux.HandleFunc("/simple-stats", RequireAuth(r.config, r.handleSimpleStats))
 
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
@@ -6502,6 +6503,10 @@ func (r *Router) handleSimpleStats(w http.ResponseWriter, req *http.Request) {
 
 // handleSocketIO handles socket.io requests
 func (r *Router) handleSocketIO(w http.ResponseWriter, req *http.Request) {
+	// SECURITY: Ensure authentication is checked for socket.io transport upgrades
+	if !CheckAuth(r.config, w, req) {
+		return
+	}
 	// For socket.io.js, redirect to CDN
 	if strings.Contains(req.URL.Path, "socket.io.js") {
 		http.Redirect(w, req, "https://cdn.socket.io/4.8.1/socket.io.min.js", http.StatusFound)
