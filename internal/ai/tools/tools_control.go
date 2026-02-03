@@ -114,9 +114,6 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 
 	// Note: Control level read_only check is now centralized in registry.Execute()
 
-	// Check if this is a pre-approved execution (agentic loop re-executing after user approval)
-	preApproved := isPreApproved(args)
-
 	// Check security policy (skip block check - blocks cannot be pre-approved)
 	decision := agentexec.PolicyAllow
 	if e.policy != nil {
@@ -133,12 +130,18 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		}
 	}
 
+	// Determine target type for approval validation
+	targetType := "container"
+	if runOnHost {
+		targetType = "host"
+	}
+
+	// Check if this is a pre-approved execution with command hash validation
+	// This validates the approval matches this exact command+target and marks it as consumed
+	preApproved := consumeApprovalWithValidation(args, command, targetType, e.targetID)
+
 	// Skip approval checks if pre-approved or in autonomous mode
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
-		targetType := "container"
-		if runOnHost {
-			targetType = "host"
-		}
 		approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Control level requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
 	}
@@ -149,10 +152,6 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 			Msg("Auto-approving command for autonomous investigation")
 	}
 	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-		targetType := "container"
-		if runOnHost {
-			targetType = "host"
-		}
 		approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Security policy requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Security policy requires approval", approvalID)), nil
 	}
@@ -968,6 +967,7 @@ func createApprovalRecord(command, targetType, targetID, targetName, context str
 
 // isPreApproved checks if the args contain a valid, approved approval_id.
 // This is used when the agentic loop re-executes a tool after user approval.
+// DEPRECATED: Use consumeApprovalWithValidation instead for replay protection.
 func isPreApproved(args map[string]interface{}) bool {
 	approvalID, ok := args["_approval_id"].(string)
 	if !ok || approvalID == "" {
@@ -992,6 +992,29 @@ func isPreApproved(args map[string]interface{}) bool {
 
 	log.Debug().Str("approval_id", approvalID).Str("status", string(req.Status)).Msg("Pre-approval check: not approved")
 	return false
+}
+
+// consumeApprovalWithValidation validates and consumes an approval for a specific command.
+// It verifies the command hash matches the approval and marks it as consumed (single-use).
+// Returns true if the approval is valid and was consumed, false otherwise.
+func consumeApprovalWithValidation(args map[string]interface{}, command, targetType, targetID string) bool {
+	approvalID, ok := args["_approval_id"].(string)
+	if !ok || approvalID == "" {
+		return false
+	}
+
+	store := approval.GetStore()
+	if store == nil {
+		return false
+	}
+
+	_, err := store.ConsumeApproval(approvalID, command, targetType, targetID)
+	if err != nil {
+		log.Warn().Err(err).Str("approval_id", approvalID).Msg("Failed to consume approval")
+		return false
+	}
+
+	return true
 }
 
 // Formatting helpers for control tools

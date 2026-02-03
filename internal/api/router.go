@@ -1398,10 +1398,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/cost/reset", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleResetAICostHistory)))
 	r.mux.HandleFunc("/api/ai/cost/export", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleExportAICostHistory)))
 	// OAuth endpoints for Claude Pro/Max subscription authentication
-	r.mux.HandleFunc("/api/ai/oauth/start", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthStart))
-	r.mux.HandleFunc("/api/ai/oauth/exchange", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthExchange)) // Manual code input
-	r.mux.HandleFunc("/api/ai/oauth/callback", r.aiSettingsHandler.HandleOAuthCallback)                         // Public - receives redirect from Anthropic
-	r.mux.HandleFunc("/api/ai/oauth/disconnect", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthDisconnect))
+	// Require settings:write scope to prevent low-privilege tokens from modifying OAuth credentials
+	r.mux.HandleFunc("/api/ai/oauth/start", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleOAuthStart)))
+	r.mux.HandleFunc("/api/ai/oauth/exchange", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleOAuthExchange))) // Manual code input
+	r.mux.HandleFunc("/api/ai/oauth/callback", r.aiSettingsHandler.HandleOAuthCallback)                                                                  // Public - receives redirect from Anthropic
+	r.mux.HandleFunc("/api/ai/oauth/disconnect", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleOAuthDisconnect)))
 
 	// AI Patrol routes for background monitoring
 	// Note: Status remains accessible so UI can show license/upgrade state
@@ -1545,8 +1546,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.routeAISessions)))
 
 	// AI approval endpoints - for command approval workflow
-	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, r.aiSettingsHandler.HandleListApprovals))
-	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, r.routeApprovals))
+	// Require ai:execute scope to prevent low-privilege tokens from enumerating or denying approvals
+	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleListApprovals)))
+	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.routeApprovals)))
 
 	// AI question endpoints
 	r.mux.HandleFunc("/api/ai/question/", RequireAuth(r.config, r.routeQuestions))

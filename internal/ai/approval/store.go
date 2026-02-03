@@ -2,6 +2,8 @@ package approval
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -50,6 +52,10 @@ type ApprovalRequest struct {
 	DecidedAt   *time.Time     `json:"decidedAt,omitempty"`
 	DecidedBy   string         `json:"decidedBy,omitempty"`
 	DenyReason  string         `json:"denyReason,omitempty"`
+	// CommandHash is a SHA256 hash of command+targetType+targetID for replay protection
+	CommandHash string `json:"commandHash,omitempty"`
+	// Consumed marks whether this approval has been used (single-use protection)
+	Consumed bool `json:"consumed,omitempty"`
 }
 
 // ExecutionState stores the AI conversation state for resumption after approval.
@@ -150,6 +156,11 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 	// Assess risk if not set
 	if req.RiskLevel == "" {
 		req.RiskLevel = AssessRiskLevel(req.Command, req.TargetType)
+	}
+
+	// Compute command hash for replay protection if not already set
+	if req.CommandHash == "" {
+		req.CommandHash = ComputeCommandHash(req.Command, req.TargetType, req.TargetID)
 	}
 
 	s.approvals[req.ID] = req
@@ -287,6 +298,55 @@ func (s *Store) Deny(id, username, reason string) (*ApprovalRequest, error) {
 		Str("by", username).
 		Str("reason", reason).
 		Msg("Approval request denied")
+
+	return req, nil
+}
+
+// ConsumeApproval validates and consumes an approval for a specific command.
+// It verifies the command hash matches and marks the approval as consumed (single-use).
+// Returns the approval if valid, or an error if invalid/already consumed.
+func (s *Store) ConsumeApproval(id, command, targetType, targetID string) (*ApprovalRequest, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	req, ok := s.approvals[id]
+	if !ok {
+		return nil, fmt.Errorf("approval request not found: %s", id)
+	}
+
+	if req.Status != StatusApproved {
+		return nil, fmt.Errorf("approval request is not approved (status: %s)", req.Status)
+	}
+
+	if req.Consumed {
+		return nil, fmt.Errorf("approval request has already been consumed")
+	}
+
+	if time.Now().After(req.ExpiresAt) {
+		req.Status = StatusExpired
+		s.saveAsync()
+		return nil, fmt.Errorf("approval request has expired")
+	}
+
+	// Verify command hash matches
+	expectedHash := ComputeCommandHash(command, targetType, targetID)
+	if req.CommandHash != "" && req.CommandHash != expectedHash {
+		log.Warn().
+			Str("id", id).
+			Str("expected_hash", req.CommandHash).
+			Str("actual_hash", expectedHash).
+			Msg("Approval command hash mismatch - possible replay attack")
+		return nil, fmt.Errorf("approval command mismatch - this approval is for a different command/target")
+	}
+
+	// Mark as consumed (single-use)
+	req.Consumed = true
+	s.saveAsync()
+
+	log.Info().
+		Str("id", id).
+		Str("command", truncateCommand(command, 50)).
+		Msg("Approval consumed successfully")
 
 	return req, nil
 }
@@ -627,6 +687,18 @@ func truncateCommand(cmd string, maxLen int) string {
 		return cmd
 	}
 	return cmd[:maxLen] + "..."
+}
+
+// ComputeCommandHash computes a SHA256 hash of command+targetType+targetID for replay protection.
+// This ensures an approved ID can only be used to execute the exact command it was approved for.
+func ComputeCommandHash(command, targetType, targetID string) string {
+	h := sha256.New()
+	h.Write([]byte(command))
+	h.Write([]byte("|"))
+	h.Write([]byte(targetType))
+	h.Write([]byte("|"))
+	h.Write([]byte(targetID))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // Global store instance
