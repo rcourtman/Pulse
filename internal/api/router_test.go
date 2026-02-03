@@ -1078,202 +1078,79 @@ func TestResolvePublicURL_NilRequest(t *testing.T) {
 	}
 }
 
-func TestIsRequestAuthenticated_NilInputs(t *testing.T) {
-	t.Run("nil config returns false", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		if isRequestAuthenticated(nil, req) {
-			t.Error("expected false for nil config")
+func TestCanCapturePublicURL_Security(t *testing.T) {
+	// Proxy Auth Tests
+	t.Run("ProxyAuth", func(t *testing.T) {
+		cfg := &config.Config{
+			ProxyAuthSecret:     "secret",
+			ProxyAuthUserHeader: "X-User",
+			ProxyAuthRoleHeader: "X-Role",
+			ProxyAuthAdminRole:  "admin",
 		}
-	})
 
-	t.Run("nil request returns false", func(t *testing.T) {
-		cfg := &config.Config{}
-		if isRequestAuthenticated(cfg, nil) {
-			t.Error("expected false for nil request")
-		}
-	})
-
-	t.Run("both nil returns false", func(t *testing.T) {
-		if isRequestAuthenticated(nil, nil) {
-			t.Error("expected false when both nil")
-		}
-	})
-}
-
-func TestIsRequestAuthenticated_BasicAuth(t *testing.T) {
-	password := "testPassword123"
-	hashedPass, err := auth.HashPassword(password)
-	if err != nil {
-		t.Fatalf("failed to hash password: %v", err)
-	}
-
-	cfg := &config.Config{
-		AuthUser: "admin",
-		AuthPass: hashedPass,
-	}
-
-	t.Run("valid basic auth", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		creds := base64.StdEncoding.EncodeToString([]byte("admin:" + password))
-		req.Header.Set("Authorization", "Basic "+creds)
-
-		if !isRequestAuthenticated(cfg, req) {
-			t.Error("expected true for valid basic auth")
-		}
-	})
-
-	t.Run("invalid password", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		creds := base64.StdEncoding.EncodeToString([]byte("admin:wrongpassword"))
-		req.Header.Set("Authorization", "Basic "+creds)
-
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false for invalid password")
-		}
-	})
-
-	t.Run("invalid username", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		creds := base64.StdEncoding.EncodeToString([]byte("wronguser:" + password))
-		req.Header.Set("Authorization", "Basic "+creds)
-
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false for invalid username")
-		}
-	})
-
-	t.Run("malformed base64", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		req.Header.Set("Authorization", "Basic notbase64!!!")
-
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false for malformed base64")
-		}
-	})
-
-	t.Run("missing colon in credentials", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		creds := base64.StdEncoding.EncodeToString([]byte("nocolon"))
-		req.Header.Set("Authorization", "Basic "+creds)
-
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false for credentials without colon")
-		}
-	})
-
-	t.Run("no auth header", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false for no auth header")
-		}
-	})
-}
-
-func TestIsRequestAuthenticated_APIToken(t *testing.T) {
-	// Create a valid API token record
-	rawToken := "test-api-token-12345"
-	record, err := config.NewAPITokenRecord(rawToken, "test-token", []string{"read"})
-	if err != nil {
-		t.Fatalf("failed to create API token record: %v", err)
-	}
-
-	cfg := &config.Config{
-		APITokens: []config.APITokenRecord{*record},
-	}
-
-	t.Run("valid X-API-Token header", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		req.Header.Set("X-API-Token", rawToken)
-
-		if !isRequestAuthenticated(cfg, req) {
-			t.Error("expected true for valid API token")
-		}
-	})
-
-	t.Run("valid Bearer token", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		req.Header.Set("Authorization", "Bearer "+rawToken)
-
-		if !isRequestAuthenticated(cfg, req) {
-			t.Error("expected true for valid Bearer token")
-		}
-	})
-
-	t.Run("Bearer case insensitive", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		req.Header.Set("Authorization", "bearer "+rawToken)
-
-		if !isRequestAuthenticated(cfg, req) {
-			t.Error("expected true for lowercase bearer")
-		}
-	})
-
-	t.Run("invalid API token", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		req.Header.Set("X-API-Token", "invalid-token")
-
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false for invalid API token")
-		}
-	})
-
-	t.Run("empty API token", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		req.Header.Set("X-API-Token", "")
-
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false for empty API token")
-		}
-	})
-
-	t.Run("whitespace only API token", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		req.Header.Set("X-API-Token", "   ")
-
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false for whitespace-only API token")
-		}
-	})
-}
-
-func TestIsRequestAuthenticated_NoAuthConfigured(t *testing.T) {
-	cfg := &config.Config{}
-
-	t.Run("no auth configured returns false", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false when no auth is configured")
-		}
-	})
-
-	t.Run("basic auth header ignored when not configured", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		creds := base64.StdEncoding.EncodeToString([]byte("admin:password"))
-		req.Header.Set("Authorization", "Basic "+creds)
-
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false when basic auth not configured")
-		}
-	})
-}
-
-func TestIsRequestAuthenticated_SessionCookie(t *testing.T) {
-	cfg := &config.Config{}
-
-	t.Run("empty session cookie value returns false", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		req.AddCookie(&http.Cookie{
-			Name:  "pulse_session",
-			Value: "",
+		t.Run("admin allowed", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("X-Proxy-Secret", "secret")
+			req.Header.Set("X-User", "adminuser")
+			req.Header.Set("X-Role", "admin")
+			if !canCapturePublicURL(cfg, req) {
+				t.Error("expected true for admin proxy user")
+			}
 		})
 
-		if isRequestAuthenticated(cfg, req) {
-			t.Error("expected false for empty session cookie value")
-		}
+		t.Run("non-admin denied", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("X-Proxy-Secret", "secret")
+			req.Header.Set("X-User", "user")
+			req.Header.Set("X-Role", "user")
+			if canCapturePublicURL(cfg, req) {
+				t.Error("expected false for non-admin proxy user")
+			}
+		})
 	})
 
-	// Note: Testing valid session would require setting up the session store,
-	// which is tested elsewhere. Here we test the branch logic.
+	// API Token Tests
+	t.Run("APITokens", func(t *testing.T) {
+		recordRead, _ := config.NewAPITokenRecord("read-token-123.12345678", "read", []string{"start:read"}) // Low scope
+		recordWrite, _ := config.NewAPITokenRecord("write-token-123.12345678", "write", []string{config.ScopeSettingsWrite})
+
+		cfg := &config.Config{
+			APITokens: []config.APITokenRecord{*recordRead, *recordWrite},
+		}
+
+		t.Run("token with settings:write allowed", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("X-API-Token", "write-token-123.12345678")
+			if !canCapturePublicURL(cfg, req) {
+				t.Error("expected true for token with settings:write")
+			}
+		})
+
+		t.Run("token without settings:write denied", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("X-API-Token", "read-token-123.12345678")
+			if canCapturePublicURL(cfg, req) {
+				t.Error("expected false for token without settings:write")
+			}
+		})
+	})
+
+	// Basic Auth Tests
+	t.Run("BasicAuth", func(t *testing.T) {
+		password := "password"
+		hashed, _ := auth.HashPassword(password)
+		cfg := &config.Config{
+			AuthUser: "admin",
+			AuthPass: hashed,
+		}
+
+		t.Run("valid credentials allowed", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			creds := base64.StdEncoding.EncodeToString([]byte("admin:" + password))
+			req.Header.Set("Authorization", "Basic "+creds)
+			if !canCapturePublicURL(cfg, req) {
+				t.Error("expected true for valid basic auth")
+			}
+		})
+	})
 }

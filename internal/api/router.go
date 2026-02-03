@@ -50,6 +50,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -3969,51 +3970,41 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 		return false
 	}
 
-	// Security fix: Do not auto-trust loopback requests for public URL capture.
-	// We require authentication even for loopback to prevent "poisoning" attacks.
-	// if isDirectLoopbackRequest(req) {
-	// 	return true
-	// }
-
-	return isRequestAuthenticated(cfg, req)
-}
-
-func isRequestAuthenticated(cfg *config.Config, req *http.Request) bool {
-	if cfg == nil || req == nil {
-		return false
-	}
-
+	// Proxy Auth: Require Admin
 	if cfg.ProxyAuthSecret != "" {
-		if ok, _, _ := CheckProxyAuth(cfg, req); ok {
+		if valid, _, isAdmin := CheckProxyAuth(cfg, req); valid && isAdmin {
 			return true
 		}
 	}
 
+	// API Tokens: Require settings:write scope
 	if cfg.HasAPITokens() {
 		if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
-			if _, ok := cfg.ValidateAPIToken(token); ok {
+			if record, ok := cfg.ValidateAPIToken(token); ok && record.HasScope(config.ScopeSettingsWrite) {
 				return true
 			}
 		}
 		if authHeader := strings.TrimSpace(req.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-			if _, ok := cfg.ValidateAPIToken(strings.TrimSpace(authHeader[7:])); ok {
+			if record, ok := cfg.ValidateAPIToken(strings.TrimSpace(authHeader[7:])); ok && record.HasScope(config.ScopeSettingsWrite) {
 				return true
 			}
 		}
 	}
 
+	// Session (Browser): Trusted (as Sessions are generally Admin/User with full access currently)
 	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
 			return true
 		}
 	}
 
+	// Basic Auth: Trusted (Admin)
 	if cfg.AuthUser != "" && cfg.AuthPass != "" {
 		const prefix = "Basic "
 		if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, prefix) {
 			if decoded, err := base64.StdEncoding.DecodeString(authHeader[len(prefix):]); err == nil {
 				if parts := strings.SplitN(string(decoded), ":", 2); len(parts) == 2 {
-					if parts[0] == cfg.AuthUser && auth.CheckPasswordHash(parts[1], cfg.AuthPass) {
+					if parts[0] == cfg.AuthUser && internalauth.CheckPasswordHash(parts[1], cfg.AuthPass) {
 						return true
 					}
 				}
