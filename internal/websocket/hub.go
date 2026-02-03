@@ -20,6 +20,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// extractPeerIP extracts just the IP part from a RemoteAddr (host:port format)
+func extractPeerIP(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		// RemoteAddr might not have a port, try using it directly
+		return remoteAddr
+	}
+	return host
+}
+
 // isValidPrivateOrigin checks if the origin is from a valid private network
 func isValidPrivateOrigin(host string) bool {
 	// Check localhost variations
@@ -121,6 +131,8 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 	}
 
 	// If no origins configured, only allow from truly private networks
+	// SECURITY: This is a relaxed policy for homelab deployments. For production,
+	// configure explicit allowed origins via WEBSOCKET_ALLOWED_ORIGINS env var.
 	if len(allowedOrigins) == 0 {
 		// Parse the origin URL to validate it properly
 		originHost := origin
@@ -135,12 +147,28 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 			originHost = originHost[:colonIdx]
 		}
 
+		// SECURITY: Validate that the peer IP is also from a private network
+		// This mitigates CSWSH where a malicious page on the same LAN tries to
+		// hijack a WebSocket connection using the victim's session cookie
+		peerIP := extractPeerIP(r.RemoteAddr)
+		peerIsPrivate := isValidPrivateOrigin(peerIP)
+
 		// Check if it's a valid private IP or localhost
 		if isValidPrivateOrigin(originHost) {
+			if !peerIsPrivate {
+				// Origin claims to be private but peer is public - suspicious
+				log.Warn().
+					Str("origin", origin).
+					Str("origin_host", originHost).
+					Str("peer_ip", peerIP).
+					Msg("WebSocket rejected - origin is private but peer is public (potential CSWSH)")
+				return false
+			}
 			log.Debug().
 				Str("origin", origin).
 				Str("host", originHost).
-				Msg("Allowing WebSocket connection from private network")
+				Str("peer_ip", peerIP).
+				Msg("Allowing WebSocket connection from private network (no explicit origins configured)")
 			return true
 		}
 
@@ -148,6 +176,7 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 		log.Warn().
 			Str("origin", origin).
 			Str("requestOrigin", requestOrigin).
+			Str("peer_ip", peerIP).
 			Msg("WebSocket connection rejected - not from allowed local/private network")
 		return false
 	}

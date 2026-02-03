@@ -1172,6 +1172,14 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 
 	// Build prompt and analyze
 	prompt := s.buildDeepAnalysisPrompt(analysisReq)
+
+	// Broadcast progress: AI analysis starting
+	s.broadcastProgress(&DiscoveryProgress{
+		ResourceID:  resourceID,
+		Status:      DiscoveryStatusRunning,
+		CurrentStep: "Analyzing with AI...",
+	})
+
 	response, err := analyzer.AnalyzeForDiscovery(ctx, prompt)
 	if err != nil {
 		inProg.err = fmt.Errorf("AI analysis failed: %w", err)
@@ -1272,6 +1280,14 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 			discovery.SuggestedURL = SuggestWebURL(discovery, externalIP)
 		}
 	}
+
+	// Broadcast progress: Discovery complete
+	s.broadcastProgress(&DiscoveryProgress{
+		ResourceID:      resourceID,
+		Status:          DiscoveryStatusCompleted,
+		CurrentStep:     "Discovery complete",
+		PercentComplete: 100,
+	})
 
 	// Save discovery
 	if err := s.store.Save(discovery); err != nil {

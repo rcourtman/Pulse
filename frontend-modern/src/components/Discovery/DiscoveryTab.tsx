@@ -84,6 +84,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     const [scanSuccess, setScanSuccess] = createSignal(false);
     const [showCommandsPreview, setShowCommandsPreview] = createSignal(false);
     const [showExplanation, setShowExplanation] = createSignal(true);
+    // Track if we initiated scan via HTTP to prevent WebSocket race conditions
+    const [httpScanInProgress, setHttpScanInProgress] = createSignal(false);
 
     // Fetch discovery info (AI provider, commands) - used for pre-scan transparency
     const [discoveryInfo] = createResource(
@@ -166,21 +168,24 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     // Handle triggering a new discovery
     const handleTriggerDiscovery = async (force = false) => {
         setIsScanning(true);
+        setHttpScanInProgress(true); // Prevent WebSocket from resetting state
         setScanProgress(null);
         setScanError(null);
         setScanSuccess(false);
         try {
-            // triggerDiscovery runs the discovery and returns the result
-            await triggerDiscovery(props.resourceType, props.hostId, props.resourceId, {
+            // triggerDiscovery runs the discovery and returns the result directly
+            const result = await triggerDiscovery(props.resourceType, props.hostId, props.resourceId, {
                 force,
                 hostname: props.hostname,
             });
-            // Scan complete - show loading state while we fetch results
-            setScanProgress({ current_step: 'Loading results...', percent_complete: 100 } as DiscoveryProgress);
-            // Refetch to get the saved discovery data
-            await refetch();
+            // Use the result directly - no need for a separate refetch which can race
+            if (result) {
+                mutate(result);
+            }
             // Now everything is ready - hide scanning state and show success
+            setHttpScanInProgress(false);
             setIsScanning(false);
+            setScanProgress(null);
             setScanSuccess(true);
             // Clear success after user has seen it
             setTimeout(() => setScanSuccess(false), 2000);
@@ -203,6 +208,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             } else {
                 setScanError(message);
             }
+            setHttpScanInProgress(false);
             setIsScanning(false);
             setScanProgress(null);
         }
@@ -236,10 +242,12 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         const unsubscribe = eventBus.on('ai_discovery_progress', (progress) => {
             // Only update if this progress is for our resource
             if (progress && progress.resource_id === resourceId()) {
+                // Always update progress display (shows current step, percentage, etc.)
                 setScanProgress(progress);
 
-                // If scan completed or failed, refresh the data and clear scanning state
-                if (progress.status === 'completed' || progress.status === 'failed') {
+                // If scan completed or failed via WebSocket, handle state update
+                // BUT only if we didn't initiate this scan via HTTP (which handles its own state)
+                if ((progress.status === 'completed' || progress.status === 'failed') && !httpScanInProgress()) {
                     setIsScanning(false);
                     // Fetch the updated discovery data
                     // Use a small delay to ensure the backend has persisted the data
