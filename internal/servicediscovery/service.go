@@ -1338,6 +1338,49 @@ Host: %s (%s)`, req.ResourceType, req.ResourceID, req.Hostname, req.HostID))
 		}
 	}
 
+	// Use different prompts for HOST vs other resource types
+	if req.ResourceType == ResourceTypeHost {
+		return fmt.Sprintf(`Analyze this HOST system and provide detailed discovery information.
+
+%s
+
+IMPORTANT: This is a HOST discovery. Focus on identifying the HOST OPERATING SYSTEM and its primary role/purpose, NOT individual services or containers running on it.
+
+Based on all available information, determine:
+1. What is the host operating system? (e.g., Unraid, Proxmox, Ubuntu Server, Debian, TrueNAS)
+2. What is the OS version?
+3. What is the primary role/purpose of this host? (e.g., NAS, hypervisor, media server, backup server)
+4. What are the key system paths?
+5. What storage is available?
+6. What services are running? (list as facts, not as the primary identification)
+
+Respond in this exact JSON format:
+{
+  "service_type": "lowercase_os_type (e.g., unraid, proxmox, ubuntu, debian, truenas)",
+  "service_name": "Human Readable OS Name and Role (e.g., Unraid NAS Server, Proxmox VE Hypervisor)",
+  "service_version": "OS version number",
+  "category": "storage|virtualizer|container|network|unknown",
+  "cli_access": "ssh user@hostname",
+  "facts": [
+    {"category": "version|config|service|port|hardware|network|storage|dependency|security", "key": "fact_name", "value": "fact_value", "source": "command_name", "confidence": 0.9}
+  ],
+  "config_paths": ["/etc/", "/boot/config/"],
+  "data_paths": ["/mnt/data", "/storage"],
+  "log_paths": ["/var/log/"],
+  "ports": [{"port": 22, "protocol": "tcp", "process": "sshd", "address": "0.0.0.0"}],
+  "confidence": 0.0-1.0,
+  "reasoning": "Explanation of host identification"
+}
+
+Important:
+- The service_type and service_name MUST reflect the HOST OS, not services running on it
+- List Docker containers, VMs, or other services as facts with category "service"
+- Include storage information (disks, pools, arrays) as facts with category "storage"
+- Include hardware info (CPU, RAM) as facts with category "hardware"
+
+Respond with ONLY valid JSON.`, strings.Join(sections, "\n\n"))
+	}
+
 	return fmt.Sprintf(`Analyze this infrastructure resource and provide detailed discovery information.
 
 %s

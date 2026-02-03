@@ -1506,7 +1506,59 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/discovery/status", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleGetStatus)))
 	r.mux.HandleFunc("/api/discovery/settings", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, r.discoveryHandlers.HandleUpdateSettings)))
 	r.mux.HandleFunc("/api/discovery/type/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListByType)))
-	r.mux.HandleFunc("/api/discovery/host/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListByHost)))
+	r.mux.HandleFunc("/api/discovery/host/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		// Route based on method and path depth:
+		// GET /api/discovery/host/{hostId} → list discoveries for host
+		// GET /api/discovery/host/{hostId}/{resourceId} → get specific discovery
+		// GET /api/discovery/host/{hostId}/{resourceId}/progress → get scan progress
+		// POST /api/discovery/host/{hostId}/{resourceId} → trigger discovery
+		// PUT /api/discovery/host/{hostId}/{resourceId}/notes → update notes
+		// DELETE /api/discovery/host/{hostId}/{resourceId} → delete discovery
+		path := strings.TrimPrefix(req.URL.Path, "/api/discovery/host/")
+		pathParts := strings.Split(strings.TrimSuffix(path, "/"), "/")
+
+		switch req.Method {
+		case http.MethodGet:
+			if !ensureScope(w, req, config.ScopeMonitoringRead) {
+				return
+			}
+			if len(pathParts) == 1 && pathParts[0] != "" {
+				// GET /api/discovery/host/{hostId} → list by host
+				r.discoveryHandlers.HandleListByHost(w, req)
+			} else if len(pathParts) >= 2 {
+				if strings.HasSuffix(req.URL.Path, "/progress") {
+					r.discoveryHandlers.HandleGetProgress(w, req)
+				} else {
+					// GET /api/discovery/host/{hostId}/{resourceId} → get specific discovery
+					r.discoveryHandlers.HandleGetDiscovery(w, req)
+				}
+			} else {
+				http.Error(w, "Invalid path", http.StatusBadRequest)
+			}
+		case http.MethodPost:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			// POST /api/discovery/host/{hostId}/{resourceId} → trigger discovery
+			r.discoveryHandlers.HandleTriggerDiscovery(w, req)
+		case http.MethodPut:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			if strings.HasSuffix(req.URL.Path, "/notes") {
+				r.discoveryHandlers.HandleUpdateNotes(w, req)
+			} else {
+				http.Error(w, "Not found", http.StatusNotFound)
+			}
+		case http.MethodDelete:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			r.discoveryHandlers.HandleDeleteDiscovery(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
 	r.mux.HandleFunc("/api/discovery/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		path := req.URL.Path
 		switch req.Method {
@@ -5469,6 +5521,15 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return nil
 	}
 
+	findHost := func(id string) *models.Host {
+		for i := range state.Hosts {
+			if state.Hosts[i].ID == id {
+				return &state.Hosts[i]
+			}
+		}
+		return nil
+	}
+
 	findDockerContainer := func(id string) *models.DockerContainer {
 		for i := range state.DockerHosts {
 			host := &state.DockerHosts[i]
@@ -5548,6 +5609,26 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				diskPercent = host.Disks[0].Usage
 			}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
+		case "host":
+			host := findHost(resourceID)
+			if host == nil {
+				return points
+			}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: host.CPUUsage}
+			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: host.Memory.Usage}
+			diskPercent := float64(0)
+			if len(host.Disks) > 0 {
+				diskPercent = host.Disks[0].Usage
+			}
+			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
+			// Sum network I/O across all interfaces
+			var totalRX, totalTX uint64
+			for _, nic := range host.NetworkInterfaces {
+				totalRX += nic.RXBytes
+				totalTX += nic.TXBytes
+			}
+			points["netin"] = monitoring.MetricPoint{Timestamp: now, Value: float64(totalRX)}
+			points["netout"] = monitoring.MetricPoint{Timestamp: now, Value: float64(totalTX)}
 		case "docker", "dockerContainer":
 			container := findDockerContainer(resourceID)
 			if container == nil {
@@ -5586,6 +5667,17 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
 		case "dockerHost":
 			metrics := monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
+			points := metrics[metricType]
+			if len(points) == 0 {
+				livePoints := liveMetricPoints(resourceType, resourceID)
+				if live, ok := livePoints[metricType]; ok {
+					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
+				}
+				return nil, "", false
+			}
+			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
+		case "host":
+			metrics := monitor.GetGuestMetrics(fmt.Sprintf("host:%s", resourceID), duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(resourceType, resourceID)
@@ -5647,6 +5739,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			metrics = monitor.GetGuestMetrics(resourceID, duration)
 		case "dockerHost":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
+		case "host":
+			metrics = monitor.GetGuestMetrics(fmt.Sprintf("host:%s", resourceID), duration)
 		case "docker", "dockerContainer":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 		case "storage":

@@ -71,7 +71,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     };
     const [notesText, setNotesText] = createSignal('');
     const [saveError, setSaveError] = createSignal<string | null>(null);
+    const [scanError, setScanError] = createSignal<string | null>(null);
     const [scanProgress, setScanProgress] = createSignal<DiscoveryProgress | null>(null);
+    const [scanSuccess, setScanSuccess] = createSignal(false);
 
     // Fetch discovery data
     const [discovery, { refetch, mutate }] = createResource(
@@ -89,18 +91,32 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     const handleTriggerDiscovery = async (force = false) => {
         setIsScanning(true);
         setScanProgress(null);
+        setScanError(null);
+        setScanSuccess(false);
         try {
-            // triggerDiscovery returns the discovery data directly
-            const result = await triggerDiscovery(props.resourceType, props.hostId, props.resourceId, {
+            // triggerDiscovery runs the discovery and returns the result
+            await triggerDiscovery(props.resourceType, props.hostId, props.resourceId, {
                 force,
                 hostname: props.hostname,
             });
-            // Use mutate to directly update the resource with the returned data
-            // This provides immediate UI feedback without needing a refetch
-            mutate(result);
+            // Scan complete - hide progress bar
+            setIsScanning(false);
+            // Refetch to get the saved discovery data (shows brief loading state)
+            await refetch();
+            // Now show success - data is already visible
+            setScanSuccess(true);
+            // Clear success after user has seen it
+            setTimeout(() => setScanSuccess(false), 2000);
         } catch (err) {
             console.error('Discovery failed:', err);
-        } finally {
+            // Extract error message for display
+            const message = err instanceof Error ? err.message : 'Discovery scan failed';
+            // Provide helpful message if it's a connection issue
+            if (message.includes('no connected agent')) {
+                setScanError('No agent available. Enable "Pulse Commands" in Settings → Unified Agents for this host.');
+            } else {
+                setScanError(message);
+            }
             setIsScanning(false);
             setScanProgress(null);
         }
@@ -163,9 +179,32 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
     const confidenceInfo = () => {
         const d = discovery();
-        if (!d) return null;
+        if (!d || d.confidence === undefined || d.confidence === null) return null;
         return getConfidenceLevel(d.confidence);
     };
+
+    // Check if discovery has meaningful data (not empty/unknown results)
+    const hasValidDiscovery = () => {
+        const d = discovery();
+        if (!d) return false;
+        // Consider valid if:
+        // - Has a service name that's not empty and not "unknown" (case-insensitive)
+        // - OR has a confidence value above 0
+        // - OR has any discovered ports, facts, paths, etc.
+        const hasServiceName = d.service_name && d.service_name.toLowerCase() !== 'unknown';
+        const hasConfidence = typeof d.confidence === 'number' && d.confidence > 0;
+        const hasPorts = d.ports && d.ports.length > 0;
+        const hasFacts = d.facts && d.facts.length > 0;
+        const hasPaths = (d.config_paths && d.config_paths.length > 0) ||
+            (d.data_paths && d.data_paths.length > 0) ||
+            (d.log_paths && d.log_paths.length > 0);
+        const hasCliAccess = !!d.cli_access;
+
+        return hasServiceName || hasConfidence || hasPorts || hasFacts || hasPaths || hasCliAccess;
+    };
+
+    // Accessor that returns discovery only when valid (for use with Show component)
+    const validDiscovery = () => hasValidDiscovery() ? discovery() : null;
 
     return (
         <div class="space-y-4">
@@ -210,6 +249,41 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </div>
             </Show>
 
+            {/* Scan Success */}
+            <Show when={scanSuccess()}>
+                <div class="mb-4 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-green-500 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <p class="text-sm font-medium text-green-800 dark:text-green-200">Discovery complete!</p>
+                    </div>
+                </div>
+            </Show>
+
+            {/* Scan Error */}
+            <Show when={scanError()}>
+                <div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div>
+                            <p class="text-sm font-medium text-red-800 dark:text-red-200">Discovery Failed</p>
+                            <p class="text-sm text-red-700 dark:text-red-300 mt-1">{scanError()}</p>
+                        </div>
+                        <button
+                            onClick={() => setScanError(null)}
+                            class="ml-auto text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </Show>
+
             {/* No discovery yet */}
             <Show when={!discovery.loading && !discovery()}>
                 <div class="text-center py-8">
@@ -239,8 +313,42 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </div>
             </Show>
 
-            {/* Discovery data */}
-            <Show when={discovery()}>
+            {/* Discovery exists but has no meaningful data - show re-scan option */}
+            <Show when={!discovery.loading && discovery() && !hasValidDiscovery()}>
+                <div class="text-center py-8">
+                    <div class="text-gray-500 dark:text-gray-400 mb-4">
+                        <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p class="text-sm">Unknown Service</p>
+                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                            Discovery completed but couldn't identify a known service.
+                        </p>
+                        <Show when={discovery()?.updated_at}>
+                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                                Last scanned: {formatDiscoveryAge(discovery()!.updated_at)}
+                            </p>
+                        </Show>
+                    </div>
+                    <button
+                        onClick={() => handleTriggerDiscovery(true)}
+                        disabled={isScanning()}
+                        class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {isScanning() ? (
+                            <span class="flex items-center justify-center">
+                                <span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></span>
+                                Scanning...
+                            </span>
+                        ) : (
+                            'Re-scan Discovery'
+                        )}
+                    </button>
+                </div>
+            </Show>
+
+            {/* Discovery data with valid results */}
+            <Show when={validDiscovery()}>
                 {(d) => (
                     <div class="space-y-4">
                         {/* Service Header */}
@@ -265,7 +373,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                             <Show when={confidenceInfo()}>
                                 <p class={`text-xs mt-2 ${confidenceInfo()!.color}`}>
-                                    {confidenceInfo()!.label} ({Math.round(d().confidence * 100)}%)
+                                    {confidenceInfo()!.label} ({Math.round((d().confidence || 0) * 100)}%)
                                 </p>
                             </Show>
                         </div>
