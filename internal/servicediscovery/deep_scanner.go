@@ -370,6 +370,20 @@ func (s *DeepScanner) getTargetID(resourceType ResourceType, resourceID string) 
 func (s *DeepScanner) findAgentForHost(hostID, hostname string) string {
 	agents := s.executor.GetConnectedAgents()
 
+	log.Debug().
+		Str("hostID", hostID).
+		Str("hostname", hostname).
+		Int("connected_agents", len(agents)).
+		Msg("Finding agent for host")
+
+	// Log connected agents for debugging
+	for _, agent := range agents {
+		log.Debug().
+			Str("agent_id", agent.AgentID).
+			Str("agent_hostname", agent.Hostname).
+			Msg("Connected agent")
+	}
+
 	// First try exact match on agent ID
 	for _, agent := range agents {
 		if agent.AgentID == hostID {

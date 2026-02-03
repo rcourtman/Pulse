@@ -15,4 +15,6 @@ const (
 	ResourceNodes     = "nodes"
 	ResourceUsers     = "users"
 	ResourceLicense   = "license"
+	ResourceAI        = "ai"
+	ResourceDiscovery = "discovery"
 )

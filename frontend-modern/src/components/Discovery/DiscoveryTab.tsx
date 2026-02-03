@@ -8,6 +8,7 @@ import {
     formatDiscoveryAge,
     getCategoryDisplayName,
     getConfidenceLevel,
+    getConnectedAgents,
 } from '../../api/discovery';
 import { GuestMetadataAPI } from '../../api/guestMetadata';
 import { eventBus } from '../../stores/events';
@@ -23,6 +24,8 @@ interface DiscoveryTabProps {
     customUrl?: string;
     /** Called after a URL is saved or deleted so the parent can update its state */
     onCustomUrlChange?: (url: string) => void;
+    /** Whether commands are enabled for this host (from host agent config) */
+    commandsEnabled?: boolean;
 }
 
 // Construct the resource ID in the same format the backend uses
@@ -94,6 +97,43 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         }
     );
 
+    // Fetch connected agents (for WebSocket command execution)
+    const [connectedAgents] = createResource(
+        async () => {
+            try {
+                return await getConnectedAgents();
+            } catch {
+                return { count: 0, agents: [] };
+            }
+        }
+    );
+
+    // Check if this host has a connected agent for command execution
+    // Matches backend logic in deep_scanner.go findAgentForHost()
+    const hasConnectedAgent = () => {
+        const agents = connectedAgents()?.agents || [];
+
+        // First try exact match on agent ID
+        if (agents.some(agent => agent.agent_id === props.hostId)) {
+            return true;
+        }
+
+        // Then try hostname match
+        if (agents.some(agent =>
+            agent.hostname === props.hostname ||
+            agent.hostname === props.hostId
+        )) {
+            return true;
+        }
+
+        // If only one agent connected, backend will use it (fallback)
+        if (agents.length === 1) {
+            return true;
+        }
+
+        return false;
+    };
+
     // Fetch discovery data
     const [discovery, { refetch, mutate }] = createResource(
         () => ({ type: props.resourceType, host: props.hostId, id: props.resourceId }),
@@ -148,9 +188,18 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             console.error('Discovery failed:', err);
             // Extract error message for display
             const message = err instanceof Error ? err.message : 'Discovery scan failed';
-            // Provide helpful message if it's a connection issue
+            // Provide helpful, specific message based on the error and current state
             if (message.includes('no connected agent')) {
-                setScanError('No agent available. Enable "Pulse Commands" in Settings → Unified Agents for this host.');
+                // Check if commands are enabled to provide more specific guidance
+                if (props.commandsEnabled === false) {
+                    setScanError('Commands not enabled. Enable "Pulse Commands" in Settings → Unified Agents for this host.');
+                } else if (props.commandsEnabled === true) {
+                    // Commands enabled but no WebSocket connection - likely token scope issue
+                    setScanError('Agent not connected for command execution. The API token may be missing the "agent:exec" scope. Check Settings → API Tokens.');
+                } else {
+                    // Unknown state - provide general guidance
+                    setScanError('No agent available for command execution. Ensure "Pulse Commands" is enabled in Settings → Unified Agents and the API token has "agent:exec" scope.');
+                }
             } else {
                 setScanError(message);
             }
@@ -420,6 +469,56 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             Run a discovery scan to identify services and configurations
                         </p>
                     </div>
+
+                    {/* Connection Status Warning - Show when commands are needed but not available */}
+                    <Show when={props.resourceType === 'host' && !connectedAgents.loading}>
+                        <Show when={props.commandsEnabled === false}>
+                            <div class="mb-4 mx-auto max-w-md rounded-lg border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800/50 dark:bg-amber-900/20">
+                                <div class="flex items-start gap-2">
+                                    <svg class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <div class="text-xs">
+                                        <p class="font-medium text-amber-800 dark:text-amber-200">Commands not enabled</p>
+                                        <p class="text-amber-700 dark:text-amber-300 mt-0.5">
+                                            Discovery requires command execution. Enable "Pulse Commands" in{' '}
+                                            <a href="/settings/agents" class="underline hover:no-underline">Settings → Unified Agents</a>.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </Show>
+                        <Show when={props.commandsEnabled === true && !hasConnectedAgent()}>
+                            <div class="mb-4 mx-auto max-w-md rounded-lg border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800/50 dark:bg-amber-900/20">
+                                <div class="flex items-start gap-2">
+                                    <svg class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <div class="text-xs">
+                                        <p class="font-medium text-amber-800 dark:text-amber-200">Agent not connected for commands</p>
+                                        <p class="text-amber-700 dark:text-amber-300 mt-0.5">
+                                            Commands are enabled, but the agent isn't connected via WebSocket. Check that the API token has the{' '}
+                                            <code class="px-1 py-0.5 bg-amber-100 dark:bg-amber-800/50 rounded">agent:exec</code>{' '}
+                                            scope in <a href="/settings/api" class="underline hover:no-underline">Settings → API Tokens</a>.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </Show>
+                        <Show when={props.commandsEnabled === true && hasConnectedAgent()}>
+                            <div class="mb-4 mx-auto max-w-md rounded-lg border border-green-200 bg-green-50 p-3 text-left dark:border-green-800/50 dark:bg-green-900/20">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    <p class="text-xs font-medium text-green-800 dark:text-green-200">
+                                        Agent connected and ready for command execution
+                                    </p>
+                                </div>
+                            </div>
+                        </Show>
+                    </Show>
+
                     <button
                         onClick={() => handleTriggerDiscovery(true)}
                         disabled={isScanning()}

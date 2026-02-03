@@ -80,6 +80,22 @@ type StateSnapshot struct {
 	Containers         []Container
 	DockerHosts        []DockerHost
 	KubernetesClusters []KubernetesCluster
+	Hosts              []Host
+}
+
+// Host represents a host system (via host-agent).
+type Host struct {
+	ID            string
+	Hostname      string
+	DisplayName   string
+	Platform      string // e.g., "linux", "darwin", "windows"
+	OSName        string // e.g., "Unraid", "Ubuntu", "Debian"
+	OSVersion     string
+	KernelVersion string
+	Architecture  string // e.g., "amd64", "arm64"
+	CPUCount      int
+	Status        string
+	Tags          []string
 }
 
 // VM represents a virtual machine.
@@ -1125,11 +1141,15 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 
 	// Run deep scan if scanner is available
 	var scanResult *ScanResult
+	var scanError error
 	if s.scanner != nil {
-		var err error
-		scanResult, err = s.scanner.Scan(ctx, req)
-		if err != nil {
-			log.Warn().Err(err).Str("id", resourceID).Msg("Deep scan failed, using metadata only")
+		scanResult, scanError = s.scanner.Scan(ctx, req)
+		if scanError != nil {
+			log.Warn().
+				Err(scanError).
+				Str("id", resourceID).
+				Str("resource_type", string(req.ResourceType)).
+				Msg("Deep scan failed, falling back to metadata-only analysis. For full discovery, ensure the host agent is connected with commands enabled.")
 		}
 	}
 
@@ -1222,6 +1242,19 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 					Msg("Parsed Docker bind mounts from on-demand discovery")
 			}
 		}
+	} else if scanError != nil {
+		// Add note to reasoning when we couldn't run commands
+		metadataNote := "[Note: Discovery was limited to metadata-only analysis because command execution was unavailable. "
+		if strings.Contains(scanError.Error(), "no connected agent") {
+			metadataNote += "To enable full discovery with command execution, ensure the host agent has 'Pulse Commands' enabled in Settings → Unified Agents.]"
+		} else {
+			metadataNote += "Error: " + scanError.Error() + "]"
+		}
+		if discovery.AIReasoning != "" {
+			discovery.AIReasoning = metadataNote + " " + discovery.AIReasoning
+		} else {
+			discovery.AIReasoning = metadataNote
+		}
 	}
 
 	// Preserve user notes from existing discovery
@@ -1290,6 +1323,24 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 						metadata["labels"] = filterSensitiveLabels(c.Labels)
 						break
 					}
+				}
+				break
+			}
+		}
+	case ResourceTypeHost:
+		for _, host := range state.Hosts {
+			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == req.HostID {
+				metadata["hostname"] = host.Hostname
+				metadata["display_name"] = host.DisplayName
+				metadata["platform"] = host.Platform
+				metadata["os_name"] = host.OSName
+				metadata["os_version"] = host.OSVersion
+				metadata["kernel_version"] = host.KernelVersion
+				metadata["architecture"] = host.Architecture
+				metadata["cpu_count"] = host.CPUCount
+				metadata["status"] = host.Status
+				if len(host.Tags) > 0 {
+					metadata["tags"] = host.Tags
 				}
 				break
 			}

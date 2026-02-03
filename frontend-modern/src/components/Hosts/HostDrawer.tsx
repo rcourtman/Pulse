@@ -350,6 +350,7 @@ export const HostDrawer: Component<HostDrawerProps> = (props) => {
                         guestId={props.host.id}
                         customUrl={props.customUrl}
                         onCustomUrlChange={(url) => props.onCustomUrlChange?.(props.host.id, url)}
+                        commandsEnabled={props.host.commandsEnabled}
                     />
                 </Suspense>
             </div>

@@ -8965,6 +8965,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	contentSuccess := 0                 // Number of successful storage content fetches
 	contentFailures := 0                // Number of failed storage content fetches
 	storageQueryErrors := 0             // Number of nodes where storage list could not be queried
+	hadPermissionError := false         // Track if any permission errors occurred this cycle
 	storagePreserveNeeded := map[string]struct{}{}
 	storageSuccess := map[string]struct{}{}
 
@@ -9051,6 +9052,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				// Check if this is a permission error
 				if strings.Contains(errStr, "403") || strings.Contains(errStr, "401") ||
 					strings.Contains(errStr, "permission") || strings.Contains(errStr, "forbidden") {
+					hadPermissionError = true
 					m.mu.Lock()
 					m.backupPermissionWarnings[instanceName] = "Missing PVEDatastoreAdmin permission on /storage. Run: pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin"
 					m.mu.Unlock()
@@ -9071,11 +9073,6 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				contentFailures++
 				continue
 			}
-
-			// Clear any previous permission warning on success
-			m.mu.Lock()
-			delete(m.backupPermissionWarnings, instanceName)
-			m.mu.Unlock()
 
 			contentSuccess++
 			storageSuccess[storage.Storage] = struct{}{}
@@ -9210,6 +9207,13 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			pmgBackups = snapshot.PMGBackups
 		}
 		m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
+	}
+
+	// Clear permission warning if no permission errors occurred this cycle
+	if !hadPermissionError {
+		m.mu.Lock()
+		delete(m.backupPermissionWarnings, instanceName)
+		m.mu.Unlock()
 	}
 
 	log.Debug().

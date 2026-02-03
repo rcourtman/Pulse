@@ -173,10 +173,29 @@ func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 		}
 	}
 
+	// Convert Hosts
+	hosts := make([]servicediscovery.Host, len(state.Hosts))
+	for i, h := range state.Hosts {
+		hosts[i] = servicediscovery.Host{
+			ID:            h.ID,
+			Hostname:      h.Hostname,
+			DisplayName:   h.DisplayName,
+			Platform:      h.Platform,
+			OSName:        h.OSName,
+			OSVersion:     h.OSVersion,
+			KernelVersion: h.KernelVersion,
+			Architecture:  h.Architecture,
+			CPUCount:      h.CPUCount,
+			Status:        h.Status,
+			Tags:          h.Tags,
+		}
+	}
+
 	return servicediscovery.StateSnapshot{
 		VMs:         vms,
 		Containers:  containers,
 		DockerHosts: dockerHosts,
+		Hosts:       hosts,
 	}
 }
 

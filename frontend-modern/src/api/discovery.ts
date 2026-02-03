@@ -237,3 +237,25 @@ export function getConfidenceLevel(confidence: number): {
     }
     return { label: 'Low confidence', color: 'text-gray-500 dark:text-gray-400' };
 }
+
+/**
+ * Connected agent info from WebSocket
+ */
+export interface ConnectedAgent {
+    agent_id: string;
+    hostname: string;
+    version: string;
+    platform: string;
+    connected_at: string;
+}
+
+/**
+ * Get list of agents connected via WebSocket (for command execution)
+ */
+export async function getConnectedAgents(): Promise<{ count: number; agents: ConnectedAgent[] }> {
+    const response = await apiFetch('/api/ai/agents');
+    if (!response.ok) {
+        throw new Error('Failed to get connected agents');
+    }
+    return response.json();
+}
