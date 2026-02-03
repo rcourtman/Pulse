@@ -34,6 +34,7 @@ import { eventBus } from './stores/events';
 import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
+import { GitHubStarBanner } from './components/GitHubStarBanner';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State, Alert } from '@/types/api';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
@@ -897,6 +898,7 @@ function App() {
                     <SecurityWarning />
                     <DemoBanner />
                     <UpdateBanner />
+                    <GitHubStarBanner />
                     <GlobalUpdateProgressWatcher />
                   </Show>
                   {/* Main layout container - flexbox to allow AI panel to push content */}

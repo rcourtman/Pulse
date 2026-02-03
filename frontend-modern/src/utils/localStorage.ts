@@ -165,6 +165,10 @@ export const STORAGE_KEYS = {
   // Feature discovery
   DISMISSED_FEATURE_TIPS: 'pulse-dismissed-feature-tips',
 
+  // GitHub star prompt
+  GITHUB_STAR_DISMISSED: 'pulse-github-star-dismissed',
+  GITHUB_STAR_FIRST_SEEN: 'pulse-github-star-first-seen',
+
   // Audit log
   AUDIT_AUTO_VERIFY: 'pulse-audit-auto-verify',
   AUDIT_AUTO_VERIFY_LIMIT: 'pulse-audit-auto-verify-limit',
