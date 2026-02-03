@@ -790,8 +790,36 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/security/validate-token", r.HandleValidateAPIToken)
 
 	// Apply security restart endpoint
+	// SECURITY: Require admin auth to prevent DoS via unauthenticated service restarts
 	r.mux.HandleFunc("/api/security/apply-restart", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
+			// SECURITY: Require authentication - this endpoint can trigger service restart (DoS risk)
+			// Allow if: (1) auth is not configured yet (initial setup), or (2) caller is admin-authenticated
+			authConfigured := r.config.AuthUser != "" && r.config.AuthPass != "" || r.config.HasAPITokens()
+			if authConfigured {
+				if !CheckAuth(r.config, w, req) {
+					log.Warn().
+						Str("ip", GetClientIP(req)).
+						Msg("Unauthenticated apply-restart attempt blocked")
+					return // CheckAuth already wrote the error
+				}
+				// Check proxy auth for admin status (session users with basic auth are implicitly admin)
+				if r.config.ProxyAuthSecret != "" {
+					if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid && !isAdmin {
+						log.Warn().
+							Str("ip", GetClientIP(req)).
+							Str("username", username).
+							Msg("Non-admin user attempted service restart")
+						http.Error(w, "Admin privileges required", http.StatusForbidden)
+						return
+					}
+				}
+				// Require settings:write scope for API tokens
+				if !ensureSettingsWriteScope(w, req) {
+					return
+				}
+			}
+
 			// Only allow restart if we're running under systemd (safer)
 			isSystemd := os.Getenv("INVOCATION_ID") != ""
 

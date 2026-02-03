@@ -440,9 +440,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             Running: <code class="font-mono">{scanProgress()?.current_command}</code>
                         </div>
                     </Show>
-                    {/* Live elapsed time - always show while scanning */}
-                    <div class="mt-1 text-xs text-blue-500 dark:text-blue-500">
-                        Elapsed: {liveElapsedSeconds()}s
+                    {/* Live elapsed time and hint */}
+                    <div class="mt-2 flex items-center justify-between text-xs text-blue-500 dark:text-blue-400">
+                        <span>Elapsed: {liveElapsedSeconds()}s</span>
+                        <span class="text-blue-400 dark:text-blue-500">Analysis time varies by model. You can navigate away — results save automatically.</span>
                     </div>
                 </div>
             </Show>
@@ -456,8 +457,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             Running discovery...
                         </span>
                     </div>
-                    <div class="text-xs text-blue-500 dark:text-blue-500">
-                        Elapsed: {liveElapsedSeconds()}s
+                    <div class="flex items-center justify-between text-xs text-blue-500 dark:text-blue-400">
+                        <span>Elapsed: {liveElapsedSeconds()}s</span>
+                        <span class="text-blue-400 dark:text-blue-500">Analysis time varies by model. You can navigate away — results save automatically.</span>
                     </div>
                 </div>
             </Show>
