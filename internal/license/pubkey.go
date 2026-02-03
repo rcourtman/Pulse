@@ -14,47 +14,83 @@ import (
 // Example: go build -ldflags "-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=BASE64_KEY"
 var EmbeddedPublicKey string = ""
 
-// InitPublicKey initializes the public key for license validation.
-// Priority:
+// EmbeddedLegacyPublicKey is the previous production public key (base64 encoded).
+// Used for dual-key verification during key rotation to validate old licenses.
+// Set at build time via -ldflags alongside EmbeddedPublicKey.
+var EmbeddedLegacyPublicKey string = ""
+
+// InitPublicKey initializes the public key(s) for license validation.
+// Primary key priority:
 //  1. PULSE_LICENSE_PUBLIC_KEY environment variable (base64 encoded)
 //  2. EmbeddedPublicKey (set at compile time via -ldflags)
-//  3. If PULSE_LICENSE_DEV_MODE=true, skip validation (development only)
 //
+// Legacy key priority (for dual-key verification during key rotation):
+//  1. PULSE_LICENSE_LEGACY_PUBLIC_KEY environment variable (base64 encoded)
+//  2. EmbeddedLegacyPublicKey (set at compile time via -ldflags)
+//
+// If PULSE_LICENSE_DEV_MODE=true, skip validation (development only).
 // Call this during application startup before any license operations.
 func InitPublicKey() {
-	// Priority 1: Environment variable
+	devMode := os.Getenv("PULSE_LICENSE_DEV_MODE") == "true"
+	primaryLoaded := false
+	legacyLoaded := false
+
+	// Load primary public key
 	if envKey := os.Getenv("PULSE_LICENSE_PUBLIC_KEY"); envKey != "" {
 		key, err := decodePublicKey(envKey)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to decode PULSE_LICENSE_PUBLIC_KEY, trying embedded key")
-			// Fall through to try embedded key instead of returning
+			log.Error().Err(err).Msg("Failed to decode PULSE_LICENSE_PUBLIC_KEY")
 		} else {
 			SetPublicKey(key)
 			log.Info().Msg("License public key loaded from environment")
-			return
+			primaryLoaded = true
 		}
 	}
-
-	// Priority 2: Embedded key (set at compile time)
-	if EmbeddedPublicKey != "" {
+	if !primaryLoaded && EmbeddedPublicKey != "" {
 		key, err := decodePublicKey(EmbeddedPublicKey)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to decode embedded public key, license validation disabled")
-			return
+			log.Error().Err(err).Msg("Failed to decode embedded public key")
+		} else {
+			SetPublicKey(key)
+			log.Info().Msg("License public key loaded from embedded key")
+			primaryLoaded = true
 		}
-		SetPublicKey(key)
-		log.Info().Msg("License public key loaded from embedded key")
-		return
 	}
 
-	// Priority 3: Dev mode - no key needed
-	if os.Getenv("PULSE_LICENSE_DEV_MODE") == "true" {
+	// Load legacy public key (for dual-key verification)
+	if envKey := os.Getenv("PULSE_LICENSE_LEGACY_PUBLIC_KEY"); envKey != "" {
+		key, err := decodePublicKey(envKey)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to decode PULSE_LICENSE_LEGACY_PUBLIC_KEY")
+		} else {
+			SetLegacyPublicKey(key)
+			log.Info().Msg("Legacy license public key loaded from environment")
+			legacyLoaded = true
+		}
+	}
+	if !legacyLoaded && EmbeddedLegacyPublicKey != "" {
+		key, err := decodePublicKey(EmbeddedLegacyPublicKey)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to decode embedded legacy public key")
+		} else {
+			SetLegacyPublicKey(key)
+			log.Info().Msg("Legacy license public key loaded from embedded key")
+			legacyLoaded = true
+		}
+	}
+
+	// Log status
+	if primaryLoaded && legacyLoaded {
+		log.Info().Msg("Dual-key license verification enabled (primary + legacy)")
+	} else if primaryLoaded {
+		log.Info().Msg("Single-key license verification enabled")
+	} else if legacyLoaded {
+		log.Warn().Msg("Only legacy key loaded - new licenses will not validate")
+	} else if devMode {
 		log.Warn().Msg("License validation running in DEV MODE - signatures not verified")
-		return
+	} else {
+		log.Warn().Msg("No license public key configured - license activation will fail")
 	}
-
-	// No key available - this is a problem in production
-	log.Warn().Msg("No license public key configured - license activation will fail")
 }
 
 // decodePublicKey decodes a base64-encoded Ed25519 public key.

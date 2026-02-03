@@ -427,10 +427,24 @@ func ValidateLicense(licenseKey string) (*License, error) {
 
 	// Verify signature
 	// In production, public key MUST be set. In dev mode, we skip signature validation.
+	// Dual-key support: try primary key first, then legacy key for old licenses.
 	devMode := os.Getenv("PULSE_LICENSE_DEV_MODE") == "true"
-	if len(publicKey) > 0 {
-		signedData := []byte(parts[0] + "." + parts[1])
-		if !ed25519.Verify(publicKey, signedData, signature) {
+	signedData := []byte(parts[0] + "." + parts[1])
+
+	if len(publicKey) > 0 || len(legacyPublicKey) > 0 {
+		verified := false
+
+		// Try primary key first (new licenses)
+		if len(publicKey) > 0 && ed25519.Verify(publicKey, signedData, signature) {
+			verified = true
+		}
+
+		// Fall back to legacy key (old licenses signed before key rotation)
+		if !verified && len(legacyPublicKey) > 0 && ed25519.Verify(legacyPublicKey, signedData, signature) {
+			verified = true
+		}
+
+		if !verified {
 			return nil, ErrSignatureInvalid
 		}
 	} else if !devMode {
