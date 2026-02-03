@@ -258,8 +258,8 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 
 	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", username, GetClientIP(req), req.URL.Path, true, "SAML login success via "+providerID)
 
-	// Redirect to return URL
-	target := relayState
+	// Redirect to return URL - sanitize relayState to prevent open redirect
+	target := sanitizeOIDCReturnTo(relayState)
 	if target == "" {
 		target = "/"
 	}
@@ -455,22 +455,45 @@ func (r *Router) getSAMLSessionInfo(req *http.Request) *SAMLSessionInfo {
 	}
 }
 
-// clearSession clears the current session
+// clearSession clears the current session - properly invalidates server-side session
+// and clears both pulse_session and pulse_csrf cookies
 func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
-	// Clear session cookie
+	isSecure, sameSitePolicy := getCookieSettings(req)
+
+	// Invalidate server-side session first
+	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+		// Get username before deleting session for untracking
+		if username := GetSessionUsername(cookie.Value); username != "" {
+			UntrackUserSession(username, cookie.Value)
+		}
+		GetSessionStore().InvalidateSession(cookie.Value)
+	}
+
+	// Clear pulse_session cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     "session",
+		Name:     "pulse_session",
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   req.TLS != nil,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
+	})
+
+	// Clear pulse_csrf cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_csrf",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
 	})
 }
 
 func (r *Router) redirectSAMLError(w http.ResponseWriter, req *http.Request, returnTo string, code string) {
-	target := returnTo
+	// Sanitize returnTo to prevent open redirect attacks
+	target := sanitizeOIDCReturnTo(returnTo)
 	if target == "" {
 		target = "/"
 	}
