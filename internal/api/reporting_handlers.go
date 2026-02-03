@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
@@ -14,11 +16,15 @@ import (
 var validResourceID = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 // ReportingHandlers handles reporting-related requests
-type ReportingHandlers struct{}
+type ReportingHandlers struct {
+	mtMonitor *monitoring.MultiTenantMonitor
+}
 
 // NewReportingHandlers creates a new ReportingHandlers
-func NewReportingHandlers() *ReportingHandlers {
-	return &ReportingHandlers{}
+func NewReportingHandlers(mtMonitor *monitoring.MultiTenantMonitor) *ReportingHandlers {
+	return &ReportingHandlers{
+		mtMonitor: mtMonitor,
+	}
 }
 
 // HandleGenerateReport generates a report
@@ -90,6 +96,14 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		Title:        q.Get("title"),
 	}
 
+	// Enrich with resource data if monitor is available
+	if h.mtMonitor != nil {
+		orgID := GetOrgID(r.Context())
+		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+			h.enrichReportRequest(&req, monitor.GetState(), start, end)
+		}
+	}
+
 	data, contentType, err := engine.Generate(req)
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "generation_failed", "Failed to generate report", nil)
@@ -118,4 +132,263 @@ func sanitizeFilename(s string) string {
 		s = s[:64]
 	}
 	return s
+}
+
+// enrichReportRequest populates enrichment data from the monitor state
+func (h *ReportingHandlers) enrichReportRequest(req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+	switch req.ResourceType {
+	case "node":
+		h.enrichNodeReport(req, state, start, end)
+	case "vm":
+		h.enrichVMReport(req, state, start, end)
+	case "container":
+		h.enrichContainerReport(req, state, start, end)
+	}
+}
+
+// enrichNodeReport adds node-specific data to the report request
+func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+	// Find the node
+	var node *models.Node
+	for i := range state.Nodes {
+		if state.Nodes[i].ID == req.ResourceID {
+			node = &state.Nodes[i]
+			break
+		}
+	}
+	if node == nil {
+		return
+	}
+
+	// Build resource info
+	req.Resource = &reporting.ResourceInfo{
+		Name:          node.Name,
+		DisplayName:   node.DisplayName,
+		Status:        node.Status,
+		Host:          node.Host,
+		Instance:      node.Instance,
+		Uptime:        node.Uptime,
+		KernelVersion: node.KernelVersion,
+		PVEVersion:    node.PVEVersion,
+		CPUModel:      node.CPUInfo.Model,
+		CPUCores:      node.CPUInfo.Cores,
+		CPUSockets:    node.CPUInfo.Sockets,
+		MemoryTotal:   node.Memory.Total,
+		DiskTotal:     node.Disk.Total,
+		LoadAverage:   node.LoadAverage,
+		ClusterName:   node.ClusterName,
+		IsCluster:     node.IsClusterMember,
+	}
+	if node.Temperature != nil && node.Temperature.CPUPackage > 0 {
+		temp := node.Temperature.CPUPackage
+		req.Resource.Temperature = &temp
+	}
+
+	// Find alerts for this node
+	for _, alert := range state.ActiveAlerts {
+		if alert.ResourceID == req.ResourceID || alert.Node == node.Name {
+			req.Alerts = append(req.Alerts, reporting.AlertInfo{
+				Type:      alert.Type,
+				Level:     alert.Level,
+				Message:   alert.Message,
+				Value:     alert.Value,
+				Threshold: alert.Threshold,
+				StartTime: alert.StartTime,
+			})
+		}
+	}
+	for _, resolved := range state.RecentlyResolved {
+		if (resolved.ResourceID == req.ResourceID || resolved.Node == node.Name) &&
+			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
+			resolvedTime := resolved.ResolvedTime
+			req.Alerts = append(req.Alerts, reporting.AlertInfo{
+				Type:         resolved.Type,
+				Level:        resolved.Level,
+				Message:      resolved.Message,
+				Value:        resolved.Value,
+				Threshold:    resolved.Threshold,
+				StartTime:    resolved.StartTime,
+				ResolvedTime: &resolvedTime,
+			})
+		}
+	}
+
+	// Find storage pools for this node
+	for _, storage := range state.Storage {
+		if storage.Node == node.Name {
+			req.Storage = append(req.Storage, reporting.StorageInfo{
+				Name:      storage.Name,
+				Type:      storage.Type,
+				Status:    storage.Status,
+				Total:     storage.Total,
+				Used:      storage.Used,
+				Available: storage.Free,
+				UsagePerc: storage.Usage,
+				Content:   storage.Content,
+			})
+		}
+	}
+
+	// Find physical disks for this node
+	for _, disk := range state.PhysicalDisks {
+		if disk.Node == node.Name {
+			req.Disks = append(req.Disks, reporting.DiskInfo{
+				Device:      disk.DevPath,
+				Model:       disk.Model,
+				Serial:      disk.Serial,
+				Type:        disk.Type,
+				Size:        disk.Size,
+				Health:      disk.Health,
+				Temperature: disk.Temperature,
+				WearLevel:   disk.Wearout,
+			})
+		}
+	}
+}
+
+// enrichVMReport adds VM-specific data to the report request
+func (h *ReportingHandlers) enrichVMReport(req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+	// Find the VM
+	var vm *models.VM
+	for i := range state.VMs {
+		if state.VMs[i].ID == req.ResourceID {
+			vm = &state.VMs[i]
+			break
+		}
+	}
+	if vm == nil {
+		return
+	}
+
+	// Build resource info
+	req.Resource = &reporting.ResourceInfo{
+		Name:        vm.Name,
+		Status:      vm.Status,
+		Node:        vm.Node,
+		Instance:    vm.Instance,
+		Uptime:      vm.Uptime,
+		OSName:      vm.OSName,
+		OSVersion:   vm.OSVersion,
+		IPAddresses: vm.IPAddresses,
+		CPUCores:    vm.CPUs,
+		MemoryTotal: vm.Memory.Total,
+		DiskTotal:   vm.Disk.Total,
+		Tags:        vm.Tags,
+	}
+
+	// Find alerts for this VM
+	for _, alert := range state.ActiveAlerts {
+		if alert.ResourceID == req.ResourceID {
+			req.Alerts = append(req.Alerts, reporting.AlertInfo{
+				Type:      alert.Type,
+				Level:     alert.Level,
+				Message:   alert.Message,
+				Value:     alert.Value,
+				Threshold: alert.Threshold,
+				StartTime: alert.StartTime,
+			})
+		}
+	}
+	for _, resolved := range state.RecentlyResolved {
+		if resolved.ResourceID == req.ResourceID &&
+			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
+			resolvedTime := resolved.ResolvedTime
+			req.Alerts = append(req.Alerts, reporting.AlertInfo{
+				Type:         resolved.Type,
+				Level:        resolved.Level,
+				Message:      resolved.Message,
+				Value:        resolved.Value,
+				Threshold:    resolved.Threshold,
+				StartTime:    resolved.StartTime,
+				ResolvedTime: &resolvedTime,
+			})
+		}
+	}
+
+	// Find backups for this VM
+	for _, backup := range state.PVEBackups.StorageBackups {
+		if backup.VMID == vm.VMID && backup.Node == vm.Node {
+			req.Backups = append(req.Backups, reporting.BackupInfo{
+				Type:      "vzdump",
+				Storage:   backup.Storage,
+				Timestamp: backup.Time,
+				Size:      backup.Size,
+				Protected: backup.Protected,
+				VolID:     backup.Volid,
+			})
+		}
+	}
+}
+
+// enrichContainerReport adds container-specific data to the report request
+func (h *ReportingHandlers) enrichContainerReport(req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+	// Find the container
+	var ct *models.Container
+	for i := range state.Containers {
+		if state.Containers[i].ID == req.ResourceID {
+			ct = &state.Containers[i]
+			break
+		}
+	}
+	if ct == nil {
+		return
+	}
+
+	// Build resource info
+	req.Resource = &reporting.ResourceInfo{
+		Name:        ct.Name,
+		Status:      ct.Status,
+		Node:        ct.Node,
+		Instance:    ct.Instance,
+		Uptime:      ct.Uptime,
+		OSName:      ct.OSName,
+		IPAddresses: ct.IPAddresses,
+		CPUCores:    ct.CPUs,
+		MemoryTotal: ct.Memory.Total,
+		DiskTotal:   ct.Disk.Total,
+		Tags:        ct.Tags,
+	}
+
+	// Find alerts for this container
+	for _, alert := range state.ActiveAlerts {
+		if alert.ResourceID == req.ResourceID {
+			req.Alerts = append(req.Alerts, reporting.AlertInfo{
+				Type:      alert.Type,
+				Level:     alert.Level,
+				Message:   alert.Message,
+				Value:     alert.Value,
+				Threshold: alert.Threshold,
+				StartTime: alert.StartTime,
+			})
+		}
+	}
+	for _, resolved := range state.RecentlyResolved {
+		if resolved.ResourceID == req.ResourceID &&
+			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
+			resolvedTime := resolved.ResolvedTime
+			req.Alerts = append(req.Alerts, reporting.AlertInfo{
+				Type:         resolved.Type,
+				Level:        resolved.Level,
+				Message:      resolved.Message,
+				Value:        resolved.Value,
+				Threshold:    resolved.Threshold,
+				StartTime:    resolved.StartTime,
+				ResolvedTime: &resolvedTime,
+			})
+		}
+	}
+
+	// Find backups for this container
+	for _, backup := range state.PVEBackups.StorageBackups {
+		if backup.VMID == ct.VMID && backup.Node == ct.Node {
+			req.Backups = append(req.Backups, reporting.BackupInfo{
+				Type:      "vzdump",
+				Storage:   backup.Storage,
+				Timestamp: backup.Time,
+				Size:      backup.Size,
+				Protected: backup.Protected,
+				VolID:     backup.Volid,
+			})
+		}
+	}
 }

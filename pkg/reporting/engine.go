@@ -82,6 +82,13 @@ type ReportData struct {
 	Metrics      map[string][]MetricDataPoint
 	TotalPoints  int
 	Summary      MetricSummary
+
+	// Enrichment data (optional, for richer PDF reports)
+	Resource *ResourceInfo
+	Alerts   []AlertInfo
+	Backups  []BackupInfo
+	Storage  []StorageInfo
+	Disks    []DiskInfo
 }
 
 // MetricDataPoint represents a single data point in a report.
@@ -125,6 +132,13 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 	if data.Title == "" {
 		data.Title = fmt.Sprintf("%s Report: %s", req.ResourceType, req.ResourceID)
 	}
+
+	// Copy enrichment data from request
+	data.Resource = req.Resource
+	data.Alerts = req.Alerts
+	data.Backups = req.Backups
+	data.Storage = req.Storage
+	data.Disks = req.Disks
 
 	var metricsMap map[string][]metrics.MetricPoint
 	var err error
