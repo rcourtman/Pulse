@@ -1,4 +1,5 @@
 name: Pulse Release Pipeline
+# Optimized: parallel jobs, fast RC path
 
 on:
   workflow_dispatch:
