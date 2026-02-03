@@ -314,7 +314,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleCharts)))
 	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
 	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsHistory)))
-	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
+	r.mux.HandleFunc("/api/diagnostics", RequireAdmin(r.config, r.handleDiagnostics))
 	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
 	r.mux.HandleFunc("/api/install/install-docker.sh", r.handleDownloadDockerInstallerScript)
 	r.mux.HandleFunc("/api/install/install.sh", r.handleDownloadUnifiedInstallScript)
@@ -1177,7 +1177,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/setup-script-url", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleSetupScriptURL)))
 
 	// Generate agent install command with API token (for authenticated users)
-	r.mux.HandleFunc("/api/agent-install-command", RequireAuth(r.config, r.configHandlers.HandleAgentInstallCommand))
+	r.mux.HandleFunc("/api/agent-install-command", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleAgentInstallCommand)))
 
 	// Auto-register route for setup scripts
 	r.mux.HandleFunc("/api/auto-register", r.configHandlers.HandleAutoRegister)
@@ -1766,6 +1766,7 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 		return
 	}
 
+	// Check setup token first (for setup scripts)
 	if token := extractSetupToken(req); token != "" {
 		if r.configHandlers.ValidateSetupToken(token) {
 			r.configHandlers.HandleVerifyTemperatureSSH(w, req)
@@ -1773,24 +1774,30 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 		}
 	}
 
-	if CheckAuth(r.config, w, req) {
-		r.configHandlers.HandleVerifyTemperatureSSH(w, req)
+	// Require authentication
+	if !CheckAuth(r.config, w, req) {
+		log.Warn().
+			Str("ip", req.RemoteAddr).
+			Str("path", req.URL.Path).
+			Str("method", req.Method).
+			Msg("Unauthorized access attempt (verify-temperature-ssh)")
+
+		if strings.HasPrefix(req.URL.Path, "/api/") || strings.Contains(req.Header.Get("Accept"), "application/json") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":"Authentication required"}`))
+		} else {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		}
 		return
 	}
 
-	log.Warn().
-		Str("ip", req.RemoteAddr).
-		Str("path", req.URL.Path).
-		Str("method", req.Method).
-		Msg("Unauthorized access attempt (verify-temperature-ssh)")
-
-	if strings.HasPrefix(req.URL.Path, "/api/") || strings.Contains(req.Header.Get("Accept"), "application/json") {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":"Authentication required"}`))
-	} else {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	// Require settings:write scope for API tokens (SSH probes are a privileged operation)
+	if !ensureScope(w, req, config.ScopeSettingsWrite) {
+		return
 	}
+
+	r.configHandlers.HandleVerifyTemperatureSSH(w, req)
 }
 
 // handleSSHConfig handles SSH config writes with setup token or API auth
@@ -1808,12 +1815,34 @@ func (r *Router) handleSSHConfig(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Fall back to standard API authentication
-	if CheckAuth(r.config, w, req) {
-		r.systemSettingsHandler.HandleSSHConfig(w, req)
+	// Require authentication
+	if !CheckAuth(r.config, w, req) {
+		log.Warn().
+			Str("ip", req.RemoteAddr).
+			Str("path", req.URL.Path).
+			Str("method", req.Method).
+			Msg("Unauthorized access attempt (ssh-config)")
+
+		if strings.HasPrefix(req.URL.Path, "/api/") || strings.Contains(req.Header.Get("Accept"), "application/json") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":"Authentication required"}`))
+		} else {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		}
 		return
 	}
 
+	// Require settings:write scope for API tokens (SSH config writes are a privileged operation)
+	if !ensureScope(w, req, config.ScopeSettingsWrite) {
+		return
+	}
+
+	r.systemSettingsHandler.HandleSSHConfig(w, req)
+}
+
+// handleSSHConfigUnauthorized logs an unauthorized access attempt (legacy helper, no longer used)
+func (r *Router) handleSSHConfigUnauthorized(w http.ResponseWriter, req *http.Request) {
 	log.Warn().
 		Str("ip", req.RemoteAddr).
 		Str("path", req.URL.Path).
