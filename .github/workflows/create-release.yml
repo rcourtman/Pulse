@@ -73,7 +73,7 @@ jobs:
             echo "The VERSION file must be updated and committed before running release."
             exit 1
           fi
-          echo "✓ VERSION file matches requested version ($REQUESTED_VERSION)"
+          echo "[OK] VERSION file matches requested version ($REQUESTED_VERSION)"
 
   # Frontend checks run in parallel with backend tests
   frontend_checks:
@@ -446,7 +446,7 @@ jobs:
 
           echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
           echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
-          echo "✓ Draft release: ${TAG} (ID: ${RELEASE_ID})"
+          echo "[OK] Draft release: ${TAG} (ID: ${RELEASE_ID})"
 
       - name: Upload checksums
         env:
@@ -482,11 +482,11 @@ jobs:
           if [ "$IS_PRERELEASE" = "true" ]; then
             gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
               -X PATCH -F draft=false -F make_latest=false
-            echo "✓ Published as prerelease: ${TAG}"
+            echo "[OK] Published as prerelease: ${TAG}"
           else
             gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
               -X PATCH -F draft=false -F make_latest=true
-            echo "✓ Published as latest: ${TAG}"
+            echo "[OK] Published as latest: ${TAG}"
           fi
 
       - name: Skip publish (draft only)
@@ -500,7 +500,7 @@ jobs:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           gh workflow run publish-docker.yml -f tag="${{ needs.prepare.outputs.tag }}"
-          echo "✓ Docker publish workflow dispatched"
+          echo "[OK] Docker publish workflow dispatched"
 
       - name: Trigger demo server update
         if: ${{ github.event.inputs.draft_only != 'true' }}
@@ -509,13 +509,13 @@ jobs:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           gh workflow run update-demo-server.yml -f tag="${{ needs.prepare.outputs.tag }}"
-          echo "✓ Demo server update dispatched"
+          echo "[OK] Demo server update dispatched"
 
       - name: Summary
         run: |
-          echo "✅ Release published!"
-          echo "📦 ${{ needs.prepare.outputs.tag }}"
-          echo "🔗 ${{ steps.create_release.outputs.release_url }}"
+          echo "[SUCCESS] Release published!"
+          echo "Release: ${{ needs.prepare.outputs.tag }}"
+          echo "URL: ${{ steps.create_release.outputs.release_url }}"
 
   validate_release_assets:
     needs:
