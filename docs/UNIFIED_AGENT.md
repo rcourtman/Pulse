@@ -340,3 +340,20 @@ If your Docker Swarm cluster isn't being detected:
    ```bash
    LOG_LEVEL=debug journalctl -u pulse-agent -f
    ```
+
+### PVE Backups Not Showing
+
+If local PVE backups aren't appearing in Pulse after setting up via `--enable-proxmox`:
+
+1. **Check permissions**: The API token needs `PVEDatastoreAdmin` on `/storage`:
+   ```bash
+   pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin
+   ```
+
+2. **Re-run setup** (v5.1.x or later): Delete the node in Pulse Settings and re-run the agent with `--enable-proxmox`. Newer versions grant this permission automatically.
+
+3. **Check state file**: If re-running doesn't trigger setup, remove the state file:
+   ```bash
+   rm /var/lib/pulse-agent/proxmox-pve-registered
+   ```
+   Then restart the agent.

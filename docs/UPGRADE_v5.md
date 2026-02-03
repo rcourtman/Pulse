@@ -68,18 +68,23 @@ Alternative option:
 
 - Run Pulse outside a container and use SSH-based temperature collection (restricted `sensors -j` keys)
 
-### Backups not showing after upgrade (v4 → v5)
+### Backups not showing (PVE)
 
-If your backups stop appearing after upgrading from v4, your existing API token may be missing the `PVEDatastoreAdmin` permission required for backup visibility.
+If local PVE backups aren't appearing in Pulse, your API token may be missing the `PVEDatastoreAdmin` permission required for backup visibility.
+
+This can happen if:
+- You upgraded from v4 (older setup scripts didn't include this permission)
+- You set up nodes via the unified agent before v5.1.x (the agent wasn't granting this permission)
+- You created the API token manually without the storage permission
 
 **Quick fix** (run on each Proxmox host):
 ```bash
 pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin
 ```
 
-**Alternative** (re-run agent setup):
+**Alternative** (re-run setup):
 1. Delete the node from Pulse Settings
-2. Re-run the agent setup command from Settings → Proxmox → Add Node
+2. Re-run the setup (either the UI-generated script or agent with `--enable-proxmox`)
 3. The new token will have correct permissions
 
-This happens because v5's agent setup grants broader permissions than the v4 manual setup scripts did.
+Note: The "re-run setup" option only works on v5.1.x or later, which includes the fix for agent-based setups.
