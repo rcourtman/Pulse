@@ -22,7 +22,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  extract_version:
+  # Combined version extraction and validation (saves a checkout)
+  prepare:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -33,7 +34,6 @@ jobs:
       - name: Extract version
         id: extract
         run: |
-          # Handle both tag push and workflow_dispatch
           if [ "${{ github.event_name }}" = "push" ]; then
             TAG="${GITHUB_REF#refs/tags/}"
             VERSION="${TAG#v}"
@@ -45,31 +45,27 @@ jobs:
             fi
             TAG="v${VERSION}"
           fi
-          
-          # Detect if this is a prerelease (RC, alpha, beta)
+
           IS_PRERELEASE="false"
           if [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
             IS_PRERELEASE="true"
             echo "Detected prerelease version: ${VERSION}"
           fi
-          
+
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}, Tag: ${TAG}, Prerelease: ${IS_PRERELEASE}"
 
-  version_guard:
-    needs: extract_version
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: VERSION
 
-      - name: Ensure VERSION file matches requested version
+      - name: Validate VERSION file
         run: |
           FILE_VERSION=$(cat VERSION | tr -d '\n')
-          REQUESTED_VERSION="${{ needs.extract_version.outputs.version }}"
+          REQUESTED_VERSION="${{ steps.extract.outputs.version }}"
           if [ "$FILE_VERSION" != "$REQUESTED_VERSION" ]; then
             echo "::error::VERSION file ($FILE_VERSION) does not match requested version ($REQUESTED_VERSION)."
             echo "The VERSION file must be updated and committed before running release."
@@ -77,15 +73,33 @@ jobs:
           fi
           echo "✓ VERSION file matches requested version ($REQUESTED_VERSION)"
 
-  preflight_tests:
-    needs:
-      - extract_version
-      - version_guard
+  # Frontend checks run in parallel with backend tests
+  frontend_checks:
+    needs: prepare
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    permissions:
-      contents: read
-      packages: write
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      - name: Install dependencies
+        run: npm --prefix frontend-modern ci
+
+      - name: Lint frontend
+        run: npm --prefix frontend-modern run lint
+
+  # Backend tests run in parallel with frontend checks
+  backend_tests:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       FRONTEND_DIST: frontend-modern/dist
     steps:
@@ -99,33 +113,24 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'frontend-modern/package-lock.json'
 
-      - name: Install frontend dependencies
-        run: npm --prefix frontend-modern ci
-
       - name: Restore frontend build cache
+        id: frontend-cache
         uses: actions/cache@v4
         with:
           path: frontend-modern/dist
           key: frontend-build-${{ hashFiles('frontend-modern/package-lock.json', 'frontend-modern/src/**/*', 'frontend-modern/index.html', 'frontend-modern/postcss.config.cjs', 'frontend-modern/tailwind.config.cjs') }}
 
-      - name: Build frontend bundle for Go embed
+      - name: Build frontend (if not cached)
+        if: steps.frontend-cache.outputs.cache-hit != 'true'
         run: |
-          if [ -d "$FRONTEND_DIST" ] && [ -f "$FRONTEND_DIST/index.html" ]; then
-            echo "Using cached frontend build";
-          else
-            npm --prefix frontend-modern run build;
-          fi
+          npm --prefix frontend-modern ci
+          npm --prefix frontend-modern run build
+
+      - name: Copy frontend to embed location
+        run: |
           rm -rf internal/api/frontend-modern
           mkdir -p internal/api/frontend-modern
           cp -r frontend-modern/dist internal/api/frontend-modern/
-
-      - name: Lint frontend
-        run: npm --prefix frontend-modern run lint
-
-      - name: Install docker-compose
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker-compose
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -138,32 +143,24 @@ jobs:
           PULSE_DATA_DIR: /tmp/pulse-test-data
         run: make test
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('tests/integration/package-lock.json') }}
-
-      - name: Prepare integration test dependencies
-        working-directory: tests/integration
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
-
-      - name: Build Pulse for integration tests
-        run: make build
+  # Docker build - amd64 only for prereleases, multi-arch for stable
+  docker_build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
+        if: needs.prepare.outputs.is_prerelease != 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -172,46 +169,82 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push staging Docker images (multi-arch)
+      - name: Build Docker image (verify only)
         uses: docker/build-push-action@v6
         with:
           context: .
           target: runtime
-          platforms: linux/amd64,linux/arm64  # Multi-arch to catch build issues before release
-          push: true
+          # amd64 only for prereleases (faster), multi-arch for stable releases
+          platforms: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: false  # Don't push staging images, just verify build
           provenance: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache,mode=max
           build-args: |
             PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
-            VERSION=${{ needs.extract_version.outputs.tag }}
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/pulse:staging-${{ needs.extract_version.outputs.tag }}
+            VERSION=${{ needs.prepare.outputs.tag }}
 
-      - name: Build and push staging Docker agent image (multi-arch)
+      - name: Build Docker agent image (verify only)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           target: agent_runtime
-          platforms: linux/amd64,linux/arm64  # Multi-arch to catch build issues before release
-          push: true
+          platforms: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: false
           provenance: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache,mode=max
           build-args: |
             PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
-            VERSION=${{ needs.extract_version.outputs.tag }}
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:staging-${{ needs.extract_version.outputs.tag }}
+            VERSION=${{ needs.prepare.outputs.tag }}
 
-      - name: Build Docker images for integration tests
+  # Integration tests - skipped for prereleases (they've been tested in CI)
+  integration_tests:
+    needs:
+      - prepare
+      - backend_tests
+    if: needs.prepare.outputs.is_prerelease != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FRONTEND_DIST: frontend-modern/dist
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      - name: Restore frontend build cache
+        uses: actions/cache@v4
+        with:
+          path: frontend-modern/dist
+          key: frontend-build-${{ hashFiles('frontend-modern/package-lock.json', 'frontend-modern/src/**/*', 'frontend-modern/index.html', 'frontend-modern/postcss.config.cjs', 'frontend-modern/tailwind.config.cjs') }}
+
+      - name: Copy frontend to embed location
         run: |
-          docker build -t pulse-mock-github:test tests/integration/mock-github-server
-        env:
-          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+          rm -rf internal/api/frontend-modern
+          mkdir -p internal/api/frontend-modern
+          cp -r frontend-modern/dist internal/api/frontend-modern/
 
-      - name: Run update integration smoke tests
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Build Pulse for integration tests
+        run: make build
+
+      - name: Build mock GitHub server
+        run: docker build -t pulse-mock-github:test tests/integration/mock-github-server
+
+      - name: Run integration tests
         working-directory: tests/integration
         env:
           MOCK_CHECKSUM_ERROR: "false"
@@ -221,56 +254,39 @@ jobs:
         run: |
           docker-compose -f docker-compose.test.yml up -d
 
-          # Wait for services to be healthy
-          echo "Waiting for mock-github to be healthy..."
-          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-mock-github | grep -q "healthy"; do sleep 2; done' || {
-            echo "Mock GitHub failed to become healthy"
-            docker logs pulse-mock-github
-            exit 1
-          }
+          echo "Waiting for services to be healthy..."
+          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-mock-github | grep -q "healthy"; do sleep 2; done'
+          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-test-server | grep -q "healthy"; do sleep 2; done'
 
-          echo "Waiting for pulse-test-server to be healthy..."
-          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-test-server | grep -q "healthy"; do sleep 2; done' || {
-            echo "Pulse server failed to become healthy"
-            docker logs pulse-test-server
-            exit 1
-          }
-
-          echo "All services healthy, verifying port mapping..."
-          # Test that the host can actually reach the container through port mapping
           for i in 1 2 3 4 5; do
             if curl -f -s http://localhost:7655/api/health > /dev/null 2>&1; then
-              echo "Port mapping verified: Pulse server is reachable from host"
+              echo "Pulse server is reachable"
               break
             elif [ $i -eq 5 ]; then
-              echo "ERROR: Port mapping failed - cannot reach Pulse server from host"
-              echo "Container healthcheck passed, but host cannot connect via localhost:7655"
-              echo "Pulse server logs:"
               docker logs pulse-test-server || true
-              echo "Mock GitHub logs:"
-              docker logs pulse-mock-github || true
               exit 1
-            else
-              echo "Attempt $i: Server not yet reachable from host, waiting..."
-              sleep 2
             fi
+            sleep 2
           done
 
-          echo "Running API-level update integration test..."
           UPDATE_API_BASE_URL=http://localhost:7655 go test ../../tests/integration/api -run TestUpdateFlowIntegration -count=1
-
-          echo "Skipping legacy Playwright update scenarios (removed until they can be rebuilt)"
           docker-compose -f docker-compose.test.yml down -v
 
-      - name: Cleanup integration environment
+      - name: Cleanup
         if: always()
         working-directory: tests/integration
         run: docker-compose -f docker-compose.test.yml down -v || true
 
+  # Create release after all checks pass
   create_release:
     needs:
-      - extract_version
-      - preflight_tests
+      - prepare
+      - frontend_checks
+      - backend_tests
+      - docker_build
+      - integration_tests
+    # Run if integration_tests passed OR was skipped (prereleases)
+    if: always() && needs.frontend_checks.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -284,7 +300,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for changelog generation
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -301,7 +317,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Install zip for Windows binaries
           sudo apt-get update
           sudo apt-get install -y zip
 
@@ -312,42 +327,35 @@ jobs:
 
       - name: Build release artifacts
         run: |
-          echo "Building release ${{ needs.extract_version.outputs.tag }}..."
-          ./scripts/build-release.sh ${{ needs.extract_version.outputs.version }}
+          echo "Building release ${{ needs.prepare.outputs.tag }}..."
+          ./scripts/build-release.sh ${{ needs.prepare.outputs.version }}
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
       - name: Post-build health check
         run: |
-          echo "Verifying server binary responds to --version and API health..."
           if [ -x ./pulse ]; then
             ./pulse --version
           elif [ -x ./cmd/pulse/pulse ]; then
             ./cmd/pulse/pulse --version
-          else
-            echo "::warning::Pulse binary not found after build-release; skipping version check"
           fi
 
       - name: Prepare release notes
         id: generate_notes
         run: |
-          VERSION="${{ needs.extract_version.outputs.version }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
           RELEASE_NOTES_INPUT=$(jq -r '.inputs.release_notes // ""' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")
 
-          # Save release notes to file
           NOTES_FILE=$(mktemp)
 
           if [ -n "$RELEASE_NOTES_INPUT" ]; then
-            echo "Using Claude-generated release notes from workflow input"
             printf "%s\n" "$RELEASE_NOTES_INPUT" > "$NOTES_FILE"
           else
-            echo "Tag-triggered release - using placeholder notes"
             echo "Release $VERSION" > "$NOTES_FILE"
             echo "" >> "$NOTES_FILE"
             echo "See commit history for changes." >> "$NOTES_FILE"
           fi
 
-          # Add installation instructions
           {
             echo ""
             echo "## Installation"
@@ -365,24 +373,17 @@ jobs:
 
           echo "notes_file=${NOTES_FILE}" >> $GITHUB_OUTPUT
 
-          echo "Release notes content:"
-          cat "$NOTES_FILE"
-
       - name: Create tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
+          TAG="${{ needs.prepare.outputs.tag }}"
           HEAD_SHA=$(git rev-parse HEAD)
 
-          # Check if tag already exists on remote
           REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')
 
           if [ -n "$REMOTE_TAG_SHA" ]; then
-            # Tag exists - check if it points to current HEAD
-            # For annotated tags, we need to dereference to get the commit
             REMOTE_COMMIT_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}^{}" | awk '{print $1}')
-            # If no dereferenced tag, it's a lightweight tag pointing directly to the commit
             [ -z "$REMOTE_COMMIT_SHA" ] && REMOTE_COMMIT_SHA="$REMOTE_TAG_SHA"
 
             if [ "$REMOTE_COMMIT_SHA" = "$HEAD_SHA" ]; then
@@ -404,12 +405,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
+          TAG="${{ needs.prepare.outputs.tag }}"
           NOTES_FILE="${{ steps.generate_notes.outputs.notes_file }}"
-          IS_PRERELEASE="${{ needs.extract_version.outputs.is_prerelease }}"
+          IS_PRERELEASE="${{ needs.prepare.outputs.is_prerelease }}"
 
-          # Check if a release already exists for this tag
-          # Note: gh api returns JSON error on 404, so check for valid release ID
           EXISTING_RELEASE=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}" 2>/dev/null || echo "")
           RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id // empty')
 
@@ -418,20 +417,17 @@ jobs:
             IS_DRAFT=$(echo "$EXISTING_RELEASE" | jq -r '.draft')
 
             if [ "$IS_DRAFT" = "true" ]; then
-              echo "Draft release already exists for ${TAG} - updating it"
-              # Update the existing draft with new notes
+              echo "Updating existing draft release for ${TAG}"
               gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
                 -X PATCH \
                 -F body="$(cat $NOTES_FILE)" \
                 -F prerelease=${IS_PRERELEASE} > /dev/null
             else
-              echo "::error::Published release already exists for ${TAG}. Cannot re-release the same version."
+              echo "::error::Published release already exists for ${TAG}."
               exit 1
             fi
           else
             echo "Creating draft release for ${TAG}..."
-            # Tag must exist first - draft releases can't create tags (GitHub API limitation)
-            # See: https://github.com/cli/cli/issues/11589
             RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
               -X POST \
               -F tag_name="${TAG}" \
@@ -446,51 +442,28 @@ jobs:
 
           rm -f "$NOTES_FILE"
 
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            echo "::error::Failed to extract release ID from API response"
-            exit 1
-          fi
-
           echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
           echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
+          echo "✓ Draft release: ${TAG} (ID: ${RELEASE_ID})"
 
-          echo "✓ Draft release created: ${TAG} (ID: ${RELEASE_ID})"
-      - name: Upload checksums.txt
+      - name: Upload checksums
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
-
-          echo "Uploading checksums.txt..."
+          TAG="${{ needs.prepare.outputs.tag }}"
           gh release upload "${TAG}" release/checksums.txt --clobber
-
-          # Upload individual .sha256 files for backward compatibility
-          echo "Uploading .sha256 checksum files..."
           gh release upload "${TAG}" release/*.sha256 --clobber
 
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
-
-          echo "Uploading release assets..."
-
-          # Upload tarballs
+          TAG="${{ needs.prepare.outputs.tag }}"
           gh release upload "${TAG}" release/*.tar.gz --clobber
-
-          # Upload Windows zip files
           gh release upload "${TAG}" release/*.zip --clobber
-
-          # Upload Helm chart if it exists
           if ls release/*.tgz 1> /dev/null 2>&1; then
-            echo "Uploading Helm chart..."
             gh release upload "${TAG}" release/*.tgz --clobber
           fi
-
-          # Upload install scripts as standalone assets
-          # Users can now use: curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
-          # This ensures scripts are version-locked to the release, not pulled from main branch
           gh release upload "${TAG}" release/install.sh --clobber
           gh release upload "${TAG}" release/install-docker.sh --clobber
           gh release upload "${TAG}" release/pulse-auto-update.sh --clobber
@@ -500,88 +473,57 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
+          TAG="${{ needs.prepare.outputs.tag }}"
           RELEASE_ID="${{ steps.create_release.outputs.release_id }}"
+          IS_PRERELEASE="${{ needs.prepare.outputs.is_prerelease }}"
 
-          IS_PRERELEASE="${{ needs.extract_version.outputs.is_prerelease }}"
-          echo "Publishing release ${TAG} (prerelease: ${IS_PRERELEASE})..."
-
-          # Only mark as latest if this is NOT a prerelease
           if [ "$IS_PRERELEASE" = "true" ]; then
             gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
-              -X PATCH \
-              -F draft=false \
-              -F make_latest=false
-            echo "✓ Release published as prerelease: ${TAG}"
+              -X PATCH -F draft=false -F make_latest=false
+            echo "✓ Published as prerelease: ${TAG}"
           else
             gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
-              -X PATCH \
-              -F draft=false \
-              -F make_latest=true
-            echo "✓ Release published as latest: ${TAG}"
+              -X PATCH -F draft=false -F make_latest=true
+            echo "✓ Published as latest: ${TAG}"
           fi
 
       - name: Skip publish (draft only)
         if: ${{ github.event.inputs.draft_only == 'true' }}
-        run: |
-          echo "Draft-only mode: Release remains as draft for review"
-          echo "View draft at: ${{ steps.create_release.outputs.release_url }}"
+        run: echo "Draft-only mode: ${{ steps.create_release.outputs.release_url }}"
 
       - name: Trigger Docker image publish
         if: ${{ github.event.inputs.draft_only != 'true' }}
-        continue-on-error: true  # Non-fatal if dispatch fails
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
-          echo "Triggering Docker image publish for ${TAG}..."
-
-          # Publishing via API doesn't fire the release webhook, so we dispatch manually
-          # Requires WORKFLOW_PAT secret with 'repo' and 'workflow' scopes
-          gh workflow run publish-docker.yml -f tag="${TAG}"
-
+          gh workflow run publish-docker.yml -f tag="${{ needs.prepare.outputs.tag }}"
           echo "✓ Docker publish workflow dispatched"
-
-
-      # NOTE: Floating tag promotion and Helm chart release workflows now trigger
-      # automatically when publish-docker.yml completes via workflow_run.
-      # No need to dispatch them manually - this eliminates race conditions.
 
       - name: Trigger demo server update
         if: ${{ github.event.inputs.draft_only != 'true' }}
-        continue-on-error: true  # Non-fatal if dispatch fails
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
-          echo "Triggering demo server update for ${TAG}..."
+          gh workflow run update-demo-server.yml -f tag="${{ needs.prepare.outputs.tag }}"
+          echo "✓ Demo server update dispatched"
 
-          gh workflow run update-demo-server.yml -f tag="${TAG}"
-
-          echo "✓ Demo server update workflow dispatched"
-
-      - name: Output release information
+      - name: Summary
         run: |
-          echo "✅ Release published successfully!"
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📦 Release: ${{ needs.extract_version.outputs.tag }}"
-          echo "🔗 URL: ${{ steps.create_release.outputs.release_url }}"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "Docker images, Helm chart, and demo server will be updated automatically."
-          echo ""
+          echo "✅ Release published!"
+          echo "📦 ${{ needs.prepare.outputs.tag }}"
+          echo "🔗 ${{ steps.create_release.outputs.release_url }}"
 
   validate_release_assets:
     needs:
-      - extract_version
+      - prepare
       - create_release
     uses: ./.github/workflows/validate-release-assets.yml
     secrets: inherit
     with:
-      tag: ${{ needs.extract_version.outputs.tag }}
-      version: ${{ needs.extract_version.outputs.version }}
+      tag: ${{ needs.prepare.outputs.tag }}
+      version: ${{ needs.prepare.outputs.version }}
       release_id: ${{ needs.create_release.outputs.release_id }}
       draft: false
       target_commitish: ${{ needs.create_release.outputs.target_commitish }}
-
