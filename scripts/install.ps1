@@ -2,6 +2,9 @@
 # Usage:
 #   irm http://pulse/install.ps1 | iex
 #   $env:PULSE_URL="..."; $env:PULSE_TOKEN="..."; irm ... | iex
+#
+# Uninstall:
+#   $env:PULSE_UNINSTALL="true"; irm http://pulse/install.ps1 | iex
 
 param (
     [string]$Url = $env:PULSE_URL,
@@ -58,6 +61,9 @@ if (-not $PSBoundParameters.ContainsKey('EnableKubernetes') -and -not [string]::
 }
 if (-not $PSBoundParameters.ContainsKey('Insecure') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_INSECURE_SKIP_VERIFY)) {
     $Insecure = Parse-Bool $env:PULSE_INSECURE_SKIP_VERIFY $Insecure
+}
+if (-not $PSBoundParameters.ContainsKey('Uninstall') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_UNINSTALL)) {
+    $Uninstall = Parse-Bool $env:PULSE_UNINSTALL $Uninstall
 }
 
 # --- Administrator Check ---
