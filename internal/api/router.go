@@ -1211,7 +1211,7 @@ func (r *Router) setupRoutes() {
 	// Auto-register route for setup scripts
 	r.mux.HandleFunc("/api/auto-register", r.configHandlers.HandleAutoRegister)
 	// Discovery endpoint
-	r.mux.HandleFunc("/api/discover", RequireAuth(r.config, r.configHandlers.HandleDiscoverServers))
+	r.mux.HandleFunc("/api/discover", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleDiscoverServers)))
 
 	// Test endpoint for WebSocket notifications
 	r.mux.HandleFunc("/api/test-notification", func(w http.ResponseWriter, req *http.Request) {
@@ -1446,7 +1446,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, r.aiSettingsHandler.HandleGetDismissedFindings))
 
 	// Patrol Autonomy - monitor/approval free, assisted/full require Pro (enforced in handlers)
-	r.mux.HandleFunc("/api/ai/patrol/autonomy", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/ai/patrol/autonomy", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			r.aiSettingsHandler.HandleGetPatrolAutonomy(w, req)
@@ -1455,7 +1455,7 @@ func (r *Router) setupRoutes() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
+	})))
 
 	// Investigation endpoints - viewing and reinvestigation are free, fix execution (reapprove) requires Pro
 	r.mux.HandleFunc("/api/ai/findings/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
@@ -1515,8 +1515,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/incidents/", RequireAuth(r.config, r.aiSettingsHandler.HandleGetIncidentData))
 
 	// AI Chat Sessions - sync across devices (legacy endpoints)
-	r.mux.HandleFunc("/api/ai/chat/sessions", RequireAuth(r.config, r.aiSettingsHandler.HandleListAIChatSessions))
-	r.mux.HandleFunc("/api/ai/chat/sessions/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/ai/chat/sessions", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleListAIChatSessions)))
+	r.mux.HandleFunc("/api/ai/chat/sessions/", RequireAuth(r.config, RequireScope(config.ScopeAIChat, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			r.aiSettingsHandler.HandleGetAIChatSession(w, req)
@@ -1527,12 +1527,12 @@ func (r *Router) setupRoutes() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
+	})))
 
 	// AI chat endpoints
 	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, r.aiHandler.HandleStatus))
-	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, r.aiHandler.HandleChat))
-	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleChat)))
+	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, RequireScope(config.ScopeAIChat, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			r.aiHandler.HandleSessions(w, req)
@@ -1541,8 +1541,8 @@ func (r *Router) setupRoutes() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
-	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeAISessions))
+	})))
+	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.routeAISessions)))
 
 	// AI approval endpoints - for command approval workflow
 	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, r.aiSettingsHandler.HandleListApprovals))

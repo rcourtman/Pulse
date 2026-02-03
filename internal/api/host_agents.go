@@ -300,7 +300,7 @@ func (h *HostAgentHandlers) canReadConfig(record *config.APITokenRecord) bool {
 func (h *HostAgentHandlers) resolveConfigHost(ctx context.Context, hostID string, record *config.APITokenRecord) (models.Host, bool) {
 	state := h.getMonitor(ctx).GetState()
 
-	if record == nil || record.HasScope(config.ScopeHostManage) || record.HasScope(config.ScopeSettingsWrite) {
+	if record == nil || record.HasScope(config.ScopeSettingsWrite) {
 		for _, candidate := range state.Hosts {
 			if candidate.ID == hostID {
 				return candidate, true
@@ -444,7 +444,7 @@ func (h *HostAgentHandlers) ensureHostTokenMatch(w http.ResponseWriter, r *http.
 		return true
 	}
 
-	if record.HasScope(config.ScopeHostManage) || record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeWildcard) {
+	if record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeWildcard) {
 		return true
 	}
 
@@ -466,6 +466,9 @@ func (h *HostAgentHandlers) ensureHostTokenMatch(w http.ResponseWriter, r *http.
 
 // handlePatchConfig updates the server-side config for a host agent.
 func (h *HostAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.Request, hostID string) {
+	if !h.ensureHostTokenMatch(w, r, hostID) {
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	defer r.Body.Close()
 

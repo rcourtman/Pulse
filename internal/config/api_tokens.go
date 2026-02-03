@@ -24,6 +24,7 @@ const (
 	ScopeSettingsRead     = "settings:read"
 	ScopeSettingsWrite    = "settings:write"
 	ScopeAIExecute        = "ai:execute" // Allows executing AI commands and remediation plans
+	ScopeAIChat           = "ai:chat"    // Allows AI chat participation
 	ScopeAgentExec        = "agent:exec" // Allows agent execution WebSocket connections
 )
 
@@ -41,6 +42,7 @@ var AllKnownScopes = []string{
 	ScopeSettingsRead,
 	ScopeSettingsWrite,
 	ScopeAIExecute,
+	ScopeAIChat,
 	ScopeAgentExec,
 }
 
