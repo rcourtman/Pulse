@@ -156,7 +156,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                  overflow-anchor: none prevents browser scroll anchoring from jumping when display toggles. */}
             <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
                     {/* Flex layout - items grow to fill space, max ~4 per row */}
-                    <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full">
+                    <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
                         {/* System Info - always show */}
                         <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">System</div>
@@ -196,7 +196,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Guest Info</div>
                                 <div class="space-y-2">
                                     <Show when={hasOsInfo()}>
-                                        <div class="text-[11px] text-gray-600 dark:text-gray-300">
+                                        <div class="text-[11px] text-gray-600 dark:text-gray-300 truncate" title={`${osName()} ${osVersion()}`.trim()}>
                                             <Show when={osName().length > 0}>
                                                 <span class="font-medium">{osName()}</span>
                                             </Show>
@@ -212,7 +212,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                         <div class="flex flex-wrap gap-1">
                                             <For each={ipAddresses()}>
                                                 {(ip) => (
-                                                    <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200" title={ip}>
+                                                    <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 max-w-full truncate" title={ip}>
                                                         {ip}
                                                     </span>
                                                 )}
@@ -301,18 +301,18 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                             const addresses = iface.addresses ?? [];
                                             const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
                                             return (
-                                                <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700">
-                                                    <div class="flex items-center gap-2 text-[11px] font-medium text-gray-700 dark:text-gray-200">
-                                                        <span class="truncate">{iface.name || 'interface'}</span>
+                                                <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700 overflow-hidden">
+                                                    <div class="flex items-center gap-2 text-[11px] font-medium text-gray-700 dark:text-gray-200 min-w-0">
+                                                        <span class="truncate min-w-0">{iface.name || 'interface'}</span>
                                                         <Show when={iface.mac}>
-                                                            <span class="text-[9px] text-gray-400 dark:text-gray-500 font-normal">{iface.mac}</span>
+                                                            <span class="text-[9px] text-gray-400 dark:text-gray-500 font-normal truncate shrink-0 max-w-[100px]" title={iface.mac}>{iface.mac}</span>
                                                         </Show>
                                                     </div>
                                                     <Show when={addresses.length > 0}>
                                                         <div class="flex flex-wrap gap-1 mt-1">
                                                             <For each={addresses}>
                                                                 {(ip) => (
-                                                                    <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                                                    <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 max-w-full truncate" title={ip}>
                                                                         {ip}
                                                                     </span>
                                                                 )}

@@ -70,26 +70,26 @@ export const HostDrawer: Component<HostDrawerProps> = (props) => {
 
             {/* Overview Tab */}
             <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
-                <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full">
+                <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
                     {/* System Info */}
                     <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                         <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">System</div>
                         <div class="space-y-1.5 text-[11px]">
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Hostname</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200 select-all">{props.host.hostname}</span>
+                            <div class="flex items-center justify-between gap-2 min-w-0">
+                                <span class="text-gray-500 dark:text-gray-400 shrink-0">Hostname</span>
+                                <span class="font-medium text-gray-700 dark:text-gray-200 select-all truncate" title={props.host.hostname}>{props.host.hostname}</span>
                             </div>
                             <div class="flex items-center justify-between">
                                 <span class="text-gray-500 dark:text-gray-400">Platform</span>
                                 <span class="font-medium text-gray-700 dark:text-gray-200 capitalize">{props.host.platform || 'Unknown'}</span>
                             </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">OS</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200">{props.host.osName} {props.host.osVersion}</span>
+                            <div class="flex items-center justify-between gap-2 min-w-0">
+                                <span class="text-gray-500 dark:text-gray-400 shrink-0">OS</span>
+                                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={`${props.host.osName} ${props.host.osVersion}`}>{props.host.osName} {props.host.osVersion}</span>
                             </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Kernel</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200">{props.host.kernelVersion}</span>
+                            <div class="flex items-center justify-between gap-2 min-w-0">
+                                <span class="text-gray-500 dark:text-gray-400 shrink-0">Kernel</span>
+                                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.host.kernelVersion}>{props.host.kernelVersion}</span>
                             </div>
                             <div class="flex items-center justify-between">
                                 <span class="text-gray-500 dark:text-gray-400">Architecture</span>
@@ -132,18 +132,18 @@ export const HostDrawer: Component<HostDrawerProps> = (props) => {
                             <div class="max-h-[140px] overflow-y-auto custom-scrollbar space-y-2">
                                 <For each={props.host.networkInterfaces}>
                                     {(iface) => (
-                                        <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700">
-                                            <div class="flex items-center gap-2 text-[11px] font-medium text-gray-700 dark:text-gray-200">
-                                                <span class="truncate">{iface.name}</span>
+                                        <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700 overflow-hidden">
+                                            <div class="flex items-center gap-2 text-[11px] font-medium text-gray-700 dark:text-gray-200 min-w-0">
+                                                <span class="truncate min-w-0">{iface.name}</span>
                                                 <Show when={iface.mac}>
-                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 font-normal">{iface.mac}</span>
+                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 font-normal truncate shrink-0 max-w-[100px]" title={iface.mac}>{iface.mac}</span>
                                                 </Show>
                                             </div>
                                             <Show when={iface.addresses && iface.addresses.length > 0}>
                                                 <div class="flex flex-wrap gap-1 mt-1">
                                                     <For each={iface.addresses}>
                                                         {(ip) => (
-                                                            <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                                            <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 max-w-full truncate" title={ip}>
                                                                 {ip}
                                                             </span>
                                                         )}

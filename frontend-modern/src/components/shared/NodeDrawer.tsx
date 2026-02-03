@@ -92,22 +92,22 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
 
             {/* Overview Tab */}
             <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
-                <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full">
+                <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
                     {/* System Info */}
                     <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                         <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">System</div>
                         <div class="space-y-1.5 text-[11px]">
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Node</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200 select-all">{props.node.name}</span>
+                            <div class="flex items-center justify-between gap-2 min-w-0">
+                                <span class="text-gray-500 dark:text-gray-400 shrink-0">Node</span>
+                                <span class="font-medium text-gray-700 dark:text-gray-200 select-all truncate" title={props.node.name}>{props.node.name}</span>
                             </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Version</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200">{props.node.pveVersion}</span>
+                            <div class="flex items-center justify-between gap-2 min-w-0">
+                                <span class="text-gray-500 dark:text-gray-400 shrink-0">Version</span>
+                                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.node.pveVersion}>{props.node.pveVersion}</span>
                             </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Kernel</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200">{props.node.kernelVersion}</span>
+                            <div class="flex items-center justify-between gap-2 min-w-0">
+                                <span class="text-gray-500 dark:text-gray-400 shrink-0">Kernel</span>
+                                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.node.kernelVersion}>{props.node.kernelVersion}</span>
                             </div>
                             <Show when={props.node.uptime}>
                                 <div class="flex items-center justify-between">
