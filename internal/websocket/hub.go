@@ -105,17 +105,28 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 	allowedOrigins := h.allowedOrigins
 	h.mu.RUnlock()
 
-	// Determine the actual origin
+	// Determine the actual origin (accounting for proxy headers)
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
 
+	// Check X-Forwarded-Proto or X-Forwarded-Scheme for proxied requests
+	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
+		scheme = normalizeForwardedProto(forwardedProto, scheme)
+	} else if forwardedScheme := r.Header.Get("X-Forwarded-Scheme"); forwardedScheme != "" {
+		scheme = normalizeForwardedProto(forwardedScheme, scheme)
+	}
+
+	// Use X-Forwarded-Host if present (for proxied requests)
 	host := r.Host
+	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
+		host = forwardedHost
+	}
 
 	requestOrigin := scheme + "://" + host
 
-	// Allow same-origin requests (accounting for proxy headers)
+	// Allow same-origin requests
 	if origin == requestOrigin {
 		return true
 	}
