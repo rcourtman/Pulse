@@ -21,8 +21,11 @@ func TestNotificationManagerEmailConfigConcurrency(t *testing.T) {
 	manager.SetGroupingWindow(0)
 	manager.SetCooldown(0)
 
+	// Disable email sending - this test verifies concurrent config updates
+	// don't cause races, not actual email delivery. Enabling email would
+	// trigger network operations with retries that slow down CI.
 	initialConfig := EmailConfig{
-		Enabled:  true,
+		Enabled:  false,
 		SMTPHost: "127.0.0.1",
 		SMTPPort: 2525,
 		From:     "initial@example.com",
@@ -39,7 +42,7 @@ func TestNotificationManagerEmailConfigConcurrency(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < iterations; i++ {
 			cfg := EmailConfig{
-				Enabled:  true,
+				Enabled:  false,
 				SMTPHost: "127.0.0.1",
 				SMTPPort: 2525,
 				From:     fmt.Sprintf("sender-%d@example.com", i),
