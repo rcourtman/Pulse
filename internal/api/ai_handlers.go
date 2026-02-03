@@ -749,8 +749,8 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	}
 	h.investigationMu.Unlock()
 
-	// Get chat service for this org
-	ctx := context.Background()
+	// Get chat service for this org using org-scoped context
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
 	chatSvc := h.chatHandler.GetService(ctx)
 	if chatSvc == nil {
 		log.Warn().Str("orgID", orgID).Msg("Chat service not available for orchestrator")
@@ -2705,13 +2705,27 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 }
 
 // SetAlertProvider sets the alert provider for AI context
+// Sets on both the legacy service and all tenant services to ensure multi-tenant support.
 func (h *AISettingsHandler) SetAlertProvider(ap ai.AlertProvider) {
-	h.GetAIService(context.Background()).SetAlertProvider(ap)
+	h.legacyAIService.SetAlertProvider(ap)
+
+	h.aiServicesMu.RLock()
+	defer h.aiServicesMu.RUnlock()
+	for _, svc := range h.aiServices {
+		svc.SetAlertProvider(ap)
+	}
 }
 
 // SetAlertResolver sets the alert resolver for AI Patrol autonomous alert management
+// Sets on both the legacy service and all tenant services to ensure multi-tenant support.
 func (h *AISettingsHandler) SetAlertResolver(resolver ai.AlertResolver) {
-	h.GetAIService(context.Background()).SetAlertResolver(resolver)
+	h.legacyAIService.SetAlertResolver(resolver)
+
+	h.aiServicesMu.RLock()
+	defer h.aiServicesMu.RUnlock()
+	for _, svc := range h.aiServices {
+		svc.SetAlertResolver(resolver)
+	}
 }
 
 // oauthSessions stores active OAuth sessions (state -> session)

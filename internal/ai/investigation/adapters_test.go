@@ -197,6 +197,7 @@ func newTestChatService(t *testing.T) *chat.Service {
 	setServiceField(t, svc, "sessions", sessions)
 	setServiceField(t, svc, "agenticLoop", agentic)
 	setServiceField(t, svc, "executor", executor)
+	setServiceField(t, svc, "provider", provider)
 	setServiceField(t, svc, "started", true)
 
 	return svc

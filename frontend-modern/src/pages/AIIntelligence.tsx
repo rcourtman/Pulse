@@ -742,9 +742,8 @@ export function AIIntelligence() {
               </div>
             </div>
 
-            {/* Advanced Settings Gear — hidden for free users since all settings are Pro-only */}
-            <Show when={!autoFixLocked() || !alertAnalysisLocked()}>
-              <div class="relative" ref={advancedSettingsRef}>
+            {/* Advanced Settings Gear — visible to all users with gentle Pro upgrade hints */}
+            <div class="relative" ref={advancedSettingsRef}>
                 <button
                   onClick={() => setShowAdvancedSettings(!showAdvancedSettings())}
                   disabled={!patrolEnabledLocal()}
@@ -847,7 +846,6 @@ export function AIIntelligence() {
                   </div>
                 </Show>
               </div>
-            </Show>
           </div>
         </div>
       </div>
