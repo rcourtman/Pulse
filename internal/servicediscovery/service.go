@@ -15,6 +15,59 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// sensitiveKeyPatterns defines patterns that indicate a label/env key might contain secrets.
+// These patterns are case-insensitive and match if any part of the key contains them.
+var sensitiveKeyPatterns = []string{
+	"password", "passwd", "pwd",
+	"secret",
+	"key", "apikey", "api_key",
+	"token",
+	"credential", "cred",
+	"auth",
+	"private",
+	"cert",
+}
+
+// filterSensitiveLabels removes or redacts labels that may contain sensitive values.
+// It returns a new map with sensitive values replaced with "[REDACTED]".
+// Keys are checked case-insensitively for sensitive patterns.
+func filterSensitiveLabels(labels map[string]string) map[string]string {
+	if labels == nil {
+		return nil
+	}
+
+	filtered := make(map[string]string, len(labels))
+	redactedCount := 0
+
+	for key, value := range labels {
+		keyLower := strings.ToLower(key)
+		isSensitive := false
+
+		for _, pattern := range sensitiveKeyPatterns {
+			if strings.Contains(keyLower, pattern) {
+				isSensitive = true
+				break
+			}
+		}
+
+		if isSensitive {
+			filtered[key] = "[REDACTED]"
+			redactedCount++
+		} else {
+			filtered[key] = value
+		}
+	}
+
+	if redactedCount > 0 {
+		log.Debug().
+			Int("redacted_count", redactedCount).
+			Int("total_labels", len(labels)).
+			Msg("Redacted sensitive labels before AI analysis")
+	}
+
+	return filtered
+}
+
 // StateProvider provides access to the current infrastructure state.
 type StateProvider interface {
 	GetState() StateSnapshot
@@ -1223,7 +1276,8 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 					if c.Name == req.ResourceID {
 						metadata["image"] = c.Image
 						metadata["status"] = c.Status
-						metadata["labels"] = c.Labels
+						// Filter sensitive labels before sending to AI
+						metadata["labels"] = filterSensitiveLabels(c.Labels)
 						break
 					}
 				}
@@ -1272,7 +1326,8 @@ func (s *Service) buildMetadataAnalysisPrompt(c DockerContainer, host DockerHost
 	}
 
 	if len(c.Labels) > 0 {
-		info["labels"] = c.Labels
+		// Filter sensitive labels before sending to AI
+		info["labels"] = filterSensitiveLabels(c.Labels)
 	}
 
 	if len(c.Mounts) > 0 {

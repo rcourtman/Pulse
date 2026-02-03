@@ -191,6 +191,21 @@ type DiscoveryProgress struct {
 	Error           string          `json:"error,omitempty"`
 }
 
+// AIProviderInfo describes the AI provider being used for discovery analysis.
+type AIProviderInfo struct {
+	Provider string `json:"provider"` // e.g., "anthropic", "openai", "ollama"
+	Model    string `json:"model"`    // e.g., "claude-haiku-4-5", "gpt-4o"
+	IsLocal  bool   `json:"is_local"` // true for ollama (local models)
+	Label    string `json:"label"`    // Human-readable label, e.g., "Local (Ollama)" or "Cloud (Anthropic)"
+}
+
+// DiscoveryInfo provides metadata about the discovery system configuration.
+type DiscoveryInfo struct {
+	AIProvider        *AIProviderInfo    `json:"ai_provider,omitempty"`        // Current AI provider info
+	Commands          []DiscoveryCommand `json:"commands,omitempty"`           // Commands that will be run
+	CommandCategories []string           `json:"command_categories,omitempty"` // Unique categories of commands
+}
+
 // UpdateNotesRequest represents a request to update user notes.
 type UpdateNotesRequest struct {
 	UserNotes   string            `json:"user_notes"`

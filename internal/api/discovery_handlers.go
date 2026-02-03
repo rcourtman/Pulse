@@ -11,12 +11,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// AIConfigProvider provides access to the current AI configuration.
+// This allows discovery handlers to show AI provider info without tight coupling.
+type AIConfigProvider interface {
+	GetAIConfig() *config.AIConfig
+}
+
 // Note: adminBypassEnabled() is defined in auth.go
 
 // DiscoveryHandlers handles AI-powered infrastructure discovery endpoints.
 type DiscoveryHandlers struct {
-	service *servicediscovery.Service
-	config  *config.Config // For admin status checks
+	service          *servicediscovery.Service
+	config           *config.Config // For admin status checks
+	aiConfigProvider AIConfigProvider
 }
 
 // NewDiscoveryHandlers creates new discovery handlers.
@@ -30,6 +37,59 @@ func NewDiscoveryHandlers(service *servicediscovery.Service, cfg *config.Config)
 // SetService sets the discovery service (used for late initialization after routes are registered).
 func (h *DiscoveryHandlers) SetService(service *servicediscovery.Service) {
 	h.service = service
+}
+
+// SetAIConfigProvider sets the AI config provider for showing AI provider info.
+func (h *DiscoveryHandlers) SetAIConfigProvider(provider AIConfigProvider) {
+	h.aiConfigProvider = provider
+}
+
+// getAIProviderInfo returns info about the current AI provider for discovery.
+func (h *DiscoveryHandlers) getAIProviderInfo() *servicediscovery.AIProviderInfo {
+	if h.aiConfigProvider == nil {
+		return nil
+	}
+
+	aiCfg := h.aiConfigProvider.GetAIConfig()
+	if aiCfg == nil || !aiCfg.Enabled {
+		return nil
+	}
+
+	// Get the discovery model
+	model := aiCfg.GetDiscoveryModel()
+	if model == "" {
+		return nil
+	}
+
+	// Parse the model to get provider
+	provider, modelName := config.ParseModelString(model)
+
+	// Determine if local
+	isLocal := provider == config.AIProviderOllama
+
+	// Build human-readable label
+	var label string
+	switch provider {
+	case config.AIProviderOllama:
+		label = "Local (Ollama)"
+	case config.AIProviderAnthropic:
+		label = "Cloud (Anthropic)"
+	case config.AIProviderOpenAI:
+		label = "Cloud (OpenAI)"
+	case config.AIProviderDeepSeek:
+		label = "Cloud (DeepSeek)"
+	case config.AIProviderGemini:
+		label = "Cloud (Google Gemini)"
+	default:
+		label = "Cloud (" + provider + ")"
+	}
+
+	return &servicediscovery.AIProviderInfo{
+		Provider: provider,
+		Model:    modelName,
+		IsLocal:  isLocal,
+		Label:    label,
+	}
 }
 
 // writeDiscoveryJSON writes a JSON response.
@@ -491,4 +551,27 @@ func (h *DiscoveryHandlers) HandleListByHost(w http.ResponseWriter, r *http.Requ
 		"total":       len(summaries),
 		"host":        hostID,
 	})
+}
+
+// HandleGetInfo handles GET /api/discovery/info/{type}
+// Returns metadata about the discovery process: AI provider info and commands that will run.
+func (h *DiscoveryHandlers) HandleGetInfo(w http.ResponseWriter, r *http.Request) {
+	// Parse resource type from path
+	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/info/")
+	resourceType := servicediscovery.ResourceType(path)
+
+	// Get commands for this resource type
+	commands := servicediscovery.GetCommandsForResource(resourceType)
+	categories := servicediscovery.GetCommandCategories(resourceType)
+
+	// Get AI provider info
+	aiProvider := h.getAIProviderInfo()
+
+	info := servicediscovery.DiscoveryInfo{
+		AIProvider:        aiProvider,
+		Commands:          commands,
+		CommandCategories: categories,
+	}
+
+	writeDiscoveryJSON(w, info)
 }

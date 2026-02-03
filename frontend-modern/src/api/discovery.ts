@@ -7,6 +7,7 @@ import type {
     DiscoveryStatus,
     TriggerDiscoveryRequest,
     UpdateNotesRequest,
+    DiscoveryInfo,
 } from '../types/discovery';
 
 const API_BASE = '/api/discovery';
@@ -160,6 +161,17 @@ export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
     const response = await apiFetch(`${API_BASE}/status`);
     if (!response.ok) {
         throw new Error('Failed to get discovery status');
+    }
+    return response.json();
+}
+
+/**
+ * Get discovery info for a resource type (AI provider info, commands that will run)
+ */
+export async function getDiscoveryInfo(resourceType: ResourceType): Promise<DiscoveryInfo> {
+    const response = await apiFetch(`${API_BASE}/info/${resourceType}`);
+    if (!response.ok) {
+        throw new Error('Failed to get discovery info');
     }
     return response.json();
 }

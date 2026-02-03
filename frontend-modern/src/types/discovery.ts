@@ -141,3 +141,28 @@ export interface UpdateNotesRequest {
 export interface UpdateSettingsRequest {
     max_discovery_age_days?: number;  // Days before rediscovery (default 30)
 }
+
+// AI provider information for discovery transparency
+export interface AIProviderInfo {
+    provider: string;    // e.g., "anthropic", "openai", "ollama"
+    model: string;       // e.g., "claude-haiku-4-5", "gpt-4o"
+    is_local: boolean;   // true for ollama (local models)
+    label: string;       // Human-readable label, e.g., "Local (Ollama)" or "Cloud (Anthropic)"
+}
+
+// Discovery command information
+export interface DiscoveryCommand {
+    name: string;        // Human-readable name
+    command: string;     // The actual command
+    description: string; // What this command discovers
+    categories: string[]; // Categories this provides info for
+    timeout?: number;    // Timeout in seconds
+    optional?: boolean;  // If true, failure won't stop discovery
+}
+
+// Discovery info metadata (AI provider, commands that will run)
+export interface DiscoveryInfo {
+    ai_provider?: AIProviderInfo;      // Current AI provider info
+    commands?: DiscoveryCommand[];     // Commands that will be run
+    command_categories?: string[];     // Unique categories of commands
+}

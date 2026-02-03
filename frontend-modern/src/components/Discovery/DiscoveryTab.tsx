@@ -2,6 +2,7 @@ import { Component, Show, For, createSignal, createResource, onCleanup, createEf
 import type { ResourceType, DiscoveryProgress } from '../../types/discovery';
 import {
     getDiscovery,
+    getDiscoveryInfo,
     triggerDiscovery,
     updateDiscoveryNotes,
     formatDiscoveryAge,
@@ -74,6 +75,20 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     const [scanError, setScanError] = createSignal<string | null>(null);
     const [scanProgress, setScanProgress] = createSignal<DiscoveryProgress | null>(null);
     const [scanSuccess, setScanSuccess] = createSignal(false);
+    const [showCommandsPreview, setShowCommandsPreview] = createSignal(false);
+    const [showExplanation, setShowExplanation] = createSignal(true);
+
+    // Fetch discovery info (AI provider, commands) - used for pre-scan transparency
+    const [discoveryInfo] = createResource(
+        () => props.resourceType,
+        async (type) => {
+            try {
+                return await getDiscoveryInfo(type);
+            } catch {
+                return null;
+            }
+        }
+    );
 
     // Fetch discovery data
     const [discovery, { refetch, mutate }] = createResource(
@@ -209,6 +224,92 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
     return (
         <div class="space-y-4">
+            {/* AI Provider Badge - Always visible when AI is configured */}
+            <Show when={discoveryInfo()?.ai_provider}>
+                <div class="flex items-center gap-2">
+                    <Show
+                        when={discoveryInfo()?.ai_provider?.is_local}
+                        fallback={
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                {/* Cloud icon */}
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                                </svg>
+                                Analysis: {discoveryInfo()?.ai_provider?.label}
+                            </span>
+                        }
+                    >
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                            {/* Server/local icon */}
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                            </svg>
+                            Analysis: {discoveryInfo()?.ai_provider?.label}
+                        </span>
+                    </Show>
+                </div>
+            </Show>
+
+            {/* "What Discovery Does" Explanation - Shown when no discovery yet */}
+            <Show when={!discovery() && !discovery.loading && showExplanation()}>
+                <div class="rounded border border-amber-200 bg-amber-50/80 p-3 shadow-sm dark:border-amber-800/50 dark:bg-amber-900/20">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="flex items-start gap-2.5">
+                            <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div class="text-xs text-amber-800 dark:text-amber-200">
+                                <p class="font-medium mb-1">What Discovery Does</p>
+                                <p class="text-amber-700 dark:text-amber-300">
+                                    Discovery runs read-only commands to gather system information (processes, ports, services),
+                                    then uses AI to analyze and identify what's running. No data is stored externally - only the analysis result is saved locally.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setShowExplanation(false)}
+                            class="text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex-shrink-0"
+                            title="Dismiss"
+                        >
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </Show>
+
+            {/* Commands Preview - Expandable before first scan */}
+            <Show when={!discovery() && !discovery.loading && discoveryInfo()?.commands && discoveryInfo()!.commands!.length > 0}>
+                <details class="rounded border border-gray-200 bg-white/70 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30" open={showCommandsPreview()}>
+                    <summary
+                        class="p-2.5 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 flex items-center gap-2"
+                        onClick={(e) => { e.preventDefault(); setShowCommandsPreview(!showCommandsPreview()); }}
+                    >
+                        <svg class={`w-3.5 h-3.5 transition-transform ${showCommandsPreview() ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        Commands that will run ({discoveryInfo()?.commands?.length || 0})
+                    </summary>
+                    <Show when={showCommandsPreview()}>
+                        <div class="px-3 pb-3 space-y-2">
+                            <For each={discoveryInfo()?.commands}>
+                                {(cmd) => (
+                                    <div class="text-xs">
+                                        <div class="flex items-start gap-2">
+                                            <code class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-mono break-all">
+                                                {cmd.command}
+                                            </code>
+                                        </div>
+                                        <p class="text-gray-500 dark:text-gray-400 mt-0.5 pl-0.5">{cmd.description}</p>
+                                    </div>
+                                )}
+                            </For>
+                        </div>
+                    </Show>
+                </details>
+            </Show>
+
             {/* Loading state */}
             <Show when={discovery.loading}>
                 <div class="flex items-center justify-center py-8">
@@ -560,6 +661,42 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                     </p>
                                 </div>
                             </details>
+                        </Show>
+
+                        {/* Scan Details / Raw Command Outputs (collapsible) */}
+                        <Show when={d().raw_command_output && Object.keys(d().raw_command_output!).length > 0}>
+                            <details class="rounded border border-gray-200 bg-white/70 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                    Scan Details ({Object.keys(d().raw_command_output!).length} commands)
+                                </summary>
+                                <div class="px-3 pb-3 space-y-3">
+                                    <For each={Object.entries(d().raw_command_output!)}>
+                                        {([cmdName, output]) => (
+                                            <div>
+                                                <div class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    {cmdName}
+                                                </div>
+                                                <pre class="text-[10px] bg-gray-100 dark:bg-gray-800 rounded p-2 overflow-x-auto text-gray-600 dark:text-gray-400 max-h-32 overflow-y-auto">
+                                                    {output || '(no output)'}
+                                                </pre>
+                                            </div>
+                                        )}
+                                    </For>
+                                </div>
+                            </details>
+                        </Show>
+
+                        {/* Commands Run (for non-admin users who can't see full output) */}
+                        <Show when={!d().raw_command_output && d().scan_duration && d().scan_duration > 0}>
+                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-1">
+                                    Scan Info
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                    Scan completed in {(d().scan_duration! / 1000).toFixed(1)}s.
+                                    Full scan details are available to administrators.
+                                </p>
+                            </div>
                         </Show>
 
                         {/* Web Interface URL */}

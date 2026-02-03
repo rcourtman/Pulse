@@ -1505,6 +1505,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/discovery", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListDiscoveries)))
 	r.mux.HandleFunc("/api/discovery/status", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleGetStatus)))
 	r.mux.HandleFunc("/api/discovery/settings", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, r.discoveryHandlers.HandleUpdateSettings)))
+	r.mux.HandleFunc("/api/discovery/info/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleGetInfo)))
 	r.mux.HandleFunc("/api/discovery/type/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListByType)))
 	r.mux.HandleFunc("/api/discovery/host/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		// Route based on method and path depth:
@@ -1988,6 +1989,13 @@ func (r *Router) SetDiscoveryService(svc *servicediscovery.Service) {
 	}
 }
 
+// SetDiscoveryAIConfigProvider sets the AI config provider for showing AI provider info in discovery.
+func (r *Router) SetDiscoveryAIConfigProvider(provider AIConfigProvider) {
+	if r.discoveryHandlers != nil {
+		r.discoveryHandlers.SetAIConfigProvider(provider)
+	}
+}
+
 // wsHubAdapter adapts websocket.Hub to the servicediscovery.WSBroadcaster interface.
 type wsHubAdapter struct {
 	hub *websocket.Hub
@@ -2253,6 +2261,8 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				r.SetDiscoveryService(discoveryService)
 				log.Info().Msg("Discovery: Service wired to API handlers")
 			}
+			// Wire up AI config provider for showing AI provider info in discovery UI
+			r.SetDiscoveryAIConfigProvider(aiService)
 		}
 	}
 }
@@ -2602,7 +2612,9 @@ func (r *Router) wireChatServiceToAI() {
 		return
 	}
 
-	ctx := context.Background()
+	// Use default org context for legacy service wiring
+	// Multi-tenant orgs get their services wired via setupInvestigationOrchestrator
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
 	chatSvc := r.aiHandler.GetService(ctx)
 	if chatSvc == nil {
 		return
@@ -2635,7 +2647,8 @@ func (r *Router) wireAIChatProviders() {
 		return
 	}
 
-	service := r.aiHandler.GetService(context.Background())
+	// Use default org context for legacy service wiring
+	service := r.aiHandler.GetService(context.WithValue(context.Background(), OrgIDContextKey, "default"))
 	if service == nil {
 		return
 	}

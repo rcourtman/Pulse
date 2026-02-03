@@ -35,12 +35,12 @@ func shellQuote(s string) string {
 
 // DiscoveryCommand represents a command to run during discovery.
 type DiscoveryCommand struct {
-	Name        string   // Human-readable name
-	Command     string   // The command template
-	Description string   // What this discovers
-	Categories  []string // What categories of info this provides
-	Timeout     int      // Timeout in seconds (0 = default)
-	Optional    bool     // If true, don't fail if command fails
+	Name        string   `json:"name"`        // Human-readable name
+	Command     string   `json:"command"`     // The command template
+	Description string   `json:"description"` // What this discovers
+	Categories  []string `json:"categories"`  // What categories of info this provides
+	Timeout     int      `json:"timeout"`     // Timeout in seconds (0 = default)
+	Optional    bool     `json:"optional"`    // If true, don't fail if command fails
 }
 
 // CommandSet represents a set of commands for a resource type.
@@ -523,4 +523,41 @@ func FormatCLIAccess(resourceType ResourceType, vmid, containerName, namespace, 
 	result = strings.ReplaceAll(result, "{pod}", podName)
 
 	return result
+}
+
+// GetCommandCategories returns a unique sorted list of all categories for a resource type.
+func GetCommandCategories(resourceType ResourceType) []string {
+	commands := GetCommandsForResource(resourceType)
+	categorySet := make(map[string]bool)
+	for _, cmd := range commands {
+		for _, cat := range cmd.Categories {
+			categorySet[cat] = true
+		}
+	}
+
+	categories := make([]string, 0, len(categorySet))
+	for cat := range categorySet {
+		categories = append(categories, cat)
+	}
+
+	// Sort for consistent ordering
+	for i := 0; i < len(categories)-1; i++ {
+		for j := i + 1; j < len(categories); j++ {
+			if categories[i] > categories[j] {
+				categories[i], categories[j] = categories[j], categories[i]
+			}
+		}
+	}
+
+	return categories
+}
+
+// GetCommandSummary returns a human-readable list of commands for a resource type.
+func GetCommandSummary(resourceType ResourceType) []string {
+	commands := GetCommandsForResource(resourceType)
+	summaries := make([]string, 0, len(commands))
+	for _, cmd := range commands {
+		summaries = append(summaries, cmd.Command)
+	}
+	return summaries
 }

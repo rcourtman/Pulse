@@ -29,6 +29,167 @@ func (errorAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (st
 	return "", context.Canceled
 }
 
+func TestFilterSensitiveLabels(t *testing.T) {
+	tests := []struct {
+		name     string
+		labels   map[string]string
+		wantKeys map[string]string // expected values (use "[REDACTED]" for sensitive ones)
+	}{
+		{
+			name:     "nil labels",
+			labels:   nil,
+			wantKeys: nil,
+		},
+		{
+			name:     "empty labels",
+			labels:   map[string]string{},
+			wantKeys: map[string]string{},
+		},
+		{
+			name: "safe labels only",
+			labels: map[string]string{
+				"app":     "myapp",
+				"version": "1.0.0",
+				"env":     "production",
+			},
+			wantKeys: map[string]string{
+				"app":     "myapp",
+				"version": "1.0.0",
+				"env":     "production",
+			},
+		},
+		{
+			name: "redacts PASSWORD labels",
+			labels: map[string]string{
+				"app":            "myapp",
+				"DB_PASSWORD":    "super-secret",
+				"mysql_password": "another-secret",
+				"PASSWORD_FILE":  "/secrets/pass",
+			},
+			wantKeys: map[string]string{
+				"app":            "myapp",
+				"DB_PASSWORD":    "[REDACTED]",
+				"mysql_password": "[REDACTED]",
+				"PASSWORD_FILE":  "[REDACTED]",
+			},
+		},
+		{
+			name: "redacts SECRET labels",
+			labels: map[string]string{
+				"app":            "myapp",
+				"AWS_SECRET_KEY": "secret123",
+				"client_secret":  "xyz",
+			},
+			wantKeys: map[string]string{
+				"app":            "myapp",
+				"AWS_SECRET_KEY": "[REDACTED]",
+				"client_secret":  "[REDACTED]",
+			},
+		},
+		{
+			name: "redacts TOKEN labels",
+			labels: map[string]string{
+				"app":          "myapp",
+				"ACCESS_TOKEN": "tok_123",
+				"oauth_token":  "tok_456",
+			},
+			wantKeys: map[string]string{
+				"app":          "myapp",
+				"ACCESS_TOKEN": "[REDACTED]",
+				"oauth_token":  "[REDACTED]",
+			},
+		},
+		{
+			name: "redacts API KEY labels",
+			labels: map[string]string{
+				"app":            "myapp",
+				"API_KEY":        "key123",
+				"openai_apikey":  "sk-123",
+				"stripe_api_key": "sk_live_123",
+			},
+			wantKeys: map[string]string{
+				"app":            "myapp",
+				"API_KEY":        "[REDACTED]",
+				"openai_apikey":  "[REDACTED]",
+				"stripe_api_key": "[REDACTED]",
+			},
+		},
+		{
+			name: "redacts CREDENTIAL labels",
+			labels: map[string]string{
+				"app":            "myapp",
+				"DB_CREDENTIALS": "user:pass",
+				"admin_cred":     "admin123",
+			},
+			wantKeys: map[string]string{
+				"app":            "myapp",
+				"DB_CREDENTIALS": "[REDACTED]",
+				"admin_cred":     "[REDACTED]",
+			},
+		},
+		{
+			name: "redacts AUTH labels",
+			labels: map[string]string{
+				"app":        "myapp",
+				"auth_code":  "abc123",
+				"BASIC_AUTH": "dXNlcjpwYXNz",
+			},
+			wantKeys: map[string]string{
+				"app":        "myapp",
+				"auth_code":  "[REDACTED]",
+				"BASIC_AUTH": "[REDACTED]",
+			},
+		},
+		{
+			name: "mixed sensitive and safe labels",
+			labels: map[string]string{
+				"app":             "myapp",
+				"version":         "2.0",
+				"maintainer":      "team@example.com",
+				"DB_PASSWORD":     "secret",
+				"API_KEY":         "key123",
+				"prometheus_port": "9090",
+			},
+			wantKeys: map[string]string{
+				"app":             "myapp",
+				"version":         "2.0",
+				"maintainer":      "team@example.com",
+				"DB_PASSWORD":     "[REDACTED]",
+				"API_KEY":         "[REDACTED]",
+				"prometheus_port": "9090",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := filterSensitiveLabels(tt.labels)
+
+			if tt.wantKeys == nil {
+				if got != nil {
+					t.Errorf("filterSensitiveLabels() = %v, want nil", got)
+				}
+				return
+			}
+
+			if len(got) != len(tt.wantKeys) {
+				t.Errorf("filterSensitiveLabels() returned %d labels, want %d", len(got), len(tt.wantKeys))
+			}
+
+			for k, wantV := range tt.wantKeys {
+				gotV, ok := got[k]
+				if !ok {
+					t.Errorf("filterSensitiveLabels() missing key %q", k)
+					continue
+				}
+				if gotV != wantV {
+					t.Errorf("filterSensitiveLabels()[%q] = %q, want %q", k, gotV, wantV)
+				}
+			}
+		})
+	}
+}
+
 type stubStateProvider struct {
 	state StateSnapshot
 }
