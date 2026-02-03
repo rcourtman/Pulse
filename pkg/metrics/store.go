@@ -541,9 +541,11 @@ func (s *Store) selectTier(duration time.Duration) Tier {
 func (s *Store) tierFallbacks(duration time.Duration) []Tier {
 	switch s.selectTier(duration) {
 	case TierRaw:
-		return []Tier{TierRaw}
+		// Fall back to coarser tiers when raw is empty (e.g., mock mode with seeded data)
+		return []Tier{TierRaw, TierMinute, TierHourly}
 	case TierMinute:
-		return []Tier{TierMinute, TierRaw}
+		// Fall back to coarser tiers when minute is empty (e.g., mock mode with seeded data)
+		return []Tier{TierMinute, TierRaw, TierHourly}
 	case TierHourly:
 		return []Tier{TierHourly, TierMinute, TierRaw}
 	case TierDaily:
