@@ -5010,13 +5010,21 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	if authCode != "" {
 		matchedAPIToken := false
 		if h.getConfig(r.Context()).HasAPITokens() {
-			if _, ok := h.getConfig(r.Context()).ValidateAPIToken(authCode); ok {
-				authenticated = true
-				matchedAPIToken = true
-				log.Info().
-					Str("type", req.Type).
-					Str("host", req.Host).
-					Msg("Auto-register authenticated via direct API token")
+			if record, ok := h.getConfig(r.Context()).ValidateAPIToken(authCode); ok {
+				// Require settings:write scope for auto-registration
+				if record.HasScope(config.ScopeSettingsWrite) {
+					authenticated = true
+					matchedAPIToken = true
+					log.Info().
+						Str("type", req.Type).
+						Str("host", req.Host).
+						Msg("Auto-register authenticated via direct API token")
+				} else {
+					log.Warn().
+						Str("type", req.Type).
+						Str("host", req.Host).
+						Msg("Auto-register rejected: API token missing settings:write scope")
+				}
 			}
 		}
 
@@ -5077,9 +5085,13 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	// If not authenticated via setup code, check API token if configured
 	if !authenticated && h.getConfig(r.Context()).HasAPITokens() {
 		apiToken := r.Header.Get("X-API-Token")
-		if _, ok := h.getConfig(r.Context()).ValidateAPIToken(apiToken); ok {
-			authenticated = true
-			log.Info().Msg("Auto-register authenticated via API token")
+		if record, ok := h.getConfig(r.Context()).ValidateAPIToken(apiToken); ok {
+			if record.HasScope(config.ScopeSettingsWrite) {
+				authenticated = true
+				log.Info().Msg("Auto-register authenticated via API token")
+			} else {
+				log.Warn().Msg("Auto-register rejected: API token missing settings:write scope")
+			}
 		}
 	}
 
@@ -5101,8 +5113,12 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 
 	// Log source IP for security auditing
 	clientIP := r.RemoteAddr
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		clientIP = forwarded
+	// Only trust X-Forwarded-For if request comes from a trusted proxy
+	peerIP := extractRemoteIP(clientIP)
+	if isTrustedProxyIP(peerIP) {
+		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+			clientIP = forwarded
+		}
 	}
 	log.Info().Str("clientIP", clientIP).Msg("Auto-register request from")
 

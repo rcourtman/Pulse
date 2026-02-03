@@ -301,6 +301,12 @@ func (m *Monitor) getDockerCommandPayload(hostID string) (map[string]any, *model
 		cmd.status.UpdatedAt = now
 		cmd.status.FailureReason = "command expired before agent acknowledged it"
 		m.state.SetDockerHostCommand(hostID, &cmd.status)
+
+		// If this was a stop command (uninstall), clear the pending flag so the host isn't stuck
+		if cmd.status.Type == DockerCommandTypeStop {
+			m.state.SetDockerHostPendingUninstall(hostID, false)
+		}
+
 		log.Warn().
 			Str("dockerHostID", hostID).
 			Str("commandID", cmd.status.ID).

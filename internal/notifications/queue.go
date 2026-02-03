@@ -248,7 +248,7 @@ func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueSta
 
 	now := time.Now().Unix()
 	var completedAt *int64
-	if status == QueueStatusSent || status == QueueStatusFailed || status == QueueStatusDLQ {
+	if status == QueueStatusSent || status == QueueStatusFailed || status == QueueStatusDLQ || status == QueueStatusCancelled {
 		completedAt = &now
 	}
 
@@ -674,8 +674,8 @@ func (nq *NotificationQueue) performCleanup() {
 	completedCutoff := time.Now().Add(-7 * 24 * time.Hour).Unix()
 	dlqCutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
 
-	// Clean completed/sent/failed
-	query := `DELETE FROM notification_queue WHERE status IN ('sent', 'failed') AND completed_at < ?`
+	// Clean completed/sent/failed/cancelled
+	query := `DELETE FROM notification_queue WHERE status IN ('sent', 'failed', 'cancelled') AND completed_at < ?`
 	result, err := nq.db.Exec(query, completedCutoff)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to cleanup old notifications")

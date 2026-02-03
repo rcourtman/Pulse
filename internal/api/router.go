@@ -251,7 +251,7 @@ func (r *Router) setupRoutes() {
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant)
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
-	r.reportingHandlers = NewReportingHandlers()
+	r.reportingHandlers = NewReportingHandlers(r.mtMonitor)
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacHandlers := NewRBACHandlers(r.config)
 
@@ -3907,9 +3907,11 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 		return false
 	}
 
-	if isDirectLoopbackRequest(req) {
-		return true
-	}
+	// Security fix: Do not auto-trust loopback requests for public URL capture.
+	// We require authentication even for loopback to prevent "poisoning" attacks.
+	// if isDirectLoopbackRequest(req) {
+	// 	return true
+	// }
 
 	return isRequestAuthenticated(cfg, req)
 }
@@ -4572,52 +4574,52 @@ func (r *Router) handleResetLockout(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !CheckAuth(r.config, w, req) {
-		return
-	}
-	if !ensureSettingsWriteScope(w, req) {
-		return
-	}
+	// Use RequireAdmin to ensure proper admin checks (including proxy auth) for session users
+	RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureSettingsWriteScope(w, req) {
+			return
+		}
 
-	// Parse request
-	var resetReq struct {
-		Identifier string `json:"identifier"` // Can be username or IP
-	}
+		// Parse request
+		var resetReq struct {
+			Identifier string `json:"identifier"` // Can be username or IP
+		}
 
-	if err := json.NewDecoder(req.Body).Decode(&resetReq); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request",
-			"Invalid request body", nil)
-		return
-	}
+		if err := json.NewDecoder(req.Body).Decode(&resetReq); err != nil {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_request",
+				"Invalid request body", nil)
+			return
+		}
 
-	if resetReq.Identifier == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_identifier",
-			"Identifier (username or IP) is required", nil)
-		return
-	}
+		if resetReq.Identifier == "" {
+			writeErrorResponse(w, http.StatusBadRequest, "missing_identifier",
+				"Identifier (username or IP) is required", nil)
+			return
+		}
 
-	// Reset the lockout
-	ResetLockout(resetReq.Identifier)
+		// Reset the lockout
+		ResetLockout(resetReq.Identifier)
 
-	// Also clear failed login attempts
-	ClearFailedLogins(resetReq.Identifier)
+		// Also clear failed login attempts
+		ClearFailedLogins(resetReq.Identifier)
 
-	// Audit log the reset
-	LogAuditEventForTenant(GetOrgID(req.Context()), "lockout_reset", "admin", GetClientIP(req), req.URL.Path, true,
-		fmt.Sprintf("Lockout reset for: %s", resetReq.Identifier))
+		// Audit log the reset
+		LogAuditEventForTenant(GetOrgID(req.Context()), "lockout_reset", "admin", GetClientIP(req), req.URL.Path, true,
+			fmt.Sprintf("Lockout reset for: %s", resetReq.Identifier))
 
-	log.Info().
-		Str("identifier", resetReq.Identifier).
-		Str("reset_by", "admin").
-		Str("ip", GetClientIP(req)).
-		Msg("Account lockout manually reset")
+		log.Info().
+			Str("identifier", resetReq.Identifier).
+			Str("reset_by", "admin").
+			Str("ip", GetClientIP(req)).
+			Msg("Account lockout manually reset")
 
-	// Return success
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": fmt.Sprintf("Lockout reset for %s", resetReq.Identifier),
-	})
+		// Return success
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": fmt.Sprintf("Lockout reset for %s", resetReq.Identifier),
+		})
+	})(w, req)
 }
 
 // handleState handles state requests
