@@ -80,6 +80,7 @@ const UnifiedBackups: Component = () => {
     return hasPBSViaPassthrough() && !hasDirectPBS() && !pbsBannerDismissed();
   });
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
+  const [selectedNodeType, setSelectedNodeType] = createSignal<'pve' | 'pbs' | null>(null);
   const [typeFilter, setTypeFilter] = createSignal<'all' | FilterableGuestType>('all');
   const [backupTypeFilter, setBackupTypeFilter] = createSignal<'all' | BackupType>('all');
   const [statusFilter, setStatusFilter] = createSignal<'all' | 'verified' | 'unverified'>('all');
@@ -625,9 +626,16 @@ const UnifiedBackups: Component = () => {
 
     // Node selection filter using both instance and node name for uniqueness
     if (nodeFilter) {
-      const node = state.nodes?.find((n) => n.id === nodeFilter);
-      if (node) {
-        data = data.filter((item) => item.instance === node.instance && item.node === node.name);
+      const nodeType = selectedNodeType();
+      if (nodeType === 'pbs') {
+        // PBS instance selected - filter by instance name
+        data = data.filter((item) => item.instance === nodeFilter);
+      } else {
+        // PVE node selected - filter by instance and node name
+        const node = state.nodes?.find((n) => n.id === nodeFilter);
+        if (node) {
+          data = data.filter((item) => item.instance === node.instance && item.node === node.name);
+        }
       }
     }
 
@@ -918,6 +926,7 @@ const UnifiedBackups: Component = () => {
   const resetFilters = () => {
     setSearchTerm('');
     setSelectedNode(null);
+    setSelectedNodeType(null);
     setIsSearchLocked(false);
     setTypeFilter('all');
     setBackupTypeFilter('all');
@@ -1181,8 +1190,9 @@ const UnifiedBackups: Component = () => {
       <UnifiedNodeSelector
         currentTab="backups"
         globalTemperatureMonitoringEnabled={state.temperatureMonitoringEnabled}
-        onNodeSelect={(nodeId) => {
+        onNodeSelect={(nodeId, nodeType) => {
           setSelectedNode(nodeId);
+          setSelectedNodeType(nodeType ?? null);
         }}
         onNamespaceSelect={(namespaceFilter) => {
           setSearchTerm(namespaceFilter);
