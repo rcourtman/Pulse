@@ -757,6 +757,27 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         </button>
                                     </Show>
                                 </div>
+                                {/* Suggested URL from discovery */}
+                                <Show when={d().suggested_url && !props.customUrl}>
+                                    <div class="mt-2 p-2 rounded bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800/50">
+                                        <div class="text-[10px] font-medium text-blue-700 dark:text-blue-300 mb-1">
+                                            Suggested URL
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <code class="flex-1 text-xs text-blue-800 dark:text-blue-200 font-mono truncate" title={d().suggested_url}>
+                                                {d().suggested_url}
+                                            </code>
+                                            <button
+                                                type="button"
+                                                class="px-2 py-1 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors flex-shrink-0"
+                                                onClick={() => setUrlValue(d().suggested_url || '')}
+                                                disabled={urlSaving()}
+                                            >
+                                                Use this
+                                            </button>
+                                        </div>
+                                    </div>
+                                </Show>
                                 <p class="mt-1.5 text-[10px] text-gray-400 dark:text-gray-500">
                                     Add a URL to quickly access this guest's web interface from the dashboard.
                                 </p>

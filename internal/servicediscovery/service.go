@@ -816,6 +816,9 @@ func (s *Service) discoverDockerContainers(ctx context.Context, hosts []DockerHo
 					discovery = s.enhanceWithDeepScan(ctx, discovery, host)
 				}
 
+				// Suggest web interface URL using Docker host hostname
+				discovery.SuggestedURL = SuggestWebURL(discovery, host.Hostname)
+
 				if err := s.store.Save(discovery); err != nil {
 					log.Warn().Err(err).Str("id", id).Msg("Failed to save discovery")
 				}
@@ -1230,6 +1233,13 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		}
 	}
 
+	// Suggest web interface URL based on service type and external IP
+	if s.stateProvider != nil {
+		if externalIP := s.getResourceExternalIP(req); externalIP != "" {
+			discovery.SuggestedURL = SuggestWebURL(discovery, externalIP)
+		}
+	}
+
 	// Save discovery
 	if err := s.store.Save(discovery); err != nil {
 		inProg.err = fmt.Errorf("failed to save discovery: %w", err)
@@ -1287,6 +1297,65 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 	}
 
 	return metadata
+}
+
+// getResourceExternalIP retrieves the external IP address for a resource from the state.
+// For LXC/VM, this is the first IP from the Proxmox guest agent.
+// For Docker containers, this is the Docker host's IP/hostname.
+func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
+	if s.stateProvider == nil {
+		return ""
+	}
+
+	state := s.stateProvider.GetState()
+
+	switch req.ResourceType {
+	case ResourceTypeLXC:
+		for _, c := range state.Containers {
+			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == req.HostID {
+				if len(c.IPAddresses) > 0 {
+					return c.IPAddresses[0]
+				}
+				return ""
+			}
+		}
+	case ResourceTypeVM:
+		for _, vm := range state.VMs {
+			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == req.HostID {
+				if len(vm.IPAddresses) > 0 {
+					return vm.IPAddresses[0]
+				}
+				return ""
+			}
+		}
+	case ResourceTypeDocker:
+		// For Docker containers, use the Docker host's hostname/IP
+		for _, host := range state.DockerHosts {
+			if host.AgentID == req.HostID || host.Hostname == req.HostID {
+				// Use hostname if it looks like an IP, otherwise it's a hostname
+				return host.Hostname
+			}
+		}
+	case ResourceTypeDockerVM, ResourceTypeDockerLXC:
+		// For Docker containers inside VMs/LXCs, find the VM/LXC's IP
+		// The hostID contains the parent resource info
+		for _, vm := range state.VMs {
+			if fmt.Sprintf("%d", vm.VMID) == req.HostID || vm.Name == req.HostID {
+				if len(vm.IPAddresses) > 0 {
+					return vm.IPAddresses[0]
+				}
+			}
+		}
+		for _, c := range state.Containers {
+			if fmt.Sprintf("%d", c.VMID) == req.HostID || c.Name == req.HostID {
+				if len(c.IPAddresses) > 0 {
+					return c.IPAddresses[0]
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 // formatCLIAccess formats the CLI access string with actual values.

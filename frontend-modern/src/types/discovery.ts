@@ -74,6 +74,8 @@ export interface ResourceDiscovery {
     fingerprint?: string;                // Hash when discovery was done
     fingerprinted_at?: string;           // When fingerprint was captured
     fingerprint_schema_version?: number; // Schema version when fingerprint was captured
+    // Auto-suggested web interface URL
+    suggested_url?: string;
 }
 
 export interface DiscoverySummary {
