@@ -100,6 +100,12 @@ func (rm *ReloadableMonitor) doReload() error {
 		rm.cancel()
 	}
 
+	// Stop the underlying multi-tenant monitor to ensure its global context is canceled
+	// and all child monitors are stopped.
+	if rm.mtMonitor != nil {
+		rm.mtMonitor.Stop()
+	}
+
 	// Wait a moment for cleanup
 	time.Sleep(1 * time.Second)
 

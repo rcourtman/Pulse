@@ -57,7 +57,6 @@ const (
 
 // createSecureWebhookClient creates an HTTP client with security controls
 func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *http.Client {
-	redirectCount := 0
 	return &http.Client{
 		Timeout: timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -66,7 +65,6 @@ func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *
 				return fmt.Errorf("stopped after %d redirects", WebhookMaxRedirects)
 			}
 
-			redirectCount++
 			newURL := req.URL.String()
 
 			// Prevent redirects to localhost or private networks (SSRF protection)
@@ -82,7 +80,7 @@ func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *
 			log.Debug().
 				Str("from", via[len(via)-1].URL.String()).
 				Str("to", newURL).
-				Int("redirectCount", redirectCount).
+				Int("redirectCount", len(via)).
 				Msg("Following webhook redirect")
 
 			return nil

@@ -2666,18 +2666,10 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	now := time.Now()
 	hostMetricKey := fmt.Sprintf("host:%s", host.ID)
 
-	// Record host CPU usage
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
-
-	// Record host Memory usage
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
-
-	// Record host Disk usage (use first disk or calculate aggregate)
 	var hostDiskPercent float64
 	if len(host.Disks) > 0 {
 		hostDiskPercent = host.Disks[0].Usage
 	}
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
 
 	// Record host Network I/O (sum across all interfaces)
 	var totalRXBytes, totalTXBytes uint64
@@ -2685,8 +2677,19 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		totalRXBytes += nic.RXBytes
 		totalTXBytes += nic.TXBytes
 	}
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "netin", float64(totalRXBytes), now)
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "netout", float64(totalTXBytes), now)
+
+	if m.metricsHistory != nil {
+		// Record host CPU usage
+		m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
+
+		// Record host Memory usage
+		m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
+
+		m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
+
+		m.metricsHistory.AddGuestMetric(hostMetricKey, "netin", float64(totalRXBytes), now)
+		m.metricsHistory.AddGuestMetric(hostMetricKey, "netout", float64(totalTXBytes), now)
+	}
 
 	// Also write to persistent SQLite store
 	if m.metricsStore != nil {
@@ -3570,27 +3573,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 	ms, err := metrics.NewStore(metricsStoreConfig)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to initialize persistent metrics store - attempting recovery by clearing DB")
-
-		// Attempt recovery by removing the likely locked/corrupted DB
-		if err := os.Remove(metricsStoreConfig.DBPath); err != nil {
-			log.Error().Err(err).Msg("Failed to remove corrupted metrics DB")
-		} else {
-			// Remove SHM/WAL files too just in case
-			os.Remove(metricsStoreConfig.DBPath + "-shm")
-			os.Remove(metricsStoreConfig.DBPath + "-wal")
-
-			ms, err = metrics.NewStore(metricsStoreConfig)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to initialize persistent metrics store after recovery - continuing with in-memory only")
-			} else {
-				if mock.IsMockEnabled() {
-					ms.SetMaxOpenConns(10)
-				}
-				metricsStore = ms
-				log.Info().Msg("Recovered persistent metrics store by clearing corrupted DB")
-			}
-		}
+		// Do not automatically delete the DB on error, as it causes data loss on transient errors (e.g. locks).
+		// If the DB is truly corrupted, the user should manually remove it.
+		log.Error().Err(err).Msg("Failed to initialize persistent metrics store - continuing without metrics persistence")
 	} else {
 		if mock.IsMockEnabled() {
 			ms.SetMaxOpenConns(10)

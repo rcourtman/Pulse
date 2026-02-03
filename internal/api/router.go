@@ -997,7 +997,13 @@ func (r *Router) setupRoutes() {
 				return ok
 			}
 
-			hasValidAPIToken := validateAPIToken(req.Header.Get("X-API-Token"))
+			token := req.Header.Get("X-API-Token")
+			if token == "" {
+				if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+					token = strings.TrimPrefix(authHeader, "Bearer ")
+				}
+			}
+			hasValidAPIToken := validateAPIToken(token)
 
 			// Check if any valid auth method is present
 			hasValidAuth := hasValidProxyAuth || hasValidSession || hasValidAPIToken
@@ -1091,7 +1097,13 @@ func (r *Router) setupRoutes() {
 				return ok
 			}
 
-			hasValidAPIToken := validateAPIToken(req.Header.Get("X-API-Token"))
+			token := req.Header.Get("X-API-Token")
+			if token == "" {
+				if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+					token = strings.TrimPrefix(authHeader, "Bearer ")
+				}
+			}
+			hasValidAPIToken := validateAPIToken(token)
 
 			// Check if any valid auth method is present
 			hasValidAuth := hasValidProxyAuth || hasValidSession || hasValidAPIToken
