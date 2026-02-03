@@ -695,6 +695,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	})
 	var inputTokens, outputTokens int
 	var finishReason string
+	var contentBuffer strings.Builder // Accumulate content to detect incompatible model output
 
 	for {
 		n, err := reader.Read(buf)
@@ -776,6 +777,20 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 				// Regular content
 				if delta.Content != "" {
+					// Accumulate content to detect control tokens from incompatible models
+					contentBuffer.WriteString(delta.Content)
+
+					// Check for LLM control tokens that indicate the model doesn't support function calling
+					// These tokens appear when local models (LM Studio, llama.cpp) receive tool definitions
+					// but don't know how to handle them properly
+					accumulated := contentBuffer.String()
+					if containsControlTokens(accumulated) {
+						return fmt.Errorf("model_incompatible: This model appears to not support function calling. " +
+							"It's outputting internal control tokens instead of proper responses. " +
+							"Please use a model that supports OpenAI-compatible function calling " +
+							"(e.g., Llama 3.1+, Mistral, Qwen 2.5, or newer instruction-tuned models)")
+					}
+
 					callback(StreamEvent{
 						Type: "content",
 						Data: ContentEvent{Text: delta.Content},
@@ -883,4 +898,30 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 
 	return models, nil
+}
+
+// containsControlTokens checks if the content contains LLM control tokens
+// that indicate the model doesn't support function calling properly.
+// These tokens are internal to models and should never appear in output.
+func containsControlTokens(content string) bool {
+	// Common control tokens from various LLM architectures
+	controlTokens := []string{
+		"<|channel|>",         // Tool/function calling control
+		"<|constrain|>",       // Output constraint control
+		"<|message|>",         // Message boundary control
+		"<|im_start|>",        // ChatML start token
+		"<|im_end|>",          // ChatML end token
+		"<|eot_id|>",          // Llama end of turn
+		"<|start_header_id|>", // Llama header
+		"<|end_header_id|>",   // Llama header end
+		"<tool_call>",         // Some models' tool call marker
+		"[TOOL_CALLS]",        // Alternative tool call marker
+	}
+
+	for _, token := range controlTokens {
+		if strings.Contains(content, token) {
+			return true
+		}
+	}
+	return false
 }
