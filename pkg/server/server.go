@@ -26,6 +26,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
 
@@ -169,6 +170,18 @@ func Run(ctx context.Context, version string) error {
 				onMetricsStoreReady(store)
 			}
 		}()
+	}
+
+	// Initialize reporting engine if not already set by enterprise hooks
+	// This ensures Pro license holders get reporting even with the standard binary
+	if reporting.GetEngine() == nil {
+		if store := reloadableMonitor.GetMonitor().GetMetricsStore(); store != nil {
+			engine := reporting.NewReportEngine(reporting.EngineConfig{
+				MetricsStore: store,
+			})
+			reporting.SetEngine(engine)
+			log.Info().Msg("Advanced Infrastructure Reporting (PDF/CSV) initialized")
+		}
 	}
 
 	// Set state getter for WebSocket hub (legacy - for default org)
