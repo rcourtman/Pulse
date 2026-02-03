@@ -8,11 +8,22 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
 )
+
+// controlTokenPattern matches common LLM control tokens that shouldn't appear in output
+// These are internal tokens used by some models (llama.cpp, etc.) for chat templating
+var controlTokenPattern = regexp.MustCompile(`<\|[a-zA-Z_]+\|>`)
+
+// sanitizeContent removes LLM control tokens from content that shouldn't be shown to users
+func sanitizeContent(content string) string {
+	// Remove control tokens like <|channel|>, <|constrain|>, <|message|>, etc.
+	return controlTokenPattern.ReplaceAllString(content, "")
+}
 
 const (
 	openaiAPIURL         = "https://api.openai.com/v1/chat/completions"
@@ -425,6 +436,9 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		contentToUse = choice.Message.ReasoningContent
 	}
 
+	// Sanitize content to remove any leaked control tokens from local models
+	contentToUse = sanitizeContent(contentToUse)
+
 	result := &ChatResponse{
 		Content:          contentToUse,
 		ReasoningContent: choice.Message.ReasoningContent, // DeepSeek thinking mode
@@ -774,12 +788,15 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 				delta := choice.Delta
 
-				// Regular content
+				// Regular content - sanitize to remove any leaked control tokens
 				if delta.Content != "" {
-					callback(StreamEvent{
-						Type: "content",
-						Data: ContentEvent{Text: delta.Content},
-					})
+					sanitized := sanitizeContent(delta.Content)
+					if sanitized != "" {
+						callback(StreamEvent{
+							Type: "content",
+							Data: ContentEvent{Text: sanitized},
+						})
+					}
 				}
 
 				// Reasoning content (DeepSeek)
