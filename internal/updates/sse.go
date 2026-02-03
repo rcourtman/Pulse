@@ -17,6 +17,7 @@ type SSEClient struct {
 	Flusher    http.Flusher
 	Done       chan bool
 	LastActive time.Time
+	mu         sync.Mutex // protects writes to Writer and Flusher
 }
 
 // SSEBroadcaster manages Server-Sent Events connections for update progress
@@ -175,6 +176,17 @@ func (b *SSEBroadcaster) sendToClient(client *SSEClient, status UpdateStatus) {
 	// Format: data: {json}\n\n
 	message := fmt.Sprintf("data: %s\n\n", string(data))
 
+	// Acquire client lock to prevent concurrent writes
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
+	// Double-check client is not disconnected while waiting for lock
+	select {
+	case <-client.Done:
+		return
+	default:
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Warn().
@@ -212,8 +224,13 @@ func (b *SSEBroadcaster) cleanupLoop() {
 
 		idsToRemove := make([]string, 0)
 		for id, client := range b.clients {
+			// Acquire client lock to safely read LastActive (written by sendToClient/SendHeartbeat)
+			client.mu.Lock()
+			inactive := now.Sub(client.LastActive) > 5*time.Minute
+			client.mu.Unlock()
+
 			// Remove clients inactive for more than 5 minutes
-			if now.Sub(client.LastActive) > 5*time.Minute {
+			if inactive {
 				idsToRemove = append(idsToRemove, id)
 			}
 		}
@@ -249,6 +266,17 @@ func (b *SSEBroadcaster) SendHeartbeat() {
 			default:
 			}
 
+			// Acquire client lock to prevent concurrent writes
+			c.mu.Lock()
+			defer c.mu.Unlock()
+
+			// Double-check client is not disconnected while waiting for lock
+			select {
+			case <-c.Done:
+				return
+			default:
+			}
+
 			defer func() {
 				if r := recover(); r != nil {
 					b.RemoveClient(c.ID)
@@ -262,6 +290,8 @@ func (b *SSEBroadcaster) SendHeartbeat() {
 				return
 			}
 			c.Flusher.Flush()
+			// Update LastActive so cleanup loop doesn't prune active clients
+			c.LastActive = time.Now()
 		}(client)
 	}
 }

@@ -671,8 +671,11 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 		Str("path", r.URL.Path).
 		Msg("Attempting to acknowledge alert")
 
-	// In a real implementation, you'd get the user from authentication
-	user := "admin"
+	// Get the authenticated user from the auth middleware (set in X-Authenticated-User header)
+	user := w.Header().Get("X-Authenticated-User")
+	if user == "" {
+		user = "unknown" // Fallback if auth header not set (shouldn't happen in normal flow)
+	}
 
 	log.Debug().
 		Str("alertID", alertID).
@@ -739,7 +742,11 @@ func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	user := "admin"
+	// Get the authenticated user from the auth middleware (set in X-Authenticated-User header)
+	user := w.Header().Get("X-Authenticated-User")
+	if user == "" {
+		user = "unknown" // Fallback if auth header not set (shouldn't happen in normal flow)
+	}
 
 	if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to acknowledge alert")
@@ -926,9 +933,10 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	user := request.User
+	// Get the authenticated user from the auth middleware - ignore request.User to prevent spoofing
+	user := w.Header().Get("X-Authenticated-User")
 	if user == "" {
-		user = "admin"
+		user = "unknown" // Fallback if auth header not set (shouldn't happen in normal flow)
 	}
 
 	var (

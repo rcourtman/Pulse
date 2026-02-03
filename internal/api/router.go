@@ -653,17 +653,15 @@ func (r *Router) setupRoutes() {
 
 			// Determine whether the caller is authenticated before exposing sensitive fields
 			// Also track token scopes for kiosk/limited-access scenarios
+			//
+			// SECURITY: Do NOT check ?token= query param here - this public endpoint would
+			// act as a token validity oracle, allowing attackers to probe for valid tokens
+			// without rate limiting. Only check session cookies and X-API-Token header.
 			isAuthenticated := false
 			var tokenScopes []string
 			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
 				isAuthenticated = true
 			} else if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
-				if record, ok := r.config.ValidateAPIToken(token); ok {
-					isAuthenticated = true
-					tokenScopes = record.Scopes
-				}
-			} else if token := req.URL.Query().Get("token"); token != "" {
-				// Also check URL query param (used for kiosk mode)
 				if record, ok := r.config.ValidateAPIToken(token); ok {
 					isAuthenticated = true
 					tokenScopes = record.Scopes
