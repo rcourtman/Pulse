@@ -24,6 +24,7 @@ import { logger } from './utils/logger';
 import { POLLING_INTERVALS } from './constants';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { layoutStore } from '@/utils/layout';
+import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
 import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
 import { apiFetch } from './utils/apiClient';
@@ -55,7 +56,7 @@ import { AIChat } from './components/AI/Chat';
 import { aiChatStore } from './stores/aiChat';
 import { useResourcesAsLegacy } from './hooks/useResources';
 import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
-import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode } from './utils/url';
+import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode, getKioskModePreference } from './utils/url';
 
 
 const Dashboard = lazy(() =>
@@ -228,6 +229,15 @@ function App() {
   // Initialize kiosk mode from URL params immediately (persists to sessionStorage)
   // This must happen before any renders so kiosk state is available everywhere
   initKioskMode();
+
+  // Reactive kiosk state for App-level components (banners, etc.)
+  const [kioskMode, setKioskModeSignal] = createSignal(isKioskMode());
+  onMount(() => {
+    const unsubscribe = subscribeToKioskMode((enabled) => {
+      setKioskModeSignal(enabled);
+    });
+    onCleanup(unsubscribe);
+  });
 
   const TooltipRoot = createTooltipSystem();
   const owner = getOwner();
@@ -883,10 +893,12 @@ function App() {
             }>
               <WebSocketContext.Provider value={enhancedStore()!}>
                 <DarkModeContext.Provider value={darkMode}>
-                  <SecurityWarning />
-                  <DemoBanner />
-                  <UpdateBanner />
-                  <GlobalUpdateProgressWatcher />
+                  <Show when={!kioskMode()}>
+                    <SecurityWarning />
+                    <DemoBanner />
+                    <UpdateBanner />
+                    <GlobalUpdateProgressWatcher />
+                  </Show>
                   {/* Main layout container - flexbox to allow AI panel to push content */}
                   <div class="flex h-screen overflow-hidden">
                     {/* Main content area - shrinks when AI panel is open, scrolls independently */}
@@ -911,30 +923,7 @@ function App() {
                     <AIChat onClose={() => aiChatStore.close()} />
                   </div>
                   <TokenRevealDialog />
-                  {/* Fixed AI Assistant Button - only shows when chat is CLOSED */}
-                  <Show when={aiChatStore.enabled === true && !aiChatStore.isOpenSignal()}>
-                    <button
-                      type="button"
-                      onClick={() => aiChatStore.toggle()}
-                      class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 pl-2 pr-1.5 py-3 rounded-l-xl bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-20 translate-y-0"
-                      title={aiChatStore.context.context?.name ? `Pulse Assistant - ${aiChatStore.context.context.name}` : 'Pulse Assistant (⌘K)'}
-                      aria-label="Expand Pulse Assistant"
-                    >
-                      <svg
-                        class="h-5 w-5 flex-shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        stroke-width="1.5"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
-                        />
-                      </svg>
-                    </button>
-                  </Show>
+                  {/* AI Assistant Button moved to AppLayout to access kioskMode state */}
                   <TooltipRoot />
                 </DarkModeContext.Provider>
               </WebSocketContext.Provider>
@@ -1068,6 +1057,20 @@ function AppLayout(props: {
       setKioskModeSignal(enabled);
     });
     onCleanup(unsubscribe);
+  });
+
+  // Auto-enable kiosk mode for monitoring-only tokens (if no user preference is set)
+  createEffect(() => {
+    const scopes = props.tokenScopes();
+    // Only proceed if scopes are loaded and equal exactly ['monitoring:read']
+    if (scopes && scopes.length === 1 && scopes[0] === MONITORING_READ_SCOPE) {
+      // Check if user has an explicit preference
+      const pref = getKioskModePreference();
+      // If preference is unset (null), default to Kiosk Mode
+      if (pref === null) {
+        setKioskMode(true);
+      }
+    }
   });
 
   const toggleKioskMode = () => {
@@ -1289,7 +1292,7 @@ function AppLayout(props: {
   };
 
   return (
-    <div class={`pulse-shell ${layoutStore.isFullWidth() ? 'pulse-shell--full-width' : ''}`}>
+    <div class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''}`}>
       {/* Header - simplified in kiosk mode */}
       <div class={`header mb-3 flex items-center gap-2 ${kioskMode() ? 'justify-end' : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'}`}>
         <Show when={!kioskMode()}>
@@ -1338,7 +1341,7 @@ function AppLayout(props: {
               <button
                 type="button"
                 onClick={toggleKioskMode}
-                class={`group relative flex h-7 items-center justify-center gap-1 rounded-full px-2 text-xs transition-all duration-500 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${kioskMode()
+                class={`group relative flex h-7 w-7 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${kioskMode()
                   ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
                   }`}
@@ -1349,11 +1352,6 @@ function AppLayout(props: {
                 <Show when={kioskMode()} fallback={<Maximize2Icon class="h-3 w-3 flex-shrink-0" />}>
                   <Minimize2Icon class="h-3 w-3 flex-shrink-0" />
                 </Show>
-                <span
-                  class="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 ease-in-out group-hover:ml-1 group-hover:max-w-[80px] group-hover:opacity-100 group-focus-visible:ml-1 group-focus-visible:max-w-[80px] group-focus-visible:opacity-100"
-                >
-                  {kioskMode() ? 'Exit' : 'Kiosk'}
-                </span>
               </button>
               <Show when={props.proxyAuthInfo()?.username}>
                 <span class="text-xs px-2 py-1 text-gray-600 dark:text-gray-400">
@@ -1363,7 +1361,7 @@ function AppLayout(props: {
               <button
                 type="button"
                 onClick={props.handleLogout}
-                class="group relative flex h-7 items-center justify-center gap-1 rounded-full bg-gray-200 px-2 text-xs text-gray-700 transition-all duration-500 ease-in-out hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                class="group relative flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-700 transition hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                 title="Logout"
                 aria-label="Logout"
               >
@@ -1381,11 +1379,6 @@ function AppLayout(props: {
                     d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
                   />
                 </svg>
-                <span
-                  class="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 ease-in-out group-hover:ml-1 group-hover:max-w-[80px] group-hover:opacity-100 group-focus-visible:ml-1 group-focus-visible:max-w-[80px] group-focus-visible:opacity-100"
-                >
-                  Logout
-                </span>
               </button>
             </div>
           </Show>
@@ -1542,6 +1535,31 @@ function AppLayout(props: {
             <span>Last refresh: {props.lastUpdateText()}</span>
           </Show>
         </footer>
+      </Show>
+
+      {/* Fixed AI Assistant Button - only shows when chat is CLOSED and NOT in kiosk mode */}
+      <Show when={aiChatStore.enabled === true && !aiChatStore.isOpenSignal() && !kioskMode()}>
+        <button
+          type="button"
+          onClick={() => aiChatStore.toggle()}
+          class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 pl-2 pr-1.5 py-3 rounded-l-xl bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-20 translate-y-0"
+          title={aiChatStore.context.context?.name ? `Pulse Assistant - ${aiChatStore.context.context.name}` : 'Pulse Assistant (⌘K)'}
+          aria-label="Expand Pulse Assistant"
+        >
+          <svg
+            class="h-5 w-5 flex-shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
+            />
+          </svg>
+        </button>
       </Show>
     </div>
   );

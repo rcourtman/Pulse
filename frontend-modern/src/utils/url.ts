@@ -56,6 +56,7 @@ export function isKioskMode(): boolean {
     // Check sessionStorage first (persists across navigation)
     const stored = window.sessionStorage.getItem(KIOSK_MODE_KEY);
     if (stored === 'true') return true;
+    if (stored === 'false') return false; // Explicitly disabled
 
     // Fall back to URL check (for initial page load)
     const params = new URLSearchParams(window.location.search);
@@ -63,6 +64,22 @@ export function isKioskMode(): boolean {
     return kioskParam === '1' || kioskParam === 'true';
   } catch {
     return false;
+  }
+}
+
+/**
+ * Get the explicit kiosk mode preference from storage.
+ * Returns true/false if set, or null if unset.
+ */
+export function getKioskModePreference(): boolean | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = window.sessionStorage.getItem(KIOSK_MODE_KEY);
+    if (stored === 'true') return true;
+    if (stored === 'false') return false;
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -77,7 +94,7 @@ export function setKioskMode(enabled: boolean): void {
     if (enabled) {
       window.sessionStorage.setItem(KIOSK_MODE_KEY, 'true');
     } else {
-      window.sessionStorage.removeItem(KIOSK_MODE_KEY);
+      window.sessionStorage.setItem(KIOSK_MODE_KEY, 'false');
     }
     notifyKioskListeners(enabled);
   } catch {

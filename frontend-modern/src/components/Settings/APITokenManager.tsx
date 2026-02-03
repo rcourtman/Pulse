@@ -4,6 +4,7 @@ import { notificationStore } from '@/stores/notifications';
 import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import type { DockerHost, Host } from '@/types/api';
+import { getPulseBaseUrl } from '@/utils/url';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
@@ -478,29 +479,56 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       </Show>
 
       <Show when={newTokenValue() && !isRevealActiveForCurrentToken()}>
-        <Card
-          tone="success"
-          padding="sm"
-          class="flex flex-wrap items-center justify-between gap-3 border border-green-300/70 text-sm text-green-800 dark:border-green-700/70 dark:text-green-200"
-        >
-          <span>
-            ✓ Token generated: <strong>{newTokenRecord()?.name || 'Untitled'}</strong> ({tokenHint(newTokenRecord())})
-          </span>
-          <div class="flex items-center gap-3 text-xs">
-            <button onClick={reopenTokenDialog} class="font-medium underline decoration-green-500/50 underline-offset-2 hover:text-green-900 dark:hover:text-green-100">
-              Show
-            </button>
-            <button
-              onClick={() => {
-                setNewTokenValue(null);
-                setNewTokenRecord(null);
-              }}
-              class="font-medium underline decoration-green-500/50 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
-            >
-              Dismiss
-            </button>
-          </div>
-        </Card>
+        <div class="space-y-3">
+          <Card
+            tone="success"
+            padding="sm"
+            class="flex flex-wrap items-center justify-between gap-3 border border-green-300/70 text-sm text-green-800 dark:border-green-700/70 dark:text-green-200"
+          >
+            <span>
+              ✓ Token generated: <strong>{newTokenRecord()?.name || 'Untitled'}</strong> ({tokenHint(newTokenRecord())})
+            </span>
+            <div class="flex items-center gap-3 text-xs">
+              <button onClick={reopenTokenDialog} class="font-medium underline decoration-green-500/50 underline-offset-2 hover:text-green-900 dark:hover:text-green-100">
+                Show
+              </button>
+              <button
+                onClick={() => {
+                  setNewTokenValue(null);
+                  setNewTokenRecord(null);
+                }}
+                class="font-medium underline decoration-green-500/50 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
+              >
+                Dismiss
+              </button>
+            </div>
+          </Card>
+
+          <Show when={newTokenRecord()?.scopes?.length === 1 && newTokenRecord()?.scopes?.[0] === MONITORING_READ_SCOPE}>
+            <div class="rounded-lg border border-blue-200 bg-blue-50/50 p-4 text-sm text-blue-900 shadow-sm dark:border-blue-800/30 dark:bg-blue-900/10 dark:text-blue-100">
+              <div class="mb-2 font-semibold">Magic Kiosk Link</div>
+              <p class="mb-3 text-xs text-blue-700 dark:text-blue-300">
+                Use this link to open Pulse directly in Kiosk mode without logging in. Perfect for wall displays and digital signage.
+              </p>
+              <div class="flex items-center gap-2">
+                <code class="flex-1 rounded border border-blue-200 bg-white px-3 py-2 font-mono text-xs text-blue-800 dark:border-blue-800 dark:bg-black/20 dark:text-blue-200 break-all">
+                  {getPulseBaseUrl()}/?token={newTokenValue()}&kiosk=1
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `${getPulseBaseUrl()}/?token=${newTokenValue()}&kiosk=1`;
+                    navigator.clipboard.writeText(url);
+                    notificationStore.success('Link copied to clipboard');
+                  }}
+                  class="flex-shrink-0 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 dark:bg-blue-600 dark:hover:bg-blue-500"
+                >
+                  Copy Link
+                </button>
+              </div>
+            </div>
+          </Show>
+        </div>
       </Show>
 
       <Show
