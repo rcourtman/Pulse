@@ -491,7 +491,7 @@ jobs:
 
       - name: Skip publish (draft only)
         if: ${{ github.event.inputs.draft_only == 'true' }}
-        run: echo "Draft-only mode: ${{ steps.create_release.outputs.release_url }}"
+        run: 'echo "Draft-only mode: ${{ steps.create_release.outputs.release_url }}"'
 
       - name: Trigger Docker image publish
         if: ${{ github.event.inputs.draft_only != 'true' }}
