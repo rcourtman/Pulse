@@ -785,10 +785,8 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 					// but don't know how to handle them properly
 					accumulated := contentBuffer.String()
 					if containsControlTokens(accumulated) {
-						return fmt.Errorf("model_incompatible: This model appears to not support function calling. " +
-							"It's outputting internal control tokens instead of proper responses. " +
-							"Please use a model that supports OpenAI-compatible function calling " +
-							"(e.g., Llama 3.1+, Mistral, Qwen 2.5, or newer instruction-tuned models)")
+						return fmt.Errorf("model_incompatible: This model doesn't support function calling. " +
+							"Please use a model that supports OpenAI-compatible tool use")
 					}
 
 					callback(StreamEvent{
