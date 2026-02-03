@@ -27,13 +27,12 @@ type AIConfig struct {
 	CustomContext  string `json:"custom_context"`            // user-provided context about their infrastructure
 
 	// Multi-provider credentials - each provider can be configured independently
-	AnthropicAPIKey     string `json:"anthropic_api_key,omitempty"`     // Anthropic API key
-	OpenAIAPIKey        string `json:"openai_api_key,omitempty"`        // OpenAI API key
-	DeepSeekAPIKey      string `json:"deepseek_api_key,omitempty"`      // DeepSeek API key
-	GeminiAPIKey        string `json:"gemini_api_key,omitempty"`        // Google Gemini API key
-	OllamaBaseURL       string `json:"ollama_base_url,omitempty"`       // Ollama server URL (default: http://localhost:11434)
-	OpenAIBaseURL       string `json:"openai_base_url,omitempty"`       // Custom OpenAI-compatible base URL (optional)
-	OpenAIToolsDisabled bool   `json:"openai_tools_disabled,omitempty"` // Disable tool use for OpenAI-compatible endpoints (for models that don't support function calling)
+	AnthropicAPIKey string `json:"anthropic_api_key,omitempty"` // Anthropic API key
+	OpenAIAPIKey    string `json:"openai_api_key,omitempty"`    // OpenAI API key
+	DeepSeekAPIKey  string `json:"deepseek_api_key,omitempty"`  // DeepSeek API key
+	GeminiAPIKey    string `json:"gemini_api_key,omitempty"`    // Google Gemini API key
+	OllamaBaseURL   string `json:"ollama_base_url,omitempty"`   // Ollama server URL (default: http://localhost:11434)
+	OpenAIBaseURL   string `json:"openai_base_url,omitempty"`   // Custom OpenAI-compatible base URL (optional)
 
 	// OAuth fields for Claude Pro/Max subscription authentication
 	AuthMethod        AuthMethod `json:"auth_method,omitempty"`         // "api_key" or "oauth" (for anthropic only)
@@ -291,16 +290,6 @@ func (c *AIConfig) GetBaseURLForProvider(provider string) string {
 // IsUsingOAuth returns true if OAuth authentication is configured for Anthropic
 func (c *AIConfig) IsUsingOAuth() bool {
 	return c.AuthMethod == AuthMethodOAuth && c.OAuthAccessToken != ""
-}
-
-// AreToolsDisabledForProvider returns true if tool use should be disabled for the given provider.
-// This is used for OpenAI-compatible endpoints where the model may not support function calling.
-func (c *AIConfig) AreToolsDisabledForProvider(provider string) bool {
-	if provider == AIProviderOpenAI && c.OpenAIBaseURL != "" {
-		// Custom OpenAI-compatible endpoint - check the setting
-		return c.OpenAIToolsDisabled
-	}
-	return false
 }
 
 // ParseModelString parses a model string in "provider:model-name" format

@@ -945,7 +945,6 @@ type AISettingsResponse struct {
 	OllamaConfigured    bool     `json:"ollama_configured"`         // true (always available for attempt)
 	OllamaBaseURL       string   `json:"ollama_base_url"`           // Ollama server URL
 	OpenAIBaseURL       string   `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
-	OpenAIToolsDisabled bool     `json:"openai_tools_disabled"`     // true if tools are disabled for OpenAI-compatible endpoints
 	ConfiguredProviders []string `json:"configured_providers"`      // List of provider names with credentials
 	// Cost controls
 	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
@@ -980,13 +979,12 @@ type AISettingsUpdateRequest struct {
 	AlertTriggeredAnalysis *bool   `json:"alert_triggered_analysis,omitempty"` // true if AI analyzes when alerts fire
 	UseProactiveThresholds *bool   `json:"use_proactive_thresholds,omitempty"` // true if patrol warns before thresholds (default: false = exact thresholds)
 	// Multi-provider credentials
-	AnthropicAPIKey     *string `json:"anthropic_api_key,omitempty"`     // Set Anthropic API key
-	OpenAIAPIKey        *string `json:"openai_api_key,omitempty"`        // Set OpenAI API key
-	DeepSeekAPIKey      *string `json:"deepseek_api_key,omitempty"`      // Set DeepSeek API key
-	GeminiAPIKey        *string `json:"gemini_api_key,omitempty"`        // Set Gemini API key
-	OllamaBaseURL       *string `json:"ollama_base_url,omitempty"`       // Set Ollama server URL
-	OpenAIBaseURL       *string `json:"openai_base_url,omitempty"`       // Set custom OpenAI base URL
-	OpenAIToolsDisabled *bool   `json:"openai_tools_disabled,omitempty"` // Disable tools for OpenAI-compatible endpoints
+	AnthropicAPIKey *string `json:"anthropic_api_key,omitempty"` // Set Anthropic API key
+	OpenAIAPIKey    *string `json:"openai_api_key,omitempty"`    // Set OpenAI API key
+	DeepSeekAPIKey  *string `json:"deepseek_api_key,omitempty"`  // Set DeepSeek API key
+	GeminiAPIKey    *string `json:"gemini_api_key,omitempty"`    // Set Gemini API key
+	OllamaBaseURL   *string `json:"ollama_base_url,omitempty"`   // Set Ollama server URL
+	OpenAIBaseURL   *string `json:"openai_base_url,omitempty"`   // Set custom OpenAI base URL
 	// Clear flags for removing credentials
 	ClearAnthropicKey *bool `json:"clear_anthropic_key,omitempty"` // Clear Anthropic API key
 	ClearOpenAIKey    *bool `json:"clear_openai_key,omitempty"`    // Clear OpenAI API key
@@ -1064,7 +1062,6 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
 		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
 		OpenAIBaseURL:          settings.OpenAIBaseURL,
-		OpenAIToolsDisabled:    settings.OpenAIToolsDisabled,
 		ConfiguredProviders:    settings.GetConfiguredProviders(),
 		CostBudgetUSD30d:       settings.CostBudgetUSD30d,
 		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
@@ -1241,9 +1238,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 	if req.OpenAIBaseURL != nil {
 		settings.OpenAIBaseURL = strings.TrimSpace(*req.OpenAIBaseURL)
-	}
-	if req.OpenAIToolsDisabled != nil {
-		settings.OpenAIToolsDisabled = *req.OpenAIToolsDisabled
 	}
 
 	if req.Enabled != nil {
@@ -1479,7 +1473,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
 		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
 		OpenAIBaseURL:          settings.OpenAIBaseURL,
-		OpenAIToolsDisabled:    settings.OpenAIToolsDisabled,
 		ConfiguredProviders:    settings.GetConfiguredProviders(),
 		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
 		ControlLevel:           settings.GetControlLevel(),

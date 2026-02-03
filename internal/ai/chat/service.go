@@ -473,23 +473,11 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		loop.SetBudgetChecker(s.budgetChecker)
 	}
 
-	// Set provider info for telemetry and check if tools should be disabled
+	// Set provider info for telemetry
 	if selectedModel != "" {
 		parts := strings.SplitN(selectedModel, ":", 2)
 		if len(parts) == 2 {
 			loop.SetProviderInfo(parts[0], parts[1])
-
-			// Check if tools should be disabled for this provider
-			s.mu.RLock()
-			cfg := s.cfg
-			s.mu.RUnlock()
-			if cfg != nil && cfg.AreToolsDisabledForProvider(parts[0]) {
-				filteredTools = nil
-				log.Info().
-					Str("provider", parts[0]).
-					Str("session_id", session.ID).
-					Msg("[ChatService] Tools disabled for this provider - chat will work but without tool capabilities")
-			}
 		}
 	}
 
