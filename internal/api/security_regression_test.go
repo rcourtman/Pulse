@@ -1305,6 +1305,118 @@ func TestDiscoverySettingsRequiresSettingsWriteScope(t *testing.T) {
 	}
 }
 
+func TestDockerAgentEndpointsRequireDockerReportScope(t *testing.T) {
+	rawToken := "docker-report-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/agents/docker/report",
+		"/api/agents/docker/commands/command-1",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing docker:report scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeDockerReport) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeDockerReport, rec.Body.String())
+		}
+	}
+}
+
+func TestDockerManageEndpointsRequireDockerManageScope(t *testing.T) {
+	rawToken := "docker-manage-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeDockerReport}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/agents/docker/hosts/host-1",
+		"/api/agents/docker/containers/update",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing docker:manage scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeDockerManage) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeDockerManage, rec.Body.String())
+		}
+	}
+}
+
+func TestKubernetesAgentEndpointsRequireKubernetesReportScope(t *testing.T) {
+	rawToken := "kube-report-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/kubernetes/report", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing kubernetes:report scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeKubernetesReport) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeKubernetesReport, rec.Body.String())
+	}
+}
+
+func TestKubernetesManageEndpointsRequireKubernetesManageScope(t *testing.T) {
+	rawToken := "kube-manage-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeKubernetesReport}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/kubernetes/clusters/cluster-1", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing kubernetes:manage scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeKubernetesManage) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeKubernetesManage, rec.Body.String())
+	}
+}
+
+func TestHostAgentEndpointsRequireHostReportScope(t *testing.T) {
+	rawToken := "host-report-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/agents/host/report",
+		"/api/agents/host/lookup",
+		"/api/agents/host/uninstall",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing host:report scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeHostReport) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeHostReport, rec.Body.String())
+		}
+	}
+}
+
 func TestSecurityOIDCRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "security-oidc-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
