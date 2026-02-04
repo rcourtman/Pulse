@@ -1498,6 +1498,22 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Check proxy auth admin status if applicable
+	if h.getConfig(r.Context()).ProxyAuthSecret != "" {
+		if valid, username, isAdmin := CheckProxyAuth(h.getConfig(r.Context()), r); valid && !isAdmin {
+			log.Warn().
+				Str("ip", r.RemoteAddr).
+				Str("path", r.URL.Path).
+				Str("method", r.Method).
+				Str("username", username).
+				Msg("Non-admin user attempted AI connection test")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
+			return
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
@@ -1535,6 +1551,22 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	// Require admin authentication
 	if !CheckAuth(h.getConfig(r.Context()), w, r) {
 		return
+	}
+
+	// Check proxy auth admin status if applicable
+	if h.getConfig(r.Context()).ProxyAuthSecret != "" {
+		if valid, username, isAdmin := CheckProxyAuth(h.getConfig(r.Context()), r); valid && !isAdmin {
+			log.Warn().
+				Str("ip", r.RemoteAddr).
+				Str("path", r.URL.Path).
+				Str("method", r.Method).
+				Str("username", username).
+				Msg("Non-admin user attempted AI provider test")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
+			return
+		}
 	}
 
 	// Get provider from URL path (e.g., /api/ai/test/anthropic -> anthropic)

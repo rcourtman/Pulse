@@ -2028,6 +2028,7 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 	cfg.ProxyAuthAdminRole = "admin"
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.aiSettingsHandler.legacyConfig = cfg
 
 	cases := []struct {
 		method string
@@ -2082,6 +2083,8 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/ai/oauth/start", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/oauth/exchange", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/oauth/disconnect", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/test", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/test/openai", body: `{}`},
 		{method: http.MethodPost, path: "/api/agents/docker/containers/update", body: `{}`},
 		{method: http.MethodDelete, path: "/api/agents/docker/hosts/host-1", body: ``},
 		{method: http.MethodDelete, path: "/api/agents/kubernetes/clusters/cluster-1", body: ``},
@@ -2396,6 +2399,46 @@ func TestAISettingsUpdateRejectsProxyNonAdmin(t *testing.T) {
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for non-admin proxy AI settings update, got %d", rec.Code)
+	}
+}
+
+func TestAITestConnectionRejectsProxyNonAdmin(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.aiSettingsHandler.legacyConfig = cfg
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", strings.NewReader(`{}`))
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy AI test, got %d", rec.Code)
+	}
+}
+
+func TestAITestProviderRejectsProxyNonAdmin(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.aiSettingsHandler.legacyConfig = cfg
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/openai", strings.NewReader(`{}`))
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy AI provider test, got %d", rec.Code)
 	}
 }
 
