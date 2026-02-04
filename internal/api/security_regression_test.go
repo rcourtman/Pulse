@@ -106,6 +106,42 @@ func TestSimpleStatsRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestSimpleStatsAllowsBearerToken(t *testing.T) {
+	rawToken := "stats-bearer-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/simple-stats", nil)
+	req.Header.Set("Authorization", "Bearer "+rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with bearer token, got %d", rec.Code)
+	}
+	if rec.Header().Get("X-Auth-Method") != "api_token" {
+		t.Fatalf("expected X-Auth-Method api_token, got %q", rec.Header().Get("X-Auth-Method"))
+	}
+}
+
+func TestSimpleStatsRejectsInvalidBearerToken(t *testing.T) {
+	rawToken := "stats-bearer-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/simple-stats", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for invalid bearer token, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Invalid API token") {
+		t.Fatalf("expected invalid token response, got %q", rec.Body.String())
+	}
+}
+
 func TestSocketIORequiresAuthInAPIMode(t *testing.T) {
 	rawToken := "socket-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
