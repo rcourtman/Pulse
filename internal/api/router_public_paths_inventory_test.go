@@ -36,6 +36,10 @@ func TestRouterPublicPathsInventory(t *testing.T) {
 	if missing := setDifference(expectedLiterals, expectedPublic); len(missing) > 0 {
 		t.Fatalf("publicPaths entries missing from public route allowlist: %s", strings.Join(sortedKeys(missing), ", "))
 	}
+	supportedPublic := sliceToSet(t, append(publicPathsAllowlist, authBypassAllowlist...), "supported public routes")
+	if stale := setDifference(expectedPublic, supportedPublic); len(stale) > 0 {
+		t.Fatalf("public route allowlist contains paths not backed by bypass logic: %s", strings.Join(sortedKeys(stale), ", "))
+	}
 }
 
 func parsePublicPaths(t *testing.T) ([]string, []string) {
