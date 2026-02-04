@@ -2901,6 +2901,21 @@ func TestSetupScriptRejectsInvalidHostURL(t *testing.T) {
 	}
 }
 
+func TestSetupScriptRejectsInvalidPulseURL(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/setup-script?type=pve&host=https://example.com&pulse_url=ftp://pulse.example.com", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid pulse_url, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Invalid pulse_url parameter") {
+		t.Fatalf("expected invalid pulse_url error, got %q", rec.Body.String())
+	}
+}
+
 func TestOIDCLoginBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
