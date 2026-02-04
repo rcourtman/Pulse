@@ -2576,28 +2576,34 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	}
 
 	// Check I/O metrics (convert bytes/s to MB/s) - checkMetric will skip if threshold is nil or <= 0
-	if thresholds.DiskRead != nil && thresholds.DiskRead.Trigger > 0 {
+	// Check I/O metrics (convert bytes/s to MB/s)
+	// We call checkMetric unconditionally. If the threshold is nil or disabled (Trigger <= 0),
+	// checkMetric will automatically clear any existing alerts for that metric.
+	{
 		readOpts := &metricOptions{MonitorOnly: monitorOnly}
 		if !monitorOnly {
 			readOpts = nil
 		}
 		m.checkMetric(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead, readOpts)
 	}
-	if thresholds.DiskWrite != nil && thresholds.DiskWrite.Trigger > 0 {
+
+	{
 		writeOpts := &metricOptions{MonitorOnly: monitorOnly}
 		if !monitorOnly {
 			writeOpts = nil
 		}
 		m.checkMetric(guestID, name, node, instanceName, guestType, "diskWrite", float64(diskWrite)/1024/1024, thresholds.DiskWrite, writeOpts)
 	}
-	if thresholds.NetworkIn != nil && thresholds.NetworkIn.Trigger > 0 {
+
+	{
 		netInOpts := &metricOptions{MonitorOnly: monitorOnly}
 		if !monitorOnly {
 			netInOpts = nil
 		}
 		m.checkMetric(guestID, name, node, instanceName, guestType, "networkIn", float64(netIn)/1024/1024, thresholds.NetworkIn, netInOpts)
 	}
-	if thresholds.NetworkOut != nil && thresholds.NetworkOut.Trigger > 0 {
+
+	{
 		netOutOpts := &metricOptions{MonitorOnly: monitorOnly}
 		if !monitorOnly {
 			netOutOpts = nil
@@ -2660,31 +2666,39 @@ func (m *Manager) CheckNode(node models.Node) {
 		// CRITICAL: Check if node is offline first
 		if node.Status == "offline" || node.ConnectionHealth == "error" || node.ConnectionHealth == "failed" {
 			m.checkNodeOffline(node)
+
+			// Clear resource alerts if node is offline/unreachable.
+			// This prevents stale alerts from persisting when we can't get new data.
+			metrics := []string{"cpu", "memory", "disk", "temperature"}
+			for _, metric := range metrics {
+				m.clearAlert(fmt.Sprintf("%s-%s", node.ID, metric))
+			}
 		} else {
 			// Clear any existing offline alert if node is back online
 			m.clearNodeOfflineAlert(node)
-		}
-	}
 
-	// Check each metric (only if node is online) - checkMetric will skip if threshold is nil or <= 0
-	if node.Status != "offline" {
-		// Check for host agent deduplication: if a host agent is running on this node,
-		// prefer the host agent alerts and skip node metric alerts to avoid duplicates.
-		if m.hasHostAgentForNode(node.Name) {
-			log.Debug().
-				Str("node", node.Name).
-				Msg("Skipping node metric alerts - host agent is monitoring this machine")
-		} else {
-			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU, nil)
-			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory, nil)
-			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "disk", node.Disk.Usage, thresholds.Disk, nil)
+			// Check each metric (only if node is online and reachable)
+			// Check for host agent deduplication: if a host agent is running on this node,
+			// prefer the host agent alerts and skip node metric alerts to avoid duplicates.
+			if m.hasHostAgentForNode(node.Name) {
+				log.Debug().
+					Str("node", node.Name).
+					Msg("Skipping node metric alerts - host agent is monitoring this machine")
+			} else {
+				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU, nil)
+				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory, nil)
+				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "disk", node.Disk.Usage, thresholds.Disk, nil)
 
-			// Check temperature if available
-			if node.Temperature != nil && node.Temperature.Available && thresholds.Temperature != nil {
-				// Use CPU package temp if available, otherwise use max core temp
-				temp := node.Temperature.CPUPackage
-				if temp == 0 {
-					temp = node.Temperature.CPUMax
+				// Check temperature if available
+				// We pass the check unconditionally so that if the threshold triggers are disabled (set to 0),
+				// any existing alerts will be properly cleared.
+				var temp float64
+				if node.Temperature != nil && node.Temperature.Available {
+					// Use CPU package temp if available, otherwise use max core temp
+					temp = node.Temperature.CPUPackage
+					if temp == 0 {
+						temp = node.Temperature.CPUMax
+					}
 				}
 				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "temperature", temp, thresholds.Temperature, nil)
 			}
@@ -2965,8 +2979,9 @@ func (m *Manager) CheckHost(host models.Host) {
 			effectiveDiskThreshold = thresholds.Disk
 		}
 
-		// Skip if no threshold configured or threshold is disabled (trigger=0)
-		if effectiveDiskThreshold == nil || effectiveDiskThreshold.Trigger <= 0 {
+		// Skip if no threshold configured (nil)
+		// We DO NOT skip if Trigger <= 0 because we need to call checkMetric to clear any existing alerts.
+		if effectiveDiskThreshold == nil {
 			continue
 		}
 
@@ -3244,6 +3259,37 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 			Int("required", requiredConfirmations).
 			Msg("Host agent appears offline, awaiting confirmation")
 		return
+	}
+
+	// Host is confirmed offline. Clear all resource metrics (CPU/Memory/Disk/RAID)
+	// before raising the offline alert, to avoid stale alerts persisting.
+	{
+		// Basic metrics
+		metricTypes := []string{"cpu", "memory"}
+		for _, mt := range metricTypes {
+			m.clearAlertNoLock(fmt.Sprintf("%s-%s", resourceKey, mt))
+		}
+
+		// Disks and RAID
+		// Note: Disks use ResourceID prefix, RAID uses AlertID prefix
+		diskResourcePrefix := fmt.Sprintf("%s/disk:", resourceKey)
+		raidAlertPrefix := fmt.Sprintf("host-%s-raid-", host.ID)
+
+		// Collect alert IDs first, then clear (avoids modifying map during iteration)
+		var alertsToClear []string
+		for alertID, a := range m.activeAlerts {
+			if a == nil {
+				continue
+			}
+			if strings.HasPrefix(a.ResourceID, diskResourcePrefix) {
+				alertsToClear = append(alertsToClear, alertID)
+			} else if strings.HasPrefix(alertID, raidAlertPrefix) {
+				alertsToClear = append(alertsToClear, alertID)
+			}
+		}
+		for _, alertID := range alertsToClear {
+			m.clearAlertNoLock(alertID)
+		}
 	}
 
 	alert := &Alert{

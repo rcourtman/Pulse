@@ -35,3 +35,25 @@ A comprehensive security audit of the Pulse codebase was conducted, focusing on 
 
 ## Conclusion
 The application security posture has been significantly improved with the remediation of the RCE and SSRF vulnerabilities. The remaining identified risks are low or accepted features. The application is ready for release from a security perspective.
+
+## Alert System Reliability Audit
+
+### Executive Summary
+A focused audit of the Alert System was conducted to identify reliability issues such as stale alerts and incorrect clearing logic. Critical bugs causing "zombie interrupts" (stale alerts that never clear) were identified and fixed.
+
+### Findings & Fixes
+
+### 1. Stale Alerts on Node/Host Offline
+- **Problem**: When a Proxmox Node or Pulse Host Agent went offline, the system correctly raised a connectivity alert but failed to clear existing resource alerts (High CPU/Memory/Disk). This resulted in contradictory states (e.g., "Node Offline" and "High CPU" simultaneously).
+- **Fix**: Updated `CheckNode` and `HandleHostOffline` to explicitly clear all resource metric alerts when an offline state is confirmed.
+
+### 2. Stale Alerts on Disabled Thresholds
+- **Problem**: For optional metrics (Guest Disk I/O, Network I/O, Node/Host Temperature, Disk Usage with Overrides), the system skipped the evaluation logic entirely if the threshold was disabled or nil. This prevented the clean-up logic from running, causing existing alerts to persist indefinitely after a rule was disabled.
+- **Fix**: Refactored the checking logic in `CheckGuest`, `CheckNode`, and `CheckHost` to execute unconditionally. The underlying `checkMetric` function now properly handles disabled thresholds by clearing any corresponding active alerts.
+
+### 3. Missing Clear Logic for Global Disable
+- **Problem**: Disabling global alert settings (e.g., "Disable all Host alerts") sometimes left specific metric alerts active if they were not explicitly cleared during the state transition.
+- **Fix**: Verified and reinforced clearing mechanisms. Specifically, `CheckHost` disk monitoring was updated to ensure alerts are cleared even when specific disk overrides disable monitoring.
+
+### Conclusion
+The reliability of the alert system has been significantly improved. Alerts will now correctly reflect the current state of resources, and disabling rules will reliably clear associated alerts.
