@@ -2063,6 +2063,8 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/system/settings/update", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/reset-lockout", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/apply-restart", body: `{}`},
+		{method: http.MethodGet, path: "/api/security/tokens", body: ``},
+		{method: http.MethodDelete, path: "/api/security/tokens/token-1", body: ``},
 		{method: http.MethodPost, path: "/api/security/regenerate-token", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/validate-token", body: `{"token":"abc"}`},
 		{method: http.MethodPost, path: "/api/security/oidc", body: `{}`},
@@ -2810,6 +2812,33 @@ func TestPermissionProtectedEndpointsDenyWhenAuthorizerBlocks(t *testing.T) {
 		if rec.Code != http.StatusForbidden {
 			t.Fatalf("expected 403 for permission denial on %s %s, got %d", tc.method, tc.path, rec.Code)
 		}
+	}
+}
+
+func TestPermissionEndpointsRejectProxyNonAdmin(t *testing.T) {
+	prevAuthorizer := auth.GetAuthorizer()
+	auth.SetAuthorizer(&auth.DefaultAuthorizer{})
+	defer auth.SetAuthorizer(prevAuthorizer)
+
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/tokens", nil)
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy on permissioned endpoint, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Admin privileges required") {
+		t.Fatalf("expected admin privilege error, got %q", rec.Body.String())
 	}
 }
 

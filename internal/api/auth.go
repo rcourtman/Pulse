@@ -691,6 +691,32 @@ func RequirePermission(cfg *config.Config, authorizer auth.Authorizer, action, r
 			return
 		}
 
+		// Check if using proxy auth and if so, verify admin status
+		if cfg.ProxyAuthSecret != "" {
+			if valid, username, isAdmin := CheckProxyAuth(cfg, r); valid {
+				if !isAdmin {
+					// User is authenticated but not an admin
+					log.Warn().
+						Str("ip", r.RemoteAddr).
+						Str("path", r.URL.Path).
+						Str("action", action).
+						Str("resource", resource).
+						Str("username", username).
+						Msg("Non-admin user attempted to access permissioned endpoint")
+
+					// Return forbidden error
+					if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusForbidden)
+						w.Write([]byte(`{"error":"Admin privileges required"}`))
+					} else {
+						http.Error(w, "Admin privileges required", http.StatusForbidden)
+					}
+					return
+				}
+			}
+		}
+
 		// Extract user from header (set by CheckAuth) and inject into context
 		username := w.Header().Get("X-Authenticated-User")
 		ctx := r.Context()
