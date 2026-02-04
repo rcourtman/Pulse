@@ -2753,6 +2753,22 @@ func TestOIDCLoginBypassesAuth(t *testing.T) {
 	}
 }
 
+func TestOIDCCallbackBypassesAuth(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.51")
+	req := httptest.NewRequest(http.MethodGet, config.DefaultOIDCCallbackPath, nil)
+	req.RemoteAddr = "203.0.113.51:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 when OIDC is disabled, got %d", rec.Code)
+	}
+}
+
 func TestAIOAuthCallbackBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
