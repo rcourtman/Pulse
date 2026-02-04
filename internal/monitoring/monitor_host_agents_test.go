@@ -125,6 +125,7 @@ func TestApplyHostReportAllowsTokenReuseAcrossHosts(t *testing.T) {
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
 		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
 
@@ -189,6 +190,7 @@ func TestApplyHostReportDisambiguatesCollidingIdentifiersAcrossTokens(t *testing
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
 		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
 
@@ -780,6 +782,7 @@ func TestApplyHostReport_NilTokenBindingsMap(t *testing.T) {
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: nil, // Nil map
 		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
 
@@ -813,6 +816,7 @@ func TestApplyHostReport_FallbackIdentifier(t *testing.T) {
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
 		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
 
