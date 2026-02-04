@@ -29,6 +29,7 @@ import ZapIcon from 'lucide-solid/icons/zap';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import FilterXIcon from 'lucide-solid/icons/filter-x';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
+import MailIcon from 'lucide-solid/icons/mail';
 
 interface PatrolStreamState {
   phase: Accessor<string>;
@@ -202,6 +203,11 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 <Show when={run.pbs_checked > 0}>
                   <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
                     <DatabaseIcon class="w-3 h-3" /> {run.pbs_checked} PBS
+                  </span>
+                </Show>
+                <Show when={run.pmg_checked > 0}>
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                    <MailIcon class="w-3 h-3" /> {run.pmg_checked} PMG
                   </span>
                 </Show>
                 <Show when={run.kubernetes_checked > 0}>

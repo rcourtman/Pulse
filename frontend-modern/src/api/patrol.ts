@@ -347,6 +347,7 @@ export interface PatrolRunRecord {
     storage_checked: number;
     hosts_checked: number;
     pbs_checked: number;
+    pmg_checked: number;
     kubernetes_checked: number;
     new_findings: number;
     existing_findings: number;

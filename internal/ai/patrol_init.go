@@ -138,6 +138,8 @@ type PatrolConfig struct {
 	AnalyzeHosts bool `json:"analyze_hosts"`
 	// AnalyzeKubernetes controls whether to analyze Kubernetes clusters
 	AnalyzeKubernetes bool `json:"analyze_kubernetes"`
+	// AnalyzePMG controls whether to analyze Proxmox Mail Gateway instances
+	AnalyzePMG bool `json:"analyze_pmg"`
 }
 
 // GetInterval returns the effective patrol interval, handling migration from old config
@@ -165,6 +167,7 @@ func DefaultPatrolConfig() PatrolConfig {
 		AnalyzePBS:        true,
 		AnalyzeHosts:      true,
 		AnalyzeKubernetes: true,
+		AnalyzePMG:        true,
 	}
 }
 

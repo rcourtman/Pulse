@@ -114,6 +114,7 @@ type PatrolRunRecord struct {
 	StorageChecked    int `json:"storage_checked"`
 	HostsChecked      int `json:"hosts_checked"`
 	PBSChecked        int `json:"pbs_checked"`
+	PMGChecked        int `json:"pmg_checked"`
 	KubernetesChecked int `json:"kubernetes_checked"`
 	// Findings from this run
 	NewFindings      int      `json:"new_findings"`

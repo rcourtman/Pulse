@@ -556,6 +556,9 @@ func patrolResourceCount(state models.StateSnapshot, cfg PatrolConfig) int {
 	if cfg.AnalyzeKubernetes {
 		resourceCount += len(state.KubernetesClusters)
 	}
+	if cfg.AnalyzePMG {
+		resourceCount += len(state.PMGInstances)
+	}
 	return resourceCount
 }
 
@@ -921,6 +924,7 @@ You are provided with the current state of the user's infrastructure below, incl
 - Use **pulse_read** to check logs on resources that look unhealthy or abnormal.
 - Use **pulse_storage** to check snapshot ages, replication status, or backup job details.
 - Use **pulse_query** to check resource configuration for misconfigurations.
+- Use **pulse_pmg** to check mail queues or spam volume if mail flow looks abnormal.
 
 **Step 3 — Report or resolve findings.** Report findings for confirmed issues. Resolve active findings that are no longer issues based on current data.
 Always call patrol_get_findings before reporting or resolving findings.
@@ -1040,6 +1044,7 @@ func (p *PatrolService) buildSeedContext(state models.StateSnapshot, scope *Patr
 	sb.WriteString(p.seedPreviousRun(now))
 	intel := p.seedPrecomputeIntelligence(state, scopedSet, now)
 	sb.WriteString(p.seedResourceInventory(state, scopedSet, cfg, now, intel.isQuiet))
+	p.seedPMGSnapshot(&sb, state, scopedSet, cfg, intel.isQuiet)
 	sb.WriteString(p.seedBackupAnalysis(state, now))
 	sb.WriteString(p.seedHealthAndAlerts(state, scopedSet, cfg, now))
 	sb.WriteString(p.seedIntelligenceContext(intel, now))
@@ -1556,6 +1561,82 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 	}
 
 	return sb.String()
+}
+
+// seedPMGSnapshot adds Proxmox Mail Gateway status to the seed context
+func (p *PatrolService) seedPMGSnapshot(sb *strings.Builder, state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) {
+	if !cfg.AnalyzePMG || len(state.PMGInstances) == 0 {
+		return
+	}
+
+	var scopedPMG []models.PMGInstance
+	for _, pmg := range state.PMGInstances {
+		if seedIsInScope(scopedSet, pmg.ID) {
+			scopedPMG = append(scopedPMG, pmg)
+		}
+	}
+
+	if len(scopedPMG) == 0 {
+		return
+	}
+
+	if isQuiet && scopedSet == nil {
+		allHealthy := true
+		for _, pmg := range scopedPMG {
+			if pmg.Status != "online" {
+				allHealthy = false
+				break
+			}
+			// basic health check on mail stats if available
+			if pmg.MailStats != nil {
+				// if average process time > 5s, consider it noteworthy/unhealthy for quiet mode
+				if pmg.MailStats.AverageProcessTimeMs > 5000 {
+					allHealthy = false
+					break
+				}
+			}
+		}
+		if allHealthy {
+			sb.WriteString(fmt.Sprintf("# PMG: %d gateways, all healthy and processing mail normally.\n\n", len(scopedPMG)))
+			return
+		}
+	}
+
+	sb.WriteString("# Proxmox Mail Gateway (PMG)\n")
+	sb.WriteString("| Instance | Status | Version | In/Out | Spam/Virus | Avg Time | Queue (Active/Deferred/Hold) |\n")
+	sb.WriteString("|----------|--------|---------|--------|------------|----------|------------------------------|\n")
+
+	for _, pmg := range scopedPMG {
+		version := pmg.Version
+		if version == "" {
+			version = "—"
+		}
+
+		traffic := "—"
+		spamVirus := "—"
+		avgTime := "—"
+
+		if stats := pmg.MailStats; stats != nil {
+			traffic = fmt.Sprintf("%.0f/%.0f", stats.CountIn, stats.CountOut)
+			spamVirus = fmt.Sprintf("%.0f/%.0f", stats.SpamIn+stats.SpamOut, stats.VirusIn+stats.VirusOut)
+			avgTime = fmt.Sprintf("%.0fms", stats.AverageProcessTimeMs)
+		}
+
+		// Aggregate queues from nodes
+		active, deferred, hold := 0, 0, 0
+		for _, node := range pmg.Nodes {
+			if node.QueueStatus != nil {
+				active += node.QueueStatus.Active
+				deferred += node.QueueStatus.Deferred
+				hold += node.QueueStatus.Hold
+			}
+		}
+		queueStr := fmt.Sprintf("%d/%d/%d", active, deferred, hold)
+
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n",
+			pmg.Name, pmg.Status, version, traffic, spamVirus, avgTime, queueStr))
+	}
+	sb.WriteString("\n")
 }
 
 // seedBackupAnalysis builds the backup status section.

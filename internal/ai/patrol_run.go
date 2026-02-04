@@ -228,6 +228,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		storageChecked    int
 		hostsChecked      int
 		pbsChecked        int
+		pmgChecked        int
 		kubernetesChecked int
 		newFindings       int
 		existingFindings  int
@@ -284,6 +285,9 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	if cfg.AnalyzePBS {
 		runStats.pbsChecked = len(state.PBSInstances)
 	}
+	if cfg.AnalyzePMG {
+		runStats.pmgChecked = len(state.PMGInstances)
+	}
 	if cfg.AnalyzeHosts {
 		runStats.hostsChecked = len(state.Hosts)
 	}
@@ -291,7 +295,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		runStats.kubernetesChecked = len(state.KubernetesClusters)
 	}
 	runStats.resourceCount = runStats.nodesChecked + runStats.guestsChecked +
-		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.hostsChecked +
+		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.pmgChecked + runStats.hostsChecked +
 		runStats.kubernetesChecked
 
 	// Determine if we can run LLM analysis (requires AI service + circuit breaker not open)
@@ -479,6 +483,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		StorageChecked:    runStats.storageChecked,
 		HostsChecked:      runStats.hostsChecked,
 		PBSChecked:        runStats.pbsChecked,
+		PMGChecked:        runStats.pmgChecked,
 		KubernetesChecked: runStats.kubernetesChecked,
 		NewFindings:       runStats.newFindings,
 		ExistingFindings:  runStats.existingFindings,
@@ -608,6 +613,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		storageChecked    int
 		hostsChecked      int
 		pbsChecked        int
+		pmgChecked        int
 		kubernetesChecked int
 		newFindings       int
 		existingFindings  int
@@ -651,6 +657,9 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	if cfg.AnalyzeKubernetes {
 		resourceCount += len(filteredState.KubernetesClusters)
 	}
+	if cfg.AnalyzePMG {
+		resourceCount += len(filteredState.PMGInstances)
+	}
 
 	if resourceCount == 0 {
 		log.Debug().
@@ -686,6 +695,9 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	}
 	if cfg.AnalyzeKubernetes {
 		runStats.kubernetesChecked = len(filteredState.KubernetesClusters)
+	}
+	if cfg.AnalyzePMG {
+		runStats.pmgChecked = len(filteredState.PMGInstances)
 	}
 	runStats.resourceCount = resourceCount
 
@@ -782,6 +794,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		StorageChecked:     runStats.storageChecked,
 		HostsChecked:       runStats.hostsChecked,
 		PBSChecked:         runStats.pbsChecked,
+		PMGChecked:         runStats.pmgChecked,
 		KubernetesChecked:  runStats.kubernetesChecked,
 		NewFindings:        runStats.newFindings,
 		ExistingFindings:   runStats.existingFindings,
