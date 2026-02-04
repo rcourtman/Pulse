@@ -135,7 +135,7 @@ if [ "$SKIP_DOCKER" = false ]; then
 
     # Validate all required binaries exist and are non-empty
     info "Checking downloadable binaries in /opt/pulse/bin/..."
-    docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/bin; required="pulse pulse-docker-agent pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 pulse-docker-agent-linux-armv7 pulse-docker-agent-linux-armv6 pulse-docker-agent-linux-386 pulse-host-agent-linux-amd64 pulse-host-agent-linux-arm64 pulse-host-agent-linux-armv7 pulse-host-agent-linux-armv6 pulse-host-agent-linux-386 pulse-host-agent-darwin-amd64 pulse-host-agent-darwin-arm64 pulse-host-agent-windows-amd64.exe pulse-host-agent-windows-amd64 pulse-host-agent-windows-arm64.exe pulse-host-agent-windows-arm64 pulse-host-agent-windows-386.exe pulse-host-agent-windows-386 pulse-agent-linux-amd64 pulse-agent-linux-arm64 pulse-agent-linux-armv7 pulse-agent-linux-armv6 pulse-agent-linux-386 pulse-agent-darwin-amd64 pulse-agent-darwin-arm64 pulse-agent-windows-amd64.exe pulse-agent-windows-amd64 pulse-agent-windows-arm64.exe pulse-agent-windows-arm64 pulse-agent-windows-386.exe pulse-agent-windows-386"; for f in $required; do [ -e "$f" ] || { echo "missing binary $f" >&2; exit 1; }; [ -s "$f" ] || { echo "empty binary $f" >&2; exit 1; }; done; [ "$(readlink pulse-host-agent-windows-amd64)" = "pulse-host-agent-windows-amd64.exe" ] || { echo "windows amd64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-host-agent-windows-arm64)" = "pulse-host-agent-windows-arm64.exe" ] || { echo "windows arm64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-host-agent-windows-386)" = "pulse-host-agent-windows-386.exe" ] || { echo "windows 386 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-agent-windows-amd64)" = "pulse-agent-windows-amd64.exe" ] || { echo "unified agent windows amd64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-agent-windows-arm64)" = "pulse-agent-windows-arm64.exe" ] || { echo "unified agent windows arm64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-agent-windows-386)" = "pulse-agent-windows-386.exe" ] || { echo "unified agent windows 386 symlink broken" >&2; exit 1; }; echo "All binaries present"' || { error "Binary validation failed"; exit 1; }
+    docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/bin; required="pulse pulse-docker-agent pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 pulse-docker-agent-linux-armv7 pulse-docker-agent-linux-armv6 pulse-docker-agent-linux-386 pulse-host-agent-linux-amd64 pulse-host-agent-linux-arm64 pulse-host-agent-linux-armv7 pulse-host-agent-linux-armv6 pulse-host-agent-linux-386 pulse-host-agent-darwin-amd64 pulse-host-agent-darwin-arm64 pulse-host-agent-windows-amd64.exe pulse-host-agent-windows-amd64 pulse-host-agent-windows-arm64.exe pulse-host-agent-windows-arm64 pulse-host-agent-windows-386.exe pulse-host-agent-windows-386 pulse-host-agent-freebsd-amd64 pulse-host-agent-freebsd-arm64 pulse-agent-linux-amd64 pulse-agent-linux-arm64 pulse-agent-linux-armv7 pulse-agent-linux-armv6 pulse-agent-linux-386 pulse-agent-darwin-amd64 pulse-agent-darwin-arm64 pulse-agent-windows-amd64.exe pulse-agent-windows-amd64 pulse-agent-windows-arm64.exe pulse-agent-windows-arm64 pulse-agent-windows-386.exe pulse-agent-windows-386 pulse-agent-freebsd-amd64 pulse-agent-freebsd-arm64"; for f in $required; do [ -e "$f" ] || { echo "missing binary $f" >&2; exit 1; }; [ -s "$f" ] || { echo "empty binary $f" >&2; exit 1; }; done; [ "$(readlink pulse-host-agent-windows-amd64)" = "pulse-host-agent-windows-amd64.exe" ] || { echo "windows amd64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-host-agent-windows-arm64)" = "pulse-host-agent-windows-arm64.exe" ] || { echo "windows arm64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-host-agent-windows-386)" = "pulse-host-agent-windows-386.exe" ] || { echo "windows 386 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-agent-windows-amd64)" = "pulse-agent-windows-amd64.exe" ] || { echo "unified agent windows amd64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-agent-windows-arm64)" = "pulse-agent-windows-arm64.exe" ] || { echo "unified agent windows arm64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-agent-windows-386)" = "pulse-agent-windows-386.exe" ] || { echo "unified agent windows 386 symlink broken" >&2; exit 1; }; echo "All binaries present"' || { error "Binary validation failed"; exit 1; }
     success "All downloadable binaries present"
 
     # Validate version embedding in Docker image binaries
@@ -313,6 +313,10 @@ required_assets=(
     "pulse-agent-v${PULSE_VERSION}-windows-amd64.zip"
     "pulse-agent-v${PULSE_VERSION}-windows-arm64.zip"
     "pulse-agent-v${PULSE_VERSION}-windows-386.zip"
+    "pulse-host-agent-v${PULSE_VERSION}-freebsd-amd64.tar.gz"
+    "pulse-host-agent-v${PULSE_VERSION}-freebsd-arm64.tar.gz"
+    "pulse-agent-v${PULSE_VERSION}-freebsd-amd64.tar.gz"
+    "pulse-agent-v${PULSE_VERSION}-freebsd-arm64.tar.gz"
 )
 
 missing_count=0
@@ -357,6 +361,8 @@ expected_agents = {
     "pulse-host-agent-windows-amd64",
     "pulse-host-agent-windows-arm64",
     "pulse-host-agent-windows-386",
+    "pulse-host-agent-freebsd-amd64",
+    "pulse-host-agent-freebsd-arm64",
 }
 
 def check_set(name, found):
@@ -413,6 +419,8 @@ host_agent_entries=(
     ./bin/pulse-host-agent-windows-amd64
     ./bin/pulse-host-agent-windows-arm64
     ./bin/pulse-host-agent-windows-386
+    ./bin/pulse-host-agent-freebsd-amd64
+    ./bin/pulse-host-agent-freebsd-arm64
 )
 unified_agent_entries=(
     ./bin/pulse-agent-linux-amd64
@@ -428,6 +436,8 @@ unified_agent_entries=(
     ./bin/pulse-agent-windows-amd64
     ./bin/pulse-agent-windows-arm64
     ./bin/pulse-agent-windows-386
+    ./bin/pulse-agent-freebsd-amd64
+    ./bin/pulse-agent-freebsd-arm64
 )
 for arch in "${tar_arches[@]}"; do
     tarball="pulse-v${PULSE_VERSION}-${arch}.tar.gz"

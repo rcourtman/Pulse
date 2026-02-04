@@ -494,6 +494,8 @@ host_agents = [
     "pulse-host-agent-windows-amd64",
     "pulse-host-agent-windows-arm64",
     "pulse-host-agent-windows-386",
+    "pulse-host-agent-freebsd-amd64",
+    "pulse-host-agent-freebsd-arm64",
 ]
 
 manifest = {
