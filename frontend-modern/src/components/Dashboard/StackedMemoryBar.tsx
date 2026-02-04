@@ -138,7 +138,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
     });
 
     const displaySublabel = createMemo(() => {
-        return `${formatBytes(props.used, 0)}/${formatBytes(props.total, 0)}`;
+        return `${formatBytes(props.used)}/${formatBytes(props.total)}`;
     });
 
     // Estimate text width for label fitting (approx 6px per char + padding)
@@ -247,7 +247,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                     <div class="flex justify-between gap-3 py-0.5">
                                         <span class="text-green-400">Used</span>
                                         <span class="whitespace-nowrap text-gray-300">
-                                            {formatBytes(props.used, 0)}
+                                            {formatBytes(props.used)}
                                         </span>
                                     </div>
 
@@ -255,7 +255,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                         <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
                                             <span class="text-yellow-400">Balloon Limit</span>
                                             <span class="whitespace-nowrap text-gray-300">
-                                                {formatBytes(props.balloon || 0, 0)}
+                                                {formatBytes(props.balloon || 0)}
                                             </span>
                                         </div>
                                     </Show>
@@ -263,7 +263,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                     <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
                                         <span class="text-gray-400">Free</span>
                                         <span class="whitespace-nowrap text-gray-300">
-                                            {formatBytes(props.total - props.used, 0)}
+                                            {formatBytes(props.total - props.used)}
                                         </span>
                                     </div>
 
@@ -273,7 +273,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                             <div class="flex justify-between gap-3 py-0.5">
                                                 <span class="text-purple-400">Swap</span>
                                                 <span class="whitespace-nowrap text-gray-300">
-                                                    {formatBytes(props.swapUsed || 0, 0)} / {formatBytes(props.swapTotal || 0, 0)}
+                                                    {formatBytes(props.swapUsed || 0)} / {formatBytes(props.swapTotal || 0)}
                                                 </span>
                                             </div>
                                         </div>

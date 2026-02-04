@@ -839,12 +839,12 @@ const DockerContainerRow: Component<{
   const diskUsageLabel = createMemo(() => {
     const used = writableLayerBytes();
     if (used <= 0) return '0 B';
-    return formatBytes(used, 0);
+    return formatBytes(used);
   });
   const diskSublabel = createMemo<string | undefined>(() => {
     const total = rootFilesystemBytes();
     if (!total || total <= 0) return undefined;
-    return `${diskUsageLabel()} / ${formatBytes(total, 0)}`;
+    return `${diskUsageLabel()} / ${formatBytes(total)}`;
   });
   const createdRelative = createMemo(() => (container.createdAt ? formatRelativeTime(container.createdAt) : null));
   const createdAbsolute = createMemo(() => (container.createdAt ? formatAbsoluteTime(container.createdAt) : null));

@@ -566,7 +566,7 @@ export function GuestRow(props: GuestRowProps) {
     if (!props.guest.memory) return undefined;
     const used = props.guest.memory.used ?? 0;
     const total = props.guest.memory.total ?? 0;
-    return `${formatBytes(used, 0)}/${formatBytes(total, 0)}`;
+    return `${formatBytes(used)}/${formatBytes(total)}`;
   });
   const memoryExtraLines = createMemo(() => {
     if (!props.guest.memory) return undefined;
@@ -577,11 +577,11 @@ export function GuestRow(props: GuestRowProps) {
       props.guest.memory.balloon > 0 &&
       props.guest.memory.balloon !== total
     ) {
-      lines.push(`Balloon: ${formatBytes(props.guest.memory.balloon, 0)}`);
+      lines.push(`Balloon: ${formatBytes(props.guest.memory.balloon)}`);
     }
     if (props.guest.memory.swapTotal && props.guest.memory.swapTotal > 0) {
       const swapUsed = props.guest.memory.swapUsed ?? 0;
-      lines.push(`Swap: ${formatBytes(swapUsed, 0)} / ${formatBytes(props.guest.memory.swapTotal, 0)}`);
+      lines.push(`Swap: ${formatBytes(swapUsed)} / ${formatBytes(props.guest.memory.swapTotal)}`);
     }
     return lines.length > 0 ? lines : undefined;
   });

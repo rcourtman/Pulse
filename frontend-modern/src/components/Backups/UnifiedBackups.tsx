@@ -1408,7 +1408,7 @@ const UnifiedBackups: Component = () => {
                             label={formatPercent(memPercent())}
                             sublabel={
                               pbs.memoryTotal
-                                ? `${formatBytes(pbs.memoryUsed, 0)}/${formatBytes(pbs.memoryTotal, 0)}`
+                                ? `${formatBytes(pbs.memoryUsed)}/${formatBytes(pbs.memoryTotal)}`
                                 : undefined
                             }
                             type="memory"
@@ -1418,7 +1418,7 @@ const UnifiedBackups: Component = () => {
                           <MetricBar
                             value={storage.percent}
                             label={formatPercent(storage.percent)}
-                            sublabel={`${formatBytes(storage.used, 0)}/${formatBytes(storage.total, 0)}`}
+                            sublabel={`${formatBytes(storage.used)}/${formatBytes(storage.total)}`}
                             type="disk"
                           />
                         </td>

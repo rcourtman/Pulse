@@ -194,8 +194,8 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
         const label = disk.mountpoint || disk.device || `Disk ${idx + 1}`;
         return {
           label,
-          used: formatBytes(disk.used, 0),
-          total: formatBytes(disk.total, 0),
+          used: formatBytes(disk.used),
+          total: formatBytes(disk.total),
           percent: formatPercent(percent),
           color: useUsageColors
             ? getUsageColor(percent)
@@ -212,8 +212,8 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       const percent = (props.aggregateDisk.used / props.aggregateDisk.total) * 100;
       return [{
         label: 'Total',
-        used: formatBytes(props.aggregateDisk.used, 0),
-        total: formatBytes(props.aggregateDisk.total, 0),
+        used: formatBytes(props.aggregateDisk.used),
+        total: formatBytes(props.aggregateDisk.total),
         percent: formatPercent(percent),
         color: getUsageColor(percent),
       }];
@@ -228,7 +228,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
 
   // Sublabel showing used/total
   const displaySublabel = createMemo(() => {
-    return `${formatBytes(totalUsed(), 0)}/${formatBytes(totalCapacity(), 0)}`;
+    return `${formatBytes(totalUsed())}/${formatBytes(totalCapacity())}`;
   });
 
   const showMaxLabel = createMemo(() => {

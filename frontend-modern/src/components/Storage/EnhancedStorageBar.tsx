@@ -81,8 +81,8 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
                 <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none pointer-events-none">
                     <span class="whitespace-nowrap px-0.5">
                         {formatPercent(usagePercent())} (
-                        {formatBytes(props.used, 0)}/
-                        {formatBytes(props.total, 0)})
+                        {formatBytes(props.used)}/
+                        {formatBytes(props.total)})
                     </span>
                 </span>
             </div>

@@ -958,7 +958,7 @@ const Storage: Component = () => {
                                     const used = Math.max(0, cluster.usedBytes || 0);
                                     const percent = total > 0 ? (used / total) * 100 : 0;
                                     parts.push(
-                                      `${formatBytes(used, 0)} / ${formatBytes(total, 0)} (${formatPercent(percent)})`,
+                                      `${formatBytes(used)} / ${formatBytes(total)} (${formatPercent(percent)})`,
                                     );
                                     if (
                                       Number.isFinite(cluster.numOsds) &&
@@ -983,7 +983,7 @@ const Storage: Component = () => {
                                       if (totals.total > 0) {
                                         const percent = (totals.used / totals.total) * 100;
                                         parts.push(
-                                          `${formatBytes(totals.used, 0)} / ${formatBytes(totals.total, 0)} (${formatPercent(percent)})`,
+                                          `${formatBytes(totals.used)} / ${formatBytes(totals.total)} (${formatPercent(percent)})`,
                                         );
                                       }
                                     }
@@ -1248,12 +1248,12 @@ const Storage: Component = () => {
                                       </td>
                                       <Show when={isColumnVisible('free')}>
                                         <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">
-                                          {formatBytes(storage.free || 0, 0)}
+                                          {formatBytes(storage.free || 0)}
                                         </td>
                                       </Show>
                                       <Show when={isColumnVisible('total')}>
                                         <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">
-                                          {formatBytes(storage.total || 0, 0)}
+                                          {formatBytes(storage.total || 0)}
                                         </td>
                                       </Show>
                                       <td class="p-0.5 px-1.5"></td>
