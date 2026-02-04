@@ -1417,6 +1417,50 @@ func TestHostAgentEndpointsRequireHostReportScope(t *testing.T) {
 	}
 }
 
+func TestMonitoringReadEndpointsRequireMonitoringReadScope(t *testing.T) {
+	rawToken := "monitoring-read-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/storage/host-1",
+		"/api/storage-charts",
+		"/api/charts",
+		"/api/metrics-store/stats",
+		"/api/metrics-store/history",
+		"/api/backups",
+		"/api/backups/unified",
+		"/api/backups/pve",
+		"/api/backups/pbs",
+		"/api/snapshots",
+		"/api/resources",
+		"/api/resources/stats",
+		"/api/resources/resource-1",
+		"/api/guests/metadata",
+		"/api/guests/metadata/guest-1",
+		"/api/docker/metadata",
+		"/api/docker/metadata/container-1",
+		"/api/docker/hosts/metadata",
+		"/api/docker/hosts/metadata/host-1",
+		"/api/hosts/metadata",
+		"/api/hosts/metadata/host-1",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing monitoring:read scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeMonitoringRead) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringRead, rec.Body.String())
+		}
+	}
+}
+
 func TestSecurityOIDCRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "security-oidc-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
