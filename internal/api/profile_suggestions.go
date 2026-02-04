@@ -16,15 +16,15 @@ import (
 
 // ProfileSuggestionHandler handles AI-assisted profile suggestions
 type ProfileSuggestionHandler struct {
-	persistence *config.ConfigPersistence
-	aiHandler   *AIHandler
+	mtPersistence *config.MultiTenantPersistence
+	aiHandler     *AIHandler
 }
 
 // NewProfileSuggestionHandler creates a new suggestion handler
-func NewProfileSuggestionHandler(persistence *config.ConfigPersistence, aiHandler *AIHandler) *ProfileSuggestionHandler {
+func NewProfileSuggestionHandler(mtp *config.MultiTenantPersistence, aiHandler *AIHandler) *ProfileSuggestionHandler {
 	return &ProfileSuggestionHandler{
-		persistence: persistence,
-		aiHandler:   aiHandler,
+		mtPersistence: mtp,
+		aiHandler:     aiHandler,
 	}
 }
 
@@ -71,14 +71,20 @@ func (h *ProfileSuggestionHandler) HandleSuggestProfile(w http.ResponseWriter, r
 	// Build context for the AI
 	contextParts := []string{}
 
-	// Add existing profiles for reference
-	profiles, err := h.persistence.LoadAgentProfiles()
-	if err == nil && len(profiles) > 0 {
-		profileNames := make([]string, len(profiles))
-		for i, p := range profiles {
-			profileNames[i] = p.Name
+	// Add existing profiles for reference (if persistence is available)
+	if h.mtPersistence != nil {
+		orgID := GetOrgID(r.Context())
+		persistence, err := h.mtPersistence.GetPersistence(orgID)
+		if err == nil {
+			profiles, err := persistence.LoadAgentProfiles()
+			if err == nil && len(profiles) > 0 {
+				profileNames := make([]string, len(profiles))
+				for i, p := range profiles {
+					profileNames[i] = p.Name
+				}
+				contextParts = append(contextParts, fmt.Sprintf("Existing profiles: %s", strings.Join(profileNames, ", ")))
+			}
 		}
-		contextParts = append(contextParts, fmt.Sprintf("Existing profiles: %s", strings.Join(profileNames, ", ")))
 	}
 
 	// Build config schema documentation from the actual definitions

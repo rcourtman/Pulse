@@ -106,7 +106,7 @@ describe('SuggestProfileModal', () => {
         target: { value: 'Production profile with minimal logging' },
       },
     );
-    fireEvent.click(screen.getByRole('button', { name: /suggest profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get ideas/i }));
 
     expect(await screen.findByText('Production Servers')).toBeInTheDocument();
     expect(screen.getByText('Settings Preview')).toBeInTheDocument();
@@ -146,12 +146,12 @@ describe('SuggestProfileModal', () => {
 
     const promptInput = screen.getByPlaceholderText('Describe the agents and use case for this profile...');
     fireEvent.input(promptInput, { target: { value: 'Production profile' } });
-    fireEvent.click(screen.getByRole('button', { name: /suggest profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get ideas/i }));
 
     expect(await screen.findByText('Production Profile')).toBeInTheDocument();
 
     fireEvent.input(promptInput, { target: { value: 'Development profile' } });
-    fireEvent.click(screen.getByRole('button', { name: /regenerate/i }));
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
 
     expect(await screen.findByText('Development Profile')).toBeInTheDocument();
     expect(screen.getByText('Recent drafts')).toBeInTheDocument();

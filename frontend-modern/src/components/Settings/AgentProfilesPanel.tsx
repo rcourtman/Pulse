@@ -3,6 +3,7 @@ import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment, type ProfileSuggestion } from '@/api/agentProfiles';
+import { AIAPI } from '@/api/ai';
 import { LicenseAPI } from '@/api/license';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -15,7 +16,7 @@ import Trash2 from 'lucide-solid/icons/trash-2';
 import Crown from 'lucide-solid/icons/crown';
 import Users from 'lucide-solid/icons/users';
 import Settings from 'lucide-solid/icons/settings';
-import Sparkles from 'lucide-solid/icons/sparkles';
+import Lightbulb from 'lucide-solid/icons/lightbulb';
 
 
 export const AgentProfilesPanel: Component = () => {
@@ -24,6 +25,9 @@ export const AgentProfilesPanel: Component = () => {
     // License state
     const [hasFeature, setHasFeature] = createSignal(false);
     const [checkingLicense, setCheckingLicense] = createSignal(true);
+
+    // AI state - only show AI features if enabled
+    const [aiAvailable, setAiAvailable] = createSignal(false);
 
     // Data state
     const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
@@ -100,7 +104,7 @@ export const AgentProfilesPanel: Component = () => {
         }
     };
 
-    // Check license on mount
+    // Check license and AI availability on mount
     onMount(async () => {
         try {
             const features = await LicenseAPI.getFeatures();
@@ -110,6 +114,15 @@ export const AgentProfilesPanel: Component = () => {
             setHasFeature(false);
         } finally {
             setCheckingLicense(false);
+        }
+
+        // Check if AI is available (enabled and configured) - silently fail if not
+        try {
+            const aiSettings = await AIAPI.getSettings();
+            setAiAvailable(aiSettings.enabled && aiSettings.configured);
+        } catch {
+            // AI not available - that's fine, just hide the Ideas button
+            setAiAvailable(false);
         }
 
         if (hasFeature()) {
@@ -286,15 +299,6 @@ export const AgentProfilesPanel: Component = () => {
                             <div class="flex items-center gap-2">
                                 <button
                                     type="button"
-                                    onClick={handleSuggest}
-                                    class="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-700 sm:px-4 sm:py-2 sm:text-sm"
-                                >
-                                    <Sparkles class="w-4 h-4" />
-                                    <span class="hidden sm:inline">Suggest Profile</span>
-                                    <span class="sm:hidden">Suggest</span>
-                                </button>
-                                <button
-                                    type="button"
                                     onClick={handleCreate}
                                     class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 sm:px-4 sm:py-2 sm:text-sm"
                                 >
@@ -302,6 +306,18 @@ export const AgentProfilesPanel: Component = () => {
                                     <span class="hidden sm:inline">New Profile</span>
                                     <span class="sm:hidden">New</span>
                                 </button>
+                                {/* Only show AI Ideas button if AI is enabled and configured */}
+                                <Show when={aiAvailable()}>
+                                    <button
+                                        type="button"
+                                        onClick={handleSuggest}
+                                        title="Get AI-powered profile suggestions"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 sm:px-3 sm:py-2 sm:text-sm"
+                                    >
+                                        <Lightbulb class="w-3.5 h-3.5" />
+                                        <span class="hidden sm:inline">Ideas</span>
+                                    </button>
+                                </Show>
                             </div>
                         }
                     >

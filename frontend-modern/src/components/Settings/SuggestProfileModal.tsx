@@ -4,7 +4,7 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
 import { KNOWN_SETTINGS_BY_KEY } from './agentProfileSettings';
-import Sparkles from 'lucide-solid/icons/sparkles';
+import Lightbulb from 'lucide-solid/icons/lightbulb';
 import AlertCircle from 'lucide-solid/icons/alert-circle';
 import Check from 'lucide-solid/icons/check';
 import Loader2 from 'lucide-solid/icons/loader-2';
@@ -242,15 +242,15 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                 {/* Header */}
                 <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
                     <div class="flex items-center gap-3">
-                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                            <Sparkles class="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                            <Lightbulb class="w-4 h-4 text-amber-600 dark:text-amber-400" />
                         </div>
                         <div>
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                Pulse Assistant Profile Suggestion
+                                Profile Ideas
                             </h3>
                             <p class="text-xs text-gray-500 dark:text-gray-400">
-                                Describe what you need, and Pulse Assistant will draft a profile
+                                Describe what you need, and we'll help draft a profile
                             </p>
                         </div>
                     </div>
@@ -595,10 +595,10 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                 type="button"
                                 onClick={handleSubmit}
                                 disabled={loading() || !prompt().trim()}
-                                class="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                <Sparkles class="w-4 h-4" />
-                                {loading() ? 'Generating...' : 'Suggest Profile'}
+                                <Lightbulb class="w-4 h-4" />
+                                {loading() ? 'Generating...' : 'Get Ideas'}
                             </button>
                         }
                     >
@@ -606,11 +606,11 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                             type="button"
                             onClick={handleSubmit}
                             disabled={loading() || !prompt().trim()}
-                            class="inline-flex items-center gap-2 rounded-lg bg-purple-100 px-4 py-2 text-sm font-medium text-purple-700 transition-colors hover:bg-purple-200 dark:bg-purple-900/40 dark:text-purple-200 dark:hover:bg-purple-900/60 disabled:cursor-not-allowed disabled:opacity-60"
+                            class="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
                             title="Regenerate using the current prompt"
                         >
-                            <Sparkles class="w-4 h-4" />
-                            {loading() ? 'Generating...' : 'Regenerate draft'}
+                            <Lightbulb class="w-4 h-4" />
+                            {loading() ? 'Generating...' : 'Try Again'}
                         </button>
                         <button
                             type="button"

@@ -39,15 +39,7 @@ func (h *ConfigProfileHandler) getPersistence(ctx context.Context) (*config.Conf
 
 // SetAIHandler sets the AI handler for profile suggestions
 func (h *ConfigProfileHandler) SetAIHandler(aiHandler *AIHandler) {
-	// We pass nil for persistence here because the suggestion handler will need
-	// to use the context-aware persistence, which requires deeper refactoring of ProfileSuggestionHandler.
-	// For now, we'll let ProfileSuggestionHandler resolve persistence from AIHandler if possible,
-	// or we update ProfileSuggestionHandler to be multi-tenant aware as well.
-	// Actually, ProfileSuggestionHandler needs persistence. Let's look at that separately.
-	// For this step, we'll temporarilly break this or pass nil and fix it in the next step.
-	// A better approach: ProfileSuggestionHandler should take MultiTenantPersistence too.
-	// Let's assume we update ProfileSuggestionHandler next.
-	h.suggestionHandler = NewProfileSuggestionHandler(nil, aiHandler)
+	h.suggestionHandler = NewProfileSuggestionHandler(h.mtPersistence, aiHandler)
 }
 
 // ServeHTTP implements the http.Handler interface

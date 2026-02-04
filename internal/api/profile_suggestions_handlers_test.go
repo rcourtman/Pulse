@@ -14,9 +14,15 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+// withOrgContext adds the default org ID to the request context
+func withOrgContext(req *http.Request) *http.Request {
+	ctx := context.WithValue(req.Context(), OrgIDContextKey, "default")
+	return req.WithContext(ctx)
+}
+
 func TestProfileSuggestionHandler_MethodNotAllowed(t *testing.T) {
-	handler := NewProfileSuggestionHandler(config.NewConfigPersistence(t.TempDir()), &AIHandler{})
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/profiles/suggestions", nil)
+	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), &AIHandler{})
+	req := withOrgContext(httptest.NewRequest(http.MethodGet, "/api/admin/profiles/suggestions", nil))
 	rr := httptest.NewRecorder()
 
 	handler.HandleSuggestProfile(rr, req)
@@ -31,8 +37,8 @@ func TestProfileSuggestionHandler_ServiceUnavailable(t *testing.T) {
 	mockSvc.On("IsRunning").Return(false)
 	aiHandler := &AIHandler{legacyService: mockSvc}
 
-	handler := NewProfileSuggestionHandler(config.NewConfigPersistence(t.TempDir()), aiHandler)
-	req := httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"test"}`)))
+	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), aiHandler)
+	req := withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"test"}`))))
 	rr := httptest.NewRecorder()
 
 	handler.HandleSuggestProfile(rr, req)
@@ -46,16 +52,16 @@ func TestProfileSuggestionHandler_InvalidRequest(t *testing.T) {
 	mockSvc := new(MockAIService)
 	mockSvc.On("IsRunning").Return(true)
 	aiHandler := &AIHandler{legacyService: mockSvc}
-	handler := NewProfileSuggestionHandler(config.NewConfigPersistence(t.TempDir()), aiHandler)
+	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), aiHandler)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte("{bad")))
+	req := withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte("{bad"))))
 	rr := httptest.NewRecorder()
 	handler.HandleSuggestProfile(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"   "}`)))
+	req = withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"   "}`))))
 	rr = httptest.NewRecorder()
 	handler.HandleSuggestProfile(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -64,7 +70,12 @@ func TestProfileSuggestionHandler_InvalidRequest(t *testing.T) {
 }
 
 func TestProfileSuggestionHandler_SuccessAndParseFailure(t *testing.T) {
-	persistence := config.NewConfigPersistence(t.TempDir())
+	mtPersistence := config.NewMultiTenantPersistence(t.TempDir())
+	// Get the default tenant's persistence to save test data
+	persistence, err := mtPersistence.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("get persistence: %v", err)
+	}
 	if err := persistence.SaveAgentProfiles([]models.AgentProfile{{Name: "Existing"}}); err != nil {
 		t.Fatalf("save profiles: %v", err)
 	}
@@ -76,9 +87,9 @@ func TestProfileSuggestionHandler_SuccessAndParseFailure(t *testing.T) {
 	}, nil).Once()
 
 	aiHandler := &AIHandler{legacyService: mockSvc}
-	handler := NewProfileSuggestionHandler(persistence, aiHandler)
+	handler := NewProfileSuggestionHandler(mtPersistence, aiHandler)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"build a profile"}`)))
+	req := withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"build a profile"}`))))
 	rr := httptest.NewRecorder()
 	handler.HandleSuggestProfile(rr, req)
 
@@ -101,7 +112,7 @@ func TestProfileSuggestionHandler_SuccessAndParseFailure(t *testing.T) {
 		"content": "not json",
 	}, nil).Once()
 
-	req = httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"bad response"}`)))
+	req = withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"bad response"}`))))
 	rr = httptest.NewRecorder()
 	handler.HandleSuggestProfile(rr, req)
 	if rr.Code != http.StatusInternalServerError {
