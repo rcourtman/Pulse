@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -2796,6 +2799,24 @@ func TestPublicEndpointsBypassAuthInAPIMode(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 for public endpoint %s, got %d", path, rec.Code)
 		}
+	}
+}
+
+func TestSSHKeyGenerationBlockedInContainer(t *testing.T) {
+	t.Setenv("PULSE_DOCKER", "true")
+	t.Setenv("PULSE_DEV_ALLOW_CONTAINER_SSH", "")
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	handler := NewConfigHandlers(nil, nil, func() error { return nil }, nil, nil, func() {})
+	keys := handler.getOrGenerateSSHKeys()
+	if keys.SensorsPublicKey != "" {
+		t.Fatalf("expected empty key when container SSH generation is blocked")
+	}
+
+	pubKeyPath := filepath.Join(homeDir, ".ssh", "id_ed25519_sensors.pub")
+	if _, err := os.Stat(pubKeyPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected no key files to be written, got err=%v", err)
 	}
 }
 
