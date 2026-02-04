@@ -186,6 +186,19 @@ func TestChangePasswordRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestResetLockoutRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "reset-lockout-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/reset-lockout", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
 func TestLicenseFeaturesRequiresAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "license-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
@@ -1637,16 +1650,33 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodGet, path: "/api/updates/check", body: ""},
 		{method: http.MethodPost, path: "/api/updates/apply", body: `{}`},
 		{method: http.MethodGet, path: "/api/updates/status", body: ""},
+		{method: http.MethodGet, path: "/api/updates/stream", body: ""},
 		{method: http.MethodGet, path: "/api/updates/plan", body: ""},
 		{method: http.MethodGet, path: "/api/updates/history", body: ""},
 		{method: http.MethodGet, path: "/api/updates/history/entry", body: ""},
 		{method: http.MethodGet, path: "/api/diagnostics", body: ""},
 		{method: http.MethodPost, path: "/api/diagnostics/docker/prepare-token", body: `{}`},
+		{method: http.MethodGet, path: "/api/config/system", body: ""},
+		{method: http.MethodGet, path: "/api/system/settings", body: ""},
+		{method: http.MethodPost, path: "/api/system/settings/update", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/reset-lockout", body: `{}`},
+		{method: http.MethodGet, path: "/api/ai/debug/context", body: ""},
+		{method: http.MethodPost, path: "/api/ai/cost/reset", body: `{}`},
+		{method: http.MethodGet, path: "/api/ai/cost/export", body: ""},
+		{method: http.MethodPost, path: "/api/ai/oauth/start", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/oauth/exchange", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/oauth/disconnect", body: `{}`},
+		{method: http.MethodPost, path: "/api/agent-install-command", body: `{}`},
+		{method: http.MethodPost, path: "/api/setup-script-url", body: `{}`},
+		{method: http.MethodGet, path: "/api/discover", body: ""},
 		{method: http.MethodPost, path: "/api/license/activate", body: `{}`},
 		{method: http.MethodPost, path: "/api/license/clear", body: `{}`},
 		{method: http.MethodGet, path: "/api/license/status", body: ""},
 		{method: http.MethodGet, path: "/api/notifications/queue/stats", body: ""},
 		{method: http.MethodGet, path: "/api/notifications/", body: ""},
+		{method: http.MethodGet, path: "/api/notifications/dlq", body: ""},
+		{method: http.MethodPost, path: "/api/notifications/dlq/retry", body: `{}`},
+		{method: http.MethodPost, path: "/api/notifications/dlq/delete", body: `{}`},
 	}
 
 	for _, tc := range cases {
