@@ -2673,6 +2673,32 @@ func TestSecurityStatusIncludesBootstrapTokenWhenUnauthenticated(t *testing.T) {
 	}
 }
 
+func TestAuditRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "audit-auth-token-123.12345678", []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
+func TestAuditVerifyRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "audit-verify-auth-token-123.12345678", []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit/event-1/verify", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
 func TestOIDCLoginBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
