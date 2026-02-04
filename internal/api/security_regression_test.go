@@ -1662,6 +1662,7 @@ func TestMonitoringReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
+		"/api/config",
 		"/api/storage/host-1",
 		"/api/storage-charts",
 		"/api/charts",
