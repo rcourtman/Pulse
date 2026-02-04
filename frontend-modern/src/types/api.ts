@@ -1051,6 +1051,7 @@ export interface Alert {
   resourceId: string;
   resourceName: string;
   node: string;
+  nodeDisplayName?: string;
   instance: string;
   message: string;
   value: number;

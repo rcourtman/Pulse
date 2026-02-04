@@ -43,6 +43,7 @@ type WebhookPayloadData struct {
 	ResourceName       string
 	ResourceID         string
 	Node               string
+	NodeDisplayName    string
 	Instance           string
 	Message            string
 	Value              float64

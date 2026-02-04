@@ -54,7 +54,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
 **Current Value:** ${formatAlertValue(props.alert.value, props.alert.type)}
 **Threshold:** ${formatAlertValue(props.alert.threshold, props.alert.type)}
 **Duration:** ${durationStr}
-${props.alert.node ? `**Node:** ${props.alert.node}` : ''}
+${props.alert.node ? `**Node:** ${props.alert.nodeDisplayName || props.alert.node}` : ''}
 
 Please:
 1. Identify the root cause

@@ -27,6 +27,15 @@ func titleCase(s string) string {
 	return result.String()
 }
 
+// alertNodeDisplay returns the display name for an alert's node, falling back
+// to the raw node name if no display name is set.
+func alertNodeDisplay(alert *alerts.Alert) string {
+	if alert.NodeDisplayName != "" {
+		return alert.NodeDisplayName
+	}
+	return alert.Node
+}
+
 // EmailTemplate generates a professional HTML email template for alerts
 func EmailTemplate(alertList []*alerts.Alert, isSingle bool) (subject, htmlBody, textBody string) {
 	if isSingle && len(alertList) == 1 {
@@ -162,7 +171,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 		formatMetricThreshold(alert.Type, alert.Threshold),
 		alert.ResourceID,
 		alertType,
-		alert.Node,
+		alertNodeDisplay(alert),
 		alert.Instance,
 		alert.StartTime.Format("Jan 2, 2006 at 3:04 PM"),
 		formatDuration(time.Since(alert.StartTime)),
@@ -194,7 +203,7 @@ View alerts and configure settings in your Pulse dashboard.`,
 		formatMetricValue(alert.Type, alert.Value),
 		formatMetricThreshold(alert.Type, alert.Threshold),
 		alert.Message,
-		alert.Node,
+		alertNodeDisplay(alert),
 		alert.Instance,
 		alert.StartTime.Format("Jan 2, 2006 at 3:04 PM"),
 		formatDuration(time.Since(alert.StartTime)),
@@ -255,7 +264,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                 </tr>`,
 			levelColor,
 			alert.ResourceName,
-			alert.Type, alert.Node,
+			alert.Type, alertNodeDisplay(alert),
 			levelColor, alert.Level,
 			formatMetricValue(alert.Type, alert.Value), formatMetricThreshold(alert.Type, alert.Threshold),
 			formatDuration(time.Since(alert.StartTime)),
@@ -364,7 +373,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 		textBuilder.WriteString(fmt.Sprintf("\n%d. %s (%s)\n", i+1, alert.ResourceName, alert.ResourceID))
 		textBuilder.WriteString(fmt.Sprintf("   Level: %s | Type: %s\n", strings.ToUpper(string(alert.Level)), alert.Type))
 		textBuilder.WriteString(fmt.Sprintf("   Value: %s (Threshold: %s)\n", formatMetricValue(alert.Type, alert.Value), formatMetricThreshold(alert.Type, alert.Threshold)))
-		textBuilder.WriteString(fmt.Sprintf("   Node: %s | Started: %s ago\n", alert.Node, formatDuration(time.Since(alert.StartTime))))
+		textBuilder.WriteString(fmt.Sprintf("   Node: %s | Started: %s ago\n", alertNodeDisplay(alert), formatDuration(time.Since(alert.StartTime))))
 		textBuilder.WriteString(fmt.Sprintf("   Message: %s\n", alert.Message))
 	}
 

@@ -2665,7 +2665,7 @@ function OverviewTab(props: {
                           </span>
                           <Show when={alert.node}>
                             <span class="text-xs text-gray-500 dark:text-gray-500">
-                              on {alert.node}
+                              on {alert.nodeDisplayName || alert.node}
                             </span>
                           </Show>
                           <Show when={alert.acknowledged}>
@@ -4740,6 +4740,7 @@ function HistoryTab(props: {
     resourceType: string;
     resourceId?: string;
     node?: string;
+    nodeDisplayName?: string;
     severity: string; // warning, critical for alerts; severity for findings
     // Aliases for backward compat with existing rendering code
     level: string; // same as severity
@@ -4767,6 +4768,7 @@ function HistoryTab(props: {
         resourceType: getResourceType(alert.resourceName, alert.metadata),
         resourceId: alert.resourceId,
         node: alert.node,
+        nodeDisplayName: alert.nodeDisplayName,
         severity: alert.level,
         level: alert.level,
         type: alert.type,
@@ -4795,6 +4797,7 @@ function HistoryTab(props: {
         resourceType: getResourceType(alert.resourceName, alert.metadata),
         resourceId: alert.resourceId,
         node: alert.node,
+        nodeDisplayName: alert.nodeDisplayName,
         severity: alert.level,
         level: alert.level,
         type: alert.type,
@@ -5816,7 +5819,7 @@ function HistoryTab(props: {
 
                                     {/* Node */}
                                     <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-gray-600 dark:text-gray-400 truncate">
-                                      {alert.node || '—'}
+                                      {alert.nodeDisplayName || alert.node || '—'}
                                     </td>
 
                                     {/* Actions */}
@@ -5854,6 +5857,7 @@ function HistoryTab(props: {
                                               resourceId: alert.resourceId || '',
                                               resourceName: alert.resourceName,
                                               node: alert.node || '',
+                                              nodeDisplayName: alert.nodeDisplayName,
                                               instance: '',
                                               message: alert.message || '',
                                               value: 0,

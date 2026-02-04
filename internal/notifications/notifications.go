@@ -1138,7 +1138,7 @@ func buildApprisePayload(alertList []*alerts.Alert, publicURL string) (string, s
 		bodyBuilder.WriteString(fmt.Sprintf("[%s] %s", strings.ToUpper(string(alert.Level)), alert.ResourceName))
 		bodyBuilder.WriteString(fmt.Sprintf(" — value %.2f (threshold %.2f)\n", alert.Value, alert.Threshold))
 		if alert.Node != "" {
-			bodyBuilder.WriteString(fmt.Sprintf("Node: %s\n", alert.Node))
+			bodyBuilder.WriteString(fmt.Sprintf("Node: %s\n", alertNodeDisplay(alert)))
 		}
 		if alert.Instance != "" && alert.Instance != alert.Node {
 			bodyBuilder.WriteString(fmt.Sprintf("Instance: %s\n", alert.Instance))
@@ -1201,7 +1201,7 @@ func buildResolvedNotificationContent(alertList []*alerts.Alert, resolvedAt time
 		bodyBuilder.WriteString("\n")
 		if alert.Node != "" {
 			bodyBuilder.WriteString("Node: ")
-			bodyBuilder.WriteString(alert.Node)
+			bodyBuilder.WriteString(alertNodeDisplay(alert))
 			bodyBuilder.WriteString("\n")
 		}
 		if alert.Instance != "" && alert.Instance != alert.Node {
@@ -2228,6 +2228,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		ResourceName:       alert.ResourceName,
 		ResourceID:         alert.ResourceID,
 		Node:               alert.Node,
+		NodeDisplayName:    alertNodeDisplay(alert),
 		Instance:           instance,
 		Message:            alert.Message,
 		Value:              roundedValue,

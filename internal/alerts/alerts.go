@@ -82,22 +82,23 @@ func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {
 
 // Alert represents an active alert
 type Alert struct {
-	ID           string                 `json:"id"`
-	Type         string                 `json:"type"` // cpu, memory, disk, etc.
-	Level        AlertLevel             `json:"level"`
-	ResourceID   string                 `json:"resourceId"` // guest or node ID
-	ResourceName string                 `json:"resourceName"`
-	Node         string                 `json:"node"`
-	Instance     string                 `json:"instance"`
-	Message      string                 `json:"message"`
-	Value        float64                `json:"value"`
-	Threshold    float64                `json:"threshold"`
-	StartTime    time.Time              `json:"startTime"`
-	LastSeen     time.Time              `json:"lastSeen"`
-	Acknowledged bool                   `json:"acknowledged"`
-	AckTime      *time.Time             `json:"ackTime,omitempty"`
-	AckUser      string                 `json:"ackUser,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	ID              string                 `json:"id"`
+	Type            string                 `json:"type"` // cpu, memory, disk, etc.
+	Level           AlertLevel             `json:"level"`
+	ResourceID      string                 `json:"resourceId"` // guest or node ID
+	ResourceName    string                 `json:"resourceName"`
+	Node            string                 `json:"node"`
+	NodeDisplayName string                 `json:"nodeDisplayName,omitempty"`
+	Instance        string                 `json:"instance"`
+	Message         string                 `json:"message"`
+	Value           float64                `json:"value"`
+	Threshold       float64                `json:"threshold"`
+	StartTime       time.Time              `json:"startTime"`
+	LastSeen        time.Time              `json:"lastSeen"`
+	Acknowledged    bool                   `json:"acknowledged"`
+	AckTime         *time.Time             `json:"ackTime,omitempty"`
+	AckUser         string                 `json:"ackUser,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 	// Notification tracking
 	LastNotified *time.Time `json:"lastNotified,omitempty"` // Last time notification was sent
 	// Escalation tracking
@@ -539,6 +540,10 @@ type Manager struct {
 	// When a host agent is running on a Proxmox node, we prefer the host agent
 	// alerts and suppress the node alerts to avoid duplicate monitoring.
 	hostAgentHostnames map[string]struct{} // Normalized hostnames (lowercase)
+	// Node display name cache: maps raw node/host name → user-configured display name.
+	// Populated by CheckNode and CheckHost so that checkMetric (and direct alert
+	// creation sites) can resolve display names without signature changes.
+	nodeDisplayNames map[string]string
 	// License checking for Pro-only alert features
 	hasProFeature func(feature string) bool
 
@@ -594,6 +599,7 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		flappingActive:        make(map[string]bool),
 		cleanupStop:           make(chan struct{}),
 		hostAgentHostnames:    make(map[string]struct{}),
+		nodeDisplayNames:      make(map[string]string),
 		config: AlertConfig{
 			Enabled:                true,
 			ActivationState:        ActivationPending,
@@ -2614,6 +2620,9 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 
 // CheckNode checks a node against thresholds
 func (m *Manager) CheckNode(node models.Node) {
+	// Cache display name so all alerts (including guest alerts on this node) can resolve it.
+	m.updateNodeDisplayName(node.Name, node.DisplayName)
+
 	m.mu.RLock()
 	if !m.config.Enabled {
 		m.mu.RUnlock()
@@ -2752,6 +2761,29 @@ func (m *Manager) hasHostAgentForNode(nodeName string) bool {
 	return exists
 }
 
+// updateNodeDisplayName caches the display name for a node/host so alerts
+// can resolve it without needing the full model object.
+func (m *Manager) updateNodeDisplayName(name, displayName string) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return
+	}
+	displayName = strings.TrimSpace(displayName)
+	m.mu.Lock()
+	if displayName != "" && displayName != name {
+		m.nodeDisplayNames[name] = displayName
+	} else {
+		delete(m.nodeDisplayNames, name)
+	}
+	m.mu.Unlock()
+}
+
+// resolveNodeDisplayName returns the cached display name for a node, or empty
+// string if none is set. Caller must hold m.mu (read or write).
+func (m *Manager) resolveNodeDisplayName(node string) string {
+	return m.nodeDisplayNames[node]
+}
+
 func hostResourceID(hostID string) string {
 	trimmed := strings.TrimSpace(hostID)
 	if trimmed == "" {
@@ -2845,6 +2877,9 @@ func (m *Manager) CheckHost(host models.Host) {
 	if host.Hostname != "" {
 		m.RegisterHostAgentHostname(host.Hostname)
 	}
+
+	// Cache display name so host alerts show the user-configured name.
+	m.updateNodeDisplayName(host.Hostname, host.DisplayName)
 
 	// Fresh telemetry marks the host as online and clears offline tracking.
 	m.HandleHostOnline(host)
@@ -3075,19 +3110,20 @@ func (m *Manager) CheckHost(host models.Host) {
 				m.mu.Lock()
 				if _, exists := m.activeAlerts[alertID]; !exists {
 					alert := &Alert{
-						ID:           alertID,
-						Type:         "raid",
-						Level:        AlertLevelCritical,
-						ResourceID:   raidResourceID,
-						ResourceName: raidName,
-						Node:         nodeName,
-						Instance:     instanceName,
-						Message:      msg,
-						Value:        float64(array.FailedDevices),
-						Threshold:    0,
-						StartTime:    time.Now(),
-						LastSeen:     time.Now(),
-						Metadata:     raidMetadata,
+						ID:              alertID,
+						Type:            "raid",
+						Level:           AlertLevelCritical,
+						ResourceID:      raidResourceID,
+						ResourceName:    raidName,
+						Node:            nodeName,
+						NodeDisplayName: m.resolveNodeDisplayName(nodeName),
+						Instance:        instanceName,
+						Message:         msg,
+						Value:           float64(array.FailedDevices),
+						Threshold:       0,
+						StartTime:       time.Now(),
+						LastSeen:        time.Now(),
+						Metadata:        raidMetadata,
 					}
 					m.preserveAlertState(alertID, alert)
 					m.activeAlerts[alertID] = alert
@@ -6188,19 +6224,20 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			alertMetadata["monitorOnly"] = monitorOnly
 
 			alert := &Alert{
-				ID:           alertID,
-				Type:         metricType,
-				Level:        AlertLevelWarning,
-				ResourceID:   resourceID,
-				ResourceName: resourceName,
-				Node:         node,
-				Instance:     instance,
-				Message:      message,
-				Value:        value,
-				Threshold:    threshold.Trigger,
-				StartTime:    alertStartTime,
-				LastSeen:     time.Now(),
-				Metadata:     alertMetadata,
+				ID:              alertID,
+				Type:            metricType,
+				Level:           AlertLevelWarning,
+				ResourceID:      resourceID,
+				ResourceName:    resourceName,
+				Node:            node,
+				NodeDisplayName: m.resolveNodeDisplayName(node),
+				Instance:        instance,
+				Message:         message,
+				Value:           value,
+				Threshold:       threshold.Trigger,
+				StartTime:       alertStartTime,
+				LastSeen:        time.Now(),
+				Metadata:        alertMetadata,
 			}
 
 			// Set level based on how much over threshold
@@ -6282,6 +6319,10 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			// Update existing alert
 			existingAlert.LastSeen = time.Now()
 			existingAlert.Value = value
+			// Keep display name current (handles upgrades and renames).
+			if dn := m.resolveNodeDisplayName(existingAlert.Node); dn != "" {
+				existingAlert.NodeDisplayName = dn
+			}
 			if existingAlert.Metadata == nil {
 				existingAlert.Metadata = map[string]interface{}{}
 			}
@@ -6578,6 +6619,11 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 		return
 	}
 
+	// Auto-resolve node display name if not already set.
+	if updated.NodeDisplayName == "" && updated.Node != "" {
+		updated.NodeDisplayName = m.resolveNodeDisplayName(updated.Node)
+	}
+
 	existing, exists := m.activeAlerts[alertID]
 	if exists && existing != nil {
 		// Preserve the original start time so duration calculations are correct
@@ -6633,7 +6679,13 @@ func (m *Manager) GetActiveAlerts() []Alert {
 
 	alerts := make([]Alert, 0, len(m.activeAlerts))
 	for _, alert := range m.activeAlerts {
-		alerts = append(alerts, *alert)
+		a := *alert
+		// Ensure display name is current (handles upgrades, renames, and
+		// alerts created before the cache was populated).
+		if dn := m.resolveNodeDisplayName(a.Node); dn != "" {
+			a.NodeDisplayName = dn
+		}
+		alerts = append(alerts, a)
 	}
 	return alerts
 }
@@ -6776,18 +6828,19 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 
 	// Create new offline alert after confirmation
 	alert := &Alert{
-		ID:           alertID,
-		Type:         "connectivity",
-		Level:        AlertLevelCritical, // Node offline is always critical
-		ResourceID:   node.ID,
-		ResourceName: node.Name,
-		Node:         node.Name,
-		Instance:     node.Instance,
-		Message:      fmt.Sprintf("Node '%s' is offline", node.Name),
-		Value:        0, // Not applicable for offline status
-		Threshold:    0, // Not applicable for offline status
-		StartTime:    time.Now(),
-		Acknowledged: false,
+		ID:              alertID,
+		Type:            "connectivity",
+		Level:           AlertLevelCritical, // Node offline is always critical
+		ResourceID:      node.ID,
+		ResourceName:    node.Name,
+		Node:            node.Name,
+		NodeDisplayName: m.resolveNodeDisplayName(node.Name),
+		Instance:        node.Instance,
+		Message:         fmt.Sprintf("Node '%s' is offline", node.Name),
+		Value:           0, // Not applicable for offline status
+		Threshold:       0, // Not applicable for offline status
+		StartTime:       time.Now(),
+		Acknowledged:    false,
 	}
 
 	m.preserveAlertState(alertID, alert)
@@ -7142,18 +7195,19 @@ func (m *Manager) checkPMGQueueDepths(pmg models.PMGInstance, defaults PMGThresh
 				alert.Level = level
 			} else {
 				alert := &Alert{
-					ID:           alertID,
-					Type:         "queue-depth",
-					Level:        level,
-					ResourceID:   pmg.ID,
-					ResourceName: pmg.Name,
-					Node:         pmg.Host,
-					Instance:     pmg.Name,
-					Message:      fmt.Sprintf("PMG %s has %d total messages in queue (threshold: %d)", pmg.Name, totalQueue, threshold),
-					Value:        float64(totalQueue),
-					Threshold:    float64(threshold),
-					StartTime:    time.Now(),
-					LastSeen:     time.Now(),
+					ID:              alertID,
+					Type:            "queue-depth",
+					Level:           level,
+					ResourceID:      pmg.ID,
+					ResourceName:    pmg.Name,
+					Node:            pmg.Host,
+					NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
+					Instance:        pmg.Name,
+					Message:         fmt.Sprintf("PMG %s has %d total messages in queue (threshold: %d)", pmg.Name, totalQueue, threshold),
+					Value:           float64(totalQueue),
+					Threshold:       float64(threshold),
+					StartTime:       time.Now(),
+					LastSeen:        time.Now(),
 				}
 				m.activeAlerts[alertID] = alert
 				m.dispatchAlert(alert, true)
@@ -7196,18 +7250,19 @@ func (m *Manager) checkPMGQueueDepths(pmg models.PMGInstance, defaults PMGThresh
 				alert.Level = level
 			} else {
 				alert := &Alert{
-					ID:           alertID,
-					Type:         "queue-deferred",
-					Level:        level,
-					ResourceID:   pmg.ID,
-					ResourceName: pmg.Name,
-					Node:         pmg.Host,
-					Instance:     pmg.Name,
-					Message:      fmt.Sprintf("PMG %s has %d deferred messages (threshold: %d)", pmg.Name, totalDeferred, threshold),
-					Value:        float64(totalDeferred),
-					Threshold:    float64(threshold),
-					StartTime:    time.Now(),
-					LastSeen:     time.Now(),
+					ID:              alertID,
+					Type:            "queue-deferred",
+					Level:           level,
+					ResourceID:      pmg.ID,
+					ResourceName:    pmg.Name,
+					Node:            pmg.Host,
+					NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
+					Instance:        pmg.Name,
+					Message:         fmt.Sprintf("PMG %s has %d deferred messages (threshold: %d)", pmg.Name, totalDeferred, threshold),
+					Value:           float64(totalDeferred),
+					Threshold:       float64(threshold),
+					StartTime:       time.Now(),
+					LastSeen:        time.Now(),
 				}
 				m.activeAlerts[alertID] = alert
 				m.dispatchAlert(alert, true)
@@ -7250,18 +7305,19 @@ func (m *Manager) checkPMGQueueDepths(pmg models.PMGInstance, defaults PMGThresh
 				alert.Level = level
 			} else {
 				alert := &Alert{
-					ID:           alertID,
-					Type:         "queue-hold",
-					Level:        level,
-					ResourceID:   pmg.ID,
-					ResourceName: pmg.Name,
-					Node:         pmg.Host,
-					Instance:     pmg.Name,
-					Message:      fmt.Sprintf("PMG %s has %d held messages (threshold: %d)", pmg.Name, totalHold, threshold),
-					Value:        float64(totalHold),
-					Threshold:    float64(threshold),
-					StartTime:    time.Now(),
-					LastSeen:     time.Now(),
+					ID:              alertID,
+					Type:            "queue-hold",
+					Level:           level,
+					ResourceID:      pmg.ID,
+					ResourceName:    pmg.Name,
+					Node:            pmg.Host,
+					NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
+					Instance:        pmg.Name,
+					Message:         fmt.Sprintf("PMG %s has %d held messages (threshold: %d)", pmg.Name, totalHold, threshold),
+					Value:           float64(totalHold),
+					Threshold:       float64(threshold),
+					StartTime:       time.Now(),
+					LastSeen:        time.Now(),
 				}
 				m.activeAlerts[alertID] = alert
 				m.dispatchAlert(alert, true)
@@ -7330,18 +7386,19 @@ func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThre
 
 	// Create new alert
 	alert := &Alert{
-		ID:           alertID,
-		Type:         "message-age",
-		Level:        level,
-		ResourceID:   pmg.ID,
-		ResourceName: pmg.Name,
-		Node:         pmg.Host,
-		Instance:     pmg.Name,
-		Message:      fmt.Sprintf("PMG %s has messages queued for %d minutes (threshold: %d minutes)", pmg.Name, oldestMinutes, threshold),
-		Value:        float64(oldestMinutes),
-		Threshold:    float64(threshold),
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		ID:              alertID,
+		Type:            "message-age",
+		Level:           level,
+		ResourceID:      pmg.ID,
+		ResourceName:    pmg.Name,
+		Node:            pmg.Host,
+		NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
+		Instance:        pmg.Name,
+		Message:         fmt.Sprintf("PMG %s has messages queued for %d minutes (threshold: %d minutes)", pmg.Name, oldestMinutes, threshold),
+		Value:           float64(oldestMinutes),
+		Threshold:       float64(threshold),
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 
 	m.activeAlerts[alertID] = alert
@@ -7577,18 +7634,19 @@ func (m *Manager) createOrUpdateNodeAlert(alertID string, pmg models.PMGInstance
 
 	// Create new alert
 	alert := &Alert{
-		ID:           alertID,
-		Type:         alertType,
-		Level:        level,
-		ResourceID:   pmg.ID,
-		ResourceName: pmg.Name,
-		Node:         nodeName,
-		Instance:     pmg.Name,
-		Message:      message,
-		Value:        value,
-		Threshold:    threshold,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		ID:              alertID,
+		Type:            alertType,
+		Level:           level,
+		ResourceID:      pmg.ID,
+		ResourceName:    pmg.Name,
+		Node:            nodeName,
+		NodeDisplayName: m.resolveNodeDisplayName(nodeName),
+		Instance:        pmg.Name,
+		Message:         message,
+		Value:           value,
+		Threshold:       threshold,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 
 	m.activeAlerts[alertID] = alert
@@ -7758,18 +7816,19 @@ func (m *Manager) checkQuarantineMetric(pmg models.PMGInstance, metricType strin
 
 	// Create new alert
 	alert := &Alert{
-		ID:           alertID,
-		Type:         fmt.Sprintf("quarantine-%s", metricType),
-		Level:        level,
-		ResourceID:   pmg.ID,
-		ResourceName: pmg.Name,
-		Node:         pmg.Host,
-		Instance:     pmg.Name,
-		Message:      message,
-		Value:        float64(current),
-		Threshold:    float64(threshold),
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		ID:              alertID,
+		Type:            fmt.Sprintf("quarantine-%s", metricType),
+		Level:           level,
+		ResourceID:      pmg.ID,
+		ResourceName:    pmg.Name,
+		Node:            pmg.Host,
+		NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
+		Instance:        pmg.Name,
+		Message:         message,
+		Value:           float64(current),
+		Threshold:       float64(threshold),
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 
 	m.activeAlerts[alertID] = alert
@@ -8066,18 +8125,19 @@ func (m *Manager) checkAnomalyMetric(pmg models.PMGInstance, tracker *pmgAnomaly
 			pmg.Name, metricName, current, ratio, baseline)
 
 		alert := &Alert{
-			ID:           alertID,
-			Type:         fmt.Sprintf("anomaly-%s", metricName),
-			Level:        level,
-			ResourceID:   pmg.ID,
-			ResourceName: pmg.Name,
-			Node:         pmg.Host,
-			Instance:     pmg.Name,
-			Message:      message,
-			Value:        current,
-			Threshold:    baseline,
-			StartTime:    now,
-			LastSeen:     now,
+			ID:              alertID,
+			Type:            fmt.Sprintf("anomaly-%s", metricName),
+			Level:           level,
+			ResourceID:      pmg.ID,
+			ResourceName:    pmg.Name,
+			Node:            pmg.Host,
+			NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
+			Instance:        pmg.Name,
+			Message:         message,
+			Value:           current,
+			Threshold:       baseline,
+			StartTime:       now,
+			LastSeen:        now,
 		}
 
 		m.activeAlerts[alertID] = alert
@@ -9653,6 +9713,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 			existing.ResourceID = resourceID
 			existing.ResourceName = resourceName
 			existing.Node = node
+			existing.NodeDisplayName = m.resolveNodeDisplayName(node)
 			existing.Instance = instance
 			if existing.Metadata == nil {
 				existing.Metadata = map[string]interface{}{}

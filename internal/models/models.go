@@ -42,20 +42,21 @@ type State struct {
 
 // Alert represents an active alert (simplified for State)
 type Alert struct {
-	ID           string     `json:"id"`
-	Type         string     `json:"type"`
-	Level        string     `json:"level"`
-	ResourceID   string     `json:"resourceId"`
-	ResourceName string     `json:"resourceName"`
-	Node         string     `json:"node"`
-	Instance     string     `json:"instance"`
-	Message      string     `json:"message"`
-	Value        float64    `json:"value"`
-	Threshold    float64    `json:"threshold"`
-	StartTime    time.Time  `json:"startTime"`
-	Acknowledged bool       `json:"acknowledged"`
-	AckTime      *time.Time `json:"ackTime,omitempty"`
-	AckUser      string     `json:"ackUser,omitempty"`
+	ID              string     `json:"id"`
+	Type            string     `json:"type"`
+	Level           string     `json:"level"`
+	ResourceID      string     `json:"resourceId"`
+	ResourceName    string     `json:"resourceName"`
+	Node            string     `json:"node"`
+	NodeDisplayName string     `json:"nodeDisplayName,omitempty"`
+	Instance        string     `json:"instance"`
+	Message         string     `json:"message"`
+	Value           float64    `json:"value"`
+	Threshold       float64    `json:"threshold"`
+	StartTime       time.Time  `json:"startTime"`
+	Acknowledged    bool       `json:"acknowledged"`
+	AckTime         *time.Time `json:"ackTime,omitempty"`
+	AckUser         string     `json:"ackUser,omitempty"`
 }
 
 // ResolvedAlert represents a recently resolved alert

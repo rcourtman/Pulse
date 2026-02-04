@@ -4792,20 +4792,21 @@ func (m *Monitor) syncAlertsToState() {
 	modelAlerts := make([]models.Alert, 0, len(activeAlerts))
 	for _, alert := range activeAlerts {
 		modelAlerts = append(modelAlerts, models.Alert{
-			ID:           alert.ID,
-			Type:         alert.Type,
-			Level:        string(alert.Level),
-			ResourceID:   alert.ResourceID,
-			ResourceName: alert.ResourceName,
-			Node:         alert.Node,
-			Instance:     alert.Instance,
-			Message:      alert.Message,
-			Value:        alert.Value,
-			Threshold:    alert.Threshold,
-			StartTime:    alert.StartTime,
-			Acknowledged: alert.Acknowledged,
-			AckTime:      alert.AckTime,
-			AckUser:      alert.AckUser,
+			ID:              alert.ID,
+			Type:            alert.Type,
+			Level:           string(alert.Level),
+			ResourceID:      alert.ResourceID,
+			ResourceName:    alert.ResourceName,
+			Node:            alert.Node,
+			NodeDisplayName: alert.NodeDisplayName,
+			Instance:        alert.Instance,
+			Message:         alert.Message,
+			Value:           alert.Value,
+			Threshold:       alert.Threshold,
+			StartTime:       alert.StartTime,
+			Acknowledged:    alert.Acknowledged,
+			AckTime:         alert.AckTime,
+			AckUser:         alert.AckUser,
 		})
 		if alert.Acknowledged && logging.IsLevelEnabled(zerolog.DebugLevel) {
 			log.Debug().Str("alertID", alert.ID).Interface("ackTime", alert.AckTime).Msg("Syncing acknowledged alert")
