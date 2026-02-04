@@ -2053,6 +2053,8 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/system/settings/update", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/reset-lockout", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/apply-restart", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/regenerate-token", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/validate-token", body: `{"token":"abc"}`},
 		{method: http.MethodPost, path: "/api/security/oidc", body: `{}`},
 		{method: http.MethodPost, path: "/api/system/verify-temperature-ssh", body: `{}`},
 		{method: http.MethodPost, path: "/api/system/ssh-config", body: `{}`},
@@ -2907,6 +2909,27 @@ func TestRegenerateTokenRequiresSettingsWriteScope(t *testing.T) {
 	}
 }
 
+func TestRegenerateTokenRejectsProxyNonAdmin(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.25")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/regenerate-token", nil)
+	req.RemoteAddr = "203.0.113.25:1234"
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy regenerate-token, got %d", rec.Code)
+	}
+}
+
 func TestValidateTokenRequiresAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "validate-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
@@ -2939,6 +2962,27 @@ func TestValidateTokenRequiresSettingsWriteScope(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
 		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestValidateTokenRejectsProxyNonAdmin(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.26")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-token", strings.NewReader(`{"token":"abc"}`))
+	req.RemoteAddr = "203.0.113.26:1234"
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy validate-token, got %d", rec.Code)
 	}
 }
 

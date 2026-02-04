@@ -525,6 +525,18 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		return
 	}
 
+	// Check proxy auth for admin status
+	if r.config.ProxyAuthSecret != "" {
+		if valid, username, isAdmin := CheckProxyAuth(r.config, rq); valid && !isAdmin {
+			log.Warn().
+				Str("ip", GetClientIP(rq)).
+				Str("username", username).
+				Msg("Non-admin user attempted API token regeneration")
+			http.Error(w, "Admin privileges required", http.StatusForbidden)
+			return
+		}
+	}
+
 	if !ensureSettingsWriteScope(w, rq) {
 		return
 	}
@@ -641,6 +653,18 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 	// Require authentication to prevent unauthenticated token guessing oracle
 	if !CheckAuth(r.config, w, rq) {
 		return
+	}
+
+	// Check proxy auth for admin status
+	if r.config.ProxyAuthSecret != "" {
+		if valid, username, isAdmin := CheckProxyAuth(r.config, rq); valid && !isAdmin {
+			log.Warn().
+				Str("ip", GetClientIP(rq)).
+				Str("username", username).
+				Msg("Non-admin user attempted API token validation")
+			http.Error(w, "Admin privileges required", http.StatusForbidden)
+			return
+		}
 	}
 
 	if !ensureSettingsWriteScope(w, rq) {
