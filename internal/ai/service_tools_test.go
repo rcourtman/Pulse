@@ -119,6 +119,15 @@ func TestIsBlockedFetchIP(t *testing.T) {
 	if isBlockedFetchIP(privateIP) {
 		t.Error("Private IP should be allowed when PULSE_AI_ALLOW_PRIVATE_IPS=true")
 	}
+
+	// Test that loopback IPs can be allowed via environment variable
+	os.Setenv("PULSE_AI_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("PULSE_AI_ALLOW_LOOPBACK")
+
+	loopbackIP := net.ParseIP("127.0.0.1")
+	if isBlockedFetchIP(loopbackIP) {
+		t.Error("Loopback IP should be allowed when PULSE_AI_ALLOW_LOOPBACK=true")
+	}
 }
 
 func TestFetchURL_SizeLimit(t *testing.T) {
