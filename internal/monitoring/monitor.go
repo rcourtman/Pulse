@@ -6050,6 +6050,16 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		close(storageFallbackDone)
 	}
 
+	// Pre-populate node display name cache so guest alerts created below
+	// can resolve friendly names. CheckNode() also does this, but it runs
+	// after guest polling — without this, the first alert notification for
+	// a guest would show the raw Proxmox node name.
+	for i := range modelNodes {
+		if modelNodes[i].DisplayName != "" {
+			m.alertManager.UpdateNodeDisplayName(modelNodes[i].Name, modelNodes[i].DisplayName)
+		}
+	}
+
 	// Poll VMs and containers FIRST - this is the most critical data.
 	// This happens immediately after starting the storage fallback goroutine,
 	// so VM/container polling runs in parallel with (and is not blocked by) storage operations.

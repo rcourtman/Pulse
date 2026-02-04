@@ -2621,7 +2621,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 // CheckNode checks a node against thresholds
 func (m *Manager) CheckNode(node models.Node) {
 	// Cache display name so all alerts (including guest alerts on this node) can resolve it.
-	m.updateNodeDisplayName(node.Name, node.DisplayName)
+	m.UpdateNodeDisplayName(node.Name, node.DisplayName)
 
 	m.mu.RLock()
 	if !m.config.Enabled {
@@ -2761,9 +2761,9 @@ func (m *Manager) hasHostAgentForNode(nodeName string) bool {
 	return exists
 }
 
-// updateNodeDisplayName caches the display name for a node/host so alerts
+// UpdateNodeDisplayName caches the display name for a node/host so alerts
 // can resolve it without needing the full model object.
-func (m *Manager) updateNodeDisplayName(name, displayName string) {
+func (m *Manager) UpdateNodeDisplayName(name, displayName string) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return
@@ -2879,7 +2879,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	// Cache display name so host alerts show the user-configured name.
-	m.updateNodeDisplayName(host.Hostname, host.DisplayName)
+	m.UpdateNodeDisplayName(host.Hostname, host.DisplayName)
 
 	// Fresh telemetry marks the host as online and clears offline tracking.
 	m.HandleHostOnline(host)
