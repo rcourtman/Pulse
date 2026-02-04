@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
@@ -2519,5 +2521,224 @@ func TestRecoveryEndpointRejectsRemoteWithoutToken(t *testing.T) {
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for remote recovery request, got %d", rec.Code)
+	}
+}
+
+func TestHealthEndpointIsPublicEvenWhenAuthConfigured(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	defer monitor.Stop()
+
+	router := NewRouter(cfg, monitor, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.40")
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req.RemoteAddr = "203.0.113.40:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for public health endpoint, got %d", rec.Code)
+	}
+}
+
+func TestVersionEndpointIsPublicEvenWhenAuthConfigured(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.41")
+	req := httptest.NewRequest(http.MethodGet, "/api/version", nil)
+	req.RemoteAddr = "203.0.113.41:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for public version endpoint, got %d", rec.Code)
+	}
+}
+
+func TestAgentVersionEndpointIsPublicEvenWhenAuthConfigured(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.42")
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/version", nil)
+	req.RemoteAddr = "203.0.113.42:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for public agent version endpoint, got %d", rec.Code)
+	}
+}
+
+func TestServerInfoEndpointIsPublicEvenWhenAuthConfigured(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.43")
+	req := httptest.NewRequest(http.MethodGet, "/api/server/info", nil)
+	req.RemoteAddr = "203.0.113.43:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for public server info endpoint, got %d", rec.Code)
+	}
+}
+
+func TestSecurityStatusIsPublicEvenWhenAuthConfigured(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.44")
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.RemoteAddr = "203.0.113.44:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for public security status endpoint, got %d", rec.Code)
+	}
+}
+
+func TestValidateBootstrapTokenBypassesAuth(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.45")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader(`{}`))
+	req.RemoteAddr = "203.0.113.45:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 when bootstrap token is unavailable, got %d", rec.Code)
+	}
+}
+
+func TestOIDCLoginBypassesAuth(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.46")
+	req := httptest.NewRequest(http.MethodGet, "/api/oidc/login", nil)
+	req.RemoteAddr = "203.0.113.46:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("expected 307 redirect when OIDC is disabled, got %d", rec.Code)
+	}
+}
+
+func TestAIOAuthCallbackBypassesAuth(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.47")
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/oauth/callback", nil)
+	req.RemoteAddr = "203.0.113.47:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("expected 307 redirect for OAuth callback, got %d", rec.Code)
+	}
+}
+
+func TestLoginEndpointBypassesAuth(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.48")
+	req := httptest.NewRequest(http.MethodGet, "/api/login", nil)
+	req.RemoteAddr = "203.0.113.48:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for login GET, got %d", rec.Code)
+	}
+}
+
+func TestInstallScriptEndpointsBypassAuth(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/install/install-docker.sh",
+		"/api/install/install.sh",
+		"/api/install/install.ps1",
+	}
+
+	for idx, path := range paths {
+		ip := "203.0.113." + strconv.Itoa(60+idx)
+		ResetRateLimitForIP(ip)
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req.RemoteAddr = ip + ":1234"
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("expected 405 for public install script %s, got %d", path, rec.Code)
+		}
+	}
+}
+
+func TestLogoutRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "logout-token-123.12345678", []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/logout", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
+func TestStateRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "state-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
+func TestStateRequiresMonitoringReadScope(t *testing.T) {
+	rawToken := "state-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing monitoring:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeMonitoringRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringRead, rec.Body.String())
 	}
 }
