@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,11 +14,18 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 type wsRawMessage struct {
 	Type    agentexec.MessageType `json:"type"`
 	Payload json.RawMessage       `json:"payload,omitempty"`
+}
+
+type denyAuthorizer struct{}
+
+func (d *denyAuthorizer) Authorize(_ context.Context, _ string, _ string) (bool, error) {
+	return false, nil
 }
 
 func newTestConfigWithTokens(t *testing.T, records ...config.APITokenRecord) *config.Config {
@@ -2251,5 +2259,46 @@ func TestDiagnosticsPrepareTokenRequiresSettingsWriteScope(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
 		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestPermissionProtectedEndpointsDenyWhenAuthorizerBlocks(t *testing.T) {
+	prevAuthorizer := auth.GetAuthorizer()
+	auth.SetAuthorizer(&denyAuthorizer{})
+	defer auth.SetAuthorizer(prevAuthorizer)
+
+	rawToken := "perm-deny-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	cases := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/api/audit", body: ""},
+		{method: http.MethodGet, path: "/api/audit/event-1/verify", body: ""},
+		{method: http.MethodGet, path: "/api/admin/roles", body: ""},
+		{method: http.MethodGet, path: "/api/admin/users", body: ""},
+		{method: http.MethodGet, path: "/api/admin/reports/generate", body: ""},
+		{method: http.MethodPost, path: "/api/admin/reports/generate-multi", body: `{}`},
+		{method: http.MethodGet, path: "/api/admin/webhooks/audit", body: ""},
+		{method: http.MethodGet, path: "/api/security/tokens", body: ""},
+		{method: http.MethodDelete, path: "/api/security/tokens/token-1", body: ""},
+		{method: http.MethodGet, path: "/api/settings/ai", body: ""},
+		{method: http.MethodPost, path: "/api/settings/ai/update", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/test", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/test/openai", body: `{}`},
+	}
+
+	for _, tc := range cases {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for permission denial on %s %s, got %d", tc.method, tc.path, rec.Code)
+		}
 	}
 }
