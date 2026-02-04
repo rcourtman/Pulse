@@ -1945,6 +1945,7 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/ai/oauth/disconnect", body: `{}`},
 		{method: http.MethodPost, path: "/api/agent-install-command", body: `{}`},
 		{method: http.MethodPost, path: "/api/setup-script-url", body: `{}`},
+		{method: http.MethodPost, path: "/api/test-notification", body: `{}`},
 		{method: http.MethodGet, path: "/api/discover", body: ""},
 		{method: http.MethodPost, path: "/api/license/activate", body: `{}`},
 		{method: http.MethodPost, path: "/api/license/clear", body: `{}`},
