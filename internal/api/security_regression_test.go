@@ -441,3 +441,688 @@ func TestWebSocketAllowsMonitoringReadScope(t *testing.T) {
 	}
 	conn.Close()
 }
+
+func TestLogEndpointsRequireSettingsReadScope(t *testing.T) {
+	rawToken := "logs-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/logs/stream",
+		"/api/logs/download",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing settings:read scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+		}
+	}
+}
+
+func TestLogLevelReadRequiresSettingsReadScope(t *testing.T) {
+	rawToken := "log-level-read-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/level", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+}
+
+func TestLogLevelUpdateRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "log-level-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/logs/level", strings.NewReader(`{"level":"info"}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestUpdateReadEndpointsRequireSettingsReadScope(t *testing.T) {
+	rawToken := "updates-read-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/updates/check",
+		"/api/updates/status",
+		"/api/updates/plan",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing settings:read scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+		}
+	}
+}
+
+func TestUpdateApplyRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "updates-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/updates/apply", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestLicenseMutationsRequireSettingsWriteScope(t *testing.T) {
+	rawToken := "license-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/license/activate",
+		"/api/license/clear",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing settings:write scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+		}
+	}
+}
+
+func TestSetupScriptURLRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "setup-script-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup-script-url", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestAgentInstallCommandRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "agent-install-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-install-command", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestDiscoverRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "discover-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []struct {
+		name   string
+		method string
+		body   string
+	}{
+		{name: "get", method: http.MethodGet, body: ""},
+		{name: "post", method: http.MethodPost, body: `{}`},
+	}
+
+	for _, tc := range paths {
+		req := httptest.NewRequest(tc.method, "/api/discover", strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing settings:write scope on %s, got %d", tc.name, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+		}
+	}
+}
+
+func TestAIOAuthEndpointsRequireSettingsWriteScope(t *testing.T) {
+	rawToken := "ai-oauth-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/ai/oauth/start",
+		"/api/ai/oauth/exchange",
+		"/api/ai/oauth/disconnect",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing settings:write scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+		}
+	}
+}
+
+func TestAIExecuteEndpointsRequireAIExecuteScope(t *testing.T) {
+	rawToken := "ai-exec-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/ai/execute",
+		"/api/ai/execute/stream",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing ai:execute scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIExecute, rec.Body.String())
+		}
+	}
+}
+
+func TestAIRemediationMutationsRequireAIExecuteScope(t *testing.T) {
+	rawToken := "ai-remediate-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/ai/remediation/execute",
+		"/api/ai/remediation/rollback",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing ai:execute scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIExecute, rec.Body.String())
+		}
+	}
+}
+
+func TestAIAgentsRequiresAIExecuteScope(t *testing.T) {
+	rawToken := "ai-agents-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/agents", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing ai:execute scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIExecute, rec.Body.String())
+	}
+}
+
+func TestAICostEndpointsRequireSettingsScopes(t *testing.T) {
+	rawToken := "ai-cost-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	// Summary requires settings:read
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+
+	// Reset requires settings:write
+	req = httptest.NewRequest(http.MethodPost, "/api/ai/cost/reset", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+
+	// Export requires settings:read
+	req = httptest.NewRequest(http.MethodGet, "/api/ai/cost/export", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+}
+
+func TestAIDebugContextRequiresSettingsReadScope(t *testing.T) {
+	rawToken := "ai-debug-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/debug/context", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+}
+
+func TestInfraUpdateReadEndpointsRequireMonitoringReadScope(t *testing.T) {
+	rawToken := "infra-read-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/infra-updates",
+		"/api/infra-updates/summary",
+		"/api/infra-updates/host/host-1",
+		"/api/infra-updates/docker:host-1/c1",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing monitoring:read scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeMonitoringRead) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringRead, rec.Body.String())
+		}
+	}
+}
+
+func TestInfraUpdateCheckRequiresMonitoringWriteScope(t *testing.T) {
+	rawToken := "infra-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/infra-updates/check", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing monitoring:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeMonitoringWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringWrite, rec.Body.String())
+	}
+}
+
+func TestAlertReadEndpointsRequireMonitoringReadScope(t *testing.T) {
+	rawToken := "alerts-read-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/alerts/config",
+		"/api/alerts/active",
+		"/api/alerts/history",
+		"/api/alerts/incidents",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing monitoring:read scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeMonitoringRead) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringRead, rec.Body.String())
+		}
+	}
+}
+
+func TestAlertMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
+	rawToken := "alerts-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodPut, path: "/api/alerts/config", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/activate", body: `{}`},
+		{method: http.MethodDelete, path: "/api/alerts/history", body: ""},
+		{method: http.MethodPost, path: "/api/alerts/bulk/acknowledge", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/bulk/clear", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/acknowledge", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/unacknowledge", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/clear", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/alert-1/acknowledge", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/alert-1/unacknowledge", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/alert-1/clear", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/incidents/note", body: `{}`},
+	}
+
+	for _, tc := range paths {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing monitoring:write scope on %s %s, got %d", tc.method, tc.path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeMonitoringWrite) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringWrite, rec.Body.String())
+		}
+	}
+}
+
+func TestNotificationQueueStatsRequireSettingsReadScope(t *testing.T) {
+	rawToken := "queue-stats-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/notifications/queue/stats", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+}
+
+func TestConfigSystemRequiresSettingsReadScope(t *testing.T) {
+	rawToken := "config-system-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config/system", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+}
+
+func TestSystemSettingsRequiresSettingsReadScope(t *testing.T) {
+	rawToken := "system-settings-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+}
+
+func TestSystemSettingsUpdateRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "system-settings-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/settings/update", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestMockModeReadRequiresSettingsReadScope(t *testing.T) {
+	rawToken := "mock-mode-read-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/mock-mode", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+}
+
+func TestMockModeWriteRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "mock-mode-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/mock-mode", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestConfigNodesReadRequiresSettingsReadScope(t *testing.T) {
+	rawToken := "config-nodes-read-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+}
+
+func TestConfigNodesWriteRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "config-nodes-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/nodes", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestSecurityOIDCRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "security-oidc-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/oidc", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestUpdateHistoryEndpointsRequireSettingsReadScope(t *testing.T) {
+	rawToken := "updates-history-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/updates/history",
+		"/api/updates/history/entry",
+		"/api/updates/stream",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing settings:read scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+		}
+	}
+}
+
+func TestDiagnosticsRequireSettingsReadScope(t *testing.T) {
+	rawToken := "diag-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/diagnostics", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+}
+
+func TestDiagnosticsPrepareTokenRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "diag-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
