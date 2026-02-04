@@ -74,6 +74,7 @@ func TestSignalHelpersAndFindingsFromSignals(t *testing.T) {
 		{signal: DetectedSignal{SignalType: SignalBackupFailed}, wantKey: "backup-failed", wantTitle: "Backup failed", recSubstring: "backup"},
 		{signal: DetectedSignal{SignalType: SignalBackupStale}, wantKey: "backup-stale", wantTitle: "Backup is stale", recSubstring: "backup"},
 		{signal: DetectedSignal{SignalType: SignalActiveAlert}, wantKey: "active-alert", wantTitle: "Active alert detected", recSubstring: "alert"},
+		{signal: DetectedSignal{SignalType: SignalGuestUnreachable, ResourceName: "db-server"}, wantKey: "guest-unreachable", wantTitle: "Guest unreachable: db-server", recSubstring: "ping"},
 		{signal: DetectedSignal{SignalType: SignalType("unknown")}, wantKey: "deterministic-signal", wantTitle: "Infrastructure signal detected", recSubstring: "Investigate"},
 	}
 
