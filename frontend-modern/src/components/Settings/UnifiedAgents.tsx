@@ -14,7 +14,7 @@ import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
 import type { HostLookupResponse } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
-import { HOST_AGENT_SCOPE, HOST_AGENT_CONFIG_READ_SCOPE, DOCKER_REPORT_SCOPE, KUBERNETES_REPORT_SCOPE } from '@/constants/apiScopes';
+import { HOST_AGENT_SCOPE, HOST_AGENT_CONFIG_READ_SCOPE, DOCKER_REPORT_SCOPE, KUBERNETES_REPORT_SCOPE, AGENT_EXEC_SCOPE } from '@/constants/apiScopes';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
@@ -268,7 +268,7 @@ export const UnifiedAgents: Component = () => {
         try {
             const desiredName = tokenName().trim() || buildDefaultTokenName();
             // Generate token with unified agent reporting scopes
-            const scopes = [HOST_AGENT_SCOPE, HOST_AGENT_CONFIG_READ_SCOPE, DOCKER_REPORT_SCOPE, KUBERNETES_REPORT_SCOPE];
+            const scopes = [HOST_AGENT_SCOPE, HOST_AGENT_CONFIG_READ_SCOPE, DOCKER_REPORT_SCOPE, KUBERNETES_REPORT_SCOPE, AGENT_EXEC_SCOPE];
             const { token, record } = await SecurityAPI.createToken(desiredName, scopes);
 
             setCurrentToken(token);

@@ -5959,6 +5959,7 @@ func (h *ConfigHandlers) HandleAgentInstallCommand(w http.ResponseWriter, r *htt
 		config.ScopeHostReport,
 		config.ScopeHostConfigRead,
 		config.ScopeHostManage,
+		config.ScopeAgentExec,
 	}
 
 	record, err := config.NewAPITokenRecord(rawToken, tokenName, scopes)

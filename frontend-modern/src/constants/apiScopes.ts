@@ -11,6 +11,7 @@ export const DOCKER_REPORT_SCOPE = 'docker:report';
 export const DOCKER_MANAGE_SCOPE = 'docker:manage';
 export const KUBERNETES_REPORT_SCOPE = 'kubernetes:report';
 export const KUBERNETES_MANAGE_SCOPE = 'kubernetes:manage';
+export const AGENT_EXEC_SCOPE = 'agent:exec';
 export const MONITORING_READ_SCOPE = 'monitoring:read';
 export const MONITORING_WRITE_SCOPE = 'monitoring:write';
 export const SETTINGS_READ_SCOPE = 'settings:read';
