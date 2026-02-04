@@ -237,6 +237,7 @@ type PatrolService struct {
 	findings            *FindingsStore
 	knowledgeStore      *knowledge.Store        // For per-resource notes in patrol context
 	discoveryStore      *servicediscovery.Store // For AI-discovered infrastructure context
+	guestProber         GuestProber             // For pre-patrol guest reachability checks
 	metricsHistory      MetricsHistoryProvider  // For trend analysis and predictions
 	baselineStore       *baseline.Store         // For anomaly detection via learned baselines
 	changeDetector      *ChangeDetector         // For tracking infrastructure changes

@@ -72,13 +72,14 @@ func SignalThresholdsFromPatrol(pt PatrolThresholds) SignalThresholds {
 }
 
 const (
-	SignalSMARTFailure SignalType = "smart_failure"
-	SignalHighCPU      SignalType = "high_cpu"
-	SignalHighMemory   SignalType = "high_memory"
-	SignalHighDisk     SignalType = "high_disk"
-	SignalBackupFailed SignalType = "backup_failed"
-	SignalBackupStale  SignalType = "backup_stale"
-	SignalActiveAlert  SignalType = "active_alert"
+	SignalSMARTFailure     SignalType = "smart_failure"
+	SignalHighCPU          SignalType = "high_cpu"
+	SignalHighMemory       SignalType = "high_memory"
+	SignalHighDisk         SignalType = "high_disk"
+	SignalBackupFailed     SignalType = "backup_failed"
+	SignalBackupStale      SignalType = "backup_stale"
+	SignalActiveAlert      SignalType = "active_alert"
+	SignalGuestUnreachable SignalType = "guest_unreachable"
 )
 
 // DetectedSignal represents a problem signal found in tool call results.
@@ -761,6 +762,34 @@ func deduplicateSignals(signals []DetectedSignal) []DetectedSignal {
 	}
 
 	return result
+}
+
+// DetectReachabilitySignals returns signals for running guests that are unreachable.
+// This is separate from tool-call-based detection since reachability comes from
+// pre-patrol probing, not from LLM tool calls.
+func DetectReachabilitySignals(guestIntel map[string]*GuestIntelligence) []DetectedSignal {
+	var signals []DetectedSignal
+	for guestID, gi := range guestIntel {
+		if gi == nil || gi.Reachable == nil || *gi.Reachable {
+			continue
+		}
+		name := gi.Name
+		if name == "" {
+			name = guestID
+		}
+		summary := fmt.Sprintf("Guest %s is running but not responding to ping", name)
+		signals = append(signals, DetectedSignal{
+			SignalType:        SignalGuestUnreachable,
+			ResourceID:        guestID,
+			ResourceName:      name,
+			ResourceType:      gi.GuestType,
+			SuggestedSeverity: "warning",
+			Category:          "connectivity",
+			Summary:           summary,
+			Evidence:          "ICMP ping from host node returned no response",
+		})
+	}
+	return signals
 }
 
 // UnmatchedSignals returns signals that don't have a corresponding finding already reported.

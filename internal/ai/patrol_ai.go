@@ -205,8 +205,13 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 		return nil, fmt.Errorf("patrol skipped: %w", err)
 	}
 
+	// Gather guest intelligence (discovery + reachability) before building seed context
+	intelCtx, intelCancel := context.WithTimeout(ctx, 5*time.Second)
+	guestIntel := p.gatherGuestIntelligence(intelCtx, state)
+	intelCancel()
+
 	// Build minimal seed context (resource inventory + thresholds + findings + notes)
-	seedContext, seededFindingIDs := p.buildSeedContext(state, scope)
+	seedContext, seededFindingIDs := p.buildSeedContext(state, scope, guestIntel)
 	if strings.TrimSpace(seedContext) == "" {
 		return nil, nil
 	}
@@ -474,6 +479,11 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	sigThresholds := SignalThresholdsFromPatrol(p.thresholds)
 	p.mu.RUnlock()
 	detectedSignals := DetectSignals(signalToolCalls, sigThresholds)
+
+	// Merge reachability signals from pre-patrol guest probing
+	reachabilitySignals := DetectReachabilitySignals(guestIntel)
+	detectedSignals = append(detectedSignals, reachabilitySignals...)
+
 	if len(detectedSignals) > 0 {
 		log.Info().
 			Int("detected_signals", len(detectedSignals)).
@@ -829,6 +839,8 @@ func signalKey(s DetectedSignal) string {
 		return "backup-stale"
 	case SignalActiveAlert:
 		return "active-alert"
+	case SignalGuestUnreachable:
+		return "guest-unreachable"
 	default:
 		return "deterministic-signal"
 	}
@@ -850,6 +862,8 @@ func signalTitle(s DetectedSignal) string {
 		return "Backup is stale"
 	case SignalActiveAlert:
 		return "Active alert detected"
+	case SignalGuestUnreachable:
+		return fmt.Sprintf("Guest unreachable: %s", s.ResourceName)
 	default:
 		return "Infrastructure signal detected"
 	}
@@ -871,6 +885,8 @@ func defaultRecommendationForSignal(s DetectedSignal) string {
 		return "Ensure backups are scheduled and completing successfully; run a new backup."
 	case SignalActiveAlert:
 		return "Investigate the active alert and resolve the underlying issue."
+	case SignalGuestUnreachable:
+		return "Investigate why this guest is not responding to ping. Check network configuration, firewall rules, or whether the guest has crashed."
 	default:
 		return "Investigate the signal and take corrective action if needed."
 	}
@@ -917,7 +933,9 @@ You have access to the following tools to investigate infrastructure:
 
 You are provided with the current state of the user's infrastructure below, including resource metrics, storage health, backup status, disk health, active alerts, baselines, and connection health. This gives you a complete point-in-time snapshot without needing to query for it.
 
-**Step 1 — Analyze the snapshot.** Scan the data for anything notable: high usage, backup gaps, disk health issues, resources above baseline, stopped resources that should be running, storage trending full, etc.
+The seed context includes service identity (from discovery) and reachability data when available. Guests marked UNREACHABLE are running according to Proxmox but did not respond to ICMP ping from their host node. This may indicate a network issue, guest crash, or firewall blocking ICMP. Use pulse_read to check guest logs or pulse_discovery for service details.
+
+**Step 1 — Analyze the snapshot.** Scan the data for anything notable: high usage, backup gaps, disk health issues, resources above baseline, stopped resources that should be running, storage trending full, unreachable guests, etc.
 
 **Step 2 — Investigate deeper.** For anything notable you spotted, use your tools to understand whether it's actually a problem:
 - Use **pulse_metrics** with historical windows (1h, 6h, 24h) to check if a high metric is trending up or just a momentary spike. A resource at 60% and rising is more interesting than one sitting steady at 75%.
@@ -1031,7 +1049,7 @@ type seedForecast struct {
 // It pre-assembles current metrics, storage health, backup status, disk health, alerts,
 // connection health, and baselines/trends so the model can analyze without tool calls.
 // Tools remain available for targeted deep-dives.
-func (p *PatrolService) buildSeedContext(state models.StateSnapshot, scope *PatrolScope) (string, []string) {
+func (p *PatrolService) buildSeedContext(state models.StateSnapshot, scope *PatrolScope, guestIntel map[string]*GuestIntelligence) (string, []string) {
 	var sb strings.Builder
 
 	p.mu.RLock()
@@ -1043,7 +1061,7 @@ func (p *PatrolService) buildSeedContext(state models.StateSnapshot, scope *Patr
 
 	sb.WriteString(p.seedPreviousRun(now))
 	intel := p.seedPrecomputeIntelligence(state, scopedSet, now)
-	sb.WriteString(p.seedResourceInventory(state, scopedSet, cfg, now, intel.isQuiet))
+	sb.WriteString(p.seedResourceInventory(state, scopedSet, cfg, now, intel.isQuiet, guestIntel))
 	p.seedPMGSnapshot(&sb, state, scopedSet, cfg, intel.isQuiet)
 	sb.WriteString(p.seedBackupAnalysis(state, now))
 	sb.WriteString(p.seedHealthAndAlerts(state, scopedSet, cfg, now))
@@ -1327,7 +1345,7 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 }
 
 // seedResourceInventory builds the node, guest, docker, storage, ceph, and PBS sections.
-func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool) string {
+func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
 	var sb strings.Builder
 
 	// --- Node Metrics ---
@@ -1394,6 +1412,8 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 		name, gType, node, status string
 		cpu, mem, disk            float64
 		lastBackup                time.Time
+		service                   string // from discovery, e.g. "PostgreSQL 15" or "-"
+		reachable                 string // "yes", "NO", or "-"
 	}
 	var guests []guestRow
 
@@ -1402,20 +1422,26 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 			if vm.Template || !seedIsInScope(scopedSet, vm.ID) {
 				continue
 			}
+			gi := guestIntel[vm.ID]
 			guests = append(guests, guestRow{
 				name: vm.Name, gType: "vm", node: vm.Node, status: vm.Status,
 				cpu: vm.CPU * 100, mem: vm.Memory.Usage, disk: vm.Disk.Usage,
 				lastBackup: vm.LastBackup,
+				service:    formatService(gi),
+				reachable:  formatReachable(reachableFromIntel(gi)),
 			})
 		}
 		for _, ct := range state.Containers {
 			if ct.Template || !seedIsInScope(scopedSet, ct.ID) {
 				continue
 			}
+			gi := guestIntel[ct.ID]
 			guests = append(guests, guestRow{
 				name: ct.Name, gType: "lxc", node: ct.Node, status: ct.Status,
 				cpu: ct.CPU * 100, mem: ct.Memory.Usage, disk: ct.Disk.Usage,
 				lastBackup: ct.LastBackup,
+				service:    formatService(gi),
+				reachable:  formatReachable(reachableFromIntel(gi)),
 			})
 		}
 	}
@@ -1423,27 +1449,66 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 	if len(guests) > 0 {
 		if isQuiet && scopedSet == nil {
 			running, stopped := 0, 0
+			var unreachableNames []string
 			for _, g := range guests {
 				if g.status == "running" {
 					running++
 				} else {
 					stopped++
 				}
+				if g.reachable == "NO" {
+					unreachableNames = append(unreachableNames, g.name)
+				}
 			}
-			sb.WriteString(fmt.Sprintf("# Guests: %d running, %d stopped, no issues detected.\n\n", running, stopped))
+			if len(unreachableNames) > 0 {
+				sb.WriteString(fmt.Sprintf("# Guests: %d running, %d stopped. %d UNREACHABLE: %s\n\n",
+					running, stopped, len(unreachableNames), strings.Join(unreachableNames, ", ")))
+			} else {
+				hasReachabilityData := false
+				for _, g := range guests {
+					if g.reachable != "-" {
+						hasReachabilityData = true
+						break
+					}
+				}
+				if hasReachabilityData {
+					sb.WriteString(fmt.Sprintf("# Guests: %d running, %d stopped, no issues detected. All reachable.\n\n", running, stopped))
+				} else {
+					sb.WriteString(fmt.Sprintf("# Guests: %d running, %d stopped, no issues detected.\n\n", running, stopped))
+				}
+			}
 		} else {
 			sb.WriteString("# Guest Metrics\n")
-			sb.WriteString("| Name | Type | Node | CPU | Mem | Disk | Status | Last Backup |\n")
-			sb.WriteString("|------|------|------|-----|-----|------|--------|-------------|\n")
+			sb.WriteString("| Name | Type | Node | Service | CPU | Mem | Disk | Status | Reachable | Last Backup |\n")
+			sb.WriteString("|------|------|------|---------|-----|-----|------|--------|-----------|-------------|\n")
 			for _, g := range guests {
 				backup := "never"
 				if !g.lastBackup.IsZero() {
 					backup = seedFormatTimeAgo(now, g.lastBackup)
 				}
-				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %.0f%% | %.0f%% | %.0f%% | %s | %s |\n",
-					g.name, g.gType, g.node, g.cpu, g.mem, g.disk, g.status, backup))
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %.0f%% | %.0f%% | %.0f%% | %s | %s | %s |\n",
+					g.name, g.gType, g.node, g.service, g.cpu, g.mem, g.disk, g.status, g.reachable, backup))
 			}
 			sb.WriteString("\n")
+
+			// Add service health issues section for unreachable running guests
+			var issues []serviceHealthIssue
+			for _, g := range guests {
+				if g.status == "running" && g.reachable == "NO" {
+					svc := g.service
+					if svc == "-" {
+						svc = strings.ToUpper(g.gType) // "VM" or "LXC"
+					}
+					issues = append(issues, serviceHealthIssue{
+						name:    g.name,
+						service: svc,
+						node:    g.node,
+					})
+				}
+			}
+			if section := buildServiceHealthIssues(issues); section != "" {
+				sb.WriteString(section)
+			}
 		}
 	}
 

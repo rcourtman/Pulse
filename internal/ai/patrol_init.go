@@ -406,6 +406,22 @@ func (p *PatrolService) GetDiscoveryStore() *servicediscovery.Store {
 	return p.discoveryStore
 }
 
+// SetGuestProber sets the guest prober for pre-patrol reachability checks.
+// This enables the patrol service to ping guests via connected host agents.
+func (p *PatrolService) SetGuestProber(prober GuestProber) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.guestProber = prober
+	log.Info().Msg("AI Patrol: Guest prober set for reachability checks")
+}
+
+// GetGuestProber returns the guest prober for external access.
+func (p *PatrolService) GetGuestProber() GuestProber {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.guestProber
+}
+
 // SetMetricsHistoryProvider sets the metrics history provider for enriched context
 // This enables the patrol service to compute trends and predictions based on historical data
 func (p *PatrolService) SetMetricsHistoryProvider(provider MetricsHistoryProvider) {

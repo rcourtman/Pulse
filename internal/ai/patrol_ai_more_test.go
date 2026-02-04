@@ -285,7 +285,7 @@ func TestSeedResourceInventory_QuietSummary(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), true)
+	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), true, nil)
 	if !strings.Contains(out, "# Nodes: All 2") {
 		t.Fatalf("expected quiet node summary, got: %s", out)
 	}
@@ -406,7 +406,7 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, now, false)
+	out := ps.seedResourceInventory(state, nil, cfg, now, false, nil)
 	for _, part := range []string{
 		"# Node Metrics",
 		"# Guest Metrics",

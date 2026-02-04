@@ -26,7 +26,7 @@ func TestPatrolService_buildSeedContext_QuietSummary(t *testing.T) {
 		},
 	}
 
-	seed, _ := ps.buildSeedContext(state, nil)
+	seed, _ := ps.buildSeedContext(state, nil, nil)
 	if !strings.Contains(seed, "# Nodes: All 1 healthy") {
 		t.Fatalf("expected quiet node summary, got:\n%s", seed)
 	}
@@ -44,7 +44,7 @@ func TestPatrolService_buildSeedContext_ScopeSection(t *testing.T) {
 		Depth:         PatrolDepthQuick,
 	}
 
-	seed, _ := ps.buildSeedContext(models.StateSnapshot{}, scope)
+	seed, _ := ps.buildSeedContext(models.StateSnapshot{}, scope, nil)
 	if !strings.Contains(seed, "# Patrol Scope") {
 		t.Fatalf("expected patrol scope section, got:\n%s", seed)
 	}

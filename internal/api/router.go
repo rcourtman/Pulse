@@ -2563,6 +2563,11 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 			patrol.SetRemediationEngine(remediationEngine)
 		}
 
+		// Wire guest prober for pre-patrol reachability checks via host agents
+		if r.agentExecServer != nil {
+			patrol.SetGuestProber(ai.NewAgentExecProber(r.agentExecServer))
+		}
+
 		// NOTE: Unified finding callback is wired in StartPatrol after findings persistence is loaded
 
 		log.Info().Msg("AI Intelligence: Patrol context providers wired up")
