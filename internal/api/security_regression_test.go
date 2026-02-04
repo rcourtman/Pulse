@@ -2505,3 +2505,17 @@ func TestValidateTokenRequiresSettingsWriteScope(t *testing.T) {
 		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
 	}
 }
+
+func TestRecoveryEndpointRejectsRemoteWithoutToken(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.30")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(`{"action":"status"}`))
+	req.RemoteAddr = "203.0.113.30:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for remote recovery request, got %d", rec.Code)
+	}
+}
