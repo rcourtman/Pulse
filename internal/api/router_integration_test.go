@@ -599,19 +599,37 @@ func TestAPITokenQueryAndHeaderAuth(t *testing.T) {
 		cfg.SortAPITokens()
 	})
 
-	// Query-string tokens are currently accepted (needed for WebSocket connections
-	// that can't send custom headers during the initial handshake).
-	// TODO: Consider restricting query-string tokens to WebSocket upgrade requests only.
+	// Query-string tokens must be rejected for regular HTTP requests to prevent
+	// token leakage via logs, referrer headers, and browser history.
 	queryURL := srv.server.URL + "/api/state?token=" + apiToken
 	res, err := http.Get(queryURL)
 	if err != nil {
 		t.Fatalf("query parameter request failed: %v", err)
 	}
 	res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 when token supplied via query string, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when query-string token used without WebSocket upgrade, got %d", res.StatusCode)
 	}
 
+	// Query-string tokens must be accepted for WebSocket upgrade requests.
+	wsReq, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/state?token="+apiToken, nil)
+	if err != nil {
+		t.Fatalf("create websocket upgrade request: %v", err)
+	}
+	wsReq.Header.Set("Upgrade", "websocket")
+	wsReq.Header.Set("Connection", "Upgrade")
+	wsRes, err := http.DefaultClient.Do(wsReq)
+	if err != nil {
+		t.Fatalf("websocket upgrade request failed: %v", err)
+	}
+	wsRes.Body.Close()
+	// The server won't complete the WebSocket handshake (no real upgrader),
+	// but the auth layer should accept the token — anything other than 401 is fine.
+	if wsRes.StatusCode == http.StatusUnauthorized {
+		t.Fatalf("expected query-string token to be accepted on WebSocket upgrade, got 401")
+	}
+
+	// Header-based token auth must still work for regular requests.
 	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/state", nil)
 	if err != nil {
 		t.Fatalf("create header-auth request: %v", err)

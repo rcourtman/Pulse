@@ -68,6 +68,14 @@ func isConnectionSecure(r *http.Request) bool {
 		strings.Contains(r.Header.Get("Forwarded"), "proto=https")
 }
 
+// isWebSocketUpgrade reports whether the request is a WebSocket upgrade handshake.
+// Query-string tokens are only accepted for WebSocket connections because those
+// can't set custom headers during the upgrade. Accepting tokens in the URL for
+// regular HTTP requests would expose them in logs, referrers, and browser history.
+func isWebSocketUpgrade(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+}
+
 // getCookieSettings returns the appropriate cookie settings based on proxy detection
 func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 	isProxied := detectProxy(r)
@@ -254,7 +262,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			providedToken = t
 		} else if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
 			providedToken = strings.TrimSpace(authHeader[7:])
-		} else if t := r.URL.Query().Get("token"); t != "" {
+		} else if t := r.URL.Query().Get("token"); t != "" && isWebSocketUpgrade(r) {
 			providedToken = t
 		}
 
@@ -348,10 +356,12 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 				}
 			}
 		}
-		// Check query parameter (for WebSocket connections that can't send headers)
-		if queryToken := r.URL.Query().Get("token"); queryToken != "" {
-			if validateToken(queryToken) {
-				return true
+		// Check query parameter (only for WebSocket upgrades that can't send headers)
+		if isWebSocketUpgrade(r) {
+			if queryToken := r.URL.Query().Get("token"); queryToken != "" {
+				if validateToken(queryToken) {
+					return true
+				}
 			}
 		}
 	}
@@ -919,10 +929,12 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 				}
 			}
 		}
-		// Query param (for WebSocket)
-		if queryToken := r.URL.Query().Get("token"); queryToken != "" {
-			if req, ok := validateToken(queryToken); ok {
-				return req
+		// Query param (only for WebSocket upgrades)
+		if isWebSocketUpgrade(r) {
+			if queryToken := r.URL.Query().Get("token"); queryToken != "" {
+				if req, ok := validateToken(queryToken); ok {
+					return req
+				}
 			}
 		}
 	}
