@@ -173,6 +173,45 @@ func TestSocketIOWebSocketRequiresAuthInAPIMode(t *testing.T) {
 	conn.Close()
 }
 
+func TestSocketIOWebSocketAllowsQueryToken(t *testing.T) {
+	rawToken := "socket-ws-query-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	defer hub.Stop()
+
+	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
+	ts := httptest.NewServer(router.Handler())
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/socket.io/?transport=websocket&token=" + rawToken
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("expected websocket connection with query token, got %v", err)
+	}
+	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
+		conn.Close()
+		t.Fatalf("expected 101 switching protocols, got %v", resp)
+	}
+	conn.Close()
+}
+
+func TestSocketIOPollingIgnoresQueryToken(t *testing.T) {
+	rawToken := "socket-polling-query-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/socket.io/?transport=polling&token="+rawToken, nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when token is only in query string, got %d", rec.Code)
+	}
+}
+
 func TestSchedulerHealthRequiresAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "sched-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
