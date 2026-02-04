@@ -33,6 +33,12 @@ func (d *denyAuthorizer) Authorize(_ context.Context, _ string, _ string) (bool,
 	return false, nil
 }
 
+type adminOnlyAuthorizer struct{}
+
+func (a *adminOnlyAuthorizer) Authorize(ctx context.Context, _ string, _ string) (bool, error) {
+	return auth.GetUser(ctx) == "admin", nil
+}
+
 func newTestConfigWithTokens(t *testing.T, records ...config.APITokenRecord) *config.Config {
 	t.Helper()
 	tempDir := t.TempDir()
@@ -327,6 +333,40 @@ func TestResetLockoutRequiresAuthInAPIMode(t *testing.T) {
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
+func TestRequirePermissionDeniesProxyNonAdminUsers(t *testing.T) {
+	prevAuthorizer := auth.GetAuthorizer()
+	auth.SetAuthorizer(&adminOnlyAuthorizer{})
+	defer auth.SetAuthorizer(prevAuthorizer)
+
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/tokens", nil)
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy user, got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/security/tokens", nil)
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "admin")
+	req.Header.Set("X-Remote-Roles", "admin")
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for admin proxy user, got %d", rec.Code)
 	}
 }
 
