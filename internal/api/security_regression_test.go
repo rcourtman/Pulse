@@ -1639,6 +1639,65 @@ func TestReportingEndpointsRequireLicenseFeature(t *testing.T) {
 	}
 }
 
+func TestRBACEndpointsRequireLicenseFeature(t *testing.T) {
+	rawToken := "rbac-license-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/admin/roles",
+		"/api/admin/users",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusPaymentRequired {
+			t.Fatalf("expected 402 for missing RBAC license on %s, got %d", path, rec.Code)
+		}
+	}
+}
+
+func TestAgentProfilesRequireLicenseFeature(t *testing.T) {
+	rawToken := "profiles-license-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/profiles/", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 for missing agent profiles license, got %d", rec.Code)
+	}
+}
+
+func TestAILicensedEndpointsRequireLicenseFeature(t *testing.T) {
+	rawToken := "ai-license-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/ai/kubernetes/analyze",
+		"/api/ai/investigate-alert",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusPaymentRequired {
+			t.Fatalf("expected 402 for missing AI license on %s, got %d", path, rec.Code)
+		}
+	}
+}
+
 func TestSecurityOIDCRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "security-oidc-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
