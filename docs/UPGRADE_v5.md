@@ -56,6 +56,12 @@ If you reset auth (for example by deleting `.env`), Pulse may require a bootstra
 - Docker: `docker exec pulse /app/pulse bootstrap-token`
 - systemd/LXC: `sudo pulse bootstrap-token`
 
+### Sensor proxy removal
+
+The `pulse-sensor-proxy` from v4 is no longer needed — temperature monitoring is now handled by the unified agent. If you had the sensor proxy installed on your Proxmox hosts, remove it **on each host** after upgrading. See the [Legacy Cleanup](TEMPERATURE_MONITORING.md#legacy-cleanup-if-upgrading) section in the temperature monitoring docs for the full cleanup commands.
+
+Skipping this step will leave a selfheal timer running on the host that generates recurring `TASK ERROR` entries in the Proxmox task log.
+
 ### Temperature monitoring in containers
 
 If Pulse runs in a container and you are relying on SSH-based temperature collection, move to the agent or run Pulse on the host. SSH-based collection from containers is intended for dev/test only (use `PULSE_DEV_ALLOW_CONTAINER_SSH=true` if you must).

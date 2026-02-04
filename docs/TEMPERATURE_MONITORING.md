@@ -77,10 +77,29 @@ ssh -i /path/to/key root@node "cat /sys/class/thermal/thermal_zone0/temp"
 
 ## Legacy Cleanup (If Upgrading)
 
-If you still have the old sensor proxy installed from prior releases, remove it manually:
+If you still have the old sensor proxy installed from prior releases, remove it from each **Proxmox host** (not the Pulse container):
 
 ```bash
-sudo systemctl disable --now pulse-sensor-proxy || true
-sudo rm -f /usr/local/bin/pulse-sensor-proxy
-sudo rm -rf /etc/pulse-sensor-proxy /var/lib/pulse-sensor-proxy /run/pulse-sensor-proxy
+# Stop and disable all sensor-proxy systemd units
+sudo systemctl disable --now pulse-sensor-proxy pulse-sensor-proxy-selfheal.timer pulse-sensor-proxy-selfheal.service pulse-sensor-cleanup.path pulse-sensor-cleanup.service 2>/dev/null
+
+# Remove systemd unit files
+sudo rm -f /etc/systemd/system/pulse-sensor-proxy.service
+sudo rm -f /etc/systemd/system/pulse-sensor-proxy-selfheal.timer
+sudo rm -f /etc/systemd/system/pulse-sensor-proxy-selfheal.service
+sudo rm -f /etc/systemd/system/pulse-sensor-cleanup.service
+sudo rm -f /etc/systemd/system/pulse-sensor-cleanup.path
+sudo systemctl daemon-reload
+
+# Remove sensor-proxy files
+sudo rm -rf /opt/pulse/sensor-proxy
+sudo rm -rf /etc/pulse-sensor-proxy
+sudo rm -rf /var/lib/pulse-sensor-proxy
+sudo rm -rf /var/log/pulse/sensor-proxy
+sudo rm -rf /run/pulse-sensor-proxy
+
+# Optional: remove sensor-proxy SSH keys from authorized_keys
+sudo sed -i '/# pulse-managed-key$/d;/# pulse-proxy-key$/d' /root/.ssh/authorized_keys
 ```
+
+Reinstalling or upgrading the Pulse container does **not** remove the sensor proxy from the host — they are separate installations. If you skip this cleanup, the selfheal timer will keep running and may generate recurring `TASK ERROR` entries in the Proxmox task log.
