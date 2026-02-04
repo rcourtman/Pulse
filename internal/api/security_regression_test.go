@@ -1948,6 +1948,8 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/security/reset-lockout", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/apply-restart", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/oidc", body: `{}`},
+		{method: http.MethodPost, path: "/api/system/verify-temperature-ssh", body: `{}`},
+		{method: http.MethodPost, path: "/api/system/ssh-config", body: `{}`},
 		{method: http.MethodGet, path: "/api/ai/debug/context", body: ""},
 		{method: http.MethodPost, path: "/api/ai/execute", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/execute/stream", body: `{}`},

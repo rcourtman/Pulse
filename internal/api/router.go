@@ -1902,6 +1902,18 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 		return
 	}
 
+	// Check admin privileges for proxy auth users
+	if r.config.ProxyAuthSecret != "" {
+		if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid && !isAdmin {
+			log.Warn().
+				Str("ip", GetClientIP(req)).
+				Str("username", username).
+				Msg("Non-admin user attempted verify-temperature-ssh")
+			http.Error(w, "Admin privileges required", http.StatusForbidden)
+			return
+		}
+	}
+
 	// Require settings:write scope for API tokens (SSH probes are a privileged operation)
 	if !ensureScope(w, req, config.ScopeSettingsWrite) {
 		return
@@ -1941,6 +1953,18 @@ func (r *Router) handleSSHConfig(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		}
 		return
+	}
+
+	// Check admin privileges for proxy auth users
+	if r.config.ProxyAuthSecret != "" {
+		if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid && !isAdmin {
+			log.Warn().
+				Str("ip", GetClientIP(req)).
+				Str("username", username).
+				Msg("Non-admin user attempted ssh-config update")
+			http.Error(w, "Admin privileges required", http.StatusForbidden)
+			return
+		}
 	}
 
 	// Require settings:write scope for API tokens (SSH config writes are a privileged operation)
