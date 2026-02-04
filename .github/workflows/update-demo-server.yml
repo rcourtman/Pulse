@@ -143,8 +143,9 @@ jobs:
           fi
 
           # Verify mock mode is active by authenticating and checking node count
+          # Uses $HOME for cookie file since /tmp may not be writable by all users
           NODES=$(ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
-            'curl -s -c /tmp/demo-cookies.txt http://localhost:7655/api/login -X POST -H "Content-Type: application/json" -d "{\"username\":\"demo\",\"password\":\"demo\"}" > /dev/null && curl -s -b /tmp/demo-cookies.txt http://localhost:7655/api/state | jq -r ".nodes | length" && rm -f /tmp/demo-cookies.txt')
+            'curl -s -c $HOME/.demo-cookies.txt http://localhost:7655/api/login -X POST -H "Content-Type: application/json" -d "{\"username\":\"demo\",\"password\":\"demo\"}" > /dev/null && curl -s -b $HOME/.demo-cookies.txt http://localhost:7655/api/state | jq -r ".nodes | length" && rm -f $HOME/.demo-cookies.txt')
 
           echo "Mock nodes detected: $NODES"
 
