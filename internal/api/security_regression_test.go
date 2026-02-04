@@ -1421,6 +1421,25 @@ func TestConfigExportRejectsShortPassphrase(t *testing.T) {
 	}
 }
 
+func TestConfigExportRequiresPassphrase(t *testing.T) {
+	rawToken := "config-export-missing-pass-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/export", strings.NewReader(`{"passphrase":""}`))
+	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing passphrase, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Passphrase is required") {
+		t.Fatalf("expected passphrase required error, got %q", rec.Body.String())
+	}
+}
+
 func TestConfigImportRejectsMissingData(t *testing.T) {
 	rawToken := "config-import-data-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
@@ -1437,6 +1456,25 @@ func TestConfigImportRejectsMissingData(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Import data is required") {
 		t.Fatalf("expected import data error, got %q", rec.Body.String())
+	}
+}
+
+func TestConfigImportRequiresPassphrase(t *testing.T) {
+	rawToken := "config-import-pass-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/import", strings.NewReader(`{"passphrase":"","data":"encrypted"}`))
+	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing passphrase, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Passphrase is required") {
+		t.Fatalf("expected passphrase required error, got %q", rec.Body.String())
 	}
 }
 
