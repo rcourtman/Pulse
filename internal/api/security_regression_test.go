@@ -160,6 +160,45 @@ func TestSocketIOWebSocketRequiresAuthInAPIMode(t *testing.T) {
 	conn.Close()
 }
 
+func TestSchedulerHealthRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "sched-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/monitoring/scheduler/health", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without token, got %d", rec.Code)
+	}
+}
+
+func TestLicenseFeaturesRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "license-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/features", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without token, got %d", rec.Code)
+	}
+}
+
+func TestAIStatusRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "ai-status-token-123.12345678", []string{config.ScopeAIChat}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/status", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without token, got %d", rec.Code)
+	}
+}
+
 func TestWebSocketRequiresMonitoringReadScope(t *testing.T) {
 	rawToken := "ws-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
