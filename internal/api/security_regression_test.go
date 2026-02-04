@@ -2820,6 +2820,36 @@ func TestSSHKeyGenerationBlockedInContainer(t *testing.T) {
 	}
 }
 
+func TestSetupScriptRejectsInvalidAuthToken(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/setup-script?type=pve&host=https://example.com&pulse_url=https://pulse.example.com&auth_token=not-hex", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid auth_token, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Invalid auth_token parameter") {
+		t.Fatalf("expected invalid auth_token error, got %q", rec.Body.String())
+	}
+}
+
+func TestSetupScriptRejectsInvalidHostURL(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/setup-script?type=pve&host=ftp://example.com&pulse_url=https://pulse.example.com", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid host, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Invalid host parameter") {
+		t.Fatalf("expected invalid host error, got %q", rec.Body.String())
+	}
+}
+
 func TestOIDCLoginBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
