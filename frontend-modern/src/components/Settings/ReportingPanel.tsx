@@ -3,9 +3,10 @@ import FileText from 'lucide-solid/icons/file-text';
 import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
 import SettingsPanel from '@/components/shared/SettingsPanel';
-import { formField, formLabel, formHelpText, formControl, formSelect } from '@/components/shared/Form';
+import { formField, formLabel, formHelpText, formControl } from '@/components/shared/Form';
 import { showSuccess, showWarning } from '@/utils/toast';
 import { apiFetch } from '@/utils/apiClient';
+import { ResourcePicker, type SelectedResource } from './ResourcePicker';
 
 interface FormFieldProps {
     label: string;
@@ -24,8 +25,7 @@ function FormField(props: FormFieldProps) {
 }
 
 export function ReportingPanel() {
-    const [resourceType, setResourceType] = createSignal('node');
-    const [resourceId, setResourceId] = createSignal('');
+    const [selectedResources, setSelectedResources] = createSignal<SelectedResource[]>([]);
     const [metricType, setMetricType] = createSignal('');
     const [format, setFormat] = createSignal<'pdf' | 'csv'>('pdf');
     const [range, setRange] = createSignal('24h');
@@ -33,8 +33,9 @@ export function ReportingPanel() {
     const [title, setTitle] = createSignal('');
 
     const handleGenerate = async () => {
-        if (!resourceId()) {
-            showWarning('Please enter a Resource ID');
+        const resources = selectedResources();
+        if (resources.length === 0) {
+            showWarning('Please select at least one resource');
             return;
         }
 
@@ -48,20 +49,49 @@ export function ReportingPanel() {
 
             const startStr = start.toISOString();
 
-            const params = new URLSearchParams({
-                resourceType: resourceType(),
-                resourceId: resourceId(),
-                format: format(),
-                start: startStr,
-                end: end,
-                title: title() || `Infrastructure Report - ${resourceId()}`,
-            });
+            let response: Response;
+            let filename: string;
 
-            if (metricType()) {
-                params.append('metricType', metricType());
+            if (resources.length === 1) {
+                // Single resource: use existing GET endpoint for backwards compatibility
+                const res = resources[0];
+                const params = new URLSearchParams({
+                    resourceType: res.type,
+                    resourceId: res.id,
+                    format: format(),
+                    start: startStr,
+                    end: end,
+                    title: title() || `Infrastructure Report - ${res.name}`,
+                });
+
+                if (metricType()) {
+                    params.append('metricType', metricType());
+                }
+
+                response = await apiFetch(`/api/admin/reports/generate?${params.toString()}`);
+                filename = `report-${res.name}-${new Date().toISOString().split('T')[0]}.${format()}`;
+            } else {
+                // Multiple resources: use POST multi endpoint
+                const body = {
+                    resources: resources.map(r => ({
+                        resourceType: r.type,
+                        resourceId: r.id,
+                    })),
+                    format: format(),
+                    start: startStr,
+                    end: end,
+                    title: title() || 'Fleet Performance Report',
+                    metricType: metricType() || undefined,
+                };
+
+                response = await apiFetch('/api/admin/reports/generate-multi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                filename = `fleet-report-${new Date().toISOString().split('T')[0]}.${format()}`;
             }
 
-            const response = await apiFetch(`/api/admin/reports/generate?${params.toString()}`);
             if (!response.ok) {
                 const text = await response.text();
                 throw new Error(text || 'Failed to generate report');
@@ -71,7 +101,7 @@ export function ReportingPanel() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `report-${resourceId()}-${new Date().toISOString().split('T')[0]}.${format()}`;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -94,32 +124,13 @@ export function ReportingPanel() {
                 icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
                 bodyClass="space-y-6"
             >
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField label="Resource Type" helpText="Select the type of infrastructure resource">
-                        <select
-                            id="resource-type"
-                            class={formSelect}
-                            value={resourceType()}
-                            onChange={(e) => setResourceType(e.currentTarget.value)}
-                        >
-                            <option value="node">Proxmox Node</option>
-                            <option value="vm">Virtual Machine (QEMU)</option>
-                            <option value="container">Container (LXC)</option>
-                            <option value="storage">Storage</option>
-                        </select>
-                    </FormField>
-
-                    <FormField label="Resource ID" helpText="Enter the full ID of the resource">
-                        <input
-                            id="resource-id"
-                            type="text"
-                            class={formControl}
-                            placeholder="e.g. pve1:node1 or pve1:node1:100"
-                            value={resourceId()}
-                            onInput={(e) => setResourceId(e.currentTarget.value)}
-                        />
-                    </FormField>
-                </div>
+                {/* Resource Picker */}
+                <FormField label="Resources" helpText="Select the resources to include in the report">
+                    <ResourcePicker
+                        selected={selectedResources}
+                        onSelectionChange={setSelectedResources}
+                    />
+                </FormField>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField label="Metric Type (Optional)" helpText="Filter by specific metric type">
@@ -202,7 +213,12 @@ export function ReportingPanel() {
                         <Show when={generating()} fallback={<Download size={20} />}>
                             <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         </Show>
-                        {generating() ? 'Generating...' : 'Generate Report'}
+                        {generating()
+                            ? 'Generating...'
+                            : selectedResources().length > 0
+                                ? `Generate Report (${selectedResources().length} resource${selectedResources().length !== 1 ? 's' : ''})`
+                                : 'Generate Report'
+                        }
                     </button>
                 </div>
             </SettingsPanel>
@@ -215,7 +231,7 @@ export function ReportingPanel() {
                     <div>
                         <h3 class="text-lg font-bold text-white mb-2">Advanced Insights</h3>
                         <p class="text-slate-400 leading-relaxed">
-                            Reports are generated directly from the historical metrics store. PDF reports provide a summarized view with average, minimum, and maximum values, while CSV exports provide raw granular data for external analysis in tools like Excel or BI suites.
+                            Reports are generated directly from the historical metrics store. PDF reports provide a summarized view with average, minimum, and maximum values, while CSV exports provide raw granular data for external analysis in tools like Excel or BI suites. Select multiple resources to generate a fleet summary report.
                         </p>
                     </div>
                 </div>

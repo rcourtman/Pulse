@@ -17,10 +17,19 @@ type stubReportingEngine struct {
 	contentType string
 	err         error
 	lastReq     reporting.MetricReportRequest
+	lastMulti   reporting.MultiReportRequest
 }
 
 func (s *stubReportingEngine) Generate(req reporting.MetricReportRequest) ([]byte, string, error) {
 	s.lastReq = req
+	if s.err != nil {
+		return nil, "", s.err
+	}
+	return s.data, s.contentType, nil
+}
+
+func (s *stubReportingEngine) GenerateMulti(req reporting.MultiReportRequest) ([]byte, string, error) {
+	s.lastMulti = req
 	if s.err != nil {
 		return nil, "", s.err
 	}

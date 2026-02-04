@@ -106,10 +106,31 @@ type DiskInfo struct {
 	WearLevel   int    // 0-100, percentage of life REMAINING (100 = healthy, 0 = end of life, -1 = unknown)
 }
 
+// MultiReportRequest defines the parameters for generating a multi-resource report.
+type MultiReportRequest struct {
+	Resources  []MetricReportRequest // One per resource, each with enrichment
+	Format     ReportFormat
+	Start      time.Time
+	End        time.Time
+	Title      string
+	MetricType string
+}
+
+// MultiReportData holds the data for multi-resource report generation.
+type MultiReportData struct {
+	Title       string
+	Start       time.Time
+	End         time.Time
+	GeneratedAt time.Time
+	Resources   []*ReportData // Reuse existing ReportData per resource
+	TotalPoints int
+}
+
 // Engine defines the interface for report generation.
 // This allows the enterprise version to provide PDF/CSV generation.
 type Engine interface {
 	Generate(req MetricReportRequest) (data []byte, contentType string, err error)
+	GenerateMulti(req MultiReportRequest) (data []byte, contentType string, err error)
 }
 
 var (

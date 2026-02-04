@@ -1622,6 +1622,717 @@ func (g *PDFGenerator) addPageNumbers(pdf *fpdf.Fpdf) {
 	}
 }
 
+// GenerateMulti creates a multi-resource PDF report from the provided data.
+func (g *PDFGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
+	pdf := fpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(20, 20, 20)
+	pdf.SetAutoPageBreak(true, 25)
+
+	// Page 1: Cover page
+	g.writeMultiCoverPage(pdf, data)
+
+	// Page 2: Fleet summary
+	pdf.AddPage()
+	g.addMultiPageHeader(pdf, data, "Fleet Summary")
+	g.writeFleetSummary(pdf, data)
+
+	// Pages 3+: Condensed per-resource pages
+	for _, rd := range data.Resources {
+		pdf.AddPage()
+		g.addMultiPageHeader(pdf, data, "Resource Detail")
+		g.writeCondensedResourcePage(pdf, rd)
+	}
+
+	// Add page numbers to all pages except cover
+	g.addMultiPageNumbers(pdf)
+
+	// Output to buffer
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		return nil, fmt.Errorf("PDF output error: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// writeMultiCoverPage creates a cover page for multi-resource reports.
+func (g *PDFGenerator) writeMultiCoverPage(pdf *fpdf.Fpdf, data *MultiReportData) {
+	pdf.AddPage()
+
+	pageWidth, pageHeight := pdf.GetPageSize()
+
+	// Top accent bar
+	pdf.SetFillColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
+	pdf.Rect(0, 0, pageWidth, 8, "F")
+
+	// Pulse branding area
+	pdf.SetY(50)
+	pdf.SetFont("Arial", "B", 32)
+	pdf.SetTextColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
+	pdf.CellFormat(0, 15, "PULSE", "", 1, "C", false, 0, "")
+
+	pdf.SetFont("Arial", "", 12)
+	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+	pdf.CellFormat(0, 8, "Infrastructure Monitoring", "", 1, "C", false, 0, "")
+
+	// Main title
+	pdf.SetY(100)
+	pdf.SetFont("Arial", "B", 28)
+	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+	pdf.CellFormat(0, 12, data.Title, "", 1, "C", false, 0, "")
+
+	// Subtitle with counts
+	pdf.SetY(120)
+	pdf.SetFont("Arial", "", 14)
+	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+
+	// Calculate duration
+	duration := data.End.Sub(data.Start)
+	durationStr := formatDuration(duration)
+	subtitle := fmt.Sprintf("%d Resources | %s", len(data.Resources), durationStr)
+	pdf.CellFormat(0, 8, subtitle, "", 1, "C", false, 0, "")
+
+	// Scope box
+	pdf.SetY(140)
+	boxX := 40.0
+	boxWidth := pageWidth - 80
+	boxHeight := 40.0
+
+	pdf.SetFillColor(colorBackground[0], colorBackground[1], colorBackground[2])
+	pdf.SetDrawColor(colorGridLine[0], colorGridLine[1], colorGridLine[2])
+	pdf.RoundedRect(boxX, pdf.GetY(), boxWidth, boxHeight, 3, "1234", "FD")
+
+	// Count by type
+	nodeCount, vmCount, ctCount := 0, 0, 0
+	for _, rd := range data.Resources {
+		switch rd.ResourceType {
+		case "node":
+			nodeCount++
+		case "vm":
+			vmCount++
+		case "container":
+			ctCount++
+		}
+	}
+
+	pdf.SetY(pdf.GetY() + 10)
+	pdf.SetFont("Arial", "B", 11)
+	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+	pdf.CellFormat(0, 7, "SCOPE", "", 1, "C", false, 0, "")
+
+	pdf.SetFont("Arial", "", 12)
+	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+
+	var scopeParts []string
+	if nodeCount > 0 {
+		word := "Nodes"
+		if nodeCount == 1 {
+			word = "Node"
+		}
+		scopeParts = append(scopeParts, fmt.Sprintf("%d %s", nodeCount, word))
+	}
+	if vmCount > 0 {
+		word := "VMs"
+		if vmCount == 1 {
+			word = "VM"
+		}
+		scopeParts = append(scopeParts, fmt.Sprintf("%d %s", vmCount, word))
+	}
+	if ctCount > 0 {
+		word := "Containers"
+		if ctCount == 1 {
+			word = "Container"
+		}
+		scopeParts = append(scopeParts, fmt.Sprintf("%d %s", ctCount, word))
+	}
+
+	scopeStr := ""
+	for i, part := range scopeParts {
+		if i > 0 {
+			scopeStr += ", "
+		}
+		scopeStr += part
+	}
+	pdf.CellFormat(0, 8, scopeStr, "", 1, "C", false, 0, "")
+
+	// Time period
+	pdf.SetY(200)
+	pdf.SetFont("Arial", "B", 11)
+	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+	pdf.CellFormat(0, 7, "REPORTING PERIOD", "", 1, "C", false, 0, "")
+
+	pdf.SetFont("Arial", "", 12)
+	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+	periodStr := fmt.Sprintf("%s  -  %s",
+		data.Start.Format("January 2, 2006 15:04"),
+		data.End.Format("January 2, 2006 15:04"))
+	pdf.CellFormat(0, 8, periodStr, "", 1, "C", false, 0, "")
+
+	pdf.SetFont("Arial", "", 10)
+	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+	pdf.CellFormat(0, 6, fmt.Sprintf("(%s)", durationStr), "", 1, "C", false, 0, "")
+
+	// Bottom section
+	pdf.SetY(pageHeight - 50)
+	pdf.SetFont("Arial", "", 10)
+	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+	pdf.CellFormat(0, 6, fmt.Sprintf("Generated: %s", data.GeneratedAt.Format("January 2, 2006 at 15:04 MST")), "", 1, "C", false, 0, "")
+	pdf.CellFormat(0, 6, fmt.Sprintf("Total Data Points: %d", data.TotalPoints), "", 1, "C", false, 0, "")
+
+	// Bottom accent bar
+	pdf.SetFillColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
+	pdf.Rect(0, pageHeight-8, pageWidth, 8, "F")
+}
+
+// addMultiPageHeader adds a consistent header to multi-report content pages.
+func (g *PDFGenerator) addMultiPageHeader(pdf *fpdf.Fpdf, data *MultiReportData, section string) {
+	pageWidth, _ := pdf.GetPageSize()
+
+	// Top line
+	pdf.SetDrawColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
+	pdf.SetLineWidth(0.5)
+	pdf.Line(20, 15, pageWidth-20, 15)
+
+	// Header text
+	pdf.SetY(18)
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetTextColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
+	pdf.CellFormat(0, 5, "PULSE FLEET REPORT", "", 0, "L", false, 0, "")
+
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+	pdf.CellFormat(0, 5, fmt.Sprintf("%d Resources", len(data.Resources)), "", 1, "R", false, 0, "")
+
+	// Section title
+	pdf.SetY(30)
+	pdf.SetFont("Arial", "B", 18)
+	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+	pdf.CellFormat(0, 10, section, "", 1, "L", false, 0, "")
+
+	pdf.Ln(5)
+}
+
+// writeFleetSummary writes the fleet summary table and observations.
+func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) {
+	pageWidth, _ := pdf.GetPageSize()
+
+	// Determine aggregate health
+	healthStatus := "HEALTHY"
+	healthColor := colorAccent
+	healthMessage := "All systems operating normally"
+
+	totalActive := 0
+	totalCritical := 0
+	totalWarning := 0
+	for _, rd := range data.Resources {
+		for _, alert := range rd.Alerts {
+			if alert.ResolvedTime == nil {
+				totalActive++
+				if alert.Level == "critical" {
+					totalCritical++
+				} else {
+					totalWarning++
+				}
+			}
+		}
+	}
+
+	if totalCritical > 0 {
+		healthStatus = "CRITICAL"
+		healthColor = colorDanger
+		healthMessage = fmt.Sprintf("%d critical issues across fleet", totalCritical)
+	} else if totalWarning > 0 {
+		healthStatus = "WARNING"
+		healthColor = colorWarning
+		healthMessage = fmt.Sprintf("%d warnings across fleet", totalWarning)
+	}
+
+	// Health status card
+	cardX := 20.0
+	cardWidth := pageWidth - 40
+	cardHeight := 30.0
+
+	pdf.SetFillColor(healthColor[0], healthColor[1], healthColor[2])
+	pdf.RoundedRect(cardX, pdf.GetY(), cardWidth, cardHeight, 3, "1234", "F")
+
+	pdf.SetXY(cardX, pdf.GetY()+6)
+	pdf.SetFont("Arial", "B", 20)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.CellFormat(cardWidth, 10, healthStatus, "", 1, "C", false, 0, "")
+	pdf.SetFont("Arial", "", 10)
+	pdf.CellFormat(cardWidth, 7, healthMessage, "", 1, "C", false, 0, "")
+
+	pdf.SetY(pdf.GetY() + 12)
+
+	// Summary table
+	pdf.SetFont("Arial", "B", 11)
+	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+	pdf.CellFormat(0, 8, "Resource Summary", "", 1, "L", false, 0, "")
+	pdf.Ln(2)
+
+	// Table header
+	colWidths := []float64{40, 25, 20, 23, 23, 23, 16}
+	headers := []string{"Resource", "Type", "Status", "Avg CPU", "Avg Mem", "Avg Disk", "Alerts"}
+
+	pdf.SetFillColor(colorTableHeader[0], colorTableHeader[1], colorTableHeader[2])
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFont("Arial", "B", 8)
+
+	for i, header := range headers {
+		pdf.CellFormat(colWidths[i], 7, header, "1", 0, "C", true, 0, "")
+	}
+	pdf.Ln(-1)
+
+	// Table rows
+	pdf.SetFont("Arial", "", 8)
+	fill := false
+
+	// Track highest values for observations
+	var highestCPUName string
+	var highestCPUVal float64
+	var mostAlertsName string
+	var mostAlertsCount int
+
+	for _, rd := range data.Resources {
+		if fill {
+			pdf.SetFillColor(colorTableAlt[0], colorTableAlt[1], colorTableAlt[2])
+		} else {
+			pdf.SetFillColor(255, 255, 255)
+		}
+
+		// Resource name
+		resourceName := rd.ResourceID
+		if rd.Resource != nil && rd.Resource.Name != "" {
+			resourceName = rd.Resource.Name
+		}
+		if len(resourceName) > 25 {
+			resourceName = resourceName[:22] + "..."
+		}
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.CellFormat(colWidths[0], 6, resourceName, "1", 0, "L", fill, 0, "")
+
+		// Type
+		pdf.CellFormat(colWidths[1], 6, GetResourceTypeDisplayName(rd.ResourceType), "1", 0, "C", fill, 0, "")
+
+		// Status
+		status := "N/A"
+		if rd.Resource != nil {
+			status = rd.Resource.Status
+		}
+		if status == "online" || status == "running" {
+			pdf.SetTextColor(colorAccent[0], colorAccent[1], colorAccent[2])
+		} else if status == "stopped" || status == "offline" {
+			pdf.SetTextColor(colorDanger[0], colorDanger[1], colorDanger[2])
+		} else {
+			pdf.SetTextColor(colorWarning[0], colorWarning[1], colorWarning[2])
+		}
+		pdf.CellFormat(colWidths[2], 6, status, "1", 0, "C", fill, 0, "")
+
+		// Avg CPU
+		var avgCPU float64
+		if stats, ok := rd.Summary.ByMetric["cpu"]; ok {
+			avgCPU = stats.Avg
+		}
+		pdf.SetTextColor(getStatColor(avgCPU)[0], getStatColor(avgCPU)[1], getStatColor(avgCPU)[2])
+		pdf.CellFormat(colWidths[3], 6, fmt.Sprintf("%.1f%%", avgCPU), "1", 0, "C", fill, 0, "")
+
+		if avgCPU > highestCPUVal {
+			highestCPUVal = avgCPU
+			if rd.Resource != nil && rd.Resource.Name != "" {
+				highestCPUName = rd.Resource.Name
+			} else {
+				highestCPUName = rd.ResourceID
+			}
+		}
+
+		// Avg Memory
+		var avgMem float64
+		if stats, ok := rd.Summary.ByMetric["memory"]; ok {
+			avgMem = stats.Avg
+		}
+		pdf.SetTextColor(getStatColor(avgMem)[0], getStatColor(avgMem)[1], getStatColor(avgMem)[2])
+		pdf.CellFormat(colWidths[4], 6, fmt.Sprintf("%.1f%%", avgMem), "1", 0, "C", fill, 0, "")
+
+		// Avg Disk
+		var avgDisk float64
+		if stats, ok := rd.Summary.ByMetric["disk"]; ok {
+			avgDisk = stats.Avg
+		} else if stats, ok := rd.Summary.ByMetric["usage"]; ok {
+			avgDisk = stats.Avg
+		}
+		pdf.SetTextColor(getStatColor(avgDisk)[0], getStatColor(avgDisk)[1], getStatColor(avgDisk)[2])
+		pdf.CellFormat(colWidths[5], 6, fmt.Sprintf("%.1f%%", avgDisk), "1", 0, "C", fill, 0, "")
+
+		// Alerts count
+		alertCount := 0
+		for _, alert := range rd.Alerts {
+			if alert.ResolvedTime == nil {
+				alertCount++
+			}
+		}
+		pdf.SetTextColor(getAlertCountColor(alertCount)[0], getAlertCountColor(alertCount)[1], getAlertCountColor(alertCount)[2])
+		pdf.CellFormat(colWidths[6], 6, fmt.Sprintf("%d", alertCount), "1", 0, "C", fill, 0, "")
+
+		if alertCount > mostAlertsCount {
+			mostAlertsCount = alertCount
+			if rd.Resource != nil && rd.Resource.Name != "" {
+				mostAlertsName = rd.Resource.Name
+			} else {
+				mostAlertsName = rd.ResourceID
+			}
+		}
+
+		pdf.Ln(-1)
+		fill = !fill
+	}
+
+	pdf.Ln(8)
+
+	// Fleet Observations
+	pdf.SetFont("Arial", "B", 11)
+	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+	pdf.CellFormat(0, 8, "Fleet Observations", "", 1, "L", false, 0, "")
+	pdf.Ln(2)
+
+	pdf.SetFont("Arial", "", 10)
+	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+
+	if highestCPUName != "" {
+		pdf.SetFillColor(colorSecondary[0], colorSecondary[1], colorSecondary[2])
+		pdf.Circle(pdf.GetX()+3, pdf.GetY()+3, 2, "F")
+		pdf.SetX(pdf.GetX() + 8)
+		pdf.CellFormat(0, 6, fmt.Sprintf("Highest CPU: %s (avg %.1f%%)", highestCPUName, highestCPUVal), "", 1, "L", false, 0, "")
+		pdf.Ln(1)
+	}
+
+	if mostAlertsCount > 0 && mostAlertsName != "" {
+		pdf.SetFillColor(colorDanger[0], colorDanger[1], colorDanger[2])
+		pdf.Circle(pdf.GetX()+3, pdf.GetY()+3, 2, "F")
+		pdf.SetX(pdf.GetX() + 8)
+		pdf.CellFormat(0, 6, fmt.Sprintf("Most alerts: %s (%d active)", mostAlertsName, mostAlertsCount), "", 1, "L", false, 0, "")
+		pdf.Ln(1)
+	}
+
+	if totalActive == 0 {
+		pdf.SetFillColor(colorAccent[0], colorAccent[1], colorAccent[2])
+		pdf.Circle(pdf.GetX()+3, pdf.GetY()+3, 2, "F")
+		pdf.SetX(pdf.GetX() + 8)
+		pdf.CellFormat(0, 6, "No active alerts across the fleet", "", 1, "L", false, 0, "")
+	}
+}
+
+// writeCondensedResourcePage writes a condensed single-page view for one resource.
+func (g *PDFGenerator) writeCondensedResourcePage(pdf *fpdf.Fpdf, rd *ReportData) {
+	// Resource header
+	resourceName := rd.ResourceID
+	if rd.Resource != nil && rd.Resource.Name != "" {
+		resourceName = rd.Resource.Name
+	}
+
+	// Name - measure width while font is still set to bold
+	pdf.SetFont("Arial", "B", 14)
+	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+	nameWidth := pdf.GetStringWidth(resourceName)
+	pdf.CellFormat(nameWidth+2, 8, resourceName, "", 0, "L", false, 0, "")
+
+	// Type/status/uptime inline after the name
+	typeDisplay := GetResourceTypeDisplayName(rd.ResourceType)
+	status := "unknown"
+	if rd.Resource != nil {
+		status = rd.Resource.Status
+	}
+
+	pdf.SetFont("Arial", "", 10)
+	if status == "online" || status == "running" {
+		pdf.SetTextColor(colorAccent[0], colorAccent[1], colorAccent[2])
+	} else if status == "stopped" || status == "offline" {
+		pdf.SetTextColor(colorDanger[0], colorDanger[1], colorDanger[2])
+	} else {
+		pdf.SetTextColor(colorWarning[0], colorWarning[1], colorWarning[2])
+	}
+	statusStr := fmt.Sprintf("  |  %s  |  %s", typeDisplay, status)
+
+	// Uptime
+	if rd.Resource != nil && rd.Resource.Uptime > 0 {
+		statusStr += fmt.Sprintf("  |  Uptime: %s", formatUptime(rd.Resource.Uptime))
+	}
+	pdf.CellFormat(0, 8, statusStr, "", 1, "L", false, 0, "")
+	pdf.Ln(3)
+
+	// Stats bar - CPU, Memory, Disk averages and maxes
+	pdf.SetFillColor(colorBackground[0], colorBackground[1], colorBackground[2])
+	pdf.SetDrawColor(colorGridLine[0], colorGridLine[1], colorGridLine[2])
+	barY := pdf.GetY()
+	barWidth := 170.0
+	barHeight := 22.0
+	pdf.RoundedRect(20, barY, barWidth, barHeight, 2, "1234", "FD")
+
+	colW := barWidth / 3.0
+
+	// CPU stats
+	var avgCPU, maxCPU, avgMem, maxMem, avgDisk, maxDisk float64
+	if stats, ok := rd.Summary.ByMetric["cpu"]; ok {
+		avgCPU = stats.Avg
+		maxCPU = stats.Max
+	}
+	if stats, ok := rd.Summary.ByMetric["memory"]; ok {
+		avgMem = stats.Avg
+		maxMem = stats.Max
+	}
+	if stats, ok := rd.Summary.ByMetric["disk"]; ok {
+		avgDisk = stats.Avg
+		maxDisk = stats.Max
+	} else if stats, ok := rd.Summary.ByMetric["usage"]; ok {
+		avgDisk = stats.Avg
+		maxDisk = stats.Max
+	}
+
+	// CPU column
+	pdf.SetXY(20+2, barY+3)
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetTextColor(colorSecondary[0], colorSecondary[1], colorSecondary[2])
+	pdf.CellFormat(colW-4, 5, "CPU", "", 0, "C", false, 0, "")
+
+	pdf.SetXY(20+2, barY+9)
+	pdf.SetFont("Arial", "B", 11)
+	pdf.SetTextColor(getStatColor(avgCPU)[0], getStatColor(avgCPU)[1], getStatColor(avgCPU)[2])
+	pdf.CellFormat(colW-4, 5, fmt.Sprintf("avg %.1f%% / max %.1f%%", avgCPU, maxCPU), "", 0, "C", false, 0, "")
+
+	// Memory column
+	pdf.SetXY(20+colW+2, barY+3)
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetTextColor([3]int{155, 89, 182}[0], [3]int{155, 89, 182}[1], [3]int{155, 89, 182}[2])
+	pdf.CellFormat(colW-4, 5, "Memory", "", 0, "C", false, 0, "")
+
+	pdf.SetXY(20+colW+2, barY+9)
+	pdf.SetFont("Arial", "B", 11)
+	pdf.SetTextColor(getStatColor(avgMem)[0], getStatColor(avgMem)[1], getStatColor(avgMem)[2])
+	pdf.CellFormat(colW-4, 5, fmt.Sprintf("avg %.1f%% / max %.1f%%", avgMem, maxMem), "", 0, "C", false, 0, "")
+
+	// Disk column
+	pdf.SetXY(20+2*colW+2, barY+3)
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetTextColor(colorAccent[0], colorAccent[1], colorAccent[2])
+	pdf.CellFormat(colW-4, 5, "Disk", "", 0, "C", false, 0, "")
+
+	pdf.SetXY(20+2*colW+2, barY+9)
+	pdf.SetFont("Arial", "B", 11)
+	pdf.SetTextColor(getStatColor(avgDisk)[0], getStatColor(avgDisk)[1], getStatColor(avgDisk)[2])
+	pdf.CellFormat(colW-4, 5, fmt.Sprintf("avg %.1f%% / max %.1f%%", avgDisk, maxDisk), "", 0, "C", false, 0, "")
+
+	pdf.SetY(barY + barHeight + 5)
+
+	// Small chart: CPU + Memory overlaid (if we have data)
+	cpuPoints := rd.Metrics["cpu"]
+	memPoints := rd.Metrics["memory"]
+	if len(cpuPoints) >= 2 || len(memPoints) >= 2 {
+		chartHeight := 40.0
+		chartWidth := 170.0
+		chartX := 20.0
+		chartY := pdf.GetY()
+
+		// Use CPU data primarily, or memory if no CPU
+		primaryPoints := cpuPoints
+		if len(primaryPoints) < 2 {
+			primaryPoints = memPoints
+		}
+
+		if len(primaryPoints) >= 2 {
+			// Chart title
+			pdf.SetFont("Arial", "B", 9)
+			pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+			pdf.CellFormat(0, 5, "Performance Overview", "", 1, "L", false, 0, "")
+			chartY = pdf.GetY()
+
+			g.drawChart(pdf, primaryPoints, chartX, chartY, chartWidth, chartHeight, "cpu")
+
+			// If we have both CPU and memory, overlay memory
+			if len(cpuPoints) >= 2 && len(memPoints) >= 2 {
+				g.drawChartOverlay(pdf, memPoints, cpuPoints, chartX, chartY, chartWidth, chartHeight)
+			}
+
+			// Legend (below chart X-axis labels which are at chartY + chartHeight + 1..+5)
+			pdf.SetY(chartY + chartHeight + 7)
+			pdf.SetFont("Arial", "", 7)
+			if len(cpuPoints) >= 2 {
+				pdf.SetTextColor(colorSecondary[0], colorSecondary[1], colorSecondary[2])
+				pdf.CellFormat(30, 4, "--- CPU", "", 0, "L", false, 0, "")
+			}
+			if len(memPoints) >= 2 {
+				pdf.SetTextColor(155, 89, 182)
+				pdf.CellFormat(30, 4, "--- Memory", "", 0, "L", false, 0, "")
+			}
+			pdf.Ln(6)
+		}
+	}
+
+	// Active alerts (up to 3)
+	activeAlerts := make([]AlertInfo, 0)
+	for _, alert := range rd.Alerts {
+		if alert.ResolvedTime == nil {
+			activeAlerts = append(activeAlerts, alert)
+		}
+	}
+
+	if len(activeAlerts) > 0 {
+		pdf.Ln(3)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.CellFormat(0, 6, "Active Alerts", "", 1, "L", false, 0, "")
+		pdf.Ln(1)
+
+		pdf.SetFont("Arial", "", 9)
+		maxAlerts := 3
+		if len(activeAlerts) < maxAlerts {
+			maxAlerts = len(activeAlerts)
+		}
+		for i := 0; i < maxAlerts; i++ {
+			alert := activeAlerts[i]
+			if alert.Level == "critical" {
+				pdf.SetTextColor(colorDanger[0], colorDanger[1], colorDanger[2])
+			} else {
+				pdf.SetTextColor(colorWarning[0], colorWarning[1], colorWarning[2])
+			}
+			pdf.CellFormat(6, 5, "!", "", 0, "C", false, 0, "")
+			pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+			msg := alert.Message
+			if len(msg) > 80 {
+				msg = msg[:77] + "..."
+			}
+			pdf.CellFormat(0, 5, msg, "", 1, "L", false, 0, "")
+		}
+		if len(activeAlerts) > 3 {
+			pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+			pdf.CellFormat(0, 5, fmt.Sprintf("... and %d more", len(activeAlerts)-3), "", 1, "L", false, 0, "")
+		}
+	}
+
+	// Storage summary (nodes) or backup summary (VMs/containers)
+	if len(rd.Storage) > 0 {
+		pdf.Ln(3)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.CellFormat(0, 6, "Storage Pools", "", 1, "L", false, 0, "")
+		pdf.Ln(1)
+
+		pdf.SetFont("Arial", "", 9)
+		for _, s := range rd.Storage {
+			pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+			line := fmt.Sprintf("%s (%s): %s / %s (%.1f%%)",
+				s.Name, s.Type,
+				formatBytes(float64(s.Used)),
+				formatBytes(float64(s.Total)),
+				s.UsagePerc)
+			pdf.CellFormat(0, 5, line, "", 1, "L", false, 0, "")
+		}
+	}
+
+	if len(rd.Backups) > 0 {
+		pdf.Ln(3)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.CellFormat(0, 6, "Backups", "", 1, "L", false, 0, "")
+		pdf.Ln(1)
+
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.CellFormat(0, 5, fmt.Sprintf("%d backups available", len(rd.Backups)), "", 1, "L", false, 0, "")
+		if len(rd.Backups) > 0 {
+			latest := rd.Backups[0]
+			for _, b := range rd.Backups {
+				if b.Timestamp.After(latest.Timestamp) {
+					latest = b
+				}
+			}
+			pdf.CellFormat(0, 5, fmt.Sprintf("Latest: %s (%s)", latest.Timestamp.Format("2006-01-02 15:04"), formatBytes(float64(latest.Size))), "", 1, "L", false, 0, "")
+		}
+	}
+}
+
+// drawChartOverlay draws a secondary line on an existing chart using memory data over CPU scale.
+func (g *PDFGenerator) drawChartOverlay(pdf *fpdf.Fpdf, overlayPoints []MetricDataPoint, primaryPoints []MetricDataPoint, x, y, width, height float64) {
+	if len(overlayPoints) < 2 || len(primaryPoints) < 2 {
+		return
+	}
+
+	// Use the same time scale as the primary chart
+	startTime := primaryPoints[0].Timestamp.Unix()
+	endTime := primaryPoints[len(primaryPoints)-1].Timestamp.Unix()
+	timeRange := float64(endTime - startTime)
+	if timeRange == 0 {
+		timeRange = 1
+	}
+
+	// Use the primary chart's value range for consistent scaling
+	minVal, maxVal := primaryPoints[0].Value, primaryPoints[0].Value
+	for _, p := range primaryPoints {
+		if p.Value < minVal {
+			minVal = p.Value
+		}
+		if p.Value > maxVal {
+			maxVal = p.Value
+		}
+	}
+	// Also include overlay points in the range
+	for _, p := range overlayPoints {
+		if p.Value < minVal {
+			minVal = p.Value
+		}
+		if p.Value > maxVal {
+			maxVal = p.Value
+		}
+	}
+
+	valRange := maxVal - minVal
+	if valRange < 1 {
+		valRange = 10
+	}
+	minVal = math.Max(0, minVal-valRange*0.1)
+	maxVal = maxVal + valRange*0.1
+
+	// Draw the overlay line in purple (memory color)
+	memColor := [3]int{155, 89, 182}
+	pdf.SetDrawColor(memColor[0], memColor[1], memColor[2])
+	pdf.SetLineWidth(0.6)
+
+	prevX, prevY := 0.0, 0.0
+	for i, p := range overlayPoints {
+		xPos := x + 2 + (float64(p.Timestamp.Unix()-startTime)/timeRange)*(width-4)
+		yPos := y + height - 2 - ((p.Value-minVal)/(maxVal-minVal))*(height-4)
+		yPos = math.Max(y+2, math.Min(y+height-2, yPos))
+
+		if i > 0 {
+			pdf.Line(prevX, prevY, xPos, yPos)
+		}
+		prevX, prevY = xPos, yPos
+	}
+}
+
+// addMultiPageNumbers adds page numbers to all pages except the first (cover).
+func (g *PDFGenerator) addMultiPageNumbers(pdf *fpdf.Fpdf) {
+	pdf.SetAutoPageBreak(false, 0)
+
+	totalPages := pdf.PageCount()
+
+	for i := 2; i <= totalPages; i++ {
+		pdf.SetPage(i)
+		pageWidth, pageHeight := pdf.GetPageSize()
+
+		pdf.SetY(pageHeight - 15)
+		pdf.SetFont("Arial", "", 8)
+		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+
+		pageNum := i - 1
+		totalContent := totalPages - 1
+		pdf.CellFormat(0, 5, fmt.Sprintf("Page %d of %d", pageNum, totalContent), "", 0, "C", false, 0, "")
+
+		// Bottom line
+		pdf.SetDrawColor(colorGridLine[0], colorGridLine[1], colorGridLine[2])
+		pdf.SetLineWidth(0.3)
+		pdf.Line(20, pageHeight-20, pageWidth-20, pageHeight-20)
+	}
+}
+
 // getMetricColor returns a color for a metric type.
 func getMetricColor(metricType string) [3]int {
 	switch metricType {

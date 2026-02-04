@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -12,8 +13,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
-// validResourceID matches safe resource identifiers for filenames
-var validResourceID = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+// validResourceID matches safe resource identifiers (includes colon for guest IDs like "instance:node:vmid")
+var validResourceID = regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
 
 // ReportingHandlers handles reporting-related requests
 type ReportingHandlers struct {
@@ -124,6 +125,7 @@ func sanitizeFilename(s string) string {
 	s = strings.ReplaceAll(s, "\"", "")
 	s = strings.ReplaceAll(s, "\\", "")
 	s = strings.ReplaceAll(s, "/", "-")
+	s = strings.ReplaceAll(s, ":", "-")
 	s = strings.ReplaceAll(s, "\r", "")
 	s = strings.ReplaceAll(s, "\n", "")
 
@@ -318,6 +320,136 @@ func (h *ReportingHandlers) enrichVMReport(req *reporting.MetricReportRequest, s
 			})
 		}
 	}
+}
+
+// multiReportResourceEntry represents a single resource in a multi-report request body.
+type multiReportResourceEntry struct {
+	ResourceType string `json:"resourceType"`
+	ResourceID   string `json:"resourceId"`
+}
+
+// multiReportRequestBody is the JSON body for multi-resource report generation.
+type multiReportRequestBody struct {
+	Resources  []multiReportResourceEntry `json:"resources"`
+	Format     string                     `json:"format"`
+	Start      string                     `json:"start"`
+	End        string                     `json:"end"`
+	Title      string                     `json:"title"`
+	MetricType string                     `json:"metricType"`
+}
+
+// HandleGenerateMultiReport generates a multi-resource report.
+func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	engine := reporting.GetEngine()
+	if engine == nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "engine_unavailable", "Reporting engine not initialized", nil)
+		return
+	}
+
+	var body multiReportRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
+		return
+	}
+
+	// Validate resource count
+	if len(body.Resources) == 0 {
+		writeErrorResponse(w, http.StatusBadRequest, "no_resources", "At least one resource is required", nil)
+		return
+	}
+	if len(body.Resources) > 50 {
+		writeErrorResponse(w, http.StatusBadRequest, "too_many_resources", "Maximum 50 resources allowed", nil)
+		return
+	}
+
+	// Validate format
+	format := reporting.ReportFormat(body.Format)
+	if format == "" {
+		format = reporting.FormatPDF
+	}
+	if format != reporting.FormatPDF && format != reporting.FormatCSV {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", "Format must be 'pdf' or 'csv'", nil)
+		return
+	}
+
+	// Parse time range
+	end := time.Now()
+	if body.End != "" {
+		if t, err := time.Parse(time.RFC3339, body.End); err == nil {
+			end = t
+		}
+	}
+	start := end.Add(-24 * time.Hour)
+	if body.Start != "" {
+		if t, err := time.Parse(time.RFC3339, body.Start); err == nil {
+			start = t
+		}
+	}
+
+	// Build multi-report request
+	multiReq := reporting.MultiReportRequest{
+		Format:     format,
+		Start:      start,
+		End:        end,
+		Title:      body.Title,
+		MetricType: body.MetricType,
+	}
+
+	// Get monitor state for enrichment
+	var state models.StateSnapshot
+	var hasState bool
+	if h.mtMonitor != nil {
+		orgID := GetOrgID(r.Context())
+		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+			state = monitor.GetState()
+			hasState = true
+		}
+	}
+
+	// Validate and build each resource request
+	for _, res := range body.Resources {
+		if !validResourceID.MatchString(res.ResourceType) || len(res.ResourceType) > 64 {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_resource_type", fmt.Sprintf("Invalid resourceType: %s", res.ResourceType), nil)
+			return
+		}
+		if !validResourceID.MatchString(res.ResourceID) || len(res.ResourceID) > 128 {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_resource_id", fmt.Sprintf("Invalid resourceId: %s", res.ResourceID), nil)
+			return
+		}
+
+		req := reporting.MetricReportRequest{
+			ResourceType: res.ResourceType,
+			ResourceID:   res.ResourceID,
+			MetricType:   body.MetricType,
+			Start:        start,
+			End:          end,
+			Format:       format,
+			Title:        body.Title,
+		}
+
+		// Enrich with resource data
+		if hasState {
+			h.enrichReportRequest(&req, state, start, end)
+		}
+
+		multiReq.Resources = append(multiReq.Resources, req)
+	}
+
+	data, contentType, err := engine.GenerateMulti(multiReq)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "generation_failed", "Failed to generate multi-resource report", nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	filename := fmt.Sprintf("fleet-report-%s.%s", time.Now().Format("20060102"), format)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Write(data)
 }
 
 // enrichContainerReport adds container-specific data to the report request

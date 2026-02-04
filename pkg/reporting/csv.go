@@ -180,6 +180,182 @@ func (g *CSVGenerator) writeData(w *csv.Writer, data *ReportData) error {
 	return nil
 }
 
+// GenerateMulti creates a multi-resource CSV report from the provided data.
+func (g *CSVGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+
+	// Write header comment rows
+	headers := [][]string{
+		{"# Pulse Multi-Resource Metrics Report"},
+		{"# Title:", data.Title},
+		{"# Resources:", fmt.Sprintf("%d", len(data.Resources))},
+		{"# Period:", fmt.Sprintf("%s to %s", data.Start.Format(time.RFC3339), data.End.Format(time.RFC3339))},
+		{"# Generated:", data.GeneratedAt.Format(time.RFC3339)},
+		{"# Total Data Points:", fmt.Sprintf("%d", data.TotalPoints)},
+		{""},
+	}
+	for _, row := range headers {
+		if err := w.Write(row); err != nil {
+			return nil, err
+		}
+	}
+
+	// Write summary section
+	if err := w.Write([]string{"# SUMMARY"}); err != nil {
+		return nil, err
+	}
+
+	// Summary column headers
+	summaryHeaders := []string{"Resource Name", "Resource Type", "Resource ID", "Metric", "Count", "Min", "Max", "Average", "Current", "Unit"}
+	if err := w.Write(summaryHeaders); err != nil {
+		return nil, err
+	}
+
+	// Write summary rows for each resource
+	for _, rd := range data.Resources {
+		resourceName := rd.ResourceID
+		if rd.Resource != nil && rd.Resource.Name != "" {
+			resourceName = rd.Resource.Name
+		}
+		resourceTypeDisplay := GetResourceTypeDisplayName(rd.ResourceType)
+
+		metricNames := make([]string, 0, len(rd.Summary.ByMetric))
+		for name := range rd.Summary.ByMetric {
+			metricNames = append(metricNames, name)
+		}
+		sort.Strings(metricNames)
+
+		for _, metricType := range metricNames {
+			stats := rd.Summary.ByMetric[metricType]
+			unit := GetMetricUnit(metricType)
+			row := []string{
+				resourceName,
+				resourceTypeDisplay,
+				rd.ResourceID,
+				GetMetricTypeDisplayName(metricType),
+				fmt.Sprintf("%d", stats.Count),
+				formatValue(stats.Min, unit),
+				formatValue(stats.Max, unit),
+				formatValue(stats.Avg, unit),
+				formatValue(stats.Current, unit),
+				unit,
+			}
+			if err := w.Write(row); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Empty separator
+	if err := w.Write([]string{""}); err != nil {
+		return nil, err
+	}
+
+	// Write data section
+	if err := w.Write([]string{"# DATA"}); err != nil {
+		return nil, err
+	}
+
+	// Collect all unique metric names across all resources
+	metricNameSet := make(map[string]bool)
+	for _, rd := range data.Resources {
+		for name := range rd.Metrics {
+			metricNameSet[name] = true
+		}
+	}
+	metricNames := make([]string, 0, len(metricNameSet))
+	for name := range metricNameSet {
+		metricNames = append(metricNames, name)
+	}
+	sort.Strings(metricNames)
+
+	// Build data header row
+	headerRow := []string{"Timestamp", "Resource Name", "Resource Type", "Resource ID"}
+	for _, name := range metricNames {
+		unit := GetMetricUnit(name)
+		if unit != "" {
+			headerRow = append(headerRow, fmt.Sprintf("%s (%s)", GetMetricTypeDisplayName(name), unit))
+		} else {
+			headerRow = append(headerRow, GetMetricTypeDisplayName(name))
+		}
+	}
+	if err := w.Write(headerRow); err != nil {
+		return nil, err
+	}
+
+	// Collect all data points across all resources, with resource info
+	type dataRow struct {
+		timestamp    int64
+		resourceName string
+		resourceType string
+		resourceID   string
+		values       map[string]float64
+	}
+
+	var allRows []dataRow
+	for _, rd := range data.Resources {
+		resourceName := rd.ResourceID
+		if rd.Resource != nil && rd.Resource.Name != "" {
+			resourceName = rd.Resource.Name
+		}
+		resourceTypeDisplay := GetResourceTypeDisplayName(rd.ResourceType)
+
+		// Build a map of timestamp -> metric values for this resource
+		timestampValues := make(map[int64]map[string]float64)
+		for metricName, points := range rd.Metrics {
+			for _, p := range points {
+				ts := p.Timestamp.Unix()
+				if timestampValues[ts] == nil {
+					timestampValues[ts] = make(map[string]float64)
+				}
+				timestampValues[ts][metricName] = p.Value
+			}
+		}
+
+		for ts, values := range timestampValues {
+			allRows = append(allRows, dataRow{
+				timestamp:    ts,
+				resourceName: resourceName,
+				resourceType: resourceTypeDisplay,
+				resourceID:   rd.ResourceID,
+				values:       values,
+			})
+		}
+	}
+
+	// Sort by timestamp, then by resource name
+	sort.Slice(allRows, func(i, j int) bool {
+		if allRows[i].timestamp != allRows[j].timestamp {
+			return allRows[i].timestamp < allRows[j].timestamp
+		}
+		return allRows[i].resourceName < allRows[j].resourceName
+	})
+
+	// Write data rows
+	for _, row := range allRows {
+		t := time.Unix(row.timestamp, 0)
+		csvRow := []string{t.Format(time.RFC3339), row.resourceName, row.resourceType, row.resourceID}
+		for _, metricName := range metricNames {
+			if val, ok := row.values[metricName]; ok {
+				csvRow = append(csvRow, fmt.Sprintf("%.2f", val))
+			} else {
+				csvRow = append(csvRow, "")
+			}
+		}
+		if err := w.Write(csvRow); err != nil {
+			return nil, err
+		}
+	}
+
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return nil, fmt.Errorf("CSV write error: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
 // formatValue formats a metric value with appropriate precision.
 func formatValue(value float64, unit string) string {
 	if unit == "bytes" {

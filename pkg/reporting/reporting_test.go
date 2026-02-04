@@ -11,6 +11,11 @@ func (f *fakeEngine) Generate(req MetricReportRequest) ([]byte, string, error) {
 	return []byte("ok"), "text/plain", nil
 }
 
+func (f *fakeEngine) GenerateMulti(req MultiReportRequest) ([]byte, string, error) {
+	f.called = true
+	return []byte("ok"), "text/plain", nil
+}
+
 func TestSetGetEngine(t *testing.T) {
 	engine := &fakeEngine{}
 	SetEngine(engine)

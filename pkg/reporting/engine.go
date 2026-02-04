@@ -202,6 +202,78 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 	return data, nil
 }
 
+// GenerateMulti creates a multi-resource report in the specified format.
+func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, contentType string, err error) {
+	if e.metricsStore == nil {
+		return nil, "", fmt.Errorf("metrics store not initialized")
+	}
+
+	multiData := &MultiReportData{
+		Title:       req.Title,
+		Start:       req.Start,
+		End:         req.End,
+		GeneratedAt: time.Now(),
+	}
+
+	if multiData.Title == "" {
+		multiData.Title = "Fleet Performance Report"
+	}
+
+	// Query metrics for each resource
+	var successCount int
+	for _, resReq := range req.Resources {
+		resReq.Start = req.Start
+		resReq.End = req.End
+		resReq.MetricType = req.MetricType
+
+		reportData, queryErr := e.queryMetrics(resReq)
+		if queryErr != nil {
+			log.Warn().
+				Str("resourceType", resReq.ResourceType).
+				Str("resourceID", resReq.ResourceID).
+				Err(queryErr).
+				Msg("Skipping resource in multi-report: failed to query metrics")
+			continue
+		}
+
+		multiData.Resources = append(multiData.Resources, reportData)
+		multiData.TotalPoints += reportData.TotalPoints
+		successCount++
+	}
+
+	if successCount == 0 {
+		return nil, "", fmt.Errorf("all resources failed to query metrics")
+	}
+
+	log.Debug().
+		Int("resources", successCount).
+		Int("skipped", len(req.Resources)-successCount).
+		Str("format", string(req.Format)).
+		Int("totalPoints", multiData.TotalPoints).
+		Msg("Generating multi-resource report")
+
+	switch req.Format {
+	case FormatCSV:
+		data, err = e.csvGen.GenerateMulti(multiData)
+		if err != nil {
+			return nil, "", fmt.Errorf("CSV generation failed: %w", err)
+		}
+		contentType = "text/csv"
+
+	case FormatPDF:
+		data, err = e.pdfGen.GenerateMulti(multiData)
+		if err != nil {
+			return nil, "", fmt.Errorf("PDF generation failed: %w", err)
+		}
+		contentType = "application/pdf"
+
+	default:
+		return nil, "", fmt.Errorf("unsupported format: %s", req.Format)
+	}
+
+	return data, contentType, nil
+}
+
 // GetResourceTypeDisplayName returns a human-readable name for resource types.
 func GetResourceTypeDisplayName(resourceType string) string {
 	switch resourceType {
