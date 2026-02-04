@@ -1240,6 +1240,7 @@ func TestAIExecuteMutationEndpointsRequireAIExecuteScope(t *testing.T) {
 		{method: http.MethodPost, path: "/api/ai/patrol/suppressions", body: `{}`},
 		{method: http.MethodDelete, path: "/api/ai/patrol/suppressions/rule-1", body: ""},
 		{method: http.MethodPost, path: "/api/ai/remediation/approve", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/findings/f-1/reapprove", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/approvals/approval-1/approve", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/approvals/approval-1/deny", body: `{}`},
 	}
@@ -2493,6 +2494,7 @@ func TestAILicensedEndpointsRequireLicenseFeature(t *testing.T) {
 	paths := []string{
 		"/api/ai/kubernetes/analyze",
 		"/api/ai/investigate-alert",
+		"/api/ai/findings/f-1/reapprove",
 	}
 
 	for _, path := range paths {
