@@ -533,6 +533,45 @@ func TestWebSocketAllowsMonitoringReadScope(t *testing.T) {
 	conn.Close()
 }
 
+func TestWebSocketAllowsTokenQueryParam(t *testing.T) {
+	rawToken := "ws-query-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	defer hub.Stop()
+
+	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
+	ts := httptest.NewServer(router.Handler())
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?token=" + rawToken
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
+		conn.Close()
+		t.Fatalf("expected 101 switching protocols, got %v", resp)
+	}
+	conn.Close()
+}
+
+func TestQueryTokenIgnoredForHTTPRequests(t *testing.T) {
+	rawToken := "query-token-ignored-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config?token="+rawToken, nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when token is only in query string, got %d", rec.Code)
+	}
+}
+
 func TestLogEndpointsRequireSettingsReadScope(t *testing.T) {
 	rawToken := "logs-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
