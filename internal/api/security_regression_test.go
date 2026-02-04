@@ -3078,3 +3078,46 @@ func TestSSHConfigAllowsSetupToken(t *testing.T) {
 		t.Fatalf("expected success response, got %q", rec.Body.String())
 	}
 }
+
+func TestVerifyTemperatureSSHAllowsSetupTokenQueryParam(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	token := "abcdefabcdefabcdefabcdefabcdefab"
+	tokenHash := auth.HashAPIToken(token)
+	router.configHandlers.codeMutex.Lock()
+	router.configHandlers.setupCodes[tokenHash] = &SetupCode{ExpiresAt: time.Now().Add(time.Minute)}
+	router.configHandlers.codeMutex.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?auth_token="+token, strings.NewReader(`{"nodes":""}`))
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with setup token query param, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "No nodes to verify") {
+		t.Fatalf("expected verify response, got %q", rec.Body.String())
+	}
+}
+
+func TestSSHConfigAllowsSetupTokenQueryParam(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Setenv("HOME", t.TempDir())
+
+	token := "deadbeefdeadbeefdeadbeefdeadbeef"
+	tokenHash := auth.HashAPIToken(token)
+	router.configHandlers.codeMutex.Lock()
+	router.configHandlers.setupCodes[tokenHash] = &SetupCode{ExpiresAt: time.Now().Add(time.Minute)}
+	router.configHandlers.codeMutex.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config?auth_token="+token, strings.NewReader("Host example\nHostname example\n"))
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with setup token query param, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"success":true`) {
+		t.Fatalf("expected success response, got %q", rec.Body.String())
+	}
+}
