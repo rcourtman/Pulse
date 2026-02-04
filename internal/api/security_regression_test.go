@@ -2626,6 +2626,53 @@ func TestValidateBootstrapTokenBypassesAuth(t *testing.T) {
 	}
 }
 
+func TestSecurityStatusHidesBootstrapTokenWhenAuthConfigured(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.49")
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.RemoteAddr = "203.0.113.49:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d", rec.Code)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if _, ok := payload["bootstrapTokenPath"]; ok {
+		t.Fatalf("expected bootstrapTokenPath to be omitted when auth is configured")
+	}
+}
+
+func TestSecurityStatusIncludesBootstrapTokenWhenUnauthenticated(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.50")
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.RemoteAddr = "203.0.113.50:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d", rec.Code)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	path, ok := payload["bootstrapTokenPath"].(string)
+	if !ok || path == "" {
+		t.Fatalf("expected bootstrapTokenPath to be present for unauthenticated setup")
+	}
+}
+
 func TestOIDCLoginBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
