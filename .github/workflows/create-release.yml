@@ -257,7 +257,7 @@ jobs:
           MOCK_RATE_LIMIT: "false"
           MOCK_STALE_RELEASE: "false"
         run: |
-          docker-compose -f docker-compose.test.yml up -d
+          docker compose -f docker-compose.test.yml up -d
 
           echo "Waiting for services to be healthy..."
           timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-mock-github | grep -q "healthy"; do sleep 2; done'
@@ -275,12 +275,12 @@ jobs:
           done
 
           UPDATE_API_BASE_URL=http://localhost:7655 go test ../../tests/integration/api -run TestUpdateFlowIntegration -count=1
-          docker-compose -f docker-compose.test.yml down -v
+          docker compose -f docker-compose.test.yml down -v
 
       - name: Cleanup
         if: always()
         working-directory: tests/integration
-        run: docker-compose -f docker-compose.test.yml down -v || true
+        run: docker compose -f docker-compose.test.yml down -v || true
 
   # Create release after all checks pass
   create_release:
