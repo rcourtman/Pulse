@@ -4,31 +4,61 @@
 # Pre-commit hook to prevent committing restricted or sensitive data
 RESTRICTED_FILES="active_subs.json charges.json customers.json subscriptions.json"
 
-echo "🔒 Running sensitivity check..."
+echo "Running sensitivity check..."
 
 for file in $RESTRICTED_FILES; do
     if git diff --cached --name-only | grep -q "^${file}$"; then
-        echo "❌ BLOCKED: restricted file pattern matched: ${file}"
+        echo "BLOCKED: restricted file pattern matched: ${file}"
         exit 1
     fi
 done
 
-# Check for potential credentials or internal identifiers
-if git diff --cached | grep -E "^\+" | grep -v ".husky/pre-commit" | grep -qE "(cus_|sub_|ch_|pi_|pm_|sk_live_|sk_test_)"; then
-    echo "⚠️  WARNING: Potential API keys or identifiers found in staged changes."
-    echo "   Use 'git diff --cached' to review before proceeding."
-    if [ -t 0 ]; then
-        printf "   Proceed anyway? (y/N): "
-        read REPLY < /dev/tty
-        echo
-        if [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
+# Block sensitive file types from ever being committed
+SENSITIVE_EXTENSIONS="\.pem$|\.p12$|\.pfx$|\.key$|\.keystore$|\.jks$|\.enc$|id_rsa$|id_ed25519$|id_ecdsa$"
+if git diff --cached --name-only | grep -qE "$SENSITIVE_EXTENSIONS"; then
+    echo "BLOCKED: sensitive file type staged for commit:"
+    git diff --cached --name-only | grep -E "$SENSITIVE_EXTENSIONS"
+    echo "If this is intentional (e.g. a template), use: git commit --no-verify"
+    exit 1
+fi
+
+# Gitleaks: comprehensive secret scanning (gracefully skips if not installed)
+if command -v gitleaks >/dev/null 2>&1; then
+    echo "Running gitleaks secret scan..."
+    if ! gitleaks protect --staged --config .gitleaks.toml --no-banner 2>/dev/null; then
+        echo "BLOCKED: gitleaks detected secrets in staged changes."
+        echo "Run 'gitleaks protect --staged --verbose' for details."
+        exit 1
+    fi
+    echo "Gitleaks scan passed."
+else
+    # Fallback: broader pattern check when gitleaks is not installed
+    # Covers Stripe, AWS, GCP, OpenAI, private keys, and generic high-entropy tokens
+    STAGED_DIFF=$(git diff --cached | grep -E "^\+" | grep -v ".husky/pre-commit" | grep -v "_test\.go")
+
+    if echo "$STAGED_DIFF" | grep -qE "(cus_|sub_|ch_|pi_|pm_|sk_live_|sk_test_|rk_live_|rk_test_|whsec_)"; then
+        echo "WARNING: Potential Stripe identifiers found in staged changes."
+        echo "   Use 'git diff --cached' to review before proceeding."
+        if [ -t 0 ]; then
+            printf "   Proceed anyway? (y/N): "
+            read REPLY < /dev/tty
+            echo
+            if [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
+                exit 1
+            fi
+        else
             exit 1
         fi
-    else
-        echo "   (Skipping confirmation in non-interactive shell)"
+    fi
+
+    if echo "$STAGED_DIFF" | grep -qE "(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|sk-[a-zA-Z0-9]{20,}|AIza[0-9A-Za-z_-]{35})"; then
+        echo "BLOCKED: Likely secret detected in staged changes (AWS key, private key, or API key)."
+        echo "   Use 'git diff --cached' to review."
+        echo "   Install gitleaks for more precise scanning: brew install gitleaks"
+        exit 1
     fi
 fi
-echo "✅ Check passed."
+echo "Sensitivity check passed."
 
 
 # Run Go formatting

@@ -1,0 +1,34 @@
+# Gitleaks configuration for Pulse
+# https://github.com/gitleaks/gitleaks
+#
+# Extends the default ruleset (AWS, GCP, Stripe, OpenAI, private keys, etc.)
+# with allowlists to suppress false positives from test fixtures, docs, and templates.
+
+[extend]
+useDefault = true
+
+[allowlist]
+paths = [
+    # Template/example files with placeholder credentials
+    '''\.env\.example$''',
+    '''mock\.env$''',
+    # Test files use fake tokens, keys, and credentials throughout
+    '''_test\.go$''',
+    '''_test\.ts$''',
+    '''tests/integration/''',
+    # tmp/ is gitignored but shows up in --no-git scans
+    '''^tmp/''',
+]
+regexTarget = "match"
+regexes = [
+    # PULSE_LICENSE_PUBLIC_KEY is an env var name, not a secret value
+    '''PULSE_LICENSE_PUBLIC_KEY''',
+    # Documentation placeholder tokens in curl examples
+    '''your-token''',
+    '''your-api-token''',
+    '''your-original-token''',
+    # Dev credentials documented in CLAUDE.md and scripts (admin:admin)
+    '''admin:admin''',
+    # E2E test bootstrap token (deterministic, not a real secret)
+    '''0123456789abcdef''',
+]
