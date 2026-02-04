@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, screen, waitFor, cleanup, within } from '@solidjs/testing-library';
 import { createStore } from 'solid-js/store';
+import { Router, Route } from '@solidjs/router';
 import { UnifiedAgents } from '../UnifiedAgents';
 import type { Host, DockerHost, KubernetesCluster, RemovedDockerHost, RemovedKubernetesCluster } from '@/types/api';
 
@@ -155,7 +156,11 @@ const setupComponent = (
     activeAlerts: [],
   };
 
-  return render(() => <UnifiedAgents />);
+  return render(() => (
+    <Router>
+      <Route path="/" component={() => <UnifiedAgents />} />
+    </Router>
+  ));
 };
 
 beforeEach(() => {
