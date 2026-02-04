@@ -506,6 +506,26 @@ func TestLogEndpointsRequireSettingsReadScope(t *testing.T) {
 	}
 }
 
+func TestLogEndpointsRequireAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "log-auth-token-123.12345678", []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/logs/stream",
+		"/api/logs/download",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 without auth on %s, got %d", path, rec.Code)
+		}
+	}
+}
+
 func TestLogLevelReadRequiresSettingsReadScope(t *testing.T) {
 	rawToken := "log-level-read-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
@@ -565,6 +585,19 @@ func TestUpdateReadEndpointsRequireSettingsReadScope(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
 			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
 		}
+	}
+}
+
+func TestUpdateStatusRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "update-auth-token-123.12345678", []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/updates/status", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
 	}
 }
 
