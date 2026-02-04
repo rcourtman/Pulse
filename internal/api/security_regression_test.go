@@ -1602,6 +1602,43 @@ func TestAIChatEndpointsRequireAIChatScope(t *testing.T) {
 	}
 }
 
+func TestAuditEndpointsRequireLicenseFeature(t *testing.T) {
+	rawToken := "audit-license-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 for missing audit logging license, got %d", rec.Code)
+	}
+}
+
+func TestReportingEndpointsRequireLicenseFeature(t *testing.T) {
+	rawToken := "reporting-license-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/admin/reports/generate",
+		"/api/admin/reports/generate-multi",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusPaymentRequired {
+			t.Fatalf("expected 402 for missing reporting license on %s, got %d", path, rec.Code)
+		}
+	}
+}
+
 func TestSecurityOIDCRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "security-oidc-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
