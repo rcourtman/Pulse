@@ -393,6 +393,7 @@ export function AIIntelligence() {
       storage_checked: 0,
       hosts_checked: 0,
       pbs_checked: 0,
+      pmg_checked: 0,
       kubernetes_checked: 0,
       new_findings: 0,
       existing_findings: 0,
