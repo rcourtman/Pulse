@@ -957,3 +957,136 @@ func TestParseDockerMounts(t *testing.T) {
 		})
 	}
 }
+
+func TestService_Redirection(t *testing.T) {
+	// Setup store
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	// Setup state with a linked PVE node
+	state := StateSnapshot{
+		Nodes: []Node{
+			{
+				ID:                "pve-id-1",
+				Name:              "pve1",
+				LinkedHostAgentID: "agent-pve1",
+			},
+		},
+		Hosts: []Host{
+			{
+				ID:       "agent-pve1",
+				Hostname: "pve1-host",
+			},
+		},
+	}
+
+	// Setup service
+	service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+	service.SetAIAnalyzer(&stubAnalyzer{
+		response: `{"service_type":"proxmox","service_name":"Proxmox VE","service_version":"8.0","category":"virtualizer","cli_access":"ssh root@pve1","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"test"}`,
+	})
+
+	ctx := context.Background()
+
+	// 1. Test DiscoverResource redirection
+	// Trigger discovery for the PVE node "pve1"
+	req := DiscoveryRequest{
+		ResourceType: ResourceTypeHost,
+		HostID:       "pve1",
+		ResourceID:   "pve1",
+		Force:        true,
+	}
+
+	discovery, err := service.DiscoverResource(ctx, req)
+	if err != nil {
+		t.Fatalf("DiscoverResource error: %v", err)
+	}
+
+	// The discovery should be associated with the AGENT ID, not the NODE ID
+	expectedID := MakeResourceID(ResourceTypeHost, "agent-pve1", "agent-pve1") // Host resources usually have HostID == ResourceID
+	if discovery.ID != expectedID {
+		t.Errorf("DiscoverResource ID mismatch. Got %s, want %s (should have redirected to agent ID)", discovery.ID, expectedID)
+	}
+	if discovery.HostID != "agent-pve1" {
+		t.Errorf("DiscoverResource HostID mismatch. Got %s, want agent-pve1", discovery.HostID)
+	}
+
+	// 2. Test GetDiscoveryByResource redirection (standard case)
+	// Try to get discovery using the PVE node name
+	got, err := service.GetDiscoveryByResource(ResourceTypeHost, "pve1", "pve1")
+	if err != nil {
+		t.Fatalf("GetDiscoveryByResource error: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("GetDiscoveryByResource returned nil")
+	}
+
+	// It should return the discovery we just created (which is under agent-pve1)
+	if got.ID != expectedID {
+		t.Errorf("GetDiscoveryByResource returned wrong discovery. Got ID %s, want %s", got.ID, expectedID)
+	}
+
+	// 3. Test GetDiscoveryByResource fallback
+	// Create a "legacy" discovery that only exists under the node ID
+	legacyID := MakeResourceID(ResourceTypeHost, "pve1", "pve1")
+	legacyDiscovery := &ResourceDiscovery{
+		ID:           legacyID,
+		ResourceType: ResourceTypeHost,
+		HostID:       "pve1",
+		ResourceID:   "pve1",
+		ServiceName:  "Legacy PVE",
+	}
+	if err := store.Save(legacyDiscovery); err != nil {
+		t.Fatalf("Failed to save legacy discovery: %v", err)
+	}
+
+	// Temporarily remove the "agent" discovery to force fallback
+	if err := store.Delete(expectedID); err != nil {
+		t.Fatalf("Failed to delete agent discovery: %v", err)
+	}
+
+	// Try to get "pve1" again. It should redirect to agent-pve1 (not found), then fallback to pve1 (found)
+	gotLegacy, err := service.GetDiscoveryByResource(ResourceTypeHost, "pve1", "pve1")
+	if err != nil {
+		t.Fatalf("GetDiscoveryByResource fallback error: %v", err)
+	}
+	if gotLegacy == nil {
+		t.Fatalf("GetDiscoveryByResource fallback returned nil")
+	}
+	if gotLegacy.ID != legacyID {
+		t.Errorf("GetDiscoveryByResource fallback returned wrong ID. Got %s, want %s", gotLegacy.ID, legacyID)
+	}
+
+	// 4. Test Deduplication
+	// Restore the agent discovery, so we have BOTH legacy (pve1) and agent (agent-pve1)
+	if err := store.Save(discovery); err != nil {
+		t.Fatalf("Failed to restore agent discovery: %v", err)
+	}
+
+	list, err := service.ListDiscoveries()
+	if err != nil {
+		t.Fatalf("ListDiscoveries error: %v", err)
+	}
+
+	// We expect deduplication to remove the legacy pve1 entry because agent-pve1 exists
+	foundLegacy := false
+	foundAgent := false
+	for _, d := range list {
+		if d.ID == legacyID {
+			foundLegacy = true
+		}
+		if d.ID == expectedID {
+			foundAgent = true
+		}
+	}
+
+	if foundLegacy {
+		t.Errorf("Deduplication failed: Legacy PVE node discovery should have been filtered out")
+	}
+	if !foundAgent {
+		t.Errorf("Deduplication failed: Agent discovery should be present")
+	}
+}

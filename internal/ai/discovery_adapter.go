@@ -191,11 +191,22 @@ func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 		}
 	}
 
+	// Convert Nodes
+	nodes := make([]servicediscovery.Node, len(state.Nodes))
+	for i, n := range state.Nodes {
+		nodes[i] = servicediscovery.Node{
+			ID:                n.ID,
+			Name:              n.Name,
+			LinkedHostAgentID: n.LinkedHostAgentID,
+		}
+	}
+
 	return servicediscovery.StateSnapshot{
 		VMs:         vms,
 		Containers:  containers,
 		DockerHosts: dockerHosts,
 		Hosts:       hosts,
+		Nodes:       nodes,
 	}
 }
 

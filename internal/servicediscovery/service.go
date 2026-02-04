@@ -81,6 +81,14 @@ type StateSnapshot struct {
 	DockerHosts        []DockerHost
 	KubernetesClusters []KubernetesCluster
 	Hosts              []Host
+	Nodes              []Node
+}
+
+// Node represents a Proxmox VE node.
+type Node struct {
+	ID                string
+	Name              string
+	LinkedHostAgentID string
 }
 
 // Host represents a host system (via host-agent).
@@ -1053,6 +1061,26 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 // - Runs discovery only when fingerprint changed or discovery is too old
 // - Prevents duplicate concurrent discoveries for the same resource
 func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*ResourceDiscovery, error) {
+	// Redirect PVE node requests to linked host agent if available
+	// This ensures we always scan and store data under the canonical Host Agent ID
+	if req.ResourceType == ResourceTypeHost && s.stateProvider != nil {
+		state := s.stateProvider.GetState()
+		for _, node := range state.Nodes {
+			// Check if the requested ID matches the Node Name or ID
+			if node.Name == req.HostID || node.Name == req.ResourceID || node.ID == req.ResourceID {
+				if node.LinkedHostAgentID != "" {
+					log.Info().
+						Str("from_host", req.HostID).
+						Str("to_agent", node.LinkedHostAgentID).
+						Msg("Redirecting discovery scan to linked host agent")
+					req.HostID = node.LinkedHostAgentID
+					req.ResourceID = node.LinkedHostAgentID
+				}
+				break
+			}
+		}
+	}
+
 	resourceID := MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)
 
 	// Get current fingerprint (if available)
@@ -1726,9 +1754,48 @@ func (s *Service) GetDiscovery(id string) (*ResourceDiscovery, error) {
 	return d, nil
 }
 
-// GetDiscoveryByResource retrieves a discovery by resource type and ID.
 func (s *Service) GetDiscoveryByResource(resourceType ResourceType, hostID, resourceID string) (*ResourceDiscovery, error) {
+	originalHostID := hostID
+	originalResourceID := resourceID
+	redirected := false
+
+	// Redirect PVE node lookups to linked host agent if available
+	// This ensures UI components looking up a PVE node by name (e.g. NodeDrawer) get the data associated with the Host Agent
+	if resourceType == ResourceTypeHost && s.stateProvider != nil {
+		state := s.stateProvider.GetState()
+		for _, node := range state.Nodes {
+			if node.Name == hostID || node.Name == resourceID || node.ID == resourceID {
+				if node.LinkedHostAgentID != "" {
+					log.Debug().
+						Str("from_host", hostID).
+						Str("to_agent", node.LinkedHostAgentID).
+						Msg("Redirecting discovery lookup to linked host agent")
+					hostID = node.LinkedHostAgentID
+					resourceID = node.LinkedHostAgentID
+					redirected = true
+				}
+				break
+			}
+		}
+	}
+
 	d, err := s.store.GetByResource(resourceType, hostID, resourceID)
+	// If redirected and not found, try the original ID (fallback for unmigrated data)
+	if (err != nil || d == nil) && redirected {
+		log.Debug().
+			Str("redirected_host", hostID).
+			Str("original_host", originalHostID).
+			Msg("Redirected lookup failed, trying fallback to original ID")
+		dOriginal, errOriginal := s.store.GetByResource(resourceType, originalHostID, originalResourceID)
+		if errOriginal == nil && dOriginal != nil {
+			log.Debug().
+				Str("original_host", originalHostID).
+				Msg("Fallback lookup succeeded - returning legacy discovery")
+			s.upgradeCLIAccessIfNeeded(dOriginal)
+			return dOriginal, nil
+		}
+	}
+
 	if err != nil || d == nil {
 		return d, err
 	}
@@ -1742,6 +1809,7 @@ func (s *Service) ListDiscoveries() ([]*ResourceDiscovery, error) {
 	if err != nil {
 		return nil, err
 	}
+	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
 		s.upgradeCLIAccessIfNeeded(d)
 	}
@@ -1754,6 +1822,7 @@ func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceD
 	if err != nil {
 		return nil, err
 	}
+	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
 		s.upgradeCLIAccessIfNeeded(d)
 	}
@@ -1766,10 +1835,78 @@ func (s *Service) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscovery, er
 	if err != nil {
 		return nil, err
 	}
+	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
 		s.upgradeCLIAccessIfNeeded(d)
 	}
 	return discoveries, nil
+}
+
+// deduplicateDiscoveries filters out redundant discoveries where a PVE node
+// is represented by both its Node Name and its Linked Host Agent ID.
+// The Host Agent ID is preferred.
+func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*ResourceDiscovery {
+	if s.stateProvider == nil {
+		return discoveries
+	}
+
+	state := s.stateProvider.GetState()
+	if len(state.Nodes) == 0 {
+		return discoveries
+	}
+
+	// Map linked agent IDs to their PVE node source(s)
+	// AgentID -> NodeName
+	linkedAgents := make(map[string]string)
+	for _, node := range state.Nodes {
+		if node.LinkedHostAgentID != "" {
+			linkedAgents[node.LinkedHostAgentID] = node.Name
+		}
+	}
+
+	if len(linkedAgents) == 0 {
+		return discoveries
+	}
+
+	// Check which agents actually have discovery data
+	hasAgentDiscovery := make(map[string]bool)
+	for _, d := range discoveries {
+		if d.ResourceType == ResourceTypeHost {
+			// d.HostID is usually the agent ID for host resources
+			if _, ok := linkedAgents[d.HostID]; ok {
+				hasAgentDiscovery[d.HostID] = true
+			}
+		}
+	}
+
+	// Filter out PVE node discoveries if the corresponding agent discovery exists
+	filtered := make([]*ResourceDiscovery, 0, len(discoveries))
+	for _, d := range discoveries {
+		if d.ResourceType == ResourceTypeHost {
+			// If this discovery is for a PVE node (by name/ID)
+			// check if it maps to an agent that ALREADY has a discovery in this list
+
+			// Is this discovery's ID satisfying a Node check?
+			isPVENode := false
+			var linkedAgentID string
+
+			for _, node := range state.Nodes {
+				if d.HostID == node.Name || d.HostID == node.ID || d.ResourceID == node.Name {
+					isPVENode = true
+					linkedAgentID = node.LinkedHostAgentID
+					break
+				}
+			}
+
+			if isPVENode && linkedAgentID != "" && hasAgentDiscovery[linkedAgentID] && d.HostID != linkedAgentID {
+				// We have the agent discovery, so skip this redundant PVE node discovery
+				continue
+			}
+		}
+		filtered = append(filtered, d)
+	}
+
+	return filtered
 }
 
 // upgradeDiscoveryIfNeeded upgrades cached discovery fields to current versions.

@@ -43,6 +43,13 @@ func TestDiscoveryStateAdapter(t *testing.T) {
 				},
 			},
 		},
+		Hosts: []models.Host{
+			{ID: "host-agent-1", Hostname: "server1", Platform: "linux"},
+		},
+		Nodes: []models.Node{
+			{ID: "node-1", Name: "pve1", LinkedHostAgentID: "host-agent-1"},
+			{ID: "node-2", Name: "pve2", LinkedHostAgentID: ""}, // No linked agent
+		},
 	}
 
 	provider := &MockStateProvider{state: mockState}
@@ -84,6 +91,42 @@ func TestDiscoveryStateAdapter(t *testing.T) {
 			if len(dc.Mounts) != 1 {
 				t.Errorf("Expected 1 mount, got %d", len(dc.Mounts))
 			}
+		}
+	}
+
+	// Test Hosts conversion
+	if len(result.Hosts) != 1 {
+		t.Errorf("Expected 1 Host, got %d", len(result.Hosts))
+	} else {
+		if result.Hosts[0].ID != "host-agent-1" {
+			t.Errorf("Expected Host ID 'host-agent-1', got %s", result.Hosts[0].ID)
+		}
+		if result.Hosts[0].Hostname != "server1" {
+			t.Errorf("Expected Host Hostname 'server1', got %s", result.Hosts[0].Hostname)
+		}
+	}
+
+	// Test Nodes conversion (critical for discovery redirection)
+	if len(result.Nodes) != 2 {
+		t.Errorf("Expected 2 Nodes, got %d", len(result.Nodes))
+	} else {
+		// Verify first node with linked agent
+		if result.Nodes[0].ID != "node-1" {
+			t.Errorf("Expected Node[0].ID 'node-1', got %s", result.Nodes[0].ID)
+		}
+		if result.Nodes[0].Name != "pve1" {
+			t.Errorf("Expected Node[0].Name 'pve1', got %s", result.Nodes[0].Name)
+		}
+		if result.Nodes[0].LinkedHostAgentID != "host-agent-1" {
+			t.Errorf("Expected Node[0].LinkedHostAgentID 'host-agent-1', got %s", result.Nodes[0].LinkedHostAgentID)
+		}
+
+		// Verify second node without linked agent
+		if result.Nodes[1].Name != "pve2" {
+			t.Errorf("Expected Node[1].Name 'pve2', got %s", result.Nodes[1].Name)
+		}
+		if result.Nodes[1].LinkedHostAgentID != "" {
+			t.Errorf("Expected Node[1].LinkedHostAgentID to be empty, got %s", result.Nodes[1].LinkedHostAgentID)
 		}
 	}
 }
