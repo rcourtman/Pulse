@@ -846,6 +846,94 @@ func TestAIPatrolAutonomyRequiresSettingsWriteScope(t *testing.T) {
 	}
 }
 
+func TestAIExecuteReadEndpointsRequireAIExecuteScope(t *testing.T) {
+	rawToken := "ai-exec-read-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/ai/patrol/status",
+		"/api/ai/patrol/stream",
+		"/api/ai/patrol/findings",
+		"/api/ai/patrol/history",
+		"/api/ai/patrol/runs",
+		"/api/ai/patrol/dismissed",
+		"/api/ai/patrol/suppressions",
+		"/api/ai/approvals",
+		"/api/ai/approvals/approval-1",
+		"/api/ai/intelligence",
+		"/api/ai/intelligence/patterns",
+		"/api/ai/intelligence/predictions",
+		"/api/ai/intelligence/correlations",
+		"/api/ai/intelligence/changes",
+		"/api/ai/intelligence/baselines",
+		"/api/ai/intelligence/remediations",
+		"/api/ai/intelligence/anomalies",
+		"/api/ai/intelligence/learning",
+		"/api/ai/unified/findings",
+		"/api/ai/forecast",
+		"/api/ai/forecasts/overview",
+		"/api/ai/learning/preferences",
+		"/api/ai/proxmox/events",
+		"/api/ai/proxmox/correlations",
+		"/api/ai/remediation/plans",
+		"/api/ai/remediation/plan",
+		"/api/ai/circuit/status",
+		"/api/ai/incidents",
+		"/api/ai/incidents/incident-1",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing ai:execute scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIExecute, rec.Body.String())
+		}
+	}
+}
+
+func TestAIExecuteMutationEndpointsRequireAIExecuteScope(t *testing.T) {
+	rawToken := "ai-exec-mutate-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodPost, path: "/api/ai/patrol/acknowledge", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/patrol/dismiss", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/patrol/findings/note", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/patrol/suppress", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/patrol/snooze", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/patrol/resolve", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/patrol/suppressions", body: `{}`},
+		{method: http.MethodDelete, path: "/api/ai/patrol/suppressions/rule-1", body: ""},
+		{method: http.MethodPost, path: "/api/ai/remediation/approve", body: `{}`},
+	}
+
+	for _, tc := range paths {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing ai:execute scope on %s %s, got %d", tc.method, tc.path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIExecute, rec.Body.String())
+		}
+	}
+}
+
 func TestInfraUpdateReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 	rawToken := "infra-read-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
