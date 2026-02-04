@@ -608,6 +608,29 @@ func TestWebSocketAllowsMonitoringReadScope(t *testing.T) {
 	conn.Close()
 }
 
+func TestWebSocketAllowsBearerToken(t *testing.T) {
+	rawToken := "ws-bearer-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	defer hub.Stop()
+
+	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
+	ts := httptest.NewServer(router.Handler())
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer "+rawToken)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	conn.Close()
+}
+
 func TestWebSocketAllowsTokenQueryParam(t *testing.T) {
 	rawToken := "ws-query-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
