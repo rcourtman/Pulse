@@ -2379,6 +2379,26 @@ func TestAISettingsWriteRequiresSettingsWriteScope(t *testing.T) {
 	}
 }
 
+func TestAISettingsUpdateRejectsProxyNonAdmin(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.aiSettingsHandler.legacyConfig = cfg
+
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/ai/update", strings.NewReader(`{}`))
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy AI settings update, got %d", rec.Code)
+	}
+}
+
 func TestAIChatEndpointsRequireAIChatScope(t *testing.T) {
 	rawToken := "ai-chat-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
