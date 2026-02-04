@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"net/http"
 	"os"
@@ -174,23 +176,77 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 		return
 	}
 
-	// Fallback: redirect to GitHub releases for the binary
-	// This handles LXC/barebone installations that don't have agent binaries locally
+	// Fallback: proxy from GitHub releases for the binary
+	// This handles LXC/barebone installations that don't have agent binaries locally.
+	// We proxy instead of redirecting because agents require the X-Checksum-Sha256 header,
+	// which GitHub doesn't provide.
 	if normalized != "" {
-		// Map architecture to GitHub release asset name
-		binaryName := "pulse-agent-" + normalized
-		if strings.HasPrefix(normalized, "windows-") {
-			binaryName += ".exe"
-		}
-		githubURL := "https://github.com/rcourtman/Pulse/releases/latest/download/" + binaryName
-		log.Info().Str("arch", normalized).Str("redirect", githubURL).Msg("Local agent binary not found, redirecting to GitHub releases")
-		w.Header().Set("X-Served-From", "github-redirect")
-		http.Redirect(w, req, githubURL, http.StatusTemporaryRedirect)
+		r.proxyAgentBinaryFromGitHub(w, req, normalized)
 		return
 	}
 
 	// No architecture specified and no local binary - can't redirect without knowing arch
 	http.Error(w, "Agent binary not found. Specify ?arch=linux-amd64 (or your architecture)", http.StatusNotFound)
+}
+
+// proxyAgentBinaryFromGitHub downloads an agent binary from GitHub releases and serves
+// it to the requesting agent with the X-Checksum-Sha256 header. This is used when the
+// binary isn't available locally (e.g., LXC/bare-metal installations updated via web UI).
+// We must proxy instead of redirecting because the agent requires the checksum header
+// for security verification, and GitHub doesn't provide it.
+func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Request, normalized string) {
+	binaryName := "pulse-agent-" + normalized
+	if strings.HasPrefix(normalized, "windows-") {
+		binaryName += ".exe"
+	}
+	githubURL := "https://github.com/rcourtman/Pulse/releases/latest/download/" + binaryName
+
+	log.Info().Str("arch", normalized).Str("url", githubURL).Msg("Local agent binary not found, proxying from GitHub releases")
+
+	client := r.installScriptClient
+	if client == nil {
+		client = &http.Client{
+			Timeout: 5 * time.Minute,
+		}
+	}
+
+	resp, err := client.Get(githubURL)
+	if err != nil {
+		log.Error().Err(err).Str("url", githubURL).Msg("Failed to fetch agent binary from GitHub")
+		http.Error(w, "Failed to fetch agent binary", http.StatusServiceUnavailable)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Error().Int("status", resp.StatusCode).Str("url", githubURL).Msg("GitHub returned non-200 status for agent binary")
+		http.Error(w, "Agent binary not found on GitHub", http.StatusNotFound)
+		return
+	}
+
+	// Read the binary with size limit (100 MB)
+	const maxAgentBinarySize = 100 * 1024 * 1024
+	limitedReader := io.LimitReader(resp.Body, maxAgentBinarySize+1)
+
+	hasher := sha256.New()
+	content, err := io.ReadAll(io.TeeReader(limitedReader, hasher))
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to read agent binary from GitHub")
+		http.Error(w, "Failed to read agent binary", http.StatusInternalServerError)
+		return
+	}
+	if int64(len(content)) > maxAgentBinarySize {
+		log.Error().Int64("size", int64(len(content))).Msg("Agent binary from GitHub exceeds size limit")
+		http.Error(w, "Agent binary too large", http.StatusInternalServerError)
+		return
+	}
+
+	checksum := hex.EncodeToString(hasher.Sum(nil))
+
+	w.Header().Set("X-Checksum-Sha256", checksum)
+	w.Header().Set("X-Served-From", "github-proxy")
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Write(content)
 }
 
 // proxyInstallScriptFromGitHub fetches an install script from GitHub releases

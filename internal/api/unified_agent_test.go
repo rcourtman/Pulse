@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -123,35 +124,74 @@ func TestDownloadUnifiedAgent_Local_SpecificArch(t *testing.T) {
 	assert.Equal(t, binContent, w.Body.String())
 }
 
-func TestDownloadUnifiedAgent_Redirect(t *testing.T) {
+func TestDownloadUnifiedAgent_ProxyFromGitHub(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 
 	// Ensure NO local files exist (temp dir is empty of binaries)
+	// Set up a mock HTTP client to simulate GitHub response
+	binaryContent := "fake binary content for proxy test"
+	expectedURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-linux-amd64"
+	router.installScriptClient = newTestInstallScriptClient(t, expectedURL, http.StatusOK, binaryContent, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
 
 	router.handleDownloadUnifiedAgent(w, req)
 
-	// Since local binary is missing, it should redirect to GitHub
-	require.Equal(t, http.StatusTemporaryRedirect, w.Code)
-	location := w.Header().Get("Location")
-	assert.Contains(t, location, "github.com")
-	assert.Contains(t, location, "pulse-agent-linux-amd64")
-	assert.Equal(t, "github-redirect", w.Header().Get("X-Served-From"))
+	// Should proxy the binary with checksum header instead of redirecting
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, binaryContent, w.Body.String())
+	assert.Equal(t, "github-proxy", w.Header().Get("X-Served-From"))
+
+	// Verify checksum header is present and correct
+	hash := sha256.Sum256([]byte(binaryContent))
+	expectedChecksum := hex.EncodeToString(hash[:])
+	assert.Equal(t, expectedChecksum, w.Header().Get("X-Checksum-Sha256"))
 }
 
-func TestDownloadUnifiedAgent_Redirect_Windows(t *testing.T) {
+func TestDownloadUnifiedAgent_ProxyFromGitHub_Windows(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
+
+	binaryContent := "MZ fake windows binary"
+	expectedURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-windows-amd64.exe"
+	router.installScriptClient = newTestInstallScriptClient(t, expectedURL, http.StatusOK, binaryContent, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=windows-amd64", nil)
 	w := httptest.NewRecorder()
 
 	router.handleDownloadUnifiedAgent(w, req)
 
-	require.Equal(t, http.StatusTemporaryRedirect, w.Code)
-	location := w.Header().Get("Location")
-	assert.Contains(t, location, "pulse-agent-windows-amd64.exe")
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, binaryContent, w.Body.String())
+	assert.NotEmpty(t, w.Header().Get("X-Checksum-Sha256"))
+}
+
+func TestDownloadUnifiedAgent_ProxyFromGitHub_NotFound(t *testing.T) {
+	router, _ := setupUnifiedAgentRouter(t)
+
+	// GitHub returns 404 for the binary
+	router.installScriptClient = newTestInstallScriptClient(t, "", http.StatusNotFound, "", nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedAgent(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestDownloadUnifiedAgent_ProxyFromGitHub_Error(t *testing.T) {
+	router, _ := setupUnifiedAgentRouter(t)
+
+	// GitHub is unreachable
+	router.installScriptClient = newTestInstallScriptClient(t, "", 0, "", errors.New("connection refused"))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedAgent(w, req)
+
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
 
 func TestNormalizeUnifiedAgentArch(t *testing.T) {
