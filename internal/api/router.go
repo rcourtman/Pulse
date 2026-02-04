@@ -6580,6 +6580,10 @@ func (r *Router) handleSocketIO(w http.ResponseWriter, req *http.Request) {
 	if !CheckAuth(r.config, w, req) {
 		return
 	}
+	// SECURITY: Ensure monitoring:read scope for socket.io connections
+	if !ensureScope(w, req, config.ScopeMonitoringRead) {
+		return
+	}
 	// For socket.io.js, redirect to CDN
 	if strings.Contains(req.URL.Path, "socket.io.js") {
 		http.Redirect(w, req, "https://cdn.socket.io/4.8.1/socket.io.min.js", http.StatusFound)

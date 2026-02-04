@@ -170,6 +170,24 @@ func TestSocketIORequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestSocketIORequiresMonitoringReadScope(t *testing.T) {
+	rawToken := "socket-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/socket.io/?transport=polling", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing monitoring:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeMonitoringRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringRead, rec.Body.String())
+	}
+}
+
 func TestSocketIOJSRequiresAuth(t *testing.T) {
 	rawToken := "socket-js-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
