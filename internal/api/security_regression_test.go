@@ -792,6 +792,60 @@ func TestAIDebugContextRequiresSettingsReadScope(t *testing.T) {
 	}
 }
 
+func TestAIRunCommandRequiresAIExecuteScope(t *testing.T) {
+	rawToken := "ai-run-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing ai:execute scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIExecute, rec.Body.String())
+	}
+}
+
+func TestAIPatrolRunRequiresAIExecuteScope(t *testing.T) {
+	rawToken := "ai-patrol-run-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/run", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing ai:execute scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIExecute, rec.Body.String())
+	}
+}
+
+func TestAIPatrolAutonomyRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "ai-patrol-autonomy-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/autonomy", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
 func TestInfraUpdateReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 	rawToken := "infra-read-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
