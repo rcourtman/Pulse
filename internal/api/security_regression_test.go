@@ -1276,6 +1276,54 @@ func TestConfigImportRequiresSettingsWriteScope(t *testing.T) {
 	}
 }
 
+func TestConfigExportRequiresProxyAdmin(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/export", strings.NewReader(`{}`))
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy user, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Admin privileges required") {
+		t.Fatalf("expected admin privilege error, got %q", rec.Body.String())
+	}
+}
+
+func TestConfigImportRequiresProxyAdmin(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/import", strings.NewReader(`{}`))
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy user, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Admin privileges required") {
+		t.Fatalf("expected admin privilege error, got %q", rec.Body.String())
+	}
+}
+
 func TestDiscoveryReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 	rawToken := "discovery-read-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
@@ -1356,6 +1404,30 @@ func TestDiscoverySettingsRequiresSettingsWriteScope(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
 		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestNotificationsRequireProxyAdmin(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/notifications/queue/stats", nil)
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy user, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Admin privileges required") {
+		t.Fatalf("expected admin privilege error, got %q", rec.Body.String())
 	}
 }
 
