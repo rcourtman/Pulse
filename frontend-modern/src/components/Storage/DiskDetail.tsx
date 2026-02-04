@@ -153,10 +153,11 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
       >
         <div class="space-y-2">
           {/* Time range selector */}
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              History
-            </span>
+          <div class="flex items-center gap-2">
+            <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <path stroke-linecap="round" d="M12 6v6l4 2" />
+            </svg>
             <select
               value={chartRange()}
               onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
