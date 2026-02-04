@@ -82,7 +82,7 @@ describe('url utils', () => {
             expect(listener).toHaveBeenCalledWith(true);
 
             setKioskMode(false);
-            expect(window.sessionStorage.removeItem).toHaveBeenCalledWith('pulse_kiosk_mode');
+            expect(window.sessionStorage.setItem).toHaveBeenCalledWith('pulse_kiosk_mode', 'false');
             expect(listener).toHaveBeenCalledWith(false);
 
             unsubscribe();
