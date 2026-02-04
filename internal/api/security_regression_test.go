@@ -2946,6 +2946,29 @@ func TestQuickSetupRequiresAuthWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestQuickSetupRejectsProxyNonAdmin(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed-password"
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.27")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(`{}`))
+	req.RemoteAddr = "203.0.113.27:1234"
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy quick setup, got %d", rec.Code)
+	}
+}
+
 func TestRegenerateTokenRequiresAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "regen-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)

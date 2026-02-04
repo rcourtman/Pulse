@@ -154,6 +154,17 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		if !authorized && authConfigured {
 			wrapped := &responseCapture{ResponseWriter: w}
 			if CheckAuth(r.config, wrapped, req) {
+				// If proxy auth is configured, require admin role for changes.
+				if r.config.ProxyAuthSecret != "" {
+					if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid && !isAdmin {
+						log.Warn().
+							Str("ip", clientIP).
+							Str("username", username).
+							Msg("Non-admin user attempted quick security setup")
+						http.Error(w, "Admin privileges required", http.StatusForbidden)
+						return
+					}
+				}
 				authorized = true
 			} else {
 				if !wrapped.wrote {
