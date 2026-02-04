@@ -1358,6 +1358,7 @@ func TestConfigExportRequiresSettingsReadScope(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/config/export", strings.NewReader(`{}`))
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
@@ -1376,6 +1377,7 @@ func TestConfigImportRequiresSettingsWriteScope(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/config/import", strings.NewReader(`{}`))
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
@@ -1393,6 +1395,7 @@ func TestConfigExportRequiresAuthInAPIMode(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/config/export", strings.NewReader(`{}`))
+	req.RemoteAddr = "127.0.0.1:1234"
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -1406,6 +1409,7 @@ func TestConfigImportRequiresAuthInAPIMode(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/config/import", strings.NewReader(`{}`))
+	req.RemoteAddr = "127.0.0.1:1234"
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -1422,6 +1426,7 @@ func TestConfigExportBlocksPublicNetworkWithoutAuth(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/config/export", strings.NewReader(`{}`))
 	req.RemoteAddr = "203.0.113.10:1234"
+	ResetRateLimitForIP("203.0.113.10")
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -1437,7 +1442,8 @@ func TestConfigImportBlocksPublicNetworkWithoutAuth(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/config/import", strings.NewReader(`{}`))
-	req.RemoteAddr = "203.0.113.10:1234"
+	req.RemoteAddr = "203.0.113.11:1234"
+	ResetRateLimitForIP("203.0.113.11")
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -1484,6 +1490,7 @@ func TestConfigExportRequiresProxyAdmin(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/config/export", strings.NewReader(`{}`))
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
 	req.Header.Set("X-Remote-User", "viewer-user")
 	req.Header.Set("X-Remote-Roles", "viewer")
@@ -1508,6 +1515,7 @@ func TestConfigImportRequiresProxyAdmin(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/config/import", strings.NewReader(`{}`))
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
 	req.Header.Set("X-Remote-User", "viewer-user")
 	req.Header.Set("X-Remote-Roles", "viewer")
