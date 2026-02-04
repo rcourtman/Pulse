@@ -205,6 +205,7 @@ var publicRouteAllowlist = []string{
 	"/api/health",
 	"/api/version",
 	"/api/agent/version",
+	"/api/agent/ws",
 	"/api/server/info",
 	"/api/security/status",
 	"/api/security/validate-bootstrap-token",
