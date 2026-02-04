@@ -323,6 +323,26 @@ func TestChangePasswordRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestChangePasswordRejectsProxyNonAdmin(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/change-password", strings.NewReader(`{}`))
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy password change, got %d", rec.Code)
+	}
+}
+
 func TestResetLockoutRequiresAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "reset-lockout-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
