@@ -2699,6 +2699,30 @@ func TestAuditVerifyRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestPathTraversalBlockedForAPIPaths(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/../api/security/status", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for path traversal on api, got %d", rec.Code)
+	}
+}
+
+func TestPathTraversalBlockedForNonAPIPaths(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/../etc/passwd", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for path traversal on non-api, got %d", rec.Code)
+	}
+}
+
 func TestOIDCLoginBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
