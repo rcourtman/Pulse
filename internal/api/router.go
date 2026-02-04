@@ -289,9 +289,13 @@ func (r *Router) setupRoutes() {
 			// GET is for agents to fetch config (host config scope)
 			// PATCH is for UI to update config (host_manage scope, admin only)
 			if req.Method == http.MethodPatch {
-				if !ensureScope(w, req, config.ScopeHostManage) {
-					return
-				}
+				RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+					if !ensureScope(w, req, config.ScopeHostManage) {
+						return
+					}
+					r.hostAgentHandlers.HandleConfig(w, req)
+				})(w, req)
+				return
 			}
 			r.hostAgentHandlers.HandleConfig(w, req)
 			return
@@ -299,10 +303,12 @@ func (r *Router) setupRoutes() {
 		// Route DELETE /api/agents/host/{id} to HandleDeleteHost
 		// SECURITY: Require settings:write (not just host_manage) to prevent compromised host tokens from deleting other hosts
 		if req.Method == http.MethodDelete {
-			if !ensureScope(w, req, config.ScopeSettingsWrite) {
-				return
-			}
-			r.hostAgentHandlers.HandleDeleteHost(w, req)
+			RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+				if !ensureScope(w, req, config.ScopeSettingsWrite) {
+					return
+				}
+				r.hostAgentHandlers.HandleDeleteHost(w, req)
+			})(w, req)
 			return
 		}
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
