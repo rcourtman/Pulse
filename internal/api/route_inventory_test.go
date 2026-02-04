@@ -1,9 +1,11 @@
 package api
 
 import (
-	"os"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -12,14 +14,16 @@ import (
 )
 
 func TestRouterRouteInventory(t *testing.T) {
-	literalRoutes, dynamicRoutes := parseRouterRoutes(t)
+	literalRoutes, dynamicRoutes, bareLiteralRoutes := parseRouterRoutes(t)
 
 	expectedAll := sliceToSet(t, allRouteAllowlist, "all route allowlist")
 	expectedPublic := sliceToSet(t, publicRouteAllowlist, "public route allowlist")
 	expectedDynamic := sliceToSet(t, dynamicRouteAllowlist, "dynamic route allowlist")
+	expectedBare := sliceToSet(t, bareRouteAllowlist, "bare route allowlist")
 
 	actualAll := sliceToSet(t, literalRoutes, "router routes")
 	actualDynamic := sliceToSet(t, dynamicRoutes, "router dynamic routes")
+	actualBare := sliceToSet(t, bareLiteralRoutes, "router bare routes")
 
 	if missing := setDifference(actualAll, expectedAll); len(missing) > 0 {
 		t.Fatalf("routes missing from allowlist: %s", strings.Join(sortedKeys(missing), ", "))
@@ -38,9 +42,18 @@ func TestRouterRouteInventory(t *testing.T) {
 	if missing := setDifference(expectedPublic, expectedAll); len(missing) > 0 {
 		t.Fatalf("public routes missing from full allowlist: %s", strings.Join(sortedKeys(missing), ", "))
 	}
+	if missing := setDifference(actualBare, expectedBare); len(missing) > 0 {
+		t.Fatalf("bare routes missing from allowlist: %s", strings.Join(sortedKeys(missing), ", "))
+	}
+	if stale := setDifference(expectedBare, actualBare); len(stale) > 0 {
+		t.Fatalf("bare allowlist contains routes not registered bare in router.go: %s", strings.Join(sortedKeys(stale), ", "))
+	}
+	if missing := setDifference(expectedPublic, expectedBare); len(missing) > 0 {
+		t.Fatalf("public routes must be registered bare: %s", strings.Join(sortedKeys(missing), ", "))
+	}
 }
 
-func parseRouterRoutes(t *testing.T) ([]string, []string) {
+func parseRouterRoutes(t *testing.T) ([]string, []string, []string) {
 	t.Helper()
 
 	_, file, _, ok := runtime.Caller(0)
@@ -48,36 +61,109 @@ func parseRouterRoutes(t *testing.T) ([]string, []string) {
 		t.Fatalf("failed to locate test file path")
 	}
 	routerPath := filepath.Join(filepath.Dir(file), "router.go")
-	data, err := os.ReadFile(routerPath)
-	if err != nil {
-		t.Fatalf("read router.go: %v", err)
-	}
 
-	re := regexp.MustCompile(`r\.mux\.Handle(?:Func)?\(([^,]+),`)
-	matches := re.FindAllStringSubmatch(string(data), -1)
-	if len(matches) == 0 {
-		t.Fatalf("no routes found in router.go")
+	fset := token.NewFileSet()
+	fileAST, err := parser.ParseFile(fset, routerPath, nil, 0)
+	if err != nil {
+		t.Fatalf("parse router.go: %v", err)
 	}
 
 	var literalRoutes []string
 	var dynamicRoutes []string
-	for _, match := range matches {
-		arg := strings.TrimSpace(match[1])
-		if arg == "" {
-			continue
+	var bareLiteralRoutes []string
+	var found bool
+
+	ast.Inspect(fileAST, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
 		}
-		if strings.HasPrefix(arg, "\"") || strings.HasPrefix(arg, "`") || strings.HasPrefix(arg, "'") {
-			unquoted, err := strconv.Unquote(arg)
-			if err != nil {
-				unquoted = strings.Trim(arg, "`\"'")
-			}
-			literalRoutes = append(literalRoutes, unquoted)
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel == nil {
+			return true
+		}
+		if selector.Sel.Name != "Handle" && selector.Sel.Name != "HandleFunc" {
+			return true
+		}
+		if len(call.Args) < 2 {
+			return true
+		}
+		route, isDynamic := routeLiteral(call.Args[0])
+		if route == "" {
+			return true
+		}
+		found = true
+		if isDynamic {
+			dynamicRoutes = append(dynamicRoutes, route)
 		} else {
-			dynamicRoutes = append(dynamicRoutes, arg)
+			literalRoutes = append(literalRoutes, route)
+			if !isProtectedHandler(call.Args[1]) {
+				bareLiteralRoutes = append(bareLiteralRoutes, route)
+			}
 		}
+		return true
+	})
+
+	if !found {
+		t.Fatalf("no routes found in router.go")
 	}
 
-	return literalRoutes, dynamicRoutes
+	return literalRoutes, dynamicRoutes, bareLiteralRoutes
+}
+
+func routeLiteral(expr ast.Expr) (string, bool) {
+	switch v := expr.(type) {
+	case *ast.BasicLit:
+		if v.Kind != token.STRING {
+			return "", true
+		}
+		unquoted, err := strconv.Unquote(v.Value)
+		if err != nil {
+			unquoted = strings.Trim(v.Value, "`\"'")
+		}
+		return unquoted, false
+	case *ast.Ident:
+		return v.Name, true
+	case *ast.SelectorExpr:
+		return fmt.Sprintf("%s.%s", selectorName(v.X), v.Sel.Name), true
+	default:
+		return fmt.Sprintf("%T", expr), true
+	}
+}
+
+func selectorName(expr ast.Expr) string {
+	switch v := expr.(type) {
+	case *ast.Ident:
+		return v.Name
+	case *ast.SelectorExpr:
+		return selectorName(v.X) + "." + v.Sel.Name
+	default:
+		return ""
+	}
+}
+
+func isProtectedHandler(expr ast.Expr) bool {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	switch fn := call.Fun.(type) {
+	case *ast.Ident:
+		return isAuthWrapper(fn.Name)
+	case *ast.SelectorExpr:
+		return isAuthWrapper(fn.Sel.Name)
+	default:
+		return false
+	}
+}
+
+func isAuthWrapper(name string) bool {
+	switch name {
+	case "RequireAuth", "RequireAdmin", "RequirePermission":
+		return true
+	default:
+		return false
+	}
 }
 
 func sliceToSet(t *testing.T, items []string, name string) map[string]struct{} {
@@ -144,6 +230,58 @@ var publicRouteAllowlist = []string{
 	"/install.sh",
 	"/install.ps1",
 	"/download/pulse-agent",
+}
+
+var bareRouteAllowlist = []string{
+	"/api/agent/version",
+	"/api/agent/ws",
+	"/api/ai/oauth/callback",
+	"/api/auto-register",
+	"/api/config/export",
+	"/api/config/import",
+	"/api/config/nodes",
+	"/api/config/nodes/",
+	"/api/config/nodes/test-config",
+	"/api/config/nodes/test-connection",
+	"/api/config/system",
+	"/api/health",
+	"/api/install/install-docker.sh",
+	"/api/install/install.ps1",
+	"/api/install/install.sh",
+	"/api/login",
+	"/api/logout",
+	"/api/logs/level",
+	"/api/oidc/login",
+	"/api/security/apply-restart",
+	"/api/security/change-password",
+	"/api/security/quick-setup",
+	"/api/security/recovery",
+	"/api/security/regenerate-token",
+	"/api/security/reset-lockout",
+	"/api/security/status",
+	"/api/security/validate-bootstrap-token",
+	"/api/security/validate-token",
+	"/api/server/info",
+	"/api/setup-script",
+	"/api/state",
+	"/api/system/mock-mode",
+	"/api/system/ssh-config",
+	"/api/system/verify-temperature-ssh",
+	"/api/version",
+	"/download/pulse-agent",
+	"/download/pulse-docker-agent",
+	"/download/pulse-host-agent",
+	"/download/pulse-host-agent.sha256",
+	"/install-container-agent.sh",
+	"/install-docker-agent.sh",
+	"/install-host-agent.ps1",
+	"/install-host-agent.sh",
+	"/install.ps1",
+	"/install.sh",
+	"/socket.io/",
+	"/uninstall-host-agent.ps1",
+	"/uninstall-host-agent.sh",
+	"/ws",
 }
 
 var allRouteAllowlist = []string{
