@@ -2419,3 +2419,89 @@ func TestSSHConfigRequiresSettingsWriteScope(t *testing.T) {
 		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
 	}
 }
+
+func TestQuickSetupRequiresAuthWhenConfigured(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed-password"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.20")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(`{"username":"admin","password":"Password!1"}`))
+	req.RemoteAddr = "203.0.113.20:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
+func TestRegenerateTokenRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "regen-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.21")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/regenerate-token", nil)
+	req.RemoteAddr = "203.0.113.21:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
+func TestRegenerateTokenRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "regen-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.22")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/regenerate-token", nil)
+	req.RemoteAddr = "203.0.113.22:1234"
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestValidateTokenRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "validate-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.23")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-token", strings.NewReader(`{"token":"abc"}`))
+	req.RemoteAddr = "203.0.113.23:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
+func TestValidateTokenRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "validate-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.24")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-token", strings.NewReader(`{"token":"abc"}`))
+	req.RemoteAddr = "203.0.113.24:1234"
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
