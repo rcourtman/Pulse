@@ -10,10 +10,48 @@ import (
 // Use IOMetrics from types package
 type IOMetrics = types.IOMetrics
 
+// rateWindowSize is the number of counter samples retained per guest.
+// Rate is computed from the oldest to the newest sample, giving an average
+// over (rateWindowSize-1) polling intervals. With a 10s poll interval and
+// window size 4, this produces a 30-second sliding window — the same approach
+// Prometheus rate() uses to smooth out per-interval counter jitter.
+const rateWindowSize = 4
+
+// counterRing is a fixed-size ring buffer of IOMetrics samples.
+type counterRing struct {
+	entries [rateWindowSize]IOMetrics
+	count   int // number of entries stored (up to rateWindowSize)
+	head    int // next write position
+}
+
+func (r *counterRing) add(m IOMetrics) {
+	r.entries[r.head] = m
+	r.head = (r.head + 1) % rateWindowSize
+	if r.count < rateWindowSize {
+		r.count++
+	}
+}
+
+func (r *counterRing) oldest() IOMetrics {
+	if r.count < rateWindowSize {
+		return r.entries[0]
+	}
+	return r.entries[r.head] // head points to the oldest when full
+}
+
+func (r *counterRing) newest() IOMetrics {
+	return r.entries[(r.head-1+rateWindowSize)%rateWindowSize]
+}
+
+// newestTimestamp returns the timestamp of the most recent entry.
+func (r *counterRing) newestTimestamp() time.Time {
+	return r.newest().Timestamp
+}
+
 // RateTracker tracks I/O metrics to calculate rates
 type RateTracker struct {
 	mu        sync.RWMutex
-	previous  map[string]IOMetrics
+	history   map[string]*counterRing
 	lastRates map[string]RateCache
 }
 
@@ -28,7 +66,7 @@ type RateCache struct {
 // NewRateTracker creates a new rate tracker
 func NewRateTracker() *RateTracker {
 	return &RateTracker{
-		previous:  make(map[string]IOMetrics),
+		history:   make(map[string]*counterRing),
 		lastRates: make(map[string]RateCache),
 	}
 }
@@ -39,13 +77,17 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	prev, exists := rt.previous[guestID]
+	ring, exists := rt.history[guestID]
 
 	if !exists {
 		// No previous data, store it and return -1 to indicate no data available
-		rt.previous[guestID] = current
+		ring = &counterRing{}
+		ring.add(current)
+		rt.history[guestID] = ring
 		return -1, -1, -1, -1
 	}
+
+	prev := ring.newest()
 
 	// Check if the values have actually changed (detect stale data)
 	// If all cumulative values are the same, we're getting cached data from Proxmox
@@ -61,11 +103,14 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 		return 0, 0, 0, 0
 	}
 
-	// Data has changed, update our cache
-	rt.previous[guestID] = current
+	// Data has changed, add to ring buffer
+	ring.add(current)
 
-	// Calculate time difference in seconds
-	timeDiff := current.Timestamp.Sub(prev.Timestamp).Seconds()
+	// Calculate rate over the full window (oldest to current), like Prometheus rate().
+	// This naturally smooths out per-interval jitter from Proxmox's lumpy counter
+	// reporting by averaging over a wider time span.
+	oldest := ring.oldest()
+	timeDiff := current.Timestamp.Sub(oldest.Timestamp).Seconds()
 	if timeDiff <= 0 {
 		// Return last known rates if time hasn't advanced
 		if lastRate, hasRate := rt.lastRates[guestID]; hasRate {
@@ -74,18 +119,18 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 		return 0, 0, 0, 0
 	}
 
-	// Calculate rates (bytes per second)
-	if current.DiskRead >= prev.DiskRead {
-		diskReadRate = float64(current.DiskRead-prev.DiskRead) / timeDiff
+	// Calculate rates (bytes per second) over the window
+	if current.DiskRead >= oldest.DiskRead {
+		diskReadRate = float64(current.DiskRead-oldest.DiskRead) / timeDiff
 	}
-	if current.DiskWrite >= prev.DiskWrite {
-		diskWriteRate = float64(current.DiskWrite-prev.DiskWrite) / timeDiff
+	if current.DiskWrite >= oldest.DiskWrite {
+		diskWriteRate = float64(current.DiskWrite-oldest.DiskWrite) / timeDiff
 	}
-	if current.NetworkIn >= prev.NetworkIn {
-		netInRate = float64(current.NetworkIn-prev.NetworkIn) / timeDiff
+	if current.NetworkIn >= oldest.NetworkIn {
+		netInRate = float64(current.NetworkIn-oldest.NetworkIn) / timeDiff
 	}
-	if current.NetworkOut >= prev.NetworkOut {
-		netOutRate = float64(current.NetworkOut-prev.NetworkOut) / timeDiff
+	if current.NetworkOut >= oldest.NetworkOut {
+		netOutRate = float64(current.NetworkOut-oldest.NetworkOut) / timeDiff
 	}
 
 	// Cache the calculated rates
@@ -103,7 +148,7 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 func (rt *RateTracker) Clear() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	rt.previous = make(map[string]IOMetrics)
+	rt.history = make(map[string]*counterRing)
 	rt.lastRates = make(map[string]RateCache)
 }
 
@@ -113,9 +158,9 @@ func (rt *RateTracker) Cleanup(cutoff time.Time) (removed int) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	for guestID, metrics := range rt.previous {
-		if metrics.Timestamp.Before(cutoff) {
-			delete(rt.previous, guestID)
+	for guestID, ring := range rt.history {
+		if ring.newestTimestamp().Before(cutoff) {
+			delete(rt.history, guestID)
 			delete(rt.lastRates, guestID)
 			removed++
 		}
