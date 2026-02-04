@@ -3268,8 +3268,6 @@ func TestInstallScriptEndpointsBypassAuth(t *testing.T) {
 
 	paths := []string{
 		"/api/install/install-docker.sh",
-		"/api/install/install.sh",
-		"/api/install/install.ps1",
 	}
 
 	for idx, path := range paths {
@@ -3281,6 +3279,30 @@ func TestInstallScriptEndpointsBypassAuth(t *testing.T) {
 		router.Handler().ServeHTTP(rec, req)
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("expected 405 for public install script %s, got %d", path, rec.Code)
+		}
+	}
+}
+
+func TestInstallScriptAPIRoutesRequireAuth(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/install/install.sh",
+		"/api/install/install.ps1",
+	}
+
+	for idx, path := range paths {
+		ip := "203.0.113." + strconv.Itoa(80+idx)
+		ResetRateLimitForIP(ip)
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req.RemoteAddr = ip + ":1234"
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 for protected install script %s, got %d", path, rec.Code)
 		}
 	}
 }
