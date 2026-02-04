@@ -758,7 +758,7 @@ func (a *Agent) collectSMARTData(ctx context.Context) []agentshost.DiskSMART {
 	// Convert internal smartctl types to agent report types
 	result := make([]agentshost.DiskSMART, 0, len(smartData))
 	for _, disk := range smartData {
-		result = append(result, agentshost.DiskSMART{
+		entry := agentshost.DiskSMART{
 			Device:      disk.Device,
 			Model:       disk.Model,
 			Serial:      disk.Serial,
@@ -767,7 +767,22 @@ func (a *Agent) collectSMARTData(ctx context.Context) []agentshost.DiskSMART {
 			Temperature: disk.Temperature,
 			Health:      disk.Health,
 			Standby:     disk.Standby,
-		})
+		}
+		if disk.Attributes != nil {
+			entry.Attributes = &agentshost.SMARTAttributes{
+				PowerOnHours:         disk.Attributes.PowerOnHours,
+				PowerCycles:          disk.Attributes.PowerCycles,
+				ReallocatedSectors:   disk.Attributes.ReallocatedSectors,
+				PendingSectors:       disk.Attributes.PendingSectors,
+				OfflineUncorrectable: disk.Attributes.OfflineUncorrectable,
+				UDMACRCErrors:        disk.Attributes.UDMACRCErrors,
+				PercentageUsed:       disk.Attributes.PercentageUsed,
+				AvailableSpare:       disk.Attributes.AvailableSpare,
+				MediaErrors:          disk.Attributes.MediaErrors,
+				UnsafeShutdowns:      disk.Attributes.UnsafeShutdowns,
+			}
+		}
+		result = append(result, entry)
 	}
 
 	a.logger.Debug().

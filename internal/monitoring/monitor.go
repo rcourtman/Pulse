@@ -367,71 +367,126 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	copy(updated, disks)
 
 	for i := range updated {
-		// Skip if temperature is already populated
-		if updated[i].Temperature > 0 {
-			continue
-		}
-
 		smartData, ok := smartByNodeName[updated[i].Node]
 		if !ok || len(smartData) == 0 {
 			continue
 		}
 
+		// Find matching SMART entry by WWN, serial, or device path
+		var matched *models.HostDiskSMART
+
 		// Try to match by WWN (most reliable)
 		if updated[i].WWN != "" {
-			for _, disk := range smartData {
-				if disk.WWN != "" && strings.EqualFold(disk.WWN, updated[i].WWN) {
-					if disk.Temperature > 0 && !disk.Standby {
-						updated[i].Temperature = disk.Temperature
-						log.Debug().
-							Str("device", updated[i].DevPath).
-							Str("wwn", updated[i].WWN).
-							Int("temp", disk.Temperature).
-							Msg("Matched host agent SMART temperature by WWN")
-					}
+			for j := range smartData {
+				if smartData[j].WWN != "" && strings.EqualFold(smartData[j].WWN, updated[i].WWN) {
+					matched = &smartData[j]
 					break
 				}
 			}
 		}
 
 		// Fall back to serial number match
-		if updated[i].Serial != "" && updated[i].Temperature == 0 {
-			for _, disk := range smartData {
-				if disk.Serial != "" && strings.EqualFold(disk.Serial, updated[i].Serial) {
-					if disk.Temperature > 0 && !disk.Standby {
-						updated[i].Temperature = disk.Temperature
-						log.Debug().
-							Str("device", updated[i].DevPath).
-							Str("serial", updated[i].Serial).
-							Int("temp", disk.Temperature).
-							Msg("Matched host agent SMART temperature by serial")
-					}
+		if matched == nil && updated[i].Serial != "" {
+			for j := range smartData {
+				if smartData[j].Serial != "" && strings.EqualFold(smartData[j].Serial, updated[i].Serial) {
+					matched = &smartData[j]
 					break
 				}
 			}
 		}
 
 		// Last resort: match by device path
-		if updated[i].Temperature == 0 {
+		if matched == nil {
 			normalizedDevPath := strings.TrimPrefix(updated[i].DevPath, "/dev/")
-			for _, disk := range smartData {
-				normalizedDiskDev := strings.TrimPrefix(disk.Device, "/dev/")
+			for j := range smartData {
+				normalizedDiskDev := strings.TrimPrefix(smartData[j].Device, "/dev/")
 				if normalizedDiskDev == normalizedDevPath {
-					if disk.Temperature > 0 && !disk.Standby {
-						updated[i].Temperature = disk.Temperature
-						log.Debug().
-							Str("device", updated[i].DevPath).
-							Int("temp", disk.Temperature).
-							Msg("Matched host agent SMART temperature by device path")
-					}
+					matched = &smartData[j]
 					break
 				}
 			}
+		}
+
+		if matched == nil || matched.Standby {
+			continue
+		}
+
+		// Merge temperature if not already set
+		if updated[i].Temperature == 0 && matched.Temperature > 0 {
+			updated[i].Temperature = matched.Temperature
+			log.Debug().
+				Str("device", updated[i].DevPath).
+				Int("temp", matched.Temperature).
+				Msg("Matched host agent SMART temperature")
+		}
+
+		// Always merge SMART attributes from host agent
+		if matched.Attributes != nil {
+			updated[i].SmartAttributes = matched.Attributes
 		}
 	}
 
 	return updated
 }
+
+// writeSMARTMetrics writes SMART attribute metrics to the persistent metrics store for a single disk.
+func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
+	// Determine resource ID: serial (preferred) → WWN → composite fallback
+	resourceID := disk.Serial
+	if resourceID == "" {
+		resourceID = disk.WWN
+	}
+	if resourceID == "" {
+		resourceID = fmt.Sprintf("%s-%s-%s", disk.Instance, disk.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
+	}
+
+	// Temperature (always write if > 0)
+	if disk.Temperature > 0 {
+		m.metricsStore.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
+	}
+
+	attrs := disk.SmartAttributes
+	if attrs == nil {
+		return
+	}
+
+	// Common
+	if attrs.PowerOnHours != nil {
+		m.metricsStore.Write("disk", resourceID, "smart_power_on_hours", float64(*attrs.PowerOnHours), now)
+	}
+	if attrs.PowerCycles != nil {
+		m.metricsStore.Write("disk", resourceID, "smart_power_cycles", float64(*attrs.PowerCycles), now)
+	}
+
+	// SATA-specific
+	if attrs.ReallocatedSectors != nil {
+		m.metricsStore.Write("disk", resourceID, "smart_reallocated_sectors", float64(*attrs.ReallocatedSectors), now)
+	}
+	if attrs.PendingSectors != nil {
+		m.metricsStore.Write("disk", resourceID, "smart_pending_sectors", float64(*attrs.PendingSectors), now)
+	}
+	if attrs.OfflineUncorrectable != nil {
+		m.metricsStore.Write("disk", resourceID, "smart_offline_uncorrectable", float64(*attrs.OfflineUncorrectable), now)
+	}
+	if attrs.UDMACRCErrors != nil {
+		m.metricsStore.Write("disk", resourceID, "smart_crc_errors", float64(*attrs.UDMACRCErrors), now)
+	}
+
+	// NVMe-specific
+	if attrs.PercentageUsed != nil {
+		m.metricsStore.Write("disk", resourceID, "smart_percentage_used", float64(*attrs.PercentageUsed), now)
+	}
+	if attrs.AvailableSpare != nil {
+		m.metricsStore.Write("disk", resourceID, "smart_available_spare", float64(*attrs.AvailableSpare), now)
+	}
+	if attrs.MediaErrors != nil {
+		m.metricsStore.Write("disk", resourceID, "smart_media_errors", float64(*attrs.MediaErrors), now)
+	}
+	if attrs.UnsafeShutdowns != nil {
+		m.metricsStore.Write("disk", resourceID, "smart_unsafe_shutdowns", float64(*attrs.UnsafeShutdowns), now)
+	}
+}
+
 func lookupClusterEndpointLabel(instance *config.PVEInstance, nodeName string) string {
 	if instance == nil {
 		return ""
@@ -6232,6 +6287,14 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				// Also merge SMART data from linked host agents
 				allDisks = mergeHostAgentSMARTIntoDisks(allDisks, currentState.Nodes, currentState.Hosts)
 
+				// Write SMART metrics to persistent store
+				if m.metricsStore != nil {
+					now := time.Now()
+					for _, disk := range allDisks {
+						m.writeSMARTMetrics(disk, now)
+					}
+				}
+
 				// Update physical disks in state
 				log.Debug().
 					Str("instance", inst).
@@ -10545,7 +10608,7 @@ func convertAgentSMARTToModels(smart []agentshost.DiskSMART) []models.HostDiskSM
 	}
 	result := make([]models.HostDiskSMART, 0, len(smart))
 	for _, disk := range smart {
-		result = append(result, models.HostDiskSMART{
+		entry := models.HostDiskSMART{
 			Device:      disk.Device,
 			Model:       disk.Model,
 			Serial:      disk.Serial,
@@ -10554,9 +10617,32 @@ func convertAgentSMARTToModels(smart []agentshost.DiskSMART) []models.HostDiskSM
 			Temperature: disk.Temperature,
 			Health:      disk.Health,
 			Standby:     disk.Standby,
-		})
+		}
+		if disk.Attributes != nil {
+			entry.Attributes = convertAgentSMARTAttributes(disk.Attributes)
+		}
+		result = append(result, entry)
 	}
 	return result
+}
+
+// convertAgentSMARTAttributes converts agent SMARTAttributes to models SMARTAttributes.
+func convertAgentSMARTAttributes(src *agentshost.SMARTAttributes) *models.SMARTAttributes {
+	if src == nil {
+		return nil
+	}
+	return &models.SMARTAttributes{
+		PowerOnHours:         src.PowerOnHours,
+		PowerCycles:          src.PowerCycles,
+		ReallocatedSectors:   src.ReallocatedSectors,
+		PendingSectors:       src.PendingSectors,
+		OfflineUncorrectable: src.OfflineUncorrectable,
+		UDMACRCErrors:        src.UDMACRCErrors,
+		PercentageUsed:       src.PercentageUsed,
+		AvailableSpare:       src.AvailableSpare,
+		MediaErrors:          src.MediaErrors,
+		UnsafeShutdowns:      src.UnsafeShutdowns,
+	}
 }
 
 // convertAgentCephToModels converts agent report Ceph data to the models.HostCephCluster format.

@@ -49,7 +49,7 @@ export interface ChartsResponse {
 
 // Persistent metrics history types (SQLite-backed, longer retention)
 export type HistoryTimeRange = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | '90d';
-export type ResourceType = 'node' | 'guest' | 'vm' | 'container' | 'storage' | 'docker' | 'dockerHost' | 'k8s' | 'host';
+export type ResourceType = 'node' | 'guest' | 'vm' | 'container' | 'storage' | 'docker' | 'dockerHost' | 'k8s' | 'host' | 'disk';
 
 export interface MetricsHistoryParams {
     resourceType: ResourceType;

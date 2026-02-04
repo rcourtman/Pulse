@@ -109,14 +109,29 @@ type Sensors struct {
 
 // DiskSMART represents S.M.A.R.T. data for a single disk.
 type DiskSMART struct {
-	Device      string `json:"device"`            // Device path (e.g., sda)
-	Model       string `json:"model,omitempty"`   // Disk model
-	Serial      string `json:"serial,omitempty"`  // Serial number
-	WWN         string `json:"wwn,omitempty"`     // World Wide Name
-	Type        string `json:"type,omitempty"`    // Transport type: sata, sas, nvme
-	Temperature int    `json:"temperature"`       // Temperature in Celsius
-	Health      string `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
-	Standby     bool   `json:"standby,omitempty"` // True if disk was in standby
+	Device      string           `json:"device"`            // Device path (e.g., sda)
+	Model       string           `json:"model,omitempty"`   // Disk model
+	Serial      string           `json:"serial,omitempty"`  // Serial number
+	WWN         string           `json:"wwn,omitempty"`     // World Wide Name
+	Type        string           `json:"type,omitempty"`    // Transport type: sata, sas, nvme
+	Temperature int              `json:"temperature"`       // Temperature in Celsius
+	Health      string           `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
+	Standby     bool             `json:"standby,omitempty"` // True if disk was in standby
+	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
+}
+
+// SMARTAttributes holds normalized SMART attributes for both SATA and NVMe disks.
+type SMARTAttributes struct {
+	PowerOnHours         *int64 `json:"powerOnHours,omitempty"`
+	PowerCycles          *int64 `json:"powerCycles,omitempty"`
+	ReallocatedSectors   *int64 `json:"reallocatedSectors,omitempty"`
+	PendingSectors       *int64 `json:"pendingSectors,omitempty"`
+	OfflineUncorrectable *int64 `json:"offlineUncorrectable,omitempty"`
+	UDMACRCErrors        *int64 `json:"udmaCrcErrors,omitempty"`
+	PercentageUsed       *int   `json:"percentageUsed,omitempty"`
+	AvailableSpare       *int   `json:"availableSpare,omitempty"`
+	MediaErrors          *int64 `json:"mediaErrors,omitempty"`
+	UnsafeShutdowns      *int64 `json:"unsafeShutdowns,omitempty"`
 }
 
 // RAIDArray represents an mdadm RAID array.

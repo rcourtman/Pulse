@@ -5785,6 +5785,16 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return nil
 	}
 
+	findDisk := func(id string) *models.PhysicalDisk {
+		for i := range state.PhysicalDisks {
+			d := &state.PhysicalDisks[i]
+			if d.Serial == id || d.WWN == id || d.ID == id {
+				return d
+			}
+		}
+		return nil
+	}
+
 	liveMetricPoints := func(resourceType, resourceID string) map[string]monitoring.MetricPoint {
 		now := time.Now()
 		points := make(map[string]monitoring.MetricPoint)
@@ -5885,6 +5895,47 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					diskPercent = 100
 				}
 				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
+			}
+		case "disk":
+			disk := findDisk(resourceID)
+			if disk == nil {
+				return points
+			}
+			if disk.Temperature > 0 {
+				points["smart_temp"] = monitoring.MetricPoint{Timestamp: now, Value: float64(disk.Temperature)}
+			}
+			if disk.SmartAttributes != nil {
+				attrs := disk.SmartAttributes
+				if attrs.PowerOnHours != nil {
+					points["smart_power_on_hours"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.PowerOnHours)}
+				}
+				if attrs.PowerCycles != nil {
+					points["smart_power_cycles"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.PowerCycles)}
+				}
+				if attrs.ReallocatedSectors != nil {
+					points["smart_reallocated_sectors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.ReallocatedSectors)}
+				}
+				if attrs.PendingSectors != nil {
+					points["smart_pending_sectors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.PendingSectors)}
+				}
+				if attrs.OfflineUncorrectable != nil {
+					points["smart_offline_uncorrectable"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.OfflineUncorrectable)}
+				}
+				if attrs.UDMACRCErrors != nil {
+					points["smart_crc_errors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.UDMACRCErrors)}
+				}
+				if attrs.PercentageUsed != nil {
+					points["smart_percentage_used"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.PercentageUsed)}
+				}
+				if attrs.AvailableSpare != nil {
+					points["smart_available_spare"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.AvailableSpare)}
+				}
+				if attrs.MediaErrors != nil {
+					points["smart_media_errors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.MediaErrors)}
+				}
+				if attrs.UnsafeShutdowns != nil {
+					points["smart_unsafe_shutdowns"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.UnsafeShutdowns)}
+				}
 			}
 		}
 

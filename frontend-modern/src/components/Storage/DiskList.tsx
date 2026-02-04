@@ -1,9 +1,31 @@
-import { Component, For, Show, createMemo } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { formatBytes } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import type { PhysicalDisk } from '@/types/api';
 import { useWebSocket } from '@/App';
+import { DiskDetail } from './DiskDetail';
+
+/** Format power-on hours into human-readable form (e.g., "2.3y", "140d", "5h"). */
+function formatPowerOnHours(hours: number): string {
+  if (hours >= 8760) {
+    return `${(hours / 8760).toFixed(1)}y`;
+  }
+  if (hours >= 24) {
+    return `${Math.round(hours / 24)}d`;
+  }
+  return `${hours}h`;
+}
+
+/** Returns true if any critical SMART counters are non-zero. */
+function hasSmartWarning(disk: PhysicalDisk): boolean {
+  const attrs = disk.smartAttributes;
+  if (!attrs) return false;
+  if (attrs.reallocatedSectors && attrs.reallocatedSectors > 0) return true;
+  if (attrs.pendingSectors && attrs.pendingSectors > 0) return true;
+  if (attrs.mediaErrors && attrs.mediaErrors > 0) return true;
+  return false;
+}
 
 interface DiskListProps {
   disks: PhysicalDisk[];
@@ -13,6 +35,7 @@ interface DiskListProps {
 
 export const DiskList: Component<DiskListProps> = (props) => {
   const { state } = useWebSocket();
+  const [selectedDisk, setSelectedDisk] = createSignal<PhysicalDisk | null>(null);
 
   // Check if there are any PVE nodes configured
   const hasPVENodes = createMemo(() => {
@@ -111,6 +134,15 @@ export const DiskList: Component<DiskListProps> = (props) => {
     return node?.name || null;
   });
 
+  const handleRowClick = (disk: PhysicalDisk) => {
+    const current = selectedDisk();
+    if (current && current.id === disk.id) {
+      setSelectedDisk(null);
+    } else {
+      setSelectedDisk(disk);
+    }
+  };
+
   return (
     <div>
       <Show when={filteredDisks().length === 0}>
@@ -152,51 +184,67 @@ export const DiskList: Component<DiskListProps> = (props) => {
       <Show when={filteredDisks().length > 0}>
         <Card padding="none" tone="glass" class="overflow-hidden">
           <div class="overflow-x-auto">
-            <table class="w-full" style={{ "min-width": "750px" }}>
+            <table class="w-full" style={{ "min-width": "800px" }}>
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Node
                   </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
                     Device
                   </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[20%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[19%]">
                     Model
                   </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
                     Type
                   </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
                     FS
                   </th>
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Health
                   </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%]">
                     SSD Life
                   </th>
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                    Power-On
+                  </th>
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
                     Temp
                   </th>
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Size
                   </th>
-                  <th class="px-1 py-1.5 w-8"></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                 <For each={filteredDisks()}>
                   {(disk) => {
                     const health = getHealthStatus(disk);
+                    const isSelected = () => selectedDisk()?.id === disk.id;
+                    const warning = hasSmartWarning(disk);
 
                     return (
                       <>
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                        <tr
+                          class={`cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}
+                          onClick={() => handleRowClick(disk)}
+                        >
                           <td class="px-1 py-1.5 text-xs">
-                            <span class="font-medium text-gray-900 dark:text-gray-100">
-                              {disk.node}
-                            </span>
+                            <div class="flex items-center gap-1.5 min-w-0">
+                              <div
+                                class={`cursor-pointer transition-transform duration-200 ${isSelected() ? 'rotate-90' : ''}`}
+                              >
+                                <svg class="w-3.5 h-3.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                              </div>
+                              <span class="font-medium text-gray-900 dark:text-gray-100">
+                                {disk.node}
+                              </span>
+                            </div>
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <span class="font-mono text-gray-600 dark:text-gray-400">
@@ -231,6 +279,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             >
                               {health.text}
                             </span>
+                            <Show when={warning}>
+                              <span class="ml-1 text-yellow-500 dark:text-yellow-400" title="SMART warning: critical counters non-zero">
+                                &#9888;
+                              </span>
+                            </Show>
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <Show
@@ -257,6 +310,16 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <Show
+                              when={disk.smartAttributes?.powerOnHours != null}
+                              fallback={<span class="text-gray-400">-</span>}
+                            >
+                              <span class="text-gray-700 dark:text-gray-300">
+                                {formatPowerOnHours(disk.smartAttributes!.powerOnHours!)}
+                              </span>
+                            </Show>
+                          </td>
+                          <td class="px-1 py-1.5 text-xs">
+                            <Show
                               when={typeof disk.temperature === 'number'}
                               fallback={<span class="font-medium text-gray-400">-</span>}
                             >
@@ -277,8 +340,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               {formatBytes(disk.size)}
                             </span>
                           </td>
-                          <td class="px-1 py-1.5"></td>
                         </tr>
+                        <Show when={isSelected()}>
+                          <tr>
+                            <td colSpan={10} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
+                              <DiskDetail disk={disk} />
+                            </td>
+                          </tr>
+                        </Show>
                       </>
                     );
                   }}

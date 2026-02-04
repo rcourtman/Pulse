@@ -453,14 +453,15 @@ type HostSensorSummaryFrontend struct {
 
 // HostDiskSMARTFrontend represents S.M.A.R.T. data for a disk from a host agent.
 type HostDiskSMARTFrontend struct {
-	Device      string `json:"device"`            // Device name (e.g., sda)
-	Model       string `json:"model,omitempty"`   // Disk model
-	Serial      string `json:"serial,omitempty"`  // Serial number
-	WWN         string `json:"wwn,omitempty"`     // World Wide Name
-	Type        string `json:"type,omitempty"`    // Transport type: sata, sas, nvme
-	Temperature int    `json:"temperature"`       // Temperature in Celsius
-	Health      string `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
-	Standby     bool   `json:"standby,omitempty"` // True if disk was in standby
+	Device      string           `json:"device"`            // Device name (e.g., sda)
+	Model       string           `json:"model,omitempty"`   // Disk model
+	Serial      string           `json:"serial,omitempty"`  // Serial number
+	WWN         string           `json:"wwn,omitempty"`     // World Wide Name
+	Type        string           `json:"type,omitempty"`    // Transport type: sata, sas, nvme
+	Temperature int              `json:"temperature"`       // Temperature in Celsius
+	Health      string           `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
+	Standby     bool             `json:"standby,omitempty"` // True if disk was in standby
+	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
 }
 
 // StorageFrontend represents Storage with frontend-friendly field names

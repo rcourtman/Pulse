@@ -887,6 +887,19 @@ export interface Disk {
   device?: string;
 }
 
+export interface SMARTAttributes {
+  powerOnHours?: number;
+  powerCycles?: number;
+  reallocatedSectors?: number;
+  pendingSectors?: number;
+  offlineUncorrectable?: number;
+  udmaCrcErrors?: number;
+  percentageUsed?: number;
+  availableSpare?: number;
+  mediaErrors?: number;
+  unsafeShutdowns?: number;
+}
+
 export interface PhysicalDisk {
   id: string;
   node: string;
@@ -895,6 +908,7 @@ export interface PhysicalDisk {
   device?: string;
   model: string;
   serial: string;
+  wwn: string;
   type: 'nvme' | 'sata' | 'sas' | string;
   size: number;
   health: 'PASSED' | 'FAILED' | 'UNKNOWN' | string;
@@ -903,7 +917,12 @@ export interface PhysicalDisk {
   rpm: number;
   used: string;
   lastChecked: string;
-  smart?: unknown;
+  smartAttributes?: SMARTAttributes;
+}
+
+/** Returns the best resource ID for disk metrics queries (serial preferred, WWN fallback). */
+export function diskResourceId(disk: PhysicalDisk): string | null {
+  return disk.serial || disk.wwn || null;
 }
 
 export interface CPUInfo {

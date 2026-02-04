@@ -750,6 +750,7 @@ func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFronte
 				Temperature: disk.Temperature,
 				Health:      disk.Health,
 				Standby:     disk.Standby,
+				Attributes:  disk.Attributes,
 			}
 		}
 	}

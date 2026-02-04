@@ -23,15 +23,36 @@ var (
 
 // DiskSMART represents S.M.A.R.T. data for a single disk.
 type DiskSMART struct {
-	Device      string    `json:"device"`            // Device path (e.g., /dev/sda)
-	Model       string    `json:"model,omitempty"`   // Disk model
-	Serial      string    `json:"serial,omitempty"`  // Serial number
-	WWN         string    `json:"wwn,omitempty"`     // World Wide Name
-	Type        string    `json:"type,omitempty"`    // Transport type: sata, sas, nvme
-	Temperature int       `json:"temperature"`       // Temperature in Celsius
-	Health      string    `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
-	Standby     bool      `json:"standby,omitempty"` // True if disk was in standby
-	LastUpdated time.Time `json:"lastUpdated"`       // When this reading was taken
+	Device      string           `json:"device"`            // Device path (e.g., /dev/sda)
+	Model       string           `json:"model,omitempty"`   // Disk model
+	Serial      string           `json:"serial,omitempty"`  // Serial number
+	WWN         string           `json:"wwn,omitempty"`     // World Wide Name
+	Type        string           `json:"type,omitempty"`    // Transport type: sata, sas, nvme
+	Temperature int              `json:"temperature"`       // Temperature in Celsius
+	Health      string           `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
+	Standby     bool             `json:"standby,omitempty"` // True if disk was in standby
+	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
+	LastUpdated time.Time        `json:"lastUpdated"` // When this reading was taken
+}
+
+// SMARTAttributes holds normalized SMART attributes for both SATA and NVMe disks.
+// Pointer fields distinguish zero from absent.
+type SMARTAttributes struct {
+	// Common attributes
+	PowerOnHours *int64 `json:"powerOnHours,omitempty"`
+	PowerCycles  *int64 `json:"powerCycles,omitempty"`
+
+	// SATA-specific (by ATA attribute ID)
+	ReallocatedSectors   *int64 `json:"reallocatedSectors,omitempty"`   // ID 5
+	PendingSectors       *int64 `json:"pendingSectors,omitempty"`       // ID 197
+	OfflineUncorrectable *int64 `json:"offlineUncorrectable,omitempty"` // ID 198
+	UDMACRCErrors        *int64 `json:"udmaCrcErrors,omitempty"`        // ID 199
+
+	// NVMe-specific
+	PercentageUsed  *int   `json:"percentageUsed,omitempty"`
+	AvailableSpare  *int   `json:"availableSpare,omitempty"`
+	MediaErrors     *int64 `json:"mediaErrors,omitempty"`
+	UnsafeShutdowns *int64 `json:"unsafeShutdowns,omitempty"`
 }
 
 // smartctlJSON represents the JSON output from smartctl --json.
@@ -55,9 +76,29 @@ type smartctlJSON struct {
 	Temperature struct {
 		Current int `json:"current"`
 	} `json:"temperature"`
-	// NVMe-specific temperature
+	// ATA SMART attributes table
+	ATASmartAttributes struct {
+		Table []struct {
+			ID     int    `json:"id"`
+			Name   string `json:"name"`
+			Value  int    `json:"value"`
+			Worst  int    `json:"worst"`
+			Thresh int    `json:"thresh"`
+			Raw    struct {
+				Value  int64  `json:"value"`
+				String string `json:"string"`
+			} `json:"raw"`
+		} `json:"table"`
+	} `json:"ata_smart_attributes"`
+	// NVMe-specific health information
 	NVMeSmartHealthInformationLog struct {
-		Temperature int `json:"temperature"`
+		Temperature     int   `json:"temperature"`
+		AvailableSpare  int   `json:"available_spare"`
+		PercentageUsed  int   `json:"percentage_used"`
+		PowerOnHours    int64 `json:"power_on_hours"`
+		UnsafeShutdowns int64 `json:"unsafe_shutdowns"`
+		MediaErrors     int64 `json:"media_errors"`
+		PowerCycles     int64 `json:"power_cycles"`
 	} `json:"nvme_smart_health_information_log"`
 	PowerMode string `json:"power_mode"`
 }
@@ -241,6 +282,9 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		result.Health = "FAILED"
 	}
 
+	// Parse SMART attributes
+	result.Attributes = parseSMARTAttributes(&smartData, result.Type)
+
 	log.Debug().
 		Str("device", result.Device).
 		Str("model", result.Model).
@@ -249,6 +293,64 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		Msg("Collected SMART data")
 
 	return result, nil
+}
+
+// parseSMARTAttributes extracts normalized SMART attributes from smartctl JSON output.
+func parseSMARTAttributes(data *smartctlJSON, diskType string) *SMARTAttributes {
+	attrs := &SMARTAttributes{}
+	hasData := false
+
+	if diskType == "nvme" {
+		nvmeLog := &data.NVMeSmartHealthInformationLog
+		// NVMe health log fields are always present when the log is available.
+		// We use simple heuristics: power_on_hours > 0 means the log was populated.
+		if nvmeLog.PowerOnHours > 0 || nvmeLog.PowerCycles > 0 || nvmeLog.AvailableSpare > 0 {
+			hasData = true
+			poh := nvmeLog.PowerOnHours
+			attrs.PowerOnHours = &poh
+			pc := nvmeLog.PowerCycles
+			attrs.PowerCycles = &pc
+			pu := nvmeLog.PercentageUsed
+			attrs.PercentageUsed = &pu
+			as := nvmeLog.AvailableSpare
+			attrs.AvailableSpare = &as
+			me := nvmeLog.MediaErrors
+			attrs.MediaErrors = &me
+			us := nvmeLog.UnsafeShutdowns
+			attrs.UnsafeShutdowns = &us
+		}
+	} else {
+		// SATA / SAS — iterate the ATA attributes table
+		for _, attr := range data.ATASmartAttributes.Table {
+			hasData = true
+			raw := attr.Raw.Value
+			switch attr.ID {
+			case 5: // Reallocated Sector Count
+				v := raw
+				attrs.ReallocatedSectors = &v
+			case 9: // Power-On Hours
+				v := raw
+				attrs.PowerOnHours = &v
+			case 12: // Power Cycle Count
+				v := raw
+				attrs.PowerCycles = &v
+			case 197: // Current Pending Sector Count
+				v := raw
+				attrs.PendingSectors = &v
+			case 198: // Offline Uncorrectable
+				v := raw
+				attrs.OfflineUncorrectable = &v
+			case 199: // UDMA CRC Error Count
+				v := raw
+				attrs.UDMACRCErrors = &v
+			}
+		}
+	}
+
+	if !hasData {
+		return nil
+	}
+	return attrs
 }
 
 // detectDiskType determines the disk transport type from smartctl output.

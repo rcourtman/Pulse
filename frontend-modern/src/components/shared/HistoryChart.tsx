@@ -13,10 +13,21 @@ import { formatBytes } from '@/utils/format';
 import { calculateOptimalPoints } from '@/utils/downsample';
 
 
+/** Format a tooltip value according to the metric unit. */
+function formatTooltipValue(value: number, unit?: string): string {
+    if (unit === '%') return `${value.toFixed(1)}%`;
+    if (unit === 'B/s') return `${formatBytes(value)}/s`;
+    if (unit === 'C') return `${Math.round(value)}°C`;
+    // If no unit or unrecognized, try byte formatting for large values, plain number for small
+    if (!unit) return formatBytes(value);
+    // Generic numeric with unit suffix
+    return `${Number.isInteger(value) ? value : value.toFixed(1)} ${unit}`;
+}
+
 interface HistoryChartProps {
     resourceType: ResourceType;
     resourceId: string;
-    metric: 'cpu' | 'memory' | 'disk' | 'diskread' | 'diskwrite' | 'netin' | 'netout';
+    metric: string;
     height?: number;
     color?: string;
     label?: string;
@@ -246,6 +257,18 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         if (props.metric === 'memory') mainColor = '#f59e0b'; // amber-500
         if (props.metric === 'disk') mainColor = '#10b981'; // emerald-500
 
+        // Unit classification (doesn't depend on data)
+        const isPercentLike = props.unit === '%';
+        const isByteLike = !props.unit || props.unit === 'B/s';
+
+        // Calculate scale (needs data for absolute metrics)
+        const minValue = 0;
+        let maxValue = 100; // default for empty/percentage
+        if (points.length > 0) {
+            const rawMax = Math.max(...points.map(p => p.max || p.value));
+            maxValue = isPercentLike ? Math.max(100, rawMax) : Math.max(1, rawMax * 1.15);
+        }
+
         // Draw grid lines (horizontal)
         ctx.strokeStyle = gridColor;
         ctx.lineWidth = 1;
@@ -264,11 +287,15 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
             let label = '';
-            if (pct === 0) label = '0';
-            else if (pct === 1) label = props.unit === '%' ? '100' : 'Max';
-            else label = props.unit === '%' ? '50' : 'Avg';
-
-            if (props.unit === '%') label += '%';
+            if (isPercentLike) {
+                label = pct === 0 ? '0%' : pct === 1 ? '100%' : '50%';
+            } else if (isByteLike) {
+                label = pct === 0 ? '0' : pct === 1 ? 'Max' : 'Avg';
+            } else {
+                // Absolute numeric values (temperature, counters) — show computed scale
+                const scaleVal = Math.round(minValue + pct * (maxValue - minValue));
+                label = pct === 0 ? '0' : `${scaleVal}`;
+            }
             ctx.fillText(label, 35, y);
         });
 
@@ -277,14 +304,10 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
             return; // Empty state handled in JSX
         }
 
-        // Calculate Scale
-        // X is time, Y is value
+        // Calculate time scale
         const startTime = points[0].timestamp;
         const endTime = points[points.length - 1].timestamp;
         const timeSpan = Math.max(1, endTime - startTime);
-
-        const maxValue = Math.max(100, ...points.map(p => p.max || p.value));
-        const minValue = 0;
 
         // Plot
         const getX = (ts: number) => 40 + ((ts - startTime) / timeSpan) * (w - 40);
@@ -601,18 +624,12 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                         >
                             <div class="font-medium text-center mb-0.5">{new Date(point().timestamp).toLocaleString()}</div>
                             <div class="text-gray-300">
-                                {props.unit === '%'
-                                    ? `${point().value.toFixed(1)}%`
-                                    : `${formatBytes(point().value)}${props.unit === 'B/s' ? '/s' : ''}`}
+                                {formatTooltipValue(point().value, props.unit)}
                             </div>
                             <Show when={point().min !== point().value}>
                                 <div class="text-[10px] text-gray-400 mt-0.5">
-                                    Min: {props.unit === '%'
-                                        ? point().min.toFixed(1)
-                                        : `${formatBytes(point().min)}${props.unit === 'B/s' ? '/s' : ''}`} •
-                                    Max: {props.unit === '%'
-                                        ? point().max.toFixed(1)
-                                        : `${formatBytes(point().max)}${props.unit === 'B/s' ? '/s' : ''}`}
+                                    Min: {formatTooltipValue(point().min, props.unit)} •
+                                    Max: {formatTooltipValue(point().max, props.unit)}
                                 </div>
                             </Show>
                         </div>

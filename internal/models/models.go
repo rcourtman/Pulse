@@ -225,14 +225,29 @@ type HostSensorSummary struct {
 
 // HostDiskSMART represents S.M.A.R.T. data for a disk from a host agent.
 type HostDiskSMART struct {
-	Device      string `json:"device"`            // Device name (e.g., sda)
-	Model       string `json:"model,omitempty"`   // Disk model
-	Serial      string `json:"serial,omitempty"`  // Serial number
-	WWN         string `json:"wwn,omitempty"`     // World Wide Name
-	Type        string `json:"type,omitempty"`    // Transport type: sata, sas, nvme
-	Temperature int    `json:"temperature"`       // Temperature in Celsius
-	Health      string `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
-	Standby     bool   `json:"standby,omitempty"` // True if disk was in standby
+	Device      string           `json:"device"`            // Device name (e.g., sda)
+	Model       string           `json:"model,omitempty"`   // Disk model
+	Serial      string           `json:"serial,omitempty"`  // Serial number
+	WWN         string           `json:"wwn,omitempty"`     // World Wide Name
+	Type        string           `json:"type,omitempty"`    // Transport type: sata, sas, nvme
+	Temperature int              `json:"temperature"`       // Temperature in Celsius
+	Health      string           `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
+	Standby     bool             `json:"standby,omitempty"` // True if disk was in standby
+	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
+}
+
+// SMARTAttributes holds normalized SMART attributes for both SATA and NVMe disks.
+type SMARTAttributes struct {
+	PowerOnHours         *int64 `json:"powerOnHours,omitempty"`
+	PowerCycles          *int64 `json:"powerCycles,omitempty"`
+	ReallocatedSectors   *int64 `json:"reallocatedSectors,omitempty"`
+	PendingSectors       *int64 `json:"pendingSectors,omitempty"`
+	OfflineUncorrectable *int64 `json:"offlineUncorrectable,omitempty"`
+	UDMACRCErrors        *int64 `json:"udmaCrcErrors,omitempty"`
+	PercentageUsed       *int   `json:"percentageUsed,omitempty"`
+	AvailableSpare       *int   `json:"availableSpare,omitempty"`
+	MediaErrors          *int64 `json:"mediaErrors,omitempty"`
+	UnsafeShutdowns      *int64 `json:"unsafeShutdowns,omitempty"`
 }
 
 // HostRAIDArray represents an mdadm RAID array on a host.
@@ -774,21 +789,22 @@ type CephServiceStatus struct {
 
 // PhysicalDisk represents a physical disk on a node
 type PhysicalDisk struct {
-	ID          string    `json:"id"` // "{instance}-{node}-{devpath}"
-	Node        string    `json:"node"`
-	Instance    string    `json:"instance"`
-	DevPath     string    `json:"devPath"` // /dev/nvme0n1, /dev/sda
-	Model       string    `json:"model"`
-	Serial      string    `json:"serial"`
-	WWN         string    `json:"wwn"`         // World Wide Name
-	Type        string    `json:"type"`        // nvme, sata, sas
-	Size        int64     `json:"size"`        // bytes
-	Health      string    `json:"health"`      // PASSED, FAILED, UNKNOWN
-	Wearout     int       `json:"wearout"`     // SSD wear metric from Proxmox (0-100, -1 when unavailable)
-	Temperature int       `json:"temperature"` // Celsius (if available)
-	RPM         int       `json:"rpm"`         // 0 for SSDs
-	Used        string    `json:"used"`        // Filesystem or partition usage
-	LastChecked time.Time `json:"lastChecked"`
+	ID              string           `json:"id"` // "{instance}-{node}-{devpath}"
+	Node            string           `json:"node"`
+	Instance        string           `json:"instance"`
+	DevPath         string           `json:"devPath"` // /dev/nvme0n1, /dev/sda
+	Model           string           `json:"model"`
+	Serial          string           `json:"serial"`
+	WWN             string           `json:"wwn"`         // World Wide Name
+	Type            string           `json:"type"`        // nvme, sata, sas
+	Size            int64            `json:"size"`        // bytes
+	Health          string           `json:"health"`      // PASSED, FAILED, UNKNOWN
+	Wearout         int              `json:"wearout"`     // SSD wear metric from Proxmox (0-100, -1 when unavailable)
+	Temperature     int              `json:"temperature"` // Celsius (if available)
+	RPM             int              `json:"rpm"`         // 0 for SSDs
+	Used            string           `json:"used"`        // Filesystem or partition usage
+	SmartAttributes *SMARTAttributes `json:"smartAttributes,omitempty"`
+	LastChecked     time.Time        `json:"lastChecked"`
 }
 
 // PBSInstance represents a Proxmox Backup Server instance
