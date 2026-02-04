@@ -310,6 +310,8 @@ var allRouteAllowlist = []string{
 	"/api/metrics-store/history",
 	"/api/diagnostics",
 	"/api/diagnostics/docker/prepare-token",
+	"/api/diagnostics/pprof",
+	"/api/diagnostics/pprof/",
 	"/api/install/install-docker.sh",
 	"/api/install/install.sh",
 	"/api/install/install.ps1",
