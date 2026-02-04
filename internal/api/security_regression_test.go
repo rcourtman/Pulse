@@ -186,6 +186,19 @@ func TestLicenseFeaturesRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestLicenseStatusRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "license-status-token-123.12345678", []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without token, got %d", rec.Code)
+	}
+}
+
 func TestAIStatusRequiresAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "ai-status-token-123.12345678", []string{config.ScopeAIChat}, nil)
 	cfg := newTestConfigWithTokens(t, record)
