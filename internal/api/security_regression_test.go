@@ -1315,6 +1315,32 @@ func TestConfigImportRequiresSettingsWriteScope(t *testing.T) {
 	}
 }
 
+func TestConfigExportRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "config-export-auth-token", []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/export", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
+func TestConfigImportRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "config-import-auth-token", []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/import", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
 func TestConfigExportRequiresProxyAdmin(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.ProxyAuthSecret = "proxy-secret"
