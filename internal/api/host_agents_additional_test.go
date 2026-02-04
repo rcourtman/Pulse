@@ -164,6 +164,31 @@ func TestHostAgentHandlers_HandleUninstall(t *testing.T) {
 	}
 }
 
+func TestHostAgentHandlers_HandleUninstallRejectsTokenMismatch(t *testing.T) {
+	handler, monitor := newHostAgentHandlers(t, nil)
+	hostID := seedHostAgent(t, monitor)
+
+	state := monitorState(t, monitor)
+	state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "host-token-mismatch.local",
+		TokenID:  "token-1",
+	})
+
+	body := []byte(`{"hostId":"` + hostID + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/uninstall", bytes.NewReader(body))
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		ID:     "token-2",
+		Scopes: []string{config.ScopeHostReport},
+	})
+	rec := httptest.NewRecorder()
+
+	handler.HandleUninstall(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHostAgentHandlers_HandleLinkUnlink(t *testing.T) {
 	handler, monitor := newHostAgentHandlers(t, nil)
 	hostID := seedHostAgent(t, monitor)
