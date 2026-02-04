@@ -168,6 +168,7 @@ export const STORAGE_KEYS = {
   // GitHub star prompt
   GITHUB_STAR_DISMISSED: 'pulse-github-star-dismissed',
   GITHUB_STAR_FIRST_SEEN: 'pulse-github-star-first-seen',
+  GITHUB_STAR_SNOOZED_UNTIL: 'pulse-github-star-snoozed-until',
 
   // Audit log
   AUDIT_AUTO_VERIFY: 'pulse-audit-auto-verify',

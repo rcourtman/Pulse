@@ -26,6 +26,12 @@ export function GitHubStarBanner() {
     ''
   );
 
+  // Track snooze date (when "Maybe later" was clicked, don't show again until this date)
+  const [snoozedUntil, setSnoozedUntil] = createLocalStorageStringSignal(
+    STORAGE_KEYS.GITHUB_STAR_SNOOZED_UNTIL,
+    ''
+  );
+
   const [showModal, setShowModal] = createSignal(false);
 
   // Check if user qualifies to see the modal
@@ -61,6 +67,13 @@ export function GitHubStarBanner() {
       return;
     }
 
+    // Still within snooze period? Don't show
+    const snoozeDate = snoozedUntil();
+    if (snoozeDate && today < snoozeDate) {
+      setShowModal(false);
+      return;
+    }
+
     // Returning user (different day than first seen)? Show the modal
     if (firstSeen !== today) {
       setShowModal(true);
@@ -80,8 +93,10 @@ export function GitHubStarBanner() {
   };
 
   const handleMaybeLater = () => {
-    // Just close for this session, but don't permanently dismiss
-    // They'll see it again next time they return
+    // Snooze for 7 days before showing again
+    const snoozeDate = new Date();
+    snoozeDate.setDate(snoozeDate.getDate() + 7);
+    setSnoozedUntil(snoozeDate.toISOString().split('T')[0]);
     setShowModal(false);
   };
 
