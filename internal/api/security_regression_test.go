@@ -1240,6 +1240,8 @@ func TestAIExecuteMutationEndpointsRequireAIExecuteScope(t *testing.T) {
 		{method: http.MethodPost, path: "/api/ai/patrol/suppressions", body: `{}`},
 		{method: http.MethodDelete, path: "/api/ai/patrol/suppressions/rule-1", body: ""},
 		{method: http.MethodPost, path: "/api/ai/remediation/approve", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/approvals/approval-1/approve", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/approvals/approval-1/deny", body: `{}`},
 	}
 
 	for _, tc := range paths {
