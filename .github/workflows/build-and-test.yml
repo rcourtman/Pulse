@@ -73,6 +73,3 @@ jobs:
 
       - name: Build Pulse backend
         run: go build ./cmd/pulse
-
-      - name: Build pulse-sensor-proxy
-        run: go build ./cmd/pulse-sensor-proxy
