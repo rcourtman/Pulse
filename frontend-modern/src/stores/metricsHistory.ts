@@ -23,11 +23,11 @@ interface RingBuffer {
 }
 
 // Configuration
-const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (to support all time ranges)
+const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (age filter for all sparkline ranges)
 const SAMPLE_INTERVAL_MS = 30 * 1000;   // 30 seconds
-const MAX_POINTS = Math.ceil(MAX_AGE_MS / SAMPLE_INTERVAL_MS); // ~86400 points
+const MAX_POINTS = 2000; // Ring buffer capacity: holds seed data + ~12h of live updates
 const STORAGE_KEY = 'pulse_metrics_history';
-const STORAGE_VERSION = 3; // Bumped version due to increased buffer size
+const STORAGE_VERSION = 4; // Bumped: reduced buffer from 86400 to 2000 points
 
 /**
  * Convert TimeRange string to milliseconds

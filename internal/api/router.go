@@ -5086,8 +5086,8 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			chartData[vm.ID] = make(VMChartData)
 		}
 
-		// Get historical metrics
-		metrics := monitor.GetGuestMetrics(vm.ID, duration)
+		// Get historical metrics (falls back to SQLite + LTTB for long ranges)
+		metrics := monitor.GetGuestMetricsForChart(vm.ID, "vm", vm.ID, duration)
 
 		// Convert metric points to API format
 		for metricType, points := range metrics {
@@ -5136,8 +5136,8 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			chartData[ct.ID] = make(VMChartData)
 		}
 
-		// Get historical metrics
-		metrics := monitor.GetGuestMetrics(ct.ID, duration)
+		// Get historical metrics (falls back to SQLite + LTTB for long ranges)
+		metrics := monitor.GetGuestMetricsForChart(ct.ID, "container", ct.ID, duration)
 
 		// Convert metric points to API format
 		for metricType, points := range metrics {
@@ -5187,8 +5187,8 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			storageData[storage.ID] = make(StorageChartData)
 		}
 
-		// Get historical metrics
-		metrics := monitor.GetStorageMetrics(storage.ID, duration)
+		// Get historical metrics (falls back to SQLite + LTTB for long ranges)
+		metrics := monitor.GetStorageMetricsForChart(storage.ID, duration)
 
 		// Convert usage metrics to chart format
 		if usagePoints, ok := metrics["usage"]; ok && len(usagePoints) > 0 {
@@ -5222,9 +5222,9 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			nodeData[node.ID] = make(NodeChartData)
 		}
 
-		// Get historical metrics for each type
+		// Get historical metrics for each type (falls back to SQLite + LTTB for long ranges)
 		for _, metricType := range []string{"cpu", "memory", "disk"} {
-			points := monitor.GetNodeMetrics(node.ID, metricType, duration)
+			points := monitor.GetNodeMetricsForChart(node.ID, metricType, duration)
 			nodeData[node.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
@@ -5276,9 +5276,9 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				dockerData[container.ID] = make(VMChartData)
 			}
 
-			// Get historical metrics using the docker: prefix key
+			// Get historical metrics using the docker: prefix key (falls back to SQLite + LTTB for long ranges)
 			metricKey := fmt.Sprintf("docker:%s", container.ID)
-			metrics := monitor.GetGuestMetrics(metricKey, duration)
+			metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", container.ID, duration)
 
 			// Convert metric points to API format
 			for metricType, points := range metrics {
@@ -5329,9 +5329,9 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			dockerHostData[host.ID] = make(VMChartData)
 		}
 
-		// Get historical metrics using the dockerHost: prefix key
+		// Get historical metrics using the dockerHost: prefix key (falls back to SQLite + LTTB for long ranges)
 		metricKey := fmt.Sprintf("dockerHost:%s", host.ID)
-		metrics := monitor.GetGuestMetrics(metricKey, duration)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerHost", host.ID, duration)
 
 		// Convert metric points to API format
 		for metricType, points := range metrics {
@@ -5378,9 +5378,9 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			hostData[host.ID] = make(VMChartData)
 		}
 
-		// Get historical metrics using the host: prefix key
+		// Get historical metrics using the host: prefix key (falls back to SQLite + LTTB for long ranges)
 		metricKey := fmt.Sprintf("host:%s", host.ID)
-		metrics := monitor.GetGuestMetrics(metricKey, duration)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "host", host.ID, duration)
 
 		// Convert metric points to API format
 		for metricType, points := range metrics {
@@ -5477,7 +5477,7 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	storageData := make(StorageChartsResponse)
 
 	for _, storage := range state.Storage {
-		metrics := monitor.GetStorageMetrics(storage.ID, duration)
+		metrics := monitor.GetStorageMetricsForChart(storage.ID, duration)
 
 		storageData[storage.ID] = StorageMetrics{
 			Usage: metrics["usage"],

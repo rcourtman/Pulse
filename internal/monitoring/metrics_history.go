@@ -68,15 +68,7 @@ func (mh *MetricsHistory) AddGuestMetric(guestID string, metricType string, valu
 
 	// Initialize guest metrics if not exists
 	if _, exists := mh.guestMetrics[guestID]; !exists {
-		mh.guestMetrics[guestID] = &GuestMetrics{
-			CPU:        make([]MetricPoint, 0, mh.maxDataPoints),
-			Memory:     make([]MetricPoint, 0, mh.maxDataPoints),
-			Disk:       make([]MetricPoint, 0, mh.maxDataPoints),
-			DiskRead:   make([]MetricPoint, 0, mh.maxDataPoints),
-			DiskWrite:  make([]MetricPoint, 0, mh.maxDataPoints),
-			NetworkIn:  make([]MetricPoint, 0, mh.maxDataPoints),
-			NetworkOut: make([]MetricPoint, 0, mh.maxDataPoints),
-		}
+		mh.guestMetrics[guestID] = &GuestMetrics{}
 	}
 
 	metrics := mh.guestMetrics[guestID]
@@ -108,11 +100,7 @@ func (mh *MetricsHistory) AddNodeMetric(nodeID string, metricType string, value 
 
 	// Initialize node metrics if not exists
 	if _, exists := mh.nodeMetrics[nodeID]; !exists {
-		mh.nodeMetrics[nodeID] = &GuestMetrics{
-			CPU:    make([]MetricPoint, 0, mh.maxDataPoints),
-			Memory: make([]MetricPoint, 0, mh.maxDataPoints),
-			Disk:   make([]MetricPoint, 0, mh.maxDataPoints),
-		}
+		mh.nodeMetrics[nodeID] = &GuestMetrics{}
 	}
 
 	metrics := mh.nodeMetrics[nodeID]
@@ -277,12 +265,7 @@ func (mh *MetricsHistory) AddStorageMetric(storageID string, metricType string, 
 
 	// Initialize storage metrics if not exists
 	if _, exists := mh.storageMetrics[storageID]; !exists {
-		mh.storageMetrics[storageID] = &StorageMetrics{
-			Usage: make([]MetricPoint, 0, mh.maxDataPoints),
-			Used:  make([]MetricPoint, 0, mh.maxDataPoints),
-			Total: make([]MetricPoint, 0, mh.maxDataPoints),
-			Avail: make([]MetricPoint, 0, mh.maxDataPoints),
-		}
+		mh.storageMetrics[storageID] = &StorageMetrics{}
 	}
 
 	metrics := mh.storageMetrics[storageID]
