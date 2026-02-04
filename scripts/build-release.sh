@@ -327,15 +327,19 @@ zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/puls
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-agent-windows-arm64.exe"
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-agent-windows-386.exe"
 
-# Also copy bare Windows EXEs for /releases/latest/download/ redirect compatibility
+# Also copy bare binaries for /releases/latest/download/ redirect compatibility
 # These allow LXC/barebone installs to redirect to GitHub without needing versioned URLs
-echo "Copying bare Windows EXEs to release directory for redirect compatibility..."
+echo "Copying bare binaries to release directory for redirect compatibility..."
 cp "$BUILD_DIR/pulse-agent-windows-amd64.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-windows-arm64.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-windows-386.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-host-agent-windows-amd64.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-host-agent-windows-386.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-agent-freebsd-amd64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-agent-freebsd-arm64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-host-agent-freebsd-amd64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-host-agent-freebsd-arm64" "$RELEASE_DIR/"
 
 # Copy Windows, macOS, and FreeBSD binaries into universal tarball for /download/ endpoint
 echo "Adding Windows, macOS, and FreeBSD binaries to universal tarball..."

@@ -1356,7 +1356,7 @@ pulse_agent_start()
 {
     if checkyesno ${rcvar}; then
         echo "Starting ${name}."
-        /usr/sbin/daemon -p ${pidfile} -f ${command} ${command_args}
+        /usr/sbin/daemon -r -p ${pidfile} -f ${command} ${command_args}
     fi
 }
 
@@ -1401,6 +1401,21 @@ RCEOF
     else
         sed -i '' 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf 2>/dev/null || \
             sed -i 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf
+    fi
+
+    # pfSense does not use the standard FreeBSD rc.d boot system.
+    # Scripts in /usr/local/etc/rc.d/ must end in .sh to run at boot.
+    # Create a .sh wrapper that invokes the rc.d script on boot.
+    if [ -f /usr/local/sbin/pfSsh.php ] || ([ -f /etc/platform ] && grep -qi pfsense /etc/platform 2>/dev/null); then
+        BOOT_WRAPPER="/usr/local/etc/rc.d/pulse_agent.sh"
+        log_info "Detected pfSense — creating boot wrapper at $BOOT_WRAPPER..."
+        cat > "$BOOT_WRAPPER" <<'BOOTEOF'
+#!/bin/sh
+# pfSense boot wrapper for pulse-agent
+# pfSense requires .sh extension for scripts to run at boot
+/usr/local/etc/rc.d/pulse-agent start
+BOOTEOF
+        chmod +x "$BOOT_WRAPPER"
     fi
 
     # Stop existing agent if running

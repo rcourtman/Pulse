@@ -113,7 +113,15 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=windows GOARCH=386 go build \
       -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
-      -o pulse-host-agent-windows-386.exe ./cmd/pulse-host-agent
+      -o pulse-host-agent-windows-386.exe ./cmd/pulse-host-agent && \
+    CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-host-agent-freebsd-amd64 ./cmd/pulse-host-agent && \
+    CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-host-agent-freebsd-arm64 ./cmd/pulse-host-agent
 
 # Build unified agent binaries for all platforms (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
@@ -158,7 +166,15 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=windows GOARCH=386 go build \
       -ldflags="-s -w -X main.Version=${VERSION}" \
       -trimpath \
-      -o pulse-agent-windows-386.exe ./cmd/pulse-agent
+      -o pulse-agent-windows-386.exe ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-freebsd-amd64 ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-freebsd-arm64 ./cmd/pulse-agent
 
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
@@ -259,6 +275,8 @@ COPY --from=backend-builder /app/pulse-host-agent-darwin-arm64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-windows-amd64.exe /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-windows-arm64.exe /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-windows-386.exe /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-host-agent-freebsd-amd64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-host-agent-freebsd-arm64 /opt/pulse/bin/
 # Create symlinks for Windows without .exe extension
 RUN ln -s pulse-host-agent-windows-amd64.exe /opt/pulse/bin/pulse-host-agent-windows-amd64 && \
     ln -s pulse-host-agent-windows-arm64.exe /opt/pulse/bin/pulse-host-agent-windows-arm64 && \
@@ -275,6 +293,8 @@ COPY --from=backend-builder /app/pulse-agent-darwin-arm64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-agent-windows-amd64.exe /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-agent-windows-arm64.exe /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-agent-windows-386.exe /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-freebsd-amd64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-freebsd-arm64 /opt/pulse/bin/
 # Create symlinks for Windows without .exe extension
 RUN ln -s pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64 && \
     ln -s pulse-agent-windows-arm64.exe /opt/pulse/bin/pulse-agent-windows-arm64 && \
