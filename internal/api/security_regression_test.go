@@ -3104,6 +3104,22 @@ func TestPublicDownloadEndpointsBypassAuth(t *testing.T) {
 	}
 }
 
+func TestHostAgentChecksumRequiresAuth(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.90")
+	req := httptest.NewRequest(http.MethodPost, "/download/pulse-host-agent.sha256", nil)
+	req.RemoteAddr = "203.0.113.90:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for protected checksum, got %d", rec.Code)
+	}
+}
+
 func TestPublicEndpointsBypassAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "public-api-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
