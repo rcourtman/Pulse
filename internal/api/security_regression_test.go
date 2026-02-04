@@ -1461,6 +1461,45 @@ func TestMonitoringReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 	}
 }
 
+func TestMetadataMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
+	rawToken := "metadata-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodPost, path: "/api/guests/metadata/guest-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/guests/metadata/guest-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/guests/metadata/guest-1", body: ""},
+		{method: http.MethodPost, path: "/api/docker/metadata/container-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/docker/metadata/container-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/docker/metadata/container-1", body: ""},
+		{method: http.MethodPost, path: "/api/docker/hosts/metadata/host-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/docker/hosts/metadata/host-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/docker/hosts/metadata/host-1", body: ""},
+		{method: http.MethodPost, path: "/api/hosts/metadata/host-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/hosts/metadata/host-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/hosts/metadata/host-1", body: ""},
+	}
+
+	for _, tc := range paths {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing monitoring:write scope on %s %s, got %d", tc.method, tc.path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeMonitoringWrite) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringWrite, rec.Body.String())
+		}
+	}
+}
+
 func TestSecurityOIDCRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "security-oidc-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
