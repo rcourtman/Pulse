@@ -1222,6 +1222,89 @@ func TestConfigNodeMutationsRequireSettingsWriteScope(t *testing.T) {
 	}
 }
 
+func TestDiscoveryReadEndpointsRequireMonitoringReadScope(t *testing.T) {
+	rawToken := "discovery-read-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/discovery",
+		"/api/discovery/status",
+		"/api/discovery/info/host-1",
+		"/api/discovery/type/pve",
+		"/api/discovery/host/host-1",
+		"/api/discovery/host/host-1/resource-1",
+		"/api/discovery/host/host-1/resource-1/progress",
+		"/api/discovery/resource-1",
+		"/api/discovery/resource-1/progress",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing monitoring:read scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeMonitoringRead) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringRead, rec.Body.String())
+		}
+	}
+}
+
+func TestDiscoveryMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
+	rawToken := "discovery-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodPost, path: "/api/discovery/host/host-1/resource-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/discovery/host/host-1/resource-1/notes", body: `{}`},
+		{method: http.MethodDelete, path: "/api/discovery/host/host-1/resource-1", body: ""},
+		{method: http.MethodPost, path: "/api/discovery/resource-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/discovery/resource-1/notes", body: `{}`},
+		{method: http.MethodDelete, path: "/api/discovery/resource-1", body: ""},
+	}
+
+	for _, tc := range paths {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing monitoring:write scope on %s %s, got %d", tc.method, tc.path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeMonitoringWrite) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringWrite, rec.Body.String())
+		}
+	}
+}
+
+func TestDiscoverySettingsRequiresSettingsWriteScope(t *testing.T) {
+	rawToken := "discovery-settings-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/discovery/settings", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
 func TestSecurityOIDCRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "security-oidc-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
