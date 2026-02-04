@@ -85,6 +85,7 @@ func TestRouterCSRFSpecialCaseSkips(t *testing.T) {
 
 	skipPaths := []string{
 		"/api/login",
+		"/api/security/apply-restart",
 		"/api/security/quick-setup",
 		"/api/security/validate-bootstrap-token",
 		"/api/setup-script-url",
