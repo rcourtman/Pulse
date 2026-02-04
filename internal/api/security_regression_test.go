@@ -2345,6 +2345,35 @@ func TestRBACEndpointsRequireLicenseFeature(t *testing.T) {
 	}
 }
 
+func TestRBACMutationsRequireLicenseFeature(t *testing.T) {
+	rawToken := "rbac-license-mutation-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	cases := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodPost, path: "/api/admin/roles", body: `{"id":"role-1","name":"Role 1"}`},
+		{method: http.MethodPut, path: "/api/admin/roles/role-1", body: `{"id":"role-1","name":"Role 1"}`},
+		{method: http.MethodDelete, path: "/api/admin/roles/role-1", body: ``},
+		{method: http.MethodPut, path: "/api/admin/users/alice/roles", body: `{"roleIds":["role-1"]}`},
+		{method: http.MethodPost, path: "/api/admin/users/alice/roles", body: `{"roleIds":["role-1"]}`},
+	}
+
+	for _, tc := range cases {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusPaymentRequired {
+			t.Fatalf("expected 402 for missing RBAC license on %s %s, got %d", tc.method, tc.path, rec.Code)
+		}
+	}
+}
+
 func TestAuditWebhookRequiresLicenseFeature(t *testing.T) {
 	rawToken := "audit-webhook-license-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
