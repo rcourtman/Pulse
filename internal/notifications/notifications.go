@@ -330,16 +330,17 @@ type Alert interface {
 
 // EmailConfig holds email notification settings
 type EmailConfig struct {
-	Enabled  bool     `json:"enabled"`
-	Provider string   `json:"provider"` // Email provider name (Gmail, SendGrid, etc.)
-	SMTPHost string   `json:"server"`   // Changed from smtpHost to server for frontend consistency
-	SMTPPort int      `json:"port"`     // Changed from smtpPort to port for frontend consistency
-	Username string   `json:"username"`
-	Password string   `json:"password"`
-	From     string   `json:"from"`
-	To       []string `json:"to"`
-	TLS      bool     `json:"tls"`
-	StartTLS bool     `json:"startTLS"` // STARTTLS support
+	Enabled   bool     `json:"enabled"`
+	Provider  string   `json:"provider"` // Email provider name (Gmail, SendGrid, etc.)
+	SMTPHost  string   `json:"server"`   // Changed from smtpHost to server for frontend consistency
+	SMTPPort  int      `json:"port"`     // Changed from smtpPort to port for frontend consistency
+	Username  string   `json:"username"`
+	Password  string   `json:"password"`
+	From      string   `json:"from"`
+	To        []string `json:"to"`
+	TLS       bool     `json:"tls"`
+	StartTLS  bool     `json:"startTLS"`  // STARTTLS support
+	RateLimit int      `json:"rateLimit"` // Max emails per minute (0 = default 60)
 }
 
 // WebhookConfig holds webhook settings
@@ -474,12 +475,16 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 	n.emailConfig = config
 
 	// Recreate email manager with new config to preserve rate limiting state
+	rateLimit := config.RateLimit
+	if rateLimit <= 0 {
+		rateLimit = 60
+	}
 	providerConfig := EmailProviderConfig{
 		EmailConfig:   config,
 		Provider:      "",
 		MaxRetries:    3,
 		RetryDelay:    5,
-		RateLimit:     60, // Default 60 emails/minute
+		RateLimit:     rateLimit,
 		StartTLS:      config.StartTLS,
 		SkipTLSVerify: false,
 		AuthRequired:  config.Username != "" && config.Password != "",
@@ -1454,6 +1459,10 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 
 	if manager == nil {
 		// Create email manager if not yet initialized
+		rl := config.RateLimit
+		if rl <= 0 {
+			rl = 60
+		}
 		enhancedConfig := EmailProviderConfig{
 			EmailConfig: EmailConfig{
 				From:     config.From,
@@ -1467,7 +1476,7 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 			StartTLS:      config.StartTLS,
 			MaxRetries:    2,
 			RetryDelay:    3,
-			RateLimit:     60,
+			RateLimit:     rl,
 			SkipTLSVerify: false,
 			AuthRequired:  config.Username != "" && config.Password != "",
 		}
@@ -1516,6 +1525,10 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 	}
 
 	// Create enhanced email configuration with proper STARTTLS support
+	rl := config.RateLimit
+	if rl <= 0 {
+		rl = 60
+	}
 	enhancedConfig := EmailProviderConfig{
 		EmailConfig: EmailConfig{
 			From:     config.From,
@@ -1529,7 +1542,7 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 		StartTLS:      config.StartTLS, // Use the configured StartTLS setting
 		MaxRetries:    2,
 		RetryDelay:    3,
-		RateLimit:     60,
+		RateLimit:     rl,
 		SkipTLSVerify: false,
 		AuthRequired:  config.Username != "" && config.Password != "",
 	}

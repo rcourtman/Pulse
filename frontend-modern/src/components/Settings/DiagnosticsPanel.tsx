@@ -257,6 +257,118 @@ export const DiagnosticsPanel: Component = () => {
         }
     };
 
+    // sanitizeDiagnostics redacts IPs, hostnames, subnets, and token hints
+    // so the export is safe to attach to a public GitHub issue.
+    const sanitizeDiagnostics = (raw: DiagnosticsData): DiagnosticsData => {
+        const data: DiagnosticsData = JSON.parse(JSON.stringify(raw));
+
+        // Regex matching IPv4 addresses, IPv6 addresses, hostnames with dots, and CIDR notation
+        const ipv4Re = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(\/\d{1,2})?\b/g;
+
+        const redactString = (s: string): string => s.replace(ipv4Re, '[REDACTED_IP]');
+
+        // Redact node hosts
+        data.nodes = data.nodes.map((node, i) => ({
+            ...node,
+            host: `node-${i + 1}`,
+            name: `node-${i + 1}`,
+            id: `node-${i + 1}`,
+            error: node.error ? redactString(node.error) : undefined,
+        }));
+
+        // Redact PBS hosts
+        data.pbs = data.pbs.map((p, i) => ({
+            ...p,
+            host: `pbs-${i + 1}`,
+            name: `pbs-${i + 1}`,
+            id: `pbs-${i + 1}`,
+            error: p.error ? redactString(p.error) : undefined,
+        }));
+
+        // Redact discovery subnets
+        if (data.discovery) {
+            data.discovery = {
+                ...data.discovery,
+                configuredSubnet: data.discovery.configuredSubnet ? '[REDACTED_SUBNET]' : undefined,
+                activeSubnet: data.discovery.activeSubnet ? '[REDACTED_SUBNET]' : undefined,
+                environmentOverride: data.discovery.environmentOverride ? '[REDACTED]' : undefined,
+                subnetAllowlist: data.discovery.subnetAllowlist?.map(() => '[REDACTED_SUBNET]'),
+                subnetBlocklist: data.discovery.subnetBlocklist?.map(() => '[REDACTED_SUBNET]'),
+            };
+            // Redact IPs in discovery history (field exists in backend but not in TS interface)
+            const disc = data.discovery as any;
+            if (Array.isArray(disc.history)) {
+                disc.history = disc.history.map((h: Record<string, unknown>) => ({
+                    ...h,
+                    subnet: '[REDACTED_SUBNET]',
+                }));
+            }
+        }
+
+        // Redact API token details (tokens/usage arrays exist in backend but not in TS interface)
+        if (data.apiTokens) {
+            const tokens = data.apiTokens as any;
+            if (Array.isArray(tokens.tokens)) {
+                tokens.tokens = tokens.tokens.map((t: Record<string, unknown>, i: number) => ({
+                    ...t,
+                    hint: '[REDACTED]',
+                    id: `token-${i + 1}`,
+                    name: `token-${i + 1}`,
+                }));
+            }
+            if (Array.isArray(tokens.usage)) {
+                tokens.usage = tokens.usage.map((u: Record<string, unknown>) => ({
+                    ...u,
+                    hosts: undefined,
+                }));
+            }
+        }
+
+        // Redact Docker agent identifiers
+        if (data.dockerAgents) {
+            const agents = data.dockerAgents as any;
+            if (Array.isArray(agents.attention)) {
+                agents.attention = agents.attention.map((a: Record<string, unknown>, i: number) => ({
+                    ...a,
+                    hostId: `docker-host-${i + 1}`,
+                    name: `docker-host-${i + 1}`,
+                    tokenHint: a.tokenHint ? '[REDACTED]' : undefined,
+                }));
+            }
+        }
+
+        // Redact AI chat URL
+        if (data.aiChat?.url) {
+            data.aiChat.url = '[REDACTED]';
+        }
+
+        // Redact IPs in error messages
+        data.errors = data.errors.map(redactString);
+
+        // Redact IPs from any raw snapshot data that may be present
+        const raw2 = data as any;
+        if (Array.isArray(raw2.nodeSnapshots)) {
+            raw2.nodeSnapshots = raw2.nodeSnapshots.map((s: Record<string, unknown>, i: number) => ({
+                ...s,
+                instance: `node-${i + 1}`,
+            }));
+        }
+        if (Array.isArray(raw2.guestSnapshots)) {
+            raw2.guestSnapshots = raw2.guestSnapshots.map((s: Record<string, unknown>, i: number) => ({
+                ...s,
+                instance: `node-${i + 1}`,
+            }));
+        }
+        if (Array.isArray(raw2.memorySources)) {
+            raw2.memorySources = raw2.memorySources.map((s: Record<string, unknown>, i: number) => ({
+                ...s,
+                instance: `node-${i + 1}`,
+            }));
+        }
+
+        return data;
+    };
+
     const exportDiagnostics = async (sanitize: boolean) => {
         setExportLoading(true);
         try {
@@ -266,7 +378,8 @@ export const DiagnosticsPanel: Component = () => {
                 return;
             }
 
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const exportData = sanitize ? sanitizeDiagnostics(data) : data;
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;

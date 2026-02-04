@@ -17,18 +17,15 @@ import (
 // Many mail servers (notably Microsoft 365) advertise only AUTH LOGIN
 // and reject AUTH PLAIN with "504 5.7.4 Unrecognized authentication type".
 type loginAuth struct {
-	username, password, host string
+	username, password string
 }
 
 // LoginAuth returns an Auth that implements the LOGIN authentication mechanism.
-func LoginAuth(username, password, host string) smtp.Auth {
-	return &loginAuth{username, password, host}
+func LoginAuth(username, password string) smtp.Auth {
+	return &loginAuth{username, password}
 }
 
 func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
-	if !server.TLS {
-		return "", nil, fmt.Errorf("LOGIN auth requires TLS connection to %s", a.host)
-	}
 	return "LOGIN", nil, nil
 }
 
@@ -47,6 +44,27 @@ func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
 	}
 }
 
+// plainAuth implements SMTP PLAIN authentication without requiring TLS.
+// Go's built-in smtp.PlainAuth refuses to send credentials over unencrypted
+// connections to non-localhost hosts. This implementation allows authenticated
+// SMTP over unencrypted connections when the user has explicitly configured
+// no TLS/STARTTLS — which is a conscious security decision on their part.
+type plainAuth struct {
+	identity, username, password string
+}
+
+func (a *plainAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	resp := []byte(a.identity + "\x00" + a.username + "\x00" + a.password)
+	return "PLAIN", resp, nil
+}
+
+func (a *plainAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if more {
+		return nil, fmt.Errorf("unexpected server challenge")
+	}
+	return nil, nil
+}
+
 // negotiateAuth queries the server for supported AUTH mechanisms after EHLO
 // and returns the best smtp.Auth to use. Prefers PLAIN, falls back to LOGIN.
 // Returns nil if auth is not configured.
@@ -61,17 +79,17 @@ func (e *EnhancedEmailManager) negotiateAuth(client *smtp.Client) (smtp.Auth, er
 	mechanisms := strings.ToUpper(mechanismsRaw)
 
 	if strings.Contains(mechanisms, "PLAIN") {
-		return smtp.PlainAuth("", e.config.Username, e.config.Password, e.config.SMTPHost), nil
+		return &plainAuth{"", e.config.Username, e.config.Password}, nil
 	}
 	if strings.Contains(mechanisms, "LOGIN") {
-		return LoginAuth(e.config.Username, e.config.Password, e.config.SMTPHost), nil
+		return LoginAuth(e.config.Username, e.config.Password), nil
 	}
 
 	// Server didn't advertise AUTH at all — try PLAIN as a default since
 	// it's the most widely supported. This handles servers that don't
 	// properly advertise their capabilities.
 	if !hasAuth || mechanisms == "" {
-		return smtp.PlainAuth("", e.config.Username, e.config.Password, e.config.SMTPHost), nil
+		return &plainAuth{"", e.config.Username, e.config.Password}, nil
 	}
 
 	return nil, fmt.Errorf("server advertises AUTH mechanisms [%s] but none are supported (PLAIN, LOGIN)", mechanisms)
