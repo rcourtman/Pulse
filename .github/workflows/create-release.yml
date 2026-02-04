@@ -241,7 +241,10 @@ jobs:
           cache: true
 
       - name: Build Pulse for integration tests
-        run: make build
+        run: |
+          # Frontend dist is already restored from cache and copied to embed location.
+          # Skip frontend rebuild (which needs node_modules) and build Go binary directly.
+          go build -o pulse ./cmd/pulse
 
       - name: Build mock GitHub server
         run: docker build -t pulse-mock-github:test tests/integration/mock-github-server
