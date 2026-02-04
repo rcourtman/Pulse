@@ -1522,6 +1522,33 @@ func (s *State) SyncGuestBackupTimes() {
 		pbsBackupsByVMID[vmid] = append(pbsBackupsByVMID[vmid], backup)
 	}
 
+	// Build a set of VMIDs that appear on more than one PVE instance.
+	// When a VMID is ambiguous, we must not fall back to VMID-only matching
+	// because we can't tell which guest the backup belongs to.
+	vmidInstances := make(map[int]map[string]struct{})
+	for i := range s.VMs {
+		m, ok := vmidInstances[s.VMs[i].VMID]
+		if !ok {
+			m = make(map[string]struct{})
+			vmidInstances[s.VMs[i].VMID] = m
+		}
+		m[s.VMs[i].Instance] = struct{}{}
+	}
+	for i := range s.Containers {
+		m, ok := vmidInstances[s.Containers[i].VMID]
+		if !ok {
+			m = make(map[string]struct{})
+			vmidInstances[s.Containers[i].VMID] = m
+		}
+		m[s.Containers[i].Instance] = struct{}{}
+	}
+	vmidIsAmbiguous := make(map[int]bool)
+	for vmid, instances := range vmidInstances {
+		if len(instances) > 1 {
+			vmidIsAmbiguous[vmid] = true
+		}
+	}
+
 	// findBestPBSBackup finds the most recent PBS backup for a given VMID and instance.
 	// If the backup has a namespace that matches the instance, it's preferred.
 	// Returns zero time if no suitable backup found.
@@ -1552,8 +1579,12 @@ func (s *State) SyncGuestBackupTimes() {
 			return bestMatchTime
 		}
 
-		// Fall back to any backup with this VMID (original behavior for backwards compat)
-		// This handles cases where namespaces aren't used or don't match
+		// Fall back to any backup with this VMID, but only when the VMID is
+		// unique across PVE instances. If the VMID exists on multiple instances,
+		// the match is ambiguous and we must not guess.
+		if vmidIsAmbiguous[vmid] {
+			return time.Time{}
+		}
 		return bestTime
 	}
 

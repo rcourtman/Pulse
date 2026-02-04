@@ -1231,6 +1231,165 @@ func TestCheckBackupsDisambiguatesWithNamespace(t *testing.T) {
 	}
 }
 
+// TestCheckBackupsVMIDCollisionNonMatchingNamespace verifies that when multiple guests
+// share a VMID and the PBS backup namespace matches none of them, the alert uses the
+// generic PBS key rather than falsely attributing to a specific guest.
+func TestCheckBackupsVMIDCollisionNonMatchingNamespace(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  3,
+		CriticalDays: 5,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+
+	guestsByKey := map[string]GuestLookup{
+		"pve1-node1-100": {
+			ResourceID: "qemu/100",
+			Name:       "vm-pve1",
+			Instance:   "pve1",
+			Node:       "node1",
+			Type:       "qemu",
+			VMID:       100,
+		},
+		"pve2-node2-100": {
+			ResourceID: "qemu/100",
+			Name:       "vm-pve2",
+			Instance:   "pve2",
+			Node:       "node2",
+			Type:       "qemu",
+			VMID:       100,
+		},
+	}
+
+	guestsByVMID := map[string][]GuestLookup{
+		"100": {
+			guestsByKey["pve1-node1-100"],
+			guestsByKey["pve2-node2-100"],
+		},
+	}
+
+	// PBS backup with namespace "staging" — matches neither pve1 nor pve2
+	pbsBackups := []models.PBSBackup{
+		{
+			ID:         "pbs-100",
+			Instance:   "pbs-main",
+			Datastore:  "backup-store",
+			Namespace:  "staging",
+			BackupType: "qemu",
+			VMID:       "100",
+			BackupTime: now.Add(-6 * 24 * time.Hour),
+		},
+	}
+
+	m.CheckBackups(nil, pbsBackups, nil, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Should NOT have a guest-specific alert key
+	for key := range m.activeAlerts {
+		if key == "backup-age-pve1-node1-100" || key == "backup-age-pve2-node2-100" {
+			t.Errorf("should not attribute ambiguous backup to a specific guest, but found key %q", key)
+		}
+	}
+
+	// Should have a generic PBS alert key
+	expectedKey := "backup-age-pbs-pbs-main-qemu-100"
+	if _, exists := m.activeAlerts[expectedKey]; !exists {
+		var keys []string
+		for k := range m.activeAlerts {
+			keys = append(keys, k)
+		}
+		t.Errorf("expected generic PBS alert key %q, found keys: %v", expectedKey, keys)
+	}
+}
+
+// TestCheckBackupsVMIDCollisionNoNamespace verifies that when multiple guests
+// share a VMID and the PBS backup has no namespace, the alert uses the generic PBS key.
+func TestCheckBackupsVMIDCollisionNoNamespace(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  3,
+		CriticalDays: 5,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+
+	guestsByKey := map[string]GuestLookup{
+		"pve1-node1-100": {
+			ResourceID: "qemu/100",
+			Name:       "vm-pve1",
+			Instance:   "pve1",
+			Node:       "node1",
+			Type:       "qemu",
+			VMID:       100,
+		},
+		"pve2-node2-100": {
+			ResourceID: "qemu/100",
+			Name:       "vm-pve2",
+			Instance:   "pve2",
+			Node:       "node2",
+			Type:       "qemu",
+			VMID:       100,
+		},
+	}
+
+	guestsByVMID := map[string][]GuestLookup{
+		"100": {
+			guestsByKey["pve1-node1-100"],
+			guestsByKey["pve2-node2-100"],
+		},
+	}
+
+	// PBS backup with NO namespace
+	pbsBackups := []models.PBSBackup{
+		{
+			ID:         "pbs-100",
+			Instance:   "pbs-main",
+			Datastore:  "backup-store",
+			Namespace:  "",
+			BackupType: "qemu",
+			VMID:       "100",
+			BackupTime: now.Add(-6 * 24 * time.Hour),
+		},
+	}
+
+	m.CheckBackups(nil, pbsBackups, nil, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Should NOT have a guest-specific alert key
+	for key := range m.activeAlerts {
+		if key == "backup-age-pve1-node1-100" || key == "backup-age-pve2-node2-100" {
+			t.Errorf("should not attribute ambiguous backup to a specific guest, but found key %q", key)
+		}
+	}
+
+	// Should have a generic PBS alert key
+	expectedKey := "backup-age-pbs-pbs-main-qemu-100"
+	if _, exists := m.activeAlerts[expectedKey]; !exists {
+		var keys []string
+		for k := range m.activeAlerts {
+			keys = append(keys, k)
+		}
+		t.Errorf("expected generic PBS alert key %q, found keys: %v", expectedKey, keys)
+	}
+}
+
 func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()

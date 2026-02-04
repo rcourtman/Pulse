@@ -938,6 +938,176 @@ func TestSyncGuestBackupTimesNamespaceDisambiguation(t *testing.T) {
 	}
 }
 
+// TestSyncGuestBackupTimesVMIDCollisionNonMatchingNamespace verifies that when the same VMID
+// exists on multiple PVE instances and a PBS backup namespace matches neither, both guests
+// get zero LastBackup instead of a false positive.
+func TestSyncGuestBackupTimesVMIDCollisionNonMatchingNamespace(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	backupTime := now.Add(-1 * time.Hour)
+
+	// Two VMs with the same VMID on different instances
+	state.UpdateVMs([]VM{
+		{VMID: 100, Name: "vm-pve1", Instance: "pve1", Node: "node1"},
+		{VMID: 100, Name: "vm-pve2", Instance: "pve2", Node: "node2"},
+	})
+
+	// PBS backup with a namespace that matches neither instance
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{
+			ID:         "pbs-100",
+			VMID:       "100",
+			Namespace:  "staging",
+			BackupType: "vm",
+			BackupTime: backupTime,
+			Instance:   "pbs-main",
+		},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	for _, vm := range snapshot.VMs {
+		if vm.VMID == 100 && !vm.LastBackup.IsZero() {
+			t.Errorf("VM %q on %s should have zero LastBackup (ambiguous VMID, non-matching namespace), got %v",
+				vm.Name, vm.Instance, vm.LastBackup)
+		}
+	}
+}
+
+// TestSyncGuestBackupTimesVMIDCollisionEmptyNamespace verifies that when the same VMID
+// exists on multiple PVE instances and a PBS backup has no namespace, both guests
+// get zero LastBackup.
+func TestSyncGuestBackupTimesVMIDCollisionEmptyNamespace(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	backupTime := now.Add(-1 * time.Hour)
+
+	state.UpdateVMs([]VM{
+		{VMID: 100, Name: "vm-pve1", Instance: "pve1", Node: "node1"},
+		{VMID: 100, Name: "vm-pve2", Instance: "pve2", Node: "node2"},
+	})
+
+	// PBS backup with empty namespace
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{
+			ID:         "pbs-100",
+			VMID:       "100",
+			Namespace:  "",
+			BackupType: "vm",
+			BackupTime: backupTime,
+			Instance:   "pbs-main",
+		},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	for _, vm := range snapshot.VMs {
+		if vm.VMID == 100 && !vm.LastBackup.IsZero() {
+			t.Errorf("VM %q on %s should have zero LastBackup (ambiguous VMID, empty namespace), got %v",
+				vm.Name, vm.Instance, vm.LastBackup)
+		}
+	}
+}
+
+// TestSyncGuestBackupTimesUniqueVMIDFallback verifies that a unique VMID still gets
+// the PBS backup via fallback even when the namespace doesn't match.
+func TestSyncGuestBackupTimesUniqueVMIDFallback(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	backupTime := now.Add(-1 * time.Hour)
+
+	// Single VM — VMID is unique
+	state.UpdateVMs([]VM{
+		{VMID: 100, Name: "my-vm", Instance: "pve1", Node: "node1"},
+	})
+
+	// PBS backup with a namespace that does NOT match the instance
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{
+			ID:         "pbs-100",
+			VMID:       "100",
+			Namespace:  "daily",
+			BackupType: "vm",
+			BackupTime: backupTime,
+			Instance:   "pbs-main",
+		},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	var found *VM
+	for i := range snapshot.VMs {
+		if snapshot.VMs[i].VMID == 100 {
+			found = &snapshot.VMs[i]
+		}
+	}
+	if found == nil {
+		t.Fatal("VM not found")
+	}
+	if !found.LastBackup.Equal(backupTime) {
+		t.Errorf("unique VMID should fall back to PBS backup; got LastBackup = %v, want %v",
+			found.LastBackup, backupTime)
+	}
+}
+
+// TestSyncGuestBackupTimesVMContainerCollision verifies that when a VM and Container
+// share the same VMID on different instances, neither gets an unmatched PBS backup.
+func TestSyncGuestBackupTimesVMContainerCollision(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	backupTime := now.Add(-1 * time.Hour)
+
+	state.UpdateVMs([]VM{
+		{VMID: 100, Name: "vm-pve1", Instance: "pve1", Node: "node1"},
+	})
+	state.UpdateContainers([]Container{
+		{VMID: 100, Name: "ct-pve2", Instance: "pve2", Node: "node2"},
+	})
+
+	// PBS backup with namespace matching neither
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{
+			ID:         "pbs-100",
+			VMID:       "100",
+			Namespace:  "other",
+			BackupType: "vm",
+			BackupTime: backupTime,
+			Instance:   "pbs-main",
+		},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	for _, vm := range snapshot.VMs {
+		if vm.VMID == 100 && !vm.LastBackup.IsZero() {
+			t.Errorf("VM %q should have zero LastBackup (ambiguous VMID with container), got %v",
+				vm.Name, vm.LastBackup)
+		}
+	}
+	for _, ct := range snapshot.Containers {
+		if ct.VMID == 100 && !ct.LastBackup.IsZero() {
+			t.Errorf("Container %q should have zero LastBackup (ambiguous VMID with VM), got %v",
+				ct.Name, ct.LastBackup)
+		}
+	}
+}
+
 func TestUpdateStorageBackupsForInstance(t *testing.T) {
 	state := NewState()
 

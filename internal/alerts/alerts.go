@@ -5353,22 +5353,16 @@ func (m *Manager) CheckBackups(
 				info = guests[0]
 			} else if backup.Namespace != "" {
 				// Try to match namespace to instance name
-				matched := false
 				for _, g := range guests {
 					if namespaceMatchesInstance(backup.Namespace, g.Instance) {
 						info = g
-						matched = true
 						break
 					}
 				}
-				if !matched {
-					// No namespace match found, fall back to first guest
-					info = guests[0]
-				}
-			} else {
-				// No namespace available, fall back to first guest
-				info = guests[0]
+				// If no namespace match found, info stays zero-value.
+				// The VMID is ambiguous across instances so we must not guess.
 			}
+			// else: multiple guests, no namespace — info stays zero-value (ambiguous)
 			if info.Instance != "" && info.Node != "" {
 				key = BuildGuestKey(info.Instance, info.Node, info.VMID)
 				displayName = info.Name
