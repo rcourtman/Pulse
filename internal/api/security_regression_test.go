@@ -3111,12 +3111,31 @@ func TestHostAgentChecksumRequiresAuth(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	ResetRateLimitForIP("203.0.113.90")
-	req := httptest.NewRequest(http.MethodPost, "/download/pulse-host-agent.sha256", nil)
+	req := httptest.NewRequest(http.MethodGet, "/download/pulse-host-agent.sha256", nil)
 	req.RemoteAddr = "203.0.113.90:1234"
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for protected checksum, got %d", rec.Code)
+	}
+}
+
+func TestHostAgentChecksumAllowsTokenAuth(t *testing.T) {
+	rawToken := "checksum-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ResetRateLimitForIP("203.0.113.91")
+	req := httptest.NewRequest(http.MethodGet, "/download/pulse-host-agent.sha256", nil)
+	req.RemoteAddr = "203.0.113.91:1234"
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code == http.StatusUnauthorized || rec.Code == http.StatusForbidden {
+		t.Fatalf("expected checksum to allow token auth, got %d", rec.Code)
 	}
 }
 
