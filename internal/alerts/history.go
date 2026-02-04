@@ -107,6 +107,23 @@ func (hm *HistoryManager) AddAlert(alert Alert) {
 	}
 }
 
+// UpdateAlertLastSeen updates the LastSeen timestamp on the most recent
+// history entry matching the given alert ID. This is called when an alert is
+// resolved so that the stored history reflects the true duration of the alert,
+// not just the snapshot captured at creation time.
+func (hm *HistoryManager) UpdateAlertLastSeen(alertID string, lastSeen time.Time) {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+
+	// Iterate from newest to oldest to find the most recent entry for this alert
+	for i := len(hm.history) - 1; i >= 0; i-- {
+		if hm.history[i].Alert.ID == alertID {
+			hm.history[i].Alert.LastSeen = lastSeen
+			return
+		}
+	}
+}
+
 // GetHistory returns alert history within the specified time range
 func (hm *HistoryManager) GetHistory(since time.Time, limit int) []Alert {
 	hm.mu.RLock()

@@ -1746,6 +1746,18 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
+			thresholds := m.config.HostDefaults
+			// Overrides are keyed by raw host ID (without the "host:" prefix
+			// that hostResourceID adds to the resource ID used in alert IDs).
+			rawHostID := strings.TrimPrefix(resourceID, "host:")
+			if override, exists := m.config.Overrides[rawHostID]; exists {
+				if override.Disabled {
+					alertsToResolve = append(alertsToResolve, alertID)
+					continue
+				}
+				thresholds = m.applyThresholdOverride(thresholds, override)
+			}
+			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
 		if alert.Type == "docker-host-offline" ||
@@ -1835,7 +1847,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			thresholds := m.config.NodeDefaults
+			thresholds := m.config.PBSDefaults
 			if override, exists := m.config.Overrides[resourceID]; exists {
 				if override.CPU != nil && metricType == "cpu" {
 					threshold = ensureHysteresisThreshold(override.CPU)
@@ -6661,6 +6673,11 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 }
 
 func (m *Manager) removeActiveAlertNoLock(alertID string) {
+	// Before deleting, update the history entry with the alert's final LastSeen
+	// timestamp so the stored duration reflects how long the alert was actually active.
+	if alert, exists := m.activeAlerts[alertID]; exists && alert != nil {
+		m.historyManager.UpdateAlertLastSeen(alertID, alert.LastSeen)
+	}
 	delete(m.activeAlerts, alertID)
 	// NOTE: Don't delete ackState here - preserve it so if the same alert
 	// reappears (e.g., powered-off VM during backup), the acknowledgement
