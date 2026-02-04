@@ -2737,6 +2737,39 @@ func TestSetupScriptIsPublicEvenWhenAuthConfigured(t *testing.T) {
 	}
 }
 
+func TestPublicDownloadEndpointsBypassAuth(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/install-docker-agent.sh",
+		"/install-container-agent.sh",
+		"/download/pulse-docker-agent",
+		"/install-host-agent.sh",
+		"/install-host-agent.ps1",
+		"/uninstall-host-agent.sh",
+		"/uninstall-host-agent.ps1",
+		"/download/pulse-host-agent",
+		"/install.sh",
+		"/install.ps1",
+		"/download/pulse-agent",
+	}
+
+	for idx, path := range paths {
+		ip := "203.0.113." + strconv.Itoa(70+idx)
+		ResetRateLimitForIP(ip)
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req.RemoteAddr = ip + ":1234"
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("expected 405 for public download endpoint %s, got %d", path, rec.Code)
+		}
+	}
+}
+
 func TestOIDCLoginBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
