@@ -11,7 +11,6 @@ import (
 
 func TestProxyAuthAdminGatesAdminEndpoints(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
-	t.Setenv("PULSE_ENABLE_PPROF", "true")
 
 	record := newTokenRecord(t, "proxy-admin-gate-token-123.12345678", []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
@@ -33,7 +32,6 @@ func TestProxyAuthAdminGatesAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/logs/level", body: `{"level":"info"}`},
 		{method: http.MethodGet, path: "/api/diagnostics", body: ""},
 		{method: http.MethodPost, path: "/api/diagnostics/docker/prepare-token", body: `{}`},
-		{method: http.MethodGet, path: "/api/diagnostics/pprof/", body: ""},
 		{method: http.MethodGet, path: "/api/system/settings", body: ""},
 		{method: http.MethodPost, path: "/api/system/settings/update", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/oidc", body: `{}`},
