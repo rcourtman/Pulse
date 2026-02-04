@@ -1653,6 +1653,21 @@ func TestAuditEndpointsRequireLicenseFeature(t *testing.T) {
 	}
 }
 
+func TestAuditVerifyRequiresLicenseFeature(t *testing.T) {
+	rawToken := "audit-verify-license-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit/event-1/verify", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 for missing audit logging license, got %d", rec.Code)
+	}
+}
+
 func TestReportingEndpointsRequireLicenseFeature(t *testing.T) {
 	rawToken := "reporting-license-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
