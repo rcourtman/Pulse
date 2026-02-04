@@ -1697,6 +1697,21 @@ func TestRBACEndpointsRequireLicenseFeature(t *testing.T) {
 	}
 }
 
+func TestAuditWebhookRequiresLicenseFeature(t *testing.T) {
+	rawToken := "audit-webhook-license-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/webhooks/audit", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 for missing audit logging license, got %d", rec.Code)
+	}
+}
+
 func TestAgentProfilesRequireLicenseFeature(t *testing.T) {
 	rawToken := "profiles-license-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
