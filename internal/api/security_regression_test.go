@@ -3223,8 +3223,8 @@ func TestOIDCLoginBypassesAuth(t *testing.T) {
 	req.RemoteAddr = "203.0.113.46:1234"
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusTemporaryRedirect {
-		t.Fatalf("expected 307 redirect when OIDC is disabled, got %d", rec.Code)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect when OIDC is disabled, got %d", rec.Code)
 	}
 }
 
