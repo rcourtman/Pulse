@@ -1544,6 +1544,46 @@ func TestAISettingsWriteRequiresSettingsWriteScope(t *testing.T) {
 	}
 }
 
+func TestAIChatEndpointsRequireAIChatScope(t *testing.T) {
+	rawToken := "ai-chat-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/api/ai/models", body: ""},
+		{method: http.MethodPost, path: "/api/ai/chat", body: `{}`},
+		{method: http.MethodGet, path: "/api/ai/sessions", body: ""},
+		{method: http.MethodGet, path: "/api/ai/sessions/session-1", body: ""},
+		{method: http.MethodGet, path: "/api/ai/chat/sessions", body: ""},
+		{method: http.MethodGet, path: "/api/ai/chat/sessions/session-1", body: ""},
+		{method: http.MethodGet, path: "/api/ai/question/q-1", body: ""},
+		{method: http.MethodGet, path: "/api/ai/knowledge", body: ""},
+		{method: http.MethodPost, path: "/api/ai/knowledge/save", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/knowledge/delete", body: `{}`},
+		{method: http.MethodGet, path: "/api/ai/knowledge/export", body: ""},
+		{method: http.MethodPost, path: "/api/ai/knowledge/import", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/knowledge/clear", body: `{}`},
+	}
+
+	for _, tc := range paths {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing ai:chat scope on %s %s, got %d", tc.method, tc.path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeAIChat) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIChat, rec.Body.String())
+		}
+	}
+}
+
 func TestSecurityOIDCRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "security-oidc-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
