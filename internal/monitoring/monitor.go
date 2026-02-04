@@ -2729,11 +2729,22 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	// Record host Network I/O (sum across all interfaces)
+	// Network bytes from the agent are cumulative totals since boot, not rates.
+	// We need to use the RateTracker to convert to bytes/second, just like VMs and containers.
 	var totalRXBytes, totalTXBytes uint64
 	for _, nic := range host.NetworkInterfaces {
 		totalRXBytes += nic.RXBytes
 		totalTXBytes += nic.TXBytes
 	}
+
+	// Calculate network rates using the RateTracker (convert cumulative bytes to bytes/sec)
+	hostRateKey := fmt.Sprintf("host:%s", host.ID)
+	currentMetrics := IOMetrics{
+		NetworkIn:  int64(totalRXBytes),
+		NetworkOut: int64(totalTXBytes),
+		Timestamp:  now,
+	}
+	_, _, netInRate, netOutRate := m.rateTracker.CalculateRates(hostRateKey, currentMetrics)
 
 	if m.metricsHistory != nil {
 		// Record host CPU usage
@@ -2744,8 +2755,13 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 		m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
 
-		m.metricsHistory.AddGuestMetric(hostMetricKey, "netin", float64(totalRXBytes), now)
-		m.metricsHistory.AddGuestMetric(hostMetricKey, "netout", float64(totalTXBytes), now)
+		// Only record network rates if we have valid data (rate >= 0 means we have enough samples)
+		if netInRate >= 0 {
+			m.metricsHistory.AddGuestMetric(hostMetricKey, "netin", netInRate, now)
+		}
+		if netOutRate >= 0 {
+			m.metricsHistory.AddGuestMetric(hostMetricKey, "netout", netOutRate, now)
+		}
 	}
 
 	// Also write to persistent SQLite store
@@ -2753,8 +2769,13 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		m.metricsStore.Write("host", host.ID, "cpu", host.CPUUsage, now)
 		m.metricsStore.Write("host", host.ID, "memory", host.Memory.Usage, now)
 		m.metricsStore.Write("host", host.ID, "disk", hostDiskPercent, now)
-		m.metricsStore.Write("host", host.ID, "netin", float64(totalRXBytes), now)
-		m.metricsStore.Write("host", host.ID, "netout", float64(totalTXBytes), now)
+		// Only write network rates if we have valid data
+		if netInRate >= 0 {
+			m.metricsStore.Write("host", host.ID, "netin", netInRate, now)
+		}
+		if netOutRate >= 0 {
+			m.metricsStore.Write("host", host.ID, "netout", netOutRate, now)
+		}
 	}
 
 	return host, nil

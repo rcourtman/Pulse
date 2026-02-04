@@ -5912,14 +5912,10 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				diskPercent = host.Disks[0].Usage
 			}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
-			// Sum network I/O across all interfaces
-			var totalRX, totalTX uint64
-			for _, nic := range host.NetworkInterfaces {
-				totalRX += nic.RXBytes
-				totalTX += nic.TXBytes
-			}
-			points["netin"] = monitoring.MetricPoint{Timestamp: now, Value: float64(totalRX)}
-			points["netout"] = monitoring.MetricPoint{Timestamp: now, Value: float64(totalTX)}
+			// Note: We intentionally don't include netin/netout here because the host model
+			// only has cumulative RXBytes/TXBytes (total since boot), not rates.
+			// The RateTracker in ApplyHostReport calculates rates and stores them in metrics history.
+			// Showing cumulative bytes as if they were rates would be misleading (showing GB instead of KB/s).
 		case "docker", "dockerContainer":
 			container := findDockerContainer(resourceID)
 			if container == nil {
