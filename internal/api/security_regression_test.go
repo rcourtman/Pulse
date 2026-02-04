@@ -1341,6 +1341,35 @@ func TestConfigImportRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestAutoRegisterRequiresAuth(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.configHandlers.SetConfig(cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
+func TestAutoRegisterRejectsTokenMissingSettingsWriteScope(t *testing.T) {
+	rawToken := "auto-register-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.configHandlers.SetConfig(cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for missing settings:write scope, got %d", rec.Code)
+	}
+}
+
 func TestConfigExportRequiresProxyAdmin(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.ProxyAuthSecret = "proxy-secret"
