@@ -106,12 +106,33 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     // Hover state for tooltip
     const [hoveredPoint, setHoveredPoint] = createSignal<{
         value: number;
-        min: number;
-        max: number;
         timestamp: number;
         x: number;
         y: number;
     } | null>(null);
+
+    // Compute overall min/max from visible data for persistent header display
+    const dataMin = createMemo(() => {
+        const points = data();
+        if (points.length === 0) return null;
+        let min = Infinity;
+        for (const p of points) {
+            const v = p.min != null ? p.min : p.value;
+            if (v < min) min = v;
+        }
+        return min;
+    });
+
+    const dataMax = createMemo(() => {
+        const points = data();
+        if (points.length === 0) return null;
+        let max = -Infinity;
+        for (const p of points) {
+            const v = p.max != null ? p.max : p.value;
+            if (v > max) max = v;
+        }
+        return max;
+    });
 
     // Helper function to load data
     const loadData = async (r: HistoryTimeRange, type: ResourceType, id: string, metric: string, pointsCap: number | null, isBackgroundRefresh: boolean) => {
@@ -492,8 +513,6 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
 
         setHoveredPoint({
             value: closest.value,
-            min: closest.min || closest.value,
-            max: closest.max || closest.value,
             timestamp: closest.timestamp,
             x: rect.left + x,
             y: rect.top + 20, // Approximate
@@ -529,22 +548,30 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                     </Show>
                 </div>
 
-                {/* Time Range Selector */}
-                <Show when={!props.hideSelector}>
-                    <div class="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
-                        {ranges.map(r => (
-                            <button
-                                onClick={() => updateRange(r)}
-                                class={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${range() === r
-                                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                    }`}
-                            >
-                                {r}
-                            </button>
-                        ))}
-                    </div>
-                </Show>
+                <div class="flex items-center gap-3">
+                    <Show when={dataMin() !== null && dataMax() !== null}>
+                        <div class="flex items-center gap-2 text-[10px]">
+                            <span><span class="text-gray-400 dark:text-gray-500">Min </span><span class="text-blue-400">{formatTooltipValue(dataMin()!, props.unit)}</span></span>
+                            <span><span class="text-gray-400 dark:text-gray-500">Max </span><span class="text-red-400">{formatTooltipValue(dataMax()!, props.unit)}</span></span>
+                        </div>
+                    </Show>
+                    {/* Time Range Selector */}
+                    <Show when={!props.hideSelector}>
+                        <div class="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+                            {ranges.map(r => (
+                                <button
+                                    onClick={() => updateRange(r)}
+                                    class={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${range() === r
+                                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                        }`}
+                                >
+                                    {r}
+                                </button>
+                            ))}
+                        </div>
+                    </Show>
+                </div>
             </div>
 
             <div class={`relative flex-1 w-full ${props.compact ? 'min-h-[120px]' : 'min-h-[200px]'}`} ref={containerRef}>
@@ -626,12 +653,6 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                             <div class="text-gray-300">
                                 {formatTooltipValue(point().value, props.unit)}
                             </div>
-                            <Show when={point().min !== point().value}>
-                                <div class="text-[10px] text-gray-400 mt-0.5">
-                                    Min: {formatTooltipValue(point().min, props.unit)} •
-                                    Max: {formatTooltipValue(point().max, props.unit)}
-                                </div>
-                            </Show>
                         </div>
                     )}
                 </Show>
