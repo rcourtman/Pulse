@@ -6647,12 +6647,19 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							memAvailable = memTotal
 						}
 						memUsed = memTotal - memAvailable
+					case detailedStatus.Mem > 0:
+						// Prefer Mem over FreeMem: Proxmox calculates Mem as
+						// (total_mem - free_mem) using the balloon's guest-visible
+						// total, which is correct even when ballooning is active.
+						// FreeMem is relative to the balloon allocation (not MaxMem),
+						// so subtracting it from MaxMem produces wildly inflated
+						// usage when the balloon has reduced the VM's memory.
+						// Refs: #1185
+						memUsed = detailedStatus.Mem
+						memorySource = "status-mem"
 					case detailedStatus.FreeMem > 0 && memTotal >= detailedStatus.FreeMem:
 						memUsed = memTotal - detailedStatus.FreeMem
 						memorySource = "status-freemem"
-					case detailedStatus.Mem > 0:
-						memUsed = detailedStatus.Mem
-						memorySource = "status-mem"
 					}
 					if memUsed > memTotal {
 						memUsed = memTotal
