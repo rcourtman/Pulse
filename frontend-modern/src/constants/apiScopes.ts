@@ -67,6 +67,12 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
     group: 'Agents',
   },
   {
+    value: AGENT_EXEC_SCOPE,
+    label: 'Agent exec connection',
+    description: 'Allow the agent to establish WebSocket connections for remote execution.',
+    group: 'Agents',
+  },
+  {
     value: SETTINGS_READ_SCOPE,
     label: 'Settings (read)',
     description: 'Fetch configuration snapshots such as nodes and security posture.',
