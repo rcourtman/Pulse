@@ -1969,6 +1969,33 @@ func TestDiscoverySettingsRejectsProxyNonAdmin(t *testing.T) {
 	}
 }
 
+func TestDiscoveryNotesRejectsProxyUserSecrets(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	service := servicediscovery.NewService(nil, nil, nil, servicediscovery.DefaultConfig())
+	router.SetDiscoveryService(service)
+
+	payload := `{"user_notes":"note","user_secrets":{"token":"abc"}}`
+	req := httptest.NewRequest(http.MethodPut, "/api/discovery/host/host-1/resource-1/notes", strings.NewReader(payload))
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set("X-Remote-User", "viewer-user")
+	req.Header.Set("X-Remote-Roles", "viewer")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin proxy discovery secrets, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "user_secrets") {
+		t.Fatalf("expected user_secrets error, got %q", rec.Body.String())
+	}
+}
+
 func TestNotificationsRequireProxyAdmin(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.ProxyAuthSecret = "proxy-secret"
