@@ -2770,6 +2770,35 @@ func TestPublicDownloadEndpointsBypassAuth(t *testing.T) {
 	}
 }
 
+func TestPublicEndpointsBypassAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "public-api-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	defer monitor.Stop()
+
+	router := NewRouter(cfg, monitor, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/health",
+		"/api/version",
+		"/api/agent/version",
+		"/api/server/info",
+		"/api/security/status",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for public endpoint %s, got %d", path, rec.Code)
+		}
+	}
+}
+
 func TestOIDCLoginBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
