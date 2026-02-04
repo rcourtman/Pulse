@@ -2967,6 +2967,30 @@ func TestPathTraversalBlockedForNonAPIPaths(t *testing.T) {
 	}
 }
 
+func TestPathTraversalBlockedForEncodedAPIPaths(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/%2e%2e/api/security/status", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for encoded path traversal on api, got %d", rec.Code)
+	}
+}
+
+func TestPathTraversalBlockedForEncodedNonAPIPaths(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/%2e%2e/%2e%2e/etc/passwd", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for encoded path traversal on non-api, got %d", rec.Code)
+	}
+}
+
 func TestSetupScriptIsPublicEvenWhenAuthConfigured(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
