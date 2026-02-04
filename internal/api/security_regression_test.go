@@ -1939,6 +1939,8 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodGet, path: "/api/system/settings", body: ""},
 		{method: http.MethodPost, path: "/api/system/settings/update", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/reset-lockout", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/apply-restart", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/oidc", body: `{}`},
 		{method: http.MethodGet, path: "/api/ai/debug/context", body: ""},
 		{method: http.MethodPost, path: "/api/ai/execute", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/execute/stream", body: `{}`},
