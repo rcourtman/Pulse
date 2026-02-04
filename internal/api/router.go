@@ -798,7 +798,10 @@ func (r *Router) setupRoutes() {
 		if req.Method == http.MethodPost {
 			// SECURITY: Require authentication - this endpoint can trigger service restart (DoS risk)
 			// Allow if: (1) auth is not configured yet (initial setup), or (2) caller is admin-authenticated
-			authConfigured := r.config.AuthUser != "" && r.config.AuthPass != "" || r.config.HasAPITokens()
+			authConfigured := (r.config.AuthUser != "" && r.config.AuthPass != "") ||
+				r.config.HasAPITokens() ||
+				r.config.ProxyAuthSecret != "" ||
+				(r.config.OIDC != nil && r.config.OIDC.Enabled)
 			if authConfigured {
 				if !CheckAuth(r.config, w, req) {
 					log.Warn().

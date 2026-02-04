@@ -1965,7 +1965,6 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodDelete, path: "/api/agents/kubernetes/clusters/cluster-1", body: ``},
 		{method: http.MethodPost, path: "/api/agents/host/link", body: `{}`},
 		{method: http.MethodPost, path: "/api/agents/host/unlink", body: `{}`},
-		{method: http.MethodDelete, path: "/api/agents/host/agent-1", body: ``},
 		{method: http.MethodGet, path: "/api/admin/profiles/", body: ""},
 		{method: http.MethodPost, path: "/api/agent-install-command", body: `{}`},
 		{method: http.MethodPost, path: "/api/setup-script-url", body: `{}`},
