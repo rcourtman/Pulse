@@ -170,6 +170,31 @@ func TestSocketIORequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestSocketIOJSRequiresAuth(t *testing.T) {
+	rawToken := "socket-js-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/socket.io/socket.io.js", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without token, got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/socket.io/socket.io.js", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect with token, got %d", rec.Code)
+	}
+	if location := rec.Header().Get("Location"); !strings.Contains(location, "socket.io.min.js") {
+		t.Fatalf("expected CDN redirect, got %q", location)
+	}
+}
+
 func TestSocketIOWebSocketRequiresAuthInAPIMode(t *testing.T) {
 	rawToken := "socket-ws-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
