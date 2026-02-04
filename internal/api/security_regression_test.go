@@ -173,6 +173,19 @@ func TestSchedulerHealthRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestChangePasswordRequiresAuthInAPIMode(t *testing.T) {
+	record := newTokenRecord(t, "change-pass-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/change-password", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
 func TestLicenseFeaturesRequiresAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "license-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
@@ -1384,6 +1397,38 @@ func TestConfigImportRequiresAuthInAPIMode(t *testing.T) {
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without auth, got %d", rec.Code)
+	}
+}
+
+func TestConfigExportBlocksPublicNetworkWithoutAuth(t *testing.T) {
+	cfg := &config.Config{
+		DataPath:   t.TempDir(),
+		ConfigPath: t.TempDir(),
+	}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/export", strings.NewReader(`{}`))
+	req.RemoteAddr = "203.0.113.10:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for public network without auth, got %d", rec.Code)
+	}
+}
+
+func TestConfigImportBlocksPublicNetworkWithoutAuth(t *testing.T) {
+	cfg := &config.Config{
+		DataPath:   t.TempDir(),
+		ConfigPath: t.TempDir(),
+	}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/import", strings.NewReader(`{}`))
+	req.RemoteAddr = "203.0.113.10:1234"
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for public network without auth, got %d", rec.Code)
 	}
 }
 
