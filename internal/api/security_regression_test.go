@@ -2689,6 +2689,57 @@ func TestAuditRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestSecurityStatusIgnoresTokenQueryParam(t *testing.T) {
+	rawToken := "status-query-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status?token="+rawToken, nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d", rec.Code)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if hint, ok := payload["apiTokenHint"].(string); ok && hint != "" {
+		t.Fatalf("expected apiTokenHint to be empty when token passed via query param, got %q", hint)
+	}
+	if _, ok := payload["tokenScopes"]; ok {
+		t.Fatalf("expected tokenScopes to be omitted when unauthenticated")
+	}
+}
+
+func TestSecurityStatusAcceptsTokenHeader(t *testing.T) {
+	rawToken := "status-header-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d", rec.Code)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if hint, ok := payload["apiTokenHint"].(string); !ok || hint != cfg.PrimaryAPITokenHint() {
+		t.Fatalf("expected apiTokenHint %q, got %v", cfg.PrimaryAPITokenHint(), payload["apiTokenHint"])
+	}
+	if scopes, ok := payload["tokenScopes"].([]interface{}); !ok || len(scopes) == 0 {
+		t.Fatalf("expected tokenScopes to be present when authenticated via API token")
+	}
+}
+
 func TestAuditVerifyRequiresAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "audit-verify-auth-token-123.12345678", []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
