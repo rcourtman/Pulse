@@ -1797,7 +1797,7 @@ func TestAutoRegisterRequiresAuth(t *testing.T) {
 	}
 }
 
-func TestAutoRegisterRejectsTokenMissingSettingsWriteScope(t *testing.T) {
+func TestAutoRegisterRejectsTokenMissingRequiredScope(t *testing.T) {
 	rawToken := "auto-register-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
@@ -1809,7 +1809,25 @@ func TestAutoRegisterRejectsTokenMissingSettingsWriteScope(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for missing settings:write scope, got %d", rec.Code)
+		t.Fatalf("expected 401 for missing required scope, got %d", rec.Code)
+	}
+}
+
+func TestAutoRegisterAcceptsAgentToken(t *testing.T) {
+	rawToken := "agent-register-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.configHandlers.SetConfig(cfg)
+
+	body := `{"type":"pve","host":"https://192.168.1.1:8006","tokenId":"test@pam!pulse","tokenValue":"secret"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", strings.NewReader(body))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	// Should not be 401 — the agent token has host-agent:report which is accepted
+	if rec.Code == http.StatusUnauthorized {
+		t.Fatalf("expected agent token with host-agent:report to be accepted, got 401")
 	}
 }
 

@@ -5021,8 +5021,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		matchedAPIToken := false
 		if h.getConfig(r.Context()).HasAPITokens() {
 			if record, ok := h.getConfig(r.Context()).ValidateAPIToken(authCode); ok {
-				// Require settings:write scope for auto-registration
-				if record.HasScope(config.ScopeSettingsWrite) {
+				// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
+				if record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostReport) {
 					authenticated = true
 					matchedAPIToken = true
 					log.Info().
@@ -5033,7 +5033,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 					log.Warn().
 						Str("type", req.Type).
 						Str("host", req.Host).
-						Msg("Auto-register rejected: API token missing settings:write scope")
+						Msg("Auto-register rejected: API token missing required scope")
 				}
 			}
 		}
@@ -5096,11 +5096,12 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	if !authenticated && h.getConfig(r.Context()).HasAPITokens() {
 		apiToken := r.Header.Get("X-API-Token")
 		if record, ok := h.getConfig(r.Context()).ValidateAPIToken(apiToken); ok {
-			if record.HasScope(config.ScopeSettingsWrite) {
+			// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
+			if record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostReport) {
 				authenticated = true
 				log.Info().Msg("Auto-register authenticated via API token")
 			} else {
-				log.Warn().Msg("Auto-register rejected: API token missing settings:write scope")
+				log.Warn().Msg("Auto-register rejected: API token missing required scope")
 			}
 		}
 	}
