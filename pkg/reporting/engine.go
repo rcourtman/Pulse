@@ -11,28 +11,47 @@ import (
 // ReportEngine implements the reporting.Engine interface with
 // full CSV and PDF generation capabilities.
 type ReportEngine struct {
-	metricsStore *metrics.Store
-	csvGen       *CSVGenerator
-	pdfGen       *PDFGenerator
+	metricsStore       *metrics.Store
+	metricsStoreGetter func() *metrics.Store
+	csvGen             *CSVGenerator
+	pdfGen             *PDFGenerator
 }
 
 // EngineConfig holds configuration for the report engine.
 type EngineConfig struct {
+	// MetricsStore is a direct reference to the metrics store.
+	// Use MetricsStoreGetter instead when the store may be replaced
+	// (e.g., after monitor reloads).
 	MetricsStore *metrics.Store
+
+	// MetricsStoreGetter dynamically resolves the current metrics store.
+	// When set, this is used instead of MetricsStore, ensuring queries
+	// always target the active store even after monitor reloads.
+	MetricsStoreGetter func() *metrics.Store
 }
 
 // NewReportEngine creates a new reporting engine.
 func NewReportEngine(cfg EngineConfig) *ReportEngine {
 	return &ReportEngine{
-		metricsStore: cfg.MetricsStore,
-		csvGen:       NewCSVGenerator(),
-		pdfGen:       NewPDFGenerator(),
+		metricsStore:       cfg.MetricsStore,
+		metricsStoreGetter: cfg.MetricsStoreGetter,
+		csvGen:             NewCSVGenerator(),
+		pdfGen:             NewPDFGenerator(),
 	}
+}
+
+// getMetricsStore returns the current metrics store, preferring the dynamic
+// getter over the static reference.
+func (e *ReportEngine) getMetricsStore() *metrics.Store {
+	if e.metricsStoreGetter != nil {
+		return e.metricsStoreGetter()
+	}
+	return e.metricsStore
 }
 
 // Generate creates a report in the specified format.
 func (e *ReportEngine) Generate(req MetricReportRequest) (data []byte, contentType string, err error) {
-	if e.metricsStore == nil {
+	if e.getMetricsStore() == nil {
 		return nil, "", fmt.Errorf("metrics store not initialized")
 	}
 
@@ -140,12 +159,14 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 	data.Storage = req.Storage
 	data.Disks = req.Disks
 
+	store := e.getMetricsStore()
+
 	var metricsMap map[string][]metrics.MetricPoint
 	var err error
 
 	if req.MetricType != "" {
 		// Query specific metric
-		points, queryErr := e.metricsStore.Query(req.ResourceType, req.ResourceID, req.MetricType, req.Start, req.End, 0)
+		points, queryErr := store.Query(req.ResourceType, req.ResourceID, req.MetricType, req.Start, req.End, 0)
 		if queryErr != nil {
 			return nil, queryErr
 		}
@@ -154,10 +175,20 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 		}
 	} else {
 		// Query all metrics for the resource
-		metricsMap, err = e.metricsStore.QueryAll(req.ResourceType, req.ResourceID, req.Start, req.End, 0)
+		metricsMap, err = store.QueryAll(req.ResourceType, req.ResourceID, req.Start, req.End, 0)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if len(metricsMap) == 0 {
+		log.Warn().
+			Str("resourceType", req.ResourceType).
+			Str("resourceID", req.ResourceID).
+			Str("metricType", req.MetricType).
+			Time("start", req.Start).
+			Time("end", req.End).
+			Msg("Report query returned no metrics — verify resource ID matches stored metrics and time range contains data")
 	}
 
 	// Convert to report format and calculate statistics
@@ -204,7 +235,7 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 
 // GenerateMulti creates a multi-resource report in the specified format.
 func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, contentType string, err error) {
-	if e.metricsStore == nil {
+	if e.getMetricsStore() == nil {
 		return nil, "", fmt.Errorf("metrics store not initialized")
 	}
 
