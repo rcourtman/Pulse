@@ -80,6 +80,18 @@ func TestConsoleLogger_Close(t *testing.T) {
 	}
 }
 
+func TestConsoleLogger_Webhooks(t *testing.T) {
+	logger := NewConsoleLogger()
+
+	if urls := logger.GetWebhookURLs(); len(urls) != 0 {
+		t.Fatalf("expected no webhook URLs, got %v", urls)
+	}
+
+	if err := logger.UpdateWebhookURLs([]string{"https://example.com"}); err != nil {
+		t.Fatalf("UpdateWebhookURLs returned error: %v", err)
+	}
+}
+
 func TestSetLogger_GetLogger(t *testing.T) {
 	// Create a custom logger for testing
 	customLogger := NewConsoleLogger()
