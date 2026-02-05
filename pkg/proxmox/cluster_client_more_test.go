@@ -110,3 +110,28 @@ func TestExecuteWithFailoverClearsErrorOnSuccess(t *testing.T) {
 		t.Fatal("expected lastError to be cleared")
 	}
 }
+
+func TestExecuteWithFailoverNotImplementedDoesNotMarkUnhealthy(t *testing.T) {
+	cc := &ClusterClient{
+		name:            "cluster",
+		endpoints:       []string{"node1"},
+		clients:         map[string]*Client{"node1": {}},
+		nodeHealth:      map[string]bool{"node1": true},
+		lastError:       make(map[string]string),
+		lastHealthCheck: map[string]time.Time{"node1": time.Now()},
+		rateLimitUntil:  make(map[string]time.Time),
+	}
+
+	err := cc.executeWithFailover(context.Background(), func(*Client) error {
+		return fmt.Errorf("not implemented status 501")
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !cc.nodeHealth["node1"] {
+		t.Fatal("expected node to remain healthy for not implemented error")
+	}
+	if len(cc.lastError) != 0 {
+		t.Fatalf("expected no lastError, got %+v", cc.lastError)
+	}
+}
