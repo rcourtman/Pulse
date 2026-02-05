@@ -85,6 +85,7 @@ const HostsOverview = lazy(() =>
     default: module.HostsOverview,
   })),
 );
+const InfrastructurePage = lazy(() => import('./pages/Infrastructure'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
@@ -953,6 +954,7 @@ function App() {
       <Route path="/docker" component={DockerRoute} />
       <Route path="/kubernetes" component={KubernetesRoute} />
       <Route path="/hosts" component={HostsRoute} />
+      <Route path="/infrastructure" component={InfrastructurePage} />
 
       <Route path="/servers" component={() => <Navigate href="/hosts" />} />
       <Route path="/alerts/*" component={AlertsPage} />
