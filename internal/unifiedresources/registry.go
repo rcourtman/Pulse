@@ -493,6 +493,14 @@ func (rr *ResourceRegistry) buildChildCounts() {
 			r.ChildCount = count
 		}
 	}
+	// Resolve parent names for child resources.
+	for _, r := range rr.resources {
+		if r.ParentID != nil {
+			if parent, ok := rr.resources[*r.ParentID]; ok {
+				r.ParentName = parent.Name
+			}
+		}
+	}
 }
 
 func (rr *ResourceRegistry) chooseNewID(resourceType ResourceType, identity ResourceIdentity, source DataSource, sourceID string) string {
@@ -587,6 +595,8 @@ func mergeMetrics(existing *ResourceMetrics, incoming *ResourceMetrics, source D
 	merged.Disk = mergeMetric(existing.Disk, incoming.Disk, source)
 	merged.NetIn = mergeMetric(existing.NetIn, incoming.NetIn, source)
 	merged.NetOut = mergeMetric(existing.NetOut, incoming.NetOut, source)
+	merged.DiskRead = mergeMetric(existing.DiskRead, incoming.DiskRead, source)
+	merged.DiskWrite = mergeMetric(existing.DiskWrite, incoming.DiskWrite, source)
 	return &merged
 }
 

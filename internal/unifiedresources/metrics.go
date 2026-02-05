@@ -66,6 +66,18 @@ func metricsFromVM(vm models.VM) *ResourceMetrics {
 		percent := percentFromUsage(vm.Disk.Usage)
 		metrics.Disk = &MetricValue{Used: &vm.Disk.Used, Total: &vm.Disk.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
 	}
+	if vm.NetworkIn != 0 {
+		metrics.NetIn = &MetricValue{Value: float64(vm.NetworkIn), Unit: "bytes/s", Source: SourceProxmox}
+	}
+	if vm.NetworkOut != 0 {
+		metrics.NetOut = &MetricValue{Value: float64(vm.NetworkOut), Unit: "bytes/s", Source: SourceProxmox}
+	}
+	if vm.DiskRead != 0 {
+		metrics.DiskRead = &MetricValue{Value: float64(vm.DiskRead), Unit: "bytes/s", Source: SourceProxmox}
+	}
+	if vm.DiskWrite != 0 {
+		metrics.DiskWrite = &MetricValue{Value: float64(vm.DiskWrite), Unit: "bytes/s", Source: SourceProxmox}
+	}
 	return metrics
 }
 
@@ -80,6 +92,18 @@ func metricsFromContainer(ct models.Container) *ResourceMetrics {
 	if ct.Disk.Total > 0 {
 		percent := percentFromUsage(ct.Disk.Usage)
 		metrics.Disk = &MetricValue{Used: &ct.Disk.Used, Total: &ct.Disk.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
+	}
+	if ct.NetworkIn != 0 {
+		metrics.NetIn = &MetricValue{Value: float64(ct.NetworkIn), Unit: "bytes/s", Source: SourceProxmox}
+	}
+	if ct.NetworkOut != 0 {
+		metrics.NetOut = &MetricValue{Value: float64(ct.NetworkOut), Unit: "bytes/s", Source: SourceProxmox}
+	}
+	if ct.DiskRead != 0 {
+		metrics.DiskRead = &MetricValue{Value: float64(ct.DiskRead), Unit: "bytes/s", Source: SourceProxmox}
+	}
+	if ct.DiskWrite != 0 {
+		metrics.DiskWrite = &MetricValue{Value: float64(ct.DiskWrite), Unit: "bytes/s", Source: SourceProxmox}
 	}
 	return metrics
 }

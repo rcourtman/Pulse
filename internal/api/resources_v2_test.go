@@ -191,3 +191,82 @@ func TestResourceV2LinkMergesResources(t *testing.T) {
 		t.Fatalf("expected merged sources, got %+v", resource.Sources)
 	}
 }
+
+func TestResourceV2ReportMergeCreatesExclusions(t *testing.T) {
+	now := time.Now().UTC()
+	sharedInterfaces := []models.HostNetworkInterface{
+		{
+			Name:      "eth0",
+			MAC:       "aa:bb:cc:dd:ee:ff",
+			Addresses: []string{"10.0.0.5"},
+		},
+	}
+	host := models.Host{
+		ID:                "host-1",
+		Hostname:          "alpha",
+		Status:            "online",
+		Memory:            models.Memory{Total: 2048, Used: 1024, Free: 1024, Usage: 0.5},
+		LastSeen:          now,
+		NetworkInterfaces: sharedInterfaces,
+	}
+	dockerHost := models.DockerHost{
+		ID:                "docker-1",
+		Hostname:          "alpha",
+		Status:            "online",
+		CPUs:              4,
+		Memory:            models.Memory{Total: 4096, Used: 2048, Free: 2048, Usage: 0.5},
+		LastSeen:          now,
+		NetworkInterfaces: sharedInterfaces,
+	}
+
+	snapshot := models.StateSnapshot{Hosts: []models.Host{host}, DockerHosts: []models.DockerHost{dockerHost}}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceV2Handlers(cfg)
+	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+
+	listRec := httptest.NewRecorder()
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=host", nil)
+	h.HandleListResources(listRec, listReq)
+
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list status = %d, body=%s", listRec.Code, listRec.Body.String())
+	}
+
+	var listResp ResourcesV2Response
+	if err := json.NewDecoder(listRec.Body).Decode(&listResp); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listResp.Data) != 1 {
+		t.Fatalf("expected 1 merged resource, got %d", len(listResp.Data))
+	}
+	resourceID := listResp.Data[0].ID
+
+	reportPayload := map[string]any{
+		"sources": []string{"agent", "docker"},
+		"notes":   "incorrect merge",
+	}
+	reportBytes, _ := json.Marshal(reportPayload)
+	reportRec := httptest.NewRecorder()
+	reportReq := httptest.NewRequest(http.MethodPost, "/api/v2/resources/"+resourceID+"/report-merge", bytes.NewReader(reportBytes))
+	h.HandleReportMerge(reportRec, reportReq)
+	if reportRec.Code != http.StatusOK {
+		t.Fatalf("report-merge status = %d, body=%s", reportRec.Code, reportRec.Body.String())
+	}
+
+	listRec2 := httptest.NewRecorder()
+	listReq2 := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=host", nil)
+	h.HandleListResources(listRec2, listReq2)
+
+	if listRec2.Code != http.StatusOK {
+		t.Fatalf("list status = %d, body=%s", listRec2.Code, listRec2.Body.String())
+	}
+
+	var listResp2 ResourcesV2Response
+	if err := json.NewDecoder(listRec2.Body).Decode(&listResp2); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listResp2.Data) != 2 {
+		t.Fatalf("expected 2 resources after report-merge, got %d", len(listResp2.Data))
+	}
+}

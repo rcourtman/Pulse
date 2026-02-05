@@ -18,6 +18,7 @@ type Resource struct {
 	Metrics  *ResourceMetrics `json:"metrics,omitempty"`
 
 	ParentID   *string `json:"parentId,omitempty"`
+	ParentName string  `json:"parentName,omitempty"`
 	ChildCount int     `json:"childCount,omitempty"`
 
 	Tags      []string `json:"tags,omitempty"`
@@ -102,11 +103,13 @@ type SourceTarget struct {
 
 // ResourceMetrics contains unified metrics derived from available sources.
 type ResourceMetrics struct {
-	CPU    *MetricValue `json:"cpu,omitempty"`
-	Memory *MetricValue `json:"memory,omitempty"`
-	Disk   *MetricValue `json:"disk,omitempty"`
-	NetIn  *MetricValue `json:"netIn,omitempty"`
-	NetOut *MetricValue `json:"netOut,omitempty"`
+	CPU       *MetricValue `json:"cpu,omitempty"`
+	Memory    *MetricValue `json:"memory,omitempty"`
+	Disk      *MetricValue `json:"disk,omitempty"`
+	NetIn     *MetricValue `json:"netIn,omitempty"`
+	NetOut    *MetricValue `json:"netOut,omitempty"`
+	DiskRead  *MetricValue `json:"diskRead,omitempty"`
+	DiskWrite *MetricValue `json:"diskWrite,omitempty"`
 }
 
 // MetricValue represents a metric value, optionally with totals.
@@ -121,12 +124,17 @@ type MetricValue struct {
 
 // ProxmoxData contains Proxmox-specific data for a resource.
 type ProxmoxData struct {
-	NodeName      string   `json:"nodeName,omitempty"`
-	ClusterName   string   `json:"clusterName,omitempty"`
-	PVEVersion    string   `json:"pveVersion,omitempty"`
-	KernelVersion string   `json:"kernelVersion,omitempty"`
-	Uptime        int64    `json:"uptime,omitempty"`
-	CPUInfo       *CPUInfo `json:"cpuInfo,omitempty"`
+	NodeName      string    `json:"nodeName,omitempty"`
+	ClusterName   string    `json:"clusterName,omitempty"`
+	Instance      string    `json:"instance,omitempty"`
+	VMID          int       `json:"vmid,omitempty"`
+	CPUs          int       `json:"cpus,omitempty"`
+	Template      bool      `json:"template,omitempty"`
+	PVEVersion    string    `json:"pveVersion,omitempty"`
+	KernelVersion string    `json:"kernelVersion,omitempty"`
+	Uptime        int64     `json:"uptime,omitempty"`
+	LastBackup    time.Time `json:"lastBackup,omitempty"`
+	CPUInfo       *CPUInfo  `json:"cpuInfo,omitempty"`
 	// Internal link hint to a host agent resource.
 	LinkedHostAgentID string `json:"-"`
 }
@@ -141,6 +149,7 @@ type AgentData struct {
 	KernelVersion     string             `json:"kernelVersion,omitempty"`
 	Architecture      string             `json:"architecture,omitempty"`
 	UptimeSeconds     int64              `json:"uptimeSeconds,omitempty"`
+	Temperature       *float64           `json:"temperature,omitempty"` // Max CPU temp in Celsius
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
 	Disks             []DiskInfo         `json:"disks,omitempty"`
 	// Internal link hints to proxmox resources.
@@ -152,6 +161,7 @@ type AgentData struct {
 // DockerData contains Docker host-specific data.
 type DockerData struct {
 	Hostname          string             `json:"hostname,omitempty"`
+	Image             string             `json:"image,omitempty"`
 	Runtime           string             `json:"runtime,omitempty"`
 	RuntimeVersion    string             `json:"runtimeVersion,omitempty"`
 	DockerVersion     string             `json:"dockerVersion,omitempty"`
@@ -159,6 +169,7 @@ type DockerData struct {
 	KernelVersion     string             `json:"kernelVersion,omitempty"`
 	Architecture      string             `json:"architecture,omitempty"`
 	AgentVersion      string             `json:"agentVersion,omitempty"`
+	UptimeSeconds     int64              `json:"uptimeSeconds,omitempty"`
 	Swarm             *DockerSwarmInfo   `json:"swarm,omitempty"`
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
 	Disks             []DiskInfo         `json:"disks,omitempty"`

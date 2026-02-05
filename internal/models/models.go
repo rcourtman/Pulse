@@ -1634,6 +1634,8 @@ func (s *State) SyncGuestBackupTimes() {
 			}
 		}
 	}
+
+	s.LastUpdate = time.Now()
 }
 
 // UpdateContainersForInstance updates containers for a specific instance, merging with existing containers

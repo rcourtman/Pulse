@@ -75,6 +75,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		KernelVersion:     host.KernelVersion,
 		Architecture:      host.Architecture,
 		UptimeSeconds:     host.UptimeSeconds,
+		Temperature:       maxCPUTemp(host.Sensors),
 		NetworkInterfaces: convertInterfaces(host.NetworkInterfaces),
 		Disks:             convertDisks(host.Disks),
 		LinkedNodeID:      host.LinkedNodeID,
@@ -147,6 +148,15 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 
 func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 	metrics := metricsFromVM(vm)
+	proxmox := &ProxmoxData{
+		NodeName:   vm.Node,
+		Instance:   vm.Instance,
+		VMID:       vm.VMID,
+		CPUs:       vm.CPUs,
+		Uptime:     vm.Uptime,
+		Template:   vm.Template,
+		LastBackup: vm.LastBackup,
+	}
 	resource := Resource{
 		Type:      ResourceTypeVM,
 		Name:      vm.Name,
@@ -154,6 +164,8 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		LastSeen:  vm.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metrics,
+		Proxmox:   proxmox,
+		Tags:      vm.Tags,
 	}
 	identity := ResourceIdentity{
 		Hostnames:   uniqueStrings([]string{vm.Name}),
@@ -164,6 +176,15 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 
 func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 	metrics := metricsFromContainer(ct)
+	proxmox := &ProxmoxData{
+		NodeName:   ct.Node,
+		Instance:   ct.Instance,
+		VMID:       ct.VMID,
+		CPUs:       ct.CPUs,
+		Uptime:     ct.Uptime,
+		Template:   ct.Template,
+		LastBackup: ct.LastBackup,
+	}
 	resource := Resource{
 		Type:      ResourceTypeLXC,
 		Name:      ct.Name,
@@ -171,6 +192,8 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 		LastSeen:  ct.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metrics,
+		Proxmox:   proxmox,
+		Tags:      ct.Tags,
 	}
 	identity := ResourceIdentity{
 		Hostnames:   uniqueStrings([]string{ct.Name}),
@@ -188,6 +211,7 @@ func resourceFromDockerContainer(ct models.DockerContainer) (Resource, ResourceI
 		LastSeen:  time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metrics,
+		Docker:    &DockerData{Image: ct.Image, UptimeSeconds: ct.UptimeSeconds},
 	}
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{ct.Name}),
@@ -278,6 +302,34 @@ func extractHostname(raw string) string {
 		raw = strings.Split(raw, ":")[0]
 	}
 	return raw
+}
+
+// maxCPUTemp returns the highest CPU temperature from host sensor readings.
+// It looks for cpu_package first, then falls back to max of any cpu_core_* key.
+func maxCPUTemp(sensors models.HostSensorSummary) *float64 {
+	temps := sensors.TemperatureCelsius
+	if len(temps) == 0 {
+		return nil
+	}
+	// Prefer cpu_package if available.
+	if v, ok := temps["cpu_package"]; ok {
+		return &v
+	}
+	// Fall back to max of any cpu-related key.
+	var best float64
+	found := false
+	for k, v := range temps {
+		if strings.HasPrefix(k, "cpu") {
+			if !found || v > best {
+				best = v
+				found = true
+			}
+		}
+	}
+	if found {
+		return &best
+	}
+	return nil
 }
 
 func uniqueStrings(values []string) []string {
