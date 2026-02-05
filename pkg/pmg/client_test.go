@@ -705,3 +705,33 @@ func TestClientMailCountNoTimespanParam(t *testing.T) {
 		t.Fatalf("GetMailCount failed: %v", err)
 	}
 }
+
+func TestClientClusterStatusNoParam(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/config/cluster/status" {
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+		if len(r.URL.Query()) != 0 {
+			t.Fatalf("expected no query params, got %v", r.URL.Query())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	if _, err := client.GetClusterStatus(context.Background(), false); err != nil {
+		t.Fatalf("GetClusterStatus failed: %v", err)
+	}
+}
