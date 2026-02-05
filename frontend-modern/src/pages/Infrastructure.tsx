@@ -1,4 +1,4 @@
-import { Show, createMemo } from 'solid-js';
+import { For, Show, createMemo, createSignal } from 'solid-js';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
@@ -6,10 +6,155 @@ import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import ServerIcon from 'lucide-solid/icons/server';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import type { Resource } from '@/types/resource';
 
 export function Infrastructure() {
   const { resources, loading, error, refetch } = useUnifiedResources();
   const hasResources = createMemo(() => resources().length > 0);
+  const [selectedSources, setSelectedSources] = createSignal<Set<string>>(new Set());
+  const [selectedStatuses, setSelectedStatuses] = createSignal<Set<string>>(new Set());
+
+  const sourceOptions = [
+    { key: 'proxmox', label: 'PVE' },
+    { key: 'agent', label: 'Agent' },
+    { key: 'docker', label: 'Docker' },
+    { key: 'pbs', label: 'PBS' },
+    { key: 'pmg', label: 'PMG' },
+    { key: 'kubernetes', label: 'K8s' },
+  ];
+
+  const statusLabels: Record<string, string> = {
+    online: 'Online',
+    offline: 'Offline',
+    degraded: 'Degraded',
+    paused: 'Paused',
+    unknown: 'Unknown',
+    running: 'Running',
+    stopped: 'Stopped',
+  };
+
+  const statusOrder = ['online', 'degraded', 'paused', 'offline', 'stopped', 'unknown', 'running'];
+
+  const normalizeSource = (value: string): string | null => {
+    const normalized = value.toLowerCase();
+    switch (normalized) {
+      case 'pve':
+      case 'proxmox':
+      case 'proxmox-pve':
+        return 'proxmox';
+      case 'agent':
+      case 'host-agent':
+        return 'agent';
+      case 'docker':
+        return 'docker';
+      case 'pbs':
+      case 'proxmox-pbs':
+        return 'pbs';
+      case 'pmg':
+      case 'proxmox-pmg':
+        return 'pmg';
+      case 'k8s':
+      case 'kubernetes':
+        return 'kubernetes';
+      default:
+        return null;
+    }
+  };
+
+  const getResourceSources = (resource: Resource): string[] => {
+    const platformData = resource.platformData as { sources?: string[] } | undefined;
+    const normalized = (platformData?.sources ?? [])
+      .map((source) => normalizeSource(source))
+      .filter((source): source is string => Boolean(source));
+    return Array.from(new Set(normalized));
+  };
+
+  const availableSources = createMemo(() => {
+    const set = new Set<string>();
+    resources().forEach((resource) => {
+      getResourceSources(resource).forEach((source) => set.add(source));
+    });
+    return set;
+  });
+
+  const availableStatuses = createMemo(() => {
+    const set = new Set<string>();
+    resources().forEach((resource) => {
+      const status = (resource.status || 'unknown').toLowerCase();
+      if (status) set.add(status);
+    });
+    return set;
+  });
+
+  const statusOptions = createMemo(() => {
+    const statuses = Array.from(availableStatuses());
+    statuses.sort((a, b) => {
+      const indexA = statusOrder.indexOf(a);
+      const indexB = statusOrder.indexOf(b);
+      if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+    return statuses.map((status) => ({
+      key: status,
+      label: statusLabels[status] ?? status,
+    }));
+  });
+
+  const hasActiveFilters = createMemo(
+    () => selectedSources().size > 0 || selectedStatuses().size > 0,
+  );
+
+  const toggleSource = (source: string) => {
+    const next = new Set(selectedSources());
+    if (next.has(source)) {
+      next.delete(source);
+    } else {
+      next.add(source);
+    }
+    setSelectedSources(next);
+  };
+
+  const toggleStatus = (status: string) => {
+    const next = new Set(selectedStatuses());
+    if (next.has(status)) {
+      next.delete(status);
+    } else {
+      next.add(status);
+    }
+    setSelectedStatuses(next);
+  };
+
+  const clearFilters = () => {
+    setSelectedSources(new Set());
+    setSelectedStatuses(new Set());
+  };
+
+  const filteredResources = createMemo(() => {
+    let filtered = resources();
+    const sources = selectedSources();
+    const statuses = selectedStatuses();
+
+    if (sources.size > 0) {
+      filtered = filtered.filter((resource) => {
+        const resourceSources = getResourceSources(resource);
+        if (resourceSources.length === 0) return false;
+        return resourceSources.some((source) => sources.has(source));
+      });
+    }
+
+    if (statuses.size > 0) {
+      filtered = filtered.filter((resource) => {
+        const status = (resource.status || 'unknown').toLowerCase();
+        return statuses.has(status);
+      });
+    }
+
+    return filtered;
+  });
+
+  const hasFilteredResources = createMemo(() => filteredResources().length > 0);
 
   return (
     <div class="space-y-4 px-4">
@@ -58,7 +203,107 @@ export function Infrastructure() {
               </Card>
             }
           >
-            <UnifiedResourceTable resources={resources()} />
+            <div class="space-y-3">
+              <div class="flex flex-wrap items-center gap-3 rounded-md border border-gray-200 bg-white/70 px-3 py-2 text-[10px] text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-400">
+                <div class="flex items-center gap-2">
+                  <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
+                  <div class="flex flex-wrap gap-1.5">
+                    <For each={sourceOptions}>
+                      {(source) => {
+                        const isSelected = () => selectedSources().has(source.key);
+                        const isDisabled = () =>
+                          !availableSources().has(source.key) && !selectedSources().has(source.key);
+                        return (
+                          <button
+                            type="button"
+                            disabled={isDisabled()}
+                            aria-pressed={isSelected()}
+                            onClick={() => toggleSource(source.key)}
+                            class={`px-2 py-0.5 rounded border text-[10px] font-medium transition-colors ${
+                              isSelected()
+                                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                : isDisabled()
+                                  ? 'border-gray-200 text-gray-300 dark:border-gray-700 dark:text-gray-600 cursor-not-allowed'
+                                  : 'border-gray-300 text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/50'
+                            }`}
+                          >
+                            {source.label}
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </div>
+
+                <div class="h-4 w-px bg-gray-200 dark:bg-gray-700" />
+
+                <div class="flex items-center gap-2">
+                  <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
+                  <div class="flex flex-wrap gap-1.5">
+                    <For each={statusOptions()}>
+                      {(status) => {
+                        const isSelected = () => selectedStatuses().has(status.key);
+                        const isDisabled = () =>
+                          !availableStatuses().has(status.key) && !selectedStatuses().has(status.key);
+                        return (
+                          <button
+                            type="button"
+                            disabled={isDisabled()}
+                            aria-pressed={isSelected()}
+                            onClick={() => toggleStatus(status.key)}
+                            class={`px-2 py-0.5 rounded border text-[10px] font-medium transition-colors ${
+                              isSelected()
+                                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                : isDisabled()
+                                  ? 'border-gray-200 text-gray-300 dark:border-gray-700 dark:text-gray-600 cursor-not-allowed'
+                                  : 'border-gray-300 text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/50'
+                            }`}
+                          >
+                            {status.label}
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </div>
+
+                <Show when={hasActiveFilters()}>
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    class="ml-auto text-[10px] font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    Clear
+                  </button>
+                </Show>
+              </div>
+
+              <Show
+                when={hasFilteredResources()}
+                fallback={
+                  <Card class="p-6">
+                    <EmptyState
+                      icon={<ServerIcon class="w-6 h-6 text-gray-400" />}
+                      title="No resources match filters"
+                      description="Try adjusting the source or status filters."
+                      actions={
+                        <Show when={hasActiveFilters()}>
+                          <button
+                            type="button"
+                            onClick={clearFilters}
+                            class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                          >
+                            Clear filters
+                          </button>
+                        </Show>
+                      }
+                    />
+                  </Card>
+                }
+              >
+                <UnifiedResourceTable resources={filteredResources()} />
+              </Show>
+            </div>
           </Show>
         </Show>
       </Show>
