@@ -125,3 +125,35 @@ func TestStoreMetadataHelpers(t *testing.T) {
 		t.Fatalf("expected max timestamp 200, got %d (ok=%t)", ts, ok)
 	}
 }
+
+func TestStoreQueryDownsamplingStats(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(DefaultConfig(dir))
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	start := time.Unix(1000, 0)
+	store.writeBatch([]bufferedMetric{
+		{resourceType: "vm", resourceID: "v2", metricType: "cpu", value: 10, timestamp: start, tier: TierRaw},
+		{resourceType: "vm", resourceID: "v2", metricType: "cpu", value: 30, timestamp: start.Add(20 * time.Second), tier: TierRaw},
+		{resourceType: "vm", resourceID: "v2", metricType: "cpu", value: 20, timestamp: start.Add(50 * time.Second), tier: TierRaw},
+	})
+
+	points, err := store.Query("vm", "v2", "cpu", start.Add(-time.Minute), start.Add(time.Minute), 120)
+	if err != nil {
+		t.Fatalf("Query downsampled failed: %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("expected 1 bucketed point, got %d", len(points))
+	}
+
+	point := points[0]
+	if point.Timestamp.Unix() != 1020 {
+		t.Fatalf("expected bucket timestamp 1020, got %d", point.Timestamp.Unix())
+	}
+	if point.Value != 20 || point.Min != 10 || point.Max != 30 {
+		t.Fatalf("unexpected stats: value=%v min=%v max=%v", point.Value, point.Min, point.Max)
+	}
+}
