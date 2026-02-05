@@ -75,12 +75,60 @@ Lightweight HTML status page for quick checks.
 ### Unified Resources
 `GET /api/resources`
 Returns a unified, flattened resource list. Requires `monitoring:read`.
+Legacy endpoint; prefer `/api/v2/resources` for the unified resource model.
 
 `GET /api/resources/stats`
 Summary counts and health rollups.
 
 `GET /api/resources/{id}`
 Fetch a single resource by ID.
+
+### Unified Resources (v2)
+`GET /api/v2/resources`
+Returns the unified resource list with pagination + aggregations. Requires `monitoring:read`.
+
+Query params:
+- `type`: comma-separated list (e.g., `host`, `vm`, `lxc`, `container`, `storage`, `pbs`, `pmg`, `ceph`)
+- `source`: comma-separated list (e.g., `proxmox`, `agent`, `docker`, `pbs`, `pmg`, `kubernetes`)
+- `status`: comma-separated list (`online`, `offline`, `warning`, `unknown`)
+- `parent`: parent resource ID
+- `cluster`: cluster name
+- `q`: name search (contains match)
+- `tags`: comma-separated tags
+- `page`: page number (default `1`)
+- `limit`: page size (default `50`, max `100`)
+- `sort`: `name` (default), `status`, `type`, `lastSeen`
+- `order`: `asc` (default) or `desc`
+
+`GET /api/v2/resources/stats`
+Returns aggregations (counts + health rollups).
+
+`GET /api/v2/resources/{id}`
+Fetch a single resource by ID.
+
+`GET /api/v2/resources/{id}/children`
+Returns child resources for the parent ID.
+
+`GET /api/v2/resources/{id}/metrics`
+Returns the resource metrics payload.
+
+`POST /api/v2/resources/{id}/link`
+Manually link two resources.
+```json
+{ "targetId": "resource-id", "reason": "optional note" }
+```
+
+`POST /api/v2/resources/{id}/unlink`
+Manually unlink two resources.
+```json
+{ "targetId": "resource-id", "reason": "optional note" }
+```
+
+`POST /api/v2/resources/{id}/report-merge`
+Report an incorrect merge (creates exclusions).
+```json
+{ "sources": ["proxmox", "agent"], "notes": "optional note" }
+```
 
 ### Resource Metadata
 User notes, tags, and custom URLs for resources.

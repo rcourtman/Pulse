@@ -16,15 +16,17 @@ This guide explains what changed in the unified navigation release and how to fi
 | Docker | `/workloads` (containers) + `/infrastructure` (hosts) |
 | Proxmox Storage | `/storage` |
 | Proxmox Backups | `/backups` |
-| Proxmox Replication | `/backups` (Replication tab) |
-| Proxmox Mail Gateway | `/services` |
+| Proxmox Replication | `/replication` (also accessible via Backups if enabled) |
+| Proxmox Ceph | `/ceph` (summary also visible in Storage) |
+| Proxmox Mail Gateway | `/mail` (Services lists PMG instances) |
 
 ## New Features to Know
 
 ### Global Search
-- Press `/` or `Cmd/Ctrl+K` to open search.
+- Press `/` to focus search.
 - Search by name, node, type, tags, or status.
 - Results navigate directly to the relevant view.
+ - Use `Cmd/Ctrl+K` for the command palette.
 
 ### Keyboard Shortcuts
 - `g i` → Infrastructure
