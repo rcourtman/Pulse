@@ -47,7 +47,11 @@ func TestGetExtendedManager(t *testing.T) {
 	orig := GetManager()
 	t.Cleanup(func() { SetManager(orig) })
 
-	SetManager(dummyManager{})
+	base := &dummyManager{}
+	SetManager(base)
+	if GetManager() != base {
+		t.Fatalf("expected GetManager to return the set manager")
+	}
 	if GetExtendedManager() != nil {
 		t.Fatalf("expected nil extended manager")
 	}
