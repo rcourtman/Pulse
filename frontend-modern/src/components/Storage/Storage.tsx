@@ -15,7 +15,6 @@ import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
-import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -681,8 +680,6 @@ const Storage: Component = () => {
 
   return (
     <div class="space-y-3">
-      <ProxmoxSectionNav current="storage" />
-
       {/* Node Selector */}
       <UnifiedNodeSelector
         currentTab="storage"
@@ -690,6 +687,7 @@ const Storage: Component = () => {
         onNodeSelect={handleNodeSelect}
         filteredStorage={sortedStorage()}
         searchTerm={searchTerm()}
+        showNodeSummary={false}
       />
 
       <Show

@@ -1,7 +1,6 @@
 import { Component, For, Show, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useWebSocket } from '@/App';
-import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { CephPool, CephServiceStatus } from '@/types/api';
@@ -340,7 +339,6 @@ const Ceph: Component = () => {
     return (
         <div class="space-y-4">
             {/* Navigation */}
-            <ProxmoxSectionNav current="ceph" />
 
             {/* Loading State */}
             <Show when={isLoading()}>

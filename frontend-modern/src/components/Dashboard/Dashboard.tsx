@@ -17,7 +17,7 @@ import type { GuestMetadata } from '@/api/guestMetadata';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
-import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 import { isNodeOnline, OFFLINE_HEALTH_STATUSES, DEGRADED_HEALTH_STATUSES } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
@@ -215,6 +215,7 @@ export function Dashboard(props: DashboardProps) {
   const { isMobile } = useBreakpoint();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const isWorkloadsRoute = () => location.pathname === '/workloads';
 
   // Kiosk mode - hide filter panel for clean dashboard display
   // Usage: Add ?kiosk=1 to URL or use the toggle button in the header
@@ -291,6 +292,9 @@ export function Dashboard(props: DashboardProps) {
   const v2Enabled = createMemo(() => props.useV2Workloads === true);
   const v2Workloads = useV2Workloads(v2Enabled);
   const v2Loaded = createMemo(() => v2Enabled() && !v2Workloads.loading() && !v2Workloads.error());
+  const sortedNodes = createMemo(() =>
+    [...props.nodes].sort((a, b) => getNodeDisplayName(a).localeCompare(getNodeDisplayName(b))),
+  );
 
   const legacyGuests = createMemo<WorkloadGuest[]>(() => [
     ...props.vms.map((vm) => ({ ...vm, workloadType: 'vm', displayId: String(vm.vmid) })),
@@ -933,12 +937,40 @@ export function Dashboard(props: DashboardProps) {
 
   return (
     <div class="space-y-3">
-      {/* Section nav - hidden in kiosk mode */}
-      <Show when={!kioskMode()}>
-        <ProxmoxSectionNav current="overview" />
+      <Show when={isWorkloadsRoute()}>
+        <SectionHeader title="Workloads" size="lg" />
       </Show>
 
-      {/* Unified Node Selector - always visible (this is the main dashboard content) */}
+      <Show when={isWorkloadsRoute()}>
+        <Card padding="sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <label
+              for="workloads-node-filter"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >
+              Host
+            </label>
+            <select
+              id="workloads-node-filter"
+              value={selectedNode() ?? ''}
+              onChange={(e) => {
+                const value = e.currentTarget.value;
+                handleNodeSelect(value || null, value ? 'pve' : null);
+              }}
+              class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="">All nodes</option>
+              <For each={sortedNodes()}>
+                {(node) => (
+                  <option value={node.id}>{getNodeDisplayName(node)}</option>
+                )}
+              </For>
+            </select>
+          </div>
+        </Card>
+      </Show>
+
+      {/* Unified Node Selector - infrastructure summary (hidden on workloads) */}
       <UnifiedNodeSelector
         currentTab="dashboard"
         globalTemperatureMonitoringEnabled={ws.state.temperatureMonitoringEnabled}
@@ -947,6 +979,7 @@ export function Dashboard(props: DashboardProps) {
         filteredVms={filteredGuests().filter((g) => resolveWorkloadType(g) === 'vm') as VM[]}
         filteredContainers={filteredGuests().filter((g) => resolveWorkloadType(g) === 'lxc') as Container[]}
         searchTerm={search()}
+        showNodeSummary={!isWorkloadsRoute()}
       />
 
       {/* Dashboard Filter - hidden in kiosk mode */}

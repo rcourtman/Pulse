@@ -1,7 +1,6 @@
 import { Component, Show, For, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useWebSocket } from '@/App';
-import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatRelativeTime, formatBytes } from '@/utils/format';
@@ -278,8 +277,6 @@ const MailGateway: Component = () => {
 
   return (
     <div class="space-y-4">
-      <ProxmoxSectionNav current="mail" />
-
       {/* Loading State */}
       <Show when={isLoading()}>
         <Card padding="lg">

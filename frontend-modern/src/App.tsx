@@ -41,7 +41,6 @@ import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
 import { MobileNavBar } from './components/shared/MobileNavBar';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State, Alert } from '@/types/api';
-import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { startMetricsSampler } from './stores/metricsSampler';
 import { seedFromBackend } from './stores/metricsHistory';
 import { getMetricsViewMode } from './stores/metricsViewMode';
@@ -50,7 +49,6 @@ import ServerIcon from 'lucide-solid/icons/server';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
 import ArchiveIcon from 'lucide-solid/icons/archive';
 import WrenchIcon from 'lucide-solid/icons/wrench';
-import MonitorIcon from 'lucide-solid/icons/monitor';
 import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import NetworkIcon from 'lucide-solid/icons/network';
@@ -67,7 +65,6 @@ import { useResourcesAsLegacy } from './hooks/useResources';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
 import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode, getKioskModePreference } from './utils/url';
-import { showToast } from '@/utils/toast';
 import { GlobalSearch } from '@/components/shared/GlobalSearch';
 
 
@@ -84,17 +81,9 @@ const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
-const DockerHosts = lazy(() =>
-  import('./components/Docker/DockerHosts').then((module) => ({ default: module.DockerHosts })),
-);
 const KubernetesClusters = lazy(() =>
   import('./components/Kubernetes/KubernetesClusters').then((module) => ({
     default: module.KubernetesClusters,
-  })),
-);
-const HostsOverview = lazy(() =>
-  import('./components/Hosts/HostsOverview').then((module) => ({
-    default: module.HostsOverview,
   })),
 );
 const InfrastructurePage = lazy(() => import('./pages/Infrastructure'));
@@ -125,23 +114,6 @@ export const useDarkMode = () => {
   }
   return context;
 };
-
-// Docker route component - uses unified resources via useResourcesAsLegacy hook
-function DockerRoute() {
-  const wsContext = useContext(WebSocketContext);
-  if (!wsContext) {
-    return <div>Loading...</div>;
-  }
-  const { activeAlerts } = wsContext;
-  const { asDockerHosts } = useResourcesAsLegacy();
-
-  return <DockerHosts hosts={asDockerHosts() as any} activeAlerts={activeAlerts} />;
-}
-
-// Hosts route component - HostsOverview uses useResourcesAsLegacy directly for proper reactivity
-function HostsRoute() {
-  return <HostsOverview />;
-}
 
 function KubernetesRoute() {
   const wsContext = useContext(WebSocketContext);
@@ -287,11 +259,8 @@ function App() {
       () => import('./components/Backups/Backups'),
       () => import('./components/Replication/Replication'),
       () => import('./components/PMG/MailGateway'),
-      () => import('./components/Hosts/HostsOverview'),
-
       () => import('./pages/Alerts'),
       () => import('./components/Settings/Settings'),
-      () => import('./components/Docker/DockerHosts'),
     ];
 
     loaders.forEach((load) => {
@@ -848,17 +817,6 @@ function App() {
     );
   };
 
-  const LegacyRedirect = (props: { to: string; toast?: { type: 'info' | 'success' | 'warning' | 'error'; title: string; message?: string } }) => {
-    const navigate = useNavigate();
-    onMount(() => {
-      if (props.toast) {
-        showToast(props.toast.type, props.toast.title, props.toast.message);
-      }
-      navigate(props.to, { replace: true });
-    });
-    return null;
-  };
-
   const SettingsRoute = () => (
     <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
   );
@@ -1000,40 +958,21 @@ function App() {
   // Use Router with routes
   return (
     <Router root={RootLayout}>
-      <Route path="/" component={() => <Navigate href="/proxmox/overview" />} />
-      <Route path="/proxmox" component={() => <Navigate href="/proxmox/overview" />} />
-      <Route
-        path="/proxmox/overview"
-        component={() => (
-          <LegacyRedirect
-            to="/infrastructure"
-            toast={{ type: 'info', title: 'Dashboard moved to Infrastructure' }}
-          />
-        )}
-      />
+      <Route path="/" component={() => <Navigate href="/infrastructure" />} />
+      <Route path="/proxmox" component={() => <Navigate href="/infrastructure" />} />
       <Route path="/workloads" component={WorkloadsView} />
-      <Route path="/proxmox/storage" component={() => <LegacyRedirect to="/storage" />} />
+      <Route path="/proxmox/storage" component={() => <Navigate href="/storage" />} />
       <Route path="/proxmox/ceph" component={CephPage} />
       <Route path="/proxmox/replication" component={Replication} />
       <Route path="/proxmox/mail" component={MailGateway} />
-      <Route path="/proxmox/backups" component={() => <LegacyRedirect to="/backups" />} />
+      <Route path="/proxmox/backups" component={() => <Navigate href="/backups" />} />
       <Route path="/storage" component={StorageComponent} />
       <Route path="/backups" component={UnifiedBackups} />
       <Route path="/services" component={Services} />
-      <Route
-        path="/docker"
-        component={() => (
-          <LegacyRedirect
-            to="/infrastructure?source=docker"
-            toast={{ type: 'info', title: 'Docker hosts moved to Infrastructure' }}
-          />
-        )}
-      />
       <Route path="/kubernetes" component={KubernetesRoute} />
-      <Route path="/hosts" component={() => <LegacyRedirect to="/infrastructure?source=agent" />} />
       <Route path="/infrastructure" component={InfrastructurePage} />
 
-      <Route path="/servers" component={() => <Navigate href="/hosts" />} />
+      <Route path="/servers" component={() => <Navigate href="/infrastructure" />} />
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/ai/*" component={AIIntelligencePage} />
       <Route path="/settings/*" component={SettingsRoute} />
@@ -1111,24 +1050,6 @@ function AppLayout(props: {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const readSeenPlatforms = (): Record<string, boolean> => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEYS.PLATFORMS_SEEN);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Record<string, boolean>;
-        if (parsed && typeof parsed === 'object') {
-          return parsed;
-        }
-      }
-    } catch (error) {
-      logger.warn('Failed to parse stored platform visibility preferences', error);
-    }
-    return {};
-  };
-
-  const [seenPlatforms, setSeenPlatforms] = createSignal<Record<string, boolean>>(readSeenPlatforms());
-
   // Reactive kiosk mode state
   const [kioskMode, setKioskModeSignal] = createSignal(isKioskMode());
 
@@ -1160,26 +1081,6 @@ function AppLayout(props: {
     setKioskModeSignal(newValue);
   };
 
-  const persistSeenPlatforms = (map: Record<string, boolean>) => {
-    if (typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem(STORAGE_KEYS.PLATFORMS_SEEN, JSON.stringify(map));
-    } catch (error) {
-      logger.warn('Failed to persist platform visibility preferences', error);
-    }
-  };
-
-  const markPlatformSeen = (platformId: string) => {
-    setSeenPlatforms((current) => {
-      if (current[platformId]) {
-        return current;
-      }
-      const updated = { ...current, [platformId]: true };
-      persistSeenPlatforms(updated);
-      return updated;
-    });
-  };
-
   // Determine active tab from current path
   const getActiveTab = () => {
     const path = location.pathname;
@@ -1188,50 +1089,19 @@ function AppLayout(props: {
     if (path.startsWith('/storage')) return 'storage';
     if (path.startsWith('/backups')) return 'backups';
     if (path.startsWith('/services')) return 'services';
-    if (path.startsWith('/proxmox')) return 'proxmox';
-    if (path.startsWith('/docker')) return 'docker';
+    if (path.startsWith('/proxmox/ceph') || path.startsWith('/proxmox/storage')) return 'storage';
+    if (path.startsWith('/proxmox/replication') || path.startsWith('/proxmox/backups')) return 'backups';
+    if (path.startsWith('/proxmox/mail')) return 'services';
+    if (path.startsWith('/proxmox')) return 'infrastructure';
     if (path.startsWith('/kubernetes')) return 'kubernetes';
-    if (path.startsWith('/hosts')) return 'hosts';
-    if (path.startsWith('/servers')) return 'hosts'; // Legacy redirect
+    if (path.startsWith('/servers')) return 'infrastructure';
     if (path.startsWith('/alerts')) return 'alerts';
     if (path.startsWith('/ai')) return 'ai';
     if (path.startsWith('/settings')) return 'settings';
-    return 'proxmox';
+    return 'infrastructure';
   };
-  const hasDockerHosts = createMemo(() => (props.state().dockerHosts?.length ?? 0) > 0);
   const hasKubernetesClusters = createMemo(() => (props.state().kubernetesClusters?.length ?? 0) > 0);
-  const hasHosts = createMemo(() => (props.state().hosts?.length ?? 0) > 0);
   const hasPMGServices = createMemo(() => (props.state().pmg?.length ?? 0) > 0);
-  const hasProxmoxHosts = createMemo(
-    () =>
-      (props.state().nodes?.length ?? 0) > 0 ||
-      (props.state().vms?.length ?? 0) > 0 ||
-      (props.state().containers?.length ?? 0) > 0,
-  );
-
-  createEffect(() => {
-    if (hasDockerHosts()) {
-      markPlatformSeen('docker');
-    }
-  });
-
-  createEffect(() => {
-    if (hasKubernetesClusters()) {
-      markPlatformSeen('kubernetes');
-    }
-  });
-
-  createEffect(() => {
-    if (hasProxmoxHosts()) {
-      markPlatformSeen('proxmox');
-    }
-  });
-
-  createEffect(() => {
-    if (hasHosts()) {
-      markPlatformSeen('hosts');
-    }
-  });
 
   type PlatformTab = {
     id: string;
@@ -1314,34 +1184,6 @@ function AppLayout(props: {
         alwaysShow: false,
       },
       {
-        id: 'proxmox' as const,
-        label: 'Proxmox Overview',
-        route: '/proxmox/overview',
-        settingsRoute: '/settings',
-        tooltip: 'Legacy Proxmox dashboard',
-        enabled: hasProxmoxHosts() || !!seenPlatforms()['proxmox'],
-        live: hasProxmoxHosts(),
-        icon: (
-          <ProxmoxIcon class="w-4 h-4 shrink-0" />
-        ),
-        alwaysShow: true, // Proxmox is the default, always show
-        badge: 'Legacy',
-      },
-      {
-        id: 'docker' as const,
-        label: 'Docker',
-        route: '/docker',
-        settingsRoute: '/settings/docker',
-        tooltip: 'Legacy Docker hosts and containers',
-        enabled: hasDockerHosts() || !!seenPlatforms()['docker'],
-        live: hasDockerHosts(),
-        icon: (
-          <BoxesIcon class="w-4 h-4 shrink-0" />
-        ),
-        alwaysShow: true, // Docker is commonly used, keep visible
-        badge: 'Legacy',
-      },
-      {
         id: 'kubernetes' as const,
         label: 'Kubernetes',
         route: '/kubernetes',
@@ -1353,20 +1195,6 @@ function AppLayout(props: {
           <NetworkIcon class="w-4 h-4 shrink-0" />
         ),
         alwaysShow: false, // Only show when clusters exist
-      },
-      {
-        id: 'hosts' as const,
-        label: 'Hosts',
-        route: '/hosts',
-        settingsRoute: '/settings/host-agents',
-        tooltip: 'Legacy hosts view',
-        enabled: hasHosts() || !!seenPlatforms()['hosts'],
-        live: hasHosts(),
-        icon: (
-          <MonitorIcon class="w-4 h-4 shrink-0" />
-        ),
-        alwaysShow: true, // Hosts is commonly used, keep visible
-        badge: 'Legacy',
       },
     ];
 

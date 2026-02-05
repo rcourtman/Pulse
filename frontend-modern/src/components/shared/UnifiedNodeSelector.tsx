@@ -1,4 +1,4 @@
-import { Component, createSignal, createEffect, createMemo, onMount, onCleanup } from 'solid-js';
+import { Component, Show, createSignal, createEffect, createMemo, onMount, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { NodeSummaryTable } from './NodeSummaryTable';
 import type { Node, VM, Container, Storage } from '@/types/api';
@@ -13,6 +13,7 @@ interface UnifiedNodeSelectorProps {
   filteredContainers?: Container[];
   filteredStorage?: Storage[];
   searchTerm?: string;
+  showNodeSummary?: boolean;
 }
 
 export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) => {
@@ -97,21 +98,24 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
 
   // Parent components now handle conditional rendering, so we can render directly
   const nodes = createMemo(() => props.nodes || state.nodes || []);
+  const showNodeSummary = () => props.showNodeSummary ?? true;
 
   return (
-    <div class="space-y-2 mb-4">
-      <NodeSummaryTable
-        nodes={nodes()}
-        pbsInstances={props.currentTab === 'backups' ? state.pbs : undefined}
-        vms={state.vms} // Always use unfiltered data for counts
-        containers={state.containers} // Always use unfiltered data for counts
-        storage={state.storage} // Always use unfiltered data for counts
-        backupCounts={backupCounts()}
-        currentTab={props.currentTab}
-        selectedNode={selectedNode()}
-        globalTemperatureMonitoringEnabled={props.globalTemperatureMonitoringEnabled}
-        onNodeClick={handleNodeClick}
-      />
-    </div>
+    <Show when={showNodeSummary()}>
+      <div class="space-y-2 mb-4">
+        <NodeSummaryTable
+          nodes={nodes()}
+          pbsInstances={props.currentTab === 'backups' ? state.pbs : undefined}
+          vms={state.vms} // Always use unfiltered data for counts
+          containers={state.containers} // Always use unfiltered data for counts
+          storage={state.storage} // Always use unfiltered data for counts
+          backupCounts={backupCounts()}
+          currentTab={props.currentTab}
+          selectedNode={selectedNode()}
+          globalTemperatureMonitoringEnabled={props.globalTemperatureMonitoringEnabled}
+          onNodeClick={handleNodeClick}
+        />
+      </div>
+    </Show>
   );
 };

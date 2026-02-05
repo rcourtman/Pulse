@@ -1,7 +1,6 @@
 import type { Component } from 'solid-js';
 import { Show, For, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -220,7 +219,6 @@ const Replication: Component = () => {
 
   return (
     <div class="space-y-4">
-      <ProxmoxSectionNav current="replication" />
 
       {/* Loading State */}
       <Show when={isLoading()}>

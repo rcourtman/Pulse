@@ -1200,6 +1200,7 @@ const UnifiedBackups: Component = () => {
           setIsSearchLocked(namespaceFilter !== '');
         }}
         searchTerm={searchTerm()}
+        showNodeSummary={false}
       />
 
       {/* PBS Enhancement Banner - shown when PBS storage exists via PVE but no direct PBS connection */}

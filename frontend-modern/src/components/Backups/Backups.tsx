@@ -3,7 +3,6 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useWebSocket } from '@/App';
 import UnifiedBackups from './UnifiedBackups';
-import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { useInstanceWarnings } from '@/hooks/useInstanceWarnings';
 import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 
@@ -31,8 +30,6 @@ const Backups: Component = () => {
 
   return (
     <div class="space-y-3">
-      <ProxmoxSectionNav current="backups" />
-
       {/* Permission Warnings Banner */}
       <Show when={allWarnings().length > 0}>
         <Card padding="md" tone="warning">
