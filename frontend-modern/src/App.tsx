@@ -833,6 +833,20 @@ function App() {
     );
   };
 
+  // Workloads view - uses v2 workloads with legacy fallback
+  const WorkloadsView = () => {
+    const { asVMs, asContainers, asNodes } = useResourcesAsLegacy();
+
+    return (
+      <Dashboard
+        vms={asVMs() as any}
+        containers={asContainers() as any}
+        nodes={asNodes() as any}
+        useV2Workloads
+      />
+    );
+  };
+
   const SettingsRoute = () => (
     <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
   );
@@ -946,7 +960,7 @@ function App() {
       <Route path="/" component={() => <Navigate href="/proxmox/overview" />} />
       <Route path="/proxmox" component={() => <Navigate href="/proxmox/overview" />} />
       <Route path="/proxmox/overview" component={DashboardView} />
-      <Route path="/workloads" component={DashboardView} />
+      <Route path="/workloads" component={WorkloadsView} />
       <Route path="/proxmox/storage" component={StorageComponent} />
       <Route path="/proxmox/ceph" component={CephPage} />
       <Route path="/proxmox/replication" component={Replication} />
