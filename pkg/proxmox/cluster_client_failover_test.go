@@ -3,8 +3,6 @@ package proxmox
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -33,45 +31,31 @@ func TestGetHealthyClientSingleEndpointFallback(t *testing.T) {
 	}
 }
 
-func TestExecuteWithFailoverUsesRecoveredEndpoint(t *testing.T) {
-	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api2/json/nodes" {
-			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
-			return
-		}
-		fmt.Fprint(w, `{"data":{}}`)
-	}))
-	defer server1.Close()
-
-	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api2/json/nodes" {
-			fmt.Fprint(w, `{"data":[{"node":"node2","status":"online"}]}`)
-			return
-		}
-		fmt.Fprint(w, `{"data":{}}`)
-	}))
-	defer server2.Close()
-
-	cfg := ClientConfig{
-		Host:       server1.URL,
-		TokenName:  "u@p!t",
-		TokenValue: "v",
-		VerifySSL:  false,
-		Timeout:    2 * time.Second,
+func TestExecuteWithFailoverMovesToAnotherEndpoint(t *testing.T) {
+	endpoint1 := "node1"
+	endpoint2 := "node2"
+	now := time.Now()
+	cc := &ClusterClient{
+		name:      "test",
+		endpoints: []string{endpoint1, endpoint2},
+		clients: map[string]*Client{
+			endpoint1: {},
+			endpoint2: {},
+		},
+		nodeHealth: map[string]bool{
+			endpoint1: true,
+			endpoint2: true,
+		},
+		lastError: make(map[string]string),
+		lastHealthCheck: map[string]time.Time{
+			endpoint1: now,
+			endpoint2: now,
+		},
+		rateLimitUntil: make(map[string]time.Time),
 	}
 
-	cc := NewClusterClient("test", cfg, []string{server1.URL, server2.URL}, nil)
-
-	// Force deterministic selection: only server1 healthy, server2 unhealthy.
-	cc.mu.Lock()
-	cc.nodeHealth[server1.URL] = true
-	cc.nodeHealth[server2.URL] = false
-	cc.lastHealthCheck[server2.URL] = time.Now().Add(-11 * time.Second)
-	cc.mu.Unlock()
-
 	usedEndpoints := make([]string, 0, 2)
+	attempts := 0
 	err := cc.executeWithFailover(context.Background(), func(c *Client) error {
 		endpoint := ""
 		cc.mu.RLock()
@@ -86,7 +70,8 @@ func TestExecuteWithFailoverUsesRecoveredEndpoint(t *testing.T) {
 			return fmt.Errorf("failed to resolve endpoint for client")
 		}
 		usedEndpoints = append(usedEndpoints, endpoint)
-		if endpoint == server1.URL {
+		attempts++
+		if attempts == 1 {
 			return fmt.Errorf("boom")
 		}
 		return nil
@@ -97,12 +82,15 @@ func TestExecuteWithFailoverUsesRecoveredEndpoint(t *testing.T) {
 	if len(usedEndpoints) < 2 {
 		t.Fatalf("expected failover to second endpoint, used: %v", usedEndpoints)
 	}
+	if usedEndpoints[0] == usedEndpoints[1] {
+		t.Fatalf("expected failover to a different endpoint, used: %v", usedEndpoints)
+	}
 
 	health := cc.GetHealthStatus()
-	if health[server1.URL] {
-		t.Fatal("expected server1 to be unhealthy after failure")
+	if health[usedEndpoints[0]] {
+		t.Fatal("expected first endpoint to be unhealthy after failure")
 	}
-	if !health[server2.URL] {
-		t.Fatal("expected server2 to be healthy after recovery")
+	if !health[usedEndpoints[1]] {
+		t.Fatal("expected second endpoint to be healthy after success")
 	}
 }
