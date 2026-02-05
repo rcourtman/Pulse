@@ -64,6 +64,13 @@ func TestValidateWebhookURL(t *testing.T) {
 	}
 
 	resolveWebhookIPs = func(ctx context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{}, nil
+	}
+	if err := validateWebhookURL(context.Background(), "https://example.com"); err == nil {
+		t.Fatalf("expected empty resolution error")
+	}
+
+	resolveWebhookIPs = func(ctx context.Context, host string) ([]net.IPAddr, error) {
 		return []net.IPAddr{{IP: net.ParseIP("10.0.0.2")}}, nil
 	}
 	if err := validateWebhookURL(context.Background(), "https://example.com"); err == nil {
