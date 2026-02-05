@@ -98,6 +98,26 @@ func TestGenerateRecommendations_Underutilized(t *testing.T) {
 	assertStringSliceContains(t, recs, "underutilized")
 }
 
+func TestGenerateRecommendations_DefaultMessage(t *testing.T) {
+	g := NewPDFGenerator()
+	data := &ReportData{}
+
+	recs := g.generateRecommendations(data, 0, 0)
+	assertStringSliceContains(t, recs, "No immediate action required")
+}
+
+func TestGenerateRecommendations_UsageMetric(t *testing.T) {
+	g := NewPDFGenerator()
+	data := &ReportData{
+		Summary: MetricSummary{ByMetric: map[string]MetricStats{
+			"usage": {Avg: 90, Max: 95},
+		}},
+	}
+
+	recs := g.generateRecommendations(data, 0, 0)
+	assertStringSliceContains(t, recs, "Clean up disk space")
+}
+
 func TestGetStatColor(t *testing.T) {
 	if got := getStatColor(95); got != colorDanger {
 		t.Fatalf("expected danger color")
