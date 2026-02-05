@@ -81,3 +81,48 @@ func TestShouldSkipPhase(t *testing.T) {
 		t.Fatalf("expected phase to run without deadline")
 	}
 }
+
+func TestBuildEnvironmentInfoCopiesData(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:       envdetect.DockerBridge,
+		Confidence: 0.75,
+		Warnings:   []string{"warning-one"},
+		Metadata: map[string]string{
+			"container_type": "docker",
+		},
+		Phases: []envdetect.SubnetPhase{
+			{
+				Name:       "phase-a",
+				Confidence: 0.9,
+				Subnets:    []net.IPNet{},
+			},
+		},
+	}
+
+	info := buildEnvironmentInfo(profile)
+	if info == nil {
+		t.Fatal("expected environment info, got nil")
+	}
+	if info.Type != "docker_bridge" || info.Confidence != 0.75 {
+		t.Fatalf("unexpected info: %+v", info)
+	}
+	if len(info.Warnings) != 1 || info.Warnings[0] != "warning-one" {
+		t.Fatalf("unexpected warnings: %v", info.Warnings)
+	}
+	if info.Metadata["container_type"] != "docker" {
+		t.Fatalf("unexpected metadata: %v", info.Metadata)
+	}
+	if len(info.Phases) != 1 || info.Phases[0].Name != "phase-a" {
+		t.Fatalf("unexpected phase info: %v", info.Phases)
+	}
+
+	info.Metadata["container_type"] = "mutated"
+	info.Warnings[0] = "mutated-warning"
+
+	if profile.Metadata["container_type"] != "docker" {
+		t.Fatalf("expected metadata copy, got %v", profile.Metadata)
+	}
+	if profile.Warnings[0] != "warning-one" {
+		t.Fatalf("expected warnings copy, got %v", profile.Warnings)
+	}
+}
