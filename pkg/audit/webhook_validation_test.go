@@ -102,3 +102,16 @@ func TestWebhookDelivery_QueueAndURLs(t *testing.T) {
 		t.Fatalf("expected URLs to be copied defensively")
 	}
 }
+
+func TestWebhookDeliveryEnqueueDropsWhenFull(t *testing.T) {
+	delivery := &WebhookDelivery{
+		queue: make(chan Event, 1),
+	}
+
+	delivery.Enqueue(Event{ID: "first", EventType: "login", Timestamp: time.Now()})
+	delivery.Enqueue(Event{ID: "second", EventType: "login", Timestamp: time.Now()})
+
+	if delivery.QueueLength() != 1 {
+		t.Fatalf("expected queue to stay at capacity, got %d", delivery.QueueLength())
+	}
+}
