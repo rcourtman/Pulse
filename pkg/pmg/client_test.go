@@ -488,3 +488,69 @@ func TestClientRequestAuthError(t *testing.T) {
 		t.Fatalf("expected authentication error, got %v", err)
 	}
 }
+
+func TestClientRequestNonAuthError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/statistics/mail":
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, "boom")
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	_, err = client.GetMailStatistics(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "API error 500") {
+		t.Fatalf("expected API error 500, got %q", msg)
+	}
+	if strings.Contains(strings.ToLower(msg), "authentication error") {
+		t.Fatalf("did not expect authentication error, got %q", msg)
+	}
+}
+
+func TestClientGetVersionInvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/version":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":`)
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	if _, err := client.GetVersion(context.Background()); err == nil || !strings.Contains(err.Error(), "failed to decode response") {
+		t.Fatalf("expected decode error, got %v", err)
+	}
+}
