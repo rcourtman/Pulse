@@ -1,10 +1,15 @@
-import { Component, Show, For, Suspense, createSignal } from 'solid-js';
+import { Component, Show, Suspense, createSignal } from 'solid-js';
 import { Host } from '@/types/api';
-import { formatBytes, formatUptime } from '@/utils/format';
 import { HistoryChart } from '../shared/HistoryChart';
 import { ResourceType, HistoryTimeRange } from '@/api/charts';
 import { hasFeature } from '@/stores/license';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
+import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
+import { HardwareCard } from '@/components/shared/cards/HardwareCard';
+import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfacesCard';
+import { DisksCard } from '@/components/shared/cards/DisksCard';
+import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
+import { formatTemperature } from '@/utils/temperature';
 
 interface HostDrawerProps {
     host: Host;
@@ -25,6 +30,42 @@ export const HostDrawer: Component<HostDrawerProps> = (props) => {
     };
 
     const isHistoryLocked = () => !hasFeature('long_term_metrics') && (historyRange() === '30d' || historyRange() === '90d');
+
+    const formatSensorName = (name: string) => {
+        let clean = name.replace(/^[a-z]+\d*_/i, '');
+        clean = clean.replace(/_/g, ' ');
+        return clean.replace(/\b\w/g, c => c.toUpperCase());
+    };
+
+    const temperatureRows = () => {
+        const rows: { label: string; value: string; valueTitle?: string }[] = [];
+        const temps = props.host.sensors?.temperatureCelsius;
+        if (temps) {
+            const entries = Object.entries(temps).sort(([a], [b]) => a.localeCompare(b));
+            entries.forEach(([name, temp]) => {
+                rows.push({
+                    label: formatSensorName(name),
+                    value: formatTemperature(temp),
+                    valueTitle: `${temp.toFixed(1)}°C`,
+                });
+            });
+        }
+
+        const smart = props.host.sensors?.smart;
+        if (smart) {
+            smart
+                .filter(disk => !disk.standby && Number.isFinite(disk.temperature))
+                .sort((a, b) => a.device.localeCompare(b.device))
+                .forEach(disk => {
+                    rows.push({
+                        label: `Disk ${disk.device}`,
+                        value: formatTemperature(disk.temperature),
+                        valueTitle: `${disk.temperature.toFixed(1)}°C`,
+                    });
+                });
+        }
+        return rows;
+    };
 
     return (
         <div class="space-y-3">
@@ -59,126 +100,11 @@ export const HostDrawer: Component<HostDrawerProps> = (props) => {
             {/* Overview Tab */}
             <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
                 <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
-                    {/* System Info */}
-                    <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                        <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">System</div>
-                        <div class="space-y-1.5 text-[11px]">
-                            <div class="flex items-center justify-between gap-2 min-w-0">
-                                <span class="text-gray-500 dark:text-gray-400 shrink-0">Hostname</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200 select-all truncate" title={props.host.hostname}>{props.host.hostname}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Platform</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200 capitalize">{props.host.platform || 'Unknown'}</span>
-                            </div>
-                            <div class="flex items-center justify-between gap-2 min-w-0">
-                                <span class="text-gray-500 dark:text-gray-400 shrink-0">OS</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={`${props.host.osName} ${props.host.osVersion}`}>{props.host.osName} {props.host.osVersion}</span>
-                            </div>
-                            <div class="flex items-center justify-between gap-2 min-w-0">
-                                <span class="text-gray-500 dark:text-gray-400 shrink-0">Kernel</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.host.kernelVersion}>{props.host.kernelVersion}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Architecture</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200">{props.host.architecture}</span>
-                            </div>
-                            <Show when={props.host.uptimeSeconds}>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-gray-500 dark:text-gray-400">Uptime</span>
-                                    <span class="font-medium text-gray-700 dark:text-gray-200">{formatUptime(props.host.uptimeSeconds!)}</span>
-                                </div>
-                            </Show>
-                        </div>
-                    </div>
-
-                    {/* Hardware Info */}
-                    <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                        <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Hardware</div>
-                        <div class="space-y-1.5 text-[11px]">
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">CPU</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200">{props.host.cpuCount} Cores</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Memory</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200">
-                                    {formatBytes(props.host.memory?.total || 0)}
-                                </span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Agent</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-200">{props.host.agentVersion}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Network Interfaces */}
-                    <Show when={props.host.networkInterfaces && props.host.networkInterfaces.length > 0}>
-                        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Network</div>
-                            <div class="max-h-[140px] overflow-y-auto custom-scrollbar space-y-2">
-                                <For each={props.host.networkInterfaces}>
-                                    {(iface) => (
-                                        <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700 overflow-hidden">
-                                            <div class="flex items-center gap-2 text-[11px] font-medium text-gray-700 dark:text-gray-200 min-w-0">
-                                                <span class="truncate min-w-0">{iface.name}</span>
-                                                <Show when={iface.mac}>
-                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 font-normal truncate shrink-0 max-w-[100px]" title={iface.mac}>{iface.mac}</span>
-                                                </Show>
-                                            </div>
-                                            <Show when={iface.addresses && iface.addresses.length > 0}>
-                                                <div class="flex flex-wrap gap-1 mt-1">
-                                                    <For each={iface.addresses}>
-                                                        {(ip) => (
-                                                            <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 max-w-full truncate" title={ip}>
-                                                                {ip}
-                                                            </span>
-                                                        )}
-                                                    </For>
-                                                </div>
-                                            </Show>
-                                        </div>
-                                    )}
-                                </For>
-                            </div>
-                        </div>
-                    </Show>
-
-                    {/* Disk Usage */}
-                    <Show when={props.host.disks && props.host.disks.length > 0}>
-                        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Disks</div>
-                            <div class="max-h-[140px] overflow-y-auto custom-scrollbar space-y-2">
-                                <For each={props.host.disks}>
-                                    {(disk) => {
-                                        const usagePercent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
-                                        // Use same colors as StackedDiskBar for consistency
-                                        const barColor = usagePercent >= 90 ? 'rgba(239, 68, 68, 0.6)' : usagePercent >= 80 ? 'rgba(234, 179, 8, 0.6)' : 'rgba(34, 197, 94, 0.6)';
-                                        const textColor = usagePercent >= 90 ? 'text-red-600 dark:text-red-400' : usagePercent >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400';
-                                        return (
-                                            <div class="text-[10px]">
-                                                <div class="flex justify-between mb-0.5">
-                                                    <span class="text-gray-600 dark:text-gray-300 truncate max-w-[100px]" title={disk.mountpoint}>{disk.mountpoint}</span>
-                                                    <span class="flex items-center gap-1.5">
-                                                        <span class={`font-medium ${textColor}`}>{usagePercent.toFixed(0)}%</span>
-                                                        <span class="text-gray-400 dark:text-gray-500">·</span>
-                                                        <span class="text-gray-500 dark:text-gray-400">{formatBytes(disk.used)} / {formatBytes(disk.total)}</span>
-                                                    </span>
-                                                </div>
-                                                <div class="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                                                    <div
-                                                        class="h-full rounded-full transition-all duration-500"
-                                                        style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%`, "background-color": barColor }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    }}
-                                </For>
-                            </div>
-                        </div>
-                    </Show>
+                    <SystemInfoCard variant="host" host={props.host} />
+                    <HardwareCard variant="host" host={props.host} />
+                    <NetworkInterfacesCard interfaces={props.host.networkInterfaces} />
+                    <DisksCard disks={props.host.disks} />
+                    <TemperaturesCard rows={temperatureRows()} />
                 </div>
 
                 {/* Performance Charts */}
