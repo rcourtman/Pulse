@@ -27,6 +27,15 @@ func TestGenerateIPs(t *testing.T) {
 	if len(ips) != 1 || ips[0] != "10.0.0.5" {
 		t.Fatalf("unexpected /32 IPs: %v", ips)
 	}
+
+	_, subnet31, err := net.ParseCIDR("10.0.0.0/31")
+	if err != nil {
+		t.Fatalf("failed to parse /31 subnet: %v", err)
+	}
+	ips = scanner.generateIPs(subnet31)
+	if len(ips) != 2 || ips[0] != "10.0.0.0" || ips[1] != "10.0.0.1" {
+		t.Fatalf("unexpected /31 IPs: %v", ips)
+	}
 }
 
 func TestGenerateIPsRespectsLimit(t *testing.T) {
