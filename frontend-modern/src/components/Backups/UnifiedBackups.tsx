@@ -166,18 +166,18 @@ const UnifiedBackups: Component = () => {
 
   // Column visibility definitions for the backup table
   const BACKUP_COLUMNS: ColumnDef[] = [
-    { id: 'vmid', label: 'VMID/ID', priority: 'essential' },
-    { id: 'type', label: 'Type', priority: 'essential' },
-    { id: 'name', label: 'Name', priority: 'essential' },
-    { id: 'node', label: 'Node', priority: 'essential' },
-    { id: 'owner', label: 'Owner', priority: 'secondary', toggleable: true },
-    { id: 'backupTime', label: 'Time', priority: 'essential' },
-    { id: 'size', label: 'Size', priority: 'primary', toggleable: true },
-    { id: 'backupType', label: 'Backup Type', priority: 'essential' },
-    { id: 'storage', label: 'Location', priority: 'primary', toggleable: true },
-    { id: 'verified', label: 'Verified', priority: 'secondary', toggleable: true },
-    { id: 'comment', label: 'Comment', priority: 'supplementary', toggleable: true },
-    { id: 'details', label: 'Details', priority: 'essential' },
+    { id: 'vmid', label: 'VMID/ID' },
+    { id: 'type', label: 'Type' },
+    { id: 'name', label: 'Name' },
+    { id: 'node', label: 'Node' },
+    { id: 'owner', label: 'Owner', toggleable: true },
+    { id: 'backupTime', label: 'Time' },
+    { id: 'size', label: 'Size', toggleable: true },
+    { id: 'backupType', label: 'Backup Type' },
+    { id: 'storage', label: 'Location', toggleable: true },
+    { id: 'verified', label: 'Verified', toggleable: true },
+    { id: 'comment', label: 'Comment', toggleable: true },
+    { id: 'details', label: 'Details' },
   ];
 
   // Column visibility with persistence - hide less useful columns by default
