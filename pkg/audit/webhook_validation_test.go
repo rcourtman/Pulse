@@ -84,6 +84,7 @@ func TestIsPrivateOrReservedIP(t *testing.T) {
 		"10.0.0.1":    true,
 		"169.254.1.1": true,
 		"0.0.0.0":     true,
+		"::1":         true,
 		"8.8.8.8":     false,
 	}
 	for ipStr, expected := range cases {
