@@ -615,5 +615,3 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 
 	return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil
 }
-
-

@@ -738,4 +738,3 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 }
 
 // GetState returns the current state
-

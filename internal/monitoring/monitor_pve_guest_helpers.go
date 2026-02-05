@@ -24,8 +24,6 @@ func seedPrevContainerOCI(instanceName string, prevState models.StateSnapshot) m
 	return prevContainerIsOCI
 }
 
-
-
 func (m *Monitor) preserveGuestsForGracePeriod(
 	instanceName string,
 	resources []proxmox.ClusterResource,
@@ -138,8 +136,6 @@ func (m *Monitor) preserveGuestsForGracePeriod(
 
 	return allVMs, allContainers
 }
-
-
 
 func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.Container) {
 	// Record guest metrics history for running guests (enables sparkline/trends view)
