@@ -279,6 +279,33 @@ func TestClusterClient_GetClusterResources(t *testing.T) {
 	}
 }
 
+func TestClusterClient_GetClusterResources_AllTypes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api2/json/nodes" {
+			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
+			return
+		}
+		if r.URL.Path == "/api2/json/cluster/resources" {
+			fmt.Fprint(w, `{"data":[{"id":"lxc/200","type":"lxc","node":"node1"}]}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	cfg := ClientConfig{Host: server.URL, TokenName: "u@p!t", TokenValue: "v"}
+	cc := NewClusterClient("test", cfg, []string{server.URL}, nil)
+
+	resources, err := cc.GetClusterResources(context.Background(), "")
+	if err != nil {
+		t.Fatalf("GetClusterResources failed: %v", err)
+	}
+	if len(resources) != 1 || resources[0].ID != "lxc/200" {
+		t.Fatalf("unexpected resources: %+v", resources)
+	}
+}
+
 func TestClusterClient_GetClusterStatusAndIsClusterMember(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
