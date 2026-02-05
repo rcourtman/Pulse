@@ -5,7 +5,6 @@ import { HistoryChart } from '../shared/HistoryChart';
 import { ResourceType, HistoryTimeRange } from '@/api/charts';
 import { hasFeature } from '@/stores/license';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
-import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 
 interface HostDrawerProps {
     host: Host;
@@ -26,17 +25,6 @@ export const HostDrawer: Component<HostDrawerProps> = (props) => {
     };
 
     const isHistoryLocked = () => !hasFeature('long_term_metrics') && (historyRange() === '30d' || historyRange() === '90d');
-
-    const diskStats = () => {
-        if (!props.host.disks || props.host.disks.length === 0) return { percent: 0, used: 0, total: 0 };
-        const totalUsed = props.host.disks.reduce((sum, d) => sum + (d.used ?? 0), 0);
-        const totalSize = props.host.disks.reduce((sum, d) => sum + (d.total ?? 0), 0);
-        return {
-            percent: totalSize > 0 ? (totalUsed / totalSize) * 100 : 0,
-            used: totalUsed,
-            total: totalSize
-        };
-    };
 
     return (
         <div class="space-y-3">
@@ -162,41 +150,31 @@ export const HostDrawer: Component<HostDrawerProps> = (props) => {
                         <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Disks</div>
                             <div class="max-h-[140px] overflow-y-auto custom-scrollbar space-y-2">
-                                {/* Summary bar */}
-                                <div class="mb-3">
-                                    <div class="flex justify-between text-[10px] mb-1">
-                                        <span class="text-gray-500 dark:text-gray-400">Total Usage</span>
-                                        <span class="text-gray-700 dark:text-gray-200">
-                                            {formatBytes(diskStats().used)} / {formatBytes(diskStats().total)}
-                                        </span>
-                                    </div>
-                                    <StackedDiskBar
-                                        disks={props.host.disks}
-                                        mode="mini"
-                                        aggregateDisk={{
-                                            total: diskStats().total,
-                                            used: diskStats().used,
-                                            free: diskStats().total - diskStats().used,
-                                            usage: diskStats().percent / 100
-                                        }}
-                                    />
-                                </div>
-
                                 <For each={props.host.disks}>
-                                    {(disk) => (
-                                        <div class="text-[10px]">
-                                            <div class="flex justify-between mb-0.5">
-                                                <span class="text-gray-600 dark:text-gray-300 truncate max-w-[120px]" title={disk.mountpoint}>{disk.mountpoint}</span>
-                                                <span class="text-gray-500 dark:text-gray-400">{formatBytes(disk.used)} / {formatBytes(disk.total)}</span>
+                                    {(disk) => {
+                                        const usagePercent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
+                                        // Use same colors as StackedDiskBar for consistency
+                                        const barColor = usagePercent >= 90 ? 'rgba(239, 68, 68, 0.6)' : usagePercent >= 80 ? 'rgba(234, 179, 8, 0.6)' : 'rgba(34, 197, 94, 0.6)';
+                                        const textColor = usagePercent >= 90 ? 'text-red-600 dark:text-red-400' : usagePercent >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400';
+                                        return (
+                                            <div class="text-[10px]">
+                                                <div class="flex justify-between mb-0.5">
+                                                    <span class="text-gray-600 dark:text-gray-300 truncate max-w-[100px]" title={disk.mountpoint}>{disk.mountpoint}</span>
+                                                    <span class="flex items-center gap-1.5">
+                                                        <span class={`font-medium ${textColor}`}>{usagePercent.toFixed(0)}%</span>
+                                                        <span class="text-gray-400 dark:text-gray-500">·</span>
+                                                        <span class="text-gray-500 dark:text-gray-400">{formatBytes(disk.used)} / {formatBytes(disk.total)}</span>
+                                                    </span>
+                                                </div>
+                                                <div class="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                                                    <div
+                                                        class="h-full rounded-full transition-all duration-500"
+                                                        style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%`, "background-color": barColor }}
+                                                    />
+                                                </div>
                                             </div>
-                                            <div class="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                                                <div
-                                                    class="h-full rounded-full transition-all duration-500 bg-blue-500"
-                                                    style={{ width: `${Math.min(100, Math.max(0, (disk.used / disk.total) * 100))}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
+                                        );
+                                    }}
                                 </For>
                             </div>
                         </div>
