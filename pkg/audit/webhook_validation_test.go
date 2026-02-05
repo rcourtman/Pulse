@@ -39,6 +39,12 @@ func TestValidateWebhookURL(t *testing.T) {
 	if err := validateWebhookURL(context.Background(), "http://metadata.google.internal"); err == nil {
 		t.Fatalf("expected error for blocked hostname")
 	}
+	if err := validateWebhookURL(context.Background(), "http://example.local"); err == nil {
+		t.Fatalf("expected error for .local hostname")
+	}
+	if err := validateWebhookURL(context.Background(), "http://internal.example.com"); err == nil {
+		t.Fatalf("expected error for internal hostname")
+	}
 
 	if err := validateWebhookURL(context.Background(), "https://example.com"); err != nil {
 		t.Fatalf("expected valid URL, got %v", err)
