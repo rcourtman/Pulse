@@ -130,6 +130,56 @@ func TestGetStatColor(t *testing.T) {
 	}
 }
 
+func TestGetAlertCountColor(t *testing.T) {
+	if got := getAlertCountColor(1); got != colorDanger {
+		t.Fatal("expected danger color when alerts present")
+	}
+	if got := getAlertCountColor(0); got != colorAccent {
+		t.Fatal("expected accent color when no alerts")
+	}
+}
+
+func TestCalculateTrend(t *testing.T) {
+	g := NewPDFGenerator()
+	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	makePoints := func(values []float64) []MetricDataPoint {
+		points := make([]MetricDataPoint, len(values))
+		for i, v := range values {
+			points[i] = MetricDataPoint{Timestamp: base.Add(time.Duration(i) * time.Minute), Value: v}
+		}
+		return points
+	}
+
+	dataUp := &ReportData{Metrics: map[string][]MetricDataPoint{
+		"cpu": makePoints([]float64{10, 10, 10, 10, 10, 20, 20, 20, 20, 20}),
+	}}
+	if trend := g.calculateTrend(dataUp, "cpu"); trend != "(trending up)" {
+		t.Fatalf("expected trending up, got %q", trend)
+	}
+
+	dataDown := &ReportData{Metrics: map[string][]MetricDataPoint{
+		"cpu": makePoints([]float64{20, 20, 20, 20, 20, 10, 10, 10, 10, 10}),
+	}}
+	if trend := g.calculateTrend(dataDown, "cpu"); trend != "(trending down)" {
+		t.Fatalf("expected trending down, got %q", trend)
+	}
+
+	dataStable := &ReportData{Metrics: map[string][]MetricDataPoint{
+		"cpu": makePoints([]float64{10, 10, 10, 10, 10, 10.1, 10.2, 10.1, 10.2, 10.1}),
+	}}
+	if trend := g.calculateTrend(dataStable, "cpu"); trend != "(stable)" {
+		t.Fatalf("expected stable, got %q", trend)
+	}
+
+	dataShort := &ReportData{Metrics: map[string][]MetricDataPoint{
+		"cpu": makePoints([]float64{10, 12, 11}),
+	}}
+	if trend := g.calculateTrend(dataShort, "cpu"); trend != "" {
+		t.Fatalf("expected empty trend, got %q", trend)
+	}
+}
+
 func assertObservationContains(t *testing.T, obs []observation, needle string) {
 	t.Helper()
 	for _, o := range obs {
