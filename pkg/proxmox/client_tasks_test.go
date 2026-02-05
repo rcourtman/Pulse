@@ -73,3 +73,29 @@ func TestClient_GetBackupTasksFiltersAndSkipsErrors(t *testing.T) {
 		t.Fatalf("unexpected backup tasks: %+v", tasks)
 	}
 }
+
+func TestClient_GetBackupTasks_NodeListError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api2/json/nodes" {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, `{"errors":"boom"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "user@pve!token",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+
+	if _, err := client.GetBackupTasks(context.Background()); err == nil {
+		t.Fatal("expected error when node list fails")
+	}
+}
