@@ -57,6 +57,14 @@ func TestClusterClientApplyRateLimitCooldown(t *testing.T) {
 	}
 }
 
+func TestClusterClientApplyRateLimitCooldownEmptyEndpoint(t *testing.T) {
+	cc := &ClusterClient{rateLimitUntil: make(map[string]time.Time)}
+	cc.applyRateLimitCooldown("", 100*time.Millisecond)
+	if len(cc.rateLimitUntil) != 0 {
+		t.Fatalf("expected no cooldown entry, got %+v", cc.rateLimitUntil)
+	}
+}
+
 func TestExecuteWithFailoverSkipsUnhealthyMarking(t *testing.T) {
 	cc := &ClusterClient{
 		name:            "cluster",
