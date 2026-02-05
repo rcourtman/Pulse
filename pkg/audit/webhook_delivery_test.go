@@ -149,3 +149,12 @@ func TestWebhookDeliveryDeliverWithRetryFails(t *testing.T) {
 		t.Fatalf("expected %d attempts, got %d", webhookMaxRetries+1, attempts)
 	}
 }
+
+func TestWebhookDeliveryDeliverInvalidURL(t *testing.T) {
+	delivery := NewWebhookDelivery([]string{})
+
+	err := delivery.deliver("://bad-url", Event{ID: "evt-3", EventType: "login", Timestamp: time.Now()})
+	if err == nil || !strings.Contains(err.Error(), "webhook URL blocked") {
+		t.Fatalf("expected URL blocked error, got %v", err)
+	}
+}

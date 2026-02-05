@@ -33,6 +33,9 @@ func TestValidateWebhookURL(t *testing.T) {
 	if err := validateWebhookURL(context.Background(), "http://127.0.0.1"); err == nil {
 		t.Fatalf("expected error for loopback")
 	}
+	if err := validateWebhookURL(context.Background(), "http://[::1]"); err == nil {
+		t.Fatalf("expected error for ipv6 loopback")
+	}
 	if err := validateWebhookURL(context.Background(), "http://192.168.1.5"); err == nil {
 		t.Fatalf("expected error for private IP")
 	}
