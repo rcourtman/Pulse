@@ -7,7 +7,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TagBadges } from '@/components/Dashboard/TagBadges';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { getHostStatusIndicator } from '@/utils/status';
-import { getPlatformBadge, getSourceBadge, getTypeBadge } from './resourceBadges';
+import { getPlatformBadge, getSourceBadge, getTypeBadge, getUnifiedSourceBadges } from './resourceBadges';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -33,6 +33,11 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
   const platformBadge = createMemo(() => getPlatformBadge(props.resource.platformType));
   const sourceBadge = createMemo(() => getSourceBadge(props.resource.sourceType));
   const typeBadge = createMemo(() => getTypeBadge(props.resource.type));
+  const unifiedSourceBadges = createMemo(() => {
+    const platformData = props.resource.platformData as { sources?: string[] } | undefined;
+    return getUnifiedSourceBadges(platformData?.sources ?? []);
+  });
+  const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
 
   return (
     <div class="space-y-3">
@@ -60,19 +65,34 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
                 </span>
               )}
             </Show>
-            <Show when={platformBadge()}>
-              {(badge) => (
-                <span class={badge().classes} title={badge().title}>
-                  {badge().label}
-                </span>
-              )}
-            </Show>
-            <Show when={sourceBadge()}>
-              {(badge) => (
-                <span class={badge().classes} title={badge().title}>
-                  {badge().label}
-                </span>
-              )}
+            <Show
+              when={hasUnifiedSources()}
+              fallback={
+                <>
+                  <Show when={platformBadge()}>
+                    {(badge) => (
+                      <span class={badge().classes} title={badge().title}>
+                        {badge().label}
+                      </span>
+                    )}
+                  </Show>
+                  <Show when={sourceBadge()}>
+                    {(badge) => (
+                      <span class={badge().classes} title={badge().title}>
+                        {badge().label}
+                      </span>
+                    )}
+                  </Show>
+                </>
+              }
+            >
+              <For each={unifiedSourceBadges()}>
+                {(badge) => (
+                  <span class={badge.classes} title={badge.title}>
+                    {badge.label}
+                  </span>
+                )}
+              </For>
             </Show>
           </div>
         </div>

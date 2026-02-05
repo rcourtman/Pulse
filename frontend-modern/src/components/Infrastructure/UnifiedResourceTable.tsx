@@ -9,7 +9,7 @@ import { buildMetricKey } from '@/utils/metricsKeys';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getHostStatusIndicator } from '@/utils/status';
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
-import { getPlatformBadge, getSourceBadge } from './resourceBadges';
+import { getPlatformBadge, getSourceBadge, getUnifiedSourceBadges } from './resourceBadges';
 
 interface UnifiedResourceTableProps {
   resources: Resource[];
@@ -130,6 +130,11 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   const thClass = `${thClassBase} text-center`;
   const tdClass = 'px-2 py-1 align-middle';
 
+  const getUnifiedSources = (resource: Resource): string[] => {
+    const platformData = resource.platformData as { sources?: string[] } | undefined;
+    return platformData?.sources ?? [];
+  };
+
   return (
     <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
       <div class="overflow-x-auto">
@@ -195,6 +200,10 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 
                 const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
                 const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
+                const unifiedSourceBadges = createMemo(() =>
+                  getUnifiedSourceBadges(getUnifiedSources(resource)),
+                );
+                const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
 
                 return (
                   <>
@@ -288,19 +297,34 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 
                       <td class={tdClass}>
                         <div class="flex flex-wrap items-center justify-center gap-1">
-                          <Show when={platformBadge()}>
-                            {(badge) => (
-                              <span class={badge().classes} title={badge().title}>
-                                {badge().label}
-                              </span>
-                            )}
-                          </Show>
-                          <Show when={sourceBadge()}>
-                            {(badge) => (
-                              <span class={badge().classes} title={badge().title}>
-                                {badge().label}
-                              </span>
-                            )}
+                          <Show
+                            when={hasUnifiedSources()}
+                            fallback={
+                              <>
+                                <Show when={platformBadge()}>
+                                  {(badge) => (
+                                    <span class={badge().classes} title={badge().title}>
+                                      {badge().label}
+                                    </span>
+                                  )}
+                                </Show>
+                                <Show when={sourceBadge()}>
+                                  {(badge) => (
+                                    <span class={badge().classes} title={badge().title}>
+                                      {badge().label}
+                                    </span>
+                                  )}
+                                </Show>
+                              </>
+                            }
+                          >
+                            <For each={unifiedSourceBadges()}>
+                              {(badge) => (
+                                <span class={badge.classes} title={badge.title}>
+                                  {badge.label}
+                                </span>
+                              )}
+                            </For>
                           </Show>
                         </div>
                       </td>
