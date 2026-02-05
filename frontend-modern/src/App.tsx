@@ -65,8 +65,10 @@ const Dashboard = lazy(() =>
 );
 const StorageComponent = lazy(() => import('./components/Storage/Storage'));
 const Backups = lazy(() => import('./components/Backups/Backups'));
+const UnifiedBackups = lazy(() => import('./components/Backups/UnifiedBackups'));
 const Replication = lazy(() => import('./components/Replication/Replication'));
 const MailGateway = lazy(() => import('./components/PMG/MailGateway'));
+const Services = lazy(() => import('./components/Services/Services'));
 const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
@@ -949,8 +951,9 @@ function App() {
       <Route path="/proxmox/replication" component={Replication} />
       <Route path="/proxmox/mail" component={MailGateway} />
       <Route path="/proxmox/backups" component={Backups} />
-      <Route path="/storage" component={() => <Navigate href="/proxmox/storage" />} />
-      <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />
+      <Route path="/storage" component={StorageComponent} />
+      <Route path="/backups" component={UnifiedBackups} />
+      <Route path="/services" component={Services} />
       <Route path="/docker" component={DockerRoute} />
       <Route path="/kubernetes" component={KubernetesRoute} />
       <Route path="/hosts" component={HostsRoute} />

@@ -207,6 +207,64 @@ const Storage: Component = () => {
     return map;
   });
 
+  const cephSummaryStats = createMemo(() => {
+    const clusters = visibleCephClusters();
+    const totals = clusters.reduce(
+      (acc, cluster) => {
+        acc.total += Math.max(0, cluster.totalBytes || 0);
+        acc.used += Math.max(0, cluster.usedBytes || 0);
+        acc.available += Math.max(0, cluster.availableBytes || 0);
+        return acc;
+      },
+      { total: 0, used: 0, available: 0 },
+    );
+    const usagePercent = totals.total > 0 ? (totals.used / totals.total) * 100 : 0;
+    return {
+      clusters,
+      totalBytes: totals.total,
+      usedBytes: totals.used,
+      availableBytes: totals.available,
+      usagePercent,
+    };
+  });
+
+  const pbsDatastoreStorage = createMemo<StorageType[]>(() => {
+    const instances = state.pbs || [];
+    const datastores: StorageType[] = [];
+
+    instances.forEach((instance) => {
+      (instance.datastores || []).forEach((store) => {
+        const total = Number.isFinite(store.total) ? store.total : 0;
+        const used = Number.isFinite(store.used) ? store.used : 0;
+        const free = Number.isFinite(store.free) ? store.free : Math.max(total - used, 0);
+        const usage = total > 0 ? (used / total) * 100 : 0;
+        const instanceLabel = instance.name || instance.host || instance.id || 'PBS';
+        const datastoreName = store.name || 'PBS Datastore';
+
+        datastores.push({
+          id: `pbs-${instance.id || instanceLabel}-${datastoreName}`,
+          name: datastoreName,
+          node: instanceLabel,
+          instance: instance.id || instanceLabel,
+          type: 'pbs',
+          status: store.status || instance.status || 'unknown',
+          total,
+          used,
+          free,
+          usage,
+          content: 'backup',
+          shared: false,
+          enabled: true,
+          active: true,
+          nodes: [instanceLabel],
+          pbsNames: [datastoreName],
+        });
+      });
+    });
+
+    return datastores;
+  });
+
 
   const sortKeyOptions: { value: StorageSortKey; label: string }[] = [
     { value: 'name', label: 'Name' },
@@ -220,7 +278,7 @@ const Storage: Component = () => {
 
   // Filter storage - in storage view, filter out 0 capacity and deduplicate
   const filteredStorage = createMemo(() => {
-    let storage = state.storage || [];
+    let storage = [...(state.storage || []), ...pbsDatastoreStorage()];
 
     // In storage view, deduplicate identical storage and filter out 0 capacity
     if (viewMode() === 'storage') {
@@ -581,6 +639,79 @@ const Storage: Component = () => {
         filteredStorage={sortedStorage()}
         searchTerm={searchTerm()}
       />
+
+      <Show
+        when={
+          tabView() === 'pools' &&
+          connected() &&
+          initialDataReceived() &&
+          cephSummaryStats().clusters.length > 0
+        }
+      >
+        <Card padding="md" tone="glass">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-0.5">
+              <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Ceph Summary
+              </div>
+              <div class="text-sm text-gray-600 dark:text-gray-300">
+                {cephSummaryStats().clusters.length} cluster
+                {cephSummaryStats().clusters.length !== 1 ? 's' : ''} detected
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {formatBytes(cephSummaryStats().totalBytes)}
+              </div>
+              <div class="text-[11px] text-gray-500 dark:text-gray-400">
+                {formatPercent(cephSummaryStats().usagePercent)} used
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <For each={cephSummaryStats().clusters}>
+              {(cluster) => (
+                <div class="rounded-lg border border-gray-200/70 dark:border-gray-700/70 bg-white/60 dark:bg-gray-800/40 p-3">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                      <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                        {cluster.name || 'Ceph Cluster'}
+                      </div>
+                      <Show when={cluster.healthMessage}>
+                        <div
+                          class="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-[240px]"
+                          title={cluster.healthMessage}
+                        >
+                          {cluster.healthMessage}
+                        </div>
+                      </Show>
+                    </div>
+                    <span
+                      class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getCephHealthStyles(
+                        cluster.health,
+                      )}`}
+                      title={cluster.healthMessage}
+                    >
+                      {getCephHealthLabel(cluster.health)}
+                    </span>
+                  </div>
+                  <div class="mt-2">
+                    <EnhancedStorageBar
+                      used={cluster.usedBytes}
+                      free={cluster.availableBytes}
+                      total={cluster.totalBytes}
+                    />
+                  </div>
+                  <div class="mt-1 flex justify-between text-[11px] text-gray-500 dark:text-gray-400">
+                    <span>{formatBytes(cluster.usedBytes)} used</span>
+                    <span>{formatBytes(cluster.availableBytes)} free</span>
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </Card>
+      </Show>
 
       {/* Tab Toggle */}
       <div class="mb-4">
