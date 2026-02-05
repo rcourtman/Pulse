@@ -33,10 +33,10 @@ export function WhatsNewModal() {
   return (
     <Show when={isOpen()}>
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div class="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
-          <div class="flex items-start justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+        <div class="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
+          <div class="flex-shrink-0 flex items-start justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
             <div>
-              <h2 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              <h2 class="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100">
                 Welcome to the New Navigation!
               </h2>
               <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
@@ -52,70 +52,70 @@ export function WhatsNewModal() {
             </button>
           </div>
 
-          <div class="space-y-6 px-6 py-5">
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div class="rounded-xl border border-blue-200 bg-blue-50/70 p-4 dark:border-blue-800/60 dark:bg-blue-900/20">
+          <div class="flex-1 overflow-y-auto space-y-4 sm:space-y-6 px-4 sm:px-6 py-4 sm:py-5">
+            <div class="grid gap-3 sm:gap-4 sm:grid-cols-2">
+              <div class="rounded-xl border border-blue-200 bg-blue-50/70 p-3 sm:p-4 dark:border-blue-800/60 dark:bg-blue-900/20">
                 <div class="flex items-center gap-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
                   <ServerIcon class="h-4 w-4" />
                   Infrastructure
                 </div>
-                <p class="mt-2 text-xs text-blue-900/80 dark:text-blue-100/80">
+                <p class="mt-1.5 sm:mt-2 text-xs text-blue-900/80 dark:text-blue-100/80">
                   Proxmox nodes, Hosts, and Docker hosts live together in one unified view.
                 </p>
               </div>
 
-              <div class="rounded-xl border border-purple-200 bg-purple-50/70 p-4 dark:border-purple-800/60 dark:bg-purple-900/20">
+              <div class="rounded-xl border border-purple-200 bg-purple-50/70 p-3 sm:p-4 dark:border-purple-800/60 dark:bg-purple-900/20">
                 <div class="flex items-center gap-2 text-sm font-semibold text-purple-900 dark:text-purple-100">
                   <BoxesIcon class="h-4 w-4" />
                   Workloads
                 </div>
-                <p class="mt-2 text-xs text-purple-900/80 dark:text-purple-100/80">
+                <p class="mt-1.5 sm:mt-2 text-xs text-purple-900/80 dark:text-purple-100/80">
                   All VMs, containers, and Docker workloads now share a single list.
                 </p>
               </div>
 
-              <div class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-800/60 dark:bg-emerald-900/20">
+              <div class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 sm:p-4 dark:border-emerald-800/60 dark:bg-emerald-900/20">
                 <div class="flex items-center gap-2 text-sm font-semibold text-emerald-900 dark:text-emerald-100">
                   <HardDriveIcon class="h-4 w-4" />
                   Storage
                 </div>
-                <p class="mt-2 text-xs text-emerald-900/80 dark:text-emerald-100/80">
+                <p class="mt-1.5 sm:mt-2 text-xs text-emerald-900/80 dark:text-emerald-100/80">
                   Storage is now a top-level destination across all systems.
                 </p>
               </div>
 
-              <div class="rounded-xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-800/60 dark:bg-amber-900/20">
+              <div class="rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:p-4 dark:border-amber-800/60 dark:bg-amber-900/20">
                 <div class="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
                   <ShieldCheckIcon class="h-4 w-4" />
                   Backups
                 </div>
-                <p class="mt-2 text-xs text-amber-900/80 dark:text-amber-100/80">
+                <p class="mt-1.5 sm:mt-2 text-xs text-amber-900/80 dark:text-amber-100/80">
                   Backup status and replication are now first-class pages.
                 </p>
               </div>
             </div>
 
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
               <div class="font-medium text-gray-900 dark:text-gray-100">
                 Quick summary
               </div>
-              <ul class="mt-2 space-y-2">
+              <ul class="mt-2 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
                 <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500"></span>
                   <span>Infrastructure combines Proxmox nodes, Hosts, and Docker hosts.</span>
                 </li>
                 <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-purple-500"></span>
                   <span>Workloads now shows every VM, container, and Docker container.</span>
                 </li>
                 <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-500"></span>
                   <span>Storage and Backups live at the top level for faster access.</span>
                 </li>
               </ul>
             </div>
 
-            <div class="flex items-center justify-between gap-4">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
               <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                 <input
                   type="checkbox"
@@ -138,7 +138,7 @@ export function WhatsNewModal() {
             </div>
           </div>
 
-          <div class="flex items-center justify-end border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-900/50">
+          <div class="flex-shrink-0 flex items-center justify-end border-t border-gray-200 bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 dark:border-gray-700 dark:bg-gray-900/50">
             <button
               onClick={handleClose}
               class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
