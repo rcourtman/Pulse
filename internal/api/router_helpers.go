@@ -103,4 +103,7 @@ func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	if r.resourceHandlers != nil {
 		r.resourceHandlers.SetTenantStateProvider(NewMultiTenantStateProvider(mtm, r.monitor))
 	}
+	if r.resourceV2Handlers != nil {
+		r.resourceV2Handlers.SetTenantStateProvider(NewMultiTenantStateProvider(mtm, r.monitor))
+	}
 }

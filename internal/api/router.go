@@ -72,6 +72,7 @@ type Router struct {
 	aiHandler                 *AIHandler // AI chat handler
 	discoveryHandlers         *DiscoveryHandlers
 	resourceHandlers          *ResourceHandlers
+	resourceV2Handlers        *ResourceV2Handlers
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
 	licenseHandlers           *LicenseHandlers
@@ -248,6 +249,7 @@ func (r *Router) setupRoutes() {
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.resourceHandlers = NewResourceHandlers()
+	r.resourceV2Handlers = NewResourceV2Handlers(r.config)
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant)
 	// Wire license service provider so middleware can access per-tenant license services
@@ -340,6 +342,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResources)))
 	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceStats)))
 	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResource)))
+
+	// Unified resources API v2 (merge layer)
+	r.mux.HandleFunc("/api/v2/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceV2Handlers.HandleListResources)))
+	r.mux.HandleFunc("/api/v2/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceV2Handlers.HandleStats)))
+	r.mux.HandleFunc("/api/v2/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceV2Handlers.HandleResourceRoutes)))
 
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
@@ -2061,6 +2068,9 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 			r.resourceHandlers.SetStateProvider(m)
 		} else {
 			log.Warn().Msg("[Router] resourceHandlers is nil, cannot inject resource store")
+		}
+		if r.resourceV2Handlers != nil {
+			r.resourceV2Handlers.SetStateProvider(m)
 		}
 
 		// Set state provider on AI handler so patrol service gets created

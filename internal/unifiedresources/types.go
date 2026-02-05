@@ -1,0 +1,214 @@
+package unifiedresources
+
+import "time"
+
+// Resource represents a unified resource aggregated across multiple data sources.
+type Resource struct {
+	ID        string         `json:"id"`
+	Type      ResourceType   `json:"type"`
+	Name      string         `json:"name"`
+	Status    ResourceStatus `json:"status"`
+	LastSeen  time.Time      `json:"lastSeen"`
+	UpdatedAt time.Time      `json:"updatedAt,omitempty"`
+
+	Sources      []DataSource                `json:"sources"`
+	SourceStatus map[DataSource]SourceStatus `json:"sourceStatus,omitempty"`
+
+	Identity ResourceIdentity `json:"identity,omitempty"`
+	Metrics  *ResourceMetrics `json:"metrics,omitempty"`
+
+	ParentID   *string `json:"parentId,omitempty"`
+	ChildCount int     `json:"childCount,omitempty"`
+
+	Tags      []string `json:"tags,omitempty"`
+	CustomURL string   `json:"customUrl,omitempty"`
+
+	// Source-specific payloads
+	Proxmox    *ProxmoxData `json:"proxmox,omitempty"`
+	Agent      *AgentData   `json:"agent,omitempty"`
+	Docker     *DockerData  `json:"docker,omitempty"`
+	PBS        *PBSData     `json:"pbs,omitempty"`
+	Kubernetes *K8sData     `json:"kubernetes,omitempty"`
+}
+
+// ResourceType represents the kind of resource.
+type ResourceType string
+
+const (
+	ResourceTypeHost      ResourceType = "host"
+	ResourceTypeVM        ResourceType = "vm"
+	ResourceTypeLXC       ResourceType = "lxc"
+	ResourceTypeContainer ResourceType = "container"
+	ResourceTypeStorage   ResourceType = "storage"
+	ResourceTypePBS       ResourceType = "pbs"
+	ResourceTypePMG       ResourceType = "pmg"
+	ResourceTypeCeph      ResourceType = "ceph"
+)
+
+// ResourceStatus represents the high-level status of a resource.
+type ResourceStatus string
+
+const (
+	StatusOnline  ResourceStatus = "online"
+	StatusOffline ResourceStatus = "offline"
+	StatusWarning ResourceStatus = "warning"
+	StatusUnknown ResourceStatus = "unknown"
+)
+
+// DataSource represents a contributing data source.
+type DataSource string
+
+const (
+	SourceProxmox DataSource = "proxmox"
+	SourceAgent   DataSource = "agent"
+	SourceDocker  DataSource = "docker"
+	SourcePBS     DataSource = "pbs"
+	SourcePMG     DataSource = "pmg"
+	SourceK8s     DataSource = "kubernetes"
+)
+
+// SourceStatus describes the freshness of data from a source.
+type SourceStatus struct {
+	Status   string    `json:"status"` // online, stale, offline
+	LastSeen time.Time `json:"lastSeen"`
+	Error    string    `json:"error,omitempty"`
+}
+
+// ResourceIdentity holds identifiers used for matching.
+type ResourceIdentity struct {
+	MachineID    string   `json:"machineId,omitempty"`
+	DMIUUID      string   `json:"dmiUuid,omitempty"`
+	Hostnames    []string `json:"hostnames,omitempty"`
+	IPAddresses  []string `json:"ipAddresses,omitempty"`
+	MACAddresses []string `json:"macAddresses,omitempty"`
+	ClusterName  string   `json:"clusterName,omitempty"`
+}
+
+// MatchResult describes a potential identity match.
+type MatchResult struct {
+	ResourceA      string  `json:"resourceA"`
+	ResourceB      string  `json:"resourceB"`
+	Confidence     float64 `json:"confidence"`
+	MatchReason    string  `json:"matchReason"`
+	RequiresReview bool    `json:"requiresReview"`
+}
+
+// ResourceMetrics contains unified metrics derived from available sources.
+type ResourceMetrics struct {
+	CPU    *MetricValue `json:"cpu,omitempty"`
+	Memory *MetricValue `json:"memory,omitempty"`
+	Disk   *MetricValue `json:"disk,omitempty"`
+	NetIn  *MetricValue `json:"netIn,omitempty"`
+	NetOut *MetricValue `json:"netOut,omitempty"`
+}
+
+// MetricValue represents a metric value, optionally with totals.
+type MetricValue struct {
+	Value   float64    `json:"value,omitempty"`
+	Used    *int64     `json:"used,omitempty"`
+	Total   *int64     `json:"total,omitempty"`
+	Percent float64    `json:"percent,omitempty"`
+	Unit    string     `json:"unit,omitempty"`
+	Source  DataSource `json:"-"`
+}
+
+// ProxmoxData contains Proxmox-specific data for a resource.
+type ProxmoxData struct {
+	NodeName      string   `json:"nodeName,omitempty"`
+	ClusterName   string   `json:"clusterName,omitempty"`
+	PVEVersion    string   `json:"pveVersion,omitempty"`
+	KernelVersion string   `json:"kernelVersion,omitempty"`
+	Uptime        int64    `json:"uptime,omitempty"`
+	CPUInfo       *CPUInfo `json:"cpuInfo,omitempty"`
+	// Internal link hint to a host agent resource.
+	LinkedHostAgentID string `json:"-"`
+}
+
+// AgentData contains host agent-specific data.
+type AgentData struct {
+	AgentVersion      string             `json:"agentVersion,omitempty"`
+	Hostname          string             `json:"hostname,omitempty"`
+	Platform          string             `json:"platform,omitempty"`
+	OSName            string             `json:"osName,omitempty"`
+	OSVersion         string             `json:"osVersion,omitempty"`
+	KernelVersion     string             `json:"kernelVersion,omitempty"`
+	Architecture      string             `json:"architecture,omitempty"`
+	UptimeSeconds     int64              `json:"uptimeSeconds,omitempty"`
+	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
+	Disks             []DiskInfo         `json:"disks,omitempty"`
+	// Internal link hints to proxmox resources.
+	LinkedNodeID      string `json:"-"`
+	LinkedVMID        string `json:"-"`
+	LinkedContainerID string `json:"-"`
+}
+
+// DockerData contains Docker host-specific data.
+type DockerData struct {
+	Hostname          string             `json:"hostname,omitempty"`
+	Runtime           string             `json:"runtime,omitempty"`
+	RuntimeVersion    string             `json:"runtimeVersion,omitempty"`
+	DockerVersion     string             `json:"dockerVersion,omitempty"`
+	OS                string             `json:"os,omitempty"`
+	KernelVersion     string             `json:"kernelVersion,omitempty"`
+	Architecture      string             `json:"architecture,omitempty"`
+	AgentVersion      string             `json:"agentVersion,omitempty"`
+	Swarm             *DockerSwarmInfo   `json:"swarm,omitempty"`
+	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
+	Disks             []DiskInfo         `json:"disks,omitempty"`
+}
+
+// PBSData contains Proxmox Backup Server data (placeholder).
+type PBSData struct {
+	Hostname string `json:"hostname,omitempty"`
+}
+
+// K8sData contains Kubernetes data (placeholder).
+type K8sData struct {
+	ClusterName string `json:"clusterName,omitempty"`
+}
+
+// CPUInfo describes CPU characteristics.
+type CPUInfo struct {
+	Model   string `json:"model,omitempty"`
+	Cores   int    `json:"cores,omitempty"`
+	Sockets int    `json:"sockets,omitempty"`
+}
+
+// NetworkInterface describes a network interface.
+type NetworkInterface struct {
+	Name      string   `json:"name"`
+	MAC       string   `json:"mac,omitempty"`
+	Addresses []string `json:"addresses,omitempty"`
+	SpeedMbps *int64   `json:"speedMbps,omitempty"`
+	Status    string   `json:"status,omitempty"`
+}
+
+// DiskInfo describes disk usage.
+type DiskInfo struct {
+	Device     string `json:"device,omitempty"`
+	Mountpoint string `json:"mountpoint,omitempty"`
+	Filesystem string `json:"filesystem,omitempty"`
+	Total      int64  `json:"total,omitempty"`
+	Used       int64  `json:"used,omitempty"`
+	Free       int64  `json:"free,omitempty"`
+}
+
+// DockerSwarmInfo captures Docker Swarm details.
+type DockerSwarmInfo struct {
+	NodeID           string `json:"nodeId,omitempty"`
+	NodeRole         string `json:"nodeRole,omitempty"`
+	LocalState       string `json:"localState,omitempty"`
+	ControlAvailable bool   `json:"controlAvailable,omitempty"`
+	ClusterID        string `json:"clusterId,omitempty"`
+	ClusterName      string `json:"clusterName,omitempty"`
+	Scope            string `json:"scope,omitempty"`
+	Error            string `json:"error,omitempty"`
+}
+
+// ResourceStats contains aggregated stats for a set of resources.
+type ResourceStats struct {
+	Total    int                    `json:"total"`
+	ByType   map[ResourceType]int   `json:"byType"`
+	ByStatus map[ResourceStatus]int `json:"byStatus"`
+	BySource map[DataSource]int     `json:"bySource"`
+}
