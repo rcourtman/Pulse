@@ -644,3 +644,34 @@ func TestClientListBackupsEscapesNode(t *testing.T) {
 		t.Fatalf("ListBackups failed: %v", err)
 	}
 }
+
+func TestClientGetSpamScores(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/statistics/spamscores" {
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[{"level":"high","count":"2","ratio":"0.5"}]}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	scores, err := client.GetSpamScores(context.Background())
+	if err != nil {
+		t.Fatalf("GetSpamScores failed: %v", err)
+	}
+	if len(scores) != 1 || scores[0].Level != "high" || scores[0].Count.Int() != 2 {
+		t.Fatalf("unexpected spam scores: %+v", scores)
+	}
+}
