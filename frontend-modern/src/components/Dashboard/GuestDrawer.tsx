@@ -1,5 +1,5 @@
 import { Component, Show, For, Suspense, createSignal } from 'solid-js';
-import { VM, Container } from '@/types/api';
+import type { WorkloadGuest } from '@/types/workloads';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { DiskList } from './DiskList';
 import { HistoryChart } from '../shared/HistoryChart';
@@ -7,8 +7,9 @@ import { ResourceType, HistoryTimeRange } from '@/api/charts';
 import { hasFeature } from '@/stores/license';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
+import { resolveWorkloadType } from '@/utils/workloads';
 
-type Guest = VM | Container;
+type Guest = WorkloadGuest;
 
 interface GuestDrawerProps {
     guest: Guest;
@@ -24,8 +25,8 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
         return `${props.guest.instance}:${props.guest.node}:${props.guest.vmid}`;
     };
 
-    const isVM = (guest: Guest): guest is VM => {
-        return guest.type === 'qemu';
+    const isVM = (guest: Guest): boolean => {
+        return resolveWorkloadType(guest) === 'vm';
     };
 
     const hasOsInfo = () => {
@@ -92,7 +93,13 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     const metricsResource = (): { type: ResourceType; id: string } => {
         const key = props.metricsKey || '';
         const separatorIndex = key.indexOf(':');
-        const fallbackType: ResourceType = isVM(props.guest) ? 'vm' : 'container';
+        const fallbackType: ResourceType = (() => {
+            const type = resolveWorkloadType(props.guest);
+            if (type === 'vm') return 'vm';
+            if (type === 'docker') return 'docker';
+            if (type === 'k8s') return 'k8s';
+            return 'container';
+        })();
 
         if (separatorIndex === -1) {
             return { type: fallbackType, id: fallbackGuestId() };
@@ -100,7 +107,14 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
         const kind = key.slice(0, separatorIndex);
         const id = key.slice(separatorIndex + 1) || fallbackGuestId();
-        const type: ResourceType = kind === 'vm' || kind === 'container' ? kind : fallbackType;
+        const type: ResourceType =
+            kind === 'vm' || kind === 'container'
+                ? (kind as ResourceType)
+                : kind === 'dockerContainer'
+                    ? 'docker'
+                    : kind === 'k8s'
+                        ? 'k8s'
+                        : fallbackType;
 
         return { type, id };
     };
@@ -120,7 +134,11 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
     // Get discovery resource type for the guest
     const discoveryResourceType = (): DiscoveryResourceType => {
-        return isVM(props.guest) ? 'vm' : 'lxc';
+        const type = resolveWorkloadType(props.guest);
+        if (type === 'vm') return 'vm';
+        if (type === 'docker') return 'docker';
+        if (type === 'k8s') return 'k8s';
+        return 'lxc';
     };
     return (
         <div class="space-y-3">

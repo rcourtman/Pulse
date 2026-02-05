@@ -2,7 +2,8 @@ import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { VM, Container, GuestNetworkInterface } from '@/types/api';
-import { formatBytes, formatUptime, formatSpeed, getBackupInfo, type BackupStatus } from '@/utils/format';
+import type { WorkloadGuest } from '@/types/workloads';
+import { formatBytes, formatUptime, formatSpeed, getBackupInfo, getShortImageName, type BackupStatus } from '@/utils/format';
 import { TagBadges } from './TagBadges';
 import { StackedDiskBar } from './StackedDiskBar';
 import { StackedMemoryBar } from './StackedMemoryBar';
@@ -10,6 +11,7 @@ import { StackedMemoryBar } from './StackedMemoryBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { buildMetricKey } from '@/utils/metricsKeys';
+import { getWorkloadMetricsKind, resolveWorkloadType } from '@/utils/workloads';
 import { type ColumnPriority } from '@/hooks/useBreakpoint';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
@@ -20,7 +22,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useAnomalyForMetric } from '@/hooks/useAnomalies';
 
 
-type Guest = VM | Container;
+type Guest = WorkloadGuest;
 
 /**
  * Get color class for I/O values based on throughput (bytes/sec)
@@ -47,7 +49,7 @@ const buildGuestId = (guest: Guest) => {
 
 // Type guard for VM vs Container
 const isVM = (guest: Guest): guest is VM => {
-  return guest.type === 'qemu';
+  return resolveWorkloadType(guest) === 'vm';
 };
 
 // Backup status indicator colors and icons
@@ -426,7 +428,7 @@ export const GUEST_COLUMNS: GuestColumnDef[] = [
   { id: 'name', label: 'Name', priority: 'essential', width: '200px', sortKey: 'name' },
 
   // Secondary - visible on md+ (Now essential for mobile scroll)
-  { id: 'type', label: 'Type', priority: 'essential', width: '40px', sortKey: 'type' },
+  { id: 'type', label: 'Type', priority: 'essential', width: '60px', sortKey: 'type' },
   { id: 'vmid', label: 'ID', priority: 'essential', width: '45px', sortKey: 'vmid' },
 
   // Core metrics - fixed minimum widths to prevent content overlap
@@ -437,7 +439,10 @@ export const GUEST_COLUMNS: GuestColumnDef[] = [
   // Secondary - visible on md+ (Now essential), user toggleable - use icons
   { id: 'ip', label: 'IP', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>, priority: 'essential', width: '45px', toggleable: true },
   { id: 'uptime', label: 'Uptime', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, priority: 'essential', width: '60px', toggleable: true, sortKey: 'uptime' },
-  { id: 'node', label: 'Node', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'node' },
+  { id: 'node', label: 'Node', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>, priority: 'essential', width: '70px', toggleable: true, sortKey: 'node' },
+
+  { id: 'image', label: 'Image', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 6v12M13 6v12" /></svg>, priority: 'secondary', width: '140px', minWidth: '120px', toggleable: true, sortKey: 'image' },
+  { id: 'namespace', label: 'Namespace', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l7 4v8l-7 4-7-4V6l7-4z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12" /></svg>, priority: 'secondary', width: '110px', minWidth: '90px', toggleable: true, sortKey: 'namespace' },
 
   // Supplementary - visible on lg+ (Now essential), user toggleable
   { id: 'backup', label: 'Backup', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, priority: 'essential', width: '50px', toggleable: true },
@@ -506,11 +511,10 @@ export function GuestRow(props: GuestRowProps) {
     return set.has(colId);
   };
 
+  const workloadType = createMemo(() => resolveWorkloadType(props.guest));
+
   // Create namespaced metrics key for sparklines
-  const metricsKey = createMemo(() => {
-    const kind = props.guest.type === 'qemu' ? 'vm' : 'container';
-    return buildMetricKey(kind, guestId());
-  });
+  const metricsKey = createMemo(() => buildMetricKey(getWorkloadMetricsKind(props.guest), guestId()));
 
   // Get anomalies for this guest's metrics (deterministic, no LLM)
   const cpuAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'cpu');
@@ -519,6 +523,15 @@ export function GuestRow(props: GuestRowProps) {
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
 
+  const displayId = createMemo(() => {
+    const provided = props.guest.displayId?.trim();
+    if (provided) return provided;
+    if (typeof props.guest.vmid === 'number' && props.guest.vmid > 0) {
+      return String(props.guest.vmid);
+    }
+    return '';
+  });
+
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
   const networkInterfaces = createMemo(() => props.guest.networkInterfaces ?? []);
   const hasNetworkInterfaces = createMemo(() => networkInterfaces().length > 0);
@@ -526,9 +539,15 @@ export function GuestRow(props: GuestRowProps) {
   const osVersion = createMemo(() => props.guest.osVersion?.trim() ?? '');
   const agentVersion = createMemo(() => props.guest.agentVersion?.trim() ?? '');
   const hasOsInfo = createMemo(() => osName().length > 0 || osVersion().length > 0);
+  const dockerImage = createMemo(() => props.guest.image?.trim() ?? '');
+  const namespace = createMemo(() => props.guest.namespace?.trim() ?? '');
+  const supportsBackup = createMemo(() => {
+    const type = workloadType();
+    return type === 'vm' || type === 'lxc';
+  });
 
   const isOCIContainer = createMemo(() => {
-    if (isVM(props.guest)) return false;
+    if (workloadType() !== 'lxc') return false;
     const container = props.guest as Container;
     return props.guest.type === 'oci' || container.isOci === true;
   });
@@ -543,6 +562,71 @@ export function GuestRow(props: GuestRowProps) {
     if (image.startsWith('oci:')) image = image.slice(4);
     if (image.startsWith('docker:')) image = image.slice(7);
     return image;
+  });
+
+  const typeInfo = createMemo(() => {
+    const type = workloadType();
+    if (type === 'vm') {
+      return {
+        label: 'VM',
+        title: 'Virtual Machine',
+        className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+        icon: (
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="12" rx="2" />
+            <path d="M8 20h8M12 16v4" />
+          </svg>
+        ),
+      };
+    }
+    if (type === 'docker') {
+      return {
+        label: 'Docker',
+        title: 'Docker Container',
+        className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300',
+        icon: (
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="6" width="18" height="12" rx="2" />
+            <path d="M3 10h18M7 6v12M13 6v12" />
+          </svg>
+        ),
+      };
+    }
+    if (type === 'k8s') {
+      return {
+        label: 'K8s',
+        title: 'Kubernetes Pod',
+        className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+        icon: (
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l7 4v8l-7 4-7-4V6l7-4z" />
+            <path d="M12 6v12" />
+          </svg>
+        ),
+      };
+    }
+    if (isOCIContainer()) {
+      return {
+        label: 'OCI',
+        title: `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`,
+        className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
+        icon: (
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+          </svg>
+        ),
+      };
+    }
+    return {
+      label: 'LXC',
+      title: 'LXC Container',
+      className: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+      icon: (
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        </svg>
+      ),
+    };
   });
 
   // Update custom URL when prop changes
@@ -713,7 +797,7 @@ export function GuestRow(props: GuestRowProps) {
                   {props.guest.name}
                 </span>
                 {/* Show backup indicator in name cell only if backup column is hidden */}
-                <Show when={!isColVisible('backup')}>
+                <Show when={!isColVisible('backup') && supportsBackup()}>
                   <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
                 </Show>
 
@@ -738,21 +822,11 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
               <span
-                class={`inline-block px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${props.guest.type === 'qemu'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                  : isOCIContainer()
-                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-                    : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                  }`}
-                title={
-                  isVM(props.guest)
-                    ? 'Virtual Machine'
-                    : isOCIContainer()
-                      ? `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`
-                      : 'LXC Container'
-                }
+                class={`inline-flex items-center gap-1 px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${typeInfo().className}`}
+                title={typeInfo().title}
               >
-                {isVM(props.guest) ? 'VM' : isOCIContainer() ? 'OCI' : 'LXC'}
+                {typeInfo().icon}
+                <span>{typeInfo().label}</span>
               </span>
             </div>
           </td>
@@ -762,7 +836,9 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('vmid')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-              {props.guest.vmid}
+              <Show when={displayId()} fallback={<span class="text-gray-400">-</span>}>
+                {displayId()}
+              </Show>
             </div>
           </td>
         </Show>
@@ -880,9 +956,49 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('node')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <span class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[80px]" title={props.guest.node}>
-                {props.guest.node}
-              </span>
+              <Show when={props.guest.node} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[80px]" title={props.guest.node}>
+                  {props.guest.node}
+                </span>
+              </Show>
+            </div>
+          </td>
+        </Show>
+
+        {/* Image */}
+        <Show when={isColVisible('image')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show
+                when={workloadType() === 'docker' && dockerImage()}
+                fallback={<span class="text-xs text-gray-400">-</span>}
+              >
+                <span
+                  class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[140px]"
+                  title={dockerImage()}
+                >
+                  {getShortImageName(dockerImage())}
+                </span>
+              </Show>
+            </div>
+          </td>
+        </Show>
+
+        {/* Namespace */}
+        <Show when={isColVisible('namespace')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show
+                when={workloadType() === 'k8s' && namespace()}
+                fallback={<span class="text-xs text-gray-400">-</span>}
+              >
+                <span
+                  class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[120px]"
+                  title={namespace()}
+                >
+                  {namespace()}
+                </span>
+              </Show>
             </div>
           </td>
         </Show>
@@ -891,11 +1007,13 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('backup')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={!props.guest.template}>
-                <BackupStatusCell lastBackup={props.guest.lastBackup} />
-              </Show>
-              <Show when={props.guest.template}>
-                <span class="text-xs text-gray-400">-</span>
+              <Show when={supportsBackup()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <Show when={!props.guest.template}>
+                  <BackupStatusCell lastBackup={props.guest.lastBackup} />
+                </Show>
+                <Show when={props.guest.template}>
+                  <span class="text-xs text-gray-400">-</span>
+                </Show>
               </Show>
             </div>
           </td>

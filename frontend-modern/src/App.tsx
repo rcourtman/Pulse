@@ -946,6 +946,7 @@ function App() {
       <Route path="/" component={() => <Navigate href="/proxmox/overview" />} />
       <Route path="/proxmox" component={() => <Navigate href="/proxmox/overview" />} />
       <Route path="/proxmox/overview" component={DashboardView} />
+      <Route path="/workloads" component={DashboardView} />
       <Route path="/proxmox/storage" component={StorageComponent} />
       <Route path="/proxmox/ceph" component={CephPage} />
       <Route path="/proxmox/replication" component={Replication} />

@@ -11,8 +11,8 @@ interface DashboardFilterProps {
   search: () => string;
   setSearch: (value: string) => void;
   isSearchLocked: () => boolean;
-  viewMode: () => 'all' | 'vm' | 'lxc';
-  setViewMode: (value: 'all' | 'vm' | 'lxc') => void;
+  viewMode: () => 'all' | 'vm' | 'lxc' | 'docker' | 'k8s';
+  setViewMode: (value: 'all' | 'vm' | 'lxc' | 'docker' | 'k8s') => void;
   statusMode: () => 'all' | 'running' | 'degraded' | 'stopped';
   setStatusMode: (value: 'all' | 'running' | 'degraded' | 'stopped') => void;
   groupingMode: () => 'grouped' | 'flat';
@@ -334,6 +334,34 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
               </svg>
               LXCs
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setViewMode(props.viewMode() === 'docker' ? 'all' : 'docker')}
+              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'docker'
+                ? 'bg-white dark:bg-gray-800 text-sky-600 dark:text-sky-400 shadow-sm ring-1 ring-sky-200 dark:ring-sky-800'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+                }`}
+            >
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="6" width="18" height="12" rx="2" />
+                <path d="M3 10h18M7 6v12M13 6v12" />
+              </svg>
+              Docker
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setViewMode(props.viewMode() === 'k8s' ? 'all' : 'k8s')}
+              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'k8s'
+                ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-200 dark:ring-amber-800'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+                }`}
+            >
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l7 4v8l-7 4-7-4V6l7-4z" />
+                <path d="M12 6v12" />
+              </svg>
+              K8s
             </button>
           </div>
 

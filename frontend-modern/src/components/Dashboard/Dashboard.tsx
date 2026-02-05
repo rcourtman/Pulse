@@ -1,6 +1,8 @@
 import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
+import type { Resource } from '@/types/resource';
+import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 import { GuestRow, GUEST_COLUMNS, type GuestColumnDef } from './GuestRow';
 import { GuestDrawer } from './GuestDrawer';
 import { useWebSocket } from '@/App';
@@ -26,6 +28,8 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { aiChatStore } from '@/stores/aiChat';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { apiFetchJSON } from '@/utils/apiClient';
+import { getWorkloadMetricsKind, resolveWorkloadType } from '@/utils/workloads';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -200,7 +204,7 @@ interface DashboardProps {
   nodes: Node[];
 }
 
-type ViewMode = 'all' | 'vm' | 'lxc';
+type ViewMode = 'all' | 'vm' | 'lxc' | 'docker' | 'k8s';
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
 export function Dashboard(props: DashboardProps) {
@@ -267,12 +271,172 @@ export function Dashboard(props: DashboardProps) {
       return next;
     });
 
-  // Combine VMs and containers into a single list for filtering
-  const allGuests = createMemo<(VM | Container)[]>(() => [...props.vms, ...props.containers]);
+  const [workloadGuests, setWorkloadGuests] = createSignal<WorkloadGuest[]>([]);
+  const [workloadsLoaded, setWorkloadsLoaded] = createSignal(false);
+  const [workloadsLoading, setWorkloadsLoading] = createSignal(false);
+
+  const normalizeWorkloadStatus = (status?: string | null): string => {
+    const normalized = (status || '').trim().toLowerCase();
+    if (!normalized) return 'unknown';
+    if (normalized === 'online' || normalized === 'healthy') return 'running';
+    if (normalized === 'offline') return 'stopped';
+    return normalized;
+  };
+
+  const buildMetric = (metric?: Resource['memory']) => {
+    const total = metric?.total ?? 0;
+    const used = metric?.used ?? 0;
+    const free = metric?.free ?? (total > 0 ? Math.max(0, total - used) : 0);
+    const usage = metric?.current ?? (total > 0 ? (used / total) * 100 : 0);
+    return { total, used, free, usage };
+  };
+
+  const resolveWorkloadsPayload = (payload: unknown): Resource[] => {
+    if (Array.isArray(payload)) return payload as Resource[];
+    if (!payload || typeof payload !== 'object') return [];
+    const record = payload as Record<string, unknown>;
+    const candidates = ['resources', 'workloads', 'data'];
+    for (const key of candidates) {
+      const value = record[key];
+      if (Array.isArray(value)) return value as Resource[];
+    }
+    return [];
+  };
+
+  const mapResourceToWorkload = (resource: Resource): WorkloadGuest | null => {
+    const type = resource.type;
+    const workloadType: WorkloadType | null =
+      type === 'vm'
+        ? 'vm'
+        : type === 'container' || type === 'oci-container'
+          ? 'lxc'
+          : type === 'docker-container'
+            ? 'docker'
+            : type === 'pod'
+              ? 'k8s'
+              : null;
+
+    if (!workloadType) return null;
+
+    const platformData = (resource.platformData ?? {}) as Record<string, unknown>;
+    const name = (resource.displayName || resource.name || resource.id || '').toString().trim();
+    const node =
+      (platformData.node as string) ??
+      (platformData.nodeName as string) ??
+      (platformData.host as string) ??
+      (platformData.hostName as string) ??
+      '';
+    const instance =
+      (platformData.instance as string) ??
+      (platformData.clusterId as string) ??
+      resource.platformId ??
+      '';
+    const vmid =
+      typeof platformData.vmid === 'number'
+        ? platformData.vmid
+        : parseInt(resource.id.split('-').pop() ?? '0', 10);
+    const rawDisplayId =
+      (platformData.shortId as string) ??
+      (platformData.uid as string) ??
+      resource.id;
+    const displayId =
+      workloadType === 'vm' || workloadType === 'lxc'
+        ? vmid > 0
+          ? String(vmid)
+          : undefined
+        : rawDisplayId
+          ? rawDisplayId.length > 12
+            ? rawDisplayId.slice(0, 12)
+            : rawDisplayId
+          : undefined;
+    const isOci =
+      type === 'oci-container' ||
+      platformData.isOci === true ||
+      platformData.type === 'oci';
+    const legacyType =
+      workloadType === 'vm'
+        ? 'qemu'
+        : workloadType === 'docker'
+          ? 'docker'
+          : workloadType === 'k8s'
+            ? 'k8s'
+            : isOci
+              ? 'oci'
+              : 'lxc';
+
+    const ipAddresses =
+      (platformData.ipAddresses as string[] | undefined) ??
+      (resource.identity?.ips as string[] | undefined);
+
+    return {
+      id: resource.id,
+      vmid: Number.isFinite(vmid) ? vmid : 0,
+      name: name || resource.id,
+      node,
+      instance,
+      status: normalizeWorkloadStatus(resource.status),
+      type: legacyType,
+      cpu: (resource.cpu?.current ?? 0) / 100,
+      cpus: (platformData.cpus as number) ?? (platformData.cpuCount as number) ?? 1,
+      memory: buildMetric(resource.memory),
+      disk: buildMetric(resource.disk),
+      disks: platformData.disks as any[] | undefined,
+      diskStatusReason: platformData.diskStatusReason as string | undefined,
+      ipAddresses,
+      osName: platformData.osName as string | undefined,
+      osVersion: platformData.osVersion as string | undefined,
+      agentVersion: platformData.agentVersion as string | undefined,
+      networkInterfaces: platformData.networkInterfaces as any[] | undefined,
+      networkIn: resource.network?.rxBytes ?? 0,
+      networkOut: resource.network?.txBytes ?? 0,
+      diskRead: (platformData.diskRead as number) ?? 0,
+      diskWrite: (platformData.diskWrite as number) ?? 0,
+      uptime: resource.uptime ?? 0,
+      template: (platformData.template as boolean) ?? false,
+      lastBackup: (platformData.lastBackup as number) ?? 0,
+      tags: resource.tags ?? [],
+      lock: (platformData.lock as string) ?? '',
+      lastSeen: new Date(resource.lastSeen).toISOString(),
+      isOci,
+      osTemplate: platformData.osTemplate as string | undefined,
+      workloadType,
+      displayId,
+      image:
+        workloadType === 'docker'
+          ? ((platformData.image as string) ??
+            (platformData.imageName as string) ??
+            (platformData.imageRef as string))
+          : undefined,
+      namespace:
+        workloadType === 'k8s'
+          ? ((platformData.namespace as string) ?? (platformData.ns as string))
+          : undefined,
+      contextLabel:
+        (platformData.clusterName as string) ??
+        (platformData.cluster as string) ??
+        (platformData.context as string) ??
+        (platformData.host as string) ??
+        undefined,
+      platformType: resource.platformType,
+    };
+  };
+
+  const legacyGuests = createMemo<WorkloadGuest[]>(() => [
+    ...props.vms.map((vm) => ({ ...vm, workloadType: 'vm', displayId: String(vm.vmid) })),
+    ...props.containers.map((ct) => ({ ...ct, workloadType: 'lxc', displayId: String(ct.vmid) })),
+  ]);
+
+  // Combine workloads into a single list for filtering, preferring /api/v2/resources
+  const allGuests = createMemo<WorkloadGuest[]>(() =>
+    workloadsLoaded() ? workloadGuests() : legacyGuests(),
+  );
 
   // Initialize from localStorage with proper type checking
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
-    deserialize: (raw) => (raw === 'all' || raw === 'vm' || raw === 'lxc' ? raw : 'all'),
+    deserialize: (raw) =>
+      raw === 'all' || raw === 'vm' || raw === 'lxc' || raw === 'docker' || raw === 'k8s'
+        ? raw
+        : 'all',
   });
 
   const [statusMode, setStatusMode] = usePersistentSignal<StatusMode>('dashboardStatusMode', 'all', {
@@ -301,7 +465,7 @@ export function Dashboard(props: DashboardProps) {
   );
 
   // Sorting state - default to VMID ascending (matches Proxmox order)
-  const [sortKey, setSortKey] = createSignal<keyof (VM | Container) | null>('vmid');
+  const [sortKey, setSortKey] = createSignal<keyof WorkloadGuest | null>('vmid');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
   // Column visibility management
@@ -328,8 +492,35 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
+  const refreshWorkloads = async () => {
+    if (workloadsLoading()) return;
+    setWorkloadsLoading(true);
+    const hadWorkloads = workloadsLoaded();
+    try {
+      const response = await apiFetchJSON('/api/v2/resources');
+      const resources = resolveWorkloadsPayload(response);
+      const mapped = resources
+        .map((resource) => mapResourceToWorkload(resource))
+        .filter((resource): resource is WorkloadGuest => !!resource);
+      setWorkloadGuests(mapped);
+      setWorkloadsLoaded(true);
+      logger.debug('[Dashboard] Loaded workloads', {
+        total: mapped.length,
+        types: [...new Set(mapped.map((w) => w.workloadType))],
+      });
+    } catch (err) {
+      logger.debug('[Dashboard] Failed to load workloads', err);
+      if (!hadWorkloads) {
+        setWorkloadsLoaded(false);
+      }
+    } finally {
+      setWorkloadsLoading(false);
+    }
+  };
+
   // Load all guest metadata on mount (single API call for all guests)
   onMount(async () => {
+    await refreshWorkloads();
     await refreshGuestMetadata();
 
     // Listen for metadata changes from AI or other sources
@@ -371,6 +562,12 @@ export function Dashboard(props: DashboardProps) {
 
     // Note: SolidJS onMount doesn't support cleanup return, so we rely on component unmount
     // In practice, Dashboard is always mounted so this is fine
+  });
+
+  createEffect(() => {
+    if (connected()) {
+      void refreshWorkloads();
+    }
   });
 
   // Callback to update a guest's custom URL in metadata
@@ -469,7 +666,7 @@ export function Dashboard(props: DashboardProps) {
   });
 
   // Sort handler
-  const handleSort = (key: keyof (VM | Container)) => {
+  const handleSort = (key: keyof WorkloadGuest) => {
     if (sortKey() === key) {
       // Toggle direction for the same column
       setSortDirection(sortDirection() === 'asc' ? 'desc' : 'asc');
@@ -494,7 +691,7 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
-  const getDiskUsagePercent = (guest: VM | Container): number | null => {
+  const getDiskUsagePercent = (guest: WorkloadGuest): number | null => {
     const disk = guest?.disk;
     if (!disk) return null;
 
@@ -529,7 +726,7 @@ export function Dashboard(props: DashboardProps) {
       return null;
     }
 
-    return (a: VM | Container, b: VM | Container): number => {
+    return (a: WorkloadGuest, b: WorkloadGuest): number => {
       let aVal: string | number | boolean | null | undefined = a[key] as
         | string
         | number
@@ -654,18 +851,19 @@ export function Dashboard(props: DashboardProps) {
       // Find the node to get both instance and name for precise matching
       const node = props.nodes.find((n) => n.id === selectedNodeId);
       if (node) {
-        guests = guests.filter(
-          (g) => g.instance === node.instance && g.node === node.name,
-        );
+        guests = guests.filter((g) => {
+          const type = resolveWorkloadType(g);
+          if (type !== 'vm' && type !== 'lxc') {
+            return true;
+          }
+          return g.instance === node.instance && g.node === node.name;
+        });
       }
     }
 
     // Filter by type
-    if (viewMode() === 'vm') {
-      guests = guests.filter((g) => g.type === 'qemu');
-    } else if (viewMode() === 'lxc') {
-      // Include both traditional LXC and OCI containers (Proxmox 9.1+)
-      guests = guests.filter((g) => g.type === 'lxc' || g.type === 'oci');
+    if (viewMode() !== 'all') {
+      guests = guests.filter((g) => resolveWorkloadType(g) === viewMode());
     }
 
     // Filter by status
@@ -733,13 +931,34 @@ export function Dashboard(props: DashboardProps) {
     return guests;
   });
 
+  const getGroupKey = (guest: WorkloadGuest): string => {
+    const type = resolveWorkloadType(guest);
+    if (type === 'vm' || type === 'lxc') {
+      return `${guest.instance}-${guest.node}`;
+    }
+    const context = guest.contextLabel || guest.node || guest.instance || guest.namespace || guest.id;
+    return `${type}:${context}`;
+  };
+
+  const getGroupLabel = (groupKey: string, guests: WorkloadGuest[]): string => {
+    const node = nodeByInstance()[groupKey];
+    if (node) return getNodeDisplayName(node);
+    const [prefix, ...rest] = groupKey.split(':');
+    const context = rest.length > 0 ? rest.join(':') : groupKey;
+    if (prefix === 'docker') return `Docker • ${context}`;
+    if (prefix === 'k8s') return `K8s • ${context}`;
+    if (prefix === 'vm') return `VMs • ${context}`;
+    if (prefix === 'lxc') return `LXCs • ${context}`;
+    return guests[0]?.contextLabel || context;
+  };
+
   // Group by node or return flat list based on grouping mode
   const groupedGuests = createMemo(() => {
     const guests = filteredGuests();
 
     // If flat mode, return all guests in a single group
     if (groupingMode() === 'flat') {
-      const groups: Record<string, (VM | Container)[]> = { '': guests };
+      const groups: Record<string, WorkloadGuest[]> = { '': guests };
       // PERFORMANCE: Use memoized sort comparator (eliminates ~50 lines of duplicate code)
       const comparator = guestSortComparator();
       if (comparator) {
@@ -749,10 +968,9 @@ export function Dashboard(props: DashboardProps) {
     }
 
     // Group by node ID (instance + node name) to match Node.ID format
-    const groups: Record<string, (VM | Container)[]> = {};
+    const groups: Record<string, WorkloadGuest[]> = {};
     guests.forEach((guest) => {
-      // Node.ID is formatted as "instance-nodename", so we need to match that
-      const nodeId = `${guest.instance}-${guest.node}`;
+      const nodeId = getGroupKey(guest);
 
       if (!groups[nodeId]) {
         groups[nodeId] = [];
@@ -783,8 +1001,10 @@ export function Dashboard(props: DashboardProps) {
       );
     }).length;
     const stopped = guests.length - running - degraded;
-    const vms = guests.filter((g) => g.type === 'qemu').length;
-    const containers = guests.filter((g) => g.type === 'lxc' || g.type === 'oci').length;
+    const vms = guests.filter((g) => resolveWorkloadType(g) === 'vm').length;
+    const containers = guests.filter((g) => resolveWorkloadType(g) === 'lxc').length;
+    const docker = guests.filter((g) => resolveWorkloadType(g) === 'docker').length;
+    const k8s = guests.filter((g) => resolveWorkloadType(g) === 'k8s').length;
     return {
       total: guests.length,
       running,
@@ -792,6 +1012,8 @@ export function Dashboard(props: DashboardProps) {
       stopped,
       vms,
       containers,
+      docker,
+      k8s,
     };
   });
 
@@ -872,8 +1094,8 @@ export function Dashboard(props: DashboardProps) {
         globalTemperatureMonitoringEnabled={ws.state.temperatureMonitoringEnabled}
         onNodeSelect={handleNodeSelect}
         nodes={props.nodes}
-        filteredVms={filteredGuests().filter((g) => g.type === 'qemu')}
-        filteredContainers={filteredGuests().filter((g) => g.type === 'lxc' || g.type === 'oci')}
+        filteredVms={filteredGuests().filter((g) => resolveWorkloadType(g) === 'vm') as VM[]}
+        filteredContainers={filteredGuests().filter((g) => resolveWorkloadType(g) === 'lxc') as Container[]}
         searchTerm={search()}
       />
 
@@ -940,8 +1162,7 @@ export function Dashboard(props: DashboardProps) {
           connected() &&
           initialDataReceived() &&
           props.nodes.length === 0 &&
-          props.vms.length === 0 &&
-          props.containers.length === 0
+          allGuests().length === 0
         }
       >
         <Card padding="lg">
@@ -1027,7 +1248,7 @@ export function Dashboard(props: DashboardProps) {
                     <For each={visibleColumns()}>
                       {(col) => {
                         const isFirst = () => col.id === visibleColumns()[0]?.id;
-                        const sortKeyForCol = col.sortKey as keyof (VM | Container) | undefined;
+                        const sortKeyForCol = col.sortKey as keyof WorkloadGuest | undefined;
                         const isSortable = !!sortKeyForCol;
                         const isSorted = () => sortKeyForCol && sortKey() === sortKeyForCol;
 
@@ -1061,21 +1282,37 @@ export function Dashboard(props: DashboardProps) {
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                   <For
-                    each={Object.entries(groupedGuests()).sort(([instanceIdA], [instanceIdB]) => {
-                      const nodeA = nodeByInstance()[instanceIdA];
-                      const nodeB = nodeByInstance()[instanceIdB];
-                      const labelA = nodeA ? getNodeDisplayName(nodeA) : instanceIdA;
-                      const labelB = nodeB ? getNodeDisplayName(nodeB) : instanceIdB;
-                      return labelA.localeCompare(labelB) || instanceIdA.localeCompare(instanceIdB);
-                    })}
+                    each={Object.entries(groupedGuests()).sort(
+                      ([instanceIdA, guestsA], [instanceIdB, guestsB]) => {
+                        const nodeA = nodeByInstance()[instanceIdA];
+                        const nodeB = nodeByInstance()[instanceIdB];
+                        const labelA = nodeA ? getNodeDisplayName(nodeA) : getGroupLabel(instanceIdA, guestsA);
+                        const labelB = nodeB ? getNodeDisplayName(nodeB) : getGroupLabel(instanceIdB, guestsB);
+                        return labelA.localeCompare(labelB) || instanceIdA.localeCompare(instanceIdB);
+                      },
+                    )}
                     fallback={<></>}
                   >
                     {([instanceId, guests]) => {
                       const node = nodeByInstance()[instanceId];
                       return (
                         <>
-                          <Show when={node && groupingMode() === 'grouped'}>
-                            <NodeGroupHeader node={node!} renderAs="tr" colspan={totalColumns()} />
+                          <Show when={groupingMode() === 'grouped'}>
+                            <Show
+                              when={node}
+                              fallback={
+                                <tr class="bg-gray-50 dark:bg-gray-900/40">
+                                  <td
+                                    colspan={totalColumns()}
+                                    class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
+                                  >
+                                    {getGroupLabel(instanceId, guests)}
+                                  </td>
+                                </tr>
+                              }
+                            >
+                              <NodeGroupHeader node={node!} renderAs="tr" colspan={totalColumns()} />
+                            </Show>
                           </Show>
                           <For each={guests} fallback={<></>}>
                             {(guest) => {
@@ -1111,7 +1348,7 @@ export function Dashboard(props: DashboardProps) {
                                         <div class="p-4" onClick={(e) => e.stopPropagation()}>
                                           <GuestDrawer
                                             guest={guest}
-                                            metricsKey={buildMetricKey(guest.type === 'qemu' ? 'vm' : 'container', guestId)}
+                                            metricsKey={buildMetricKey(getWorkloadMetricsKind(guest), guestId)}
                                             onClose={() => setSelectedGuestId(null)}
                                             customUrl={getMetadata()?.customUrl}
                                             onCustomUrlChange={handleCustomUrlUpdate}
@@ -1140,7 +1377,7 @@ export function Dashboard(props: DashboardProps) {
           connected() &&
           initialDataReceived() &&
           filteredGuests().length === 0 &&
-          (props.vms.length > 0 || props.containers.length > 0)
+          allGuests().length > 0
         }
       >
         <Card padding="lg" class="mb-4">
