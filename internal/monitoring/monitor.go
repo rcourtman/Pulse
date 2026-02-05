@@ -8916,10 +8916,18 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 			if resolvedAlert != nil {
 				// Check if recovery notification should be suppressed during quiet hours
 				if m.alertManager.ShouldSuppressResolvedNotification(resolvedAlert.Alert) {
+					log.Info().
+						Str("alertID", alertID).
+						Str("type", resolvedAlert.Alert.Type).
+						Msg("Resolved notification skipped - suppressed by quiet hours")
 					return
 				}
 				go m.notificationMgr.SendResolvedAlert(resolvedAlert)
 			}
+		} else {
+			log.Info().
+				Str("alertID", alertID).
+				Msg("Resolved notification skipped - notifyOnResolve is disabled")
 		}
 	}
 }
