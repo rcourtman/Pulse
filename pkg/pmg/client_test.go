@@ -417,3 +417,74 @@ func TestMailEndpointsHandleNullAndStringValues(t *testing.T) {
 		t.Fatalf("expected oldest age 600, got %d", queue.OldestAge.Int64())
 	}
 }
+
+func TestClientTokenNameIncludesUserAndRealm(t *testing.T) {
+	t.Parallel()
+
+	var authHeader string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/statistics/mail":
+			authHeader = r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{"count":1}}`)
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apiuser@custom!apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	stats, err := client.GetMailStatistics(context.Background(), "")
+	if err != nil {
+		t.Fatalf("get mail statistics failed: %v", err)
+	}
+	if stats == nil || stats.Count.Float64() != 1 {
+		t.Fatalf("expected statistics count 1, got %+v", stats)
+	}
+
+	expected := "PMGAPIToken=apiuser@custom!apitoken:secret"
+	if authHeader != expected {
+		t.Fatalf("expected authorization header %q, got %q", expected, authHeader)
+	}
+}
+
+func TestClientRequestAuthError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/statistics/mail":
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, "unauthorized")
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	_, err = client.GetMailStatistics(context.Background(), "")
+	if err == nil || !strings.Contains(err.Error(), "authentication error") {
+		t.Fatalf("expected authentication error, got %v", err)
+	}
+}
