@@ -33,6 +33,15 @@ func TestCollectExtraTargets(t *testing.T) {
 	}
 }
 
+func TestCollectExtraTargetsNilProfile(t *testing.T) {
+	scanner := &Scanner{policy: envdetect.DefaultScanPolicy()}
+	seen := map[string]struct{}{}
+
+	if targets := scanner.collectExtraTargets(nil, seen); targets != nil {
+		t.Fatalf("expected nil targets for nil profile, got %v", targets)
+	}
+}
+
 func TestExpandPhaseIPs(t *testing.T) {
 	scanner := &Scanner{policy: envdetect.DefaultScanPolicy()}
 	seen := map[string]struct{}{
