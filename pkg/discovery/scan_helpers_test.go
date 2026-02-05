@@ -135,3 +135,9 @@ func TestBuildEnvironmentInfoCopiesData(t *testing.T) {
 		t.Fatalf("expected warnings copy, got %v", profile.Warnings)
 	}
 }
+
+func TestBuildEnvironmentInfoNilProfile(t *testing.T) {
+	if info := buildEnvironmentInfo(nil); info != nil {
+		t.Fatalf("expected nil info for nil profile, got %+v", info)
+	}
+}
