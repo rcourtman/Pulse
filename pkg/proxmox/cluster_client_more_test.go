@@ -230,3 +230,53 @@ func TestExecuteWithFailoverNodeSpecificStorageError(t *testing.T) {
 		t.Fatalf("expected no lastError, got %+v", cc.lastError)
 	}
 }
+
+func TestGetHealthyClientUsesCoolingEndpoints(t *testing.T) {
+	cc := &ClusterClient{
+		name:            "cluster",
+		endpoints:       []string{"node1"},
+		clients:         map[string]*Client{"node1": {}},
+		nodeHealth:      map[string]bool{"node1": true},
+		lastError:       make(map[string]string),
+		lastHealthCheck: map[string]time.Time{"node1": time.Now()},
+		rateLimitUntil:  map[string]time.Time{"node1": time.Now().Add(1 * time.Minute)},
+	}
+
+	client, err := cc.getHealthyClient(context.Background())
+	if err != nil {
+		t.Fatalf("getHealthyClient failed: %v", err)
+	}
+	if client == nil {
+		t.Fatal("expected client, got nil")
+	}
+	if _, ok := cc.rateLimitUntil["node1"]; !ok {
+		t.Fatal("expected cooldown entry to remain while in future")
+	}
+}
+
+func TestGetHealthyClientNoHealthyEndpointsError(t *testing.T) {
+	now := time.Now()
+	cc := &ClusterClient{
+		name:      "cluster",
+		endpoints: []string{"node1", "node2"},
+		clients:   map[string]*Client{},
+		nodeHealth: map[string]bool{
+			"node1": false,
+			"node2": false,
+		},
+		lastError: make(map[string]string),
+		lastHealthCheck: map[string]time.Time{
+			"node1": now,
+			"node2": now,
+		},
+		rateLimitUntil: make(map[string]time.Time),
+	}
+
+	_, err := cc.getHealthyClient(context.Background())
+	if err == nil {
+		t.Fatal("expected error when no healthy endpoints")
+	}
+	if !strings.Contains(err.Error(), "no healthy nodes available") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
