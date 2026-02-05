@@ -1,5 +1,6 @@
-import { createResource } from 'solid-js';
+import { createEffect, createResource, onCleanup } from 'solid-js';
 import { apiFetch } from '@/utils/apiClient';
+import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
 
 const UNIFIED_RESOURCES_URL = '/api/v2/resources?type=host';
@@ -190,6 +191,43 @@ async function fetchUnifiedResources(): Promise<Resource[]> {
 export function useUnifiedResources() {
   const [resources, { refetch, mutate }] = createResource<Resource[]>(fetchUnifiedResources, {
     initialValue: [],
+  });
+  const wsStore = getGlobalWebSocketStore();
+  let refreshHandle: number | undefined;
+
+  const scheduleRefetch = () => {
+    if (refreshHandle !== undefined) {
+      clearTimeout(refreshHandle);
+    }
+    refreshHandle = setTimeout(() => {
+      refreshHandle = undefined;
+      if (!resources.loading) {
+        void refetch();
+      }
+    }, 800);
+  };
+
+  createEffect(() => {
+    if (!wsStore.connected() || !wsStore.initialDataReceived()) {
+      return;
+    }
+    // Track resource-adjacent updates from the WebSocket store.
+    // Accessing these arrays makes this effect react to updates.
+    void wsStore.state.resources;
+    void wsStore.state.nodes;
+    void wsStore.state.hosts;
+    void wsStore.state.dockerHosts;
+    void wsStore.state.kubernetesClusters;
+    void wsStore.state.pbs;
+    void wsStore.state.pmg;
+
+    scheduleRefetch();
+  });
+
+  onCleanup(() => {
+    if (refreshHandle !== undefined) {
+      clearTimeout(refreshHandle);
+    }
   });
 
   return {

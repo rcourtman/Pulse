@@ -1,5 +1,5 @@
-import { Component, For, Show, createSignal, createMemo, createEffect } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
+import { Component, For, Show, createSignal, createMemo, createEffect, onCleanup } from 'solid-js';
+import { useLocation, useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { formatBytes, formatPercent } from '@/utils/format';
@@ -24,9 +24,11 @@ import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
+type StorageSourceFilter = 'all' | 'proxmox' | 'pbs' | 'ceph';
 
 const Storage: Component = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { state, connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
@@ -41,6 +43,9 @@ const Storage: Component = () => {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [expandedStorage, setExpandedStorage] = createSignal<string | null>(null);
+  const [highlightedStorageId, setHighlightedStorageId] = createSignal<string | null>(null);
+  const [handledStorageId, setHandledStorageId] = createSignal<string | null>(null);
+  let highlightTimer: number | undefined;
   const [sortKey, setSortKey] = usePersistentSignal<StorageSortKey>('storageSortKey', 'name', {
     deserialize: (raw) =>
       (['name', 'node', 'type', 'status', 'usage', 'free', 'total'] as const).includes(
@@ -62,6 +67,37 @@ const Storage: Component = () => {
     {
       deserialize: (raw) =>
         raw === 'all' || raw === 'available' || raw === 'offline' ? raw : 'all',
+    },
+  );
+
+  const getStorageRowId = (storage: StorageType) =>
+    storage.id || `${storage.instance}-${storage.node}-${storage.name}`;
+
+  createEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const resourceId = params.get('resource');
+    if (!resourceId || resourceId === handledStorageId()) return;
+    const match = (state.storage || []).find(
+      (storage) => getStorageRowId(storage) === resourceId || storage.name === resourceId,
+    );
+    if (!match) return;
+    const rowId = getStorageRowId(match);
+    setExpandedStorage(rowId);
+    setHighlightedStorageId(rowId);
+    setHandledStorageId(resourceId);
+    if (highlightTimer) window.clearTimeout(highlightTimer);
+    highlightTimer = window.setTimeout(() => setHighlightedStorageId(null), 2000);
+  });
+
+  onCleanup(() => {
+    if (highlightTimer) window.clearTimeout(highlightTimer);
+  });
+  const [sourceFilter, setSourceFilter] = usePersistentSignal<StorageSourceFilter>(
+    STORAGE_KEYS.STORAGE_SOURCE_FILTER,
+    'all',
+    {
+      deserialize: (raw) =>
+        raw === 'all' || raw === 'proxmox' || raw === 'pbs' || raw === 'ceph' ? raw : 'all',
     },
   );
 
@@ -99,6 +135,11 @@ const Storage: Component = () => {
     const value = (type || '').toLowerCase();
     return value === 'rbd' || value === 'cephfs' || value === 'ceph';
   };
+
+  const isPBSStorage = (storage: StorageType) => storage.type === 'pbs';
+  const isCephStorage = (storage: StorageType) => isCephType(storage.type);
+  const isProxmoxStorage = (storage: StorageType) =>
+    !isPBSStorage(storage) && !isCephStorage(storage);
 
   const getCephHealthLabel = (health?: string) => {
     if (!health) return 'CEPH';
@@ -410,6 +451,15 @@ const Storage: Component = () => {
       }
     }
 
+    // Apply source filter
+    if (sourceFilter() !== 'all') {
+      storage = storage.filter((s) => {
+        if (sourceFilter() === 'pbs') return isPBSStorage(s);
+        if (sourceFilter() === 'ceph') return isCephStorage(s);
+        return isProxmoxStorage(s);
+      });
+    }
+
     // Apply status filter
     if (statusFilter() !== 'all') {
       storage = storage.filter((s) => {
@@ -579,6 +629,7 @@ const Storage: Component = () => {
     setSortKey('name');
     setSortDirection('asc');
     setStatusFilter('all');
+    setSourceFilter('all');
   };
 
   // Handle keyboard shortcuts
@@ -601,7 +652,8 @@ const Storage: Component = () => {
           searchTerm().trim() ||
           selectedNode() ||
           viewMode() !== 'node' ||
-          statusFilter() !== 'all'
+          statusFilter() !== 'all' ||
+          sourceFilter() !== 'all'
         ) {
           resetFilters();
 
@@ -645,7 +697,8 @@ const Storage: Component = () => {
           tabView() === 'pools' &&
           connected() &&
           initialDataReceived() &&
-          cephSummaryStats().clusters.length > 0
+          cephSummaryStats().clusters.length > 0 &&
+          (sourceFilter() === 'all' || sourceFilter() === 'ceph')
         }
       >
         <Card padding="md" tone="glass">
@@ -753,6 +806,8 @@ const Storage: Component = () => {
           setSortDirection={setSortDirection}
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
+          sourceFilter={sourceFilter}
+          setSourceFilter={setSourceFilter}
           searchInputRef={(el) => (searchInputRef = el)}
           columnVisibility={columnVisibility}
         />
@@ -1169,6 +1224,9 @@ const Storage: Component = () => {
                                 const isExpanded = createMemo(
                                   () => expandedStorage() === storageRowId(),
                                 );
+                                const isHighlighted = createMemo(
+                                  () => highlightedStorageId() === storageRowId(),
+                                );
 
                                 const hasAcknowledgedOnlyAlert = createMemo(
                                   () => alertStyles().hasAcknowledgedOnlyAlert && parentNodeOnline(),
@@ -1187,6 +1245,8 @@ const Storage: Component = () => {
                                         ? 'bg-red-50 dark:bg-red-950/30'
                                         : 'bg-yellow-50 dark:bg-yellow-950/20',
                                     );
+                                  } else if (isHighlighted()) {
+                                    classes.push('bg-blue-50/60 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600');
                                   } else if (hasAcknowledgedOnlyAlert()) {
                                     classes.push('bg-gray-50/40 dark:bg-gray-800/40');
                                   }

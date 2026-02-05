@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { useLocation } from '@solidjs/router';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
@@ -10,9 +11,37 @@ import type { Resource } from '@/types/resource';
 
 export function Infrastructure() {
   const { resources, loading, error, refetch } = useUnifiedResources();
+  const location = useLocation();
   const hasResources = createMemo(() => resources().length > 0);
   const [selectedSources, setSelectedSources] = createSignal<Set<string>>(new Set());
   const [selectedStatuses, setSelectedStatuses] = createSignal<Set<string>>(new Set());
+  const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
+  const [highlightedResourceId, setHighlightedResourceId] = createSignal<string | null>(null);
+  const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
+  let highlightTimer: number | undefined;
+
+  createEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const resourceId = params.get('resource');
+    if (!resourceId || resourceId === handledResourceId()) return;
+    const matching = resources().some((resource) => resource.id === resourceId);
+    if (!matching) return;
+    setExpandedResourceId(resourceId);
+    setHighlightedResourceId(resourceId);
+    setHandledResourceId(resourceId);
+    if (highlightTimer) {
+      window.clearTimeout(highlightTimer);
+    }
+    highlightTimer = window.setTimeout(() => {
+      setHighlightedResourceId(null);
+    }, 2000);
+  });
+
+  onCleanup(() => {
+    if (highlightTimer) {
+      window.clearTimeout(highlightTimer);
+    }
+  });
 
   const sourceOptions = [
     { key: 'proxmox', label: 'PVE' },
@@ -301,7 +330,12 @@ export function Infrastructure() {
                   </Card>
                 }
               >
-                <UnifiedResourceTable resources={filteredResources()} />
+                <UnifiedResourceTable
+                  resources={filteredResources()}
+                  expandedResourceId={expandedResourceId()}
+                  highlightedResourceId={highlightedResourceId()}
+                  onExpandedResourceChange={setExpandedResourceId}
+                />
               </Show>
             </div>
           </Show>

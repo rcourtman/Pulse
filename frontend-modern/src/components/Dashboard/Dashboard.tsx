@@ -1,5 +1,5 @@
 import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import { GuestRow, GUEST_COLUMNS, type GuestColumnDef } from './GuestRow';
@@ -209,6 +209,7 @@ type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
 export function Dashboard(props: DashboardProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const ws = useWebSocket();
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
   const { isMobile } = useBreakpoint();
@@ -232,6 +233,22 @@ export function Dashboard(props: DashboardProps) {
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
+  const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
+
+  createEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const resourceId = params.get('resource');
+    if (!resourceId || resourceId === handledResourceId()) return;
+    setSelectedGuestId(resourceId);
+    const [instance, node, vmid] = resourceId.split(':');
+    if (instance && node && vmid) {
+      const knownNode = props.nodes.find((item) => item.id === instance || item.node === node || item.name === node);
+      if (knownNode) {
+        setSelectedNode(knownNode.id);
+      }
+    }
+    setHandledResourceId(resourceId);
+  });
 
   // Wrap setSelectedGuestId to preserve scroll position. Opening/closing the
   // drawer mounts/unmounts GuestDrawer (which contains DiscoveryTab). The

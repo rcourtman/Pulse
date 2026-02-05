@@ -22,6 +22,18 @@ Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" wit
 
 ![Pulse Dashboard](docs/images/01-dashboard.jpg)
 
+## 🧭 Unified Navigation
+
+Pulse now groups everything by task instead of data source:
+- **Infrastructure** for hosts and nodes
+- **Workloads** for VMs and containers
+- **Storage** and **Backups** as top-level views
+- **Services** for PMG instances (when connected)
+
+Power-user shortcuts:
+- `g i` → Infrastructure, `g w` → Workloads, `?` → shortcuts help
+- `/` or `Cmd/Ctrl+K` → global search
+
 ## ✨ Features
 
 ### Core Monitoring

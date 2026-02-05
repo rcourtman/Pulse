@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { getDisplayName, getCpuPercent, getMemoryPercent, getDiskPercent } from '@/types/resource';
 import { formatBytes, formatUptime } from '@/utils/format';
@@ -13,6 +13,9 @@ import { getPlatformBadge, getSourceBadge, getUnifiedSourceBadges } from './reso
 
 interface UnifiedResourceTableProps {
   resources: Resource[];
+  expandedResourceId: string | null;
+  highlightedResourceId?: string | null;
+  onExpandedResourceChange: (id: string | null) => void;
 }
 
 type SortKey = 'default' | 'name' | 'uptime' | 'cpu' | 'memory' | 'disk' | 'source';
@@ -33,7 +36,17 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   const { isMobile } = useBreakpoint();
   const [sortKey, setSortKey] = createSignal<SortKey>('default');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
-  const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
+  const setExpandedResourceId = (id: string | null) => props.onExpandedResourceChange(id);
+  const rowRefs = new Map<string, HTMLTableRowElement>();
+
+  createEffect(() => {
+    const selectedId = props.expandedResourceId;
+    if (!selectedId) return;
+    const row = rowRefs.get(selectedId);
+    if (row) {
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  });
 
   const handleSort = (key: Exclude<SortKey, 'default'>) => {
     if (sortKey() === key) {
@@ -123,7 +136,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   };
 
   const toggleExpand = (resourceId: string) => {
-    setExpandedResourceId((prev) => (prev === resourceId ? null : resourceId));
+    setExpandedResourceId(props.expandedResourceId === resourceId ? null : resourceId);
   };
 
   const thClassBase = 'px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap';
@@ -164,7 +177,8 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
           <tbody class="bg-white dark:bg-gray-800">
             <For each={sortedResources()}>
               {(resource) => {
-                const isExpanded = createMemo(() => expandedResourceId() === resource.id);
+                const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
+                const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
                 const displayName = createMemo(() => getDisplayName(resource));
                 const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
                 const metricsKey = createMemo(() => buildMetricKey('host', resource.id));
@@ -191,6 +205,9 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                   }
 
                   let className = baseHover;
+                  if (isHighlighted()) {
+                    className += ' bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600';
+                  }
                   if (!isResourceOnline(resource)) {
                     className += ' opacity-60';
                   }
@@ -208,6 +225,13 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                 return (
                   <>
                     <tr
+                      ref={(el) => {
+                        if (el) {
+                          rowRefs.set(resource.id, el);
+                        } else {
+                          rowRefs.delete(resource.id);
+                        }
+                      }}
                       class={rowClass()}
                       style={{ 'min-height': '36px' }}
                       onClick={() => toggleExpand(resource.id)}

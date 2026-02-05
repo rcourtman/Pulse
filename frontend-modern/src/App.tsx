@@ -35,6 +35,10 @@ import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
+import { WhatsNewModal } from './components/shared/WhatsNewModal';
+import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
+import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
+import { MobileNavBar } from './components/shared/MobileNavBar';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State, Alert } from '@/types/api';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
@@ -42,6 +46,10 @@ import { startMetricsSampler } from './stores/metricsSampler';
 import { seedFromBackend } from './stores/metricsHistory';
 import { getMetricsViewMode } from './stores/metricsViewMode';
 import BoxesIcon from 'lucide-solid/icons/boxes';
+import ServerIcon from 'lucide-solid/icons/server';
+import HardDriveIcon from 'lucide-solid/icons/hard-drive';
+import ArchiveIcon from 'lucide-solid/icons/archive';
+import WrenchIcon from 'lucide-solid/icons/wrench';
 import MonitorIcon from 'lucide-solid/icons/monitor';
 import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -56,15 +64,17 @@ import type { UpdateStatus } from './api/updates';
 import { AIChat } from './components/AI/Chat';
 import { aiChatStore } from './stores/aiChat';
 import { useResourcesAsLegacy } from './hooks/useResources';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
 import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode, getKioskModePreference } from './utils/url';
+import { showToast } from '@/utils/toast';
+import { GlobalSearch } from '@/components/shared/GlobalSearch';
 
 
 const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
 );
 const StorageComponent = lazy(() => import('./components/Storage/Storage'));
-const Backups = lazy(() => import('./components/Backups/Backups'));
 const UnifiedBackups = lazy(() => import('./components/Backups/UnifiedBackups'));
 const Replication = lazy(() => import('./components/Replication/Replication'));
 const MailGateway = lazy(() => import('./components/PMG/MailGateway'));
@@ -824,15 +834,6 @@ function App() {
   // Pass through the store directly (only when initialized)
   const enhancedStore = () => wsStore();
 
-  // Dashboard view - uses unified resources via useResourcesAsLegacy hook
-  const DashboardView = () => {
-    const { asVMs, asContainers, asNodes } = useResourcesAsLegacy();
-
-    return (
-      <Dashboard vms={asVMs() as any} containers={asContainers() as any} nodes={asNodes() as any} />
-    );
-  };
-
   // Workloads view - uses v2 workloads with legacy fallback
   const WorkloadsView = () => {
     const { asVMs, asContainers, asNodes } = useResourcesAsLegacy();
@@ -847,13 +848,53 @@ function App() {
     );
   };
 
+  const LegacyRedirect = (props: { to: string; toast?: { type: 'info' | 'success' | 'warning' | 'error'; title: string; message?: string } }) => {
+    const navigate = useNavigate();
+    onMount(() => {
+      if (props.toast) {
+        showToast(props.toast.type, props.toast.title, props.toast.message);
+      }
+      navigate(props.to, { replace: true });
+    });
+    return null;
+  };
+
   const SettingsRoute = () => (
     <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
   );
 
   // Root layout component for Router
   const RootLayout = (props: { children?: JSX.Element }) => {
-    // Check AI settings on mount and setup keyboard shortcut
+    const [shortcutsOpen, setShortcutsOpen] = createSignal(false);
+    const [commandPaletteOpen, setCommandPaletteOpen] = createSignal(false);
+
+    const focusGlobalSearch = () => {
+      if (typeof document === 'undefined') return false;
+      const el = document.querySelector<HTMLInputElement>('[data-global-search]');
+      if (!el) return false;
+      el.focus();
+      el.select?.();
+      return true;
+    };
+
+    useKeyboardShortcuts({
+      enabled: () => !needsAuth(),
+      isShortcutsOpen: shortcutsOpen,
+      isCommandPaletteOpen: commandPaletteOpen,
+      onToggleShortcuts: () => {
+        setCommandPaletteOpen(false);
+        setShortcutsOpen((prev) => !prev);
+      },
+      onCloseShortcuts: () => setShortcutsOpen(false),
+      onToggleCommandPalette: () => {
+        setShortcutsOpen(false);
+        setCommandPaletteOpen((prev) => !prev);
+      },
+      onCloseCommandPalette: () => setCommandPaletteOpen(false),
+      onFocusSearch: focusGlobalSearch,
+    });
+
+    // Check AI settings on mount and setup escape handling
     onMount(() => {
       // Only check AI settings if already authenticated (not on login screen)
       // Otherwise, the 401 response triggers a redirect loop
@@ -869,18 +910,11 @@ function App() {
             })
             .catch(() => {
               aiChatStore.setEnabled(false);
-            });
+          });
         });
       }
 
-      // Keyboard shortcut: Cmd/Ctrl+K to toggle AI
       const handleKeyDown = (e: KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-          e.preventDefault();
-          if (aiChatStore.enabled) {
-            aiChatStore.toggle();
-          }
-        }
         // Escape to close
         if (e.key === 'Escape' && aiChatStore.isOpen) {
           aiChatStore.close();
@@ -916,6 +950,7 @@ function App() {
                     <DemoBanner />
                     <UpdateBanner />
                     <GitHubStarBanner />
+                    <WhatsNewModal />
                     <GlobalUpdateProgressWatcher />
                   </Show>
                   {/* Main layout container - flexbox to allow AI panel to push content */}
@@ -941,6 +976,14 @@ function App() {
                     {/* AI Panel - slides in from right, pushes content */}
                     <AIChat onClose={() => aiChatStore.close()} />
                   </div>
+                  <KeyboardShortcutsModal
+                    isOpen={shortcutsOpen()}
+                    onClose={() => setShortcutsOpen(false)}
+                  />
+                  <CommandPaletteModal
+                    isOpen={commandPaletteOpen()}
+                    onClose={() => setCommandPaletteOpen(false)}
+                  />
                   <TokenRevealDialog />
                   {/* AI Assistant Button moved to AppLayout to access kioskMode state */}
                   <TooltipRoot />
@@ -959,19 +1002,35 @@ function App() {
     <Router root={RootLayout}>
       <Route path="/" component={() => <Navigate href="/proxmox/overview" />} />
       <Route path="/proxmox" component={() => <Navigate href="/proxmox/overview" />} />
-      <Route path="/proxmox/overview" component={DashboardView} />
+      <Route
+        path="/proxmox/overview"
+        component={() => (
+          <LegacyRedirect
+            to="/infrastructure"
+            toast={{ type: 'info', title: 'Dashboard moved to Infrastructure' }}
+          />
+        )}
+      />
       <Route path="/workloads" component={WorkloadsView} />
-      <Route path="/proxmox/storage" component={StorageComponent} />
+      <Route path="/proxmox/storage" component={() => <LegacyRedirect to="/storage" />} />
       <Route path="/proxmox/ceph" component={CephPage} />
       <Route path="/proxmox/replication" component={Replication} />
       <Route path="/proxmox/mail" component={MailGateway} />
-      <Route path="/proxmox/backups" component={Backups} />
+      <Route path="/proxmox/backups" component={() => <LegacyRedirect to="/backups" />} />
       <Route path="/storage" component={StorageComponent} />
       <Route path="/backups" component={UnifiedBackups} />
       <Route path="/services" component={Services} />
-      <Route path="/docker" component={DockerRoute} />
+      <Route
+        path="/docker"
+        component={() => (
+          <LegacyRedirect
+            to="/infrastructure?source=docker"
+            toast={{ type: 'info', title: 'Docker hosts moved to Infrastructure' }}
+          />
+        )}
+      />
       <Route path="/kubernetes" component={KubernetesRoute} />
-      <Route path="/hosts" component={HostsRoute} />
+      <Route path="/hosts" component={() => <LegacyRedirect to="/infrastructure?source=agent" />} />
       <Route path="/infrastructure" component={InfrastructurePage} />
 
       <Route path="/servers" component={() => <Navigate href="/hosts" />} />
@@ -1124,6 +1183,11 @@ function AppLayout(props: {
   // Determine active tab from current path
   const getActiveTab = () => {
     const path = location.pathname;
+    if (path.startsWith('/infrastructure')) return 'infrastructure';
+    if (path.startsWith('/workloads')) return 'workloads';
+    if (path.startsWith('/storage')) return 'storage';
+    if (path.startsWith('/backups')) return 'backups';
+    if (path.startsWith('/services')) return 'services';
     if (path.startsWith('/proxmox')) return 'proxmox';
     if (path.startsWith('/docker')) return 'docker';
     if (path.startsWith('/kubernetes')) return 'kubernetes';
@@ -1137,6 +1201,7 @@ function AppLayout(props: {
   const hasDockerHosts = createMemo(() => (props.state().dockerHosts?.length ?? 0) > 0);
   const hasKubernetesClusters = createMemo(() => (props.state().kubernetesClusters?.length ?? 0) > 0);
   const hasHosts = createMemo(() => (props.state().hosts?.length ?? 0) > 0);
+  const hasPMGServices = createMemo(() => (props.state().pmg?.length ?? 0) > 0);
   const hasProxmoxHosts = createMemo(
     () =>
       (props.state().nodes?.length ?? 0) > 0 ||
@@ -1168,33 +1233,113 @@ function AppLayout(props: {
     }
   });
 
+  type PlatformTab = {
+    id: string;
+    label: string;
+    route: string;
+    settingsRoute: string;
+    tooltip: string;
+    enabled: boolean;
+    live: boolean;
+    icon: JSX.Element;
+    alwaysShow: boolean;
+    badge?: string;
+  };
+
   const platformTabs = createMemo(() => {
-    const allPlatforms = [
+    const allPlatforms: PlatformTab[] = [
+      {
+        id: 'infrastructure' as const,
+        label: 'Infrastructure',
+        route: '/infrastructure',
+        settingsRoute: '/settings',
+        tooltip: 'All hosts and nodes across platforms',
+        enabled: true,
+        live: true,
+        icon: (
+          <ServerIcon class="w-4 h-4 shrink-0" />
+        ),
+        alwaysShow: true,
+      },
+      {
+        id: 'workloads' as const,
+        label: 'Workloads',
+        route: '/workloads',
+        settingsRoute: '/settings',
+        tooltip: 'VMs, containers, and Kubernetes workloads',
+        enabled: true,
+        live: true,
+        icon: (
+          <BoxesIcon class="w-4 h-4 shrink-0" />
+        ),
+        alwaysShow: true,
+      },
+      {
+        id: 'storage' as const,
+        label: 'Storage',
+        route: '/storage',
+        settingsRoute: '/settings',
+        tooltip: 'Storage pools, disks, and Ceph',
+        enabled: true,
+        live: true,
+        icon: (
+          <HardDriveIcon class="w-4 h-4 shrink-0" />
+        ),
+        alwaysShow: true,
+      },
+      {
+        id: 'backups' as const,
+        label: 'Backups',
+        route: '/backups',
+        settingsRoute: '/settings',
+        tooltip: 'Backup jobs, history, and replication',
+        enabled: true,
+        live: true,
+        icon: (
+          <ArchiveIcon class="w-4 h-4 shrink-0" />
+        ),
+        alwaysShow: true,
+      },
+      {
+        id: 'services' as const,
+        label: 'Services',
+        route: '/services',
+        settingsRoute: '/settings',
+        tooltip: 'Mail gateway status and service health',
+        enabled: hasPMGServices(),
+        live: hasPMGServices(),
+        icon: (
+          <WrenchIcon class="w-4 h-4 shrink-0" />
+        ),
+        alwaysShow: false,
+      },
       {
         id: 'proxmox' as const,
-        label: 'Proxmox',
+        label: 'Proxmox Overview',
         route: '/proxmox/overview',
         settingsRoute: '/settings',
-        tooltip: 'Monitor Proxmox clusters and nodes',
+        tooltip: 'Legacy Proxmox dashboard',
         enabled: hasProxmoxHosts() || !!seenPlatforms()['proxmox'],
         live: hasProxmoxHosts(),
         icon: (
           <ProxmoxIcon class="w-4 h-4 shrink-0" />
         ),
         alwaysShow: true, // Proxmox is the default, always show
+        badge: 'Legacy',
       },
       {
         id: 'docker' as const,
         label: 'Docker',
         route: '/docker',
         settingsRoute: '/settings/docker',
-        tooltip: 'Monitor Docker hosts and containers',
+        tooltip: 'Legacy Docker hosts and containers',
         enabled: hasDockerHosts() || !!seenPlatforms()['docker'],
         live: hasDockerHosts(),
         icon: (
           <BoxesIcon class="w-4 h-4 shrink-0" />
         ),
         alwaysShow: true, // Docker is commonly used, keep visible
+        badge: 'Legacy',
       },
       {
         id: 'kubernetes' as const,
@@ -1214,13 +1359,14 @@ function AppLayout(props: {
         label: 'Hosts',
         route: '/hosts',
         settingsRoute: '/settings/host-agents',
-        tooltip: 'Monitor hosts with the host agent',
+        tooltip: 'Legacy hosts view',
         enabled: hasHosts() || !!seenPlatforms()['hosts'],
         live: hasHosts(),
         icon: (
           <MonitorIcon class="w-4 h-4 shrink-0" />
         ),
         alwaysShow: true, // Hosts is commonly used, keep visible
+        badge: 'Legacy',
       },
     ];
 
@@ -1314,7 +1460,9 @@ function AppLayout(props: {
   };
 
   return (
-    <div class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''}`}>
+    <div
+      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-20 md:pb-0' : ''}`}
+    >
       {/* Header - simplified in kiosk mode */}
       <div class={`header mb-3 flex items-center gap-2 ${kioskMode() ? 'justify-end' : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'}`}>
         <Show when={!kioskMode()}>
@@ -1411,11 +1559,16 @@ function AppLayout(props: {
           />
         </div>
       </div>
+      <Show when={!kioskMode()}>
+        <div class="mb-3 flex items-center justify-center px-2 md:justify-end">
+          <GlobalSearch />
+        </div>
+      </Show>
 
       {/* Tabs - hidden in kiosk mode */}
       <Show when={!kioskMode()}>
         <div
-          class="tabs mb-2 flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-gray-300 dark:border-gray-700 scrollbar-hide"
+          class="tabs mb-2 hidden md:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-gray-300 dark:border-gray-700 scrollbar-hide"
           role="tablist"
           aria-label="Primary navigation"
         >
@@ -1451,7 +1604,14 @@ function AppLayout(props: {
                     title={title()}
                   >
                     {platform.icon}
-                    <span class="hidden xs:inline">{platform.label}</span>
+                    <span class="hidden xs:inline-flex items-center gap-1">
+                      <span>{platform.label}</span>
+                      <Show when={platform.badge}>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 bg-gray-200/70 dark:bg-gray-700/60 rounded">
+                          {platform.badge}
+                        </span>
+                      </Show>
+                    </span>
                     <span class="xs:hidden">{platform.label.charAt(0)}</span>
                   </div>
                 );
@@ -1537,6 +1697,16 @@ function AppLayout(props: {
           </Suspense>
         </div>
       </main>
+
+      <Show when={!kioskMode()}>
+        <MobileNavBar
+          activeTab={getActiveTab}
+          platformTabs={platformTabs}
+          utilityTabs={utilityTabs}
+          onPlatformClick={handlePlatformClick}
+          onUtilityClick={handleUtilityClick}
+        />
+      </Show>
 
       {/* Footer - hidden in kiosk mode */}
       <Show when={!kioskMode()}>

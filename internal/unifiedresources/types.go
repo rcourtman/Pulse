@@ -93,6 +93,13 @@ type MatchResult struct {
 	RequiresReview bool    `json:"requiresReview"`
 }
 
+// SourceTarget describes a source-specific mapping for a unified resource.
+type SourceTarget struct {
+	Source      DataSource `json:"source"`
+	SourceID    string     `json:"sourceId"`
+	CandidateID string     `json:"candidateId"`
+}
+
 // ResourceMetrics contains unified metrics derived from available sources.
 type ResourceMetrics struct {
 	CPU    *MetricValue `json:"cpu,omitempty"`

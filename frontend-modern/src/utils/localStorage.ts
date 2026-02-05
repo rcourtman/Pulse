@@ -121,6 +121,7 @@ export const STORAGE_KEYS = {
   // Storage settings
   STORAGE_SHOW_FILTERS: 'storageShowFilters',
   STORAGE_VIEW_MODE: 'storageViewMode',
+  STORAGE_SOURCE_FILTER: 'storageSourceFilter',
 
   // Backup settings
   BACKUPS_SHOW_FILTERS: 'backupsShowFilters',
@@ -164,6 +165,8 @@ export const STORAGE_KEYS = {
 
   // Feature discovery
   DISMISSED_FEATURE_TIPS: 'pulse-dismissed-feature-tips',
+  WHATS_NEW_NAV_V2_SHOWN: 'pulse_whats_new_v2_shown',
+  DEBUG_MODE: 'pulse_debug_mode',
 
   // GitHub star prompt
   GITHUB_STAR_DISMISSED: 'pulse-github-star-dismissed',

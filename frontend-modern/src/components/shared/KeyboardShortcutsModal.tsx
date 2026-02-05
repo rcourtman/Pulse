@@ -1,0 +1,98 @@
+import { Show, For } from 'solid-js';
+
+interface ShortcutGroup {
+  title: string;
+  items: { keys: string; description: string }[];
+}
+
+interface KeyboardShortcutsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const SHORTCUT_GROUPS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    items: [
+      { keys: 'g then i', description: 'Go to Infrastructure' },
+      { keys: 'g then w', description: 'Go to Workloads' },
+      { keys: 'g then s', description: 'Go to Storage' },
+      { keys: 'g then b', description: 'Go to Backups' },
+      { keys: 'g then a', description: 'Go to Alerts' },
+      { keys: 'g then t', description: 'Go to Settings' },
+    ],
+  },
+  {
+    title: 'Search & Help',
+    items: [
+      { keys: '/', description: 'Focus search' },
+      { keys: 'Cmd+K / Ctrl+K', description: 'Open command palette' },
+      { keys: '?', description: 'Show keyboard shortcuts' },
+      { keys: 'Esc', description: 'Close dialogs / cancel' },
+    ],
+  },
+];
+
+export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
+  return (
+    <Show when={props.isOpen}>
+      <div
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={props.onClose}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          class="w-full max-w-xl rounded-lg bg-white shadow-xl dark:bg-gray-800"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Keyboard Shortcuts
+            </h2>
+            <button
+              type="button"
+              onClick={props.onClose}
+              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              aria-label="Close shortcuts"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="space-y-5 px-5 py-4">
+            <For each={SHORTCUT_GROUPS}>
+              {(group) => (
+                <div>
+                  <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {group.title}
+                  </div>
+                  <div class="mt-2 space-y-2">
+                    <For each={group.items}>
+                      {(item) => (
+                        <div class="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300">
+                          <span>{item.description}</span>
+                          <span class="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                            {item.keys}
+                          </span>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+
+          <div class="border-t border-gray-200 px-5 py-3 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+            Press <span class="font-medium">?</span> again or <span class="font-medium">Esc</span> to close.
+          </div>
+        </div>
+      </div>
+    </Show>
+  );
+}
+
+export default KeyboardShortcutsModal;

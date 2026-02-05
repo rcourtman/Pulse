@@ -2,7 +2,7 @@ import { createMemo, createResource, type Accessor } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 
-const V2_WORKLOADS_URL = '/api/v2/resources?type=vm,lxc,container';
+const V2_WORKLOADS_URL = '/api/v2/resources?type=vm,lxc,docker_container';
 
 type V2MetricValue = {
   value?: number;
@@ -98,7 +98,9 @@ const resolveWorkloadType = (value?: string | null): WorkloadType | null => {
   const normalized = (value || '').trim().toLowerCase();
   if (normalized === 'vm' || normalized === 'qemu') return 'vm';
   if (normalized === 'lxc') return 'lxc';
-  if (normalized === 'container' || normalized === 'docker-container') return 'docker';
+  if (normalized === 'container' || normalized === 'docker-container' || normalized === 'docker_container') {
+    return 'docker';
+  }
   if (normalized === 'pod' || normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
   return null;
 };

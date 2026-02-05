@@ -117,6 +117,12 @@ func Run(ctx context.Context, version string) error {
 	api.SetTenantAuditManager(tenantAuditManager)
 	log.Info().Msg("Tenant audit manager initialized")
 
+	// Enable async audit logging to avoid request latency on audit writes.
+	if !strings.EqualFold(os.Getenv("PULSE_AUDIT_ASYNC"), "false") {
+		audit.EnableAsyncLogging(audit.AsyncLoggerConfig{BufferSize: 4096})
+		log.Info().Msg("Async audit logging enabled")
+	}
+
 	log.Info().Msg("Starting Pulse monitoring server")
 
 	// Validate agent binaries are available for download
@@ -384,6 +390,9 @@ shutdown:
 
 	// Close tenant audit loggers
 	tenantAuditManager.Close()
+	if err := audit.Close(); err != nil {
+		log.Error().Err(err).Msg("Failed to close audit logger")
+	}
 
 	log.Info().Msg("Server stopped")
 	return nil

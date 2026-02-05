@@ -1,4 +1,4 @@
-import { Component, Show, createMemo, For } from 'solid-js';
+import { Component, Show, createMemo, For, createSignal, createEffect } from 'solid-js';
 import type { Disk, Host, HostNetworkInterface, HostSensorSummary, Memory, Node } from '@/types/api';
 import type { Resource, ResourceMetric } from '@/types/resource';
 import { getDisplayName, getCpuPercent, getMemoryPercent, getDiskPercent } from '@/types/resource';
@@ -16,6 +16,8 @@ import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
 import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfacesCard';
 import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
+import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import { ReportMergeModal } from './ReportMergeModal';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -61,6 +63,15 @@ type PlatformData = {
   sources?: string[];
   proxmox?: ProxmoxPlatformData;
   agent?: AgentPlatformData;
+  sourceStatus?: Record<string, { status?: string; lastSeen?: string | number; error?: string }>;
+  docker?: Record<string, unknown>;
+  pbs?: Record<string, unknown>;
+  kubernetes?: Record<string, unknown>;
+  metrics?: Record<string, unknown>;
+  identityMatch?: unknown;
+  matchResults?: unknown;
+  matchCandidates?: unknown;
+  matches?: unknown;
 };
 
 const metricSublabel = (metric?: ResourceMetric) => {
@@ -221,6 +232,12 @@ const buildTemperatureRows = (sensors?: HostSensorSummary) => {
 };
 
 export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
+  type DrawerTab = 'overview' | 'discovery' | 'metrics' | 'debug';
+  const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
+  const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
+  const [copied, setCopied] = createSignal(false);
+  const [showReportModal, setShowReportModal] = createSignal(false);
+
   const displayName = createMemo(() => getDisplayName(props.resource));
   const statusIndicator = createMemo(() => getHostStatusIndicator({ status: props.resource.status }));
   const lastSeen = createMemo(() => formatRelativeTime(props.resource.lastSeen));
@@ -243,6 +260,99 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
   const proxmoxNode = createMemo(() => toNodeFromProxmox(props.resource));
   const agentHost = createMemo(() => toHostFromAgent(props.resource));
   const temperatureRows = createMemo(() => buildTemperatureRows(agentHost()?.sensors));
+
+  const platformData = createMemo(() => props.resource.platformData as PlatformData | undefined);
+  const sourceStatus = createMemo(() => platformData()?.sourceStatus ?? {});
+  const mergedSources = createMemo(() => platformData()?.sources ?? []);
+  const hasMergedSources = createMemo(() => mergedSources().length > 1);
+  const sourceSections = createMemo(() => {
+    const data = platformData();
+    if (!data) return [];
+    const sections = [
+      { id: 'proxmox', label: 'Proxmox', payload: data.proxmox },
+      { id: 'agent', label: 'Agent', payload: data.agent },
+      { id: 'docker', label: 'Docker', payload: data.docker },
+      { id: 'pbs', label: 'PBS', payload: data.pbs },
+      { id: 'kubernetes', label: 'Kubernetes', payload: data.kubernetes },
+      { id: 'metrics', label: 'Metrics', payload: data.metrics },
+    ];
+    return sections.filter((section) => section.payload !== undefined);
+  });
+  const identityMatchInfo = createMemo(() => {
+    const data = platformData();
+    return (
+      data?.identityMatch ??
+      data?.matchResults ??
+      data?.matchCandidates ??
+      data?.matches ??
+      undefined
+    );
+  });
+  const debugBundle = createMemo(() => ({
+    resource: props.resource,
+    identity: {
+      resourceIdentity: props.resource.identity,
+      matchInfo: identityMatchInfo(),
+    },
+    sources: {
+      sourceStatus: sourceStatus(),
+      proxmox: platformData()?.proxmox,
+      agent: platformData()?.agent,
+      docker: platformData()?.docker,
+      pbs: platformData()?.pbs,
+      kubernetes: platformData()?.kubernetes,
+      metrics: platformData()?.metrics,
+    },
+  }));
+  const debugJson = createMemo(() => JSON.stringify(debugBundle(), null, 2));
+
+  createEffect(() => {
+    if (!debugEnabled() && activeTab() === 'debug') {
+      setActiveTab('overview');
+    }
+  });
+
+  const tabs = createMemo(() => {
+    const base = [
+      { id: 'overview' as DrawerTab, label: 'Overview' },
+      { id: 'discovery' as DrawerTab, label: 'Discovery' },
+      { id: 'metrics' as DrawerTab, label: 'Metrics' },
+    ];
+    if (debugEnabled()) {
+      base.push({ id: 'debug' as DrawerTab, label: 'Debug' });
+    }
+    return base;
+  });
+
+  const formatSourceTime = (value?: string | number) => {
+    if (!value) return '';
+    const timestamp = typeof value === 'number' ? value : Date.parse(value);
+    if (!Number.isFinite(timestamp)) return '';
+    return formatRelativeTime(timestamp);
+  };
+
+  const handleCopyJson = async () => {
+    const payload = debugJson();
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(payload);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = payload;
+        textarea.setAttribute('readonly', 'true');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <div class="space-y-3">
@@ -313,169 +423,295 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
         </Show>
       </div>
 
-      <Show when={proxmoxNode() || agentHost()}>
-        <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
-          <Show when={proxmoxNode()}>
-            {(node) => (
-              <>
-                <SystemInfoCard variant="node" node={node()} />
-                <HardwareCard variant="node" node={node()} />
-                <RootDiskCard node={node()} />
-              </>
-            )}
-          </Show>
-          <Show when={agentHost()}>
-            {(host) => (
-              <>
-                <SystemInfoCard variant="host" host={host()} />
-                <HardwareCard variant="host" host={host()} />
-                <NetworkInterfacesCard interfaces={host().networkInterfaces} />
-                <DisksCard disks={host().disks} />
-                <TemperaturesCard rows={temperatureRows()} />
-              </>
-            )}
-          </Show>
-        </div>
-      </Show>
+      <div class="flex items-center gap-6 border-b border-gray-200 dark:border-gray-700 px-1 mb-1">
+        <For each={tabs()}>
+          {(tab) => (
+            <button
+              onClick={() => setActiveTab(tab.id)}
+              class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === tab.id
+                ? 'text-blue-600 dark:text-blue-400'
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                }`}
+            >
+              {tab.label}
+              <Show when={activeTab() === tab.id}>
+                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
+              </Show>
+            </button>
+          )}
+        </For>
+      </div>
 
-      <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-          <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Metrics</div>
-          <div class="space-y-2">
-            <div class="space-y-1">
-              <div class="text-[10px] text-gray-500 dark:text-gray-400">CPU</div>
-              <Show when={cpuPercent() !== null} fallback={<div class="text-xs text-gray-400">—</div>}>
-                <MetricBar
-                  value={cpuPercent() ?? 0}
-                  label={formatPercent(cpuPercent() ?? 0)}
-                  type="cpu"
-                  resourceId={metricKey()}
-                />
-              </Show>
-            </div>
-            <div class="space-y-1">
-              <div class="text-[10px] text-gray-500 dark:text-gray-400">Memory</div>
-              <Show when={memoryPercent() !== null} fallback={<div class="text-xs text-gray-400">—</div>}>
-                <MetricBar
-                  value={memoryPercent() ?? 0}
-                  label={formatPercent(memoryPercent() ?? 0)}
-                  sublabel={metricSublabel(props.resource.memory)}
-                  type="memory"
-                  resourceId={metricKey()}
-                />
-              </Show>
-            </div>
-            <div class="space-y-1">
-              <div class="text-[10px] text-gray-500 dark:text-gray-400">Disk</div>
-              <Show when={diskPercent() !== null} fallback={<div class="text-xs text-gray-400">—</div>}>
-                <MetricBar
-                  value={diskPercent() ?? 0}
-                  label={formatPercent(diskPercent() ?? 0)}
-                  sublabel={metricSublabel(props.resource.disk)}
-                  type="disk"
-                  resourceId={metricKey()}
-                />
-              </Show>
-            </div>
-          </div>
-        </div>
-
-        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-          <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Status</div>
-          <div class="space-y-1.5 text-[11px]">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-gray-500 dark:text-gray-400">State</span>
-              <span class="font-medium text-gray-700 dark:text-gray-200 capitalize">{props.resource.status || 'unknown'}</span>
-            </div>
-            <Show when={props.resource.uptime}>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Uptime</span>
-                <span class="font-medium text-gray-700 dark:text-gray-200">{formatUptime(props.resource.uptime ?? 0)}</span>
-              </div>
+      {/* Overview Tab */}
+      <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+        <Show when={proxmoxNode() || agentHost()}>
+          <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
+            <Show when={proxmoxNode()}>
+              {(node) => (
+                <>
+                  <SystemInfoCard variant="node" node={node()} />
+                  <HardwareCard variant="node" node={node()} />
+                  <RootDiskCard node={node()} />
+                </>
+              )}
             </Show>
-            <Show when={props.resource.lastSeen}>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Last Seen</span>
-                <span
-                  class="font-medium text-gray-700 dark:text-gray-200"
-                  title={lastSeenAbsolute()}
-                >
-                  {lastSeen() || '—'}
-                </span>
-              </div>
-            </Show>
-            <Show when={props.resource.platformId}>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Platform ID</span>
-                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.platformId}>
-                  {props.resource.platformId}
-                </span>
-              </div>
-            </Show>
-            <Show when={props.resource.clusterId}>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Cluster</span>
-                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.clusterId}>
-                  {props.resource.clusterId}
-                </span>
-              </div>
-            </Show>
-            <Show when={props.resource.parentId}>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Parent</span>
-                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.parentId}>
-                  {props.resource.parentId}
-                </span>
-              </div>
+            <Show when={agentHost()}>
+              {(host) => (
+                <>
+                  <SystemInfoCard variant="host" host={host()} />
+                  <HardwareCard variant="host" host={host()} />
+                  <NetworkInterfacesCard interfaces={host().networkInterfaces} />
+                  <DisksCard disks={host().disks} />
+                  <TemperaturesCard rows={temperatureRows()} />
+                </>
+              )}
             </Show>
           </div>
-        </div>
+        </Show>
 
-        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-          <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Identity</div>
-          <div class="space-y-1.5 text-[11px]">
-            <Show when={props.resource.identity?.hostname}>
+        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
+          <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Status</div>
+            <div class="space-y-1.5 text-[11px]">
               <div class="flex items-center justify-between gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Hostname</span>
-                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.identity?.hostname}>
-                  {props.resource.identity?.hostname}
-                </span>
+                <span class="text-gray-500 dark:text-gray-400">State</span>
+                <span class="font-medium text-gray-700 dark:text-gray-200 capitalize">{props.resource.status || 'unknown'}</span>
               </div>
-            </Show>
-            <Show when={props.resource.identity?.machineId}>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Machine ID</span>
-                <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.identity?.machineId}>
-                  {props.resource.identity?.machineId}
-                </span>
-              </div>
-            </Show>
-            <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
-              <div class="flex flex-col gap-1">
-                <span class="text-gray-500 dark:text-gray-400">IP Addresses</span>
-                <div class="flex flex-wrap gap-1">
-                  <For each={props.resource.identity?.ips ?? []}>
-                    {(ip) => (
-                      <span
-                        class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
-                        title={ip}
-                      >
-                        {ip}
-                      </span>
-                    )}
-                  </For>
+              <Show when={props.resource.uptime}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-gray-400">Uptime</span>
+                  <span class="font-medium text-gray-700 dark:text-gray-200">{formatUptime(props.resource.uptime ?? 0)}</span>
                 </div>
-              </div>
-            </Show>
-            <Show when={props.resource.tags && props.resource.tags.length > 0}>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Tags</span>
-                <TagBadges tags={props.resource.tags} maxVisible={6} />
-              </div>
-            </Show>
+              </Show>
+              <Show when={props.resource.lastSeen}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-gray-400">Last Seen</span>
+                  <span
+                    class="font-medium text-gray-700 dark:text-gray-200"
+                    title={lastSeenAbsolute()}
+                  >
+                    {lastSeen() || '—'}
+                  </span>
+                </div>
+              </Show>
+              <Show when={props.resource.platformId}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-gray-400">Platform ID</span>
+                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.platformId}>
+                    {props.resource.platformId}
+                  </span>
+                </div>
+              </Show>
+              <Show when={props.resource.clusterId}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-gray-400">Cluster</span>
+                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.clusterId}>
+                    {props.resource.clusterId}
+                  </span>
+                </div>
+              </Show>
+              <Show when={props.resource.parentId}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-gray-400">Parent</span>
+                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.parentId}>
+                    {props.resource.parentId}
+                  </span>
+                </div>
+              </Show>
+            </div>
+          </div>
+
+          <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Identity</div>
+            <div class="space-y-1.5 text-[11px]">
+              <Show when={props.resource.identity?.hostname}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-gray-400">Hostname</span>
+                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.identity?.hostname}>
+                    {props.resource.identity?.hostname}
+                  </span>
+                </div>
+              </Show>
+              <Show when={props.resource.identity?.machineId}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-gray-400">Machine ID</span>
+                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.identity?.machineId}>
+                    {props.resource.identity?.machineId}
+                  </span>
+                </div>
+              </Show>
+              <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
+                <div class="flex flex-col gap-1">
+                  <span class="text-gray-500 dark:text-gray-400">IP Addresses</span>
+                  <div class="flex flex-wrap gap-1">
+                    <For each={props.resource.identity?.ips ?? []}>
+                      {(ip) => (
+                        <span
+                          class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+                          title={ip}
+                        >
+                          {ip}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+              <Show when={props.resource.tags && props.resource.tags.length > 0}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-gray-400">Tags</span>
+                  <TagBadges tags={props.resource.tags} maxVisible={6} />
+                </div>
+              </Show>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Discovery Tab */}
+      <div class={activeTab() === 'discovery' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+        <div class="rounded border border-dashed border-gray-300 bg-gray-50/70 p-4 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-300">
+          Discovery details are available in the legacy host drawer for now.
+        </div>
+      </div>
+
+      {/* Metrics Tab */}
+      <div class={activeTab() === 'metrics' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Metrics</div>
+            <div class="space-y-2">
+              <div class="space-y-1">
+                <div class="text-[10px] text-gray-500 dark:text-gray-400">CPU</div>
+                <Show when={cpuPercent() !== null} fallback={<div class="text-xs text-gray-400">—</div>}>
+                  <MetricBar
+                    value={cpuPercent() ?? 0}
+                    label={formatPercent(cpuPercent() ?? 0)}
+                    type="cpu"
+                    resourceId={metricKey()}
+                  />
+                </Show>
+              </div>
+              <div class="space-y-1">
+                <div class="text-[10px] text-gray-500 dark:text-gray-400">Memory</div>
+                <Show when={memoryPercent() !== null} fallback={<div class="text-xs text-gray-400">—</div>}>
+                  <MetricBar
+                    value={memoryPercent() ?? 0}
+                    label={formatPercent(memoryPercent() ?? 0)}
+                    sublabel={metricSublabel(props.resource.memory)}
+                    type="memory"
+                    resourceId={metricKey()}
+                  />
+                </Show>
+              </div>
+              <div class="space-y-1">
+                <div class="text-[10px] text-gray-500 dark:text-gray-400">Disk</div>
+                <Show when={diskPercent() !== null} fallback={<div class="text-xs text-gray-400">—</div>}>
+                  <MetricBar
+                    value={diskPercent() ?? 0}
+                    label={formatPercent(diskPercent() ?? 0)}
+                    sublabel={metricSublabel(props.resource.disk)}
+                    type="disk"
+                    resourceId={metricKey()}
+                  />
+                </Show>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Debug Tab */}
+      <Show when={debugEnabled()}>
+        <div class={activeTab() === 'debug' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+          <div class="flex items-center justify-between gap-3">
+            <div class="text-xs text-gray-500 dark:text-gray-400">
+              Debug mode is enabled via localStorage (<code>pulse_debug_mode</code>).
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyJson}
+              class="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              {copied() ? 'Copied' : 'Copy JSON'}
+            </button>
+          </div>
+
+          <div class="mt-3 space-y-4">
+            <div>
+              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Unified Resource</div>
+              <pre class="max-h-[280px] overflow-auto rounded-lg bg-gray-900/90 p-3 text-[11px] text-gray-100">
+                {JSON.stringify(props.resource, null, 2)}
+              </pre>
+            </div>
+
+            <div>
+              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Identity Matching</div>
+              <pre class="max-h-[220px] overflow-auto rounded-lg bg-gray-900/90 p-3 text-[11px] text-gray-100">
+                {JSON.stringify(
+                  {
+                    identity: props.resource.identity,
+                    matchInfo: identityMatchInfo(),
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
+            </div>
+
+            <div>
+              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Sources</div>
+              <div class="space-y-2">
+                <For each={sourceSections()}>
+                  {(section) => {
+                    const status = sourceStatus()[section.id];
+                    const lastSeenText = formatSourceTime(status?.lastSeen);
+                    return (
+                      <details class="rounded-lg border border-gray-200 bg-white/70 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+                        <summary class="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-200">
+                          <span>{section.label}</span>
+                          <span class="text-[11px] text-gray-500 dark:text-gray-400">
+                            {status?.status ?? 'unknown'}
+                            {lastSeenText ? ` • ${lastSeenText}` : ''}
+                          </span>
+                        </summary>
+                        <Show when={status?.error}>
+                          <div class="mt-2 text-[11px] text-amber-600 dark:text-amber-300">
+                            {status?.error}
+                          </div>
+                        </Show>
+                        <pre class="mt-3 max-h-[220px] overflow-auto rounded-lg bg-gray-900/90 p-3 text-[11px] text-gray-100">
+                          {JSON.stringify(section.payload ?? {}, null, 2)}
+                        </pre>
+                      </details>
+                    );
+                  }}
+                </For>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      <Show when={hasMergedSources()}>
+        <div class="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setShowReportModal(true)}
+            class="text-xs font-medium text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            Report incorrect merge
+          </button>
+        </div>
+      </Show>
+
+      <ReportMergeModal
+        isOpen={showReportModal()}
+        resourceId={props.resource.id}
+        resourceName={displayName()}
+        sources={mergedSources()}
+        onClose={() => setShowReportModal(false)}
+      />
     </div>
   );
 };

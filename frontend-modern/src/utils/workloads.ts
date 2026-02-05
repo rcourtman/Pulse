@@ -8,7 +8,9 @@ export const resolveWorkloadType = (
   const rawType = (guest.type || '').toLowerCase();
   if (rawType === 'qemu' || rawType === 'vm') return 'vm';
   if (rawType === 'lxc' || rawType === 'oci' || rawType === 'container') return 'lxc';
-  if (rawType === 'docker' || rawType === 'docker-container') return 'docker';
+  if (rawType === 'docker' || rawType === 'docker-container' || rawType === 'docker_container') {
+    return 'docker';
+  }
   if (rawType === 'k8s' || rawType === 'pod' || rawType === 'kubernetes') return 'k8s';
   return 'lxc';
 };

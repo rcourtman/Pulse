@@ -103,6 +103,20 @@ func GetLogger() Logger {
 	return globalLogger
 }
 
+// Close closes the global audit logger if it implements Close.
+func Close() error {
+	loggerMu.RLock()
+	l := globalLogger
+	loggerMu.RUnlock()
+	if l == nil {
+		return nil
+	}
+	if closer, ok := l.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
 // Log is a convenience function that logs an event using the global logger.
 func Log(eventType, user, ip, path string, success bool, details string) {
 	event := Event{

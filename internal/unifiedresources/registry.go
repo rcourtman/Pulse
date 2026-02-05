@@ -119,6 +119,31 @@ func (rr *ResourceRegistry) Get(id string) (*Resource, bool) {
 	return r, ok
 }
 
+// SourceTargets returns the source-specific IDs that map to the provided resource ID.
+func (rr *ResourceRegistry) SourceTargets(resourceID string) []SourceTarget {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	resource := rr.resources[resourceID]
+	if resource == nil {
+		return nil
+	}
+
+	out := make([]SourceTarget, 0)
+	for source, mapping := range rr.bySource {
+		for sourceID, mappedID := range mapping {
+			if mappedID != resourceID {
+				continue
+			}
+			out = append(out, SourceTarget{
+				Source:      source,
+				SourceID:    sourceID,
+				CandidateID: rr.sourceSpecificID(resource.Type, source, sourceID),
+			})
+		}
+	}
+	return out
+}
+
 // GetChildren returns child resources for a parent.
 func (rr *ResourceRegistry) GetChildren(parentID string) []Resource {
 	rr.mu.RLock()

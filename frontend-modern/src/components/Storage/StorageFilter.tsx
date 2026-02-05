@@ -19,6 +19,8 @@ interface StorageFilterProps {
   searchInputRef?: (el: HTMLInputElement) => void;
   statusFilter?: () => 'all' | 'available' | 'offline';
   setStatusFilter?: (value: 'all' | 'available' | 'offline') => void;
+  sourceFilter?: () => 'all' | 'proxmox' | 'pbs' | 'ceph';
+  setSourceFilter?: (value: 'all' | 'proxmox' | 'pbs' | 'ceph') => void;
   // Column visibility (optional)
   columnVisibility?: {
     availableToggles: () => ColumnDef[];
@@ -107,7 +109,8 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
     props.sortKey() !== 'name' ||
     props.sortDirection() !== 'asc' ||
     (props.groupBy && props.groupBy() !== 'node') ||
-    (props.statusFilter && props.statusFilter() !== 'all');
+    (props.statusFilter && props.statusFilter() !== 'all') ||
+    (props.sourceFilter && props.sourceFilter() !== 'all');
 
   return (
     <Card class="storage-filter mb-3" padding="sm">
@@ -325,6 +328,53 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
           </Show>
 
+          {/* Source Filter */}
+          <Show when={props.sourceFilter && props.setSourceFilter}>
+            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+              <button
+                type="button"
+                onClick={() => props.setSourceFilter!('all')}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.sourceFilter!() === 'all'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+              >
+                All Sources
+              </button>
+              <button
+                type="button"
+                onClick={() => props.setSourceFilter!('proxmox')}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.sourceFilter!() === 'proxmox'
+                  ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+              >
+                Proxmox
+              </button>
+              <button
+                type="button"
+                onClick={() => props.setSourceFilter!('pbs')}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.sourceFilter!() === 'pbs'
+                  ? 'bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-300 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+              >
+                PBS
+              </button>
+              <button
+                type="button"
+                onClick={() => props.setSourceFilter!('ceph')}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.sourceFilter!() === 'ceph'
+                  ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-300 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+              >
+                Ceph
+              </button>
+            </div>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+          </Show>
+
           {/* Status Filter */}
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
             <button
@@ -415,9 +465,10 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                 props.setSearch('');
                 props.setSortKey('name');
                 props.setSortDirection('asc');
-                if (props.setGroupBy) props.setGroupBy('node');
-                if (props.setStatusFilter) props.setStatusFilter('all');
-              }}
+              if (props.setGroupBy) props.setGroupBy('node');
+              if (props.setStatusFilter) props.setStatusFilter('all');
+              if (props.setSourceFilter) props.setSourceFilter('all');
+            }}
               title="Reset all filters"
               class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors
                      text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70"

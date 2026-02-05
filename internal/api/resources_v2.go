@@ -2,6 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -124,6 +127,10 @@ func (h *ResourceV2Handlers) HandleResourceRoutes(w http.ResponseWriter, r *http
 	}
 	if strings.HasSuffix(r.URL.Path, "/unlink") {
 		h.HandleUnlink(w, r)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/report-merge") {
+		h.HandleReportMerge(w, r)
 		return
 	}
 	h.HandleGetResource(w, r)
@@ -319,6 +326,116 @@ func (h *ResourceV2Handlers) HandleUnlink(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"message": "Resources unlinked",
+	})
+}
+
+// HandleReportMerge handles POST /api/v2/resources/{id}/report-merge.
+func (h *ResourceV2Handlers) HandleReportMerge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getStore(orgID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/v2/resources/")
+	path = strings.TrimSuffix(path, "/report-merge")
+	path = strings.TrimSuffix(path, "/")
+	if path == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		Sources []string `json:"sources"`
+		Notes   string   `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resource, ok := registry.Get(path)
+	if !ok {
+		http.Error(w, "Resource not found", http.StatusNotFound)
+		return
+	}
+
+	if len(resource.Sources) < 2 {
+		http.Error(w, "Resource is not merged", http.StatusBadRequest)
+		return
+	}
+
+	sourceTargets := registry.SourceTargets(path)
+	if len(sourceTargets) == 0 {
+		http.Error(w, "No source targets found", http.StatusBadRequest)
+		return
+	}
+
+	filteredSources := make(map[string]struct{})
+	for _, source := range payload.Sources {
+		filteredSources[strings.ToLower(strings.TrimSpace(source))] = struct{}{}
+	}
+
+	reason := strings.TrimSpace(payload.Notes)
+	if reason == "" {
+		reason = "reported_incorrect_merge"
+	}
+
+	exclusionsAdded := 0
+	seen := make(map[string]struct{})
+	for _, target := range sourceTargets {
+		if len(filteredSources) > 0 {
+			if _, ok := filteredSources[strings.ToLower(string(target.Source))]; !ok {
+				continue
+			}
+		}
+		if target.CandidateID == "" || target.CandidateID == path {
+			continue
+		}
+		key := target.CandidateID
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		exclusion := unified.ResourceExclusion{
+			ResourceA: path,
+			ResourceB: target.CandidateID,
+			Reason:    reason,
+			CreatedBy: getUserID(r),
+			CreatedAt: time.Now().UTC(),
+		}
+		if err := store.AddExclusion(exclusion); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		exclusionsAdded += 1
+	}
+
+	if exclusionsAdded == 0 {
+		http.Error(w, "No exclusions created", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("v2 report-merge: resource=%s exclusions=%d user=%s sources=%v", path, exclusionsAdded, getUserID(r), payload.Sources)
+	h.invalidateCache(orgID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":     "ok",
+		"message":    "Merge reported",
+		"exclusions": exclusionsAdded,
 	})
 }
 
@@ -577,7 +694,7 @@ func parseResourceTypesV2(raw string) map[unified.ResourceType]struct{} {
 			result[unified.ResourceTypeVM] = struct{}{}
 		case "lxc":
 			result[unified.ResourceTypeLXC] = struct{}{}
-		case "container":
+		case "container", "docker_container", "docker-container":
 			result[unified.ResourceTypeContainer] = struct{}{}
 		case "storage":
 			result[unified.ResourceTypeStorage] = struct{}{}
