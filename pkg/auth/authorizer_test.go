@@ -65,6 +65,17 @@ func TestContextTokenHelpers(t *testing.T) {
 	}
 }
 
+func TestGetAPITokenContextKey(t *testing.T) {
+	key := GetAPITokenContextKey()
+	token := testToken{scopes: map[string]bool{"write": true}}
+	ctx := context.WithValue(context.Background(), key, token)
+
+	got := GetAPIToken(ctx)
+	if got == nil || !got.HasScope("write") {
+		t.Fatalf("expected token from context key")
+	}
+}
+
 func TestSetAuthorizerAndHasPermission(t *testing.T) {
 	orig := GetAuthorizer()
 	defer SetAuthorizer(orig)
