@@ -91,6 +91,20 @@ func TestShouldSkipPhase(t *testing.T) {
 	}
 }
 
+func TestShouldSkipPhaseDefaultBudget(t *testing.T) {
+	policy := envdetect.DefaultScanPolicy()
+	policy.DialTimeout = 0
+	scanner := &Scanner{policy: policy}
+
+	ctxShort, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	defer cancel()
+
+	phaseLowConfidence := envdetect.SubnetPhase{Name: "low", Confidence: 0.2}
+	if !scanner.shouldSkipPhase(ctxShort, phaseLowConfidence) {
+		t.Fatalf("expected phase to be skipped with default budget")
+	}
+}
+
 func TestBuildEnvironmentInfoCopiesData(t *testing.T) {
 	profile := &envdetect.EnvironmentProfile{
 		Type:       envdetect.DockerBridge,
