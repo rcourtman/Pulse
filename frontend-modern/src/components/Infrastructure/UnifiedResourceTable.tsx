@@ -139,9 +139,29 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     setExpandedResourceId(props.expandedResourceId === resourceId ? null : resourceId);
   };
 
-  const thClassBase = 'px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap';
+  const thClassBase = 'px-1.5 sm:px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap';
   const thClass = `${thClassBase} text-center`;
-  const tdClass = 'px-2 py-1 align-middle';
+  const tdClass = 'px-1.5 sm:px-2 py-1 align-middle';
+  const resourceColumnStyle = createMemo(() =>
+    isMobile()
+      ? { width: '110px', 'min-width': '110px', 'max-width': '150px' }
+      : { 'min-width': '220px' }
+  );
+  const metricColumnStyle = createMemo(() =>
+    isMobile()
+      ? { width: '70px', 'min-width': '70px', 'max-width': '90px' }
+      : { 'min-width': '140px', 'max-width': '180px' }
+  );
+  const sourceColumnStyle = createMemo(() =>
+    isMobile()
+      ? { width: '100px', 'min-width': '100px', 'max-width': '120px' }
+      : { width: '140px', 'min-width': '140px', 'max-width': '160px' }
+  );
+  const uptimeColumnStyle = createMemo(() =>
+    isMobile()
+      ? { width: '70px', 'min-width': '70px', 'max-width': '80px' }
+      : { width: '80px', 'min-width': '80px', 'max-width': '80px' }
+  );
 
   const getUnifiedSources = (resource: Resource): string[] => {
     const platformData = resource.platformData as { sources?: string[] } | undefined;
@@ -150,27 +170,30 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 
   return (
     <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '840px' }}>
+      <div
+        class="overflow-x-auto"
+        style={{ '-webkit-overflow-scrolling': 'touch' }}
+      >
+        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '600px' }}>
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-              <th class={`${thClassBase} text-left pl-3`} onClick={() => handleSort('name')}>
+              <th class={`${thClassBase} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()} onClick={() => handleSort('name')}>
                 Resource {renderSortIndicator('name')}
               </th>
-              <th class={thClass} style={{ width: '80px', 'min-width': '80px', 'max-width': '80px' }} onClick={() => handleSort('uptime')}>
-                Uptime {renderSortIndicator('uptime')}
-              </th>
-              <th class={thClass} style={isMobile() ? { 'min-width': '80px' } : { 'min-width': '140px', 'max-width': '180px' }} onClick={() => handleSort('cpu')}>
+              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('cpu')}>
                 CPU {renderSortIndicator('cpu')}
               </th>
-              <th class={thClass} style={isMobile() ? { 'min-width': '80px' } : { 'min-width': '140px', 'max-width': '180px' }} onClick={() => handleSort('memory')}>
+              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('memory')}>
                 Memory {renderSortIndicator('memory')}
               </th>
-              <th class={thClass} style={isMobile() ? { 'min-width': '80px' } : { 'min-width': '140px', 'max-width': '180px' }} onClick={() => handleSort('disk')}>
+              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('disk')}>
                 Disk {renderSortIndicator('disk')}
               </th>
-              <th class={thClass} style={{ width: '140px', 'min-width': '140px', 'max-width': '160px' }} onClick={() => handleSort('source')}>
+              <th class={thClass} style={sourceColumnStyle()} onClick={() => handleSort('source')}>
                 Source {renderSortIndicator('source')}
+              </th>
+              <th class={thClass} style={uptimeColumnStyle()} onClick={() => handleSort('uptime')}>
+                Uptime {renderSortIndicator('uptime')}
               </th>
             </tr>
           </thead>
@@ -214,7 +237,6 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 
                   return className;
                 });
-
                 const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
                 const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
                 const unifiedSourceBadges = createMemo(() =>
@@ -236,7 +258,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                       style={{ 'min-height': '36px' }}
                       onClick={() => toggleExpand(resource.id)}
                     >
-                      <td class="pr-2 py-1 align-middle overflow-hidden pl-3">
+                      <td class="pr-1.5 sm:pr-2 py-1 align-middle overflow-hidden pl-2 sm:pl-3">
                         <div class="flex items-center gap-1.5 min-w-0">
                           <div
                             class={`transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
@@ -266,57 +288,44 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                       </td>
 
                       <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
-                            <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                              {formatUptime(resource.uptime ?? 0)}
-                            </span>
-                          </Show>
-                        </div>
+                        <Show when={cpuPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+                          <ResponsiveMetricCell
+                            class="w-full"
+                            value={cpuPercentValue() ?? 0}
+                            type="cpu"
+                            resourceId={isMobile() ? undefined : metricsKey()}
+                            isRunning={isResourceOnline(resource)}
+                            showMobile={false}
+                          />
+                        </Show>
                       </td>
 
                       <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <Show when={cpuPercentValue() !== null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                            <ResponsiveMetricCell
-                              value={cpuPercentValue() ?? 0}
-                              type="cpu"
-                              resourceId={metricsKey()}
-                              isRunning={isResourceOnline(resource)}
-                              showMobile={false}
-                            />
-                          </Show>
-                        </div>
+                        <Show when={memoryPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+                          <ResponsiveMetricCell
+                            class="w-full"
+                            value={memoryPercentValue() ?? 0}
+                            type="memory"
+                            sublabel={memorySublabel()}
+                            resourceId={isMobile() ? undefined : metricsKey()}
+                            isRunning={isResourceOnline(resource)}
+                            showMobile={false}
+                          />
+                        </Show>
                       </td>
 
                       <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <Show when={memoryPercentValue() !== null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                            <ResponsiveMetricCell
-                              value={memoryPercentValue() ?? 0}
-                              type="memory"
-                              sublabel={memorySublabel()}
-                              resourceId={metricsKey()}
-                              isRunning={isResourceOnline(resource)}
-                              showMobile={false}
-                            />
-                          </Show>
-                        </div>
-                      </td>
-
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <Show when={diskPercentValue() !== null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                            <ResponsiveMetricCell
-                              value={diskPercentValue() ?? 0}
-                              type="disk"
-                              sublabel={diskSublabel()}
-                              resourceId={metricsKey()}
-                              isRunning={isResourceOnline(resource)}
-                              showMobile={false}
-                            />
-                          </Show>
-                        </div>
+                        <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+                          <ResponsiveMetricCell
+                            class="w-full"
+                            value={diskPercentValue() ?? 0}
+                            type="disk"
+                            sublabel={diskSublabel()}
+                            resourceId={isMobile() ? undefined : metricsKey()}
+                            isRunning={isResourceOnline(resource)}
+                            showMobile={false}
+                          />
+                        </Show>
                       </td>
 
                       <td class={tdClass}>
@@ -349,6 +358,16 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                 </span>
                               )}
                             </For>
+                          </Show>
+                        </div>
+                      </td>
+
+                      <td class={tdClass}>
+                        <div class="flex justify-center">
+                          <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
+                            <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                              {formatUptime(resource.uptime ?? 0)}
+                            </span>
                           </Show>
                         </div>
                       </td>

@@ -304,25 +304,25 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
             </Show>
 
             {/* Label overlay */}
-            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none">
-              <span class="flex items-center gap-1 whitespace-nowrap px-0.5">
+            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none min-w-0 overflow-hidden">
+              <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
                 <span>{displayLabel()}</span>
                 <Show when={showMaxLabel()}>
                   <span
                     class="text-[8px] font-normal text-gray-500 dark:text-gray-400"
                     title={maxLabelFull()}
                   >
-                    {maxLabelShort()}
+                    {' '}{maxLabelShort()}
                   </span>
                 </Show>
                 <Show when={showSublabel()}>
                   <span class="metric-sublabel font-normal text-gray-500 dark:text-gray-300">
-                    ({displaySublabel()})
+                    {' '}({displaySublabel()})
                   </span>
                 </Show>
                 <Show when={useStackedSegments()}>
                   <span class="text-[8px] font-normal text-gray-500 dark:text-gray-400">
-                    [{props.disks?.length}]
+                    {' '}[{props.disks?.length}]
                   </span>
                 </Show>
                 {/* Anomaly indicator */}

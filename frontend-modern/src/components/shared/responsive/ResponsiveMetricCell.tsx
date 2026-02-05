@@ -1,5 +1,6 @@
 import { Component, Show, createMemo, JSX } from 'solid-js';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatPercent } from '@/utils/format';
 
 export interface ResponsiveMetricCellProps {
@@ -57,6 +58,34 @@ function getMetricColorClass(value: number, type: 'cpu' | 'memory' | 'disk'): st
   return 'text-gray-600 dark:text-gray-400';
 }
 
+function compactCapacityLabel(sublabel?: string): string | undefined {
+  if (!sublabel) return undefined;
+
+  const raw = sublabel.trim();
+  const parts = raw.split('/');
+  if (parts.length < 2) return raw;
+
+  const leftRaw = parts[0]?.trim();
+  const rightRaw = parts.slice(1).join('/').trim();
+  if (!leftRaw || !rightRaw) return raw;
+
+  const rightUnitMatch = rightRaw.match(/[A-Za-z]+$/);
+  const leftUnitMatch = leftRaw.match(/[A-Za-z]+$/);
+  const rightUnit = rightUnitMatch?.[0];
+  const leftUnit = leftUnitMatch?.[0];
+
+  let normalizedLeft = leftRaw;
+  if (rightUnit && leftUnit && rightUnit === leftUnit) {
+    normalizedLeft = leftRaw.slice(0, Math.max(0, leftRaw.length - rightUnit.length)).trim();
+  }
+
+  const compactLeft = normalizedLeft.replace(/\s+/g, '');
+  const compactRight = rightRaw.replace(/\s+/g, '');
+
+  if (!compactLeft || !compactRight) return raw;
+  return `${compactLeft}/${compactRight}`;
+}
+
 /**
  * A responsive metric cell that shows a simple colored percentage on mobile
  * and a full MetricBar (with progress bar or sparkline) on desktop.
@@ -73,9 +102,24 @@ function getMetricColorClass(value: number, type: 'cpu' | 'memory' | 'disk'): st
  * ```
  */
 export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props) => {
+  const { isAtLeast, isBelow } = useBreakpoint();
   const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
   const colorClass = createMemo(() => getMetricColorClass(props.value, props.type));
   const isRunning = () => props.isRunning !== false; // Default to true if not specified
+
+  const isVeryNarrow = createMemo(() => isBelow('xs'));
+  const isMedium = createMemo(() => isAtLeast('md') && isBelow('lg'));
+  const isWide = createMemo(() => isAtLeast('lg'));
+
+  const compactSublabel = createMemo(() => compactCapacityLabel(props.sublabel));
+  const resolvedSublabel = createMemo(() => {
+    if (isWide()) return props.sublabel;
+    if (isMedium()) return compactSublabel();
+    return undefined;
+  });
+  const showLabel = createMemo(() => !isVeryNarrow());
+  const showMobileText = createMemo(() => Boolean(props.showMobile) && !isVeryNarrow());
+  const showMetricBar = createMemo(() => !props.showMobile || isVeryNarrow());
 
   const defaultFallback = (
     <div class="h-4 flex items-center justify-center">
@@ -87,18 +131,19 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
     <Show when={isRunning()} fallback={props.fallback ?? defaultFallback}>
       <div class={props.class}>
         {/* Mobile: Colored percentage text */}
-        <Show when={props.showMobile}>
-          <div class={`md:hidden text-xs text-center ${colorClass()}`}>
+        <Show when={showMobileText()}>
+          <div class={`md:hidden text-xs text-center ${colorClass()} whitespace-nowrap overflow-hidden text-ellipsis`}>
             {displayLabel()}
           </div>
         </Show>
 
         {/* Desktop: Full MetricBar with sparkline support */}
-        <div class={props.showMobile ? 'hidden md:block' : ''}>
+        <div class={showMetricBar() ? '' : 'hidden md:block'}>
           <MetricBar
             value={props.value}
             label={displayLabel()}
-            sublabel={props.sublabel}
+            sublabel={resolvedSublabel()}
+            showLabel={showLabel()}
             type={props.type}
             resourceId={props.resourceId}
           />

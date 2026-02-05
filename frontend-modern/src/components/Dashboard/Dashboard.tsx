@@ -243,7 +243,7 @@ export function Dashboard(props: DashboardProps) {
     setSelectedGuestId(resourceId);
     const [instance, node, vmid] = resourceId.split(':');
     if (instance && node && vmid) {
-      const knownNode = props.nodes.find((item) => item.id === instance || item.node === node || item.name === node);
+      const knownNode = props.nodes.find((item) => item.id === instance || item.name === node);
       if (knownNode) {
         setSelectedNode(knownNode.id);
       }
@@ -297,8 +297,8 @@ export function Dashboard(props: DashboardProps) {
   );
 
   const legacyGuests = createMemo<WorkloadGuest[]>(() => [
-    ...props.vms.map((vm) => ({ ...vm, workloadType: 'vm', displayId: String(vm.vmid) })),
-    ...props.containers.map((ct) => ({ ...ct, workloadType: 'lxc', displayId: String(ct.vmid) })),
+    ...props.vms.map((vm) => ({ ...vm, workloadType: 'vm' as const, displayId: String(vm.vmid) })),
+    ...props.containers.map((ct) => ({ ...ct, workloadType: 'lxc' as const, displayId: String(ct.vmid) })),
   ]);
 
   // Combine workloads into a single list for filtering, preferring v2 workloads when enabled
@@ -1124,7 +1124,11 @@ export function Dashboard(props: DashboardProps) {
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
-            <div ref={tableRef} class="overflow-x-auto">
+            <div
+              ref={tableRef}
+              class="overflow-x-auto"
+              style={{ '-webkit-overflow-scrolling': 'touch' }}
+            >
               <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "800px" : "900px" }}>
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
@@ -1144,7 +1148,7 @@ export function Dashboard(props: DashboardProps) {
                               ...((['cpu', 'memory', 'disk'].includes(col.id))
                                 ? { "width": isMobile() ? "60px" : "140px" }
                                 : (col.width ? { "width": col.width } : {})),
-                              "vertical-align": 'middle'
+                              "vertical-align": 'middle',
                             }}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
                             title={col.icon ? col.label : undefined}

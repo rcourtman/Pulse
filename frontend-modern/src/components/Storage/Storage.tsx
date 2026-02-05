@@ -992,7 +992,7 @@ const Storage: Component = () => {
         <Show when={connected() && initialDataReceived() && sortedStorage().length > 0}>
           <ComponentErrorBoundary name="Storage Table">
             <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
-              <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
+              <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch;">
                 <style>{`
                 .overflow-x-auto::-webkit-scrollbar { display: none; }
               `}</style>

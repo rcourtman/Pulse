@@ -2042,7 +2042,7 @@ const UnifiedBackups: Component = () => {
 
         {/* Table */}
         <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
-          <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
+          <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch;">
             <style>{`
           .overflow-x-auto::-webkit-scrollbar { display: none; }
           .backup-table {

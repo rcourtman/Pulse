@@ -12,7 +12,18 @@ import type { Resource } from '@/types/resource';
 export function Infrastructure() {
   const { resources, loading, error, refetch } = useUnifiedResources();
   const location = useLocation();
+
+  // Track if we've completed initial load to prevent flash of empty state
+  const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
+  createEffect(() => {
+    if (!loading() && !initialLoadComplete()) {
+      setInitialLoadComplete(true);
+    }
+  });
+
   const hasResources = createMemo(() => resources().length > 0);
+  // Only show "no resources" after initial load completes with zero results
+  const showNoResources = createMemo(() => initialLoadComplete() && !hasResources() && !error());
   const [selectedSources, setSelectedSources] = createSignal<Set<string>>(new Set());
   const [selectedStatuses, setSelectedStatuses] = createSignal<Set<string>>(new Set());
   const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
@@ -156,8 +167,19 @@ export function Infrastructure() {
   };
 
   const clearFilters = () => {
-    setSelectedSources(new Set());
-    setSelectedStatuses(new Set());
+    setSelectedSources(new Set<string>());
+    setSelectedStatuses(new Set<string>());
+  };
+
+  const segmentedButtonClass = (selected: boolean, disabled: boolean) => {
+    const base = 'px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95';
+    if (disabled) {
+      return `${base} text-gray-400 dark:text-gray-600 cursor-not-allowed`;
+    }
+    if (selected) {
+      return `${base} bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600`;
+    }
+    return `${base} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50`;
   };
 
   const filteredResources = createMemo(() => {
@@ -186,7 +208,7 @@ export function Infrastructure() {
   const hasFilteredResources = createMemo(() => filteredResources().length > 0);
 
   return (
-    <div class="space-y-4 px-4">
+    <div class="space-y-4">
       <SectionHeader
         title="Infrastructure"
         description="Unified host inventory across monitored platforms."
@@ -221,7 +243,7 @@ export function Infrastructure() {
           }
         >
           <Show
-            when={hasResources()}
+            when={!showNoResources()}
             fallback={
               <Card class="p-6">
                 <EmptyState
@@ -233,79 +255,69 @@ export function Infrastructure() {
             }
           >
             <div class="space-y-3">
-              <div class="flex flex-wrap items-center gap-3 rounded-md border border-gray-200 bg-white/70 px-3 py-2 text-[10px] text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-400">
-                <div class="flex items-center gap-2">
-                  <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
-                  <div class="flex flex-wrap gap-1.5">
-                    <For each={sourceOptions}>
-                      {(source) => {
-                        const isSelected = () => selectedSources().has(source.key);
-                        const isDisabled = () =>
-                          !availableSources().has(source.key) && !selectedSources().has(source.key);
-                        return (
-                          <button
-                            type="button"
-                            disabled={isDisabled()}
-                            aria-pressed={isSelected()}
-                            onClick={() => toggleSource(source.key)}
-                            class={`px-2 py-0.5 rounded border text-[10px] font-medium transition-colors ${
-                              isSelected()
-                                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                                : isDisabled()
-                                  ? 'border-gray-200 text-gray-300 dark:border-gray-700 dark:text-gray-600 cursor-not-allowed'
-                                  : 'border-gray-300 text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/50'
-                            }`}
-                          >
-                            {source.label}
-                          </button>
-                        );
-                      }}
-                    </For>
+              <Card padding="sm" class="mb-4">
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div class="flex items-center gap-2">
+                    <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
+                    <div class="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <For each={sourceOptions}>
+                        {(source) => {
+                          const isSelected = () => selectedSources().has(source.key);
+                          const isDisabled = () =>
+                            !availableSources().has(source.key) && !selectedSources().has(source.key);
+                          return (
+                            <button
+                              type="button"
+                              disabled={isDisabled()}
+                              aria-pressed={isSelected()}
+                              onClick={() => toggleSource(source.key)}
+                              class={segmentedButtonClass(isSelected(), isDisabled())}
+                            >
+                              {source.label}
+                            </button>
+                          );
+                        }}
+                      </For>
+                    </div>
                   </div>
-                </div>
 
-                <div class="h-4 w-px bg-gray-200 dark:bg-gray-700" />
+                  <div class="h-5 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
 
-                <div class="flex items-center gap-2">
-                  <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
-                  <div class="flex flex-wrap gap-1.5">
-                    <For each={statusOptions()}>
-                      {(status) => {
-                        const isSelected = () => selectedStatuses().has(status.key);
-                        const isDisabled = () =>
-                          !availableStatuses().has(status.key) && !selectedStatuses().has(status.key);
-                        return (
-                          <button
-                            type="button"
-                            disabled={isDisabled()}
-                            aria-pressed={isSelected()}
-                            onClick={() => toggleStatus(status.key)}
-                            class={`px-2 py-0.5 rounded border text-[10px] font-medium transition-colors ${
-                              isSelected()
-                                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                                : isDisabled()
-                                  ? 'border-gray-200 text-gray-300 dark:border-gray-700 dark:text-gray-600 cursor-not-allowed'
-                                  : 'border-gray-300 text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/50'
-                            }`}
-                          >
-                            {status.label}
-                          </button>
-                        );
-                      }}
-                    </For>
+                  <div class="flex items-center gap-2">
+                    <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
+                    <div class="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <For each={statusOptions()}>
+                        {(status) => {
+                          const isSelected = () => selectedStatuses().has(status.key);
+                          const isDisabled = () =>
+                            !availableStatuses().has(status.key) && !selectedStatuses().has(status.key);
+                          return (
+                            <button
+                              type="button"
+                              disabled={isDisabled()}
+                              aria-pressed={isSelected()}
+                              onClick={() => toggleStatus(status.key)}
+                              class={segmentedButtonClass(isSelected(), isDisabled())}
+                            >
+                              {status.label}
+                            </button>
+                          );
+                        }}
+                      </For>
+                    </div>
                   </div>
-                </div>
 
-                <Show when={hasActiveFilters()}>
-                  <button
-                    type="button"
-                    onClick={clearFilters}
-                    class="ml-auto text-[10px] font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  >
-                    Clear
-                  </button>
-                </Show>
-              </div>
+                  <Show when={hasActiveFilters()}>
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      class="ml-auto text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      Clear
+                    </button>
+                  </Show>
+                </div>
+              </Card>
 
               <Show
                 when={hasFilteredResources()}

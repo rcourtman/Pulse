@@ -27,7 +27,7 @@ const anomalySeverityClass: Record<string, string> = {
 // Colors for memory segments
 const MEMORY_COLORS = {
     active: 'rgba(34, 197, 94, 0.6)',   // green (base, overridden by threshold)
-    balloon: 'rgba(59, 130, 246, 0.6)',  // yellow to blue
+    balloon: 'rgba(59, 130, 246, 0.6)',  // blue
     swap: 'rgba(168, 85, 247, 0.6)',    // purple
 };
 
@@ -206,12 +206,12 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                         </Show>
 
                         {/* Label overlay */}
-                        <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none pointer-events-none">
-                            <span class="flex items-center gap-1 whitespace-nowrap px-0.5">
+                        <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none pointer-events-none min-w-0 overflow-hidden">
+                            <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
                                 <span>{displayLabel()}</span>
                                 <Show when={showSublabel()}>
                                     <span class="metric-sublabel font-normal text-gray-500 dark:text-gray-300">
-                                        ({displaySublabel()})
+                                        {' '}({displaySublabel()})
                                     </span>
                                 </Show>
                                 {/* Anomaly indicator */}

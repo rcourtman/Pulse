@@ -183,7 +183,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
       <Show when={filteredDisks().length > 0}>
         <Card padding="none" tone="glass" class="overflow-hidden">
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
             <table class="w-full" style={{ "min-width": "800px" }}>
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">

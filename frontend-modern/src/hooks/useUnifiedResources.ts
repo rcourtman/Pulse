@@ -144,9 +144,9 @@ const toResource = (v2: V2Resource): Resource => {
     network:
       v2.metrics?.netIn || v2.metrics?.netOut
         ? {
-            rxBytes: v2.metrics?.netIn?.value ?? 0,
-            txBytes: v2.metrics?.netOut?.value ?? 0,
-          }
+          rxBytes: v2.metrics?.netIn?.value ?? 0,
+          txBytes: v2.metrics?.netOut?.value ?? 0,
+        }
         : undefined,
     uptime: v2.agent?.uptimeSeconds ?? v2.proxmox?.uptime,
     tags: v2.tags,
@@ -193,7 +193,7 @@ export function useUnifiedResources() {
     initialValue: [],
   });
   const wsStore = getGlobalWebSocketStore();
-  let refreshHandle: number | undefined;
+  let refreshHandle: ReturnType<typeof setTimeout> | undefined;
 
   const scheduleRefetch = () => {
     if (refreshHandle !== undefined) {

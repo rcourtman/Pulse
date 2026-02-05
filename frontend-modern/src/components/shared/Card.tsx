@@ -22,9 +22,9 @@ const toneClassMap: Record<Tone, string> = {
 
 const paddingClassMap: Record<Padding, string> = {
   none: 'p-0',
-  sm: 'p-3',
-  md: 'p-4',
-  lg: 'p-6',
+  sm: 'p-2 sm:p-3',
+  md: 'p-3 sm:p-4',
+  lg: 'p-4 sm:p-6',
 };
 
 export function Card(props: CardProps) {

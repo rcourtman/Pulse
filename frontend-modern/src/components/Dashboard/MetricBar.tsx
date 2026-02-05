@@ -7,6 +7,7 @@ interface MetricBarProps {
   value: number;
   label: string;
   sublabel?: string;
+  showLabel?: boolean;
   type?: 'cpu' | 'memory' | 'disk' | 'generic';
   resourceId?: string; // Required for sparkline mode to fetch history
   class?: string;
@@ -45,11 +46,14 @@ export function MetricBar(props: MetricBarProps) {
 
   // Determine if sublabel fits based on estimated text width
   const showSublabel = createMemo(() => {
+    if (props.showLabel === false) return false;
     if (!props.sublabel) return false;
     const fullText = `${props.label} (${props.sublabel})`;
     const estimatedWidth = estimateTextWidth(fullText);
     return containerWidth() >= estimatedWidth;
   });
+
+  const showLabel = createMemo(() => props.showLabel !== false && props.label.trim().length > 0);
 
   // Get color based on percentage and metric type (matching original)
   const getColor = createMemo(() => {
@@ -106,19 +110,21 @@ export function MetricBar(props: MetricBarProps) {
       when={viewMode() === 'sparklines' && props.resourceId}
       fallback={
         // Progress bar mode - full width, flex centered like stacked bars
-        <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
+        <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center min-w-0">
           <div class={`relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded ${props.class || ''}`}>
             <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
-            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none">
-              <span class="flex items-center gap-1 whitespace-nowrap px-0.5">
-                <span>{props.label}</span>
-                <Show when={showSublabel()}>
-                  <span class="metric-sublabel font-normal text-gray-500 dark:text-gray-300">
-                    ({props.sublabel})
-                  </span>
-                </Show>
+            <Show when={showLabel()}>
+              <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none min-w-0 overflow-hidden">
+                <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
+                  <span>{props.label}</span>
+                  <Show when={showSublabel()}>
+                    <span class="metric-sublabel font-normal text-gray-500 dark:text-gray-300">
+                      {' '}({props.sublabel})
+                    </span>
+                  </Show>
+                </span>
               </span>
-            </span>
+            </Show>
           </div>
         </div>
       }

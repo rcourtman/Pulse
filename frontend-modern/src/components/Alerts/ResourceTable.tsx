@@ -712,7 +712,7 @@ export function ResourceTable(props: ResourceTableProps) {
         <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <SectionHeader title={props.title} size="sm" />
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
           <table class="w-full">
             <thead>
               <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">

@@ -775,7 +775,9 @@ export function GuestRow(props: GuestRowProps) {
         onClick={props.onClick}
       >
         {/* Name - always visible */}
-        <td class={`pr-2 py-1 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
+        <td
+          class={`pr-2 py-1 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}
+        >
           <div class="flex items-center gap-2 min-w-0">
             <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
               <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

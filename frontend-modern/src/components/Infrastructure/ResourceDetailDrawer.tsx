@@ -1,13 +1,11 @@
 import { Component, Show, createMemo, For, createSignal, createEffect } from 'solid-js';
 import type { Disk, Host, HostNetworkInterface, HostSensorSummary, Memory, Node } from '@/types/api';
 import type { Resource, ResourceMetric } from '@/types/resource';
-import { getDisplayName, getCpuPercent, getMemoryPercent, getDiskPercent } from '@/types/resource';
-import { formatBytes, formatUptime, formatRelativeTime, formatAbsoluteTime, formatPercent } from '@/utils/format';
+import { getDisplayName } from '@/types/resource';
+import { formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
-import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TagBadges } from '@/components/Dashboard/TagBadges';
-import { buildMetricKey } from '@/utils/metricsKeys';
 import { getHostStatusIndicator } from '@/utils/status';
 import { getPlatformBadge, getSourceBadge, getTypeBadge, getUnifiedSourceBadges } from './resourceBadges';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
@@ -74,10 +72,7 @@ type PlatformData = {
   matches?: unknown;
 };
 
-const metricSublabel = (metric?: ResourceMetric) => {
-  if (!metric || typeof metric.used !== 'number' || typeof metric.total !== 'number') return undefined;
-  return `${formatBytes(metric.used)}/${formatBytes(metric.total)}`;
-};
+
 
 const buildMemory = (metric?: ResourceMetric, fallback?: Partial<Memory>): Memory => {
   const total = metric?.total ?? fallback?.total ?? 0;
@@ -155,6 +150,7 @@ const toNodeFromProxmox = (resource: Resource): Node | null => {
       model: proxmox.cpuInfo?.model ?? 'Unknown',
       cores: proxmox.cpuInfo?.cores ?? 0,
       sockets: proxmox.cpuInfo?.sockets ?? 0,
+      mhz: '0',
     },
     lastSeen,
     connectionHealth: resource.status ?? 'unknown',
@@ -232,7 +228,7 @@ const buildTemperatureRows = (sensors?: HostSensorSummary) => {
 };
 
 export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
-  type DrawerTab = 'overview' | 'discovery' | 'metrics' | 'debug';
+  type DrawerTab = 'overview' | 'discovery' | 'debug';
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
   const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
   const [copied, setCopied] = createSignal(false);
@@ -242,11 +238,6 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
   const statusIndicator = createMemo(() => getHostStatusIndicator({ status: props.resource.status }));
   const lastSeen = createMemo(() => formatRelativeTime(props.resource.lastSeen));
   const lastSeenAbsolute = createMemo(() => formatAbsoluteTime(props.resource.lastSeen));
-  const metricKey = createMemo(() => buildMetricKey('host', props.resource.id));
-
-  const cpuPercent = createMemo(() => (props.resource.cpu ? Math.round(getCpuPercent(props.resource)) : null));
-  const memoryPercent = createMemo(() => (props.resource.memory ? Math.round(getMemoryPercent(props.resource)) : null));
-  const diskPercent = createMemo(() => (props.resource.disk ? Math.round(getDiskPercent(props.resource)) : null));
 
   const platformBadge = createMemo(() => getPlatformBadge(props.resource.platformType));
   const sourceBadge = createMemo(() => getSourceBadge(props.resource.sourceType));
@@ -316,7 +307,6 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
     const base = [
       { id: 'overview' as DrawerTab, label: 'Overview' },
       { id: 'discovery' as DrawerTab, label: 'Discovery' },
-      { id: 'metrics' as DrawerTab, label: 'Metrics' },
     ];
     if (debugEnabled()) {
       base.push({ id: 'debug' as DrawerTab, label: 'Debug' });
@@ -572,52 +562,6 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
       <div class={activeTab() === 'discovery' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
         <div class="rounded border border-dashed border-gray-300 bg-gray-50/70 p-4 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-300">
           Discovery details are available in the legacy host drawer for now.
-        </div>
-      </div>
-
-      {/* Metrics Tab */}
-      <div class={activeTab() === 'metrics' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
-        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Metrics</div>
-            <div class="space-y-2">
-              <div class="space-y-1">
-                <div class="text-[10px] text-gray-500 dark:text-gray-400">CPU</div>
-                <Show when={cpuPercent() !== null} fallback={<div class="text-xs text-gray-400">—</div>}>
-                  <MetricBar
-                    value={cpuPercent() ?? 0}
-                    label={formatPercent(cpuPercent() ?? 0)}
-                    type="cpu"
-                    resourceId={metricKey()}
-                  />
-                </Show>
-              </div>
-              <div class="space-y-1">
-                <div class="text-[10px] text-gray-500 dark:text-gray-400">Memory</div>
-                <Show when={memoryPercent() !== null} fallback={<div class="text-xs text-gray-400">—</div>}>
-                  <MetricBar
-                    value={memoryPercent() ?? 0}
-                    label={formatPercent(memoryPercent() ?? 0)}
-                    sublabel={metricSublabel(props.resource.memory)}
-                    type="memory"
-                    resourceId={metricKey()}
-                  />
-                </Show>
-              </div>
-              <div class="space-y-1">
-                <div class="text-[10px] text-gray-500 dark:text-gray-400">Disk</div>
-                <Show when={diskPercent() !== null} fallback={<div class="text-xs text-gray-400">—</div>}>
-                  <MetricBar
-                    value={diskPercent() ?? 0}
-                    label={formatPercent(diskPercent() ?? 0)}
-                    sublabel={metricSublabel(props.resource.disk)}
-                    type="disk"
-                    resourceId={metricKey()}
-                  />
-                </Show>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
