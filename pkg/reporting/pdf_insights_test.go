@@ -45,6 +45,18 @@ func TestGenerateObservations_MixedSignals(t *testing.T) {
 	assertObservationContains(t, obs, "System uptime")
 }
 
+func TestGenerateObservations_UnderutilizedCPU(t *testing.T) {
+	g := NewPDFGenerator()
+	data := &ReportData{
+		Summary: MetricSummary{ByMetric: map[string]MetricStats{
+			"cpu": {Avg: 10, Max: 15},
+		}},
+	}
+
+	obs := g.generateObservations(data)
+	assertObservationContains(t, obs, "underutilized")
+}
+
 func TestGenerateRecommendations(t *testing.T) {
 	g := NewPDFGenerator()
 	data := &ReportData{
@@ -72,6 +84,18 @@ func TestGenerateRecommendations(t *testing.T) {
 	assertStringSliceContains(t, recs, "Clean up disk space")
 	assertStringSliceContains(t, recs, "Expand storage pool 'local'")
 	assertStringSliceContains(t, recs, "Schedule maintenance window")
+}
+
+func TestGenerateRecommendations_Underutilized(t *testing.T) {
+	g := NewPDFGenerator()
+	data := &ReportData{
+		Summary: MetricSummary{ByMetric: map[string]MetricStats{
+			"cpu": {Avg: 5, Max: 10},
+		}},
+	}
+
+	recs := g.generateRecommendations(data, 0, 0)
+	assertStringSliceContains(t, recs, "underutilized")
 }
 
 func TestGetStatColor(t *testing.T) {
