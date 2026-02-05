@@ -143,3 +143,31 @@ func TestExecuteWithFailoverNotImplementedDoesNotMarkUnhealthy(t *testing.T) {
 		t.Fatalf("expected no lastError, got %+v", cc.lastError)
 	}
 }
+
+func TestExecuteWithFailoverRateLimitContextCancel(t *testing.T) {
+	cc := &ClusterClient{
+		name:            "cluster",
+		endpoints:       []string{"node1"},
+		clients:         map[string]*Client{"node1": {}},
+		nodeHealth:      map[string]bool{"node1": true},
+		lastError:       make(map[string]string),
+		lastHealthCheck: map[string]time.Time{"node1": time.Now()},
+		rateLimitUntil:  make(map[string]time.Time),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	err := cc.executeWithFailover(ctx, func(*Client) error {
+		return fmt.Errorf("status 429: Too Many Requests")
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "backing off after rate limit") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := cc.rateLimitUntil["node1"]; !ok {
+		t.Fatal("expected rate limit cooldown to be recorded")
+	}
+}
