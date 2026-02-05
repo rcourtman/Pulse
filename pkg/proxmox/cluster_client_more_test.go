@@ -171,3 +171,62 @@ func TestExecuteWithFailoverRateLimitContextCancel(t *testing.T) {
 		t.Fatal("expected rate limit cooldown to be recorded")
 	}
 }
+
+func TestExecuteWithFailoverRateLimitThenSuccess(t *testing.T) {
+	cc := &ClusterClient{
+		name:            "cluster",
+		endpoints:       []string{"node1"},
+		clients:         map[string]*Client{"node1": {}},
+		nodeHealth:      map[string]bool{"node1": true},
+		lastError:       make(map[string]string),
+		lastHealthCheck: map[string]time.Time{"node1": time.Now()},
+		rateLimitUntil:  make(map[string]time.Time),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	attempts := 0
+	err := cc.executeWithFailover(ctx, func(*Client) error {
+		attempts++
+		if attempts == 1 {
+			return fmt.Errorf("status 429: Too Many Requests")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected success after rate limit, got %v", err)
+	}
+	if attempts < 2 {
+		t.Fatalf("expected retry after rate limit, attempts=%d", attempts)
+	}
+	if time.Since(start) < 100*time.Millisecond {
+		t.Fatalf("expected backoff delay, elapsed=%v", time.Since(start))
+	}
+}
+
+func TestExecuteWithFailoverNodeSpecificStorageError(t *testing.T) {
+	cc := &ClusterClient{
+		name:            "cluster",
+		endpoints:       []string{"node1"},
+		clients:         map[string]*Client{"node1": {}},
+		nodeHealth:      map[string]bool{"node1": true},
+		lastError:       make(map[string]string),
+		lastHealthCheck: map[string]time.Time{"node1": time.Now()},
+		rateLimitUntil:  make(map[string]time.Time),
+	}
+
+	err := cc.executeWithFailover(context.Background(), func(*Client) error {
+		return fmt.Errorf("context deadline exceeded /storage")
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !cc.nodeHealth["node1"] {
+		t.Fatal("expected node to remain healthy for storage timeout")
+	}
+	if len(cc.lastError) != 0 {
+		t.Fatalf("expected no lastError, got %+v", cc.lastError)
+	}
+}
