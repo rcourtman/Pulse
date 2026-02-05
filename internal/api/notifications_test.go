@@ -318,6 +318,7 @@ func TestNotificationHandlers(t *testing.T) {
 			SMTPHost: "smtp.example.com",
 			Password: "newpassword",
 		}
+		mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 		mockManager.On("SetEmailConfig", mock.Anything).Return().Once()
 		mockPersistence.On("SaveEmailConfig", mock.Anything).Return(nil).Once()
 

@@ -156,6 +156,7 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		Str("from", config.From).
 		Int("toCount", len(config.To)).
 		Bool("hasPassword", config.Password != "").
+		Int("rateLimit", config.RateLimit).
 		Msg("Parsed email config")
 
 	h.getMonitor(r.Context()).GetNotificationManager().SetEmailConfig(config)

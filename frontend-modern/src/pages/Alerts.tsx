@@ -1370,7 +1370,7 @@ export function Alerts() {
           replyTo: '',
           maxRetries: 3,
           retryDelay: 5,
-          rateLimit: 60,
+          rateLimit: emailConfigData.rateLimit ?? 60,
         });
       } catch (emailErr) {
         logger.error('Failed to load email configuration:', emailErr);
@@ -1435,7 +1435,7 @@ export function Alerts() {
             replyTo: '',
             maxRetries: 3,
             retryDelay: 5,
-            rateLimit: 60,
+            rateLimit: emailConfigData.rateLimit ?? 60,
           });
         })
         .catch((err) => {

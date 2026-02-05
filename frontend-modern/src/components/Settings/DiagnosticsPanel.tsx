@@ -268,22 +268,26 @@ export const DiagnosticsPanel: Component = () => {
         const redactString = (s: string): string => s.replace(ipv4Re, '[REDACTED_IP]');
 
         // Redact node hosts
-        data.nodes = data.nodes.map((node, i) => ({
-            ...node,
-            host: `node-${i + 1}`,
-            name: `node-${i + 1}`,
-            id: `node-${i + 1}`,
-            error: node.error ? redactString(node.error) : undefined,
-        }));
+        if (Array.isArray(data.nodes)) {
+            data.nodes = data.nodes.map((node, i) => ({
+                ...node,
+                host: `node-${i + 1}`,
+                name: `node-${i + 1}`,
+                id: `node-${i + 1}`,
+                error: node.error ? redactString(node.error) : undefined,
+            }));
+        }
 
         // Redact PBS hosts
-        data.pbs = data.pbs.map((p, i) => ({
-            ...p,
-            host: `pbs-${i + 1}`,
-            name: `pbs-${i + 1}`,
-            id: `pbs-${i + 1}`,
-            error: p.error ? redactString(p.error) : undefined,
-        }));
+        if (Array.isArray(data.pbs)) {
+            data.pbs = data.pbs.map((p, i) => ({
+                ...p,
+                host: `pbs-${i + 1}`,
+                name: `pbs-${i + 1}`,
+                id: `pbs-${i + 1}`,
+                error: p.error ? redactString(p.error) : undefined,
+            }));
+        }
 
         // Redact discovery subnets
         if (data.discovery) {
@@ -343,7 +347,9 @@ export const DiagnosticsPanel: Component = () => {
         }
 
         // Redact IPs in error messages
-        data.errors = data.errors.map(redactString);
+        if (Array.isArray(data.errors)) {
+            data.errors = data.errors.map(redactString);
+        }
 
         // Redact IPs from any raw snapshot data that may be present
         const raw2 = data as any;

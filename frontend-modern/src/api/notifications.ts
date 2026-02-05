@@ -43,6 +43,7 @@ export interface EmailConfig {
   to: string[];
   tls: boolean;
   startTLS: boolean;
+  rateLimit?: number;
 }
 
 export interface Webhook {
@@ -107,12 +108,13 @@ export class NotificationsAPI {
       to: (backendConfig.to as string[]) || [],
       tls: (backendConfig.tls as boolean) || false,
       startTLS: (backendConfig.startTLS as boolean) || false,
+      rateLimit: (backendConfig.rateLimit as number) || undefined,
     };
   }
 
   static async updateEmailConfig(config: EmailConfig): Promise<{ success: boolean }> {
     // Backend expects fields with these names (server, port)
-    const backendConfig = {
+    const backendConfig: Record<string, unknown> = {
       enabled: config.enabled,
       server: config.server,
       port: config.port,
@@ -124,6 +126,11 @@ export class NotificationsAPI {
       startTLS: config.startTLS || false,
       provider: config.provider || '',
     };
+
+    // Only include rateLimit if it's explicitly set
+    if (config.rateLimit !== undefined) {
+      backendConfig.rateLimit = config.rateLimit;
+    }
 
     return apiFetchJSON(`${this.baseUrl}/email`, {
       method: 'PUT',
