@@ -1,8 +1,7 @@
 import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
-import type { Resource } from '@/types/resource';
-import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
+import type { WorkloadGuest } from '@/types/workloads';
 import { GuestRow, GUEST_COLUMNS, type GuestColumnDef } from './GuestRow';
 import { GuestDrawer } from './GuestDrawer';
 import { useWebSocket } from '@/App';
@@ -25,10 +24,10 @@ import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useV2Workloads } from '@/hooks/useV2Workloads';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { aiChatStore } from '@/stores/aiChat';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
-import { apiFetchJSON } from '@/utils/apiClient';
 import { getWorkloadMetricsKind, resolveWorkloadType } from '@/utils/workloads';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
@@ -202,6 +201,7 @@ interface DashboardProps {
   vms: VM[];
   containers: Container[];
   nodes: Node[];
+  useV2Workloads?: boolean;
 }
 
 type ViewMode = 'all' | 'vm' | 'lxc' | 'docker' | 'k8s';
@@ -271,165 +271,22 @@ export function Dashboard(props: DashboardProps) {
       return next;
     });
 
-  const [workloadGuests, setWorkloadGuests] = createSignal<WorkloadGuest[]>([]);
-  const [workloadsLoaded, setWorkloadsLoaded] = createSignal(false);
-  const [workloadsLoading, setWorkloadsLoading] = createSignal(false);
-
-  const normalizeWorkloadStatus = (status?: string | null): string => {
-    const normalized = (status || '').trim().toLowerCase();
-    if (!normalized) return 'unknown';
-    if (normalized === 'online' || normalized === 'healthy') return 'running';
-    if (normalized === 'offline') return 'stopped';
-    return normalized;
-  };
-
-  const buildMetric = (metric?: Resource['memory']) => {
-    const total = metric?.total ?? 0;
-    const used = metric?.used ?? 0;
-    const free = metric?.free ?? (total > 0 ? Math.max(0, total - used) : 0);
-    const usage = metric?.current ?? (total > 0 ? (used / total) * 100 : 0);
-    return { total, used, free, usage };
-  };
-
-  const resolveWorkloadsPayload = (payload: unknown): Resource[] => {
-    if (Array.isArray(payload)) return payload as Resource[];
-    if (!payload || typeof payload !== 'object') return [];
-    const record = payload as Record<string, unknown>;
-    const candidates = ['resources', 'workloads', 'data'];
-    for (const key of candidates) {
-      const value = record[key];
-      if (Array.isArray(value)) return value as Resource[];
-    }
-    return [];
-  };
-
-  const mapResourceToWorkload = (resource: Resource): WorkloadGuest | null => {
-    const type = resource.type;
-    const workloadType: WorkloadType | null =
-      type === 'vm'
-        ? 'vm'
-        : type === 'container' || type === 'oci-container'
-          ? 'lxc'
-          : type === 'docker-container'
-            ? 'docker'
-            : type === 'pod'
-              ? 'k8s'
-              : null;
-
-    if (!workloadType) return null;
-
-    const platformData = (resource.platformData ?? {}) as Record<string, unknown>;
-    const name = (resource.displayName || resource.name || resource.id || '').toString().trim();
-    const node =
-      (platformData.node as string) ??
-      (platformData.nodeName as string) ??
-      (platformData.host as string) ??
-      (platformData.hostName as string) ??
-      '';
-    const instance =
-      (platformData.instance as string) ??
-      (platformData.clusterId as string) ??
-      resource.platformId ??
-      '';
-    const vmid =
-      typeof platformData.vmid === 'number'
-        ? platformData.vmid
-        : parseInt(resource.id.split('-').pop() ?? '0', 10);
-    const rawDisplayId =
-      (platformData.shortId as string) ??
-      (platformData.uid as string) ??
-      resource.id;
-    const displayId =
-      workloadType === 'vm' || workloadType === 'lxc'
-        ? vmid > 0
-          ? String(vmid)
-          : undefined
-        : rawDisplayId
-          ? rawDisplayId.length > 12
-            ? rawDisplayId.slice(0, 12)
-            : rawDisplayId
-          : undefined;
-    const isOci =
-      type === 'oci-container' ||
-      platformData.isOci === true ||
-      platformData.type === 'oci';
-    const legacyType =
-      workloadType === 'vm'
-        ? 'qemu'
-        : workloadType === 'docker'
-          ? 'docker'
-          : workloadType === 'k8s'
-            ? 'k8s'
-            : isOci
-              ? 'oci'
-              : 'lxc';
-
-    const ipAddresses =
-      (platformData.ipAddresses as string[] | undefined) ??
-      (resource.identity?.ips as string[] | undefined);
-
-    return {
-      id: resource.id,
-      vmid: Number.isFinite(vmid) ? vmid : 0,
-      name: name || resource.id,
-      node,
-      instance,
-      status: normalizeWorkloadStatus(resource.status),
-      type: legacyType,
-      cpu: (resource.cpu?.current ?? 0) / 100,
-      cpus: (platformData.cpus as number) ?? (platformData.cpuCount as number) ?? 1,
-      memory: buildMetric(resource.memory),
-      disk: buildMetric(resource.disk),
-      disks: platformData.disks as any[] | undefined,
-      diskStatusReason: platformData.diskStatusReason as string | undefined,
-      ipAddresses,
-      osName: platformData.osName as string | undefined,
-      osVersion: platformData.osVersion as string | undefined,
-      agentVersion: platformData.agentVersion as string | undefined,
-      networkInterfaces: platformData.networkInterfaces as any[] | undefined,
-      networkIn: resource.network?.rxBytes ?? 0,
-      networkOut: resource.network?.txBytes ?? 0,
-      diskRead: (platformData.diskRead as number) ?? 0,
-      diskWrite: (platformData.diskWrite as number) ?? 0,
-      uptime: resource.uptime ?? 0,
-      template: (platformData.template as boolean) ?? false,
-      lastBackup: (platformData.lastBackup as number) ?? 0,
-      tags: resource.tags ?? [],
-      lock: (platformData.lock as string) ?? '',
-      lastSeen: new Date(resource.lastSeen).toISOString(),
-      isOci,
-      osTemplate: platformData.osTemplate as string | undefined,
-      workloadType,
-      displayId,
-      image:
-        workloadType === 'docker'
-          ? ((platformData.image as string) ??
-            (platformData.imageName as string) ??
-            (platformData.imageRef as string))
-          : undefined,
-      namespace:
-        workloadType === 'k8s'
-          ? ((platformData.namespace as string) ?? (platformData.ns as string))
-          : undefined,
-      contextLabel:
-        (platformData.clusterName as string) ??
-        (platformData.cluster as string) ??
-        (platformData.context as string) ??
-        (platformData.host as string) ??
-        undefined,
-      platformType: resource.platformType,
-    };
-  };
+  const v2Enabled = createMemo(() => props.useV2Workloads === true);
+  const v2Workloads = useV2Workloads(v2Enabled);
+  const v2Loaded = createMemo(() => v2Enabled() && !v2Workloads.loading() && !v2Workloads.error());
 
   const legacyGuests = createMemo<WorkloadGuest[]>(() => [
     ...props.vms.map((vm) => ({ ...vm, workloadType: 'vm', displayId: String(vm.vmid) })),
     ...props.containers.map((ct) => ({ ...ct, workloadType: 'lxc', displayId: String(ct.vmid) })),
   ]);
 
-  // Combine workloads into a single list for filtering, preferring /api/v2/resources
-  const allGuests = createMemo<WorkloadGuest[]>(() =>
-    workloadsLoaded() ? workloadGuests() : legacyGuests(),
-  );
+  // Combine workloads into a single list for filtering, preferring v2 workloads when enabled
+  const allGuests = createMemo<WorkloadGuest[]>(() => {
+    if (v2Enabled()) {
+      return v2Loaded() ? v2Workloads.workloads() : legacyGuests();
+    }
+    return legacyGuests();
+  });
 
   // Initialize from localStorage with proper type checking
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
@@ -492,35 +349,8 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
-  const refreshWorkloads = async () => {
-    if (workloadsLoading()) return;
-    setWorkloadsLoading(true);
-    const hadWorkloads = workloadsLoaded();
-    try {
-      const response = await apiFetchJSON('/api/v2/resources');
-      const resources = resolveWorkloadsPayload(response);
-      const mapped = resources
-        .map((resource) => mapResourceToWorkload(resource))
-        .filter((resource): resource is WorkloadGuest => !!resource);
-      setWorkloadGuests(mapped);
-      setWorkloadsLoaded(true);
-      logger.debug('[Dashboard] Loaded workloads', {
-        total: mapped.length,
-        types: [...new Set(mapped.map((w) => w.workloadType))],
-      });
-    } catch (err) {
-      logger.debug('[Dashboard] Failed to load workloads', err);
-      if (!hadWorkloads) {
-        setWorkloadsLoaded(false);
-      }
-    } finally {
-      setWorkloadsLoading(false);
-    }
-  };
-
   // Load all guest metadata on mount (single API call for all guests)
   onMount(async () => {
-    await refreshWorkloads();
     await refreshGuestMetadata();
 
     // Listen for metadata changes from AI or other sources
@@ -564,10 +394,13 @@ export function Dashboard(props: DashboardProps) {
     // In practice, Dashboard is always mounted so this is fine
   });
 
+  let lastConnected = connected();
   createEffect(() => {
-    if (connected()) {
-      void refreshWorkloads();
+    const isConnected = connected();
+    if (v2Enabled() && isConnected && !lastConnected) {
+      void v2Workloads.refetch();
     }
+    lastConnected = isConnected;
   });
 
   // Callback to update a guest's custom URL in metadata
