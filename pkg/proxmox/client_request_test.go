@@ -118,3 +118,33 @@ func TestClientRequest_401Unauthorized(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestClientRequest_500NonAuth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("boom"))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "user@pve!token",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+
+	_, err = client.get(context.Background(), "/nodes")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "API error 500") {
+		t.Fatalf("expected api error 500, got %q", msg)
+	}
+	if strings.Contains(strings.ToLower(msg), "authentication error") {
+		t.Fatalf("did not expect authentication error for 500, got %q", msg)
+	}
+}
