@@ -49,6 +49,9 @@ func TestValidateWebhookURL(t *testing.T) {
 	if err := validateWebhookURL(context.Background(), "https://example.com"); err != nil {
 		t.Fatalf("expected valid URL, got %v", err)
 	}
+	if err := validateWebhookURL(nil, "https://example.com"); err != nil {
+		t.Fatalf("expected valid URL with nil context, got %v", err)
+	}
 
 	resolveWebhookIPs = func(ctx context.Context, host string) ([]net.IPAddr, error) {
 		return nil, context.DeadlineExceeded
