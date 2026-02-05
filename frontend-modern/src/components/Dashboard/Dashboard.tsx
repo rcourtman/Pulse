@@ -939,7 +939,7 @@ export function Dashboard(props: DashboardProps) {
         when={
           connected() &&
           initialDataReceived() &&
-          props.nodes.filter((n) => n.type === 'pve').length === 0 &&
+          props.nodes.length === 0 &&
           props.vms.length === 0 &&
           props.containers.length === 0
         }

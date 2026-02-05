@@ -733,7 +733,7 @@ const Storage: Component = () => {
         when={
           connected() &&
           initialDataReceived() &&
-          (state.nodes || []).filter((n) => n.type === 'pve').length === 0 &&
+          (state.nodes || []).filter((n) => n.type === 'node').length === 0 &&
           sortedStorage().length === 0 &&
           searchTerm().trim() === ''
         }
