@@ -675,3 +675,33 @@ func TestClientGetSpamScores(t *testing.T) {
 		t.Fatalf("unexpected spam scores: %+v", scores)
 	}
 }
+
+func TestClientMailCountNoTimespanParam(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/statistics/mailcount" {
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("timespan"); got != "" {
+			t.Fatalf("expected no timespan param, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	if _, err := client.GetMailCount(context.Background(), 0); err != nil {
+		t.Fatalf("GetMailCount failed: %v", err)
+	}
+}
