@@ -266,3 +266,57 @@ func TestMatchesUserExclude(t *testing.T) {
 		})
 	}
 }
+
+func TestMatchesDiskExclude(t *testing.T) {
+	tests := []struct {
+		name       string
+		device     string
+		mountpoint string
+		patterns   []string
+		expected   bool
+	}{
+		{"empty patterns", "/dev/sda", "/mnt/data", nil, false},
+		{"mountpoint exact match", "/dev/sdb", "/mnt/backup", []string{"/mnt/backup"}, true},
+		{"mountpoint prefix match", "/dev/sdb", "/mnt/external-drive", []string{"/mnt/ext*"}, true},
+		{"device exact match", "/dev/sda", "/mnt/data", []string{"/dev/sda"}, true},
+		{"device name match", "/dev/nvme0n1", "/mnt/fast", []string{"nvme0n1"}, true},
+		{"device contains match", "/dev/nvme1n1", "/mnt/fast", []string{"*nvme*"}, true},
+		{"no match", "/dev/sdc", "/mnt/data", []string{"/mnt/backup", "/dev/sda"}, false},
+		{"device without prefix match", "sdd", "/mnt/data", []string{"sdd"}, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := MatchesDiskExclude(tc.device, tc.mountpoint, tc.patterns)
+			if result != tc.expected {
+				t.Errorf("MatchesDiskExclude(%q, %q, %v) = %t, want %t", tc.device, tc.mountpoint, tc.patterns, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestMatchesDeviceExclude(t *testing.T) {
+	tests := []struct {
+		name     string
+		device   string
+		patterns []string
+		expected bool
+	}{
+		{"empty patterns", "/dev/sda", nil, false},
+		{"exact path match", "/dev/sda", []string{"/dev/sda"}, true},
+		{"exact name match", "/dev/sda", []string{"sda"}, true},
+		{"prefix added match", "sdb", []string{"/dev/sdb"}, true},
+		{"contains match", "/dev/nvme0n1", []string{"*nvme*"}, true},
+		{"whitespace pattern", "/dev/sdc", []string{"  /dev/sdc  "}, true},
+		{"no match", "/dev/sdd", []string{"/dev/sde"}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := MatchesDeviceExclude(tc.device, tc.patterns)
+			if result != tc.expected {
+				t.Errorf("MatchesDeviceExclude(%q, %v) = %t, want %t", tc.device, tc.patterns, result, tc.expected)
+			}
+		})
+	}
+}
