@@ -157,3 +157,22 @@ func TestStoreQueryDownsamplingStats(t *testing.T) {
 		t.Fatalf("unexpected stats: value=%v min=%v max=%v", point.Value, point.Min, point.Max)
 	}
 }
+
+func TestStoreFlushLockedDropsWhenChannelFull(t *testing.T) {
+	store := &Store{
+		config:  StoreConfig{WriteBufferSize: 1},
+		buffer:  []bufferedMetric{{resourceType: "vm", resourceID: "v3", metricType: "cpu", value: 1, timestamp: time.Now(), tier: TierRaw}},
+		writeCh: make(chan []bufferedMetric),
+	}
+
+	store.bufferMu.Lock()
+	store.flushLocked()
+	store.bufferMu.Unlock()
+
+	if len(store.buffer) != 0 {
+		t.Fatalf("expected buffer to be cleared, got %d", len(store.buffer))
+	}
+	if len(store.writeCh) != 0 {
+		t.Fatalf("expected write channel to remain empty, got %d", len(store.writeCh))
+	}
+}
