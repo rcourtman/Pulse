@@ -123,6 +123,14 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 	log.Info().
 		Msg("Received email config update")
 
+	// Parse strict subset to check for presence of fields
+	var presenceCheck struct {
+		RateLimit *int `json:"rateLimit"`
+	}
+	if err := json.Unmarshal(body, &presenceCheck); err != nil {
+		// Non-fatal, just means we can't do presence check
+	}
+
 	var config notifications.EmailConfig
 	if err := json.Unmarshal(body, &config); err != nil {
 		log.Error().Err(err).Msg("Failed to parse email config") // Don't log body with passwords
@@ -130,10 +138,16 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		return
 	}
 
+	existingConfig := h.getMonitor(r.Context()).GetNotificationManager().GetEmailConfig()
+
 	// If password is empty, preserve the existing password
 	if config.Password == "" {
-		existingConfig := h.getMonitor(r.Context()).GetNotificationManager().GetEmailConfig()
 		config.Password = existingConfig.Password
+	}
+
+	// If rateLimit was NOT provided (nil in presence check), preserve existing
+	if presenceCheck.RateLimit == nil {
+		config.RateLimit = existingConfig.RateLimit
 	}
 
 	log.Info().

@@ -530,6 +530,9 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
 					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
 				},
+				Schedule: alerts.ScheduleConfig{
+					NotifyOnResolve: true,
+				},
 				StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
 				TimeThreshold:  5,
 				TimeThresholds: map[string]int{
@@ -593,6 +596,25 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	}
 	if config.HysteresisMargin <= 0 {
 		config.HysteresisMargin = 5.0
+	}
+	// NotifyOnResolve defaults to true (send recovery notifications).
+	// Since bool zero-value is false, we check raw JSON to distinguish
+	// "missing field" (old configs) from "explicitly set to false".
+	if !config.Schedule.NotifyOnResolve {
+		// Use a temporary map to check if the field exists in the JSON
+		var raw map[string]interface{}
+		// Ignore error here as we've already unmarshaled successfully above
+		if json.Unmarshal(data, &raw) == nil {
+			// Check if "schedule" exists and has "notifyOnResolve"
+			if schedule, ok := raw["schedule"].(map[string]interface{}); ok {
+				if _, exists := schedule["notifyOnResolve"]; !exists {
+					config.Schedule.NotifyOnResolve = true
+				}
+			} else {
+				// "schedule" block missing entirely -> default to true
+				config.Schedule.NotifyOnResolve = true
+			}
+		}
 	}
 	// NodeDefaults.Temperature: Allow Trigger=0 to disable temperature alerting
 	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger < 0 {
