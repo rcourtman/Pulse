@@ -176,6 +176,26 @@ const iconForGroup = (group: 'infrastructure' | 'workloads' | 'storage') => {
   return ServerIcon;
 };
 
+const resolveWorkloadViewMode = (type: ResourceType): string | null => {
+  switch (type) {
+    case 'vm':
+      return 'vm';
+    case 'container':
+    case 'oci-container':
+    case 'jail':
+      return 'lxc';
+    case 'docker-container':
+    case 'docker-service':
+      return 'docker';
+    case 'pod':
+    case 'k8s-deployment':
+    case 'k8s-service':
+      return 'k8s';
+    default:
+      return null;
+  }
+};
+
 const fetchSearchResults = async (query: string): Promise<SearchResponse> => {
   const params = new URLSearchParams();
   params.set('q', query);
@@ -288,7 +308,13 @@ export const GlobalSearch: Component = () => {
   const navigateToResource = (resource: SearchResource) => {
     const group = resolveGroup(resource);
     if (group === 'workloads') {
-      navigate(`/workloads?resource=${encodeURIComponent(resource.id)}`);
+      const viewMode = resolveWorkloadViewMode(resource.type);
+      const params = new URLSearchParams();
+      params.set('resource', resource.id);
+      if (viewMode) {
+        params.set('type', viewMode);
+      }
+      navigate(`/workloads?${params.toString()}`);
       return;
     }
     if (group === 'storage') {
@@ -306,7 +332,7 @@ export const GlobalSearch: Component = () => {
   const handleViewAll = () => {
     const term = query().trim();
     if (!term) return;
-    navigate(`/infrastructure?search=${encodeURIComponent(term)}`);
+    navigate(`/infrastructure?q=${encodeURIComponent(term)}`);
     clearSearch();
   };
 

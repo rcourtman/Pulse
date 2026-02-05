@@ -37,7 +37,7 @@ type V2Resource = {
   parentId?: string;
   tags?: string[];
   proxmox?: { nodeName?: string; clusterName?: string; uptime?: number };
-  agent?: { hostname?: string; uptimeSeconds?: number };
+  agent?: { hostname?: string; uptimeSeconds?: number; temperature?: number };
   docker?: { hostname?: string };
   pbs?: Record<string, unknown>;
   kubernetes?: Record<string, unknown>;
@@ -149,6 +149,7 @@ const toResource = (v2: V2Resource): Resource => {
         }
         : undefined,
     uptime: v2.agent?.uptimeSeconds ?? v2.proxmox?.uptime,
+    temperature: v2.agent?.temperature,
     tags: v2.tags,
     lastSeen: Number.isFinite(lastSeen) ? lastSeen : Date.now(),
     identity: {

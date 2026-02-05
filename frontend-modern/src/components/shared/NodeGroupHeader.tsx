@@ -54,10 +54,10 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
 
       <Show when={props.node.linkedHostAgentId}>
         <span
-          class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+          class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
           title="Pulse host agent is installed on this node for enhanced metrics (temperatures, detailed disks, RAID status)"
         >
-          + Host Agent
+          Agent
         </span>
       </Show>
     </div>

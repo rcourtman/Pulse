@@ -1,8 +1,8 @@
-import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
+import { createSignal, createMemo, createEffect, For, Index, Show, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
-import type { WorkloadGuest } from '@/types/workloads';
-import { GuestRow, GUEST_COLUMNS, type GuestColumnDef } from './GuestRow';
+import type { WorkloadGuest, ViewMode } from '@/types/workloads';
+import { GuestRow, GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './GuestRow';
 import { GuestDrawer } from './GuestDrawer';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -17,7 +17,6 @@ import type { GuestMetadata } from '@/api/guestMetadata';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 import { isNodeOnline, OFFLINE_HEALTH_STATUSES, DEGRADED_HEALTH_STATUSES } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
@@ -204,7 +203,6 @@ interface DashboardProps {
   useV2Workloads?: boolean;
 }
 
-type ViewMode = 'all' | 'vm' | 'lxc' | 'docker' | 'k8s';
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
 export function Dashboard(props: DashboardProps) {
@@ -235,6 +233,7 @@ export function Dashboard(props: DashboardProps) {
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
+  const [handledTypeParam, setHandledTypeParam] = createSignal<string | null>(null);
 
   createEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -250,6 +249,7 @@ export function Dashboard(props: DashboardProps) {
     }
     setHandledResourceId(resourceId);
   });
+
 
   // Wrap setSelectedGuestId to preserve scroll position. Opening/closing the
   // drawer mounts/unmounts GuestDrawer (which contains DiscoveryTab). The
@@ -291,7 +291,6 @@ export function Dashboard(props: DashboardProps) {
 
   const v2Enabled = createMemo(() => props.useV2Workloads === true);
   const v2Workloads = useV2Workloads(v2Enabled);
-  const v2Loaded = createMemo(() => v2Enabled() && !v2Workloads.loading() && !v2Workloads.error());
   const sortedNodes = createMemo(() =>
     [...props.nodes].sort((a, b) => getNodeDisplayName(a).localeCompare(getNodeDisplayName(b))),
   );
@@ -301,10 +300,16 @@ export function Dashboard(props: DashboardProps) {
     ...props.containers.map((ct) => ({ ...ct, workloadType: 'lxc' as const, displayId: String(ct.vmid) })),
   ]);
 
-  // Combine workloads into a single list for filtering, preferring v2 workloads when enabled
+  // Combine workloads into a single list for filtering, preferring v2 workloads when enabled.
+  // IMPORTANT: Once v2 data has loaded, always use it — even during refetch.
+  // createResource keeps the previous value while loading, so workloads() returns
+  // stale-but-valid data. Checking !loading() caused the table to switch between
+  // v2 and legacy data every 5-second poll cycle, causing the entire UI to glitch.
   const allGuests = createMemo<WorkloadGuest[]>(() => {
     if (v2Enabled()) {
-      return v2Loaded() ? v2Workloads.workloads() : legacyGuests();
+      const w = v2Workloads.workloads();
+      if (w.length > 0) return w;
+      return legacyGuests();
     }
     return legacyGuests();
   });
@@ -315,6 +320,26 @@ export function Dashboard(props: DashboardProps) {
       raw === 'all' || raw === 'vm' || raw === 'lxc' || raw === 'docker' || raw === 'k8s'
         ? raw
         : 'all',
+  });
+
+  const normalizeTypeParam = (value: string): ViewMode | null => {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'all') return 'all';
+    if (normalized === 'vm' || normalized === 'qemu') return 'vm';
+    if (normalized === 'lxc') return 'lxc';
+    if (normalized === 'docker' || normalized === 'container' || normalized === 'containers') return 'docker';
+    if (normalized === 'k8s' || normalized === 'kubernetes' || normalized === 'pod') return 'k8s';
+    return null;
+  };
+
+  createEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const typeParam = params.get('type');
+    if (!typeParam || typeParam === handledTypeParam()) return;
+    const nextMode = normalizeTypeParam(typeParam);
+    if (!nextMode) return;
+    setViewMode(nextMode);
+    setHandledTypeParam(typeParam);
   });
 
   const [statusMode, setStatusMode] = usePersistentSignal<StatusMode>('dashboardStatusMode', 'all', {
@@ -342,16 +367,28 @@ export function Dashboard(props: DashboardProps) {
     },
   );
 
-  // Sorting state - default to VMID ascending (matches Proxmox order)
-  const [sortKey, setSortKey] = createSignal<keyof WorkloadGuest | null>('vmid');
+  // Sorting state - default to type ascending so VMs/LXCs/Docker/K8s cluster together
+  const [sortKey, setSortKey] = createSignal<keyof WorkloadGuest | null>('type');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
   // Column visibility management
   // OS and IP columns are hidden by default since they require guest agent and may show dashes
+  const relevantColumns = createMemo(() => {
+    const base = VIEW_MODE_COLUMNS[viewMode()];
+    if (!base) return null;
+    // Hide the node column when grouped by node — it's already shown in the group header
+    if (groupingMode() === 'grouped' && base.has('node')) {
+      const filtered = new Set(base);
+      filtered.delete('node');
+      return filtered;
+    }
+    return base;
+  });
   const columnVisibility = useColumnVisibility(
     STORAGE_KEYS.DASHBOARD_HIDDEN_COLUMNS,
-    GUEST_COLUMNS as GuestColumnDef[],
-    ['os', 'ip']  // Default hidden columns for cleaner first-run experience
+    GUEST_COLUMNS,
+    ['os', 'ip'],  // Default hidden columns for cleaner first-run experience
+    relevantColumns
   );
   const visibleColumns = columnVisibility.visibleColumns;
   const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));
@@ -580,6 +617,16 @@ export function Dashboard(props: DashboardProps) {
       return null;
     }
 
+    // Stable tiebreaker: when primary sort values are equal, compare by
+    // name then id so that row positions never shift between polls.
+    // Without this, <Index> position changes cause the drawer to glitch.
+    const tiebreak = (a: WorkloadGuest, b: WorkloadGuest): number => {
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
+      if (nameA !== nameB) return nameA < nameB ? -1 : 1;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    };
+
     return (a: WorkloadGuest, b: WorkloadGuest): number => {
       let aVal: string | number | boolean | null | undefined = a[key] as
         | string
@@ -610,19 +657,20 @@ export function Dashboard(props: DashboardProps) {
       const aIsEmpty = aVal === null || aVal === undefined || aVal === '';
       const bIsEmpty = bVal === null || bVal === undefined || bVal === '';
 
-      if (aIsEmpty && bIsEmpty) return 0;
+      if (aIsEmpty && bIsEmpty) return tiebreak(a, b);
       if (aIsEmpty) return 1;
       if (bIsEmpty) return -1;
 
       // Type-specific comparison
       if (typeof aVal === 'number' && typeof bVal === 'number') {
+        if (aVal === bVal) return tiebreak(a, b);
         const comparison = aVal < bVal ? -1 : 1;
         return dir === 'asc' ? comparison : -comparison;
       } else {
         const aStr = String(aVal).toLowerCase();
         const bStr = String(bVal).toLowerCase();
 
-        if (aStr === bStr) return 0;
+        if (aStr === bStr) return tiebreak(a, b);
         const comparison = aStr < bStr ? -1 : 1;
         return dir === 'asc' ? comparison : -comparison;
       }
@@ -647,7 +695,7 @@ export function Dashboard(props: DashboardProps) {
         // First check if we have search/filters to clear (including tag filters and node selection)
         const hasActiveFilters =
           search().trim() ||
-          sortKey() !== 'vmid' ||
+          sortKey() !== 'type' ||
           sortDirection() !== 'asc' ||
           selectedNode() !== null ||
           viewMode() !== 'all' ||
@@ -657,7 +705,7 @@ export function Dashboard(props: DashboardProps) {
           // Clear ALL filters including search text, tag filters, node selection, and view modes
           setSearch('');
           setIsSearchLocked(false);
-          setSortKey('vmid');
+          setSortKey('type');
           setSortDirection('asc');
           setSelectedNode(null);
           setViewMode('all');
@@ -794,16 +842,16 @@ export function Dashboard(props: DashboardProps) {
     return `${type}:${context}`;
   };
 
-  const getGroupLabel = (groupKey: string, guests: WorkloadGuest[]): string => {
+  const getGroupLabel = (groupKey: string, guests: WorkloadGuest[]): { type: string; name: string } => {
     const node = nodeByInstance()[groupKey];
-    if (node) return getNodeDisplayName(node);
+    if (node) return { type: '', name: getNodeDisplayName(node) };
     const [prefix, ...rest] = groupKey.split(':');
     const context = rest.length > 0 ? rest.join(':') : groupKey;
-    if (prefix === 'docker') return `Docker • ${context}`;
-    if (prefix === 'k8s') return `K8s • ${context}`;
-    if (prefix === 'vm') return `VMs • ${context}`;
-    if (prefix === 'lxc') return `LXCs • ${context}`;
-    return guests[0]?.contextLabel || context;
+    if (prefix === 'docker') return { type: 'Docker', name: context };
+    if (prefix === 'k8s') return { type: 'K8s', name: context };
+    if (prefix === 'vm') return { type: 'VM', name: context };
+    if (prefix === 'lxc') return { type: 'LXC', name: context };
+    return { type: '', name: guests[0]?.contextLabel || context };
   };
 
   // Group by node or return flat list based on grouping mode
@@ -841,6 +889,19 @@ export function Dashboard(props: DashboardProps) {
     }
 
     return groups;
+  });
+
+  // Stable sorted group keys for <For> — strings compare by value so DOM stays stable across data updates
+  const sortedGroupKeys = createMemo(() => {
+    const groups = groupedGuests();
+    const nodes = nodeByInstance();
+    return Object.keys(groups).sort((a, b) => {
+      const nodeA = nodes[a];
+      const nodeB = nodes[b];
+      const labelA = nodeA ? getNodeDisplayName(nodeA) : getGroupLabel(a, groups[a]).name;
+      const labelB = nodeB ? getNodeDisplayName(nodeB) : getGroupLabel(b, groups[b]).name;
+      return labelA.localeCompare(labelB) || a.localeCompare(b);
+    });
   });
 
   const totalStats = createMemo(() => {
@@ -937,10 +998,6 @@ export function Dashboard(props: DashboardProps) {
 
   return (
     <div class="space-y-3">
-      <Show when={isWorkloadsRoute()}>
-        <SectionHeader title="Workloads" size="lg" />
-      </Show>
-
       <Show when={isWorkloadsRoute()}>
         <Card padding="sm">
           <div class="flex flex-wrap items-center gap-2">
@@ -1168,74 +1225,80 @@ export function Dashboard(props: DashboardProps) {
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                  <For
-                    each={Object.entries(groupedGuests()).sort(
-                      ([instanceIdA, guestsA], [instanceIdB, guestsB]) => {
-                        const nodeA = nodeByInstance()[instanceIdA];
-                        const nodeB = nodeByInstance()[instanceIdB];
-                        const labelA = nodeA ? getNodeDisplayName(nodeA) : getGroupLabel(instanceIdA, guestsA);
-                        const labelB = nodeB ? getNodeDisplayName(nodeB) : getGroupLabel(instanceIdB, guestsB);
-                        return labelA.localeCompare(labelB) || instanceIdA.localeCompare(instanceIdB);
-                      },
-                    )}
-                    fallback={<></>}
-                  >
-                    {([instanceId, guests]) => {
-                      const node = nodeByInstance()[instanceId];
+                  {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
+                  <For each={sortedGroupKeys()} fallback={<></>}>
+                    {(groupKey) => {
+                      const groupGuests = () => groupedGuests()[groupKey] || [];
+                      const node = () => nodeByInstance()[groupKey];
                       return (
                         <>
                           <Show when={groupingMode() === 'grouped'}>
                             <Show
-                              when={node}
+                              when={node()}
                               fallback={
                                 <tr class="bg-gray-50 dark:bg-gray-900/40">
                                   <td
                                     colspan={totalColumns()}
                                     class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                                   >
-                                    {getGroupLabel(instanceId, guests)}
+                                    {(() => {
+                                      const label = getGroupLabel(groupKey, groupGuests());
+                                      return (
+                                        <div class="flex items-center gap-3">
+                                          <span>{label.name}</span>
+                                          <Show when={label.type}>
+                                            <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300">
+                                              {label.type}
+                                            </span>
+                                          </Show>
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
                                 </tr>
                               }
                             >
-                              <NodeGroupHeader node={node!} renderAs="tr" colspan={totalColumns()} />
+                              <NodeGroupHeader node={node()!} renderAs="tr" colspan={totalColumns()} />
                             </Show>
                           </Show>
-                          <For each={guests} fallback={<></>}>
+                          {/* Inner <Index> tracks by position — updates props reactively instead of recreating DOM */}
+                          <Index each={groupGuests()} fallback={<></>}>
                             {(guest) => {
-                              // Use canonical format: instance:node:vmid
-                              const guestId = guest.id || `${guest.instance}:${guest.node}:${guest.vmid}`;
-                              // Create a getter function for metadata to ensure reactivity
-                              // Accessing guestMetadata() in a plain variable breaks SolidJS reactivity
+                              const guestId = () => {
+                                const g = guest();
+                                return g.id || `${g.instance}:${g.node}:${g.vmid}`;
+                              };
                               const getMetadata = () =>
-                                guestMetadata()[guestId] ||
-                                guestMetadata()[`${guest.instance}:${guest.node}:${guest.vmid}`];
-                              // PERFORMANCE: Use pre-computed parent node map instead of resolveParentNode
-                              const parentNode = node ?? guestParentNodeMap().get(guestId);
-                              const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
+                                guestMetadata()[guestId()] ||
+                                guestMetadata()[`${guest().instance}:${guest().node}:${guest().vmid}`];
+                              const parentNode = () => node() ?? guestParentNodeMap().get(guestId());
+                              const parentNodeOnline = () => {
+                                const pn = parentNode();
+                                return pn ? isNodeOnline(pn) : true;
+                              };
 
                               return (
                                 <ComponentErrorBoundary name="GuestRow">
                                   <GuestRow
-                                    guest={guest}
-                                    alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
+                                    guest={guest()}
+                                    alertStyles={getAlertStyles(guestId(), activeAlerts, alertsEnabled())}
                                     customUrl={getMetadata()?.customUrl}
                                     onTagClick={handleTagClick}
                                     activeSearch={search()}
-                                    parentNodeOnline={parentNodeOnline}
+                                    parentNodeOnline={parentNodeOnline()}
                                     onCustomUrlUpdate={handleCustomUrlUpdate}
                                     isGroupedView={groupingMode() === 'grouped'}
                                     visibleColumnIds={visibleColumnIds()}
-                                    onClick={() => setSelectedGuestId(selectedGuestId() === guestId ? null : guestId)}
-                                    isExpanded={selectedGuestId() === guestId}
+                                    onClick={() => setSelectedGuestId(selectedGuestId() === guestId() ? null : guestId())}
+                                    isExpanded={selectedGuestId() === guestId()}
                                   />
-                                  <Show when={selectedGuestId() === guestId}>
+                                  <Show when={selectedGuestId() === guestId()}>
                                     <tr>
                                       <td colspan={totalColumns()} class="p-0 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
                                         <div class="p-4" onClick={(e) => e.stopPropagation()}>
                                           <GuestDrawer
-                                            guest={guest}
-                                            metricsKey={buildMetricKey(getWorkloadMetricsKind(guest), guestId)}
+                                            guest={guest()}
+                                            metricsKey={buildMetricKey(getWorkloadMetricsKind(guest()), guestId())}
                                             onClose={() => setSelectedGuestId(null)}
                                             customUrl={getMetadata()?.customUrl}
                                             onCustomUrlChange={handleCustomUrlUpdate}
@@ -1247,7 +1310,7 @@ export function Dashboard(props: DashboardProps) {
                                 </ComponentErrorBoundary>
                               );
                             }}
-                          </For>
+                          </Index>
                         </>
                       );
                     }}

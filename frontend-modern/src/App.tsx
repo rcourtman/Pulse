@@ -66,6 +66,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
 import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode, getKioskModePreference } from './utils/url';
 import { GlobalSearch } from '@/components/shared/GlobalSearch';
+import { showToast } from '@/utils/toast';
 
 
 const Dashboard = lazy(() =>
@@ -211,6 +212,26 @@ function GlobalUpdateProgressWatcher() {
   );
 }
 
+type LegacyRedirectProps = {
+  to: string;
+  toast?: {
+    type?: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message?: string;
+  };
+};
+
+function LegacyRedirect(props: LegacyRedirectProps) {
+  const navigate = useNavigate();
+  onMount(() => {
+    if (props.toast) {
+      showToast(props.toast.type ?? 'info', props.toast.title, props.toast.message);
+    }
+    navigate(props.to, { replace: true });
+  });
+  return null;
+}
+
 function App() {
   // Initialize kiosk mode from URL params immediately (persists to sessionStorage)
   // This must happen before any renders so kiosk state is available everywhere
@@ -256,7 +277,7 @@ function App() {
     hasPreloadedRoutes = true;
     const loaders: Array<() => Promise<unknown>> = [
       () => import('./components/Storage/Storage'),
-      () => import('./components/Backups/Backups'),
+      () => import('./components/Backups/UnifiedBackups'),
       () => import('./components/Replication/Replication'),
       () => import('./components/PMG/MailGateway'),
       () => import('./pages/Alerts'),
@@ -960,14 +981,53 @@ function App() {
     <Router root={RootLayout}>
       <Route path="/" component={() => <Navigate href="/infrastructure" />} />
       <Route path="/proxmox" component={() => <Navigate href="/infrastructure" />} />
+      <Route
+        path="/proxmox/overview"
+        component={() => (
+          <LegacyRedirect
+            to="/infrastructure"
+            toast={{
+              title: 'Overview moved',
+              message: 'Hosts and nodes are now in Infrastructure. Workloads live under Workloads.',
+            }}
+          />
+        )}
+      />
+      <Route
+        path="/hosts"
+        component={() => (
+          <LegacyRedirect
+            to="/infrastructure?source=agent"
+            toast={{
+              title: 'Hosts moved',
+              message: 'Agent hosts are now under Infrastructure.',
+            }}
+          />
+        )}
+      />
+      <Route
+        path="/docker"
+        component={() => (
+          <LegacyRedirect
+            to="/infrastructure?source=docker"
+            toast={{
+              title: 'Docker moved',
+              message: 'Docker hosts are in Infrastructure. Containers are in Workloads.',
+            }}
+          />
+        )}
+      />
       <Route path="/workloads" component={WorkloadsView} />
       <Route path="/proxmox/storage" component={() => <Navigate href="/storage" />} />
-      <Route path="/proxmox/ceph" component={CephPage} />
-      <Route path="/proxmox/replication" component={Replication} />
-      <Route path="/proxmox/mail" component={MailGateway} />
+      <Route path="/proxmox/ceph" component={() => <Navigate href="/ceph" />} />
+      <Route path="/proxmox/replication" component={() => <Navigate href="/replication" />} />
+      <Route path="/proxmox/mail" component={() => <Navigate href="/mail" />} />
       <Route path="/proxmox/backups" component={() => <Navigate href="/backups" />} />
       <Route path="/storage" component={StorageComponent} />
       <Route path="/backups" component={UnifiedBackups} />
+      <Route path="/ceph" component={CephPage} />
+      <Route path="/replication" component={Replication} />
+      <Route path="/mail" component={MailGateway} />
       <Route path="/services" component={Services} />
       <Route path="/kubernetes" component={KubernetesRoute} />
       <Route path="/infrastructure" component={InfrastructurePage} />
@@ -1087,8 +1147,11 @@ function AppLayout(props: {
     if (path.startsWith('/infrastructure')) return 'infrastructure';
     if (path.startsWith('/workloads')) return 'workloads';
     if (path.startsWith('/storage')) return 'storage';
+    if (path.startsWith('/ceph')) return 'storage';
     if (path.startsWith('/backups')) return 'backups';
+    if (path.startsWith('/replication')) return 'backups';
     if (path.startsWith('/services')) return 'services';
+    if (path.startsWith('/mail')) return 'services';
     if (path.startsWith('/proxmox/ceph') || path.startsWith('/proxmox/storage')) return 'storage';
     if (path.startsWith('/proxmox/replication') || path.startsWith('/proxmox/backups')) return 'backups';
     if (path.startsWith('/proxmox/mail')) return 'services';

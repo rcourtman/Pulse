@@ -1,4 +1,4 @@
-import { createMemo, createResource, type Accessor } from 'solid-js';
+import { createMemo, createResource, onCleanup, createEffect, type Accessor } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 
@@ -48,8 +48,11 @@ type V2Resource = {
     disk?: V2MetricValue;
     netIn?: V2MetricValue;
     netOut?: V2MetricValue;
+    diskRead?: V2MetricValue;
+    diskWrite?: V2MetricValue;
   };
   parentId?: string;
+  parentName?: string;
   tags?: string[];
   vmid?: number;
   node?: string;
@@ -57,7 +60,12 @@ type V2Resource = {
   proxmox?: {
     nodeName?: string;
     clusterName?: string;
+    instance?: string;
+    vmid?: number;
+    cpus?: number;
     uptime?: number;
+    template?: boolean;
+    lastBackup?: string;
   };
   agent?: {
     hostname?: string;
@@ -73,6 +81,7 @@ type V2Resource = {
     image?: string;
     imageName?: string;
     imageRef?: string;
+    uptimeSeconds?: number;
   };
   kubernetes?: {
     clusterName?: string;
@@ -176,10 +185,14 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
   const node = resource.node ?? resource.proxmox?.nodeName ?? '';
   const instance =
     resource.instance ??
+    resource.proxmox?.instance ??
     resource.proxmox?.clusterName ??
     resource.identity?.clusterName ??
     '';
-  const vmid = typeof resource.vmid === 'number' ? resource.vmid : 0;
+  const vmid =
+    typeof resource.vmid === 'number' ? resource.vmid
+    : typeof resource.proxmox?.vmid === 'number' ? resource.proxmox.vmid
+    : 0;
   const rawDisplayId = resource.id;
   const displayId =
     workloadType === 'vm' || workloadType === 'lxc'
@@ -194,8 +207,15 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
 
   const cpuPercent = resource.metrics?.cpu?.percent ?? resource.metrics?.cpu?.value ?? 0;
 
+  // For PVE guests, use the legacy ID format (instance:node:vmid) so metrics keys
+  // match what the WebSocket-based metricsSampler records. Without this, sparklines
+  // show "collecting data" because the hashed v2 ID doesn't match any sampler keys.
+  const guestId = (workloadType === 'vm' || workloadType === 'lxc') && instance && node && vmid > 0
+    ? `${instance}:${node}:${vmid}`
+    : resource.id;
+
   return {
-    id: resource.id,
+    id: guestId,
     vmid: Number.isFinite(vmid) ? vmid : 0,
     name: name || resource.id,
     node,
@@ -203,7 +223,7 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
     status: normalizeWorkloadStatus(resource.status),
     type: workloadType === 'vm' ? 'vm' : workloadType === 'lxc' ? 'lxc' : 'docker',
     cpu: cpuPercent / 100,
-    cpus: 1,
+    cpus: resource.proxmox?.cpus ?? 1,
     memory: buildMetric(resource.metrics?.memory),
     disk: buildMetric(resource.metrics?.disk),
     disks: mapDisks(resource.agent?.disks),
@@ -215,11 +235,16 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
     networkInterfaces: mapNetworkInterfaces(resource.agent?.networkInterfaces),
     networkIn: resource.metrics?.netIn?.value ?? 0,
     networkOut: resource.metrics?.netOut?.value ?? 0,
-    diskRead: 0,
-    diskWrite: 0,
-    uptime: resource.agent?.uptimeSeconds ?? resource.proxmox?.uptime ?? 0,
-    template: false,
-    lastBackup: 0,
+    diskRead: resource.metrics?.diskRead?.value ?? 0,
+    diskWrite: resource.metrics?.diskWrite?.value ?? 0,
+    uptime: resource.proxmox?.uptime ?? resource.agent?.uptimeSeconds ?? resource.docker?.uptimeSeconds ?? 0,
+    template: resource.proxmox?.template ?? false,
+    lastBackup: (() => {
+      if (!resource.proxmox?.lastBackup) return 0;
+      const parsed = Date.parse(resource.proxmox.lastBackup);
+      // Go zero time "0001-01-01T00:00:00Z" parses to a large negative number
+      return parsed > 0 ? parsed : 0;
+    })(),
     tags: resource.tags ?? [],
     lock: '',
     lastSeen: toIsoString(resource.lastSeen),
@@ -237,7 +262,7 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
         : undefined,
     contextLabel:
       workloadType === 'docker'
-        ? resource.docker?.hostname
+        ? resource.parentName || resource.docker?.hostname
         : workloadType === 'k8s'
           ? resource.kubernetes?.clusterName
           : undefined,
@@ -253,10 +278,29 @@ async function fetchV2Workloads(): Promise<WorkloadGuest[]> {
     .filter((resource): resource is WorkloadGuest => !!resource);
 }
 
+const DEFAULT_POLL_INTERVAL_MS = 5_000;
+
 export function useV2Workloads(enabled: Accessor<boolean> = () => true) {
   const source = createMemo(() => (enabled() ? 'v2-workloads' : null));
   const [workloads, { refetch, mutate }] = createResource(source, fetchV2Workloads, {
     initialValue: [],
+  });
+
+  // Poll for fresh metrics while enabled.
+  // Use mutate() instead of refetch() so the resource never enters a loading
+  // state during polls. refetch() sets loading=true which triggers the app-level
+  // <Suspense> boundary, briefly unmounting the entire page every poll cycle.
+  createEffect(() => {
+    if (!enabled()) return;
+    const id = setInterval(async () => {
+      try {
+        const data = await fetchV2Workloads();
+        mutate(data);
+      } catch {
+        // Silently ignore poll errors; keep showing last data
+      }
+    }, DEFAULT_POLL_INTERVAL_MS);
+    onCleanup(() => clearInterval(id));
   });
 
   return {

@@ -1,8 +1,8 @@
 import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
-import type { JSX } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { useNavigate } from '@solidjs/router';
 import type { VM, Container, GuestNetworkInterface } from '@/types/api';
-import type { WorkloadGuest } from '@/types/workloads';
+import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { formatBytes, formatUptime, formatSpeed, getBackupInfo, getShortImageName, type BackupStatus } from '@/utils/format';
 import { TagBadges } from './TagBadges';
 import { StackedDiskBar } from './StackedDiskBar';
@@ -12,7 +12,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { getWorkloadMetricsKind, resolveWorkloadType } from '@/utils/workloads';
-import { type ColumnPriority } from '@/hooks/useBreakpoint';
+import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -40,6 +40,7 @@ function getIOColorClass(bytesPerSec: number): string {
 
 const GROUPED_FIRST_CELL_INDENT = 'pl-5 sm:pl-6 lg:pl-8';
 const DEFAULT_FIRST_CELL_INDENT = 'pl-4';
+const INFRASTRUCTURE_ROUTE = '/infrastructure';
 
 const buildGuestId = (guest: Guest) => {
   if (guest.id) return guest.id;
@@ -409,55 +410,105 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
   );
 }
 
-// Column configuration using the priority system
-export interface GuestColumnDef {
-  id: string;
-  label: string;
-  icon?: JSX.Element;  // SVG icon for compact column headers
-  priority: ColumnPriority;
-  toggleable?: boolean;
-  width?: string;  // Fixed width for consistent column sizing
-  minWidth?: string;
-  maxWidth?: string;
-  flex?: number;
-  sortKey?: string;
+// Info cell (VMID / image / namespace) with Portal tooltip for truncated values
+function InfoTooltipCell(props: { value: string; tooltip: string; type: string }) {
+  const [showTooltip, setShowTooltip] = createSignal(false);
+  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+
+  const label = createMemo(() => {
+    if (props.type === 'docker') return 'Image';
+    if (props.type === 'k8s') return 'Namespace';
+    return 'ID';
+  });
+
+  const handleMouseEnter = (e: MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowTooltip(false);
+  };
+
+  return (
+    <>
+      <span
+        class="truncate max-w-[100px] cursor-help"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {props.value}
+      </span>
+
+      <Show when={showTooltip()}>
+        <Portal mount={document.body}>
+          <div
+            class="fixed z-[9999] pointer-events-none"
+            style={{
+              left: `${tooltipPos().x}px`,
+              top: `${tooltipPos().y - 8}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 max-w-[280px] border border-gray-700">
+              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                {label()}
+              </div>
+              <div class="py-0.5 text-gray-200 break-all">
+                {props.tooltip}
+              </div>
+            </div>
+          </div>
+        </Portal>
+      </Show>
+    </>
+  );
 }
 
-export const GUEST_COLUMNS: GuestColumnDef[] = [
-  // Essential - always visible (fixed widths ensure no overlap)
-  { id: 'name', label: 'Name', priority: 'essential', width: '200px', sortKey: 'name' },
+// Column configuration using the priority system
+export const GUEST_COLUMNS: ColumnDef[] = [
+  { id: 'name', label: 'Name', width: '200px', sortKey: 'name' },
+  { id: 'type', label: 'Type', width: '60px', sortKey: 'type' },
+  { id: 'info', label: 'Info', width: '100px' },  // Merged identifier: VMID for VMs/LXCs, image for Docker, namespace for K8s
+  { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid' },
 
-  // Secondary - visible on md+ (Now essential for mobile scroll)
-  { id: 'type', label: 'Type', priority: 'essential', width: '60px', sortKey: 'type' },
-  { id: 'vmid', label: 'ID', priority: 'essential', width: '45px', sortKey: 'vmid' },
+  // Core metrics
+  { id: 'cpu', label: 'CPU', width: '140px', sortKey: 'cpu' },
+  { id: 'memory', label: 'Mem', width: '140px', sortKey: 'memory' },
+  { id: 'disk', label: 'Disk', width: '140px', sortKey: 'disk' },
 
-  // Core metrics - fixed minimum widths to prevent content overlap
-  { id: 'cpu', label: 'CPU', priority: 'essential', width: '140px', sortKey: 'cpu' },
-  { id: 'memory', label: 'Mem', priority: 'essential', width: '140px', sortKey: 'memory' },
-  { id: 'disk', label: 'Disk', priority: 'essential', width: '140px', sortKey: 'disk' },
+  // Toggleable columns
+  { id: 'ip', label: 'IP', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>, width: '45px', toggleable: true },
+  { id: 'uptime', label: 'Uptime', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, width: '60px', toggleable: true, sortKey: 'uptime' },
+  { id: 'node', label: 'Node', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>, width: '70px', toggleable: true, sortKey: 'node' },
+  { id: 'image', label: 'Image', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 6v12M13 6v12" /></svg>, width: '140px', minWidth: '120px', toggleable: true, sortKey: 'image' },
+  { id: 'namespace', label: 'Namespace', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l7 4v8l-7 4-7-4V6l7-4z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12" /></svg>, width: '110px', minWidth: '90px', toggleable: true, sortKey: 'namespace' },
+  { id: 'context', label: 'Context', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 6h.01M4 6a8 8 0 018-4 8 8 0 018 4M4 18a8 8 0 008 4 8 8 0 008-4" /></svg>, width: '120px', minWidth: '100px', toggleable: true, sortKey: 'contextLabel' },
+  { id: 'backup', label: 'Backup', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, width: '50px', toggleable: true },
+  { id: 'tags', label: 'Tags', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>, width: '60px', toggleable: true },
+  { id: 'os', label: 'OS', width: '45px', toggleable: true },
+  { id: 'diskRead', label: 'D Read', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>, width: '55px', toggleable: true, sortKey: 'diskRead' },
+  { id: 'diskWrite', label: 'D Write', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>, width: '55px', toggleable: true, sortKey: 'diskWrite' },
+  { id: 'netIn', label: 'Net In', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" /></svg>, width: '55px', toggleable: true, sortKey: 'networkIn' },
+  { id: 'netOut', label: 'Net Out', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>, width: '55px', toggleable: true, sortKey: 'networkOut' },
 
-  // Secondary - visible on md+ (Now essential), user toggleable - use icons
-  { id: 'ip', label: 'IP', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>, priority: 'essential', width: '45px', toggleable: true },
-  { id: 'uptime', label: 'Uptime', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, priority: 'essential', width: '60px', toggleable: true, sortKey: 'uptime' },
-  { id: 'node', label: 'Node', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>, priority: 'essential', width: '70px', toggleable: true, sortKey: 'node' },
-
-  { id: 'image', label: 'Image', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 6v12M13 6v12" /></svg>, priority: 'secondary', width: '140px', minWidth: '120px', toggleable: true, sortKey: 'image' },
-  { id: 'namespace', label: 'Namespace', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l7 4v8l-7 4-7-4V6l7-4z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12" /></svg>, priority: 'secondary', width: '110px', minWidth: '90px', toggleable: true, sortKey: 'namespace' },
-
-  // Supplementary - visible on lg+ (Now essential), user toggleable
-  { id: 'backup', label: 'Backup', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, priority: 'essential', width: '50px', toggleable: true },
-  { id: 'tags', label: 'Tags', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>, priority: 'essential', width: '60px', toggleable: true },
-
-  // Detailed - visible on xl+ (Now essential), user toggleable
-  { id: 'os', label: 'OS', priority: 'essential', width: '45px', toggleable: true },
-  { id: 'diskRead', label: 'D Read', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'diskRead' },
-  { id: 'diskWrite', label: 'D Write', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'diskWrite' },
-  { id: 'netIn', label: 'Net In', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'networkIn' },
-  { id: 'netOut', label: 'Net Out', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'networkOut' },
-
-  // Link column - at the end like NodeSummaryTable
-  { id: 'link', label: '', priority: 'essential', width: '28px' },
+  // Link column
+  { id: 'link', label: '', width: '28px' },
 ];
+
+/**
+ * Columns relevant to each ViewMode.
+ * - "all" uses the merged `info` column instead of vmid/image/namespace
+ * - Type-specific views use the dedicated columns for that type
+ */
+export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
+  all:    new Set(['name','type','info','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskRead','diskWrite','netIn','netOut','link']),
+  vm:     new Set(['name','vmid','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskRead','diskWrite','netIn','netOut','link']),
+  lxc:    new Set(['name','vmid','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskRead','diskWrite','netIn','netOut','link']),
+  docker: new Set(['name','cpu','memory','uptime','image','context','tags','link']),
+  k8s:    new Set(['name','cpu','memory','image','namespace','context','link']),
+};
 
 interface GuestRowProps {
   guest: Guest;
@@ -490,6 +541,7 @@ interface GuestRowProps {
 }
 
 export function GuestRow(props: GuestRowProps) {
+  const navigate = useNavigate();
   const guestId = createMemo(() => buildGuestId(props.guest));
 
   // Use breakpoint hook directly for responsive behavior
@@ -541,6 +593,21 @@ export function GuestRow(props: GuestRowProps) {
   const hasOsInfo = createMemo(() => osName().length > 0 || osVersion().length > 0);
   const dockerImage = createMemo(() => props.guest.image?.trim() ?? '');
   const namespace = createMemo(() => props.guest.namespace?.trim() ?? '');
+  const contextLabel = createMemo(() => props.guest.contextLabel?.trim() ?? '');
+
+  // Merged identifier for the "all" view — shows the most relevant ID per type
+  const infoValue = createMemo(() => {
+    const type = workloadType();
+    if (type === 'vm' || type === 'lxc') return displayId();
+    if (type === 'docker') return dockerImage() ? getShortImageName(dockerImage()) : '';
+    if (type === 'k8s') return namespace();
+    return '';
+  });
+  const infoTooltip = createMemo(() => {
+    const type = workloadType();
+    if (type === 'docker') return dockerImage(); // Full image name in tooltip
+    return infoValue();
+  });
   const supportsBackup = createMemo(() => {
     const type = workloadType();
     return type === 'vm' || type === 'lxc';
@@ -571,12 +638,6 @@ export function GuestRow(props: GuestRowProps) {
         label: 'VM',
         title: 'Virtual Machine',
         className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
-        icon: (
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="12" rx="2" />
-            <path d="M8 20h8M12 16v4" />
-          </svg>
-        ),
       };
     }
     if (type === 'docker') {
@@ -584,12 +645,6 @@ export function GuestRow(props: GuestRowProps) {
         label: 'Docker',
         title: 'Docker Container',
         className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300',
-        icon: (
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="6" width="18" height="12" rx="2" />
-            <path d="M3 10h18M7 6v12M13 6v12" />
-          </svg>
-        ),
       };
     }
     if (type === 'k8s') {
@@ -597,12 +652,6 @@ export function GuestRow(props: GuestRowProps) {
         label: 'K8s',
         title: 'Kubernetes Pod',
         className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
-        icon: (
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2l7 4v8l-7 4-7-4V6l7-4z" />
-            <path d="M12 6v12" />
-          </svg>
-        ),
       };
     }
     if (isOCIContainer()) {
@@ -610,22 +659,12 @@ export function GuestRow(props: GuestRowProps) {
         label: 'OCI',
         title: `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`,
         className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
-        icon: (
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-          </svg>
-        ),
       };
     }
     return {
       label: 'LXC',
       title: 'LXC Container',
       className: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-      icon: (
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-        </svg>
-      ),
     };
   });
 
@@ -769,7 +808,7 @@ export function GuestRow(props: GuestRowProps) {
   return (
     <>
       <tr
-        class={`${rowClass()} ${props.onClick ? 'cursor-pointer' : ''}`}
+        class={`${rowClass()} ${props.onClick ? 'cursor-pointer group' : ''}`}
         style={rowStyle()}
         data-guest-id={guestId()}
         onClick={props.onClick}
@@ -780,7 +819,7 @@ export function GuestRow(props: GuestRowProps) {
         >
           <div class="flex items-center gap-2 min-w-0">
             <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
-              <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="w-3.5 h-3.5 text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
             </div>
@@ -824,12 +863,22 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
               <span
-                class={`inline-flex items-center gap-1 px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${typeInfo().className}`}
+                class={`inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${typeInfo().className}`}
                 title={typeInfo().title}
               >
-                {typeInfo().icon}
-                <span>{typeInfo().label}</span>
+                {typeInfo().label}
               </span>
+            </div>
+          </td>
+        </Show>
+
+        {/* Info - merged identifier (VMID / image / namespace) for mixed-type views */}
+        <Show when={isColVisible('info')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
+              <Show when={infoValue()} fallback={<span class="text-gray-400">-</span>}>
+                <InfoTooltipCell value={infoValue()} tooltip={infoTooltip()} type={workloadType()} />
+              </Show>
             </div>
           </td>
         </Show>
@@ -943,13 +992,13 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('uptime')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <span class={`text-xs whitespace-nowrap ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
-                <Show when={isRunning()} fallback="-">
+              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
                   <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
                     {formatUptime(props.guest.uptime, true)}
                   </Show>
-                </Show>
-              </span>
+                </span>
+              </Show>
             </div>
           </td>
         </Show>
@@ -959,9 +1008,17 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
               <Show when={props.guest.node} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[80px]" title={props.guest.node}>
+                <button
+                  type="button"
+                  class="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[80px]"
+                  title={`${props.guest.node} (Open Infrastructure)`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    navigate(INFRASTRUCTURE_ROUTE);
+                  }}
+                >
                   {props.guest.node}
-                </span>
+                </button>
               </Show>
             </div>
           </td>
@@ -999,6 +1056,25 @@ export function GuestRow(props: GuestRowProps) {
                   title={namespace()}
                 >
                   {namespace()}
+                </span>
+              </Show>
+            </div>
+          </td>
+        </Show>
+
+        {/* Context */}
+        <Show when={isColVisible('context')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show
+                when={contextLabel()}
+                fallback={<span class="text-xs text-gray-400">-</span>}
+              >
+                <span
+                  class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[140px]"
+                  title={contextLabel()}
+                >
+                  {contextLabel()}
                 </span>
               </Show>
             </div>

@@ -102,13 +102,6 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
                     <span class={`text-sm ${isChecked() ? 'text-gray-700 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
                       {col.label}
                     </span>
-                    <Show when={col.priority !== 'essential'}>
-                      <span class="ml-auto text-[10px] text-gray-400 dark:text-gray-500">
-                        {col.priority === 'secondary' && 'md+'}
-                        {col.priority === 'supplementary' && 'lg+'}
-                        {col.priority === 'detailed' && 'xl+'}
-                      </span>
-                    </Show>
                   </label>
                 );
               }}
@@ -117,7 +110,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
 
           <Show when={props.columns.length === 0}>
             <div class="px-3 py-4 text-xs text-gray-500 dark:text-gray-400 text-center">
-              No columns available to toggle at this screen size
+              No columns available to toggle
             </div>
           </Show>
         </div>

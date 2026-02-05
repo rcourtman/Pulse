@@ -108,9 +108,6 @@ export const STORAGE_KEYS = {
   GUEST_METADATA: 'pulseGuestMetadata',
   DOCKER_METADATA: 'pulseDockerMetadata',
 
-  // Platform tracking
-  PLATFORMS_SEEN: 'pulse-platforms-seen',
-
   // Updates
   UPDATES: 'pulse-updates',
 
@@ -137,12 +134,6 @@ export const STORAGE_KEYS = {
   // Storage search
   STORAGE_SEARCH_HISTORY: 'storageSearchHistory',
 
-  // Docker search
-  DOCKER_SEARCH_HISTORY: 'dockerSearchHistory',
-
-  // Hosts search
-  HOSTS_SEARCH_HISTORY: 'hostsSearchHistory',
-
   // Alerts search
   ALERTS_SEARCH_HISTORY: 'alertsSearchHistory',
 
@@ -155,8 +146,6 @@ export const STORAGE_KEYS = {
 
   // Column visibility
   DASHBOARD_HIDDEN_COLUMNS: 'dashboardHiddenColumns',
-  HOSTS_HIDDEN_COLUMNS: 'hostsHiddenColumns',
-  DOCKER_HIDDEN_COLUMNS: 'dockerHiddenColumns',
   BACKUPS_HIDDEN_COLUMNS: 'backupsHiddenColumns',
   STORAGE_HIDDEN_COLUMNS: 'storageHiddenColumns',
 

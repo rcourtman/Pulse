@@ -2,6 +2,7 @@ import { Component, For, Show, createEffect, createMemo, createSignal } from 'so
 import type { Resource } from '@/types/resource';
 import { getDisplayName, getCpuPercent, getMemoryPercent, getDiskPercent } from '@/types/resource';
 import { formatBytes, formatUptime } from '@/utils/format';
+import { formatTemperature } from '@/utils/temperature';
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
@@ -16,9 +17,10 @@ interface UnifiedResourceTableProps {
   expandedResourceId: string | null;
   highlightedResourceId?: string | null;
   onExpandedResourceChange: (id: string | null) => void;
+  groupingMode?: 'grouped' | 'flat';
 }
 
-type SortKey = 'default' | 'name' | 'uptime' | 'cpu' | 'memory' | 'disk' | 'source';
+type SortKey = 'default' | 'name' | 'uptime' | 'cpu' | 'memory' | 'disk' | 'source' | 'temp';
 
 const isResourceOnline = (resource: Resource) => {
   const status = resource.status?.toLowerCase();
@@ -76,6 +78,8 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
         return resource.disk ? getDiskPercent(resource) : null;
       case 'source':
         return `${resource.platformType ?? ''}-${resource.sourceType ?? ''}`;
+      case 'temp':
+        return resource.temperature ?? null;
       default:
         return null;
     }
@@ -130,6 +134,31 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     });
   });
 
+  const groupedResources = createMemo(() => {
+    const sorted = sortedResources();
+    if (props.groupingMode !== 'grouped') {
+      return [{ cluster: '', resources: sorted }];
+    }
+    const groups = new Map<string, Resource[]>();
+    for (const resource of sorted) {
+      const cluster = resource.clusterId || '';
+      const list = groups.get(cluster);
+      if (list) {
+        list.push(resource);
+      } else {
+        groups.set(cluster, [resource]);
+      }
+    }
+    const entries = Array.from(groups.entries()).map(([cluster, resources]) => ({ cluster, resources }));
+    // Named clusters first (alphabetical), then standalone
+    entries.sort((a, b) => {
+      if (!a.cluster && b.cluster) return 1;
+      if (a.cluster && !b.cluster) return -1;
+      return a.cluster.localeCompare(b.cluster);
+    });
+    return entries;
+  });
+
   const renderSortIndicator = (key: SortKey) => {
     if (sortKey() !== key) return null;
     return sortDirection() === 'asc' ? '▲' : '▼';
@@ -161,6 +190,11 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     isMobile()
       ? { width: '70px', 'min-width': '70px', 'max-width': '80px' }
       : { width: '80px', 'min-width': '80px', 'max-width': '80px' }
+  );
+  const tempColumnStyle = createMemo(() =>
+    isMobile()
+      ? { width: '50px', 'min-width': '50px', 'max-width': '60px' }
+      : { width: '60px', 'min-width': '60px', 'max-width': '70px' }
   );
 
   const getUnifiedSources = (resource: Resource): string[] => {
@@ -195,193 +229,246 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
               <th class={thClass} style={uptimeColumnStyle()} onClick={() => handleSort('uptime')}>
                 Uptime {renderSortIndicator('uptime')}
               </th>
+              <th class={thClass} style={tempColumnStyle()} onClick={() => handleSort('temp')}>
+                Temp {renderSortIndicator('temp')}
+              </th>
             </tr>
           </thead>
           <tbody class="bg-white dark:bg-gray-800">
-            <For each={sortedResources()}>
-              {(resource) => {
-                const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
-                const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
-                const displayName = createMemo(() => getDisplayName(resource));
-                const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
-                const metricsKey = createMemo(() => buildMetricKey('host', resource.id));
-
-                const cpuPercentValue = createMemo(() => (resource.cpu ? Math.round(getCpuPercent(resource)) : null));
-                const memoryPercentValue = createMemo(() => (resource.memory ? Math.round(getMemoryPercent(resource)) : null));
-                const diskPercentValue = createMemo(() => (resource.disk ? Math.round(getDiskPercent(resource)) : null));
-
-                const memorySublabel = createMemo(() => {
-                  if (!resource.memory || resource.memory.used === undefined || resource.memory.total === undefined) return undefined;
-                  return `${formatBytes(resource.memory.used)}/${formatBytes(resource.memory.total)}`;
-                });
-
-                const diskSublabel = createMemo(() => {
-                  if (!resource.disk || resource.disk.used === undefined || resource.disk.total === undefined) return undefined;
-                  return `${formatBytes(resource.disk.used)}/${formatBytes(resource.disk.total)}`;
-                });
-
-                const rowClass = createMemo(() => {
-                  const baseHover = 'cursor-pointer transition-all duration-200 relative hover:shadow-sm group';
-
-                  if (isExpanded()) {
-                    return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900/20`;
-                  }
-
-                  let className = baseHover;
-                  if (isHighlighted()) {
-                    className += ' bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600';
-                  }
-                  if (!isResourceOnline(resource)) {
-                    className += ' opacity-60';
-                  }
-
-                  return className;
-                });
-                const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
-                const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
-                const unifiedSourceBadges = createMemo(() =>
-                  getUnifiedSourceBadges(getUnifiedSources(resource)),
-                );
-                const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-
-                return (
-                  <>
-                    <tr
-                      ref={(el) => {
-                        if (el) {
-                          rowRefs.set(resource.id, el);
-                        } else {
-                          rowRefs.delete(resource.id);
-                        }
-                      }}
-                      class={rowClass()}
-                      style={{ 'min-height': '36px' }}
-                      onClick={() => toggleExpand(resource.id)}
-                    >
-                      <td class="pr-1.5 sm:pr-2 py-1 align-middle overflow-hidden pl-2 sm:pl-3">
-                        <div class="flex items-center gap-1.5 min-w-0">
-                          <div
-                            class={`transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
-                          >
-                            <svg class="w-3.5 h-3.5 text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                          <StatusDot
-                            variant={statusIndicator().variant}
-                            title={statusIndicator().label}
-                            ariaLabel={statusIndicator().label}
-                            size="xs"
-                          />
-                          <span
-                            class="font-medium text-[11px] text-gray-900 dark:text-gray-100 whitespace-nowrap select-text"
-                            title={displayName()}
-                          >
-                            {displayName()}
-                          </span>
-                          <Show when={hasAlternateName(resource)}>
-                            <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                              ({resource.name})
-                            </span>
-                          </Show>
-                        </div>
-                      </td>
-
-                      <td class={tdClass}>
-                        <Show when={cpuPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
-                          <ResponsiveMetricCell
-                            class="w-full"
-                            value={cpuPercentValue() ?? 0}
-                            type="cpu"
-                            resourceId={isMobile() ? undefined : metricsKey()}
-                            isRunning={isResourceOnline(resource)}
-                            showMobile={false}
-                          />
-                        </Show>
-                      </td>
-
-                      <td class={tdClass}>
-                        <Show when={memoryPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
-                          <ResponsiveMetricCell
-                            class="w-full"
-                            value={memoryPercentValue() ?? 0}
-                            type="memory"
-                            sublabel={memorySublabel()}
-                            resourceId={isMobile() ? undefined : metricsKey()}
-                            isRunning={isResourceOnline(resource)}
-                            showMobile={false}
-                          />
-                        </Show>
-                      </td>
-
-                      <td class={tdClass}>
-                        <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
-                          <ResponsiveMetricCell
-                            class="w-full"
-                            value={diskPercentValue() ?? 0}
-                            type="disk"
-                            sublabel={diskSublabel()}
-                            resourceId={isMobile() ? undefined : metricsKey()}
-                            isRunning={isResourceOnline(resource)}
-                            showMobile={false}
-                          />
-                        </Show>
-                      </td>
-
-                      <td class={tdClass}>
-                        <div class="flex flex-wrap items-center justify-center gap-1">
+            <For each={groupedResources()}>
+              {(group) => (
+                <>
+                  <Show when={props.groupingMode === 'grouped'}>
+                    <tr class="bg-gray-50 dark:bg-gray-900/40">
+                      <td
+                        colspan={7}
+                        class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
+                      >
+                        <div class="flex items-center gap-2">
                           <Show
-                            when={hasUnifiedSources()}
+                            when={group.cluster}
                             fallback={
-                              <>
-                                <Show when={platformBadge()}>
-                                  {(badge) => (
-                                    <span class={badge().classes} title={badge().title}>
-                                      {badge().label}
-                                    </span>
-                                  )}
-                                </Show>
-                                <Show when={sourceBadge()}>
-                                  {(badge) => (
-                                    <span class={badge().classes} title={badge().title}>
-                                      {badge().label}
-                                    </span>
-                                  )}
-                                </Show>
-                              </>
+                              <span class="text-slate-500 dark:text-slate-400">Standalone</span>
                             }
                           >
-                            <For each={unifiedSourceBadges()}>
-                              {(badge) => (
-                                <span class={badge.classes} title={badge.title}>
-                                  {badge.label}
-                                </span>
-                              )}
-                            </For>
-                          </Show>
-                        </div>
-                      </td>
-
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
-                            <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                              {formatUptime(resource.uptime ?? 0)}
+                            <span>{group.cluster}</span>
+                            <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                              Cluster
                             </span>
                           </Show>
+                          <span class="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
+                            {group.resources.length} {group.resources.length === 1 ? 'host' : 'hosts'}
+                          </span>
                         </div>
                       </td>
                     </tr>
-                    <Show when={isExpanded()}>
-                      <tr>
-                        <td colspan={6} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
-                          <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
-                        </td>
-                      </tr>
-                    </Show>
-                  </>
-                );
-              }}
+                  </Show>
+                  <For each={group.resources}>
+                    {(resource) => {
+                      const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
+                      const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
+                      const displayName = createMemo(() => getDisplayName(resource));
+                      const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
+                      const metricsKey = createMemo(() => buildMetricKey('host', resource.id));
+
+                      const cpuPercentValue = createMemo(() => (resource.cpu ? Math.round(getCpuPercent(resource)) : null));
+                      const memoryPercentValue = createMemo(() => (resource.memory ? Math.round(getMemoryPercent(resource)) : null));
+                      const diskPercentValue = createMemo(() => (resource.disk ? Math.round(getDiskPercent(resource)) : null));
+
+                      const memorySublabel = createMemo(() => {
+                        if (!resource.memory || resource.memory.used === undefined || resource.memory.total === undefined) return undefined;
+                        return `${formatBytes(resource.memory.used)}/${formatBytes(resource.memory.total)}`;
+                      });
+
+                      const diskSublabel = createMemo(() => {
+                        if (!resource.disk || resource.disk.used === undefined || resource.disk.total === undefined) return undefined;
+                        return `${formatBytes(resource.disk.used)}/${formatBytes(resource.disk.total)}`;
+                      });
+
+                      const rowClass = createMemo(() => {
+                        const baseBorder = 'border-b border-gray-100 dark:border-gray-700/50';
+                        const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
+
+                        if (isExpanded()) {
+                          return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900/20 ${baseBorder}`;
+                        }
+
+                        let className = baseHover;
+                        if (isHighlighted()) {
+                          className += ' bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600';
+                        }
+                        if (!isResourceOnline(resource)) {
+                          className += ' opacity-60';
+                        }
+
+                        return className;
+                      });
+                      const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
+                      const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
+                      const unifiedSourceBadges = createMemo(() =>
+                        getUnifiedSourceBadges(getUnifiedSources(resource)),
+                      );
+                      const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+
+                      return (
+                        <>
+                          <tr
+                            ref={(el) => {
+                              if (el) {
+                                rowRefs.set(resource.id, el);
+                              } else {
+                                rowRefs.delete(resource.id);
+                              }
+                            }}
+                            class={rowClass()}
+                            style={{ 'min-height': '36px' }}
+                            onClick={() => toggleExpand(resource.id)}
+                          >
+                            <td class="pr-1.5 sm:pr-2 py-1 align-middle overflow-hidden pl-2 sm:pl-3">
+                              <div class="flex items-center gap-1.5 min-w-0">
+                                <div
+                                  class={`transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
+                                >
+                                  <svg class="w-3.5 h-3.5 text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </div>
+                                <StatusDot
+                                  variant={statusIndicator().variant}
+                                  title={statusIndicator().label}
+                                  ariaLabel={statusIndicator().label}
+                                  size="xs"
+                                />
+                                <span
+                                  class="font-medium text-[11px] text-gray-900 dark:text-gray-100 whitespace-nowrap select-text"
+                                  title={displayName()}
+                                >
+                                  {displayName()}
+                                </span>
+                                <Show when={hasAlternateName(resource)}>
+                                  <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                    ({resource.name})
+                                  </span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <Show when={cpuPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+                                <ResponsiveMetricCell
+                                  class="w-full"
+                                  value={cpuPercentValue() ?? 0}
+                                  type="cpu"
+                                  resourceId={isMobile() ? undefined : metricsKey()}
+                                  isRunning={isResourceOnline(resource)}
+                                  showMobile={false}
+                                />
+                              </Show>
+                            </td>
+
+                            <td class={tdClass}>
+                              <Show when={memoryPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+                                <ResponsiveMetricCell
+                                  class="w-full"
+                                  value={memoryPercentValue() ?? 0}
+                                  type="memory"
+                                  sublabel={memorySublabel()}
+                                  resourceId={isMobile() ? undefined : metricsKey()}
+                                  isRunning={isResourceOnline(resource)}
+                                  showMobile={false}
+                                />
+                              </Show>
+                            </td>
+
+                            <td class={tdClass}>
+                              <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+                                <ResponsiveMetricCell
+                                  class="w-full"
+                                  value={diskPercentValue() ?? 0}
+                                  type="disk"
+                                  sublabel={diskSublabel()}
+                                  resourceId={isMobile() ? undefined : metricsKey()}
+                                  isRunning={isResourceOnline(resource)}
+                                  showMobile={false}
+                                />
+                              </Show>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex flex-wrap items-center justify-center gap-1">
+                                <Show
+                                  when={hasUnifiedSources()}
+                                  fallback={
+                                    <>
+                                      <Show when={platformBadge()}>
+                                        {(badge) => (
+                                          <span class={badge().classes} title={badge().title}>
+                                            {badge().label}
+                                          </span>
+                                        )}
+                                      </Show>
+                                      <Show when={sourceBadge()}>
+                                        {(badge) => (
+                                          <span class={badge().classes} title={badge().title}>
+                                            {badge().label}
+                                          </span>
+                                        )}
+                                      </Show>
+                                    </>
+                                  }
+                                >
+                                  <For each={unifiedSourceBadges()}>
+                                    {(badge) => (
+                                      <span class={badge.classes} title={badge.title}>
+                                        {badge.label}
+                                      </span>
+                                    )}
+                                  </For>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                    {formatUptime(resource.uptime ?? 0)}
+                                  </span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={resource.temperature != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span
+                                    class={`text-xs whitespace-nowrap font-medium ${
+                                      (resource.temperature ?? 0) >= 80
+                                        ? 'text-red-600 dark:text-red-400'
+                                        : (resource.temperature ?? 0) >= 65
+                                          ? 'text-amber-600 dark:text-amber-400'
+                                          : 'text-emerald-600 dark:text-emerald-400'
+                                    }`}
+                                  >
+                                    {formatTemperature(resource.temperature)}
+                                  </span>
+                                </Show>
+                              </div>
+                            </td>
+                          </tr>
+                          <Show when={isExpanded()}>
+                            <tr>
+                              <td colspan={7} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
+                                <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
+                              </td>
+                            </tr>
+                          </Show>
+                        </>
+                      );
+                    }}
+                  </For>
+                </>
+              )}
             </For>
           </tbody>
         </table>

@@ -1,4 +1,4 @@
-import { Component, Show, For, createSignal, createResource, onCleanup, createEffect } from 'solid-js';
+import { Component, Show, For, createSignal, createMemo, createResource, onCleanup, createEffect } from 'solid-js';
 import type { ResourceType, DiscoveryProgress } from '../../types/discovery';
 import {
     getDiscovery,
@@ -140,11 +140,16 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     };
 
     // Fetch discovery data
+    // Use a stable string key so createResource doesn't refetch when the parent's guest
+    // object reference changes (e.g. from <Index> data updates every 5 seconds)
+    const discoverySourceKey = createMemo(() =>
+        `${props.resourceType}|${props.hostId}|${props.resourceId}`
+    );
     const [discovery, { refetch, mutate }] = createResource(
-        () => ({ type: props.resourceType, host: props.hostId, id: props.resourceId }),
-        async (params) => {
+        discoverySourceKey,
+        async () => {
             try {
-                const result = await getDiscovery(params.type, params.host, params.id);
+                const result = await getDiscovery(props.resourceType, props.hostId, props.resourceId);
                 setHasFetched(true);
                 return result;
             } catch {

@@ -156,14 +156,14 @@ const formatAge = (timestamp?: number | string | null): string => {
 
 // Column definitions for the pods table
 const POD_COLUMNS: ColumnDef[] = [
-  { id: 'name', label: 'Pod', priority: 'essential', toggleable: false },
-  { id: 'namespace', label: 'Namespace', priority: 'essential', toggleable: true },
-  { id: 'cluster', label: 'Cluster', priority: 'primary', toggleable: true },
-  { id: 'status', label: 'Status', priority: 'essential', toggleable: false },
-  { id: 'ready', label: 'Ready', priority: 'primary', toggleable: true },
-  { id: 'restarts', label: 'Restarts', priority: 'primary', toggleable: true },
-  { id: 'image', label: 'Image', priority: 'secondary', toggleable: true },
-  { id: 'age', label: 'Age', priority: 'primary', toggleable: true },
+  { id: 'name', label: 'Pod', toggleable: false },
+  { id: 'namespace', label: 'Namespace', toggleable: true },
+  { id: 'cluster', label: 'Cluster', toggleable: true },
+  { id: 'status', label: 'Status', toggleable: false },
+  { id: 'ready', label: 'Ready', toggleable: true },
+  { id: 'restarts', label: 'Restarts', toggleable: true },
+  { id: 'image', label: 'Image', toggleable: true },
+  { id: 'age', label: 'Age', toggleable: true },
 ];
 
 const PodRow: Component<{
