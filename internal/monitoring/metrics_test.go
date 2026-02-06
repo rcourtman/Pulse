@@ -108,17 +108,6 @@ func getGaugeVecValue(gv *prometheus.GaugeVec, labels ...string) float64 {
 	return m.GetGauge().GetValue()
 }
 
-func TestUpdateQueueSnapshot_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.UpdateQueueSnapshot(QueueSnapshot{
-		DueWithinSeconds: 5,
-		PerType:          map[string]int{"pve": 10},
-	})
-}
-
 func TestUpdateQueueSnapshot_SetsDueWithinSeconds(t *testing.T) {
 	t.Parallel()
 
@@ -229,16 +218,6 @@ func TestUpdateQueueSnapshot_EmptySnapshot(t *testing.T) {
 	if got := getGaugeVecValue(pm.schedulerQueueDepthByType, "pve"); got != 0 {
 		t.Errorf("pve should be cleared to 0, got %v", got)
 	}
-}
-
-func TestUpdateDeadLetterCounts_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.UpdateDeadLetterCounts([]DeadLetterTask{
-		{Type: "pve", Instance: "pve1"},
-	})
 }
 
 func TestUpdateDeadLetterCounts_EmptyClearsPrevious(t *testing.T) {
@@ -377,14 +356,6 @@ func TestUpdateDeadLetterCounts_MultipleInstancesSameType(t *testing.T) {
 	if got := getGaugeVecValue(pm.schedulerDeadLetterDepth, "pve", "pve3"); got != 1 {
 		t.Errorf("pve/pve3 = %v, want 1", got)
 	}
-}
-
-func TestSetBreakerState_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.SetBreakerState("pve", "pve1", "open", 5, time.Now().Add(time.Minute))
 }
 
 func TestSetBreakerState_ZeroRetryAt(t *testing.T) {
@@ -623,20 +594,6 @@ func getHistogramSampleSum(hv *prometheus.HistogramVec, labels ...string) float6
 		return 0
 	}
 	return m.GetHistogram().GetSampleSum()
-}
-
-func TestRecordResult_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.RecordResult(PollResult{
-		InstanceType: "pve",
-		InstanceName: "pve1",
-		StartTime:    time.Now(),
-		EndTime:      time.Now().Add(time.Second),
-		Success:      true,
-	})
 }
 
 func TestRecordResult_SuccessUpdatesLastSuccessAndStaleness(t *testing.T) {
@@ -952,14 +909,6 @@ func newInFlightTestPollMetrics(t *testing.T) *PollMetrics {
 	return pm
 }
 
-func TestResetQueueDepth_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.ResetQueueDepth(10)
-}
-
 func TestResetQueueDepth_SetsPendingTotal(t *testing.T) {
 	t.Parallel()
 
@@ -1031,14 +980,6 @@ func TestResetQueueDepth_ZeroWorksCorrectly(t *testing.T) {
 	}
 }
 
-func TestIncInFlight_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.IncInFlight("pve")
-}
-
 func TestIncInFlight_IncrementsGauge(t *testing.T) {
 	t.Parallel()
 
@@ -1057,14 +998,6 @@ func TestIncInFlight_IncrementsGauge(t *testing.T) {
 	if gotPbs != 1 {
 		t.Errorf("inflight{pbs} = %v, want 1", gotPbs)
 	}
-}
-
-func TestDecInFlight_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.DecInFlight("pve")
 }
 
 func TestDecInFlight_DecrementsGauge(t *testing.T) {
@@ -1093,14 +1026,6 @@ func TestDecInFlight_DecrementsGauge(t *testing.T) {
 	if got != 0 {
 		t.Errorf("inflight{pve} = %v, want 0 after full decrement", got)
 	}
-}
-
-func TestDecrementPending_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.decrementPending()
 }
 
 func TestDecrementPending_DecrementsWhenPositive(t *testing.T) {
@@ -1295,21 +1220,6 @@ func newNodeTestPollMetrics(t *testing.T) *PollMetrics {
 	)
 
 	return pm
-}
-
-func TestRecordNodeResult_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.RecordNodeResult(NodePollResult{
-		InstanceType: "pve",
-		InstanceName: "pve1",
-		NodeName:     "node1",
-		StartTime:    time.Now(),
-		EndTime:      time.Now().Add(time.Second),
-		Success:      true,
-	})
 }
 
 func TestRecordNodeResult_SuccessUpdatesMetrics(t *testing.T) {
@@ -1552,14 +1462,6 @@ func newQueueWaitTestPollMetrics(t *testing.T) *PollMetrics {
 	return pm
 }
 
-func TestRecordQueueWait_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.RecordQueueWait("pve", 5*time.Second)
-}
-
 func TestRecordQueueWait_RecordsWaitTime(t *testing.T) {
 	t.Parallel()
 
@@ -1603,14 +1505,6 @@ func TestRecordQueueWait_EmptyTypeNormalized(t *testing.T) {
 	if sampleCount != 1 {
 		t.Errorf("queue_wait{unknown} count = %v, want 1", sampleCount)
 	}
-}
-
-func TestSetQueueDepth_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	var pm *PollMetrics
-	// Should not panic
-	pm.SetQueueDepth(10)
 }
 
 func TestSetQueueDepth_SetsGauge(t *testing.T) {

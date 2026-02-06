@@ -14,6 +14,10 @@ import (
 )
 
 func TestCommandClient_LoopsCoverage(t *testing.T) {
+	origDelay := reconnectDelay
+	reconnectDelay = 0
+	t.Cleanup(func() { reconnectDelay = origDelay })
+
 	upgrader := websocket.Upgrader{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := upgrader.Upgrade(w, r, nil)
@@ -52,9 +56,6 @@ func TestCommandClient_LoopsCoverage(t *testing.T) {
 
 		// 8. Send invalid JSON for read_file
 		conn.WriteJSON(wsMessage{Type: msgTypeReadFile, Payload: json.RawMessage(`{invalid}`)})
-
-		// Wait a bit then close
-		time.Sleep(100 * time.Millisecond)
 	}))
 	defer server.Close()
 
@@ -66,14 +67,8 @@ func TestCommandClient_LoopsCoverage(t *testing.T) {
 
 	client := NewCommandClient(cfg, "agent", "host", "linux", "1.0")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-
-	// Run in background and stop after a short while
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		cancel()
-	}()
 
 	err := client.Run(ctx)
 	if err != nil && err != context.Canceled {
@@ -107,14 +102,16 @@ func TestCommandClient_PingLoop_Direct(t *testing.T) {
 	defer cancel()
 
 	done := make(chan struct{})
-	// We can't wait for the ticker easily, so we just run it briefly
+	// We can't wait for the ticker easily; this is just a cancellation/exit-path coverage check.
 	go client.pingLoop(ctx, conn, done)
-
-	time.Sleep(50 * time.Millisecond)
 	close(done)
 }
 
 func TestCommandClient_RegistrationFailure(t *testing.T) {
+	origDelay := reconnectDelay
+	reconnectDelay = 0
+	t.Cleanup(func() { reconnectDelay = origDelay })
+
 	upgrader := websocket.Upgrader{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := upgrader.Upgrade(w, r, nil)
@@ -127,8 +124,6 @@ func TestCommandClient_RegistrationFailure(t *testing.T) {
 		// Send registered FAILURE
 		payload, _ := json.Marshal(registeredPayload{Success: false, Message: "registration rejected"})
 		conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Payload: payload})
-
-		time.Sleep(100 * time.Millisecond)
 	}))
 	defer server.Close()
 

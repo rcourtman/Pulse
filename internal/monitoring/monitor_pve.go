@@ -958,7 +958,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// We give the storage fallback goroutine up to 2 additional seconds to finish if it's still running.
 	localStorageByNode := m.awaitStorageFallback(instanceName, storageFallback, 2*time.Second)
 
-	modelNodes = m.applyStorageFallbackAndRecordNodeMetrics(instanceName, modelNodes, localStorageByNode)
+	modelNodes = m.applyStorageFallbackAndRecordNodeMetrics(instanceName, client, modelNodes, localStorageByNode)
 
 	// Periodically re-check cluster status for nodes marked as standalone
 	// This addresses issue #437 where clusters aren't detected on first attempt

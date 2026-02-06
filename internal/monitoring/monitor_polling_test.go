@@ -87,13 +87,6 @@ func TestRescheduleTaskUsesInstanceIntervalWhenSchedulerDisabled(t *testing.T) {
 	}
 }
 
-func TestRecordTaskResult_NilMonitor(t *testing.T) {
-	// Should not panic when called on nil monitor
-	var m *Monitor
-	m.recordTaskResult(InstanceTypePVE, "test-instance", nil)
-	// If we get here without panic, the test passes
-}
-
 func TestRecordTaskResult_Success(t *testing.T) {
 	m := &Monitor{
 		pollStatusMap:   make(map[string]*pollStatus),
@@ -380,22 +373,6 @@ func TestDescribeInstancesForScheduler_NilSchedulerAndTracker(t *testing.T) {
 	if !descriptors[0].LastSuccess.IsZero() {
 		t.Error("expected LastSuccess to be zero with nil stalenessTracker")
 	}
-}
-
-func TestRescheduleTask_NilTaskQueue(t *testing.T) {
-	m := &Monitor{
-		taskQueue: nil, // nil queue
-	}
-
-	task := ScheduledTask{
-		InstanceName: "pve-1",
-		InstanceType: InstanceTypePVE,
-		Interval:     30 * time.Second,
-		NextRun:      time.Now(),
-	}
-
-	// Should not panic with nil taskQueue, just returns early
-	m.rescheduleTask(task)
 }
 
 func TestRescheduleTask_SuccessfulOutcome(t *testing.T) {

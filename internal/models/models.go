@@ -200,6 +200,12 @@ type Host struct {
 	Tags              []string               `json:"tags,omitempty"`
 	IsLegacy          bool                   `json:"isLegacy,omitempty"`
 
+	// Computed I/O rates (bytes/sec), populated from cumulative counters by rate tracker
+	NetInRate     float64 `json:"netInRate,omitempty"`
+	NetOutRate    float64 `json:"netOutRate,omitempty"`
+	DiskReadRate  float64 `json:"diskReadRate,omitempty"`
+	DiskWriteRate float64 `json:"diskWriteRate,omitempty"`
+
 	// Linking: When this host agent is running on a known PVE node/VM/container
 	LinkedNodeID      string `json:"linkedNodeId,omitempty"`      // ID of the PVE node this agent is running on
 	LinkedVMID        string `json:"linkedVmId,omitempty"`        // ID of the VM this agent is running inside

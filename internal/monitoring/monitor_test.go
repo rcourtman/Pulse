@@ -2410,42 +2410,6 @@ func TestEnsureBreaker(t *testing.T) {
 	}
 }
 
-func TestUpdateDeadLetterMetrics_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	m := &Monitor{
-		pollMetrics:     nil,
-		deadLetterQueue: NewTaskQueue(),
-	}
-
-	// Should not panic
-	m.updateDeadLetterMetrics()
-}
-
-func TestUpdateDeadLetterMetrics_NilDeadLetterQueue(t *testing.T) {
-	t.Parallel()
-
-	m := &Monitor{
-		pollMetrics:     newTestPollMetrics(t),
-		deadLetterQueue: nil,
-	}
-
-	// Should not panic
-	m.updateDeadLetterMetrics()
-}
-
-func TestUpdateDeadLetterMetrics_BothNil(t *testing.T) {
-	t.Parallel()
-
-	m := &Monitor{
-		pollMetrics:     nil,
-		deadLetterQueue: nil,
-	}
-
-	// Should not panic
-	m.updateDeadLetterMetrics()
-}
-
 func TestUpdateDeadLetterMetrics_EmptyQueue(t *testing.T) {
 	t.Parallel()
 

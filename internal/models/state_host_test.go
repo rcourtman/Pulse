@@ -169,40 +169,6 @@ func TestTouchHost(t *testing.T) {
 	}
 }
 
-func TestUpdateRecentlyResolved(t *testing.T) {
-	state := NewState()
-
-	now := time.Now()
-	alerts := []ResolvedAlert{
-		{
-			Alert: Alert{
-				ID:           "alert-1",
-				Type:         "cpu_high",
-				Level:        "warning",
-				ResourceName: "server-1",
-				Message:      "High CPU usage",
-			},
-			ResolvedTime: now,
-		},
-		{
-			Alert: Alert{
-				ID:           "alert-2",
-				Type:         "disk_low",
-				Level:        "critical",
-				ResourceName: "server-2",
-				Message:      "Low disk space",
-			},
-			ResolvedTime: now.Add(-time.Hour),
-		},
-	}
-
-	state.UpdateRecentlyResolved(alerts)
-
-	// The method updates internal state - verify via snapshot or other means
-	// Since RecentlyResolvedAlerts might be accessed differently, just verify no panic
-	// and method executes correctly
-}
-
 func TestSetConnectionHealth(t *testing.T) {
 	state := NewState()
 

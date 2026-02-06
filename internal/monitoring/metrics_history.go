@@ -114,6 +114,10 @@ func (mh *MetricsHistory) AddNodeMetric(nodeID string, metricType string, value 
 		metrics.Memory = mh.appendMetric(metrics.Memory, point)
 	case "disk":
 		metrics.Disk = mh.appendMetric(metrics.Disk, point)
+	case "netin":
+		metrics.NetworkIn = mh.appendMetric(metrics.NetworkIn, point)
+	case "netout":
+		metrics.NetworkOut = mh.appendMetric(metrics.NetworkOut, point)
 	}
 }
 
@@ -208,6 +212,10 @@ func (mh *MetricsHistory) GetNodeMetrics(nodeID string, metricType string, durat
 		data = metrics.Memory
 	case "disk":
 		data = metrics.Disk
+	case "netin":
+		data = metrics.NetworkIn
+	case "netout":
+		data = metrics.NetworkOut
 	default:
 		return []MetricPoint{}
 	}

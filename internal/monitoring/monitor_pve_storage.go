@@ -143,6 +143,7 @@ func (m *Monitor) awaitStorageFallback(instanceName string, sf *storageFallback,
 
 func (m *Monitor) applyStorageFallbackAndRecordNodeMetrics(
 	instanceName string,
+	client PVEClientInterface,
 	modelNodes []models.Node,
 	storageFallback map[string]models.Disk,
 ) []models.Node {
@@ -160,14 +161,38 @@ func (m *Monitor) applyStorageFallbackAndRecordNodeMetrics(
 		if modelNodes[i].Status == "online" {
 			// Record node metrics history only for online nodes
 			now := time.Now()
+			var nodeNetMetrics *rrdMemCacheEntry
+			if client != nil {
+				if rrdMetrics, err := m.getNodeRRDMetrics(context.Background(), client, modelNodes[i].Name); err == nil {
+					nodeNetMetrics = &rrdMetrics
+				}
+			}
+
 			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
 			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
 			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
+			if nodeNetMetrics != nil {
+				if nodeNetMetrics.hasNetIn {
+					m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "netin", nodeNetMetrics.netIn, now)
+				}
+				if nodeNetMetrics.hasNetOut {
+					m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "netout", nodeNetMetrics.netOut, now)
+				}
+			}
+
 			// Also write to persistent store
 			if m.metricsStore != nil {
 				m.metricsStore.Write("node", modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
 				m.metricsStore.Write("node", modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
 				m.metricsStore.Write("node", modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
+				if nodeNetMetrics != nil {
+					if nodeNetMetrics.hasNetIn {
+						m.metricsStore.Write("node", modelNodes[i].ID, "netin", nodeNetMetrics.netIn, now)
+					}
+					if nodeNetMetrics.hasNetOut {
+						m.metricsStore.Write("node", modelNodes[i].ID, "netout", nodeNetMetrics.netOut, now)
+					}
+				}
 			}
 		}
 

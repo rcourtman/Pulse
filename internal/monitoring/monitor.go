@@ -697,6 +697,10 @@ type rrdMemCacheEntry struct {
 	available uint64
 	used      uint64
 	total     uint64
+	netIn     float64
+	netOut    float64
+	hasNetIn  bool
+	hasNetOut bool
 	fetchedAt time.Time
 }
 
@@ -794,7 +798,7 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	requestCtx, cancel := context.WithTimeout(ctx, nodeRRDRequestTimeout)
 	defer cancel()
 
-	points, err := client.GetNodeRRDData(requestCtx, nodeName, "hour", "AVERAGE", []string{"memavailable", "memused", "memtotal"})
+	points, err := client.GetNodeRRDData(requestCtx, nodeName, "hour", "AVERAGE", []string{"memavailable", "memused", "memtotal", "netin", "netout"})
 	if err != nil {
 		return rrdMemCacheEntry{}, err
 	}
@@ -802,6 +806,10 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	var memAvailable uint64
 	var memUsed uint64
 	var memTotal uint64
+	var netIn float64
+	var netOut float64
+	var hasNetIn bool
+	var hasNetOut bool
 
 	for i := len(points) - 1; i >= 0; i-- {
 		point := points[i]
@@ -818,8 +826,13 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 			memUsed = uint64(math.Round(*point.MemUsed))
 		}
 
-		if memTotal > 0 && (memAvailable > 0 || memUsed > 0) {
-			break
+		if !hasNetIn && point.NetIn != nil && !math.IsNaN(*point.NetIn) {
+			netIn = *point.NetIn
+			hasNetIn = true
+		}
+		if !hasNetOut && point.NetOut != nil && !math.IsNaN(*point.NetOut) {
+			netOut = *point.NetOut
+			hasNetOut = true
 		}
 	}
 
@@ -832,14 +845,18 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 		}
 	}
 
-	if memAvailable == 0 && memUsed == 0 {
-		return rrdMemCacheEntry{}, fmt.Errorf("rrd mem metrics not present")
+	if memAvailable == 0 && memUsed == 0 && !hasNetIn && !hasNetOut {
+		return rrdMemCacheEntry{}, fmt.Errorf("rrd node metrics not present")
 	}
 
 	entry := rrdMemCacheEntry{
 		available: memAvailable,
 		used:      memUsed,
 		total:     memTotal,
+		netIn:     netIn,
+		netOut:    netOut,
+		hasNetIn:  hasNetIn,
+		hasNetOut: hasNetOut,
 		fetchedAt: now,
 	}
 
@@ -2379,6 +2396,18 @@ func (m *Monitor) GetState() models.StateSnapshot {
 			state = mock.GetMockState()
 		}
 		return state
+	}
+	return m.state.GetSnapshot()
+}
+
+// GetLiveStateSnapshot returns the underlying monitor state snapshot without
+// applying global mock mode overrides.
+//
+// This is useful for agent management endpoints that need to reflect actual
+// registrations even when mock mode is enabled for the UI/demo experience.
+func (m *Monitor) GetLiveStateSnapshot() models.StateSnapshot {
+	if m == nil || m.state == nil {
+		return models.StateSnapshot{}
 	}
 	return m.state.GetSnapshot()
 }

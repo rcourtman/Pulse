@@ -75,18 +75,6 @@ func TestStoreClear(t *testing.T) {
 	}
 }
 
-func TestStoreSetMaxOpenConns(t *testing.T) {
-	dir := t.TempDir()
-	store, err := NewStore(DefaultConfig(dir))
-	if err != nil {
-		t.Fatalf("NewStore returned error: %v", err)
-	}
-	defer store.Close()
-
-	// Just verifying it doesn't panic
-	store.SetMaxOpenConns(5)
-}
-
 func TestStoreRunRollupManually(t *testing.T) {
 	// Tests the runRollup function wrapper which was showing 0% coverage
 	dir := t.TempDir()

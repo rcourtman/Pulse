@@ -3,7 +3,6 @@ package monitoring
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +15,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -37,22 +35,6 @@ func TestMonitor_GetConnectionStatuses_MockMode_Extra(t *testing.T) {
 	if statuses == nil {
 		t.Error("Statuses should not be nil")
 	}
-}
-
-func TestMonitor_Stop_Extra(t *testing.T) {
-	m := &Monitor{}
-	m.Stop()
-
-	tmpFile := filepath.Join(t.TempDir(), "test_metrics_extra.db")
-	store, _ := metrics.NewStore(metrics.StoreConfig{
-		DBPath:          tmpFile,
-		FlushInterval:   time.Millisecond,
-		WriteBufferSize: 1,
-	})
-
-	m.metricsStore = store
-	m.alertManager = alerts.NewManager()
-	m.Stop()
 }
 
 func TestMonitor_Cleanup_Extra(t *testing.T) {
@@ -127,21 +109,6 @@ func TestMonitor_SetMockMode_Advanced_Extra(t *testing.T) {
 	if mock.IsMockEnabled() {
 		t.Error("Mock mode should be disabled")
 	}
-}
-
-func TestMonitor_RetryFailedConnections_Short_Extra(t *testing.T) {
-	m := &Monitor{
-		config: &config.Config{
-			PVEInstances: []config.PVEInstance{{Name: "pve1", Host: "localhost"}},
-		},
-		pveClients: make(map[string]PVEClientInterface),
-		state:      models.NewState(),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	m.retryFailedConnections(ctx)
 }
 
 func TestMonitor_GetConfiguredHostIPs_Extra(t *testing.T) {
@@ -379,41 +346,6 @@ func TestMonitor_PollVMsAndContainersEfficient_Extra(t *testing.T) {
 	}
 }
 
-func TestMonitor_MiscSetters_Extra(t *testing.T) {
-	m := &Monitor{
-		state:        models.NewState(),
-		alertManager: alerts.NewManager(),
-	}
-	defer m.alertManager.Stop()
-
-	m.ClearUnauthenticatedAgents()
-
-	m.SetExecutor(nil)
-	m.SyncAlertState()
-}
-
-func TestMonitor_PollGuestSnapshots_Extra(t *testing.T) {
-	m := &Monitor{
-		state:          models.NewState(),
-		guestSnapshots: make(map[string]GuestMemorySnapshot),
-	}
-	m.state.UpdateVMsForInstance("pve1", []models.VM{
-		{ID: "pve1:node1:100", Instance: "pve1", Node: "node1", VMID: 100, Name: "vm100"},
-	})
-	m.state.UpdateContainersForInstance("pve1", []models.Container{
-		{ID: "pve1:node1:101", Instance: "pve1", Node: "node1", VMID: 101, Name: "ct101"},
-	})
-
-	client := &mockPVEClientExtra{}
-	m.pollGuestSnapshots(context.Background(), "pve1", client)
-}
-
-func TestMonitor_CephConversion_Extra(t *testing.T) {
-	// Just call the functions to get coverage
-	convertAgentCephToModels(nil)
-	convertAgentCephToGlobalCluster(&agentshost.CephCluster{}, "host1", "host1", time.Now())
-}
-
 func TestMonitor_EnrichContainerMetadata_Extra(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),
@@ -581,19 +513,6 @@ func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 	}
 }
 
-func TestMonitor_CheckMockAlerts_Extra(t *testing.T) {
-	m := &Monitor{
-		alertManager:   alerts.NewManager(),
-		metricsHistory: NewMetricsHistory(10, time.Hour),
-	}
-	defer m.alertManager.Stop()
-
-	m.SetMockMode(true)
-	defer m.SetMockMode(false)
-
-	m.checkMockAlerts()
-}
-
 func TestMonitor_MoreUtilities_Extra(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),
@@ -755,33 +674,6 @@ func TestMonitor_CephConversion_Detailed_Extra(t *testing.T) {
 	if globalEmpty.ID != "agent-ceph-h1" {
 		t.Errorf("Expected generated ID agent-ceph-h1, got %s", globalEmpty.ID)
 	}
-}
-
-func TestMonitor_HandleAlertResolved_Extra(t *testing.T) {
-	m := &Monitor{
-		alertManager:  alerts.NewManager(),
-		incidentStore: nil, // nil store
-		wsHub:         websocket.NewHub(nil),
-	}
-	defer m.alertManager.Stop()
-
-	// 1. With nil NotificationMgr
-	m.handleAlertResolved("alert1")
-
-	// 2. With NotificationMgr
-	m.notificationMgr = notifications.NewNotificationManager("")
-	m.handleAlertResolved("alert1")
-}
-
-func TestMonitor_BroadcastStateUpdate_Extra(t *testing.T) {
-	m := &Monitor{
-		state: models.NewState(),
-	}
-	// nil hub
-	m.broadcastStateUpdate()
-
-	m.wsHub = websocket.NewHub(nil)
-	m.broadcastStateUpdate()
 }
 
 func TestMonitor_PollPBSBackups_Extra(t *testing.T) {

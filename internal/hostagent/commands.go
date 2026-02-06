@@ -25,6 +25,10 @@ var safeTargetIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 var execCommandContext = exec.CommandContext
 
+// How long the command client waits before retrying after a connection failure.
+// Package var so tests can override to avoid long sleeps.
+var reconnectDelay = 10 * time.Second
+
 // CommandClient handles WebSocket connection to Pulse for AI command execution
 type CommandClient struct {
 	pulseURL           string
@@ -147,7 +151,7 @@ func (c *CommandClient) Run(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(10 * time.Second):
+			case <-time.After(reconnectDelay):
 			}
 		} else {
 			// Connection closed cleanly (shouldn't happen in normal operation)

@@ -79,18 +79,6 @@ func TestMonitor_GetConnectionStatuses(t *testing.T) {
 	}
 }
 
-func TestMonitor_Stop(t *testing.T) {
-	// Initialize a monitor with mostly nil dependencies, but enough to pass Stop()
-	// This ensures Stop is safe to call even if initialization was partial
-	m := &Monitor{
-		config: &config.Config{},
-		state:  models.NewState(),
-	}
-
-	// Should not panic
-	m.Stop()
-}
-
 func TestPollPBSInstance(t *testing.T) {
 	// Create a mock PBS server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

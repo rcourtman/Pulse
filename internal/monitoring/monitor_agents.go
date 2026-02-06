@@ -1477,6 +1477,46 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			Msg("Linked host agent to container")
 	}
 
+	// Compute I/O rates from cumulative counters before adding to state.
+	// Network and disk bytes from the agent are cumulative totals since boot;
+	// the RateTracker converts them to bytes/second, just like VMs and containers.
+	now := time.Now()
+
+	var totalRXBytes, totalTXBytes uint64
+	for _, nic := range host.NetworkInterfaces {
+		totalRXBytes += nic.RXBytes
+		totalTXBytes += nic.TXBytes
+	}
+	var totalDiskReadBytes, totalDiskWriteBytes uint64
+	for _, d := range host.DiskIO {
+		totalDiskReadBytes += d.ReadBytes
+		totalDiskWriteBytes += d.WriteBytes
+	}
+
+	hostRateKey := fmt.Sprintf("host:%s", host.ID)
+	currentMetrics := IOMetrics{
+		DiskRead:   int64(totalDiskReadBytes),
+		DiskWrite:  int64(totalDiskWriteBytes),
+		NetworkIn:  int64(totalRXBytes),
+		NetworkOut: int64(totalTXBytes),
+		Timestamp:  now,
+	}
+	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(hostRateKey, currentMetrics)
+
+	// Store computed rates on the host model so they flow through to unified resources
+	if netInRate >= 0 {
+		host.NetInRate = netInRate
+	}
+	if netOutRate >= 0 {
+		host.NetOutRate = netOutRate
+	}
+	if diskReadRate >= 0 {
+		host.DiskReadRate = diskReadRate
+	}
+	if diskWriteRate >= 0 {
+		host.DiskWriteRate = diskWriteRate
+	}
+
 	m.state.UpsertHost(host)
 	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
 
@@ -1503,7 +1543,6 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	// Record Host metrics for sparkline charts
-	now := time.Now()
 	hostMetricKey := fmt.Sprintf("host:%s", host.ID)
 
 	var hostDiskPercent float64
@@ -1511,53 +1550,40 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		hostDiskPercent = host.Disks[0].Usage
 	}
 
-	// Record host Network I/O (sum across all interfaces)
-	// Network bytes from the agent are cumulative totals since boot, not rates.
-	// We need to use the RateTracker to convert to bytes/second, just like VMs and containers.
-	var totalRXBytes, totalTXBytes uint64
-	for _, nic := range host.NetworkInterfaces {
-		totalRXBytes += nic.RXBytes
-		totalTXBytes += nic.TXBytes
-	}
-
-	// Calculate network rates using the RateTracker (convert cumulative bytes to bytes/sec)
-	hostRateKey := fmt.Sprintf("host:%s", host.ID)
-	currentMetrics := IOMetrics{
-		NetworkIn:  int64(totalRXBytes),
-		NetworkOut: int64(totalTXBytes),
-		Timestamp:  now,
-	}
-	_, _, netInRate, netOutRate := m.rateTracker.CalculateRates(hostRateKey, currentMetrics)
-
 	if m.metricsHistory != nil {
-		// Record host CPU usage
 		m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
-
-		// Record host Memory usage
 		m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
-
 		m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
 
-		// Only record network rates if we have valid data (rate >= 0 means we have enough samples)
 		if netInRate >= 0 {
 			m.metricsHistory.AddGuestMetric(hostMetricKey, "netin", netInRate, now)
 		}
 		if netOutRate >= 0 {
 			m.metricsHistory.AddGuestMetric(hostMetricKey, "netout", netOutRate, now)
 		}
+		if diskReadRate >= 0 {
+			m.metricsHistory.AddGuestMetric(hostMetricKey, "diskread", diskReadRate, now)
+		}
+		if diskWriteRate >= 0 {
+			m.metricsHistory.AddGuestMetric(hostMetricKey, "diskwrite", diskWriteRate, now)
+		}
 	}
 
-	// Also write to persistent SQLite store
 	if m.metricsStore != nil {
 		m.metricsStore.Write("host", host.ID, "cpu", host.CPUUsage, now)
 		m.metricsStore.Write("host", host.ID, "memory", host.Memory.Usage, now)
 		m.metricsStore.Write("host", host.ID, "disk", hostDiskPercent, now)
-		// Only write network rates if we have valid data
 		if netInRate >= 0 {
 			m.metricsStore.Write("host", host.ID, "netin", netInRate, now)
 		}
 		if netOutRate >= 0 {
 			m.metricsStore.Write("host", host.ID, "netout", netOutRate, now)
+		}
+		if diskReadRate >= 0 {
+			m.metricsStore.Write("host", host.ID, "diskread", diskReadRate, now)
+		}
+		if diskWriteRate >= 0 {
+			m.metricsStore.Write("host", host.ID, "diskwrite", diskWriteRate, now)
 		}
 	}
 
