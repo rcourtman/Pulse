@@ -59,9 +59,6 @@ TRUENAS_STATE_DIR="/data/pulse-agent"
 TRUENAS_LOG_DIR="$TRUENAS_STATE_DIR/logs"
 TRUENAS_BOOTSTRAP_SCRIPT="$TRUENAS_STATE_DIR/bootstrap-pulse-agent.sh"
 TRUENAS_ENV_FILE="$TRUENAS_STATE_DIR/pulse-agent.env"
-if [[ -f /etc/truenas-version ]] || [[ -f /etc/version ]]; then
-    LOG_FILE="$TRUENAS_LOG_DIR/${AGENT_NAME}.log"
-fi
 
 # Defaults
 PULSE_URL=""
@@ -88,15 +85,9 @@ KUBERNETES_EXPLICIT="false"
 PROXMOX_EXPLICIT="false"
 
 # --- Helper Functions ---
-log_info() {
-    printf "[INFO] %s\n" "$1" | tee $LOG_FILE;
-}
-log_warn() {
-    printf "[WARN] %s\n" "$1" | tee $LOG_FILE;
-}
-log_error() {
-    printf "[ERROR] %s\n" "$1" | tee $LOG_FILE;
-}
+log_info() { printf "[INFO] %s\n" "$1"; }
+log_warn() { printf "[WARN] %s\n" "$1"; }
+log_error() { printf "[ERROR] %s\n" "$1"; }
 fail() {
     log_error "$1"
     if [[ -t 0 ]]; then
@@ -544,8 +535,9 @@ if [[ "$UNINSTALL" == "true" ]]; then
             # Stop service
             if [[ -f /usr/local/etc/rc.d/pulse-agent ]]; then
                 service "${AGENT_NAME}" stop 2>/dev/null || true
+                rm -f /usr/local/etc/rc.d/pulse-agent
             else
-                STARTSCRIPT="${$TRUENAS_STATE_DIR}/${AGENT_NAME}.service"
+                STARTSCRIPT="${TRUENAS_STATE_DIR}/${AGENT_NAME}.service"
                 "$STARTSCRIPT" stop 2>/dev/null || true
             fi
         fi
@@ -657,13 +649,11 @@ elif [[ "$(uname -s)" == "Linux" ]] && [[ -d /data ]] && ! is_install_dir_writab
 elif [[ "$(uname -s)" == "FreeBSD" ]] && is_truenas; then
     TRUENAS=true
     INSTALL_DIR="$TRUENAS_STATE_DIR"
-    TRUENAS_LOG_FILE="$TRUENAS_LOG_DIR/${AGENT_NAME}.log"
     log_info "TrueNAS CORE detected (immutable root). Using $TRUENAS_STATE_DIR for installation."
 elif [[ "$(uname -s)" == "FreeBSD" ]] && [[ -d /data ]] && ! is_install_dir_writable; then
     # /usr/local/bin is read-only but /data exists - likely TrueNAS or similar immutable system
     TRUENAS=true
     INSTALL_DIR="$TRUENAS_STATE_DIR"
-    TRUENAS_LOG_FILE="$TRUENAS_LOG_DIR/${AGENT_NAME}.log"
     log_info "Immutable filesystem detected (read-only /usr/local/bin). Using $TRUENAS_STATE_DIR for installation."
 fi
 
@@ -1114,7 +1104,7 @@ if [[ "$TRUENAS" == true ]]; then
         if [[ -f /usr/local/etc/rc.d/pulse-agent ]]; then
             service "${AGENT_NAME}" stop 2>/dev/null || true
         else
-            STOPSCRIPT="${$TRUENAS_STATE_DIR}/${AGENT_NAME}.service"
+            STOPSCRIPT="${INSTALL_DIR}/${AGENT_NAME}.service"
             "$STOPSCRIPT" stop 2>/dev/null || true
         fi
     fi
@@ -1440,26 +1430,26 @@ BOOTSTRAP
                 sed -i 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf
         fi
         # Stop existing agent if running
-        service "${SERVICE_NAME}" stop 2>/dev/null || true
+        service "${AGENT_NAME}" stop 2>/dev/null || true
         sleep 1
 
         # Start the agent
-        service "${SERVICE_NAME}" start 2>/dev/null || true
+        service "${AGENT_NAME}" start 2>/dev/null || true
         if [[ "$UPGRADE_MODE" == "true" ]]; then
             log_info "Upgrade complete! Agent restarted with new configuration."
         else
             log_info "Installation complete! Agent service started."
         fi
-        log_info "To check status: service "${SERVICE_NAME}" status"
-        log_info "To view logs: tail -f ${TRUENAS_LOG_FILE}"
-        exit 0
+        log_info "To check status: service "${AGENT_NAME}" status"
     fi
 
     log_info "Installation complete!"
     log_info "Binary: $TRUENAS_STORED_BINARY (persistent)"
     log_info "Runtime: $TRUENAS_RUNTIME_BINARY (for execution)"
     log_info "Service: $TRUENAS_SERVICE_STORAGE (symlinked to systemd)"
-    log_info "Logs: tail -f ${TRUENAS_LOG_FILE}"
+    if [[ "$(uname -s)" == "Linux" ]]; then
+        log_info "Logs: tail -f ${TRUENAS_LOG_FILE}"
+    fi
     log_info ""
     log_info "The Init/Shutdown task ensures the agent survives TrueNAS upgrades."
     exit 0
