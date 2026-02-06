@@ -1,21 +1,12 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { Card } from '@/components/shared/Card';
-import { formatBytes } from '@/utils/format';
+import { formatBytes, formatPowerOnHours } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import type { PhysicalDisk } from '@/types/api';
 import { useWebSocket } from '@/App';
 import { DiskDetail } from './DiskDetail';
+import { DiskLiveMetric } from './DiskLiveMetric';
 
-/** Format power-on hours into human-readable form (e.g., "2.3y", "140d", "5h"). */
-function formatPowerOnHours(hours: number): string {
-  if (hours >= 8760) {
-    return `${(hours / 8760).toFixed(1)}y`;
-  }
-  if (hours >= 24) {
-    return `${Math.round(hours / 24)}d`;
-  }
-  return `${hours}h`;
-}
 
 /** Returns true if any critical SMART counters are non-zero. */
 function hasSmartWarning(disk: PhysicalDisk): boolean {
@@ -143,6 +134,19 @@ export const DiskList: Component<DiskListProps> = (props) => {
     }
   };
 
+  const getNodeHostId = (nodeName: string, instance: string) => {
+    const node = state.nodes?.find(n => n.name === nodeName && n.instance === instance);
+    return node?.linkedHostAgentId;
+  };
+
+  const getMetricResourceId = (disk: PhysicalDisk) => {
+    const hostId = getNodeHostId(disk.node, disk.instance);
+    if (!hostId) return null;
+    // Strip /dev/ if present to match agent metric key
+    const deviceName = disk.devPath.replace('/dev/', '');
+    return `${hostId}:${deviceName}`;
+  };
+
   return (
     <div>
       <Show when={filteredDisks().length === 0}>
@@ -213,6 +217,15 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   </th>
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
                     Temp
+                  </th>
+                  <th class="hidden md:table-cell px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                    Read
+                  </th>
+                  <th class="hidden md:table-cell px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                    Write
+                  </th>
+                  <th class="hidden md:table-cell px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%]">
+                    Busy
                   </th>
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Size
@@ -314,7 +327,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               fallback={<span class="text-gray-400">-</span>}
                             >
                               <span class="text-gray-700 dark:text-gray-300">
-                                {formatPowerOnHours(disk.smartAttributes!.powerOnHours!)}
+                                {formatPowerOnHours(disk.smartAttributes!.powerOnHours!, true)}
                               </span>
                             </Show>
                           </td>
@@ -335,7 +348,28 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               </span>
                             </Show>
                           </td>
-                          <td class="px-1 py-1.5 text-xs">
+                          <td class="hidden md:table-cell px-1 py-1.5 align-middle">
+                            <Show when={getMetricResourceId(disk)} fallback={<span class="text-gray-300">-</span>}>
+                              {(resourceId) => (
+                                <DiskLiveMetric resourceId={resourceId()} type="read" />
+                              )}
+                            </Show>
+                          </td>
+                          <td class="hidden md:table-cell px-1 py-1.5 align-middle">
+                            <Show when={getMetricResourceId(disk)} fallback={<span class="text-gray-300">-</span>}>
+                              {(resourceId) => (
+                                <DiskLiveMetric resourceId={resourceId()} type="write" />
+                              )}
+                            </Show>
+                          </td>
+                          <td class="hidden md:table-cell px-1 py-1.5 align-middle">
+                            <Show when={getMetricResourceId(disk)} fallback={<span class="text-gray-300">-</span>}>
+                              {(resourceId) => (
+                                <DiskLiveMetric resourceId={resourceId()} type="ioTime" />
+                              )}
+                            </Show>
+                          </td>
+                          <td class="px-1 py-1.5 text-xs whitespace-nowrap">
                             <span class="text-gray-700 dark:text-gray-300">
                               {formatBytes(disk.size)}
                             </span>
@@ -343,7 +377,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </tr>
                         <Show when={isSelected()}>
                           <tr>
-                            <td colSpan={10} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
+                            <td colSpan={13} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
                               <DiskDetail disk={disk} />
                             </td>
                           </tr>

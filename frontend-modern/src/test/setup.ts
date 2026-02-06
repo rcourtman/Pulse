@@ -3,7 +3,12 @@ import '@testing-library/jest-dom';
 type StorageValue = string | null;
 
 const ensureLocalStorage = () => {
-  const existing = globalThis.localStorage as Storage | undefined;
+  // Avoid reading `globalThis.localStorage` directly. Newer Node versions
+  // expose an experimental Web Storage API that emits warnings when accessed
+  // without a backing file. Use a descriptor check instead to keep test output
+  // clean and deterministic.
+  const desc = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const existing = desc && 'value' in desc ? (desc.value as Storage | undefined) : undefined;
   const hasApi =
     existing &&
     typeof existing.getItem === 'function' &&

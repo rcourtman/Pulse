@@ -1,13 +1,25 @@
-import { For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
+import { SearchInput } from '@/components/shared/SearchInput';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
+import { InfrastructureSummary } from '@/components/Infrastructure/InfrastructureSummary';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { isRangeLocked, licenseLoaded, loadLicenseStatus } from '@/stores/license';
+import type { TimeRange } from '@/api/charts';
 import ServerIcon from 'lucide-solid/icons/server';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import type { Resource } from '@/types/resource';
+
+const INFRASTRUCTURE_TREND_RANGES: { value: TimeRange; label: string }[] = [
+  { value: '1h', label: '1h' },
+  { value: '4h', label: '4h' },
+  { value: '24h', label: '24h' },
+  { value: '7d', label: '7d' },
+  { value: '30d', label: '30d' },
+];
 
 export function Infrastructure() {
   const { resources, loading, error, refetch } = useUnifiedResources();
@@ -33,11 +45,32 @@ export function Infrastructure() {
     'grouped',
     { deserialize: (raw) => (raw === 'grouped' || raw === 'flat' ? raw : 'grouped') },
   );
+  const [trendRange, setTrendRange] = usePersistentSignal<TimeRange>(
+    'infrastructureTrendRange',
+    '1h',
+    {
+      deserialize: (raw) =>
+        INFRASTRUCTURE_TREND_RANGES.some((option) => option.value === raw)
+          ? (raw as TimeRange)
+          : '1h',
+    },
+  );
   const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
   const [highlightedResourceId, setHighlightedResourceId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [handledSourceParam, setHandledSourceParam] = createSignal<string | null>(null);
   let highlightTimer: number | undefined;
+
+  createEffect(() => {
+    void loadLicenseStatus();
+  });
+
+  createEffect(() => {
+    if (!licenseLoaded()) return;
+    if (isRangeLocked(trendRange())) {
+      setTrendRange('7d');
+    }
+  });
 
   createEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -72,7 +105,7 @@ export function Infrastructure() {
   createEffect(() => {
     const params = new URLSearchParams(location.search);
     const nextSearch = params.get('q') ?? params.get('search') ?? '';
-    if (nextSearch !== searchQuery()) {
+    if (nextSearch !== untrack(searchQuery)) {
       setSearchQuery(nextSearch);
     }
   });
@@ -212,6 +245,8 @@ export function Infrastructure() {
     return `${base} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50`;
   };
 
+  const isTrendRangeLocked = (range: TimeRange) => licenseLoaded() && isRangeLocked(range);
+
   const matchesSearch = (resource: Resource, term: string) => {
     if (!term) return true;
     const normalizedTerm = term.toLowerCase();
@@ -279,7 +314,7 @@ export function Infrastructure() {
 
   return (
     <div class="space-y-4">
-      <Show when={!loading()} fallback={
+      <Show when={!loading() || initialLoadComplete()} fallback={
         <Card class="p-6">
           <div class="text-sm text-gray-600 dark:text-gray-300">Loading infrastructure resources...</div>
         </Card>
@@ -321,24 +356,12 @@ export function Infrastructure() {
             <div class="space-y-3">
               <Card padding="sm" class="mb-4">
                 <div class="space-y-3">
-                  <div class="relative">
-                    <input
-                      type="text"
-                      value={searchQuery()}
-                      onInput={(event) => setSearchQuery(event.currentTarget.value)}
-                      placeholder="Search hosts, IDs, IPs, or tags..."
-                      class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-                    />
-                    <Show when={searchQuery().trim().length > 0}>
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery('')}
-                        class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200"
-                      >
-                        Clear
-                      </button>
-                    </Show>
-                  </div>
+                  <SearchInput
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder="Search hosts, IDs, IPs, or tags..."
+                    autoFocus
+                  />
 
                   <div class="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
                     <div class="flex items-center gap-2">
@@ -423,6 +446,38 @@ export function Infrastructure() {
                       </button>
                     </div>
 
+                    <div class="h-5 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
+
+                    <div class="flex items-center gap-2">
+                      <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Trend</span>
+                      <div class="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <For each={INFRASTRUCTURE_TREND_RANGES}>
+                          {(rangeOption) => {
+                            const isSelected = () => trendRange() === rangeOption.value;
+                            const isLocked = () => isTrendRangeLocked(rangeOption.value);
+                            const isDisabled = () => isLocked() && !isSelected();
+                            return (
+                              <button
+                                type="button"
+                                disabled={isDisabled()}
+                                aria-pressed={isSelected()}
+                                onClick={() => setTrendRange(rangeOption.value)}
+                                class={segmentedButtonClass(isSelected(), isDisabled())}
+                                title={isLocked() ? `${rangeOption.label} history requires Pulse Pro` : `Show ${rangeOption.label} trend history`}
+                              >
+                                {rangeOption.label}
+                                <Show when={isLocked()}>
+                                  <span class="ml-0.5 text-[8px] font-semibold uppercase text-blue-600 dark:text-blue-300">
+                                    Pro
+                                  </span>
+                                </Show>
+                              </button>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    </div>
+
                     <Show when={hasActiveFilters()}>
                       <button
                         type="button"
@@ -435,6 +490,11 @@ export function Infrastructure() {
                   </div>
                 </div>
               </Card>
+
+              <InfrastructureSummary
+                hosts={filteredResources()}
+                timeRange={trendRange()}
+              />
 
               <div class="flex items-center gap-3 px-1 text-[11px] text-gray-500 dark:text-gray-400">
                 <span class="font-medium text-gray-700 dark:text-gray-200">{stats().total} {stats().total === 1 ? 'host' : 'hosts'}</span>

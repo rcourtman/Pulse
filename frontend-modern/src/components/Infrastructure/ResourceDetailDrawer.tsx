@@ -1,4 +1,4 @@
-import { Component, Show, createMemo, For, createSignal, createEffect } from 'solid-js';
+import { Component, Show, Suspense, createMemo, For, createSignal, createEffect } from 'solid-js';
 import type { Disk, Host, HostNetworkInterface, HostSensorSummary, Memory, Node } from '@/types/api';
 import type { Resource, ResourceMetric } from '@/types/resource';
 import { getDisplayName } from '@/types/resource';
@@ -16,6 +16,8 @@ import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import { ReportMergeModal } from './ReportMergeModal';
+import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -42,6 +44,7 @@ type AgentDiskInfo = {
 };
 
 type AgentPlatformData = {
+  agentId?: string;
   agentVersion?: string;
   hostname?: string;
   platform?: string;
@@ -70,6 +73,94 @@ type PlatformData = {
   matchResults?: unknown;
   matchCandidates?: unknown;
   matches?: unknown;
+};
+
+type DiscoveryConfig = {
+  resourceType: DiscoveryResourceType;
+  hostId: string;
+  resourceId: string;
+  hostname: string;
+  metadataKind: 'guest' | 'host';
+  metadataId: string;
+  targetLabel: string;
+};
+
+const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
+  const platformData = resource.platformData as PlatformData | undefined;
+  const hostLookupId =
+    platformData?.agent?.agentId ||
+    resource.identity?.hostname ||
+    platformData?.agent?.hostname ||
+    platformData?.proxmox?.nodeName ||
+    ((platformData?.docker as { hostname?: string } | undefined)?.hostname) ||
+    resource.name ||
+    resource.id;
+  const hostLikeId = hostLookupId;
+  const workloadHostId = resource.platformId || resource.parentId || resource.id;
+  const hostname = resource.identity?.hostname || resource.displayName || resource.name || resource.id;
+
+  switch (resource.type) {
+    case 'host':
+    case 'node':
+    case 'docker-host':
+    case 'k8s-cluster':
+    case 'k8s-node':
+    case 'truenas':
+      return {
+        resourceType: 'host',
+        hostId: hostLikeId,
+        resourceId: hostLikeId,
+        hostname,
+        metadataKind: 'host',
+        metadataId: hostLikeId,
+        targetLabel: 'host',
+      };
+    case 'vm':
+      return {
+        resourceType: 'vm',
+        hostId: workloadHostId,
+        resourceId: resource.id,
+        hostname,
+        metadataKind: 'guest',
+        metadataId: resource.id,
+        targetLabel: 'guest',
+      };
+    case 'container':
+    case 'oci-container':
+      return {
+        resourceType: 'lxc',
+        hostId: workloadHostId,
+        resourceId: resource.id,
+        hostname,
+        metadataKind: 'guest',
+        metadataId: resource.id,
+        targetLabel: 'guest',
+      };
+    case 'docker-container':
+      return {
+        resourceType: 'docker',
+        hostId: workloadHostId,
+        resourceId: resource.id,
+        hostname,
+        metadataKind: 'guest',
+        metadataId: resource.id,
+        targetLabel: 'container',
+      };
+    case 'pod':
+    case 'k8s-deployment':
+    case 'k8s-service':
+      return {
+        resourceType: 'k8s',
+        hostId: workloadHostId,
+        resourceId: resource.id,
+        hostname,
+        metadataKind: 'guest',
+        metadataId: resource.id,
+        targetLabel: 'workload',
+      };
+    default:
+      return null;
+  }
 };
 
 
@@ -256,6 +347,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
   const sourceStatus = createMemo(() => platformData()?.sourceStatus ?? {});
   const mergedSources = createMemo(() => platformData()?.sources ?? []);
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
+  const discoveryConfig = createMemo(() => toDiscoveryConfig(props.resource));
   const sourceSections = createMemo(() => {
     const data = platformData();
     if (!data) return [];
@@ -560,9 +652,35 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
 
       {/* Discovery Tab */}
       <div class={activeTab() === 'discovery' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
-        <div class="rounded border border-dashed border-gray-300 bg-gray-50/70 p-4 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-300">
-          Discovery details are available in the legacy host drawer for now.
-        </div>
+        <Show
+          when={discoveryConfig()}
+          fallback={
+            <div class="rounded border border-dashed border-gray-300 bg-gray-50/70 p-4 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-300">
+              Discovery is not available for this resource type yet.
+            </div>
+          }
+        >
+          {(config) => (
+            <Suspense
+              fallback={
+                <div class="flex items-center justify-center py-8">
+                  <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                  <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">Loading discovery...</span>
+                </div>
+              }
+            >
+              <DiscoveryTab
+                resourceType={config().resourceType}
+                hostId={config().hostId}
+                resourceId={config().resourceId}
+                hostname={config().hostname}
+                urlMetadataKind={config().metadataKind}
+                urlMetadataId={config().metadataId}
+                urlTargetLabel={config().targetLabel}
+              />
+            </Suspense>
+          )}
+        </Show>
       </div>
 
       {/* Debug Tab */}
@@ -644,7 +762,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
             onClick={() => setShowReportModal(true)}
             class="text-xs font-medium text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
-            Report incorrect merge
+            Split merged resource
           </button>
         </div>
       </Show>

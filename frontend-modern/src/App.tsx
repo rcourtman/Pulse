@@ -27,6 +27,7 @@ import { layoutStore } from '@/utils/layout';
 import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
 import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
+import type { TimeRange } from './api/charts';
 import { apiFetch } from './utils/apiClient';
 import type { SecurityStatus } from '@/types/config';
 import { SettingsAPI } from './api/settings';
@@ -41,9 +42,9 @@ import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
 import { MobileNavBar } from './components/shared/MobileNavBar';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State, Alert } from '@/types/api';
-import { startMetricsSampler } from './stores/metricsSampler';
-import { seedFromBackend } from './stores/metricsHistory';
-import { getMetricsViewMode } from './stores/metricsViewMode';
+import { activateSparklines } from './stores/sparklineData';
+import { getMetricsViewMode, getMetricsTimeRange } from './stores/metricsViewMode';
+import { startMetricsCollector } from './stores/metricsCollector';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import ServerIcon from 'lucide-solid/icons/server';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
@@ -64,8 +65,14 @@ import { aiChatStore } from './stores/aiChat';
 import { useResourcesAsLegacy } from './hooks/useResources';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
+import {
+  fetchInfrastructureSummaryAndCache,
+  INFRASTRUCTURE_TREND_RANGE_STORAGE_KEY,
+  hasFreshInfrastructureSummaryCache,
+  parseChartsTimeRange,
+} from '@/utils/infrastructureSummaryCache';
 import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode, getKioskModePreference } from './utils/url';
-import { GlobalSearch } from '@/components/shared/GlobalSearch';
+
 import { showToast } from '@/utils/toast';
 
 
@@ -256,20 +263,60 @@ function App() {
   };
   const alertsActivation = useAlertsActivation();
 
-  // Start metrics sampler for sparklines
+  // Start metrics collector (always runs for Storage page)
+  // and activate sparklines if the user has that mode enabled
   onMount(() => {
-    startMetricsSampler();
-
-    // If user already has sparklines mode enabled, seed historical data immediately
+    startMetricsCollector();
     if (getMetricsViewMode() === 'sparklines') {
-      seedFromBackend('1h').catch(() => {
-        // Errors are already logged in seedFromBackend
-      });
+      activateSparklines(getMetricsTimeRange());
     }
   });
 
   let hasPreloadedRoutes = false;
   let hasFetchedVersionInfo = false;
+  let hasPrewarmedInfrastructureCharts = false;
+
+  const getInfrastructureTrendRangeForPrewarm = (): TimeRange => {
+    if (typeof window === 'undefined') return '1h';
+    return parseChartsTimeRange(window.localStorage.getItem(INFRASTRUCTURE_TREND_RANGE_STORAGE_KEY), '1h');
+  };
+
+  const shouldPrewarmInfrastructure = (): boolean => {
+    if (typeof window === 'undefined') return false;
+
+    // Respect data-saver / very slow connections.
+    // We treat this as an optimization, not a correctness requirement.
+    const conn = (navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (conn?.saveData) return false;
+    const effective = conn?.effectiveType;
+    if (typeof effective === 'string' && (effective === 'slow-2g' || effective === '2g')) {
+      return false;
+    }
+
+    const pathname = window.location.pathname;
+    if (!pathname) return true;
+    if (pathname === '/infrastructure') return false;
+    return true;
+  };
+
+  const prewarmInfrastructureCharts = () => {
+    if (hasPrewarmedInfrastructureCharts || !shouldPrewarmInfrastructure()) {
+      return;
+    }
+
+    const range = getInfrastructureTrendRangeForPrewarm();
+    if (hasFreshInfrastructureSummaryCache(range)) {
+      hasPrewarmedInfrastructureCharts = true;
+      return;
+    }
+
+    hasPrewarmedInfrastructureCharts = true;
+    void fetchInfrastructureSummaryAndCache(range, { caller: 'App prewarm' })
+      .catch(() => {
+        // Non-blocking prewarm; ignore failures.
+      });
+  };
+
   const preloadLazyRoutes = () => {
     if (hasPreloadedRoutes || typeof window === 'undefined') {
       return;
@@ -401,6 +448,32 @@ function App() {
         window.setTimeout(preloadLazyRoutes, 0);
       }
     }
+  });
+
+  createEffect(() => {
+    if (isLoading() || needsAuth() || hasPrewarmedInfrastructureCharts) {
+      return;
+    }
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(() => {
+        prewarmInfrastructureCharts();
+      }, { timeout: 2_000 });
+      onCleanup(() => {
+        window.cancelIdleCallback(id);
+      });
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      prewarmInfrastructureCharts();
+    }, 500);
+    onCleanup(() => {
+      window.clearTimeout(timeout);
+    });
   });
 
   createEffect(() => {
@@ -847,14 +920,7 @@ function App() {
     const [shortcutsOpen, setShortcutsOpen] = createSignal(false);
     const [commandPaletteOpen, setCommandPaletteOpen] = createSignal(false);
 
-    const focusGlobalSearch = () => {
-      if (typeof document === 'undefined') return false;
-      const el = document.querySelector<HTMLInputElement>('[data-global-search]');
-      if (!el) return false;
-      el.focus();
-      el.select?.();
-      return true;
-    };
+
 
     useKeyboardShortcuts({
       enabled: () => !needsAuth(),
@@ -870,7 +936,6 @@ function App() {
         setCommandPaletteOpen((prev) => !prev);
       },
       onCloseCommandPalette: () => setCommandPaletteOpen(false),
-      onFocusSearch: focusGlobalSearch,
     });
 
     // Check AI settings on mount and setup escape handling
@@ -889,7 +954,7 @@ function App() {
             })
             .catch(() => {
               aiChatStore.setEnabled(false);
-          });
+            });
         });
       }
 
@@ -1450,11 +1515,7 @@ function AppLayout(props: {
           />
         </div>
       </div>
-      <Show when={!kioskMode()}>
-        <div class="mb-3 flex items-center justify-center px-2 md:justify-end">
-          <GlobalSearch />
-        </div>
-      </Show>
+
 
       {/* Tabs - hidden in kiosk mode */}
       <Show when={!kioskMode()}>

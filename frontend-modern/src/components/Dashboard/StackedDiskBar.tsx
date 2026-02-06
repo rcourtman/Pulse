@@ -1,7 +1,9 @@
 import { Show, For, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { useTooltip } from '@/hooks/useTooltip';
+import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import type { Disk } from '@/types/api';
-import { formatBytes, formatPercent } from '@/utils/format';
+import { formatBytes, formatPercent, estimateTextWidth, formatAnomalyRatio, ANOMALY_SEVERITY_CLASS } from '@/utils/format';
+import { getMetricColorRgba } from '@/utils/metricThresholds';
 import type { AnomalyReport } from '@/types/aiIntelligence';
 
 interface StackedDiskBarProps {
@@ -15,13 +17,6 @@ interface StackedDiskBarProps {
   anomaly?: AnomalyReport | null;
 }
 
-// Anomaly severity colors
-const anomalySeverityClass: Record<string, string> = {
-  critical: 'text-red-400',
-  high: 'text-orange-400',
-  medium: 'text-yellow-400',
-  low: 'text-blue-400',
-};
 
 // Color palette for disk segments - distinct colors for visual differentiation
 const SEGMENT_COLORS = [
@@ -33,22 +28,11 @@ const SEGMENT_COLORS = [
   'rgba(20, 184, 166, 0.6)',  // teal
 ];
 
-// Get color based on usage percentage
-function getUsageColor(percentage: number): string {
-  if (percentage >= 90) return 'rgba(239, 68, 68, 0.6)';  // red
-  if (percentage >= 80) return 'rgba(234, 179, 8, 0.6)';  // yellow
-  return 'rgba(34, 197, 94, 0.6)'; // green
-}
 
-// Estimate text width for label fitting
-const estimateTextWidth = (text: string): number => {
-  return text.length * 5.5 + 8;
-};
 
 export function StackedDiskBar(props: StackedDiskBarProps) {
+  const tip = useTooltip();
   const [containerWidth, setContainerWidth] = createSignal(100);
-  const [showTooltip, setShowTooltip] = createSignal(false);
-  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
   let containerRef: HTMLDivElement | undefined;
 
   onMount(() => {
@@ -65,14 +49,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
     onCleanup(() => observer.disconnect());
   });
 
-  // Format anomaly ratio for display
-  const anomalyRatio = createMemo(() => {
-    if (!props.anomaly || props.anomaly.baseline_mean === 0) return null;
-    const ratio = props.anomaly.current_value / props.anomaly.baseline_mean;
-    if (ratio >= 2) return `${ratio.toFixed(1)}x`;
-    if (ratio >= 1.5) return '↑↑';
-    return '↑';
-  });
+  const anomalyRatio = createMemo(() => formatAnomalyRatio(props.anomaly));
 
   // Determine if we have multiple disks or should use aggregate
   const hasMultipleDisks = createMemo(() => {
@@ -118,8 +95,8 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       const usedPercent = (disk.used / total) * 100;
       const diskPercent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
       // Use warning/critical colors for high usage, otherwise use the color palette
-      const color = diskPercent >= 90 ? getUsageColor(90) :
-        diskPercent >= 80 ? getUsageColor(80) :
+      const color = diskPercent >= 90 ? getMetricColorRgba(90, 'disk') :
+        diskPercent >= 80 ? getMetricColorRgba(80, 'disk') :
           SEGMENT_COLORS[idx % SEGMENT_COLORS.length];
       return {
         disk,
@@ -144,7 +121,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       return {
         label,
         percent,
-        color: getUsageColor(percent),
+        color: getMetricColorRgba(percent, 'disk'),
       };
     });
   });
@@ -180,9 +157,9 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
   const barColor = createMemo(() => {
     const info = maxDiskInfo();
     if (aggregateMode() && hasMultipleDisks() && info) {
-      return getUsageColor(info.percent);
+      return getMetricColorRgba(info.percent, 'disk');
     }
-    return getUsageColor(overallPercent());
+    return getMetricColorRgba(overallPercent(), 'disk');
   });
 
   // Generate tooltip content
@@ -198,11 +175,11 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           total: formatBytes(disk.total),
           percent: formatPercent(percent),
           color: useUsageColors
-            ? getUsageColor(percent)
+            ? getMetricColorRgba(percent, 'disk')
             : percent >= 90
-              ? getUsageColor(90)
+              ? getMetricColorRgba(90, 'disk')
               : percent >= 80
-                ? getUsageColor(80)
+                ? getMetricColorRgba(80, 'disk')
                 : SEGMENT_COLORS[idx % SEGMENT_COLORS.length],
         };
       });
@@ -215,7 +192,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
         used: formatBytes(props.aggregateDisk.used),
         total: formatBytes(props.aggregateDisk.total),
         percent: formatPercent(percent),
-        color: getUsageColor(percent),
+        color: getMetricColorRgba(percent, 'disk'),
       }];
     }
     return [];
@@ -253,15 +230,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
   });
 
   const handleMouseEnter = (e: MouseEvent) => {
-    if (tooltipContent().length > 0) {
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-      setShowTooltip(true);
-    }
-  };
-
-  const handleMouseLeave = () => {
-    setShowTooltip(false);
+    if (tooltipContent().length > 0) tip.onMouseEnter(e);
   };
 
   return (
@@ -272,7 +241,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           <div
             class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded"
             onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
+            onMouseLeave={tip.onMouseLeave}
           >
             {/* Stacked segments for multiple disks */}
             <Show when={useStackedSegments()}>
@@ -328,7 +297,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 {/* Anomaly indicator */}
                 <Show when={props.anomaly && anomalyRatio()}>
                   <span
-                    class={`ml-0.5 font-bold animate-pulse ${anomalySeverityClass[props.anomaly!.severity] || 'text-yellow-400'}`}
+                    class={`ml-0.5 font-bold animate-pulse ${ANOMALY_SEVERITY_CLASS[props.anomaly!.severity] || 'text-yellow-400'}`}
                     title={props.anomaly!.description}
                   >
                     {anomalyRatio()}
@@ -339,7 +308,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           </div>
         }
       >
-        <div class="w-full" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+        <div class="w-full" onMouseEnter={handleMouseEnter} onMouseLeave={tip.onMouseLeave}>
           <div
             class="grid gap-1"
             style={{
@@ -369,50 +338,39 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       </Show>
 
       {/* Tooltip for disk breakdown */}
-      <Show when={showTooltip() && tooltipContent().length > 0}>
-        <Portal mount={document.body}>
-          <div
-            class="fixed z-[9999] pointer-events-none"
-            style={{
-              left: `${tooltipPos().x}px`,
-              top: `${tooltipPos().y - 8}px`,
-              transform: 'translate(-50%, -100%)',
-            }}
-          >
-            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[140px] border border-gray-700">
-              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
-                {hasMultipleDisks() ? 'Disk Breakdown' : 'Disk Usage'}
-              </div>
-              <For each={tooltipContent()}>
-                {(item, idx) => (
-                  <div class="flex flex-col gap-1 py-0.5" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
-                    <div class="flex justify-between gap-3">
-                      <span
-                        class="truncate max-w-[100px]"
-                        style={{ color: item.color }}
-                      >
-                        {item.label}
-                      </span>
-                      <span class="whitespace-nowrap text-gray-300">
-                        {item.percent} ({item.used}/{item.total})
-                      </span>
-                    </div>
-                    <div class="h-1.5 w-full rounded bg-gray-700/70 overflow-hidden">
-                      <div
-                        class="h-full"
-                        style={{
-                          width: item.percent,
-                          'background-color': item.color,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
+      <TooltipPortal when={tip.show() && tooltipContent().length > 0} x={tip.pos().x} y={tip.pos().y}>
+        <div class="min-w-[140px]">
+          <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+            {hasMultipleDisks() ? 'Disk Breakdown' : 'Disk Usage'}
           </div>
-        </Portal>
-      </Show>
+          <For each={tooltipContent()}>
+            {(item, idx) => (
+              <div class="flex flex-col gap-1 py-0.5" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
+                <div class="flex justify-between gap-3">
+                  <span
+                    class="truncate max-w-[100px]"
+                    style={{ color: item.color }}
+                  >
+                    {item.label}
+                  </span>
+                  <span class="whitespace-nowrap text-gray-300">
+                    {item.percent} ({item.used}/{item.total})
+                  </span>
+                </div>
+                <div class="h-1.5 w-full rounded bg-gray-700/70 overflow-hidden">
+                  <div
+                    class="h-full"
+                    style={{
+                      width: item.percent,
+                      'background-color': item.color,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </For>
+        </div>
+      </TooltipPortal>
     </div>
   );
 }

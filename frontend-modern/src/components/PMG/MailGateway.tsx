@@ -1,5 +1,6 @@
 import { Component, Show, For, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { useTooltip } from '@/hooks/useTooltip';
+import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -101,8 +102,7 @@ const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
 
 // Queue depth indicator with tooltip
 const QueueIndicator: Component<{ queue?: { total: number; active?: number; deferred?: number; hold?: number; incoming?: number; oldestAge?: number } }> = (props) => {
-  const [showTooltip, setShowTooltip] = createSignal(false);
-  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+  const tip = useTooltip();
 
   const queueTotal = () => props.queue?.total || 0;
   const hasQueue = () => queueTotal() > 0;
@@ -114,19 +114,12 @@ const QueueIndicator: Component<{ queue?: { total: number; active?: number; defe
     return 'low';
   };
 
-  const handleMouseEnter = (e: MouseEvent) => {
-    if (!props.queue) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-    setShowTooltip(true);
-  };
-
   return (
     <>
       <div
         class="cursor-help"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={() => setShowTooltip(false)}
+        onMouseEnter={(e) => { if (props.queue) tip.onMouseEnter(e); }}
+        onMouseLeave={tip.onMouseLeave}
       >
         <Show when={hasQueue()} fallback={
           <span class="text-xs text-gray-400">Empty</span>
@@ -140,36 +133,25 @@ const QueueIndicator: Component<{ queue?: { total: number; active?: number; defe
         </Show>
       </div>
 
-      <Show when={showTooltip() && props.queue}>
-        <Portal mount={document.body}>
-          <div
-            class="fixed z-[9999] pointer-events-none"
-            style={{
-              left: `${tooltipPos().x}px`,
-              top: `${tooltipPos().y - 8}px`,
-              transform: 'translate(-50%, -100%)',
-            }}
-          >
-            <div class="bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-md shadow-lg px-3 py-2 min-w-[140px] border border-gray-700">
-              <div class="font-medium mb-1.5 text-gray-300 border-b border-gray-700 pb-1">Queue Breakdown</div>
-              <div class="space-y-0.5 text-[11px]">
-                <div class="flex justify-between"><span class="text-gray-400">Active</span><span>{props.queue?.active || 0}</span></div>
-                <div class="flex justify-between"><span class="text-gray-400">Deferred</span><span>{props.queue?.deferred || 0}</span></div>
-                <div class="flex justify-between"><span class="text-gray-400">Hold</span><span>{props.queue?.hold || 0}</span></div>
-                <div class="flex justify-between"><span class="text-gray-400">Incoming</span><span>{props.queue?.incoming || 0}</span></div>
-                <Show when={(props.queue?.oldestAge || 0) > 0}>
-                  <div class="flex justify-between pt-1 mt-1 border-t border-gray-700">
-                    <span class="text-gray-400">Oldest</span>
-                    <span class={(props.queue?.oldestAge || 0) > 1800 ? 'text-yellow-400' : ''}>
-                      {Math.floor((props.queue?.oldestAge || 0) / 60)}m
-                    </span>
-                  </div>
-                </Show>
+      <TooltipPortal when={tip.show() && !!props.queue} x={tip.pos().x} y={tip.pos().y}>
+        <div class="min-w-[140px]">
+          <div class="font-medium mb-1.5 text-gray-300 border-b border-gray-700 pb-1">Queue Breakdown</div>
+          <div class="space-y-0.5 text-[11px]">
+            <div class="flex justify-between"><span class="text-gray-400">Active</span><span>{props.queue?.active || 0}</span></div>
+            <div class="flex justify-between"><span class="text-gray-400">Deferred</span><span>{props.queue?.deferred || 0}</span></div>
+            <div class="flex justify-between"><span class="text-gray-400">Hold</span><span>{props.queue?.hold || 0}</span></div>
+            <div class="flex justify-between"><span class="text-gray-400">Incoming</span><span>{props.queue?.incoming || 0}</span></div>
+            <Show when={(props.queue?.oldestAge || 0) > 0}>
+              <div class="flex justify-between pt-1 mt-1 border-t border-gray-700">
+                <span class="text-gray-400">Oldest</span>
+                <span class={(props.queue?.oldestAge || 0) > 1800 ? 'text-yellow-400' : ''}>
+                  {Math.floor((props.queue?.oldestAge || 0) / 60)}m
+                </span>
               </div>
-            </div>
+            </Show>
           </div>
-        </Portal>
-      </Show>
+        </div>
+      </TooltipPortal>
     </>
   );
 };

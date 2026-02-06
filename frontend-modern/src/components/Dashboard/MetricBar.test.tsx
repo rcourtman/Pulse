@@ -8,10 +8,11 @@ vi.mock('@/stores/metricsViewMode', () => ({
     useMetricsViewMode: () => mockUseMetricsViewMode()
 }));
 
-const mockGetMetricHistory = vi.fn();
-vi.mock('@/stores/metricsHistory', () => ({
-    getMetricHistoryForRange: (...args: any[]) => mockGetMetricHistory(...args),
-    getMetricsVersion: vi.fn()
+const mockGetSparklineData = vi.fn();
+vi.mock('@/stores/sparklineData', () => ({
+    getSparklineData: (...args: any[]) => mockGetSparklineData(...args),
+    getSparklineStore: vi.fn(() => new Map()),
+    isSparklineLoading: vi.fn(() => false),
 }));
 
 // Mock Sparkline
@@ -39,7 +40,7 @@ describe('MetricBar', () => {
             viewMode: () => 'bars',
             timeRange: () => '1h'
         });
-        mockGetMetricHistory.mockReturnValue([]);
+        mockGetSparklineData.mockReturnValue([]);
 
         // Default Mock offsetWidth
         Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 100 });
@@ -112,13 +113,14 @@ describe('MetricBar', () => {
         result.unmount();
     });
 
-    it('renders correct color classes for Generic/Default', () => {
+    it('renders correct color classes for Generic/Default (uses CPU thresholds)', () => {
         let result = render(() => <MetricBar value={50} label="val" />);
         let bar = result.container.querySelector('.bg-green-500\\/60');
         expect(bar).toBeInTheDocument();
         result.unmount();
 
-        result = render(() => <MetricBar value={75} label="val" />);
+        // Generic defaults to CPU thresholds: warning=80, critical=90
+        result = render(() => <MetricBar value={80} label="val" />);
         bar = result.container.querySelector('.bg-yellow-500\\/60');
         expect(bar).toBeInTheDocument();
         result.unmount();
@@ -183,7 +185,7 @@ describe('MetricBar', () => {
             viewMode: () => 'sparklines',
             timeRange: () => '1h'
         });
-        mockGetMetricHistory.mockReturnValue(dummyData);
+        mockGetSparklineData.mockReturnValue(dummyData);
 
         render(() => <MetricBar value={50} label="val" resourceId="r1" type="cpu" />);
         const spark = screen.getByTestId('sparkline');

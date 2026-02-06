@@ -24,6 +24,7 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
+    "lint:cpd": "jscpd",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
   },
@@ -52,6 +53,7 @@
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-solid": "^0.14.5",
     "globals": "^17.3.0",
+    "jscpd": "^4.0.8",
     "jsdom": "^24.1.0",
     "postcss": "^8.4.0",
     "prettier": "^3.3.0",

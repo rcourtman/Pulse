@@ -1,9 +1,12 @@
 import { Show, For, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { formatBytes, formatPercent } from '@/utils/format';
-import { Sparkline } from '@/components/shared/Sparkline';
+import { useTooltip } from '@/hooks/useTooltip';
+import { TooltipPortal } from '@/components/shared/TooltipPortal';
+import { formatBytes, formatPercent, estimateTextWidth, formatAnomalyRatio, ANOMALY_SEVERITY_CLASS } from '@/utils/format';
+import { getMetricColorRgba } from '@/utils/metricThresholds';
+import { Sparkline, SparklineLockBadge } from '@/components/shared/Sparkline';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
-import { getMetricHistoryForRange, getMetricsVersion } from '@/stores/metricsHistory';
+import { isRangeLocked } from '@/stores/license';
+import { getSparklineData, getSparklineStore } from '@/stores/sparklineData';
 import type { AnomalyReport } from '@/types/aiIntelligence';
 
 interface StackedMemoryBarProps {
@@ -16,13 +19,6 @@ interface StackedMemoryBarProps {
     anomaly?: AnomalyReport | null;  // Baseline anomaly if detected
 }
 
-// Anomaly severity colors
-const anomalySeverityClass: Record<string, string> = {
-    critical: 'text-red-400',
-    high: 'text-orange-400',
-    medium: 'text-yellow-400',
-    low: 'text-blue-400',
-};
 
 // Colors for memory segments
 const MEMORY_COLORS = {
@@ -31,37 +27,23 @@ const MEMORY_COLORS = {
     swap: 'rgba(168, 85, 247, 0.6)',    // purple
 };
 
-// Threshold-based colors for memory usage (matches disk bar behavior)
-const getMemoryColor = (percent: number): string => {
-    if (percent >= 90) return 'rgba(239, 68, 68, 0.7)';   // red
-    if (percent >= 70) return 'rgba(234, 179, 8, 0.7)';   // yellow/orange
-    return 'rgba(34, 197, 94, 0.6)';                      // green
-};
 
 export function StackedMemoryBar(props: StackedMemoryBarProps) {
     const { viewMode, timeRange } = useMetricsViewMode();
 
-    // Get metric history for sparkline
-    // Depends on metricsVersion to re-fetch when data is seeded (e.g., on time range change)
-    const metricHistory = createMemo(() => {
-        // Subscribe to version changes so we re-read when new data is seeded
-        getMetricsVersion();
+    const locked = () => isRangeLocked(timeRange());
+
+    // Get sparkline points from the new sparkline data store
+    const sparklinePoints = createMemo(() => {
+        getSparklineStore(); // reactive dependency
         if (viewMode() !== 'sparklines' || !props.resourceId) return [];
-        return getMetricHistoryForRange(props.resourceId, timeRange());
+        return getSparklineData(props.resourceId, 'memory');
     });
 
-    // Format anomaly ratio for display
-    const anomalyRatio = createMemo(() => {
-        if (!props.anomaly || props.anomaly.baseline_mean === 0) return null;
-        const ratio = props.anomaly.current_value / props.anomaly.baseline_mean;
-        if (ratio >= 2) return `${ratio.toFixed(1)}x`;
-        if (ratio >= 1.5) return '↑↑';
-        return '↑';
-    });
+    const anomalyRatio = createMemo(() => formatAnomalyRatio(props.anomaly));
 
+    const tip = useTooltip();
     const [containerWidth, setContainerWidth] = createSignal(100);
-    const [showTooltip, setShowTooltip] = createSignal(false);
-    const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
     let containerRef: HTMLDivElement | undefined;
 
     onMount(() => {
@@ -103,7 +85,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
             const balloonLimitPercent = Math.max(0, (balloon / props.total) * 100 - usedPercent);
 
             const segs = [
-                { type: 'Active', bytes: props.used, percent: usedPercent, color: getMemoryColor(usedPercent) },
+                { type: 'Active', bytes: props.used, percent: usedPercent, color: getMetricColorRgba(usedPercent, 'memory') },
             ];
 
             // Only show balloon segment if there's room between used and balloon limit
@@ -121,7 +103,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
 
         // No active ballooning - show used memory with threshold-based coloring
         return [
-            { type: 'Active', bytes: props.used, percent: usedPercent, color: getMemoryColor(usedPercent) },
+            { type: 'Active', bytes: props.used, percent: usedPercent, color: getMetricColorRgba(usedPercent, 'memory') },
         ].filter(s => s.bytes > 0);
     });
 
@@ -141,25 +123,12 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         return `${formatBytes(props.used)}/${formatBytes(props.total)}`;
     });
 
-    // Estimate text width for label fitting (approx 6px per char + padding)
-    const estimateTextWidth = (text: string): number => {
-        return text.length * 6 + 10;
-    };
 
     const showSublabel = createMemo(() => {
         const fullText = `${displayLabel()} (${displaySublabel()})`;
         return containerWidth() >= estimateTextWidth(fullText);
     });
 
-    const handleMouseEnter = (e: MouseEvent) => {
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-        setShowTooltip(true);
-    };
-
-    const handleMouseLeave = () => {
-        setShowTooltip(false);
-    };
 
     return (
         <Show
@@ -168,8 +137,8 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                 <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
                     <div
                         class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded"
-                        onMouseEnter={handleMouseEnter}
-                        onMouseLeave={handleMouseLeave}
+                        onMouseEnter={tip.onMouseEnter}
+                        onMouseLeave={tip.onMouseLeave}
                     >
                         {/* Stacked segments - use absolute positioning like MetricBar for correct width scaling */}
                         <For each={segments()}>
@@ -217,7 +186,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                 {/* Anomaly indicator */}
                                 <Show when={props.anomaly && anomalyRatio()}>
                                     <span
-                                        class={`ml-0.5 font-bold animate-pulse ${anomalySeverityClass[props.anomaly!.severity] || 'text-yellow-400'}`}
+                                        class={`ml-0.5 font-bold animate-pulse ${ANOMALY_SEVERITY_CLASS[props.anomaly!.severity] || 'text-yellow-400'}`}
                                         title={props.anomaly!.description}
                                     >
                                         {anomalyRatio()}
@@ -228,71 +197,60 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                     </div>
 
                     {/* Tooltip */}
-                    <Show when={showTooltip()}>
-                        <Portal mount={document.body}>
-                            <div
-                                class="fixed z-[9999] pointer-events-none"
-                                style={{
-                                    left: `${tooltipPos().x}px`,
-                                    top: `${tooltipPos().y - 8}px`,
-                                    transform: 'translate(-50%, -100%)',
-                                }}
-                            >
-                                <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[140px] border border-gray-700">
-                                    <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
-                                        Memory Composition
-                                    </div>
-
-                                    {/* RAM Breakdown */}
-                                    <div class="flex justify-between gap-3 py-0.5">
-                                        <span class="text-green-400">Used</span>
-                                        <span class="whitespace-nowrap text-gray-300">
-                                            {formatBytes(props.used)}
-                                        </span>
-                                    </div>
-
-                                    <Show when={(props.balloon || 0) > 0 && (props.balloon || 0) < props.total}>
-                                        <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
-                                            <span class="text-blue-400">Balloon Limit</span>
-                                            <span class="whitespace-nowrap text-gray-300">
-                                                {formatBytes(props.balloon || 0)}
-                                            </span>
-                                        </div>
-                                    </Show>
-
-                                    <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
-                                        <span class="text-gray-400">Free</span>
-                                        <span class="whitespace-nowrap text-gray-300">
-                                            {formatBytes(props.total - props.used)}
-                                        </span>
-                                    </div>
-
-                                    {/* Swap Section */}
-                                    <Show when={hasSwap()}>
-                                        <div class="mt-1 pt-1 border-t border-gray-600">
-                                            <div class="flex justify-between gap-3 py-0.5">
-                                                <span class="text-purple-400">Swap</span>
-                                                <span class="whitespace-nowrap text-gray-300">
-                                                    {formatBytes(props.swapUsed || 0)} / {formatBytes(props.swapTotal || 0)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </Show>
-                                </div>
+                    <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
+                        <div class="min-w-[140px]">
+                            <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                                Memory Composition
                             </div>
-                        </Portal>
-                    </Show>
+
+                            <div class="flex justify-between gap-3 py-0.5">
+                                <span class="text-green-400">Used</span>
+                                <span class="whitespace-nowrap text-gray-300">
+                                    {formatBytes(props.used)}
+                                </span>
+                            </div>
+
+                            <Show when={(props.balloon || 0) > 0 && (props.balloon || 0) < props.total}>
+                                <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
+                                    <span class="text-blue-400">Balloon Limit</span>
+                                    <span class="whitespace-nowrap text-gray-300">
+                                        {formatBytes(props.balloon || 0)}
+                                    </span>
+                                </div>
+                            </Show>
+
+                            <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
+                                <span class="text-gray-400">Free</span>
+                                <span class="whitespace-nowrap text-gray-300">
+                                    {formatBytes(props.total - props.used)}
+                                </span>
+                            </div>
+
+                            <Show when={hasSwap()}>
+                                <div class="mt-1 pt-1 border-t border-gray-600">
+                                    <div class="flex justify-between gap-3 py-0.5">
+                                        <span class="text-purple-400">Swap</span>
+                                        <span class="whitespace-nowrap text-gray-300">
+                                            {formatBytes(props.swapUsed || 0)} / {formatBytes(props.swapTotal || 0)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </Show>
+                        </div>
+                    </TooltipPortal>
                 </div>
             }
         >
             {/* Sparkline mode - full width, flex centered like stacked bars */}
             <div class="metric-text w-full h-4 flex items-center justify-center min-w-0 overflow-hidden">
-                <Sparkline
-                    data={metricHistory()}
-                    metric="memory"
-                    width={0}
-                    height={16}
-                />
+                <Show when={!locked()} fallback={<SparklineLockBadge />}>
+                    <Sparkline
+                        data={sparklinePoints()}
+                        metric="memory"
+                        width={0}
+                        height={16}
+                    />
+                </Show>
             </div>
         </Show>
     );

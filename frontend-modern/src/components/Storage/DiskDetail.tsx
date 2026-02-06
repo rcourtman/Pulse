@@ -1,20 +1,14 @@
-import { Component, Show, createSignal } from 'solid-js';
+import { Component, Show, createSignal, createMemo } from 'solid-js';
 import type { PhysicalDisk } from '@/types/api';
 import { diskResourceId } from '@/types/api';
 import { HistoryChart } from '@/components/shared/HistoryChart';
-import type { HistoryTimeRange } from '@/api/charts';
+import type { HistoryTimeRange, AggregatedMetricPoint } from '@/api/charts';
 import { formatTemperature } from '@/utils/temperature';
+import { formatPowerOnHours } from '@/utils/format';
+import { useWebSocket } from '@/App';
+import { getDiskMetricHistory, getDiskMetricsVersion } from '@/stores/diskMetricsHistory';
+import { createEffect, onCleanup } from 'solid-js';
 
-/** Format power-on hours into human-readable form. */
-function formatPowerOnHours(hours: number): string {
-  if (hours >= 8760) {
-    return `${(hours / 8760).toFixed(1)} years`;
-  }
-  if (hours >= 24) {
-    return `${Math.round(hours / 24)} days`;
-  }
-  return `${hours} hours`;
-}
 
 /** Color class for attribute values. */
 function attrColor(ok: boolean): string {
@@ -34,24 +28,88 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
   const attrs = () => props.disk.smartAttributes;
   const isNvme = () => props.disk.type?.toLowerCase() === 'nvme';
 
+  const { state } = useWebSocket();
+
+  const getMetricResourceId = () => {
+    const nodeName = props.disk.node;
+    const instance = props.disk.instance;
+    const node = state.nodes?.find(n => n.name === nodeName && n.instance === instance);
+    const hostId = node?.linkedHostAgentId;
+
+    if (!hostId) return null;
+    const deviceName = props.disk.devPath.replace('/dev/', '');
+    return `${hostId}:${deviceName}`;
+  };
+
+  const metricResourceId = createMemo(() => getMetricResourceId());
+
+  // Subscribe to disk metrics updates
+  const [diskVer, setDiskVer] = createSignal(getDiskMetricsVersion());
+  createEffect(() => {
+    const t = setInterval(() => setDiskVer(getDiskMetricsVersion()), 2000);
+    onCleanup(() => clearInterval(t));
+  });
+
+  const historyData = createMemo(() => {
+    diskVer(); // dependency
+    const id = metricResourceId();
+    if (!id) return [];
+    return getDiskMetricHistory(id, 30 * 60 * 1000); // 30 mins
+  });
+
+  const readData = createMemo<AggregatedMetricPoint[]>(() =>
+    historyData().map(d => ({ timestamp: d.timestamp, value: d.readBps, min: d.readBps, max: d.readBps }))
+  );
+  const writeData = createMemo<AggregatedMetricPoint[]>(() =>
+    historyData().map(d => ({ timestamp: d.timestamp, value: d.writeBps, min: d.writeBps, max: d.writeBps }))
+  );
+  const ioData = createMemo<AggregatedMetricPoint[]>(() =>
+    // Convert util% (0-100)
+    historyData().map(d => ({ timestamp: d.timestamp, value: d.ioTime, min: d.ioTime, max: d.ioTime }))
+  );
+
   return (
     <div class="space-y-3">
       {/* Disk info */}
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-        <span class="font-semibold text-gray-900 dark:text-gray-100">
-          {props.disk.model || 'Unknown Disk'}
-        </span>
-        <span class="text-gray-500 dark:text-gray-400 font-mono">
-          {props.disk.devPath}
-        </span>
-        <span class="text-gray-500 dark:text-gray-400">
-          {props.disk.node}
-        </span>
-        <Show when={props.disk.serial}>
-          <span class="text-gray-400 font-mono">
-            S/N: {props.disk.serial}
+      {/* Header: Info & Selector */}
+      <div class="flex flex-wrap items-end justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+          <span class="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+            {props.disk.model || 'Unknown Disk'}
           </span>
-        </Show>
+          <span class="text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
+            {props.disk.devPath}
+          </span>
+          <span class="text-gray-500 dark:text-gray-400">
+            {props.disk.node}
+          </span>
+          <Show when={props.disk.serial}>
+            <span class="text-gray-400 font-mono">
+              S/N: {props.disk.serial}
+            </span>
+          </Show>
+        </div>
+
+        {/* Global Time Range Selector */}
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">History:</span>
+          <div class="relative">
+            <select
+              value={chartRange()}
+              onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
+              class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none shadow-sm hover:border-gray-300 dark:hover:border-gray-500 transition-colors"
+              style={{ "background-image": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", "background-repeat": "no-repeat", "background-position": "right 6px center" }}
+            >
+              <option value="1h">Last 1 hour</option>
+              <option value="6h">Last 6 hours</option>
+              <option value="12h">Last 12 hours</option>
+              <option value="24h">Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* SMART attribute cards */}
@@ -142,6 +200,39 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         </div>
       </Show>
 
+      {/* Live Performance Sparklines */}
+      <Show when={metricResourceId()}>
+        <div class="space-y-2">
+          <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+            Live I/O (30m)
+            <span class="text-[10px] font-normal text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">Real-time</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <HistoryChart
+                resourceType="host" resourceId="dummy" metric="disk"
+                label="Read" unit="B/s"
+                data={readData()} hideSelector hideLock height={120} compact={true}
+              />
+            </div>
+            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <HistoryChart
+                resourceType="host" resourceId="dummy" metric="disk"
+                label="Write" unit="B/s"
+                data={writeData()} hideSelector hideLock height={120} compact={true}
+              />
+            </div>
+            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <HistoryChart
+                resourceType="host" resourceId="dummy" metric="disk"
+                label="Busy" unit="%"
+                data={ioData()} hideSelector hideLock height={120} compact={true}
+              />
+            </div>
+          </div>
+        </div>
+      </Show>
+
       {/* Historical charts */}
       <Show
         when={resId()}
@@ -152,27 +243,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         }
       >
         <div class="space-y-2">
-          {/* Time range selector */}
-          <div class="flex items-center gap-2">
-            <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10" />
-              <path stroke-linecap="round" d="M12 6v6l4 2" />
-            </svg>
-            <select
-              value={chartRange()}
-              onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
-              class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none"
-              style={{ "background-image": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", "background-repeat": "no-repeat", "background-position": "right 6px center" }}
-            >
-              <option value="1h">Last 1 hour</option>
-              <option value="6h">Last 6 hours</option>
-              <option value="12h">Last 12 hours</option>
-              <option value="24h">Last 24 hours</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="90d">Last 90 days</option>
-            </select>
-          </div>
+
 
           {/* Charts grid */}
           <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(33.333%-0.5rem)] [&>*]:min-w-[250px]">

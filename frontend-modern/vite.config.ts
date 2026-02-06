@@ -228,6 +228,44 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('solid-js') || id.includes('@solidjs/router')) return 'vendor-solid';
+            if (id.includes('lucide-solid')) return 'vendor-icons';
+            if (id.includes('marked') || id.includes('dompurify')) return 'vendor-ai';
+            return 'vendor';
+          }
+
+          if (id.includes('/src/components/Settings/')) {
+            if (
+              /NodeModal|SSOProvidersPanel|OIDCPanel|ConfiguredNodeTables|AISettings|ReportingPanel|DiagnosticsPanel|SystemLogsPanel/.test(
+                id,
+              )
+            ) {
+              return 'settings-heavy';
+            }
+            if (/Security|RolesPanel|UserAssignmentsPanel|APIAccessPanel|APITokenManager|ChangePasswordModal|QuickSecuritySetup/.test(id)) {
+              return 'settings-auth';
+            }
+            if (/Audit|ProLicensePanel|GeneralSettingsPanel|NetworkSettingsPanel|UpdatesSettingsPanel|BackupsSettingsPanel|UnifiedAgents/.test(id)) {
+              return 'settings-admin';
+            }
+            if (/Settings\.tsx|SettingsSectionNav|ResourcePicker|SuggestProfileModal/.test(id)) {
+              return 'settings-shell';
+            }
+            return 'settings-core';
+          }
+
+          if (id.includes('/src/components/AI/')) {
+            return 'ai-ui';
+          }
+
+          return undefined;
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

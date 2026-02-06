@@ -63,7 +63,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
         throw new Error(message || 'Failed to report merge');
       }
 
-      showSuccess('Thanks! This merge will be reviewed');
+      showSuccess('Resource split applied');
       props.onReported?.();
       props.onClose();
       setNotes('');
@@ -83,10 +83,10 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
           <div class="flex items-start justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
             <div>
               <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Report Incorrect Merge
+                Split Merged Resource
               </h3>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                We&#39;ll split this resource into separate entries in the next refresh.
+                Use this when two systems were combined incorrectly. Pulse will keep them separate on future refreshes.
               </p>
             </div>
             <button
@@ -158,7 +158,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
               disabled={isSubmitting() || props.sources.length < 2}
               class="rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting() ? 'Submitting...' : 'Report Merge'}
+              {isSubmitting() ? 'Submitting...' : 'Split Resource'}
             </button>
           </div>
         </div>

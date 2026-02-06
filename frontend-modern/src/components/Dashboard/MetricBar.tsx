@@ -1,7 +1,11 @@
 import { Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
-import { Sparkline } from '@/components/shared/Sparkline';
+import { Sparkline, SparklineLockBadge } from '@/components/shared/Sparkline';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
-import { getMetricHistoryForRange, getMetricsVersion } from '@/stores/metricsHistory';
+import { isRangeLocked } from '@/stores/license';
+import { getSparklineData, getSparklineStore, isSparklineLoading } from '@/stores/sparklineData';
+import { estimateTextWidth } from '@/utils/format';
+import { getMetricColorClass } from '@/utils/metricThresholds';
+import type { MetricType } from '@/utils/metricThresholds';
 
 interface MetricBarProps {
   value: number;
@@ -13,14 +17,11 @@ interface MetricBarProps {
   class?: string;
 }
 
-// Estimate text width based on character count (rough approximation for 10px font)
-// Average char width ~6px at 10px font size
-const estimateTextWidth = (text: string): number => {
-  return text.length * 5.5 + 8; // chars * avg width + padding
-};
 
 export function MetricBar(props: MetricBarProps) {
   const { viewMode, timeRange } = useMetricsViewMode();
+
+  const locked = () => isRangeLocked(timeRange());
   const width = createMemo(() => Math.min(props.value, 100));
 
   // Track container width
@@ -55,47 +56,12 @@ export function MetricBar(props: MetricBarProps) {
 
   const showLabel = createMemo(() => props.showLabel !== false && props.label.trim().length > 0);
 
-  // Get color based on percentage and metric type (matching original)
-  const getColor = createMemo(() => {
-    const percentage = props.value;
-    const metric = props.type || 'generic';
-
-    if (metric === 'cpu') {
-      if (percentage >= 90) return 'red';
-      if (percentage >= 80) return 'yellow';
-      return 'green';
-    } else if (metric === 'memory') {
-      if (percentage >= 85) return 'red';
-      if (percentage >= 75) return 'yellow';
-      return 'green';
-    } else if (metric === 'disk') {
-      if (percentage >= 90) return 'red';
-      if (percentage >= 80) return 'yellow';
-      return 'green';
-    } else {
-      if (percentage >= 90) return 'red';
-      if (percentage >= 75) return 'yellow';
-      return 'green';
-    }
-  });
-
-  // Map color to CSS classes
+  // Get color class from centralized thresholds
   const progressColorClass = createMemo(() => {
-    const colorMap = {
-      red: 'bg-red-500/60 dark:bg-red-500/50',
-      yellow: 'bg-yellow-500/60 dark:bg-yellow-500/50',
-      green: 'bg-green-500/60 dark:bg-green-500/50',
-    };
-    return colorMap[getColor()] || 'bg-gray-500/60 dark:bg-gray-500/50';
-  });
-
-  // Get metric history for sparkline
-  // Depends on metricsVersion to re-fetch when data is seeded (e.g., on time range change)
-  const metricHistory = createMemo(() => {
-    // Subscribe to version changes so we re-read when new data is seeded
-    getMetricsVersion();
-    if (viewMode() !== 'sparklines' || !props.resourceId) return [];
-    return getMetricHistoryForRange(props.resourceId, timeRange());
+    const metric = props.type || 'cpu';
+    // 'generic' falls back to cpu thresholds
+    const metricType: MetricType = metric === 'generic' ? 'cpu' : metric;
+    return getMetricColorClass(props.value, metricType);
   });
 
   // Determine which metric type to use for sparkline
@@ -104,6 +70,13 @@ export function MetricBar(props: MetricBarProps) {
     if (type === 'generic') return 'cpu';
     return type;
   };
+
+  // Get sparkline points from the new sparkline data store
+  const sparklinePoints = createMemo(() => {
+    getSparklineStore(); // reactive dependency
+    if (viewMode() !== 'sparklines' || !props.resourceId) return [];
+    return getSparklineData(props.resourceId, sparklineMetric());
+  });
 
   return (
     <Show
@@ -131,12 +104,21 @@ export function MetricBar(props: MetricBarProps) {
     >
       {/* Sparkline mode - full width, flex centered like stacked bars */}
       <div class="metric-text w-full h-4 flex items-center justify-center min-w-0 overflow-hidden">
-        <Sparkline
-          data={metricHistory()}
-          metric={sparklineMetric()}
-          width={0}
-          height={16}
-        />
+        <Show when={!locked()} fallback={<SparklineLockBadge />}>
+          <Show
+            when={!isSparklineLoading() || sparklinePoints().length > 0}
+            fallback={
+              <span class="text-[9px] text-gray-400 dark:text-gray-500 animate-pulse">loading...</span>
+            }
+          >
+            <Sparkline
+              data={sparklinePoints()}
+              metric={sparklineMetric()}
+              width={0}
+              height={16}
+            />
+          </Show>
+        </Show>
       </div>
     </Show>
   );

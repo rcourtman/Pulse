@@ -5,12 +5,12 @@ import { FindingsPanel } from '@/components/AI/FindingsPanel';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
 import { RunToolCallTrace } from './RunToolCallTrace';
 import {
-  formatRelativeTime,
   formatDurationMs,
   formatTriggerReason,
   formatScope,
   sanitizeAnalysis,
 } from '@/utils/patrolFormat';
+import { formatRelativeTime } from '@/utils/format';
 
 import BrainCircuitIcon from 'lucide-solid/icons/brain-circuit';
 import ActivityIcon from 'lucide-solid/icons/activity';
@@ -30,11 +30,18 @@ import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import FilterXIcon from 'lucide-solid/icons/filter-x';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import MailIcon from 'lucide-solid/icons/mail';
+import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 
 interface PatrolStreamState {
   phase: Accessor<string>;
   currentTool: Accessor<string>;
   tokens: Accessor<number>;
+  resynced: Accessor<boolean>;
+  resyncReason: Accessor<string>;
+  bufferStartSeq: Accessor<number>;
+  bufferEndSeq: Accessor<number>;
+  outputTruncated: Accessor<boolean>;
+  reconnectCount: Accessor<number>;
   isStreaming: Accessor<boolean>;
   errorMessage: Accessor<string>;
 }
@@ -53,6 +60,17 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   // Live in-progress entry
   if (props.isLive) {
     const hasError = () => !!props.patrolStream.errorMessage();
+    const resyncTitle = () => {
+      const reason = props.patrolStream.resyncReason();
+      const start = props.patrolStream.bufferStartSeq();
+      const end = props.patrolStream.bufferEndSeq();
+      const parts: string[] = [];
+      if (reason) parts.push(`reason=${reason}`);
+      if (start > 0 || end > 0) parts.push(`buffer=${start || '?'}..${end || '?'}`);
+      if (props.patrolStream.outputTruncated()) parts.push('output_truncated=true');
+      if (props.patrolStream.reconnectCount() > 0) parts.push(`reconnects=${props.patrolStream.reconnectCount()}`);
+      return parts.length ? parts.join(' ') : '';
+    };
     return (
       <div class={`rounded-md border transition-colors ${hasError()
         ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
@@ -66,6 +84,19 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
               </span>
               <span class="font-medium text-blue-800 dark:text-blue-200">Running now</span>
+            </Show>
+            <Show when={!hasError() && (props.patrolStream.resynced() || props.patrolStream.reconnectCount() > 0)}>
+              <span
+                title={resyncTitle()}
+                class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+              >
+                <RefreshCwIcon class="w-3 h-3" />
+                <span>
+                  {props.patrolStream.resynced()
+                    ? (props.patrolStream.resyncReason() === 'buffer_rotated' ? 'Resynced (truncated)' : 'Resynced')
+                    : `Reconnected${props.patrolStream.reconnectCount() > 1 ? ` x${props.patrolStream.reconnectCount()}` : ''}`}
+                </span>
+              </span>
             </Show>
             <Show when={hasError()}>
               <ShieldAlertIcon class="w-3.5 h-3.5 text-red-500" />
@@ -112,7 +143,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
       >
         <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
           <span class="text-gray-900 dark:text-gray-100 font-medium">
-            {formatRelativeTime(run.started_at)}
+            {formatRelativeTime(run.started_at, { compact: true })}
           </span>
           <span class={`px-1.5 py-0.5 rounded ${run.status === 'critical'
             ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'

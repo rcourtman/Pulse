@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import type { Disk } from '@/types/api';
 import { formatBytes } from '@/utils/format';
+import { getMetricColorClass } from '@/utils/metricThresholds';
 
 interface DiskListProps {
   disks: Disk[];
@@ -13,11 +14,6 @@ export function DiskList(props: DiskListProps) {
     return (disk.used / disk.total) * 100;
   };
 
-  const getBarColor = (percentage: number) => {
-    if (percentage >= 90) return 'bg-red-500/60 dark:bg-red-500/50';
-    if (percentage >= 80) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
-    return 'bg-green-500/60 dark:bg-green-500/50';
-  };
 
   const getDiskStatusTooltip = () => {
     const reason = props.diskStatusReason;
@@ -75,7 +71,7 @@ export function DiskList(props: DiskListProps) {
                 </div>
                 <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-600">
                   <div
-                    class={`absolute inset-y-0 left-0 ${getBarColor(usage)}`}
+                    class={`absolute inset-y-0 left-0 ${getMetricColorClass(usage, 'disk')}`}
                     style={{ width: `${Math.min(usage, 100)}%` }}
                   />
                 </div>

@@ -1,6 +1,7 @@
 import { Component, Show, For, createSignal } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { showSuccess, showError } from '@/utils/toast';
+import { formatRelativeTime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
 import Activity from 'lucide-solid/icons/activity';
 import Server from 'lucide-solid/icons/server';
@@ -152,18 +153,6 @@ function formatUptime(seconds: number): string {
     return `${days}d ${hours % 24}h`;
 }
 
-function formatRelativeTime(timestamp?: string | number): string {
-    if (!timestamp) return 'Never';
-    const date = typeof timestamp === 'string' ? new Date(timestamp) : new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-
-    if (diffSec < 60) return 'just now';
-    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
-    return `${Math.floor(diffSec / 86400)}d ago`;
-}
 
 import type { JSX } from 'solid-js';
 
@@ -623,7 +612,7 @@ export const DiagnosticsPanel: Component = () => {
                         />
                         <MetricRow
                             label="Last Scan"
-                            value={formatRelativeTime(diagnosticsData()?.discovery?.lastScanStartedAt)}
+                            value={formatRelativeTime(diagnosticsData()?.discovery?.lastScanStartedAt, { compact: true, emptyText: 'Never' })}
                         />
                         <MetricRow
                             label="Servers Found"

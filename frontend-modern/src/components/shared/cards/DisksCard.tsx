@@ -1,6 +1,7 @@
 import { Component, For } from 'solid-js';
 import { Disk } from '@/types/api';
 import { formatBytes } from '@/utils/format';
+import { getMetricColorRgba, getMetricTextColorClass } from '@/utils/metricThresholds';
 
 interface DisksCardProps {
   disks?: Disk[];
@@ -16,9 +17,8 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
         <For each={props.disks}>
           {(disk) => {
             const usagePercent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
-            // Use same colors as StackedDiskBar for consistency
-            const barColor = usagePercent >= 90 ? 'rgba(239, 68, 68, 0.6)' : usagePercent >= 80 ? 'rgba(234, 179, 8, 0.6)' : 'rgba(34, 197, 94, 0.6)';
-            const textColor = usagePercent >= 90 ? 'text-red-600 dark:text-red-400' : usagePercent >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400';
+            const barColor = getMetricColorRgba(usagePercent, 'disk');
+            const textColor = getMetricTextColorClass(usagePercent, 'disk');
             return (
               <div class="text-[10px]">
                 <div class="flex justify-between mb-0.5">

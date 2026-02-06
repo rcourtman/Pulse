@@ -1,7 +1,7 @@
 import { Component, For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { getDisplayName, getCpuPercent, getMemoryPercent, getDiskPercent } from '@/types/resource';
-import { formatBytes, formatUptime } from '@/utils/format';
+import { formatBytes, formatUptime, formatSpeed } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -20,7 +20,7 @@ interface UnifiedResourceTableProps {
   groupingMode?: 'grouped' | 'flat';
 }
 
-type SortKey = 'default' | 'name' | 'uptime' | 'cpu' | 'memory' | 'disk' | 'source' | 'temp';
+type SortKey = 'default' | 'name' | 'uptime' | 'cpu' | 'memory' | 'disk' | 'network' | 'diskio' | 'source' | 'temp';
 
 const isResourceOnline = (resource: Resource) => {
   const status = resource.status?.toLowerCase();
@@ -32,6 +32,88 @@ const hasAlternateName = (resource: Resource) => {
   const display = resource.displayName.trim().toLowerCase();
   const name = resource.name.trim().toLowerCase();
   return display !== name;
+};
+
+interface IODistributionStats {
+  median: number;
+  mad: number;
+  max: number;
+  p97: number;
+  p99: number;
+  count: number;
+}
+
+interface IOEmphasis {
+  className: string;
+  showOutlierHint: boolean;
+}
+
+const computeMedian = (values: number[]): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+};
+
+const computePercentile = (values: number[], percentile: number): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const clamped = Math.max(0, Math.min(1, percentile));
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(clamped * sorted.length) - 1));
+  return sorted[index];
+};
+
+const buildIODistribution = (values: number[]): IODistributionStats => {
+  const valid = values.filter((value) => Number.isFinite(value) && value >= 0);
+  if (valid.length === 0) {
+    return { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 0 };
+  }
+
+  const median = computeMedian(valid);
+  const deviations = valid.map((value) => Math.abs(value - median));
+  const mad = computeMedian(deviations);
+  const max = Math.max(...valid, 0);
+  const p97 = computePercentile(valid, 0.97);
+  const p99 = computePercentile(valid, 0.99);
+
+  return { median, mad, max, p97, p99, count: valid.length };
+};
+
+const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphasis => {
+  if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
+    return { className: 'text-gray-400 dark:text-gray-500', showOutlierHint: false };
+  }
+
+  // For tiny sets, avoid aggressive highlighting.
+  if (stats.count < 4) {
+    const ratio = value / stats.max;
+    if (ratio >= 0.995) {
+      return { className: 'text-gray-800 dark:text-gray-100 font-medium', showOutlierHint: true };
+    }
+    return { className: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
+  }
+
+  // Robust outlier score: only values meaningfully far from the cluster brighten.
+  if (stats.mad > 0) {
+    const modifiedZ = (0.6745 * (value - stats.median)) / stats.mad;
+    if (modifiedZ >= 6.5 && value >= stats.p99) {
+      return { className: 'text-gray-900 dark:text-gray-50 font-semibold', showOutlierHint: true };
+    }
+    if (modifiedZ >= 5.5 && value >= stats.p97) {
+      return { className: 'text-gray-800 dark:text-gray-100 font-medium', showOutlierHint: true };
+    }
+    return { className: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
+  }
+
+  // Fallback when values are too uniform for MAD to separate:
+  // only near-peak values should get emphasis.
+  if (value >= stats.p99) return { className: 'text-gray-900 dark:text-gray-50 font-semibold', showOutlierHint: true };
+  if (value >= stats.p97) return { className: 'text-gray-800 dark:text-gray-100 font-medium', showOutlierHint: true };
+  if (value > 0) return { className: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
+  return { className: 'text-gray-400 dark:text-gray-500', showOutlierHint: false };
 };
 
 export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props) => {
@@ -76,6 +158,10 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
         return resource.memory ? getMemoryPercent(resource) : null;
       case 'disk':
         return resource.disk ? getDiskPercent(resource) : null;
+      case 'network':
+        return resource.network ? (resource.network.rxBytes + resource.network.txBytes) : null;
+      case 'diskio':
+        return resource.diskIO ? (resource.diskIO.readRate + resource.diskIO.writeRate) : null;
       case 'source':
         return `${resource.platformType ?? ''}-${resource.sourceType ?? ''}`;
       case 'temp':
@@ -159,6 +245,28 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     return entries;
   });
 
+  const ioScale = createMemo(() => {
+    const networkValues: number[] = [];
+    const diskIOValues: number[] = [];
+
+    for (const resource of props.resources) {
+      const networkTotal = (resource.network?.rxBytes ?? 0) + (resource.network?.txBytes ?? 0);
+      if (resource.network) {
+        networkValues.push(networkTotal);
+      }
+
+      const diskIOTotal = (resource.diskIO?.readRate ?? 0) + (resource.diskIO?.writeRate ?? 0);
+      if (resource.diskIO) {
+        diskIOValues.push(diskIOTotal);
+      }
+    }
+
+    return {
+      network: buildIODistribution(networkValues),
+      diskIO: buildIODistribution(diskIOValues),
+    };
+  });
+
   const renderSortIndicator = (key: SortKey) => {
     if (sortKey() !== key) return null;
     return sortDirection() === 'asc' ? '▲' : '▼';
@@ -180,6 +288,11 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     isMobile()
       ? { width: '70px', 'min-width': '70px', 'max-width': '90px' }
       : { 'min-width': '140px', 'max-width': '180px' }
+  );
+  const ioColumnStyle = createMemo(() =>
+    isMobile()
+      ? { width: '110px', 'min-width': '110px', 'max-width': '130px' }
+      : { width: '160px', 'min-width': '160px', 'max-width': '180px' }
   );
   const sourceColumnStyle = createMemo(() =>
     isMobile()
@@ -208,7 +321,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
         class="overflow-x-auto"
         style={{ '-webkit-overflow-scrolling': 'touch' }}
       >
-        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '600px' }}>
+        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '900px' }}>
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
               <th class={`${thClassBase} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()} onClick={() => handleSort('name')}>
@@ -222,6 +335,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
               </th>
               <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('disk')}>
                 Disk {renderSortIndicator('disk')}
+              </th>
+              <th class={thClass} style={ioColumnStyle()} onClick={() => handleSort('network')}>
+                Net I/O {renderSortIndicator('network')}
+              </th>
+              <th class={thClass} style={ioColumnStyle()} onClick={() => handleSort('diskio')}>
+                Disk I/O {renderSortIndicator('diskio')}
               </th>
               <th class={thClass} style={sourceColumnStyle()} onClick={() => handleSort('source')}>
                 Source {renderSortIndicator('source')}
@@ -241,7 +360,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                   <Show when={props.groupingMode === 'grouped'}>
                     <tr class="bg-gray-50 dark:bg-gray-900/40">
                       <td
-                        colspan={7}
+                        colspan={9}
                         class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                       >
                         <div class="flex items-center gap-2">
@@ -284,6 +403,18 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         if (!resource.disk || resource.disk.used === undefined || resource.disk.total === undefined) return undefined;
                         return `${formatBytes(resource.disk.used)}/${formatBytes(resource.disk.total)}`;
                       });
+                      const networkTotal = createMemo(() =>
+                        (resource.network?.rxBytes ?? 0) + (resource.network?.txBytes ?? 0),
+                      );
+                      const networkEmphasis = createMemo(() =>
+                        getOutlierEmphasis(networkTotal(), ioScale().network),
+                      );
+                      const diskIOTotal = createMemo(() =>
+                        (resource.diskIO?.readRate ?? 0) + (resource.diskIO?.writeRate ?? 0),
+                      );
+                      const diskIOEmphasis = createMemo(() =>
+                        getOutlierEmphasis(diskIOTotal(), ioScale().diskIO),
+                      );
 
                       const rowClass = createMemo(() => {
                         const baseBorder = 'border-b border-gray-100 dark:border-gray-700/50';
@@ -395,6 +526,48 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             </td>
 
                             <td class={tdClass}>
+                              <Show when={resource.network} fallback={<div class="text-center"><span class="text-xs text-gray-400">—</span></div>}>
+                                <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
+                                  <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
+                                  <span
+                                    class={`min-w-0 whitespace-nowrap ${networkEmphasis().className}`}
+                                    title={networkEmphasis().showOutlierHint ? `${formatSpeed(resource.network!.rxBytes)} (Top outlier)` : formatSpeed(resource.network!.rxBytes)}
+                                  >
+                                    {formatSpeed(resource.network!.rxBytes)}
+                                  </span>
+                                  <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
+                                  <span
+                                    class={`min-w-0 whitespace-nowrap ${networkEmphasis().className}`}
+                                    title={networkEmphasis().showOutlierHint ? `${formatSpeed(resource.network!.txBytes)} (Top outlier)` : formatSpeed(resource.network!.txBytes)}
+                                  >
+                                    {formatSpeed(resource.network!.txBytes)}
+                                  </span>
+                                </div>
+                              </Show>
+                            </td>
+
+                            <td class={tdClass}>
+                              <Show when={resource.diskIO} fallback={<div class="text-center"><span class="text-xs text-gray-400">—</span></div>}>
+                                <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
+                                  <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
+                                  <span
+                                    class={`min-w-0 whitespace-nowrap ${diskIOEmphasis().className}`}
+                                    title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(resource.diskIO!.readRate)} (Top outlier)` : formatSpeed(resource.diskIO!.readRate)}
+                                  >
+                                    {formatSpeed(resource.diskIO!.readRate)}
+                                  </span>
+                                  <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
+                                  <span
+                                    class={`min-w-0 whitespace-nowrap ${diskIOEmphasis().className}`}
+                                    title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(resource.diskIO!.writeRate)} (Top outlier)` : formatSpeed(resource.diskIO!.writeRate)}
+                                  >
+                                    {formatSpeed(resource.diskIO!.writeRate)}
+                                  </span>
+                                </div>
+                              </Show>
+                            </td>
+
+                            <td class={tdClass}>
                               <div class="flex flex-wrap items-center justify-center gap-1">
                                 <Show
                                   when={hasUnifiedSources()}
@@ -458,7 +631,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                           </tr>
                           <Show when={isExpanded()}>
                             <tr>
-                              <td colspan={7} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
+                              <td colspan={9} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
                                 <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
                               </td>
                             </tr>

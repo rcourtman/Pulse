@@ -7,10 +7,11 @@
 
 import { Component, createEffect, createSignal, onCleanup, Show, createMemo, onMount } from 'solid-js';
 import { ChartsAPI, type ResourceType, type HistoryTimeRange, type AggregatedMetricPoint } from '@/api/charts';
-import { hasFeature, loadLicenseStatus } from '@/stores/license';
+import { isRangeLocked, loadLicenseStatus } from '@/stores/license';
 import { Portal } from 'solid-js/web';
 import { formatBytes } from '@/utils/format';
 import { calculateOptimalPoints } from '@/utils/downsample';
+import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
 
 
 /** Format a tooltip value according to the metric unit. */
@@ -39,6 +40,8 @@ interface HistoryChartProps {
     compact?: boolean;
     /** Suppress the built-in Pro lock overlay (caller handles it externally). */
     hideLock?: boolean;
+    /** Direct data injection (bypasses API fetch) */
+    data?: AggregatedMetricPoint[];
 }
 
 export const HistoryChart: Component<HistoryChartProps> = (props) => {
@@ -83,6 +86,15 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         }
     });
 
+    // Sync external data if provided
+    createEffect(() => {
+        if (props.data) {
+            setData(props.data);
+            if (!hasLoadedOnce()) setHasLoadedOnce(true);
+            setSource('live');
+        }
+    });
+
     // Handle range change
     const updateRange = (newRange: HistoryTimeRange) => {
         setRange(newRange);
@@ -91,15 +103,8 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         }
     };
 
-    // Feature gating check
-    const isLongTermEnabled = () => hasFeature('long_term_metrics');
-
-    // Check if current view is locked
-    const isLocked = createMemo(() => {
-        const r = range();
-        // Lock if range > 7d and feature not enabled (7d is free, 30d/90d require Pro)
-        return !isLongTermEnabled() && (r === '30d' || r === '90d');
-    });
+    // Check if current view is locked (uses shared gating logic from license store)
+    const isLocked = createMemo(() => isRangeLocked(range()));
 
     const lockDays = createMemo(() => (range() === '30d' ? '30' : '90'));
 
@@ -181,6 +186,9 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     // Main data loading effect - responds to resource/range changes
     // This is NOT a background refresh, so show loading spinner on first load
     createEffect(async () => {
+        // Skip fetch if external data is provided
+        if (props.data) return;
+
         const r = range();
         const type = props.resourceType;
         const id = props.resourceId;
@@ -242,28 +250,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         const w = canvas.parentElement?.clientWidth || 300;
         const h = props.height || 200;
 
-        // Set canvas size ONLY if dimensions have changed
-        // Resizing canvas clears its content and resets transforms, which causes flickering
-        const dpr = window.devicePixelRatio || 1;
-        const targetWidth = Math.round(w * dpr);
-        const targetHeight = Math.round(h * dpr);
-
-        const needsResize = canvas.width !== targetWidth || canvas.height !== targetHeight;
-
-        if (needsResize) {
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-            canvas.style.width = `${w}px`;
-            canvas.style.height = `${h}px`;
-        }
-
-        // Reset transform and apply DPR scale before drawing
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-        // Clear canvas (if not already cleared by resize)
-        if (!needsResize) {
-            ctx.clearRect(0, 0, w, h);
-        }
+        setupCanvasDPR(canvas, ctx, w, h);
 
 
         // Colors

@@ -2,6 +2,8 @@ import { Component, Show, createMemo, JSX } from 'solid-js';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatPercent } from '@/utils/format';
+import { getMetricSeverity } from '@/utils/metricThresholds';
+import type { MetricSeverity } from '@/utils/metricThresholds';
 
 export interface ResponsiveMetricCellProps {
   /** Metric value (0-100 percentage) */
@@ -32,30 +34,15 @@ export interface ResponsiveMetricCellProps {
   class?: string;
 }
 
-/**
- * Get the appropriate text color class based on metric value and type
- */
-function getMetricColorClass(value: number, type: 'cpu' | 'memory' | 'disk'): string {
-  // Thresholds match MetricBar component
-  if (type === 'cpu') {
-    if (value >= 90) return 'text-red-600 dark:text-red-400 font-bold';
-    if (value >= 80) return 'text-orange-600 dark:text-orange-400 font-medium';
-    return 'text-gray-600 dark:text-gray-400';
-  }
+/** Map metric severity to text color + weight for compact metric display */
+const METRIC_TEXT_STYLES: Record<MetricSeverity, string> = {
+  critical: 'text-red-600 dark:text-red-400 font-bold',
+  warning:  'text-orange-600 dark:text-orange-400 font-medium',
+  normal:   'text-gray-600 dark:text-gray-400',
+};
 
-  if (type === 'memory') {
-    if (value >= 85) return 'text-red-600 dark:text-red-400 font-bold';
-    if (value >= 75) return 'text-orange-600 dark:text-orange-400 font-medium';
-    return 'text-gray-600 dark:text-gray-400';
-  }
-
-  if (type === 'disk') {
-    if (value >= 90) return 'text-red-600 dark:text-red-400 font-bold';
-    if (value >= 80) return 'text-orange-600 dark:text-orange-400 font-medium';
-    return 'text-gray-600 dark:text-gray-400';
-  }
-
-  return 'text-gray-600 dark:text-gray-400';
+function metricTextClass(value: number, type: 'cpu' | 'memory' | 'disk'): string {
+  return METRIC_TEXT_STYLES[getMetricSeverity(value, type)];
 }
 
 function compactCapacityLabel(sublabel?: string): string | undefined {
@@ -104,7 +91,7 @@ function compactCapacityLabel(sublabel?: string): string | undefined {
 export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props) => {
   const { isAtLeast, isBelow } = useBreakpoint();
   const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
-  const colorClass = createMemo(() => getMetricColorClass(props.value, props.type));
+  const colorClass = createMemo(() => metricTextClass(props.value, props.type));
   const isRunning = () => props.isRunning !== false; // Default to true if not specified
 
   const isVeryNarrow = createMemo(() => isBelow('xs'));
@@ -164,7 +151,7 @@ export const MetricText: Component<{
   class?: string;
 }> = (props) => {
   const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
-  const colorClass = createMemo(() => getMetricColorClass(props.value, props.type));
+  const colorClass = createMemo(() => metricTextClass(props.value, props.type));
 
   return (
     <span class={`text-xs text-center ${colorClass()} ${props.class || ''}`}>
@@ -191,7 +178,7 @@ export const DualMetricCell: Component<{
   class?: string;
 }> = (props) => {
   const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
-  const colorClass = createMemo(() => getMetricColorClass(props.value, props.type));
+  const colorClass = createMemo(() => metricTextClass(props.value, props.type));
   const isRunning = () => props.isRunning !== false;
 
   const defaultFallback = (

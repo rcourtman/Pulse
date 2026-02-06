@@ -4,7 +4,7 @@ import { formatBytes, formatUptime } from '@/utils/format';
 import { DiskList } from './DiskList';
 import { HistoryChart } from '../shared/HistoryChart';
 import { ResourceType, HistoryTimeRange } from '@/api/charts';
-import { hasFeature } from '@/stores/license';
+import { isRangeLocked } from '@/stores/license';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import { resolveWorkloadType } from '@/utils/workloads';
@@ -130,7 +130,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     };
 
     const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>('1h');
-    const isHistoryLocked = () => !hasFeature('long_term_metrics') && (historyRange() === '30d' || historyRange() === '90d');
+    const isHistoryLocked = () => isRangeLocked(historyRange());
 
     // Get discovery resource type for the guest
     const discoveryResourceType = (): DiscoveryResourceType => {

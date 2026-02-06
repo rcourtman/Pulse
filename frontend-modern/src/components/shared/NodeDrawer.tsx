@@ -2,7 +2,7 @@ import { Component, Show, Suspense, createSignal, createEffect } from 'solid-js'
 import { Node } from '@/types/api';
 import { HistoryChart } from '../shared/HistoryChart';
 import { ResourceType, HistoryTimeRange } from '@/api/charts';
-import { hasFeature } from '@/stores/license';
+import { isRangeLocked } from '@/stores/license';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import { HostMetadataAPI } from '@/api/hostMetadata';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
@@ -48,7 +48,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
         setActiveTab(tab);
     };
 
-    const isHistoryLocked = () => !hasFeature('long_term_metrics') && (historyRange() === '30d' || historyRange() === '90d');
+    const isHistoryLocked = () => isRangeLocked(historyRange());
 
     return (
         <div class="space-y-3">
@@ -201,6 +201,9 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
                         resourceId={props.node.id || props.node.name}
                         hostname={props.node.name}
                         guestId={props.node.id || props.node.name}
+                        urlMetadataKind="host"
+                        urlMetadataId={props.node.id || props.node.name}
+                        urlTargetLabel="host"
                         customUrl={fetchedCustomUrl()}
                         onCustomUrlChange={handleCustomUrlChange}
                     />

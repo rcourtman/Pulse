@@ -7,13 +7,25 @@
 
 import { onCleanup, createEffect, createSignal, Component, Show, createMemo } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import type { MetricSnapshot } from '@/stores/metricsHistory';
-import { scheduleSparkline } from '@/utils/canvasRenderQueue';
-import { downsampleMetricSnapshots, calculateOptimalPoints } from '@/utils/downsample';
+import type { MetricPoint } from '@/api/charts';
+import { scheduleSparkline, setupCanvasDPR } from '@/utils/canvasRenderQueue';
+import { downsampleLTTB, calculateOptimalPoints } from '@/utils/downsample';
+import { getMetricColorHex } from '@/utils/metricThresholds';
 
+
+/** Compact inline lock badge shown in sparkline rows when the selected range requires Pro. */
+export const SparklineLockBadge: Component = () => (
+  <span class="flex items-center gap-0.5 text-[9px] text-gray-400 dark:text-gray-500">
+    <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+    <span>Pro</span>
+  </span>
+);
 
 interface SparklineProps {
-  data: MetricSnapshot[];
+  data: MetricPoint[];
   metric: 'cpu' | 'memory' | 'disk';
   width?: number;
   height?: number;
@@ -59,39 +71,27 @@ export const Sparkline: Component<SparklineProps> = (props) => {
       return data;
     }
 
-    return downsampleMetricSnapshots(data, props.metric, optimalPoints);
+    return downsampleLTTB(data, optimalPoints);
   });
 
-  // Default thresholds based on metric type
-  const getDefaultThresholds = () => {
-    switch (props.metric) {
-      case 'cpu':
-        return { warning: 80, critical: 90 };
-      case 'memory':
-        return { warning: 75, critical: 85 };
-      case 'disk':
-        return { warning: 80, critical: 90 };
-      default:
-        return { warning: 75, critical: 90 };
-    }
-  };
-
-  const thresholds = () => props.thresholds || getDefaultThresholds();
-
-
   // Get color based on latest value and thresholds
-  const getColor = (value: number): string => {
+  const resolveColor = (value: number): string => {
     if (props.color) return props.color;
 
-    const t = thresholds();
-    if (value >= t.critical) return '#ef4444'; // red-500
-    if (value >= t.warning) return '#eab308';  // yellow-500
-    return '#22c55e'; // green-500
+    // If custom thresholds were provided, use them directly
+    if (props.thresholds) {
+      const t = props.thresholds;
+      if (value >= t.critical) return '#ef4444';
+      if (value >= t.warning) return '#eab308';
+      return '#22c55e';
+    }
+
+    return getMetricColorHex(value, props.metric);
   };
 
   // Get color with opacity matching progress bars (60% for consistency)
-  const getColorWithOpacity = (value: number): string => {
-    const baseColor = getColor(value);
+  const resolveColorWithOpacity = (value: number): string => {
+    const baseColor = resolveColor(value);
     // Convert hex to rgba with 0.6 opacity (matching progress bar 60%)
     const r = parseInt(baseColor.slice(1, 3), 16);
     const g = parseInt(baseColor.slice(3, 5), 16);
@@ -110,34 +110,8 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     const data = downsampledData();
     const w = width();
     const h = height();
-    const metric = props.metric;
 
-
-    // Set canvas size ONLY if dimensions have changed
-    // Resizing canvas clears its content and resets transforms, which causes flickering
-    const dpr = window.devicePixelRatio || 1;
-    const targetWidth = Math.round(w * dpr);
-    const targetHeight = Math.round(h * dpr);
-
-    const needsResize = canvas.width !== targetWidth || canvas.height !== targetHeight;
-
-    if (needsResize) {
-      // Resize clears canvas and resets transform automatically
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
-    }
-
-    // Reset transform and apply DPR scale before drawing
-    // This must be done on every draw since transforms can compound
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    // Clear canvas (if not already cleared by resize)
-    if (!needsResize) {
-      ctx.clearRect(0, 0, w, h);
-    }
-
+    setupCanvasDPR(canvas, ctx, w, h);
 
     // Detect dark mode for reference line color
     const isDark = document.documentElement.classList.contains('dark');
@@ -168,13 +142,13 @@ export const Sparkline: Component<SparklineProps> = (props) => {
       return;
     }
 
-    // Extract values for the selected metric
-    const values = data.map(d => d[metric]);
+    // Extract values
+    const values = data.map(d => d.value);
 
     // Get latest value for color
     const latestValue = values[values.length - 1] || 0;
-    const color = getColor(latestValue);
-    const colorWithOpacity = getColorWithOpacity(latestValue);
+    const color = resolveColor(latestValue);
+    const colorWithOpacity = resolveColorWithOpacity(latestValue);
 
     // Find min/max for scaling
     const minValue = 0;  // Always anchor at 0
@@ -249,7 +223,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     const mouseX = e.clientX - rect.left;
     const w = width();
 
-    const values = data.map(d => d[props.metric]);
+    const values = data.map(d => d.value);
     const xStep = w / Math.max(values.length - 1, 1);
 
     // Find nearest point

@@ -1,5 +1,6 @@
 import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { useTooltip } from '@/hooks/useTooltip';
+import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, GuestNetworkInterface } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
@@ -24,16 +25,59 @@ import { useAnomalyForMetric } from '@/hooks/useAnomalies';
 
 type Guest = WorkloadGuest;
 
-/**
- * Get color class for I/O values based on throughput (bytes/sec)
- * Uses color intensity to indicate activity level (green/yellow/red)
- */
-function getIOColorClass(bytesPerSec: number): string {
-  const mbps = bytesPerSec / (1024 * 1024);
-  if (mbps < 1) return 'text-gray-500 dark:text-gray-400';
-  if (mbps < 10) return 'text-green-600 dark:text-green-400';
-  if (mbps < 50) return 'text-yellow-600 dark:text-yellow-400';
-  return 'text-red-600 dark:text-red-400';
+interface IODistributionStats {
+  median: number;
+  mad: number;
+  max: number;
+  p97: number;
+  p99: number;
+  count: number;
+}
+
+export interface WorkloadIOEmphasis {
+  network: IODistributionStats;
+  diskIO: IODistributionStats;
+}
+
+const EMPTY_IO_DISTRIBUTION: IODistributionStats = { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 0 };
+const EMPTY_IO_EMPHASIS: WorkloadIOEmphasis = {
+  network: EMPTY_IO_DISTRIBUTION,
+  diskIO: EMPTY_IO_DISTRIBUTION,
+};
+
+interface IOEmphasis {
+  className: string;
+  showOutlierHint: boolean;
+}
+
+const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphasis => {
+  if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
+    return { className: 'text-gray-400 dark:text-gray-500', showOutlierHint: false };
+  }
+
+  if (stats.count < 4) {
+    const ratio = value / stats.max;
+    if (ratio >= 0.995) {
+      return { className: 'text-gray-800 dark:text-gray-100 font-medium', showOutlierHint: true };
+    }
+    return { className: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
+  }
+
+  if (stats.mad > 0) {
+    const modifiedZ = (0.6745 * (value - stats.median)) / stats.mad;
+    if (modifiedZ >= 6.5 && value >= stats.p99) {
+      return { className: 'text-gray-900 dark:text-gray-50 font-semibold', showOutlierHint: true };
+    }
+    if (modifiedZ >= 5.5 && value >= stats.p97) {
+      return { className: 'text-gray-800 dark:text-gray-100 font-medium', showOutlierHint: true };
+    }
+    return { className: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
+  }
+
+  if (value >= stats.p99) return { className: 'text-gray-900 dark:text-gray-50 font-semibold', showOutlierHint: true };
+  if (value >= stats.p97) return { className: 'text-gray-800 dark:text-gray-100 font-medium', showOutlierHint: true };
+  if (value > 0) return { className: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
+  return { className: 'text-gray-400 dark:text-gray-500', showOutlierHint: false };
 }
 
 
@@ -107,8 +151,7 @@ function BackupIndicator(props: { lastBackup: string | number | null | undefined
 
 // Network info cell with rich tooltip showing interfaces, IPs, and MACs
 function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: GuestNetworkInterface[] }) {
-  const [showTooltip, setShowTooltip] = createSignal(false);
-  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+  const tip = useTooltip();
 
   const hasInterfaces = () => props.networkInterfaces.length > 0;
   const primaryIp = () => props.ipAddresses[0] || props.networkInterfaces[0]?.addresses?.[0] || null;
@@ -117,22 +160,12 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
     return props.networkInterfaces.reduce((sum, iface) => sum + (iface.addresses?.length || 0), 0);
   };
 
-  const handleMouseEnter = (e: MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-    setShowTooltip(true);
-  };
-
-  const handleMouseLeave = () => {
-    setShowTooltip(false);
-  };
-
   return (
     <>
       <span
         class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        onMouseEnter={tip.onMouseEnter}
+        onMouseLeave={tip.onMouseLeave}
       >
         <Show when={primaryIp()} fallback="-">
           {/* Network icon */}
@@ -143,74 +176,61 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
         </Show>
       </span>
 
-      <Show when={showTooltip() && (hasInterfaces() || props.ipAddresses.length > 0)}>
-        <Portal mount={document.body}>
-          <div
-            class="fixed z-[9999] pointer-events-none"
-            style={{
-              left: `${tooltipPos().x}px`,
-              top: `${tooltipPos().y - 8}px`,
-              transform: 'translate(-50%, -100%)',
-            }}
-          >
-            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[180px] max-w-[280px] border border-gray-700">
-              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
-                Network Interfaces
-              </div>
+      <TooltipPortal when={tip.show() && (hasInterfaces() || props.ipAddresses.length > 0)} x={tip.pos().x} y={tip.pos().y}>
+        <div class="min-w-[180px] max-w-[280px]">
+          <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+            Network Interfaces
+          </div>
 
-              {/* Show detailed interface info if available */}
-              <Show when={hasInterfaces()}>
-                <For each={props.networkInterfaces}>
-                  {(iface, idx) => (
-                    <div class="py-1" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
-                      <div class="flex items-center gap-2 text-blue-400 font-medium">
-                        <span>{iface.name || 'eth' + idx()}</span>
-                        <Show when={iface.mac}>
-                          <span class="text-[9px] text-gray-500 font-normal">{iface.mac}</span>
-                        </Show>
-                      </div>
-                      <Show when={iface.addresses && iface.addresses.length > 0}>
-                        <div class="mt-0.5 flex flex-wrap gap-1">
-                          <For each={iface.addresses}>
-                            {(ip) => (
-                              <span class="text-gray-300 font-mono">{ip}</span>
-                            )}
-                          </For>
-                        </div>
-                      </Show>
-                      <Show when={!iface.addresses || iface.addresses.length === 0}>
-                        <span class="text-gray-500 text-[9px]">No IP assigned</span>
-                      </Show>
-                      <Show when={(iface.rxBytes || 0) > 0 || (iface.txBytes || 0) > 0}>
-                        <div class="mt-0.5 text-[9px] text-gray-500">
-                          RX: {formatBytes(iface.rxBytes || 0)} / TX: {formatBytes(iface.txBytes || 0)}
-                        </div>
-                      </Show>
+          <Show when={hasInterfaces()}>
+            <For each={props.networkInterfaces}>
+              {(iface, idx) => (
+                <div class="py-1" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
+                  <div class="flex items-center gap-2 text-blue-400 font-medium">
+                    <span>{iface.name || 'eth' + idx()}</span>
+                    <Show when={iface.mac}>
+                      <span class="text-[9px] text-gray-500 font-normal">{iface.mac}</span>
+                    </Show>
+                  </div>
+                  <Show when={iface.addresses && iface.addresses.length > 0}>
+                    <div class="mt-0.5 flex flex-wrap gap-1">
+                      <For each={iface.addresses}>
+                        {(ip) => (
+                          <span class="text-gray-300 font-mono">{ip}</span>
+                        )}
+                      </For>
                     </div>
+                  </Show>
+                  <Show when={!iface.addresses || iface.addresses.length === 0}>
+                    <span class="text-gray-500 text-[9px]">No IP assigned</span>
+                  </Show>
+                  <Show when={(iface.rxBytes || 0) > 0 || (iface.txBytes || 0) > 0}>
+                    <div class="mt-0.5 text-[9px] text-gray-500">
+                      RX: {formatBytes(iface.rxBytes || 0)} / TX: {formatBytes(iface.txBytes || 0)}
+                    </div>
+                  </Show>
+                </div>
+              )}
+            </For>
+          </Show>
+
+          <Show when={!hasInterfaces() && props.ipAddresses.length > 0}>
+            <div class="py-1">
+              <div class="flex items-center gap-2 text-blue-400 font-medium">
+                <span>IP Addresses</span>
+                <span class="text-[9px] text-gray-500 font-normal">No agent data</span>
+              </div>
+              <div class="mt-0.5 flex flex-wrap gap-1">
+                <For each={props.ipAddresses}>
+                  {(ip) => (
+                    <span class="text-gray-300 font-mono">{ip}</span>
                   )}
                 </For>
-              </Show>
-
-              {/* Fallback: just show IP list if no interface details */}
-              <Show when={!hasInterfaces() && props.ipAddresses.length > 0}>
-                <div class="py-1">
-                  <div class="flex items-center gap-2 text-blue-400 font-medium">
-                    <span>IP Addresses</span>
-                    <span class="text-[9px] text-gray-500 font-normal">No agent data</span>
-                  </div>
-                  <div class="mt-0.5 flex flex-wrap gap-1">
-                    <For each={props.ipAddresses}>
-                      {(ip) => (
-                        <span class="text-gray-300 font-mono">{ip}</span>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
+              </div>
             </div>
-          </div>
-        </Portal>
-      </Show>
+          </Show>
+        </div>
+      </TooltipPortal>
     </>
   );
 }
@@ -236,20 +256,8 @@ function detectOSType(osName: string): OSType {
 
 // OS info cell with icon and Portal tooltip
 function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: string }) {
-  const [showTooltip, setShowTooltip] = createSignal(false);
-  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
-
+  const tip = useTooltip();
   const osType = createMemo(() => detectOSType(props.osName));
-
-  const handleMouseEnter = (e: MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-    setShowTooltip(true);
-  };
-
-  const handleMouseLeave = () => {
-    setShowTooltip(false);
-  };
 
   // OS icons - Windows logo and terminal prompt for Linux
   const OSIcon = () => {
@@ -281,70 +289,48 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
     <>
       <span
         class="inline-flex items-center gap-1"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        onMouseEnter={tip.onMouseEnter}
+        onMouseLeave={tip.onMouseLeave}
       >
         <OSIcon />
       </span>
 
-      <Show when={showTooltip()}>
-        <Portal mount={document.body}>
-          <div
-            class="fixed z-[9999] pointer-events-none"
-            style={{
-              left: `${tooltipPos().x}px`,
-              top: `${tooltipPos().y - 8}px`,
-              transform: 'translate(-50%, -100%)',
-            }}
-          >
-            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[120px] max-w-[220px] border border-gray-700">
-              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
-                Operating System
-              </div>
-              <div class="py-0.5">
-                <div class="text-gray-200 font-medium">{props.osName}</div>
-                <Show when={props.osVersion}>
-                  <div class="text-gray-400">Version: {props.osVersion}</div>
-                </Show>
-                <Show when={props.agentVersion}>
-                  <div class="text-gray-500 text-[9px] mt-1 pt-1 border-t border-gray-700/50">
-                    Agent: {props.agentVersion}
-                  </div>
-                </Show>
-              </div>
-            </div>
+      <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
+        <div class="min-w-[120px] max-w-[220px]">
+          <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+            Operating System
           </div>
-        </Portal>
-      </Show>
+          <div class="py-0.5">
+            <div class="text-gray-200 font-medium">{props.osName}</div>
+            <Show when={props.osVersion}>
+              <div class="text-gray-400">Version: {props.osVersion}</div>
+            </Show>
+            <Show when={props.agentVersion}>
+              <div class="text-gray-500 text-[9px] mt-1 pt-1 border-t border-gray-700/50">
+                Agent: {props.agentVersion}
+              </div>
+            </Show>
+          </div>
+        </div>
+      </TooltipPortal>
     </>
   );
 }
 
 // Backup status cell with Portal tooltip
 function BackupStatusCell(props: { lastBackup: string | number | null | undefined }) {
-  const [showTooltip, setShowTooltip] = createSignal(false);
-  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+  const tip = useTooltip();
 
   const alertsActivation = useAlertsActivation();
   const info = createMemo(() => getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()));
   const config = createMemo(() => BACKUP_STATUS_CONFIG[info().status]);
 
-  const handleMouseEnter = (e: MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-    setShowTooltip(true);
-  };
-
-  const handleMouseLeave = () => {
-    setShowTooltip(false);
-  };
-
   return (
     <>
       <span
         class={`flex-shrink-0 cursor-help ${config().color}`}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        onMouseEnter={tip.onMouseEnter}
+        onMouseLeave={tip.onMouseLeave}
         aria-label={`Backup status: ${info().status}`}
       >
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -364,56 +350,44 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
         </svg>
       </span>
 
-      <Show when={showTooltip()}>
-        <Portal mount={document.body}>
-          <div
-            class="fixed z-[9999] pointer-events-none"
-            style={{
-              left: `${tooltipPos().x}px`,
-              top: `${tooltipPos().y - 8}px`,
-              transform: 'translate(-50%, -100%)',
-            }}
-          >
-            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[140px] border border-gray-700">
-              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
-                Backup Status
-              </div>
-              <Show when={info().status !== 'never'}>
-                <div class="py-0.5">
-                  <div class="text-gray-400">Last backup</div>
-                  <div class="text-gray-200 font-medium">
-                    {new Date(props.lastBackup!).toLocaleDateString(undefined, {
-                      weekday: 'short',
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </div>
-                  <div class="text-gray-300">
-                    {new Date(props.lastBackup!).toLocaleTimeString()}
-                  </div>
-                </div>
-                <div class="pt-1 mt-1 border-t border-gray-700/50">
-                  <span class={config().color}>{info().ageFormatted} ago</span>
-                </div>
-              </Show>
-              <Show when={info().status === 'never'}>
-                <div class="py-0.5 text-red-400">
-                  No backup has ever been recorded for this guest.
-                </div>
-              </Show>
-            </div>
+      <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
+        <div class="min-w-[140px]">
+          <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+            Backup Status
           </div>
-        </Portal>
-      </Show>
+          <Show when={info().status !== 'never'}>
+            <div class="py-0.5">
+              <div class="text-gray-400">Last backup</div>
+              <div class="text-gray-200 font-medium">
+                {new Date(props.lastBackup!).toLocaleDateString(undefined, {
+                  weekday: 'short',
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </div>
+              <div class="text-gray-300">
+                {new Date(props.lastBackup!).toLocaleTimeString()}
+              </div>
+            </div>
+            <div class="pt-1 mt-1 border-t border-gray-700/50">
+              <span class={config().color}>{info().ageFormatted} ago</span>
+            </div>
+          </Show>
+          <Show when={info().status === 'never'}>
+            <div class="py-0.5 text-red-400">
+              No backup has ever been recorded for this guest.
+            </div>
+          </Show>
+        </div>
+      </TooltipPortal>
     </>
   );
 }
 
 // Info cell (VMID / image / namespace) with Portal tooltip for truncated values
 function InfoTooltipCell(props: { value: string; tooltip: string; type: string }) {
-  const [showTooltip, setShowTooltip] = createSignal(false);
-  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+  const tip = useTooltip();
 
   const label = createMemo(() => {
     if (props.type === 'docker') return 'Image';
@@ -421,47 +395,26 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
     return 'ID';
   });
 
-  const handleMouseEnter = (e: MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-    setShowTooltip(true);
-  };
-
-  const handleMouseLeave = () => {
-    setShowTooltip(false);
-  };
-
   return (
     <>
       <span
         class="truncate max-w-[100px] cursor-help"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        onMouseEnter={tip.onMouseEnter}
+        onMouseLeave={tip.onMouseLeave}
       >
         {props.value}
       </span>
 
-      <Show when={showTooltip()}>
-        <Portal mount={document.body}>
-          <div
-            class="fixed z-[9999] pointer-events-none"
-            style={{
-              left: `${tooltipPos().x}px`,
-              top: `${tooltipPos().y - 8}px`,
-              transform: 'translate(-50%, -100%)',
-            }}
-          >
-            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 max-w-[280px] border border-gray-700">
-              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
-                {label()}
-              </div>
-              <div class="py-0.5 text-gray-200 break-all">
-                {props.tooltip}
-              </div>
-            </div>
+      <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
+        <div class="max-w-[280px]">
+          <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+            {label()}
           </div>
-        </Portal>
-      </Show>
+          <div class="py-0.5 text-gray-200 break-all">
+            {props.tooltip}
+          </div>
+        </div>
+      </TooltipPortal>
     </>
   );
 }
@@ -488,10 +441,8 @@ export const GUEST_COLUMNS: ColumnDef[] = [
   { id: 'backup', label: 'Backup', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, width: '50px', toggleable: true },
   { id: 'tags', label: 'Tags', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>, width: '60px', toggleable: true },
   { id: 'os', label: 'OS', width: '45px', toggleable: true },
-  { id: 'diskRead', label: 'D Read', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>, width: '55px', toggleable: true, sortKey: 'diskRead' },
-  { id: 'diskWrite', label: 'D Write', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>, width: '55px', toggleable: true, sortKey: 'diskWrite' },
-  { id: 'netIn', label: 'Net In', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" /></svg>, width: '55px', toggleable: true, sortKey: 'networkIn' },
-  { id: 'netOut', label: 'Net Out', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>, width: '55px', toggleable: true, sortKey: 'networkOut' },
+  { id: 'netIo', label: 'Net I/O', width: '130px', minWidth: '120px', toggleable: true, sortKey: 'netIo' },
+  { id: 'diskIo', label: 'Disk I/O', width: '130px', minWidth: '120px', toggleable: true, sortKey: 'diskIo' },
 
   // Link column
   { id: 'link', label: '', width: '28px' },
@@ -503,9 +454,9 @@ export const GUEST_COLUMNS: ColumnDef[] = [
  * - Type-specific views use the dedicated columns for that type
  */
 export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
-  all:    new Set(['name','type','info','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskRead','diskWrite','netIn','netOut','link']),
-  vm:     new Set(['name','vmid','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskRead','diskWrite','netIn','netOut','link']),
-  lxc:    new Set(['name','vmid','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskRead','diskWrite','netIn','netOut','link']),
+  all:    new Set(['name','type','info','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskIo','netIo','link']),
+  vm:     new Set(['name','vmid','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskIo','netIo','link']),
+  lxc:    new Set(['name','vmid','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskIo','netIo','link']),
   docker: new Set(['name','cpu','memory','uptime','image','context','tags','link']),
   k8s:    new Set(['name','cpu','memory','image','namespace','context','link']),
 };
@@ -538,6 +489,8 @@ interface GuestRowProps {
   onClick?: () => void;
   /** Whether the row details are expanded */
   isExpanded?: boolean;
+  /** Optional cross-row I/O emphasis stats for relative highlighting */
+  ioEmphasis?: WorkloadIOEmphasis;
 }
 
 export function GuestRow(props: GuestRowProps) {
@@ -680,6 +633,15 @@ export function GuestRow(props: GuestRowProps) {
   const diskWrite = createMemo(() => props.guest.diskWrite || 0);
   const networkIn = createMemo(() => props.guest.networkIn || 0);
   const networkOut = createMemo(() => props.guest.networkOut || 0);
+  const ioEmphasis = createMemo(() => props.ioEmphasis ?? EMPTY_IO_EMPHASIS);
+  const diskIOTotal = createMemo(() => diskRead() + diskWrite());
+  const networkTotal = createMemo(() => networkIn() + networkOut());
+  const diskIOEmphasis = createMemo(() =>
+    getOutlierEmphasis(diskIOTotal(), ioEmphasis().diskIO),
+  );
+  const networkEmphasis = createMemo(() =>
+    getOutlierEmphasis(networkTotal(), ioEmphasis().network),
+  );
 
   const memPercent = createMemo(() => {
     if (!props.guest.memory) return 0;
@@ -1142,49 +1104,53 @@ export function GuestRow(props: GuestRowProps) {
           </td>
         </Show>
 
-        {/* Disk Read */}
-        <Show when={isColVisible('diskRead')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center whitespace-nowrap">
-              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span class={`text-xs ${getIOColorClass(diskRead())}`}>{formatSpeed(diskRead())}</span>
-              </Show>
-            </div>
-          </td>
-        </Show>
+		        {/* Net I/O */}
+		        <Show when={isColVisible('netIo')}>
+		          <td class="px-2 py-1 align-middle">
+		            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-gray-400">-</span></div>}>
+		              <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
+		                <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
+		                <span
+		                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
+		                  title={networkEmphasis().showOutlierHint ? `${formatSpeed(networkIn())} (Top outlier)` : formatSpeed(networkIn())}
+		                >
+		                  {formatSpeed(networkIn())}
+		                </span>
+		                <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
+		                <span
+		                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
+		                  title={networkEmphasis().showOutlierHint ? `${formatSpeed(networkOut())} (Top outlier)` : formatSpeed(networkOut())}
+		                >
+		                  {formatSpeed(networkOut())}
+		                </span>
+		              </div>
+		            </Show>
+		          </td>
+		        </Show>
 
-        {/* Disk Write */}
-        <Show when={isColVisible('diskWrite')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center whitespace-nowrap">
-              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span class={`text-xs ${getIOColorClass(diskWrite())}`}>{formatSpeed(diskWrite())}</span>
-              </Show>
-            </div>
-          </td>
-        </Show>
-
-        {/* Net In */}
-        <Show when={isColVisible('netIn')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center whitespace-nowrap">
-              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span class={`text-xs ${getIOColorClass(networkIn())}`}>{formatSpeed(networkIn())}</span>
-              </Show>
-            </div>
-          </td>
-        </Show>
-
-        {/* Net Out */}
-        <Show when={isColVisible('netOut')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center whitespace-nowrap">
-              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span class={`text-xs ${getIOColorClass(networkOut())}`}>{formatSpeed(networkOut())}</span>
-              </Show>
-            </div>
-          </td>
-        </Show>
+		        {/* Disk I/O */}
+		        <Show when={isColVisible('diskIo')}>
+		          <td class="px-2 py-1 align-middle">
+		            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-gray-400">-</span></div>}>
+		              <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
+		                <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
+		                <span
+		                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
+		                  title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(diskRead())} (Top outlier)` : formatSpeed(diskRead())}
+		                >
+		                  {formatSpeed(diskRead())}
+		                </span>
+		                <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
+		                <span
+		                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
+		                  title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(diskWrite())} (Top outlier)` : formatSpeed(diskWrite())}
+		                >
+		                  {formatSpeed(diskWrite())}
+		                </span>
+		              </div>
+		            </Show>
+		          </td>
+		        </Show>
 
         {/* Link Column - at the end like NodeSummaryTable */}
         <Show when={isColVisible('link')}>

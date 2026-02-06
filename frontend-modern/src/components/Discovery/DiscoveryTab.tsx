@@ -11,6 +11,7 @@ import {
     getConnectedAgents,
 } from '../../api/discovery';
 import { GuestMetadataAPI } from '../../api/guestMetadata';
+import { HostMetadataAPI } from '../../api/hostMetadata';
 import { eventBus } from '../../stores/events';
 
 interface DiscoveryTabProps {
@@ -18,12 +19,18 @@ interface DiscoveryTabProps {
     hostId: string;
     resourceId: string;
     hostname: string;
-    /** Canonical guest ID used for metadata API calls */
+    /** Canonical guest ID used for metadata API calls (legacy prop, prefer urlMetadataId) */
     guestId?: string;
-    /** Current custom URL for this guest */
+    /** Current custom URL from parent state (optional) */
     customUrl?: string;
     /** Called after a URL is saved or deleted so the parent can update its state */
     onCustomUrlChange?: (url: string) => void;
+    /** Metadata target kind for URL persistence */
+    urlMetadataKind?: 'guest' | 'host';
+    /** Metadata target ID for URL persistence */
+    urlMetadataId?: string;
+    /** Display label used in URL helper copy */
+    urlTargetLabel?: string;
     /** Whether commands are enabled for this host (from host agent config) */
     commandsEnabled?: boolean;
 }
@@ -31,6 +38,36 @@ interface DiscoveryTabProps {
 // Construct the resource ID in the same format the backend uses
 const makeResourceId = (type: ResourceType, hostId: string, resourceId: string) => {
     return `${type}:${hostId}:${resourceId}`;
+};
+
+const getURLSuggestionSourceLabel = (code?: string): string => {
+    switch ((code || '').trim()) {
+        case 'service_default_match':
+            return 'Known service default';
+        case 'service_default_variation_match':
+            return 'Known service variant';
+        case 'web_port_inference':
+            return 'Detected web port';
+        case 'host_management_profile_proxmox_node':
+        case 'host_management_profile_linked_proxmox_node':
+        case 'host_management_profile_pve':
+            return 'Proxmox host profile';
+        case 'host_management_profile_pbs':
+            return 'Proxmox Backup profile';
+        case 'host_management_profile_pmg':
+            return 'Proxmox Mail Gateway profile';
+        case 'host_management_profile_nas':
+            return 'NAS host profile';
+        default:
+            return 'Discovery heuristic';
+    }
+};
+
+const toSentence = (text?: string): string => {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return '';
+    const first = trimmed.charAt(0);
+    return first.toUpperCase() + trimmed.slice(1);
 };
 
 export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
@@ -47,35 +84,152 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     // --- Guest URL editing state ---
     const [urlValue, setUrlValue] = createSignal(props.customUrl ?? '');
     const [urlSaving, setUrlSaving] = createSignal(false);
+    const [fetchedCustomUrl, setFetchedCustomUrl] = createSignal('');
+    const [urlError, setUrlError] = createSignal<string | null>(null);
+    const [urlSuccess, setUrlSuccess] = createSignal<string | null>(null);
+
+    const urlMetadataKind = createMemo<'guest' | 'host'>(() => props.urlMetadataKind ?? 'guest');
+    const urlMetadataId = createMemo(() => props.urlMetadataId ?? props.guestId ?? '');
+    const currentCustomUrl = createMemo(() => props.customUrl ?? fetchedCustomUrl());
+    const urlTargetLabel = createMemo(() => props.urlTargetLabel ?? (urlMetadataKind() === 'host' ? 'host' : 'guest'));
+    let urlSuccessTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const clearUrlSuccessTimer = () => {
+        if (urlSuccessTimer) {
+            clearTimeout(urlSuccessTimer);
+            urlSuccessTimer = undefined;
+        }
+    };
+
+    onCleanup(() => {
+        clearUrlSuccessTimer();
+    });
+
+    const setUrlSuccessMessage = (message: string) => {
+        clearUrlSuccessTimer();
+        setUrlSuccess(message);
+        urlSuccessTimer = setTimeout(() => {
+            setUrlSuccess(null);
+            urlSuccessTimer = undefined;
+        }, 2500);
+    };
+
+    const validateCustomUrl = (value: string): string | null => {
+        if (!value) return null;
+        let parsed: URL;
+        try {
+            parsed = new URL(value);
+        } catch {
+            return 'Enter a valid URL (for example: https://192.168.1.100:8080).';
+        }
+
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return 'URL must start with http:// or https://.';
+        }
+
+        if (!parsed.hostname) {
+            return 'URL is missing a hostname or IP address.';
+        }
+
+        return null;
+    };
+
+    createEffect(() => {
+        const id = urlMetadataId();
+        const kind = urlMetadataKind();
+        if (!id || props.customUrl !== undefined) return;
+
+        let cancelled = false;
+        const loadMetadata = async () => {
+            try {
+                const metadata = kind === 'host'
+                    ? await HostMetadataAPI.getMetadata(id)
+                    : await GuestMetadataAPI.getMetadata(id);
+                if (!cancelled) {
+                    setFetchedCustomUrl(metadata?.customUrl ?? '');
+                }
+            } catch (err) {
+                console.error('Failed to load custom URL metadata:', err);
+            }
+        };
+
+        void loadMetadata();
+        onCleanup(() => {
+            cancelled = true;
+        });
+    });
 
     // Keep local value in sync with prop changes
     createEffect(() => {
-        setUrlValue(props.customUrl ?? '');
+        setUrlValue(currentCustomUrl());
     });
 
+    // Reset ephemeral UI state when changing discovery context
+    createEffect(() => {
+        void discoverySourceKey();
+        setHasFetched(false);
+        setIsScanning(false);
+        setHttpScanInProgress(false);
+        setScanProgress(null);
+        setScanError(null);
+        setScanSuccess(false);
+        setScanStartTime(null);
+        setLiveElapsedSeconds(0);
+        setShowLoadingSpinner(false);
+        setEditingNotes(false);
+        setSaveError(null);
+        setUrlError(null);
+        setUrlSuccess(null);
+    });
+
+    const updateCustomUrlMetadata = async (value: string) => {
+        const id = urlMetadataId();
+        if (!id) return;
+        if (urlMetadataKind() === 'host') {
+            await HostMetadataAPI.updateMetadata(id, { customUrl: value });
+        } else {
+            await GuestMetadataAPI.updateMetadata(id, { customUrl: value });
+        }
+    };
+
     const handleSaveUrl = async () => {
-        if (!props.guestId) return;
+        if (!urlMetadataId()) return;
         const trimmed = urlValue().trim();
+        setUrlError(null);
+        setUrlSuccess(null);
+        const validationError = validateCustomUrl(trimmed);
+        if (validationError) {
+            setUrlError(validationError);
+            return;
+        }
         setUrlSaving(true);
         try {
-            await GuestMetadataAPI.updateMetadata(props.guestId, { customUrl: trimmed });
+            await updateCustomUrlMetadata(trimmed);
+            setFetchedCustomUrl(trimmed);
             props.onCustomUrlChange?.(trimmed);
+            setUrlSuccessMessage(trimmed ? 'URL saved.' : 'URL cleared.');
         } catch (err) {
-            console.error('Failed to save guest URL:', err);
+            setUrlError(err instanceof Error ? err.message : 'Failed to save URL.');
+            console.error('Failed to save custom URL:', err);
         } finally {
             setUrlSaving(false);
         }
     };
 
     const handleDeleteUrl = async () => {
-        if (!props.guestId) return;
+        if (!urlMetadataId()) return;
+        setUrlError(null);
+        setUrlSuccess(null);
         setUrlSaving(true);
         try {
-            await GuestMetadataAPI.updateMetadata(props.guestId, { customUrl: '' });
+            await updateCustomUrlMetadata('');
+            setFetchedCustomUrl('');
             setUrlValue('');
             props.onCustomUrlChange?.('');
+            setUrlSuccessMessage('URL removed.');
         } catch (err) {
-            console.error('Failed to remove guest URL:', err);
+            setUrlError(err instanceof Error ? err.message : 'Failed to remove URL.');
+            console.error('Failed to remove custom URL:', err);
         } finally {
             setUrlSaving(false);
         }
@@ -158,6 +312,21 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             }
         }
     );
+    const suggestedURLReasonText = createMemo(() => {
+        const d = discovery();
+        if (!d) return '';
+        const detail = toSentence(d.suggested_url_source_detail);
+        if (detail) return detail;
+        if (d.suggested_url_source_code) return getURLSuggestionSourceLabel(d.suggested_url_source_code);
+        return '';
+    });
+    const suggestedURLReasonTitle = createMemo(() => {
+        const d = discovery();
+        if (!d) return '';
+        const label = getURLSuggestionSourceLabel(d.suggested_url_source_code);
+        if (d.suggested_url_source_detail) return `${label}: ${d.suggested_url_source_detail}`;
+        return label;
+    });
 
     // Delay showing loading spinner to prevent flash for fast API calls
     createEffect(() => {
@@ -868,7 +1037,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         </Show>
 
                         {/* Web Interface URL */}
-                        <Show when={props.guestId}>
+                        <Show when={urlMetadataId()}>
                             <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">
                                     Web Interface URL
@@ -886,12 +1055,23 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                     <button
                                         type="button"
                                         class="px-2.5 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                        disabled={urlSaving() || urlValue().trim() === (props.customUrl ?? '')}
+                                        disabled={urlSaving() || urlValue().trim() === currentCustomUrl().trim()}
                                         onClick={handleSaveUrl}
                                     >
                                         Save
                                     </button>
-                                    <Show when={props.customUrl}>
+                                    <Show when={currentCustomUrl()}>
+                                        <a
+                                            href={currentCustomUrl()}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="px-2.5 py-1.5 text-xs font-medium rounded-md text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
+                                            title="Open URL"
+                                        >
+                                            Open
+                                        </a>
+                                    </Show>
+                                    <Show when={currentCustomUrl()}>
                                         <button
                                             type="button"
                                             class="px-2.5 py-1.5 text-xs font-medium rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
@@ -903,12 +1083,32 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         </button>
                                     </Show>
                                 </div>
+                                <Show when={urlError()}>
+                                    <p class="mt-1.5 text-[11px] text-red-600 dark:text-red-400">{urlError()}</p>
+                                </Show>
+                                <Show when={urlSuccess()}>
+                                    <p class="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">{urlSuccess()}</p>
+                                </Show>
+                                <Show when={!d().suggested_url && d().suggested_url_diagnostic}>
+                                    <div class="mt-2 rounded border border-amber-200 bg-amber-50/80 p-2 text-[11px] text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-200">
+                                        <p class="font-medium">No suggested URL found</p>
+                                        <p class="mt-0.5">{d().suggested_url_diagnostic}</p>
+                                    </div>
+                                </Show>
                                 {/* Suggested URL from discovery */}
-                                <Show when={d().suggested_url && !props.customUrl}>
+                                <Show when={d().suggested_url && d().suggested_url !== currentCustomUrl()}>
                                     <div class="mt-2 p-2 rounded bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800/50">
                                         <div class="text-[10px] font-medium text-blue-700 dark:text-blue-300 mb-1">
-                                            Suggested URL
+                                            {currentCustomUrl() ? 'Discovered URL' : 'Suggested URL'}
                                         </div>
+                                        <Show when={suggestedURLReasonText()}>
+                                            <p
+                                                class="mb-1 text-[10px] text-blue-700/90 dark:text-blue-300/90"
+                                                title={suggestedURLReasonTitle()}
+                                            >
+                                                Why this URL: {suggestedURLReasonText()}
+                                            </p>
+                                        </Show>
                                         <div class="flex items-center gap-2">
                                             <code class="flex-1 text-xs text-blue-800 dark:text-blue-200 font-mono truncate" title={d().suggested_url}>
                                                 {d().suggested_url}
@@ -919,13 +1119,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                                 onClick={() => setUrlValue(d().suggested_url || '')}
                                                 disabled={urlSaving()}
                                             >
-                                                Use this
+                                                {currentCustomUrl() ? 'Use instead' : 'Use this'}
                                             </button>
                                         </div>
                                     </div>
                                 </Show>
                                 <p class="mt-1.5 text-[10px] text-gray-400 dark:text-gray-500">
-                                    Add a URL to quickly access this guest's web interface from the dashboard.
+                                    Add a URL to quickly access this {urlTargetLabel()}'s web interface from the dashboard.
                                 </p>
                             </div>
                         </Show>

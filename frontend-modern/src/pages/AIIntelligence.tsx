@@ -52,8 +52,8 @@ import { TogglePrimitive, Toggle } from '@/components/shared/Toggle';
 import { ApprovalBanner, PatrolStatusBar, RunHistoryPanel, CountdownTimer } from '@/components/patrol';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import { hasFeature } from '@/stores/license';
+import { formatRelativeTime } from '@/utils/format';
 import {
-  formatRelativeTime,
   formatTriggerReason,
   groupModelsByProvider,
 } from '@/utils/patrolFormat';
@@ -87,13 +87,15 @@ export function AIIntelligence() {
 
   // Optimistic running state — set immediately on "Run Patrol" click to avoid race with backend
   const [manualRunRequested, setManualRunRequested] = createSignal(false);
+  const [patrolEnabledLocal, setPatrolEnabledLocal] = createSignal<boolean>(true);
+  const [liveRunStartedAt, setLiveRunStartedAt] = createSignal('');
 
   // Safety timer ref — hoisted so onStart can clear it when SSE connects
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
 
   // Live patrol streaming
   const patrolStream = usePatrolStream({
-    running: () => (patrolStatus()?.running ?? false) || manualRunRequested(),
+    running: () => patrolEnabledLocal() && ((patrolStatus()?.running ?? false) || manualRunRequested()),
     onStart: () => {
       // SSE connected — clear the safety timeout
       if (safetyTimerRef !== undefined) {
@@ -144,7 +146,6 @@ export function AIIntelligence() {
   const [patrolModel, setPatrolModel] = createSignal<string>('');
   const [defaultModel, setDefaultModel] = createSignal<string>('');
   const [patrolInterval, setPatrolInterval] = createSignal<number>(360);
-  const [patrolEnabledLocal, setPatrolEnabledLocal] = createSignal<boolean>(true);
   const [isUpdatingSettings, setIsUpdatingSettings] = createSignal(false);
   const [isTogglingPatrol, setIsTogglingPatrol] = createSignal(false);
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
@@ -219,7 +220,16 @@ export function AIIntelligence() {
   async function handleTogglePatrol() {
     if (isTogglingPatrol()) return;
     setIsTogglingPatrol(true);
-    const newValue = !patrolEnabledLocal();
+    const previousValue = patrolEnabledLocal();
+    const newValue = !previousValue;
+    setPatrolEnabledLocal(newValue);
+    if (!newValue) {
+      setManualRunRequested(false);
+      if (safetyTimerRef !== undefined) {
+        clearTimeout(safetyTimerRef);
+        safetyTimerRef = undefined;
+      }
+    }
     try {
       const data = await apiFetchJSON<AISettings>('/api/settings/ai/update', {
         method: 'PUT',
@@ -238,7 +248,7 @@ export function AIIntelligence() {
       }
     } catch (err) {
       console.error('Failed to toggle patrol:', err);
-      setPatrolEnabledLocal(!newValue); // Rollback
+      setPatrolEnabledLocal(previousValue); // Rollback
       notificationStore.error('Failed to toggle patrol');
     } finally {
       setIsTogglingPatrol(false);
@@ -370,6 +380,22 @@ export function AIIntelligence() {
     return '';
   });
 
+  const shouldShowLiveRun = createMemo(
+    () => patrolEnabledLocal() && ((patrolStatus()?.running ?? false) || manualRunRequested() || patrolStream.isStreaming()),
+  );
+
+  createEffect(() => {
+    if (shouldShowLiveRun()) {
+      if (!liveRunStartedAt()) {
+        setLiveRunStartedAt(new Date().toISOString());
+      }
+      return;
+    }
+    if (liveRunStartedAt()) {
+      setLiveRunStartedAt('');
+    }
+  });
+
   const selectedRunFindingIds = createMemo(() => {
     const run = selectedRun();
     if (!run || !run.finding_ids || run.finding_ids.length === 0) return null;
@@ -378,10 +404,10 @@ export function AIIntelligence() {
 
   // Live in-progress run entry for history list
   const liveRunRecord = createMemo<PatrolRunRecord | null>(() => {
-    if (!patrolStream.isStreaming() && !manualRunRequested()) return null;
+    if (!shouldShowLiveRun()) return null;
     return {
       id: '__live__',
-      started_at: new Date().toISOString(),
+      started_at: liveRunStartedAt() || new Date().toISOString(),
       completed_at: '',
       duration_ms: 0,
       type: 'full',
@@ -589,7 +615,7 @@ export function AIIntelligence() {
             {/* Last/Next patrol timing - only show if patrol has run */}
             <Show when={patrolStatus()?.last_patrol_at}>
               <div class="hidden sm:flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-                <span>Last: {formatRelativeTime(patrolStatus()?.last_patrol_at)}</span>
+                <span>Last: {formatRelativeTime(patrolStatus()?.last_patrol_at, { compact: true, emptyText: 'Never' })}</span>
                 <Show when={patrolStatus()?.next_patrol_at}>
                   <span class="text-gray-300 dark:text-gray-600">|</span>
                   <CountdownTimer
@@ -903,7 +929,7 @@ export function AIIntelligence() {
                 </p>
                 <Show when={blockedAt()}>
                   <p class="text-[10px] text-amber-700/80 dark:text-amber-300/80">
-                    Blocked {formatRelativeTime(blockedAt())}
+                    Blocked {formatRelativeTime(blockedAt(), { compact: true })}
                   </p>
                 </Show>
               </div>
@@ -1086,7 +1112,7 @@ export function AIIntelligence() {
               {(run) => (
                 <div class="flex items-center justify-between px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300">
                   <span>
-                    Filtered to run {formatRelativeTime(run().started_at)} ({formatTriggerReason(run().trigger_reason)})
+                    Filtered to run {formatRelativeTime(run().started_at, { compact: true })} ({formatTriggerReason(run().trigger_reason)})
                   </span>
                   <button
                     type="button"

@@ -9,6 +9,12 @@ interface PatrolStreamState {
   phase: Accessor<string>;
   currentTool: Accessor<string>;
   tokens: Accessor<number>;
+  resynced: Accessor<boolean>;
+  resyncReason: Accessor<string>;
+  bufferStartSeq: Accessor<number>;
+  bufferEndSeq: Accessor<number>;
+  outputTruncated: Accessor<boolean>;
+  reconnectCount: Accessor<number>;
   isStreaming: Accessor<boolean>;
   errorMessage: Accessor<string>;
 }

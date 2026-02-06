@@ -8,6 +8,7 @@
 
 import { Component, Show } from 'solid-js';
 import { useMetricsViewMode, TIME_RANGE_OPTIONS } from '@/stores/metricsViewMode';
+import { isRangeLocked } from '@/stores/license';
 import type { TimeRange } from '@/api/charts';
 
 export const MetricsViewToggle: Component = () => {
@@ -64,6 +65,11 @@ export const MetricsViewToggle: Component = () => {
               title={`Show last ${option.label} of data`}
             >
               {option.label}
+              <Show when={isRangeLocked(option.value)}>
+                <span class="ml-0.5 text-[8px] font-semibold uppercase text-blue-600 dark:text-blue-300">
+                  Pro
+                </span>
+              </Show>
             </button>
           ))}
         </div>

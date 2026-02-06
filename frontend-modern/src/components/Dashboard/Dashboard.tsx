@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { GuestRow, GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './GuestRow';
+import type { WorkloadIOEmphasis } from './GuestRow';
 import { GuestDrawer } from './GuestDrawer';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -44,6 +45,57 @@ let persistHandle: number | null = null;
 let persistHandleType: 'idle' | 'timeout' | null = null;
 
 const instrumentationEnabled = import.meta.env.DEV && typeof performance !== 'undefined';
+
+const computeMedian = (values: number[]): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+};
+
+const computePercentile = (values: number[], percentile: number): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const clamped = Math.max(0, Math.min(1, percentile));
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(clamped * sorted.length) - 1));
+  return sorted[index];
+};
+
+const buildIODistribution = (values: number[]) => {
+  const valid = values.filter((value) => Number.isFinite(value) && value >= 0);
+  if (valid.length === 0) {
+    return { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 0 };
+  }
+  const median = computeMedian(valid);
+  const deviations = valid.map((value) => Math.abs(value - median));
+  const mad = computeMedian(deviations);
+  const max = Math.max(...valid, 0);
+  const p97 = computePercentile(valid, 0.97);
+  const p99 = computePercentile(valid, 0.99);
+  return { median, mad, max, p97, p99, count: valid.length };
+};
+
+const computeWorkloadIOEmphasis = (guests: WorkloadGuest[]): WorkloadIOEmphasis => {
+  const networkValues: number[] = [];
+  const diskIOValues: number[] = [];
+
+  for (const guest of guests) {
+    const networkIn = Math.max(0, guest.networkIn ?? 0);
+    const networkOut = Math.max(0, guest.networkOut ?? 0);
+    const diskRead = Math.max(0, guest.diskRead ?? 0);
+    const diskWrite = Math.max(0, guest.diskWrite ?? 0);
+    networkValues.push(networkIn + networkOut);
+    diskIOValues.push(diskRead + diskWrite);
+  }
+
+  return {
+    network: buildIODistribution(networkValues),
+    diskIO: buildIODistribution(diskIOValues),
+  };
+};
 
 const readGuestMetadataCache = (): GuestMetadataRecord => {
   if (cachedGuestMetadata) {
@@ -205,6 +257,7 @@ interface DashboardProps {
 
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
+type WorkloadSortKey = keyof WorkloadGuest | 'diskIo' | 'netIo';
 export function Dashboard(props: DashboardProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -368,7 +421,7 @@ export function Dashboard(props: DashboardProps) {
   );
 
   // Sorting state - default to type ascending so VMs/LXCs/Docker/K8s cluster together
-  const [sortKey, setSortKey] = createSignal<keyof WorkloadGuest | null>('type');
+  const [sortKey, setSortKey] = createSignal<WorkloadSortKey | null>('type');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
   // Column visibility management
@@ -557,7 +610,7 @@ export function Dashboard(props: DashboardProps) {
   });
 
   // Sort handler
-  const handleSort = (key: keyof WorkloadGuest) => {
+  const handleSort = (key: WorkloadSortKey) => {
     if (sortKey() === key) {
       // Toggle direction for the same column
       setSortDirection(sortDirection() === 'asc' ? 'desc' : 'asc');
@@ -569,10 +622,8 @@ export function Dashboard(props: DashboardProps) {
         key === 'cpu' ||
         key === 'memory' ||
         key === 'disk' ||
-        key === 'diskRead' ||
-        key === 'diskWrite' ||
-        key === 'networkIn' ||
-        key === 'networkOut' ||
+        key === 'diskIo' ||
+        key === 'netIo' ||
         key === 'uptime'
       ) {
         setSortDirection('desc');
@@ -628,18 +679,8 @@ export function Dashboard(props: DashboardProps) {
     };
 
     return (a: WorkloadGuest, b: WorkloadGuest): number => {
-      let aVal: string | number | boolean | null | undefined = a[key] as
-        | string
-        | number
-        | boolean
-        | null
-        | undefined;
-      let bVal: string | number | boolean | null | undefined = b[key] as
-        | string
-        | number
-        | boolean
-        | null
-        | undefined;
+      let aVal: string | number | boolean | null | undefined = null;
+      let bVal: string | number | boolean | null | undefined = null;
 
       // Special handling for percentage-based columns
       if (key === 'cpu') {
@@ -651,6 +692,15 @@ export function Dashboard(props: DashboardProps) {
       } else if (key === 'disk') {
         aVal = getDiskUsagePercent(a);
         bVal = getDiskUsagePercent(b);
+      } else if (key === 'diskIo') {
+        aVal = Math.max(0, a.diskRead || 0) + Math.max(0, a.diskWrite || 0);
+        bVal = Math.max(0, b.diskRead || 0) + Math.max(0, b.diskWrite || 0);
+      } else if (key === 'netIo') {
+        aVal = Math.max(0, a.networkIn || 0) + Math.max(0, a.networkOut || 0);
+        bVal = Math.max(0, b.networkIn || 0) + Math.max(0, b.networkOut || 0);
+      } else {
+        aVal = a[key] as string | number | boolean | null | undefined;
+        bVal = b[key] as string | number | boolean | null | undefined;
       }
 
       // Handle null/undefined/empty values - put at end for both asc and desc
@@ -682,14 +732,6 @@ export function Dashboard(props: DashboardProps) {
 
   createEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input, textarea, or contenteditable
-      const target = e.target as HTMLElement;
-      const isInputField =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.contentEditable === 'true';
-
       // Escape key behavior
       if (e.key === 'Escape') {
         // First check if we have search/filters to clear (including tag filters and node selection)
@@ -718,23 +760,6 @@ export function Dashboard(props: DashboardProps) {
         } else {
           // No active filters, toggle the filters section visibility
           setShowFilters(!showFilters());
-        }
-      } else if (!isInputField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        // If it's a printable character and user is not in an input field
-        // Check if AI chat is open - if so, focus that instead
-        if (aiChatStore.focusInput()) {
-          // AI chat input was focused, let the character be typed there
-          return;
-        }
-        // Otherwise, focus the search input
-        // Expand filters section if collapsed
-        if (!showFilters()) {
-          setShowFilters(true);
-        }
-        // Focus the search input and let the character be typed
-        if (searchInputRef) {
-          searchInputRef.focus();
-          // Don't prevent default - let the character be typed
         }
       }
     };
@@ -932,6 +957,8 @@ export function Dashboard(props: DashboardProps) {
     };
   });
 
+  const workloadIOEmphasis = createMemo(() => computeWorkloadIOEmphasis(filteredGuests()));
+
   const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => {
     logger.debug('handleNodeSelect called', { nodeId, nodeType });
 
@@ -1054,6 +1081,11 @@ export function Dashboard(props: DashboardProps) {
           setSortKey={setSortKey}
           setSortDirection={setSortDirection}
           searchInputRef={(el) => (searchInputRef = el)}
+          onBeforeAutoFocus={() => {
+            if (aiChatStore.focusInput()) return true;
+            if (!showFilters()) setShowFilters(true);
+            return false;
+          }}
           availableColumns={columnVisibility.availableToggles()}
           isColumnHidden={columnVisibility.isHiddenByUser}
           onColumnToggle={columnVisibility.toggle}
@@ -1192,7 +1224,7 @@ export function Dashboard(props: DashboardProps) {
                     <For each={visibleColumns()}>
                       {(col) => {
                         const isFirst = () => col.id === visibleColumns()[0]?.id;
-                        const sortKeyForCol = col.sortKey as keyof WorkloadGuest | undefined;
+                        const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
                         const isSortable = !!sortKeyForCol;
                         const isSorted = () => sortKeyForCol && sortKey() === sortKeyForCol;
 
@@ -1204,6 +1236,8 @@ export function Dashboard(props: DashboardProps) {
                             style={{
                               ...((['cpu', 'memory', 'disk'].includes(col.id))
                                 ? { "width": isMobile() ? "60px" : "140px" }
+                                : (['netIo', 'diskIo'].includes(col.id))
+                                  ? { "width": isMobile() ? "130px" : "170px" }
                                 : (col.width ? { "width": col.width } : {})),
                               "vertical-align": 'middle',
                             }}
@@ -1291,6 +1325,7 @@ export function Dashboard(props: DashboardProps) {
                                     visibleColumnIds={visibleColumnIds()}
                                     onClick={() => setSelectedGuestId(selectedGuestId() === guestId() ? null : guestId())}
                                     isExpanded={selectedGuestId() === guestId()}
+                                    ioEmphasis={workloadIOEmphasis()}
                                   />
                                   <Show when={selectedGuestId() === guestId()}>
                                     <tr>

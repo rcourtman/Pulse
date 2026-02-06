@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js';
 import { Show, For, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { useTooltip } from '@/hooks/useTooltip';
+import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -67,42 +68,24 @@ function getTimeUntil(timestamp?: number): { text: string; isOverdue: boolean; i
 
 // Error tooltip component
 const ErrorTooltip: Component<{ error: string }> = (props) => {
-  const [showTooltip, setShowTooltip] = createSignal(false);
-  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
-
-  const handleMouseEnter = (e: MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-    setShowTooltip(true);
-  };
+  const tip = useTooltip();
 
   return (
     <>
       <div
         class="mt-1 text-xs text-red-500 dark:text-red-400 line-clamp-1 cursor-help"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={() => setShowTooltip(false)}
+        onMouseEnter={tip.onMouseEnter}
+        onMouseLeave={tip.onMouseLeave}
       >
         {props.error}
       </div>
 
-      <Show when={showTooltip()}>
-        <Portal mount={document.body}>
-          <div
-            class="fixed z-[9999] pointer-events-none"
-            style={{
-              left: `${tooltipPos().x}px`,
-              top: `${tooltipPos().y - 8}px`,
-              transform: 'translate(-50%, -100%)',
-            }}
-          >
-            <div class="bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-md shadow-lg px-3 py-2 max-w-[400px] border border-gray-700">
-              <div class="font-medium text-red-400 mb-1">Error Details</div>
-              <div class="text-gray-300 whitespace-pre-wrap">{props.error}</div>
-            </div>
-          </div>
-        </Portal>
-      </Show>
+      <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
+        <div class="max-w-[400px]">
+          <div class="font-medium text-red-400 mb-1">Error Details</div>
+          <div class="text-gray-300 whitespace-pre-wrap">{props.error}</div>
+        </div>
+      </TooltipPortal>
     </>
   );
 };

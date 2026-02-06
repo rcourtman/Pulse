@@ -13,6 +13,7 @@ import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import { formatRelativeTime } from '@/utils/format';
 import {
   apiFetch,
   apiFetchJSON,
@@ -84,6 +85,7 @@ import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
+import { updateDockerUpdateActionsSetting } from '@/stores/systemSettings';
 
 import { updateStore } from '@/stores/updates';
 import { isPro, loadLicenseStatus } from '@/stores/license';
@@ -740,7 +742,6 @@ const Settings: Component<SettingsProps> = (props) => {
     try {
       await SettingsAPI.updateSystemSettings({ disableDockerUpdateActions: disabled });
       // Also update the global store so UpdateButton reacts immediately
-      const { updateDockerUpdateActionsSetting } = await import('@/stores/systemSettings');
       updateDockerUpdateActionsSetting(disabled);
 
       if (disabled) {
@@ -857,33 +858,6 @@ const Settings: Component<SettingsProps> = (props) => {
   const authDisabledByEnv = createMemo(() => Boolean(securityStatus()?.deprecatedDisableAuth));
   const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
 
-  const formatRelativeTime = (timestamp?: number) => {
-    if (!timestamp) {
-      return '';
-    }
-
-    const delta = Date.now() - timestamp;
-    if (delta < 0) {
-      return 'just now';
-    }
-
-    const seconds = Math.round(delta / 1000);
-    if (seconds < 60) {
-      return `${seconds}s ago`;
-    }
-
-    const minutes = Math.round(seconds / 60);
-    if (minutes < 60) {
-      return `${minutes}m ago`;
-    }
-
-    const hours = Math.round(minutes / 60);
-    if (hours < 24) {
-      return `${hours}h ago`;
-    }
-
-    return new Date(timestamp).toLocaleString();
-  };
 
 
   const runDiagnostics = async () => {
@@ -2652,6 +2626,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               {formatRelativeTime(
                                 discoveryScanStatus().lastResultAt ??
                                 discoveryScanStatus().lastScanStartedAt,
+                                { compact: true },
                               )}
                             </span>
                           </Show>
@@ -2939,6 +2914,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               {formatRelativeTime(
                                 discoveryScanStatus().lastResultAt ??
                                 discoveryScanStatus().lastScanStartedAt,
+                                { compact: true },
                               )}
                             </span>
                           </Show>
@@ -3222,6 +3198,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               {formatRelativeTime(
                                 discoveryScanStatus().lastResultAt ??
                                 discoveryScanStatus().lastScanStartedAt,
+                                { compact: true },
                               )}
                             </span>
                           </Show>

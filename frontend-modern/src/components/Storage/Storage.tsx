@@ -636,14 +636,6 @@ const Storage: Component = () => {
 
   createEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input
-      const target = e.target as HTMLElement;
-      const isInputField =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.contentEditable === 'true';
-
       // Escape key behavior
       if (e.key === 'Escape') {
         // Clear search and reset filters
@@ -660,12 +652,6 @@ const Storage: Component = () => {
           if (searchInputRef && document.activeElement === searchInputRef) {
             searchInputRef.blur();
           }
-        }
-      } else if (!isInputField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        // If it's a printable character and user is not in an input field
-        // Focus the search input and let the character be typed
-        if (searchInputRef) {
-          searchInputRef.focus();
         }
       }
     };
