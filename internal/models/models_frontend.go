@@ -433,6 +433,7 @@ type HostFrontend struct {
 	LastSeen          int64                      `json:"lastSeen"`
 	IntervalSeconds   int                        `json:"intervalSeconds,omitempty"`
 	AgentVersion      string                     `json:"agentVersion,omitempty"`
+	MachineID         string                     `json:"machineId,omitempty"`
 	TokenID           string                     `json:"tokenId,omitempty"`
 	TokenName         string                     `json:"tokenName,omitempty"`
 	TokenHint         string                     `json:"tokenHint,omitempty"`

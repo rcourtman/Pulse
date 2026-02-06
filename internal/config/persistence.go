@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rs/zerolog/log"
 )
 
@@ -43,6 +44,7 @@ type ConfigPersistence struct {
 	agentAssignmentsFile     string
 	aiChatSessionsFile       string
 	orgFile                  string
+	relayFile                string
 	crypto                   *crypto.CryptoManager
 	fs                       FileSystem
 
@@ -127,6 +129,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		agentAssignmentsFile:     filepath.Join(configDir, "agent_profile_assignments.json"),
 		aiChatSessionsFile:       filepath.Join(configDir, "ai_chat_sessions.json"),
 		orgFile:                  filepath.Join(configDir, "org.json"),
+		relayFile:                filepath.Join(configDir, "relay.enc"),
 		crypto:                   cryptoMgr,
 		fs:                       defaultFileSystem{},
 	}
@@ -2661,4 +2664,66 @@ func (c *ConfigPersistence) CleanupOldAIChatSessions(maxAge time.Duration) (int,
 	}
 
 	return removed, nil
+}
+
+// SaveRelayConfig stores relay settings, encrypting when a crypto manager is available.
+func (c *ConfigPersistence) SaveRelayConfig(cfg relay.Config) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
+	}
+
+	if err := c.writeConfigFileLocked(c.relayFile, data, 0600); err != nil {
+		return err
+	}
+
+	log.Info().Str("file", c.relayFile).Bool("enabled", cfg.Enabled).Msg("Relay configuration saved")
+	return nil
+}
+
+// LoadRelayConfig retrieves the persisted relay settings. Returns default config if none exists.
+func (c *ConfigPersistence) LoadRelayConfig() (*relay.Config, error) {
+	c.mu.RLock()
+
+	data, err := c.fs.ReadFile(c.relayFile)
+	if err != nil {
+		c.mu.RUnlock()
+		if os.IsNotExist(err) {
+			return relay.DefaultConfig(), nil
+		}
+		return nil, err
+	}
+
+	if c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			c.mu.RUnlock()
+			return nil, err
+		}
+		data = decrypted
+	}
+
+	c.mu.RUnlock()
+
+	cfg := relay.DefaultConfig()
+	if err := json.Unmarshal(data, cfg); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }

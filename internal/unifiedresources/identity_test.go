@@ -95,7 +95,7 @@ func TestExclusionPreventsMatch(t *testing.T) {
 	}
 }
 
-func TestHostnameIPMatch(t *testing.T) {
+func TestHostnameIPMatchRequiresReview(t *testing.T) {
 	matcher := NewIdentityMatcher()
 	matcher.Add("host-1", ResourceIdentity{
 		Hostnames:   []string{"pve1"},
@@ -110,8 +110,11 @@ func TestHostnameIPMatch(t *testing.T) {
 	if len(candidates) == 0 || candidates[0].ID != "host-1" {
 		t.Fatalf("expected host-1 candidate, got %+v", candidates)
 	}
-	if candidates[0].Confidence < 0.85 {
-		t.Fatalf("expected >=0.85 confidence, got %.2f", candidates[0].Confidence)
+	if candidates[0].Confidence < 0.80 {
+		t.Fatalf("expected >=0.80 confidence, got %.2f", candidates[0].Confidence)
+	}
+	if !candidates[0].RequiresReview {
+		t.Fatalf("expected requires review")
 	}
 }
 

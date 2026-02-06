@@ -178,7 +178,12 @@ func (m *IdentityMatcher) FindCandidates(identity ResourceIdentity) []MatchCandi
 
 	// Hostname + IP overlap
 	for id := range intersectIDs(hostnameIDs, ipIDs) {
-		candidates[id] = promoteCandidate(candidates[id], MatchCandidate{ID: id, Confidence: 0.85, Reason: "hostname+ip"})
+		candidates[id] = promoteCandidate(candidates[id], MatchCandidate{
+			ID:             id,
+			Confidence:     0.80,
+			Reason:         "hostname+ip",
+			RequiresReview: true,
+		})
 	}
 
 	// Hostname only

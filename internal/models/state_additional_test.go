@@ -153,6 +153,47 @@ func TestStateUnlinkNodesFromHostAgent(t *testing.T) {
 	}
 }
 
+func TestStateUpdateNodesForInstanceSkipsAmbiguousHostAgentHostnameMatch(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{ID: "host-a", Hostname: "pve1"},
+			{ID: "host-b", Hostname: "pve1.local"},
+		},
+	}
+
+	state.UpdateNodesForInstance("cluster-a", []Node{
+		{ID: "node-1", Name: "pve1", Instance: "cluster-a"},
+	})
+
+	nodes := state.Nodes
+	if len(nodes) != 1 {
+		t.Fatalf("nodes = %#v, want 1", nodes)
+	}
+	if nodes[0].LinkedHostAgentID != "" {
+		t.Fatalf("expected no auto-link for ambiguous hostname, got %q", nodes[0].LinkedHostAgentID)
+	}
+}
+
+func TestStateUpdateNodesForInstanceLinksUniqueHostname(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{ID: "host-a", Hostname: "pve1.local"},
+		},
+	}
+
+	state.UpdateNodesForInstance("cluster-a", []Node{
+		{ID: "node-1", Name: "pve1", Instance: "cluster-a"},
+	})
+
+	nodes := state.Nodes
+	if len(nodes) != 1 {
+		t.Fatalf("nodes = %#v, want 1", nodes)
+	}
+	if nodes[0].LinkedHostAgentID != "host-a" {
+		t.Fatalf("LinkedHostAgentID = %q, want host-a", nodes[0].LinkedHostAgentID)
+	}
+}
+
 func TestStateLinkHostAgentToNode(t *testing.T) {
 	state := &State{
 		Hosts: []Host{

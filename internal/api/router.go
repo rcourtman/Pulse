@@ -3444,9 +3444,10 @@ func (r *Router) StartRelay(ctx context.Context) {
 			config.Mu.Unlock()
 			return ok
 		},
-		LocalAddr:      localAddr,
-		ServerVersion:  r.serverVersion,
-		IdentityPubKey: cfg.IdentityPublicKey,
+		LocalAddr:          localAddr,
+		ServerVersion:      r.serverVersion,
+		IdentityPubKey:     cfg.IdentityPublicKey,
+		IdentityPrivateKey: cfg.IdentityPrivateKey,
 	}
 
 	relayCtx, relayCancel := context.WithCancel(ctx)

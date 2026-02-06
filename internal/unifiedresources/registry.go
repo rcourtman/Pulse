@@ -264,8 +264,8 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 		resource.LastSeen = time.Now().UTC()
 	}
 
-	// Link hints override identity matching
-	if linked := rr.resolveLinkedResource(source, resource); linked != "" {
+	// Linked resources must be mutually linked to avoid one-sided/ambiguous auto-merges.
+	if linked := rr.resolveLinkedResource(source, sourceID, resource); linked != "" {
 		existing := rr.resources[linked]
 		if existing != nil {
 			rr.mergeInto(existing, resource, source)
@@ -330,17 +330,33 @@ func (rr *ResourceRegistry) findMatch(identity ResourceIdentity, resourceType Re
 	return nil, excludedMatch
 }
 
-func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, resource Resource) string {
+func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID string, resource Resource) string {
 	switch source {
 	case SourceProxmox:
 		if resource.Proxmox != nil && resource.Proxmox.LinkedHostAgentID != "" {
 			if id, ok := rr.bySource[SourceAgent][resource.Proxmox.LinkedHostAgentID]; ok {
+				existing := rr.resources[id]
+				if existing == nil || existing.Agent == nil {
+					return ""
+				}
+				linkedNodeID := strings.TrimSpace(existing.Agent.LinkedNodeID)
+				if linkedNodeID == "" || linkedNodeID != sourceID {
+					return ""
+				}
 				return id
 			}
 		}
 	case SourceAgent:
 		if resource.Agent != nil && resource.Agent.LinkedNodeID != "" {
 			if id, ok := rr.bySource[SourceProxmox][resource.Agent.LinkedNodeID]; ok {
+				existing := rr.resources[id]
+				if existing == nil || existing.Proxmox == nil {
+					return ""
+				}
+				linkedHostID := strings.TrimSpace(existing.Proxmox.LinkedHostAgentID)
+				if linkedHostID == "" || linkedHostID != sourceID {
+					return ""
+				}
 				return id
 			}
 		}

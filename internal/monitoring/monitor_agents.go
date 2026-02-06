@@ -1402,6 +1402,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		IntervalSeconds: report.Agent.IntervalSeconds,
 		LastSeen:        timestamp,
 		AgentVersion:    strings.TrimSpace(report.Agent.Version),
+		MachineID:       strings.TrimSpace(report.Host.MachineID),
 		CommandsEnabled: report.Agent.CommandsEnabled,
 		ReportIP:        strings.TrimSpace(report.Host.ReportIP),
 		Tags:            append([]string(nil), report.Tags...),

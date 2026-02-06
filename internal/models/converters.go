@@ -476,6 +476,7 @@ func (h Host) ToFrontend() HostFrontend {
 		UptimeSeconds:   h.UptimeSeconds,
 		IntervalSeconds: h.IntervalSeconds,
 		AgentVersion:    h.AgentVersion,
+		MachineID:       h.MachineID,
 		TokenID:         h.TokenID,
 		TokenName:       h.TokenName,
 		TokenHint:       h.TokenHint,

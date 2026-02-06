@@ -69,6 +69,7 @@ func (h *ResourceV2Handlers) HandleListResources(w http.ResponseWriter, r *http.
 	applySorting(resources, filters.sortField, filters.sortOrder)
 
 	paged, meta := paginate(resources, filters.page, filters.limit)
+	attachDiscoveryTargets(paged)
 
 	response := ResourcesV2Response{
 		Data:         paged,
@@ -107,8 +108,11 @@ func (h *ResourceV2Handlers) HandleGetResource(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	resourceCopy := *resource
+	attachDiscoveryTarget(&resourceCopy)
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resource)
+	json.NewEncoder(w).Encode(resourceCopy)
 }
 
 // HandleResourceRoutes dispatches nested resource routes.
@@ -756,6 +760,146 @@ func parseTags(raw string) map[string]struct{} {
 		result[strings.ToLower(part)] = struct{}{}
 	}
 	return result
+}
+
+func attachDiscoveryTargets(resources []unified.Resource) {
+	for i := range resources {
+		attachDiscoveryTarget(&resources[i])
+	}
+}
+
+func attachDiscoveryTarget(resource *unified.Resource) {
+	if resource == nil {
+		return
+	}
+	resource.DiscoveryTarget = buildDiscoveryTarget(*resource)
+}
+
+func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	switch resource.Type {
+	case unified.ResourceTypeHost:
+		linkedHostAgentID := ""
+		if hasSource(resource.Sources, unified.SourceAgent) || resource.Agent != nil {
+			linkedHostAgentID = proxmoxLinkedHostAgentID(resource.Proxmox)
+		}
+		hostID := firstNonEmptyTrimmed(
+			agentID(resource.Agent),
+			linkedHostAgentID,
+			proxmoxNodeName(resource.Proxmox),
+			agentHostname(resource.Agent),
+			dockerHostname(resource.Docker),
+			firstResourceHostname(resource),
+			resource.Name,
+			resource.ID,
+		)
+		if hostID == "" {
+			return nil
+		}
+		return &unified.DiscoveryTarget{
+			ResourceType: "host",
+			HostID:       hostID,
+			ResourceID:   hostID,
+			Hostname: firstNonEmptyTrimmed(
+				agentHostname(resource.Agent),
+				proxmoxNodeName(resource.Proxmox),
+				dockerHostname(resource.Docker),
+				firstResourceHostname(resource),
+				resource.Name,
+				hostID,
+			),
+		}
+	case unified.ResourceTypeVM:
+		return proxmoxGuestDiscoveryTarget(resource, "vm")
+	case unified.ResourceTypeLXC:
+		return proxmoxGuestDiscoveryTarget(resource, "lxc")
+	default:
+		return nil
+	}
+}
+
+func proxmoxGuestDiscoveryTarget(resource unified.Resource, resourceType string) *unified.DiscoveryTarget {
+	if resource.Proxmox == nil || resource.Proxmox.NodeName == "" || resource.Proxmox.VMID == 0 {
+		return nil
+	}
+	resourceID := strconv.Itoa(resource.Proxmox.VMID)
+	hostID := strings.TrimSpace(resource.Proxmox.NodeName)
+	if hostID == "" || resourceID == "" {
+		return nil
+	}
+	return &unified.DiscoveryTarget{
+		ResourceType: resourceType,
+		HostID:       hostID,
+		ResourceID:   resourceID,
+		Hostname: firstNonEmptyTrimmed(
+			firstResourceHostname(resource),
+			resource.Name,
+			resourceID,
+		),
+	}
+}
+
+func firstResourceHostname(resource unified.Resource) string {
+	for _, hostname := range resource.Identity.Hostnames {
+		trimmed := strings.TrimSpace(hostname)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func firstNonEmptyTrimmed(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func hasSource(sources []unified.DataSource, target unified.DataSource) bool {
+	for _, source := range sources {
+		if source == target {
+			return true
+		}
+	}
+	return false
+}
+
+func agentID(agent *unified.AgentData) string {
+	if agent == nil {
+		return ""
+	}
+	return agent.AgentID
+}
+
+func agentHostname(agent *unified.AgentData) string {
+	if agent == nil {
+		return ""
+	}
+	return agent.Hostname
+}
+
+func proxmoxLinkedHostAgentID(proxmox *unified.ProxmoxData) string {
+	if proxmox == nil {
+		return ""
+	}
+	return proxmox.LinkedHostAgentID
+}
+
+func proxmoxNodeName(proxmox *unified.ProxmoxData) string {
+	if proxmox == nil {
+		return ""
+	}
+	return proxmox.NodeName
+}
+
+func dockerHostname(docker *unified.DockerData) string {
+	if docker == nil {
+		return ""
+	}
+	return docker.Hostname
 }
 
 func splitCSV(raw string) []string {

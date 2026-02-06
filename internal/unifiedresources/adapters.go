@@ -61,6 +61,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	}
 
 	identity := ResourceIdentity{
+		MachineID:    strings.TrimSpace(host.MachineID),
 		Hostnames:    uniqueStrings([]string{host.Hostname}),
 		IPAddresses:  uniqueStrings(ips),
 		MACAddresses: uniqueStrings(macs),

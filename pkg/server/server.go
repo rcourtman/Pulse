@@ -268,6 +268,9 @@ func Run(ctx context.Context, version string) error {
 	// Start AI chat service
 	router.StartAIChat(ctx)
 
+	// Start relay client for mobile remote access
+	router.StartRelay(ctx)
+
 	// Wire alert-triggered AI analysis
 	router.WireAlertTriggeredAI()
 
@@ -377,6 +380,9 @@ shutdown:
 
 	// Gracefully stop AI intelligence services (patrol, investigations, triggers)
 	router.ShutdownAIIntelligence()
+
+	// Stop relay client
+	router.StopRelay()
 
 	// Stop AI chat service (kills sidecar process group)
 	router.StopAIChat(shutdownCtx)

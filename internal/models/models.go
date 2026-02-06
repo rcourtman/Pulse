@@ -191,6 +191,7 @@ type Host struct {
 	IntervalSeconds   int                    `json:"intervalSeconds,omitempty"`
 	LastSeen          time.Time              `json:"lastSeen"`
 	AgentVersion      string                 `json:"agentVersion,omitempty"`
+	MachineID         string                 `json:"machineId,omitempty"`
 	CommandsEnabled   bool                   `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
 	ReportIP          string                 `json:"reportIp,omitempty"`        // User-specified IP for multi-NIC systems
 	TokenID           string                 `json:"tokenId,omitempty"`
@@ -1341,17 +1342,30 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		}
 	}
 
-	// Build hostname-to-hostAgentID map for linking new nodes to existing host agents
+	// Build hostname-to-hostAgentID map for linking new nodes to existing host agents.
+	// Keep all candidates so we can avoid creating links when hostname matching is ambiguous.
 	// Also build a set of valid host agent IDs to validate existing links
-	hostAgentByHostname := make(map[string]string) // lowercase hostname -> hostAgentID
-	validHostAgentIDs := make(map[string]bool)     // set of existing host agent IDs
+	hostAgentByHostname := make(map[string]map[string]struct{}) // lowercase hostname -> hostAgentIDs
+	validHostAgentIDs := make(map[string]bool)                  // set of existing host agent IDs
+	addHostAlias := func(name, hostID string) {
+		name = strings.TrimSpace(strings.ToLower(name))
+		if name == "" || hostID == "" {
+			return
+		}
+		bucket := hostAgentByHostname[name]
+		if bucket == nil {
+			bucket = make(map[string]struct{})
+			hostAgentByHostname[name] = bucket
+		}
+		bucket[hostID] = struct{}{}
+	}
 	for _, host := range s.Hosts {
 		if host.ID != "" {
 			validHostAgentIDs[host.ID] = true
-			hostAgentByHostname[strings.ToLower(host.Hostname)] = host.ID
+			addHostAlias(host.Hostname, host.ID)
 			// Also index by short hostname
 			if idx := strings.Index(host.Hostname, "."); idx > 0 {
-				hostAgentByHostname[strings.ToLower(host.Hostname[:idx])] = host.ID
+				addHostAlias(host.Hostname[:idx], host.ID)
 			}
 		}
 	}
@@ -1367,12 +1381,25 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		}
 		// If no existing link, try to match by hostname
 		if node.LinkedHostAgentID == "" {
-			nodeName := strings.ToLower(node.Name)
-			if hostID, ok := hostAgentByHostname[nodeName]; ok {
-				node.LinkedHostAgentID = hostID
-			} else if idx := strings.Index(nodeName, "."); idx > 0 {
-				if hostID, ok := hostAgentByHostname[nodeName[:idx]]; ok {
-					node.LinkedHostAgentID = hostID
+			nodeName := strings.TrimSpace(strings.ToLower(node.Name))
+			candidates := make(map[string]struct{})
+			if nodeName != "" {
+				if ids, ok := hostAgentByHostname[nodeName]; ok {
+					for id := range ids {
+						candidates[id] = struct{}{}
+					}
+				}
+				if idx := strings.Index(nodeName, "."); idx > 0 {
+					if ids, ok := hostAgentByHostname[nodeName[:idx]]; ok {
+						for id := range ids {
+							candidates[id] = struct{}{}
+						}
+					}
+				}
+			}
+			if len(candidates) == 1 {
+				for id := range candidates {
+					node.LinkedHostAgentID = id
 				}
 			}
 		}

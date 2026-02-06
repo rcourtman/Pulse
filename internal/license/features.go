@@ -24,6 +24,9 @@ const (
 	FeatureAdvancedReporting = "advanced_reporting" // PDF/CSV reporting engine
 	FeatureLongTermMetrics   = "long_term_metrics"  // 90-day historical metrics (SQLite)
 
+	// Pro tier features - Remote Access
+	FeatureRelay = "relay" // Mobile relay for remote access
+
 	// MSP/Enterprise tier features (for volume deals)
 	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
 	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
@@ -58,6 +61,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureKubernetesAI,
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
+		FeatureRelay,
 		FeatureSSO,
 		FeatureAdvancedSSO,
 		FeatureRBAC,
@@ -72,6 +76,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureKubernetesAI,
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
+		FeatureRelay,
 		FeatureSSO,
 		FeatureAdvancedSSO,
 		FeatureRBAC,
@@ -86,6 +91,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureKubernetesAI,
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
+		FeatureRelay,
 		FeatureSSO,
 		FeatureAdvancedSSO,
 		FeatureRBAC,
@@ -100,6 +106,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureKubernetesAI,
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
+		FeatureRelay,
 		FeatureUnlimited,
 		FeatureSSO,
 		FeatureAdvancedSSO,
@@ -117,6 +124,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureKubernetesAI,
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
+		FeatureRelay,
 		FeatureUnlimited,
 		FeatureMultiUser,
 		FeatureWhiteLabel,
@@ -195,6 +203,8 @@ func GetFeatureDisplayName(feature string) string {
 		return "Basic SSO (OIDC)"
 	case FeatureAdvancedSSO:
 		return "Advanced SSO (SAML/Multi-Provider)"
+	case FeatureRelay:
+		return "Remote Access (Mobile Relay)"
 	case FeatureAdvancedReporting:
 		return "Advanced Infrastructure Reporting (PDF/CSV)"
 	case FeatureLongTermMetrics:

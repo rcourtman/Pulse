@@ -11,6 +11,8 @@ type Resource struct {
 	LastSeen  time.Time      `json:"lastSeen"`
 	UpdatedAt time.Time      `json:"updatedAt,omitempty"`
 
+	DiscoveryTarget *DiscoveryTarget `json:"discoveryTarget,omitempty"`
+
 	Sources      []DataSource                `json:"sources"`
 	SourceStatus map[DataSource]SourceStatus `json:"sourceStatus,omitempty"`
 
@@ -30,6 +32,15 @@ type Resource struct {
 	Docker     *DockerData  `json:"docker,omitempty"`
 	PBS        *PBSData     `json:"pbs,omitempty"`
 	Kubernetes *K8sData     `json:"kubernetes,omitempty"`
+}
+
+// DiscoveryTarget describes the canonical discovery request coordinates
+// for this unified resource.
+type DiscoveryTarget struct {
+	ResourceType string `json:"resourceType"`
+	HostID       string `json:"hostId"`
+	ResourceID   string `json:"resourceId"`
+	Hostname     string `json:"hostname,omitempty"`
 }
 
 // ResourceType represents the kind of resource.
