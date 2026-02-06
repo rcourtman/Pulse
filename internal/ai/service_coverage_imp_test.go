@@ -127,8 +127,28 @@ func TestService_RecordIncidentRunbook(t *testing.T) {
 	svc.RecordIncidentRunbook("alert1", "", "title", memory.OutcomeResolved, true, "msg")
 
 	// Case 3: Valid
-	// We verify it doesn't panic. IncidentStore has its own tests.
 	svc.RecordIncidentRunbook("alert1", "rb1", "title", memory.OutcomeResolved, true, "msg")
+
+	timeline := svc.incidentStore.GetTimelineByAlertID("alert1")
+	if timeline == nil {
+		t.Fatal("expected incident timeline to be created")
+	}
+	found := false
+	for _, ev := range timeline.Events {
+		if ev.Type != memory.IncidentEventRunbook {
+			continue
+		}
+		if ev.Details == nil {
+			continue
+		}
+		if ev.Details["runbook_id"] == "rb1" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected runbook event to be recorded, got %d events", len(timeline.Events))
+	}
 }
 
 func TestAbsFloat(t *testing.T) {

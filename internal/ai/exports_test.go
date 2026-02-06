@@ -2,6 +2,7 @@ package ai
 
 import (
 	"testing"
+	"time"
 )
 
 func TestNewDefaultConfig(t *testing.T) {
@@ -41,9 +42,18 @@ func TestNewBaselineStore(t *testing.T) {
 func TestDefaultPatternConfig(t *testing.T) {
 	cfg := DefaultPatternConfig()
 
-	// Verify config exists (the actual struct may vary)
-	// Just check it doesn't panic
-	_ = cfg
+	if cfg.MaxEvents != 5000 {
+		t.Fatalf("MaxEvents = %d, want 5000", cfg.MaxEvents)
+	}
+	if cfg.MinOccurrences != 3 {
+		t.Fatalf("MinOccurrences = %d, want 3", cfg.MinOccurrences)
+	}
+	if cfg.PatternWindow != 90*24*time.Hour {
+		t.Fatalf("PatternWindow = %v, want %v", cfg.PatternWindow, 90*24*time.Hour)
+	}
+	if cfg.PredictionLimit != 30*24*time.Hour {
+		t.Fatalf("PredictionLimit = %v, want %v", cfg.PredictionLimit, 30*24*time.Hour)
+	}
 }
 
 func TestNewPatternDetector(t *testing.T) {
@@ -58,8 +68,18 @@ func TestNewPatternDetector(t *testing.T) {
 func TestDefaultCorrelationConfig(t *testing.T) {
 	cfg := DefaultCorrelationConfig()
 
-	// Verify config exists
-	_ = cfg
+	if cfg.MaxEvents != 10000 {
+		t.Fatalf("MaxEvents = %d, want 10000", cfg.MaxEvents)
+	}
+	if cfg.CorrelationWindow != 10*time.Minute {
+		t.Fatalf("CorrelationWindow = %v, want %v", cfg.CorrelationWindow, 10*time.Minute)
+	}
+	if cfg.MinOccurrences != 3 {
+		t.Fatalf("MinOccurrences = %d, want 3", cfg.MinOccurrences)
+	}
+	if cfg.RetentionWindow != 30*24*time.Hour {
+		t.Fatalf("RetentionWindow = %v, want %v", cfg.RetentionWindow, 30*24*time.Hour)
+	}
 }
 
 func TestNewCorrelationDetector(t *testing.T) {

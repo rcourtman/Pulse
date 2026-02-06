@@ -22,8 +22,10 @@ func TestPatrolService_BroadcastFullChannel(t *testing.T) {
 	// Fill the channel
 	ch <- PatrolStreamEvent{Type: "full"}
 
-	// Broadcast another event - this should hit the default case and mark for removal
-	ps.broadcast(PatrolStreamEvent{Type: "overflow"})
+	// Broadcast enough times to trigger slow-subscriber eviction (fullCount >= 25).
+	for i := 0; i < 25; i++ {
+		ps.broadcast(PatrolStreamEvent{Type: "overflow"})
+	}
 
 	// Verify the channel was removed from subscribers
 	ps.streamMu.RLock()

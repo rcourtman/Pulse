@@ -2,6 +2,8 @@
 package ai
 
 import (
+	"time"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -20,6 +22,31 @@ func (a *FindingsPersistenceAdapter) SaveFindings(findings map[string]*Finding) 
 	// Convert from Finding to AIFindingRecord
 	records := make(map[string]*config.AIFindingRecord, len(findings))
 	for id, f := range findings {
+		lifecycle := make([]struct {
+			At       time.Time         `json:"at"`
+			Type     string            `json:"type"`
+			Message  string            `json:"message,omitempty"`
+			From     string            `json:"from,omitempty"`
+			To       string            `json:"to,omitempty"`
+			Metadata map[string]string `json:"metadata,omitempty"`
+		}, 0, len(f.Lifecycle))
+		for _, e := range f.Lifecycle {
+			lifecycle = append(lifecycle, struct {
+				At       time.Time         `json:"at"`
+				Type     string            `json:"type"`
+				Message  string            `json:"message,omitempty"`
+				From     string            `json:"from,omitempty"`
+				To       string            `json:"to,omitempty"`
+				Metadata map[string]string `json:"metadata,omitempty"`
+			}{
+				At:       e.At,
+				Type:     e.Type,
+				Message:  e.Message,
+				From:     e.From,
+				To:       e.To,
+				Metadata: e.Metadata,
+			})
+		}
 		records[id] = &config.AIFindingRecord{
 			ID:              f.ID,
 			Key:             f.Key,
@@ -38,6 +65,7 @@ func (a *FindingsPersistenceAdapter) SaveFindings(findings map[string]*Finding) 
 			LastSeenAt:      f.LastSeenAt,
 			ResolvedAt:      f.ResolvedAt,
 			AutoResolved:    f.AutoResolved,
+			ResolveReason:   f.ResolveReason,
 			AcknowledgedAt:  f.AcknowledgedAt,
 			SnoozedUntil:    f.SnoozedUntil,
 			AlertID:         f.AlertID,
@@ -51,6 +79,10 @@ func (a *FindingsPersistenceAdapter) SaveFindings(findings map[string]*Finding) 
 			InvestigationOutcome:   f.InvestigationOutcome,
 			LastInvestigatedAt:     f.LastInvestigatedAt,
 			InvestigationAttempts:  f.InvestigationAttempts,
+			LoopState:              f.LoopState,
+			Lifecycle:              lifecycle,
+			RegressionCount:        f.RegressionCount,
+			LastRegressionAt:       f.LastRegressionAt,
 		}
 	}
 	return a.config.SaveAIFindings(records)
@@ -66,6 +98,17 @@ func (a *FindingsPersistenceAdapter) LoadFindings() (map[string]*Finding, error)
 	// Convert from AIFindingRecord to Finding
 	findings := make(map[string]*Finding, len(data.Findings))
 	for id, r := range data.Findings {
+		lifecycle := make([]FindingLifecycleEvent, 0, len(r.Lifecycle))
+		for _, e := range r.Lifecycle {
+			lifecycle = append(lifecycle, FindingLifecycleEvent{
+				At:       e.At,
+				Type:     e.Type,
+				Message:  e.Message,
+				From:     e.From,
+				To:       e.To,
+				Metadata: e.Metadata,
+			})
+		}
 		findings[id] = &Finding{
 			ID:              r.ID,
 			Key:             r.Key,
@@ -84,6 +127,7 @@ func (a *FindingsPersistenceAdapter) LoadFindings() (map[string]*Finding, error)
 			LastSeenAt:      r.LastSeenAt,
 			ResolvedAt:      r.ResolvedAt,
 			AutoResolved:    r.AutoResolved,
+			ResolveReason:   r.ResolveReason,
 			AcknowledgedAt:  r.AcknowledgedAt,
 			SnoozedUntil:    r.SnoozedUntil,
 			AlertID:         r.AlertID,
@@ -97,6 +141,10 @@ func (a *FindingsPersistenceAdapter) LoadFindings() (map[string]*Finding, error)
 			InvestigationOutcome:   r.InvestigationOutcome,
 			LastInvestigatedAt:     r.LastInvestigatedAt,
 			InvestigationAttempts:  r.InvestigationAttempts,
+			LoopState:              r.LoopState,
+			Lifecycle:              lifecycle,
+			RegressionCount:        r.RegressionCount,
+			LastRegressionAt:       r.LastRegressionAt,
 		}
 	}
 	return findings, nil

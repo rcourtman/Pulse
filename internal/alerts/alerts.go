@@ -6691,6 +6691,10 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 
 // GetActiveAlerts returns all active alerts
 func (m *Manager) GetActiveAlerts() []Alert {
+	if m == nil {
+		return nil
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -6725,6 +6729,10 @@ func (m *Manager) NotifyExistingAlert(alertID string) {
 
 // GetRecentlyResolved returns recently resolved alerts
 func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
+	if m == nil {
+		return nil
+	}
+
 	m.resolvedMutex.RLock()
 	defer m.resolvedMutex.RUnlock()
 

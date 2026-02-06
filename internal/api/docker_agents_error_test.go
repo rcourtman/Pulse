@@ -35,7 +35,7 @@ func TestDockerAgentHandlers_SetMonitorAndTenant(t *testing.T) {
 
 func TestDockerAgentHandlers_GetMonitorFallback(t *testing.T) {
 	legacy := &monitoring.Monitor{}
-	handler := &DockerAgentHandlers{legacyMonitor: legacy}
+	handler := &DockerAgentHandlers{baseAgentHandlers: baseAgentHandlers{legacyMonitor: legacy}}
 
 	if got := handler.getMonitor(context.Background()); got != legacy {
 		t.Fatalf("expected legacy monitor fallback")

@@ -11,28 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRouter_ConfigUpdates(t *testing.T) {
-	// Initialize Router with minimal dependencies
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		DataPath:   tmpDir,
-		ConfigPath: tmpDir,
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	// Test SetConfig
-	newCfg := &config.Config{
-		DataPath:   tmpDir,
-		ConfigPath: tmpDir,
-	}
-	router.SetConfig(newCfg)
-
-	// Check SetMonitor
-	mon := &monitoring.Monitor{}
-	router.SetMonitor(mon)
-}
-
 func TestRouter_HandlerWrapping(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{

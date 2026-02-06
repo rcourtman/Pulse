@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -66,7 +65,7 @@ func TestSendGroupedWebhookGeneric(t *testing.T) {
 	var gotMethod string
 	var gotBody []byte
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		body, _ := io.ReadAll(r.Body)
 		gotBody = body
@@ -133,7 +132,7 @@ func TestSendGroupedWebhookGeneric(t *testing.T) {
 
 func TestSendResolvedWebhookHTTP(t *testing.T) {
 	var gotBody []byte
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		gotBody = body
 		w.WriteHeader(http.StatusNoContent)

@@ -53,6 +53,15 @@ const (
 	CategoryGeneral       UnifiedCategory = "general"
 )
 
+type UnifiedFindingLifecycleEvent struct {
+	At       time.Time         `json:"at"`
+	Type     string            `json:"type"`
+	Message  string            `json:"message,omitempty"`
+	From     string            `json:"from,omitempty"`
+	To       string            `json:"to,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
 // UnifiedFinding represents a unified finding that can originate from
 // threshold alerts, AI analysis, or other detection methods
 type UnifiedFinding struct {
@@ -86,11 +95,15 @@ type UnifiedFinding struct {
 	AIEnhancedAt  *time.Time `json:"ai_enhanced_at,omitempty"` // When AI analyzed
 
 	// Investigation fields (autonomous patrol investigation)
-	InvestigationSessionID string     `json:"investigation_session_id,omitempty"`
-	InvestigationStatus    string     `json:"investigation_status,omitempty"`
-	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`
-	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`
-	InvestigationAttempts  int        `json:"investigation_attempts,omitempty"`
+	InvestigationSessionID string                         `json:"investigation_session_id,omitempty"`
+	InvestigationStatus    string                         `json:"investigation_status,omitempty"`
+	InvestigationOutcome   string                         `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt     *time.Time                     `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts  int                            `json:"investigation_attempts,omitempty"`
+	LoopState              string                         `json:"loop_state,omitempty"`
+	Lifecycle              []UnifiedFindingLifecycleEvent `json:"lifecycle,omitempty"`
+	RegressionCount        int                            `json:"regression_count,omitempty"`
+	LastRegressionAt       *time.Time                     `json:"last_regression_at,omitempty"`
 
 	// Timestamps
 	DetectedAt time.Time  `json:"detected_at"`
@@ -398,38 +411,108 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 
 // AddFromAI creates a unified finding from AI analysis
 func (s *UnifiedStore) AddFromAI(finding *UnifiedFinding) (*UnifiedFinding, bool) {
+	if finding == nil {
+		return nil, false
+	}
+
+	now := time.Now()
 	if finding.Source == "" {
 		finding.Source = SourceAIPatrol
 	}
 	if finding.DetectedAt.IsZero() {
-		finding.DetectedAt = time.Now()
+		finding.DetectedAt = now
 	}
-	finding.LastSeenAt = time.Now()
-	finding.TimesRaised = 1
+	if finding.LastSeenAt.IsZero() {
+		finding.LastSeenAt = now
+	}
 
 	s.mu.Lock()
 
-	// Check for existing finding BY ID (not by resource+category)
-	// Each AI patrol finding is unique and should be preserved
-	if existing, exists := s.findings[finding.ID]; exists && existing.IsActive() {
-		// Update existing finding with same ID
-		existing.LastSeenAt = time.Now()
-		existing.TimesRaised++
+	// For AI patrol findings, the ID is stable and should be treated as the canonical key.
+	// Always merge into the existing record to avoid duplicating index entries.
+	if existing, exists := s.findings[finding.ID]; exists && existing != nil {
+		// Basic fields
+		existing.Source = finding.Source
+		existing.ResourceID = finding.ResourceID
+		existing.ResourceName = finding.ResourceName
+		existing.ResourceType = finding.ResourceType
+		existing.Node = finding.Node
+		existing.Title = finding.Title
 		if severityOrder(finding.Severity) > severityOrder(existing.Severity) {
 			existing.Severity = finding.Severity
 		}
+		existing.Category = finding.Category
+
 		if finding.Description != "" {
 			existing.Description = finding.Description
 		}
 		if finding.Recommendation != "" {
 			existing.Recommendation = finding.Recommendation
 		}
+		if finding.Evidence != "" {
+			existing.Evidence = finding.Evidence
+		}
+
+		// Timestamps and counters
+		if finding.LastSeenAt.After(existing.LastSeenAt) {
+			existing.LastSeenAt = finding.LastSeenAt
+		}
+		if finding.TimesRaised > 0 {
+			existing.TimesRaised = finding.TimesRaised
+		} else {
+			existing.TimesRaised++
+		}
+		// Allow reopening by clearing ResolvedAt if the incoming finding is active again.
+		existing.ResolvedAt = finding.ResolvedAt
+
+		// Investigation fields (allow clearing)
+		existing.InvestigationSessionID = finding.InvestigationSessionID
+		existing.InvestigationStatus = finding.InvestigationStatus
+		existing.InvestigationOutcome = finding.InvestigationOutcome
+		existing.LastInvestigatedAt = finding.LastInvestigatedAt
+		existing.InvestigationAttempts = finding.InvestigationAttempts
+		existing.LoopState = finding.LoopState
+		existing.Lifecycle = finding.Lifecycle
+		existing.RegressionCount = finding.RegressionCount
+		existing.LastRegressionAt = finding.LastRegressionAt
+
+		// User feedback (allow clearing)
+		existing.AcknowledgedAt = finding.AcknowledgedAt
+		existing.SnoozedUntil = finding.SnoozedUntil
+		existing.DismissedReason = finding.DismissedReason
+		existing.UserNote = finding.UserNote
+		existing.Suppressed = finding.Suppressed
+
+		// AI enhancement fields (best-effort merge)
+		if finding.AIContext != "" {
+			existing.AIContext = finding.AIContext
+		}
+		if finding.RootCauseID != "" {
+			existing.RootCauseID = finding.RootCauseID
+		}
+		if len(finding.CorrelatedIDs) > 0 {
+			existing.CorrelatedIDs = finding.CorrelatedIDs
+		}
+		if finding.RemediationID != "" {
+			existing.RemediationID = finding.RemediationID
+		}
+		if finding.AIConfidence != 0 {
+			existing.AIConfidence = finding.AIConfidence
+		}
+		if finding.EnhancedByAI {
+			existing.EnhancedByAI = true
+			existing.AIEnhancedAt = finding.AIEnhancedAt
+		}
+
 		s.mu.Unlock()
 		s.scheduleSave()
 		return existing, false
 	}
 
-	// Add new finding
+	// New finding
+	if finding.TimesRaised <= 0 {
+		finding.TimesRaised = 1
+	}
 	s.findings[finding.ID] = finding
 	s.byResource[finding.ResourceID] = append(s.byResource[finding.ResourceID], finding.ID)
 	s.bySource[finding.Source] = append(s.bySource[finding.Source], finding.ID)

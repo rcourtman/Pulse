@@ -56,6 +56,11 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 
 	keyPath := filepath.Join(dataDir, ".encryption.key")
 	oldKeyPath := legacyKeyPath
+	// Test/ops hook: allow overriding the legacy key location to avoid touching /etc/pulse in unit tests.
+	// This is only used during migration checks and has no effect unless explicitly set.
+	if v := os.Getenv("PULSE_LEGACY_KEY_PATH"); v != "" {
+		oldKeyPath = v
+	}
 	oldKeyDir := filepath.Dir(oldKeyPath)
 
 	log.Debug().

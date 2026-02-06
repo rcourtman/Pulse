@@ -546,10 +546,8 @@ func TestDecryptStringError(t *testing.T) {
 }
 
 func TestNewCryptoManagerRefusesOrphanedData(t *testing.T) {
-	// Skip if production key exists - migration code will always find and use it
-	if _, err := os.Stat("/etc/pulse/.encryption.key"); err == nil {
-		t.Skip("Skipping: production encryption key exists at /etc/pulse/.encryption.key - migration will find it")
-	}
+	// Ensure we don't accidentally read a real production key during the legacy-migration path.
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
 
 	tmpDir := t.TempDir()
 

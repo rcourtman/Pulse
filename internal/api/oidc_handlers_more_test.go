@@ -263,7 +263,7 @@ func TestHandleOIDCCallback_MissingCode(t *testing.T) {
 }
 
 func TestHandleOIDCCallback_ExchangeFailed(t *testing.T) {
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tokenServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer tokenServer.Close()
@@ -290,7 +290,7 @@ func TestHandleOIDCCallback_ExchangeFailed(t *testing.T) {
 }
 
 func TestHandleOIDCCallback_MissingIDToken(t *testing.T) {
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tokenServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"access_token":"access","token_type":"Bearer","expires_in":3600}`))
 	}))

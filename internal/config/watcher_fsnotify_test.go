@@ -12,6 +12,18 @@ import (
 
 // TestHandleEvents tests handleEvents with mock channels
 func TestHandleEvents(t *testing.T) {
+	origEnv := debounceEnvWrite
+	origAPITokens := debounceAPITokensWrite
+	origMock := debounceMockWrite
+	debounceEnvWrite = 0
+	debounceAPITokensWrite = 0
+	debounceMockWrite = 0
+	t.Cleanup(func() {
+		debounceEnvWrite = origEnv
+		debounceAPITokensWrite = origAPITokens
+		debounceMockWrite = origMock
+	})
+
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, ".env")
 	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
@@ -24,8 +36,8 @@ func TestHandleEvents(t *testing.T) {
 	// Override hash check
 	cw.lastEnvHash = "dummy"
 
-	events := make(chan fsnotify.Event)
-	errors := make(chan error)
+	events := make(chan fsnotify.Event, 1)
+	errors := make(chan error, 1)
 
 	go cw.handleEvents(events, errors)
 	defer cw.Stop()
@@ -47,8 +59,6 @@ func TestHandleEvents(t *testing.T) {
 	// 2. Inject Error
 	// Just ensure it doesn't panic and logs it (can't easily check log here without hook)
 	errors <- parseError("test err")
-
-	time.Sleep(100 * time.Millisecond)
 }
 
 func parseError(s string) error {

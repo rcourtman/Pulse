@@ -306,6 +306,8 @@ var allRouteAllowlist = []string{
 	"/api/storage/",
 	"/api/storage-charts",
 	"/api/charts",
+	"/api/charts/infrastructure",
+	"/api/charts/infrastructure-summary",
 	"/api/metrics-store/stats",
 	"/api/metrics-store/history",
 	"/api/diagnostics",

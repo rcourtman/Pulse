@@ -1,10 +1,12 @@
 package ai
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -448,30 +450,20 @@ func TestSubscribeToStream_ReceivesCurrentState(t *testing.T) {
 	ch := ps.SubscribeToStream()
 	defer ps.UnsubscribeFromStream(ch)
 
-	// New subscriber should receive current phase first
+	// New subscriber should receive a snapshot of the current state.
 	select {
 	case event := <-ch:
-		if event.Type != "phase" {
-			t.Errorf("expected phase event first, got %s", event.Type)
+		if event.Type != "snapshot" {
+			t.Errorf("expected snapshot event first, got %s", event.Type)
 		}
 		if event.Phase != "analyzing" {
 			t.Errorf("expected phase 'analyzing', got %q", event.Phase)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Error("expected to receive phase event on subscribe")
-	}
-
-	// Then receive accumulated content
-	select {
-	case event := <-ch:
-		if event.Type != "content" {
-			t.Errorf("expected content event, got %s", event.Type)
 		}
 		if event.Content != "some output" {
 			t.Errorf("expected 'some output', got %q", event.Content)
 		}
 	case <-time.After(100 * time.Millisecond):
-		t.Error("expected to receive content event on subscribe")
+		t.Error("expected to receive snapshot event on subscribe")
 	}
 }
 
@@ -514,8 +506,11 @@ func TestBroadcast_StaleSubscriberRemoved(t *testing.T) {
 		ps.broadcast(PatrolStreamEvent{Type: "fill", Content: "x"})
 	}
 
-	// Next broadcast should detect the stale subscriber and remove it
-	ps.broadcast(PatrolStreamEvent{Type: "overflow"})
+	// Keep broadcasting without reading; subscriber should eventually be dropped
+	// after repeated full-buffer backpressure.
+	for i := 0; i < 30; i++ {
+		ps.broadcast(PatrolStreamEvent{Type: "overflow"})
+	}
 
 	// Give goroutine time to close the channel
 	time.Sleep(50 * time.Millisecond)
@@ -526,6 +521,295 @@ func TestBroadcast_StaleSubscriberRemoved(t *testing.T) {
 
 	if exists {
 		t.Error("expected stale subscriber to be removed")
+	}
+}
+
+func TestSubscribeToStreamFrom_ReplaysBufferedEvents(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.resetStreamForRun("run-1")
+
+	// No subscribers: broadcast should still buffer events for replay.
+	ps.broadcast(PatrolStreamEvent{Type: "phase", Phase: "analyzing"})
+	ps.broadcast(PatrolStreamEvent{Type: "content", Content: "hello"})
+	ps.broadcast(PatrolStreamEvent{Type: "tool_start", ToolName: "uptime"})
+
+	ps.streamMu.RLock()
+	lastSeq := ps.streamSeq
+	ps.streamMu.RUnlock()
+	if lastSeq < 3 {
+		t.Fatalf("expected seq to be >= 3, got %d", lastSeq)
+	}
+
+	// Subscribe from seq 1; should replay seq 2 and 3.
+	ch := ps.SubscribeToStreamFrom(1)
+	defer ps.UnsubscribeFromStream(ch)
+
+	// First replayed event: content
+	select {
+	case ev := <-ch:
+		if ev.Type != "content" {
+			t.Fatalf("expected content replay, got %s", ev.Type)
+		}
+		if ev.Content != "hello" {
+			t.Fatalf("expected hello content, got %q", ev.Content)
+		}
+		if ev.Seq <= 1 {
+			t.Fatalf("expected seq > 1, got %d", ev.Seq)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timed out waiting for replayed content event")
+	}
+
+	// Second replayed event: tool_start
+	select {
+	case ev := <-ch:
+		if ev.Type != "tool_start" {
+			t.Fatalf("expected tool_start replay, got %s", ev.Type)
+		}
+		if ev.ToolName != "uptime" {
+			t.Fatalf("expected tool uptime, got %q", ev.ToolName)
+		}
+		if ev.Seq <= 1 {
+			t.Fatalf("expected seq > 1, got %d", ev.Seq)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timed out waiting for replayed tool_start event")
+	}
+}
+
+func TestSubscribeToStreamFrom_BufferRotatedSnapshot(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.resetStreamForRun("run-1")
+	ps.setStreamPhase("analyzing")
+
+	// Fill beyond replay buffer to force rotation.
+	for i := 0; i < 260; i++ {
+		ps.broadcast(PatrolStreamEvent{Type: "content", Content: "x"})
+	}
+
+	ps.streamMu.RLock()
+	start, end := ps.streamBufferWindowLocked()
+	ps.streamMu.RUnlock()
+	if start == 0 || end == 0 || end <= start {
+		t.Fatalf("expected non-empty buffer window, got start=%d end=%d", start, end)
+	}
+
+	// Ask to resume from a seq that is behind the buffered window.
+	ch := ps.SubscribeToStreamFrom(start - 1)
+	defer ps.UnsubscribeFromStream(ch)
+
+	select {
+	case ev := <-ch:
+		if ev.Type != "snapshot" {
+			t.Fatalf("expected snapshot, got %s", ev.Type)
+		}
+		if ev.ResyncReason != "buffer_rotated" {
+			t.Fatalf("expected resync_reason buffer_rotated, got %q", ev.ResyncReason)
+		}
+		if ev.BufferStart == 0 || ev.BufferEnd == 0 || ev.BufferEnd < ev.BufferStart {
+			t.Fatalf("expected buffer window in snapshot, got start=%d end=%d", ev.BufferStart, ev.BufferEnd)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timed out waiting for buffer_rotated snapshot")
+	}
+}
+
+func TestSubscribeToStreamFrom_BufferRotatedSnapshotNotDuplicated(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.resetStreamForRun("run-1")
+	ps.setStreamPhase("analyzing")
+
+	for i := 0; i < 260; i++ {
+		ps.broadcast(PatrolStreamEvent{Type: "content", Content: "x"})
+	}
+
+	ps.streamMu.RLock()
+	start, _ := ps.streamBufferWindowLocked()
+	ps.streamMu.RUnlock()
+
+	ch := ps.SubscribeToStreamFrom(start - 1)
+	defer ps.UnsubscribeFromStream(ch)
+
+	snapshotCount := 0
+	read := 0
+	for read < 25 {
+		select {
+		case ev := <-ch:
+			read++
+			if ev.Type == "snapshot" {
+				snapshotCount++
+			}
+		case <-time.After(100 * time.Millisecond):
+			read = 25
+		}
+	}
+
+	if snapshotCount != 1 {
+		t.Fatalf("expected exactly 1 snapshot for buffer_rotated resume, got %d", snapshotCount)
+	}
+}
+
+func TestSubscribeToStreamFrom_ChurnDoesNotLeakSubscribers(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	const workers = 12
+	const loopsPerWorker = 60
+
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < loopsPerWorker; i++ {
+				ch := ps.SubscribeToStreamFrom(0)
+				ps.broadcast(PatrolStreamEvent{Type: "content", Content: "x"})
+				ps.UnsubscribeFromStream(ch)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Allow concurrent close/remove paths to settle.
+	time.Sleep(25 * time.Millisecond)
+
+	ps.streamMu.RLock()
+	subs := len(ps.streamSubscribers)
+	ps.streamMu.RUnlock()
+	if subs != 0 {
+		t.Fatalf("expected no leaked subscribers after churn, got %d", subs)
+	}
+
+	// Sanity: broadcasting after heavy churn should still work.
+	ps.broadcast(PatrolStreamEvent{Type: "content", Content: "ok"})
+}
+
+func TestSubscribeToStreamFrom_RecordsReplayMetrics(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.resetStreamForRun("run-metrics-replay")
+	ps.setStreamPhase("analyzing")
+
+	ps.broadcast(PatrolStreamEvent{Type: "phase", Phase: "analyzing"})
+	ps.broadcast(PatrolStreamEvent{Type: "content", Content: "hello"})
+	ps.broadcast(PatrolStreamEvent{Type: "tool_start", ToolName: "uptime"})
+
+	m := GetPatrolMetrics()
+	beforeOutcome := testutil.ToFloat64(m.streamResumeOutcome.WithLabelValues("replay"))
+	beforeEvents := testutil.ToFloat64(m.streamReplayEvents)
+
+	ch := ps.SubscribeToStreamFrom(1)
+	defer ps.UnsubscribeFromStream(ch)
+
+	// Drain replayed events to avoid backpressure affecting subsequent tests.
+	<-ch
+	<-ch
+
+	afterOutcome := testutil.ToFloat64(m.streamResumeOutcome.WithLabelValues("replay"))
+	afterEvents := testutil.ToFloat64(m.streamReplayEvents)
+	if afterOutcome <= beforeOutcome {
+		t.Fatalf("expected replay outcome counter to increase (before=%f after=%f)", beforeOutcome, afterOutcome)
+	}
+	if afterEvents < beforeEvents+2 {
+		t.Fatalf("expected replay event counter to increase by at least 2 (before=%f after=%f)", beforeEvents, afterEvents)
+	}
+}
+
+func TestSubscribeToStreamFrom_RecordsSnapshotAndMissMetrics(t *testing.T) {
+	// Snapshot path (buffer rotated)
+	psSnap := NewPatrolService(nil, nil)
+	psSnap.resetStreamForRun("run-metrics-snapshot")
+	psSnap.setStreamPhase("analyzing")
+	for i := 0; i < 260; i++ {
+		psSnap.broadcast(PatrolStreamEvent{Type: "content", Content: "x"})
+	}
+	psSnap.streamMu.RLock()
+	start, _ := psSnap.streamBufferWindowLocked()
+	psSnap.streamMu.RUnlock()
+
+	m := GetPatrolMetrics()
+	beforeSnapshotOutcome := testutil.ToFloat64(m.streamResumeOutcome.WithLabelValues("snapshot"))
+	beforeReason := testutil.ToFloat64(m.streamResyncReason.WithLabelValues("buffer_rotated"))
+
+	chSnap := psSnap.SubscribeToStreamFrom(start - 1)
+	defer psSnap.UnsubscribeFromStream(chSnap)
+	<-chSnap // consume snapshot
+
+	afterSnapshotOutcome := testutil.ToFloat64(m.streamResumeOutcome.WithLabelValues("snapshot"))
+	afterReason := testutil.ToFloat64(m.streamResyncReason.WithLabelValues("buffer_rotated"))
+	if afterSnapshotOutcome <= beforeSnapshotOutcome {
+		t.Fatalf("expected snapshot outcome counter to increase (before=%f after=%f)", beforeSnapshotOutcome, afterSnapshotOutcome)
+	}
+	if afterReason <= beforeReason {
+		t.Fatalf("expected buffer_rotated reason counter to increase (before=%f after=%f)", beforeReason, afterReason)
+	}
+
+	// Miss path (resume requested while stream idle and no buffered events)
+	psMiss := NewPatrolService(nil, nil)
+	psMiss.resetStreamForRun("run-metrics-miss")
+
+	beforeMiss := testutil.ToFloat64(m.streamResumeOutcome.WithLabelValues("miss"))
+	chMiss := psMiss.SubscribeToStreamFrom(42)
+	defer psMiss.UnsubscribeFromStream(chMiss)
+	afterMiss := testutil.ToFloat64(m.streamResumeOutcome.WithLabelValues("miss"))
+	if afterMiss <= beforeMiss {
+		t.Fatalf("expected miss outcome counter to increase (before=%f after=%f)", beforeMiss, afterMiss)
+	}
+}
+
+func TestBroadcast_RecordsBackpressureDropMetric(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ch := ps.SubscribeToStream()
+	defer ps.UnsubscribeFromStream(ch)
+
+	m := GetPatrolMetrics()
+	beforeDrop := testutil.ToFloat64(m.streamSubscriberDrop.WithLabelValues("backpressure"))
+
+	for i := 0; i < 100; i++ {
+		ps.broadcast(PatrolStreamEvent{Type: "fill", Content: "x"})
+	}
+	for i := 0; i < 30; i++ {
+		ps.broadcast(PatrolStreamEvent{Type: "overflow"})
+	}
+
+	time.Sleep(25 * time.Millisecond)
+	afterDrop := testutil.ToFloat64(m.streamSubscriberDrop.WithLabelValues("backpressure"))
+	if afterDrop <= beforeDrop {
+		t.Fatalf("expected backpressure drop metric to increase (before=%f after=%f)", beforeDrop, afterDrop)
+	}
+}
+
+func TestStreamOutput_TruncatesTailAndSnapshotMarksIt(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.resetStreamForRun("run-1")
+	ps.setStreamPhase("analyzing")
+
+	// Write more than the tail buffer can hold.
+	payload := strings.Repeat("a", patrolStreamMaxOutputBytes+123)
+	ps.appendStreamContent(payload)
+
+	out, phase := ps.GetCurrentStreamOutput()
+	if phase != "analyzing" {
+		t.Fatalf("expected phase analyzing, got %q", phase)
+	}
+	if len(out) != patrolStreamMaxOutputBytes {
+		t.Fatalf("expected output len %d, got %d", patrolStreamMaxOutputBytes, len(out))
+	}
+	expectedTail := payload[len(payload)-patrolStreamMaxOutputBytes:]
+	if out != expectedTail {
+		t.Fatalf("expected tail output to match last %d bytes", patrolStreamMaxOutputBytes)
+	}
+
+	ch := ps.SubscribeToStreamFrom(0)
+	defer ps.UnsubscribeFromStream(ch)
+	select {
+	case ev := <-ch:
+		if ev.Type != "snapshot" {
+			t.Fatalf("expected snapshot, got %s", ev.Type)
+		}
+		if ev.ContentTruncated == nil || !*ev.ContentTruncated {
+			t.Fatalf("expected snapshot content_truncated to be true")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timed out waiting for snapshot")
 	}
 }
 
@@ -750,9 +1034,7 @@ func TestSetStreamPhase_ResetClearsOutput(t *testing.T) {
 	if phase != "idle" {
 		t.Errorf("expected phase 'idle', got %q", phase)
 	}
-	if output != "" {
-		t.Errorf("expected empty output after idle reset, got %q", output)
-	}
+	// Output is no longer cleared on idle; it is cleared when a new run starts.
 }
 
 // --- isResourceOnline (heuristic alert resolution) ---

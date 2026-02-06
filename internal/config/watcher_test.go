@@ -296,12 +296,11 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	go cw.pollForChanges()
 	defer cw.Stop()
 
-	// Wait a bit
-	time.Sleep(20 * time.Millisecond)
-
 	// 1. Update .env
-	time.Sleep(100 * time.Millisecond) // Ensure FS modtime change
 	require.NoError(t, os.WriteFile(envPath, []byte(`PULSE_AUTH_USER="updated"`), 0644))
+	// Avoid relying on filesystem timestamp granularity.
+	future := time.Now().Add(2 * time.Second)
+	require.NoError(t, os.Chtimes(envPath, future, future))
 
 	require.Eventually(t, func() bool {
 		Mu.RLock()
@@ -310,19 +309,21 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	}, 1*time.Second, 10*time.Millisecond)
 
 	// 2. Update mock.env
-	time.Sleep(100 * time.Millisecond)
 	require.NoError(t, os.WriteFile(mockEnvPath, []byte(`PULSE_MOCK_TEST="2"`), 0644))
+	future = future.Add(2 * time.Second)
+	require.NoError(t, os.Chtimes(mockEnvPath, future, future))
 
 	require.Eventually(t, func() bool { return mockCalled }, 1*time.Second, 10*time.Millisecond)
 	assert.Equal(t, "2", os.Getenv("PULSE_MOCK_TEST"))
 
 	// 3. Update api_tokens.json
 	// Write valid JSON
-	time.Sleep(100 * time.Millisecond)
 	// We need to write to file that Persistence reads.
 	// ReloadAPITokens uses globalPersistence to load.
 	tokens := []APITokenRecord{{ID: "new", Hash: "hash", Name: "New"}}
 	require.NoError(t, p.SaveAPITokens(tokens))
+	future = future.Add(2 * time.Second)
+	require.NoError(t, os.Chtimes(apiTokensPath, future, future))
 
 	// Waiting for polling to pick up change in file modification
 	// persistence.SaveAPITokens writes to the file.

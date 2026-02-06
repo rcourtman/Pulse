@@ -460,6 +460,8 @@ type NodeRRDPoint struct {
 	MemTotal     *float64 `json:"memtotal,omitempty"`
 	MemUsed      *float64 `json:"memused,omitempty"`
 	MemAvailable *float64 `json:"memavailable,omitempty"`
+	NetIn        *float64 `json:"netin,omitempty"`
+	NetOut       *float64 `json:"netout,omitempty"`
 }
 
 // GuestRRDPoint represents a single RRD datapoint for a VM or LXC container.

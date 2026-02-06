@@ -391,18 +391,6 @@ func TestBootstrapTokenValid(t *testing.T) {
 	})
 }
 
-func TestInitializeBootstrapToken_NilRouter(t *testing.T) {
-	var r *Router = nil
-	// Should not panic
-	r.initializeBootstrapToken()
-}
-
-func TestInitializeBootstrapToken_NilConfig(t *testing.T) {
-	r := &Router{config: nil}
-	// Should not panic
-	r.initializeBootstrapToken()
-}
-
 func TestInitializeBootstrapToken_LoadOrCreateFails(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission tests not reliable on Windows")

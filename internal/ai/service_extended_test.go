@@ -113,13 +113,6 @@ func TestService_GetTools(t *testing.T) {
 	}
 }
 
-func TestService_LogRemediation_Nil(t *testing.T) {
-	svc := NewService(nil, nil)
-	// Should not panic even if remediation log is nil
-	req := ExecuteRequest{Prompt: "Fix it"}
-	svc.logRemediation(req, "ls", "output", true)
-}
-
 func TestService_AcquireExecutionSlot_Blocked(t *testing.T) {
 	svc := NewService(nil, nil)
 
@@ -1814,26 +1807,6 @@ func TestService_PatrolManagement_NilPatrol(t *testing.T) {
 	svc.StopPatrol()
 	svc.SetMetricsHistoryProvider(nil)
 	svc.SetBaselineStore(nil)
-}
-
-func TestService_StartPatrol_EdgeCases(t *testing.T) {
-	// Case 1: Patrol service is nil
-	svc := &Service{}
-	svc.StartPatrol(context.Background()) // Should not panic
-
-	// Case 2: Config is nil
-	svc.patrolService = &PatrolService{}
-	svc.StartPatrol(context.Background())
-
-	// Case 3: Patrol disabled in config
-	svc.cfg = &config.AIConfig{Enabled: true, PatrolSchedulePreset: "disabled"}
-	svc.StartPatrol(context.Background())
-
-	// Case 4: License feature missing
-	svc.cfg = &config.AIConfig{Enabled: true, PatrolEnabled: true}
-	svc.licenseChecker = &mockLicenseStore{features: map[string]bool{FeatureAIPatrol: false}}
-	// This will still call Start but log info.
-	svc.patrolService = &PatrolService{}
 }
 
 func TestSanitizeError_Extended(t *testing.T) {

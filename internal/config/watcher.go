@@ -22,6 +22,13 @@ var (
 	watcherOsGetenv = os.Getenv
 )
 
+// Debounce durations for fsnotify events. Package vars so tests can override to avoid real sleeps.
+var (
+	debounceEnvWrite       = 500 * time.Millisecond
+	debounceAPITokensWrite = 250 * time.Millisecond
+	debounceMockWrite      = 100 * time.Millisecond
+)
+
 // ConfigWatcher monitors the .env file for changes and updates runtime config
 type ConfigWatcher struct {
 	config               *Config
@@ -223,7 +230,7 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			// Check if the event is for our .env file
 			if filepath.Base(event.Name) == ".env" || event.Name == cw.envPath {
 				// Debounce - wait a bit for write to complete
-				time.Sleep(500 * time.Millisecond)
+				time.Sleep(debounceEnvWrite)
 
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					// Check if content actually changed to prevent restart loops on touch
@@ -244,7 +251,7 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			if cw.apiTokensPath != "" && (filepath.Base(event.Name) == filepath.Base(cw.apiTokensPath) || event.Name == cw.apiTokensPath) {
 				// Debounce - wait longer for atomic file operations to complete
 				// (write to .tmp, rename to final file)
-				time.Sleep(250 * time.Millisecond)
+				time.Sleep(debounceAPITokensWrite)
 
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					log.Info().Str("event", event.Op.String()).Msg("Detected API token file change")
@@ -255,7 +262,7 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			// Check if the event is for mock.env (only if mock.env watching is enabled)
 			if cw.mockEnvPath != "" && (filepath.Base(event.Name) == "mock.env" || event.Name == cw.mockEnvPath) {
 				// Debounce - wait a bit for write to complete
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(debounceMockWrite)
 
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					log.Info().Str("event", event.Op.String()).Msg("Detected mock.env file change")

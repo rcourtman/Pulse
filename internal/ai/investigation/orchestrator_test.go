@@ -220,6 +220,20 @@ func TestParseInvestigationSummary_MarkdownWrapped(t *testing.T) {
 	}
 }
 
+func TestParseInvestigationSummary_MultiLineCommands(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStore(tempDir)
+	orchestrator := NewOrchestrator(nil, store, nil, nil, DefaultConfig())
+
+	summary := "PROPOSED_FIX: ```sh\n$ echo one\n\necho two\n```\nTARGET_HOST: local"
+	fix, outcome := orchestrator.parseInvestigationSummary(summary)
+	require.NotNil(t, fix, "Fix should not be nil")
+	assert.Equal(t, OutcomeFixQueued, outcome)
+	require.Len(t, fix.Commands, 2)
+	assert.Equal(t, "echo one", fix.Commands[0])
+	assert.Equal(t, "echo two", fix.Commands[1])
+}
+
 func TestParseInvestigationSummary_EmptyCommand(t *testing.T) {
 	tempDir := t.TempDir()
 	store := NewStore(tempDir)

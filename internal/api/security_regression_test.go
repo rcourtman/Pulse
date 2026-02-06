@@ -230,7 +230,7 @@ func TestSocketIOWebSocketRequiresAuthInAPIMode(t *testing.T) {
 	defer hub.Stop()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/socket.io/?transport=websocket"
@@ -269,7 +269,7 @@ func TestSocketIOWebSocketAllowsQueryToken(t *testing.T) {
 	defer hub.Stop()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/socket.io/?transport=websocket&token=" + rawToken
@@ -459,7 +459,7 @@ func TestWebSocketRequiresMonitoringReadScopeForUpgrade(t *testing.T) {
 	defer hub.Stop()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
@@ -595,7 +595,7 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := wsURLForHTTP(ts.URL) + "/api/agent/ws"
@@ -659,7 +659,7 @@ func TestAgentExecRequiresAgentExecScope(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/agent/ws"
@@ -699,7 +699,7 @@ func TestWebSocketAllowsMonitoringReadScope(t *testing.T) {
 	defer hub.Stop()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
@@ -722,7 +722,7 @@ func TestWebSocketAllowsBearerToken(t *testing.T) {
 	defer hub.Stop()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
@@ -745,7 +745,7 @@ func TestWebSocketAllowsTokenQueryParam(t *testing.T) {
 	defer hub.Stop()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?token=" + rawToken

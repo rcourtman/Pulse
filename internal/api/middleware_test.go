@@ -48,10 +48,6 @@ func TestAPIError_Error(t *testing.T) {
 	}
 }
 
-func TestAPIError_ImplementsError(t *testing.T) {
-	var _ error = &APIError{}
-}
-
 func TestResponseWriter_WriteHeader(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -320,14 +316,6 @@ func (m *mockFlusher) Flush() {
 	m.flushed = true
 }
 
-func TestResponseWriter_Flush_NotSupported(t *testing.T) {
-	rec := httptest.NewRecorder()
-	rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
-
-	// This should not panic even though underlying doesn't support Flush
-	rw.Flush()
-}
-
 func TestResponseWriter_Flush_Supported(t *testing.T) {
 	flusher := &mockFlusher{ResponseWriter: httptest.NewRecorder()}
 	rw := &responseWriter{ResponseWriter: flusher, statusCode: http.StatusOK}
@@ -341,20 +329,6 @@ func TestResponseWriter_Flush_Supported(t *testing.T) {
 	if !flusher.flushed {
 		t.Error("Flush() should call underlying Flusher.Flush()")
 	}
-}
-
-// Note: httptest.ResponseRecorder implements http.Flusher
-func TestResponseWriter_Flush_WithRecorder(t *testing.T) {
-	rec := httptest.NewRecorder()
-	rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
-
-	// Write some data
-	rw.Write([]byte("test"))
-
-	// Flush should work with httptest.ResponseRecorder (it implements Flusher)
-	rw.Flush()
-
-	// If we got here without panic, the test passes
 }
 
 func TestResponseWriter_Header(t *testing.T) {

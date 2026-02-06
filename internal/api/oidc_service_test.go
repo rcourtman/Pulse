@@ -5,7 +5,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -14,7 +13,7 @@ import (
 
 func TestNewOIDCHTTPClient_WithCustomCABundle(t *testing.T) {
 	// Self-signed TLS server should be rejected by default client
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()

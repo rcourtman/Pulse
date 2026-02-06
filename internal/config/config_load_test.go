@@ -12,11 +12,12 @@ import (
 )
 
 func TestLoad_Defaults(t *testing.T) {
-	// This test requires write access to /etc/pulse (the default data path)
-	// Skip in CI environments where /etc/pulse doesn't exist or isn't writable
-	if _, err := os.Stat("/etc/pulse"); os.IsNotExist(err) {
-		t.Skip("Skipping test: /etc/pulse does not exist (likely CI environment)")
-	}
+	// Avoid relying on /etc/pulse existing on the machine running tests.
+	// We still want to verify "defaults" behavior when PULSE_DATA_DIR is unset.
+	tmpDefault := t.TempDir()
+	prevDefault := defaultDataDir
+	defaultDataDir = tmpDefault
+	t.Cleanup(func() { defaultDataDir = prevDefault })
 
 	// Clear env vars that might affect defaults
 	os.Unsetenv("PULSE_DATA_DIR")
@@ -26,7 +27,7 @@ func TestLoad_Defaults(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 7655, cfg.FrontendPort)
-	assert.Equal(t, "/etc/pulse", cfg.DataPath)
+	assert.Equal(t, tmpDefault, cfg.DataPath)
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {

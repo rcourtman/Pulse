@@ -39,7 +39,6 @@ package ai
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -300,8 +299,84 @@ type PatrolService struct {
 	// Live streaming support
 	streamMu          sync.RWMutex
 	streamSubscribers map[chan PatrolStreamEvent]*streamSubscriber
-	currentOutput     strings.Builder // Buffer for current streaming output
-	streamPhase       string          // "idle", "analyzing", "complete"
+	currentOutput     streamOutputBuffer // Tail buffer for current streaming output
+	streamPhase       string             // "idle", "analyzing", "complete"
+	streamRunID       string             // Identifies the current streamed run (best-effort)
+	streamSeq         int64              // Monotonic sequence for SSE events within streamRunID
+	streamCurrentTool string             // Last observed tool name (best-effort)
+	streamEvents      []PatrolStreamEvent
+}
+
+const patrolStreamMaxOutputBytes = 64 * 1024
+
+// streamOutputBuffer retains only the most recent bytes written, to cap memory usage
+// while still allowing late joiners to get a useful snapshot.
+type streamOutputBuffer struct {
+	buf       []byte
+	truncated bool
+}
+
+func (b *streamOutputBuffer) Reset() {
+	// Keep capacity bounded so long-running streams can't retain a large backing array.
+	if cap(b.buf) > patrolStreamMaxOutputBytes {
+		b.buf = make([]byte, 0, patrolStreamMaxOutputBytes)
+	} else {
+		b.buf = b.buf[:0]
+	}
+	b.truncated = false
+}
+
+func (b *streamOutputBuffer) Len() int             { return len(b.buf) }
+func (b *streamOutputBuffer) String() string       { return string(b.buf) }
+func (b *streamOutputBuffer) Truncated() bool      { return b.truncated }
+func (b *streamOutputBuffer) WriteString(s string) { b.appendString(s) }
+
+func (b *streamOutputBuffer) appendString(s string) {
+	if len(s) == 0 {
+		return
+	}
+
+	max := patrolStreamMaxOutputBytes
+	if len(s) >= max {
+		// Keep only the tail of the incoming chunk.
+		b.buf = append(b.buf[:0], s[len(s)-max:]...)
+		b.truncated = true
+		b.normalizeUTF8Start()
+		b.shrinkCapIfNeeded()
+		return
+	}
+
+	// Keep as much of existing tail as possible.
+	needKeep := max - len(s)
+	if len(b.buf) > needKeep {
+		b.buf = append(b.buf[:0], b.buf[len(b.buf)-needKeep:]...)
+		b.truncated = true
+	}
+	b.buf = append(b.buf, s...)
+	if len(b.buf) > max {
+		b.buf = b.buf[len(b.buf)-max:]
+		b.truncated = true
+	}
+	b.normalizeUTF8Start()
+	b.shrinkCapIfNeeded()
+}
+
+func (b *streamOutputBuffer) normalizeUTF8Start() {
+	// If we truncated by bytes, we may have cut in the middle of a UTF-8 rune.
+	// Drop leading continuation bytes so the string starts on a rune boundary.
+	for len(b.buf) > 0 && (b.buf[0]&0xC0) == 0x80 {
+		b.buf = b.buf[1:]
+		b.truncated = true
+	}
+}
+
+func (b *streamOutputBuffer) shrinkCapIfNeeded() {
+	if cap(b.buf) <= patrolStreamMaxOutputBytes {
+		return
+	}
+	tmp := make([]byte, len(b.buf), patrolStreamMaxOutputBytes)
+	copy(tmp, b.buf)
+	b.buf = tmp
 }
 
 // ToolCallRecord captures a single tool invocation during a patrol run.
@@ -321,11 +396,30 @@ type ToolCallRecord struct {
 type streamSubscriber struct {
 	ch     chan PatrolStreamEvent
 	closed atomic.Bool
+	// Consecutive times we couldn't deliver to this subscriber because its channel
+	// was full. Used to tolerate short bursts without immediately disconnecting.
+	fullCount int
 }
 
 // PatrolStreamEvent represents a streaming update from the patrol
 type PatrolStreamEvent struct {
-	Type    string `json:"type"` // "start", "content", "phase", "complete", "error", "tool_start", "tool_end"
+	// Meta
+	// Seq is suitable to be used as an SSE "id:" for Last-Event-ID, but replay is best-effort.
+	RunID string `json:"run_id,omitempty"`
+	Seq   int64  `json:"seq,omitempty"`
+	TsMs  int64  `json:"ts_ms,omitempty"`
+	// If this is a synthetic snapshot/resync event, why it was emitted.
+	// Examples: "late_joiner", "stale_last_event_id".
+	ResyncReason string `json:"resync_reason,omitempty"`
+	BufferStart  int64  `json:"buffer_start_seq,omitempty"`
+	BufferEnd    int64  `json:"buffer_end_seq,omitempty"`
+	// True when the snapshot content has been truncated due to the tail buffer.
+	ContentTruncated *bool `json:"content_truncated,omitempty"`
+
+	// Payload
+	// Known types include: "snapshot", "start", "content", "phase", "thinking",
+	// "complete", "error", "tool_start", "tool_end".
+	Type    string `json:"type"`
 	Content string `json:"content,omitempty"`
 	Phase   string `json:"phase,omitempty"`  // Current phase description
 	Tokens  int    `json:"tokens,omitempty"` // Token count so far

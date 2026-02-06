@@ -182,6 +182,10 @@ type NotificationManager struct {
 	allowedPrivateMu   sync.RWMutex       // Protects allowedPrivateNets
 }
 
+// spawnAsync is used for fire-and-forget notification delivery.
+// It exists so tests can disable or inline async behavior without relying on sleeps.
+var spawnAsync = func(f func()) { go f() }
+
 type appriseExecFunc func(ctx context.Context, path string, args []string) ([]byte, error)
 
 // copyEmailConfig returns a defensive copy of EmailConfig including its slices to avoid data races.
@@ -834,7 +838,7 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 			if err := n.queue.Enqueue(notif); err != nil {
 				log.Error().Err(err).Msg("Failed to enqueue email notification - falling back to direct send")
 				anyFailed = true
-				go n.sendGroupedEmail(emailConfig, alertsToSend)
+				spawnAsync(func() { _ = n.sendGroupedEmail(emailConfig, alertsToSend) })
 			} else {
 				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued email notification")
 			}
@@ -857,7 +861,8 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 				if err := n.queue.Enqueue(notif); err != nil {
 					log.Error().Err(err).Str("webhookName", webhook.Name).Msg("Failed to enqueue webhook notification - falling back to direct send")
 					anyFailed = true
-					go n.sendGroupedWebhook(webhook, alertsToSend)
+					webhookCopy := webhook
+					spawnAsync(func() { _ = n.sendGroupedWebhook(webhookCopy, alertsToSend) })
 				} else {
 					log.Debug().Str("webhookName", webhook.Name).Int("alertCount", len(alertsToSend)).Msg("Enqueued webhook notification")
 				}
@@ -880,7 +885,7 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 			if err := n.queue.Enqueue(notif); err != nil {
 				log.Error().Err(err).Msg("Failed to enqueue apprise notification - falling back to direct send")
 				anyFailed = true
-				go n.sendGroupedApprise(appriseConfig, alertsToSend)
+				spawnAsync(func() { _ = n.sendGroupedApprise(appriseConfig, alertsToSend) })
 			} else {
 				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued apprise notification")
 			}
@@ -923,7 +928,7 @@ func (n *NotificationManager) enqueueResolvedNotifications(queue *NotificationQu
 			if err := queue.Enqueue(notif); err != nil {
 				log.Error().Err(err).Msg("Failed to enqueue resolved email notification - falling back to direct send")
 				anyFailed = true
-				go n.sendResolvedEmail(emailConfig, alertsToSend, resolvedAt)
+				spawnAsync(func() { _ = n.sendResolvedEmail(emailConfig, alertsToSend, resolvedAt) })
 			} else {
 				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued resolved email notification")
 			}
@@ -949,7 +954,8 @@ func (n *NotificationManager) enqueueResolvedNotifications(queue *NotificationQu
 		if err := queue.Enqueue(notif); err != nil {
 			log.Error().Err(err).Str("webhookName", webhookCopy.Name).Msg("Failed to enqueue resolved webhook notification - falling back to direct send")
 			anyFailed = true
-			go n.sendResolvedWebhook(webhookCopy, alertsToSend, resolvedAt)
+			webhookCopy2 := webhookCopy
+			spawnAsync(func() { _ = n.sendResolvedWebhook(webhookCopy2, alertsToSend, resolvedAt) })
 		} else {
 			log.Debug().Str("webhookName", webhookCopy.Name).Int("alertCount", len(alertsToSend)).Msg("Enqueued resolved webhook notification")
 		}
@@ -969,7 +975,7 @@ func (n *NotificationManager) enqueueResolvedNotifications(queue *NotificationQu
 			if err := queue.Enqueue(notif); err != nil {
 				log.Error().Err(err).Msg("Failed to enqueue resolved Apprise notification - falling back to direct send")
 				anyFailed = true
-				go n.sendResolvedApprise(appriseConfig, alertsToSend, resolvedAt)
+				spawnAsync(func() { _ = n.sendResolvedApprise(appriseConfig, alertsToSend, resolvedAt) })
 			} else {
 				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued resolved Apprise notification")
 			}
@@ -992,7 +998,7 @@ func (n *NotificationManager) sendNotificationsDirect(emailConfig EmailConfig, w
 			Strs("recipients", emailConfig.To).
 			Bool("hasAuth", emailConfig.Username != "" && emailConfig.Password != "").
 			Msg("Email notifications enabled - sending grouped email")
-		go n.sendGroupedEmail(emailConfig, alertsToSend)
+		spawnAsync(func() { _ = n.sendGroupedEmail(emailConfig, alertsToSend) })
 	} else {
 		log.Debug().
 			Int("alertCount", len(alertsToSend)).
@@ -1001,12 +1007,13 @@ func (n *NotificationManager) sendNotificationsDirect(emailConfig EmailConfig, w
 
 	for _, webhook := range webhooks {
 		if webhook.Enabled {
-			go n.sendGroupedWebhook(webhook, alertsToSend)
+			webhookCopy := webhook
+			spawnAsync(func() { _ = n.sendGroupedWebhook(webhookCopy, alertsToSend) })
 		}
 	}
 
 	if appriseConfig.Enabled {
-		go n.sendGroupedApprise(appriseConfig, alertsToSend)
+		spawnAsync(func() { _ = n.sendGroupedApprise(appriseConfig, alertsToSend) })
 	}
 }
 
@@ -1017,11 +1024,11 @@ func (n *NotificationManager) sendResolvedNotificationsDirect(emailConfig EmailC
 	}
 
 	if emailConfig.Enabled {
-		go func() {
+		spawnAsync(func() {
 			if err := n.sendResolvedEmail(emailConfig, alertsToSend, resolvedAt); err != nil {
 				log.Error().Err(err).Msg("Failed to send resolved email notification")
 			}
-		}()
+		})
 	}
 
 	for _, webhook := range webhooks {
@@ -1029,22 +1036,22 @@ func (n *NotificationManager) sendResolvedNotificationsDirect(emailConfig EmailC
 			continue
 		}
 		webhookCopy := webhook
-		go func() {
+		spawnAsync(func() {
 			if err := n.sendResolvedWebhook(webhookCopy, alertsToSend, resolvedAt); err != nil {
 				log.Error().
 					Err(err).
 					Str("webhookName", webhookCopy.Name).
 					Msg("Failed to send resolved webhook notification")
 			}
-		}()
+		})
 	}
 
 	if appriseConfig.Enabled {
-		go func() {
+		spawnAsync(func() {
 			if err := n.sendResolvedApprise(appriseConfig, alertsToSend, resolvedAt); err != nil {
 				log.Error().Err(err).Msg("Failed to send resolved Apprise notification")
 			}
-		}()
+		})
 	}
 }
 

@@ -15,6 +15,11 @@ type PatrolMetrics struct {
 	runTotal             *prometheus.CounterVec
 	scopedDropped        prometheus.Counter
 	scopedDroppedFinal   prometheus.Counter
+	streamResumeOutcome  *prometheus.CounterVec
+	streamResyncReason   *prometheus.CounterVec
+	streamReplayEvents   prometheus.Counter
+	streamReplayBatch    prometheus.Histogram
+	streamSubscriberDrop *prometheus.CounterVec
 }
 
 var (
@@ -92,6 +97,50 @@ func newPatrolMetrics() *PatrolMetrics {
 				Help:      "Total scoped patrols permanently dropped after exhausting retries",
 			},
 		),
+		streamResumeOutcome: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "stream_resume_outcome_total",
+				Help:      "Total patrol stream resume outcomes",
+			},
+			[]string{"outcome"},
+		),
+		streamResyncReason: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "stream_resync_reason_total",
+				Help:      "Total synthetic patrol stream snapshots by resync reason",
+			},
+			[]string{"reason"},
+		),
+		streamReplayEvents: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "stream_replay_events_total",
+				Help:      "Total patrol stream events replayed to resuming subscribers",
+			},
+		),
+		streamReplayBatch: prometheus.NewHistogram(
+			prometheus.HistogramOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "stream_replay_batch_size",
+				Help:      "Patrol stream replay batch size per subscriber sync",
+				Buckets:   []float64{1, 2, 5, 10, 25, 50, 100},
+			},
+		),
+		streamSubscriberDrop: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "stream_subscriber_drop_total",
+				Help:      "Total patrol stream subscribers dropped by reason",
+			},
+			[]string{"reason"},
+		),
 	}
 
 	prometheus.MustRegister(
@@ -102,6 +151,11 @@ func newPatrolMetrics() *PatrolMetrics {
 		m.runTotal,
 		m.scopedDropped,
 		m.scopedDroppedFinal,
+		m.streamResumeOutcome,
+		m.streamResyncReason,
+		m.streamReplayEvents,
+		m.streamReplayBatch,
+		m.streamSubscriberDrop,
 	)
 
 	return m
@@ -140,4 +194,35 @@ func (m *PatrolMetrics) RecordScopedDroppedFinal() {
 // RecordRun records a patrol run.
 func (m *PatrolMetrics) RecordRun(trigger, runType string) {
 	m.runTotal.WithLabelValues(trigger, runType).Inc()
+}
+
+// RecordStreamReplay records a stream subscriber sync that replayed buffered events.
+func (m *PatrolMetrics) RecordStreamReplay(replayEvents int) {
+	m.streamResumeOutcome.WithLabelValues("replay").Inc()
+	if replayEvents > 0 {
+		m.streamReplayEvents.Add(float64(replayEvents))
+		m.streamReplayBatch.Observe(float64(replayEvents))
+	}
+}
+
+// RecordStreamSnapshot records a synthetic snapshot sent for resync or late join.
+func (m *PatrolMetrics) RecordStreamSnapshot(reason string) {
+	if reason == "" {
+		reason = "unknown"
+	}
+	m.streamResumeOutcome.WithLabelValues("snapshot").Inc()
+	m.streamResyncReason.WithLabelValues(reason).Inc()
+}
+
+// RecordStreamMiss records a resume attempt where no replay or snapshot was emitted.
+func (m *PatrolMetrics) RecordStreamMiss() {
+	m.streamResumeOutcome.WithLabelValues("miss").Inc()
+}
+
+// RecordStreamSubscriberDrop records subscriber removals from the live stream.
+func (m *PatrolMetrics) RecordStreamSubscriberDrop(reason string) {
+	if reason == "" {
+		reason = "unknown"
+	}
+	m.streamSubscriberDrop.WithLabelValues(reason).Inc()
 }

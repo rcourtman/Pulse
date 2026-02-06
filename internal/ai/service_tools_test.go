@@ -14,10 +14,16 @@ func TestFetchURL(t *testing.T) {
 	os.Setenv("PULSE_AI_ALLOW_LOOPBACK", "true")
 	defer os.Unsetenv("PULSE_AI_ALLOW_LOOPBACK")
 
-	// Start a local test server
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Start a local test server on IPv4 to avoid environments that disallow tcp6 binds.
+	l, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "Hello, world")
 	}))
+	ts.Listener = l
+	ts.Start()
 	defer ts.Close()
 
 	svc := NewService(nil, nil)

@@ -466,109 +466,95 @@ func TestCheckRateLimit_Concurrency(t *testing.T) {
 	}
 }
 func TestSendPlain_Success(t *testing.T) {
-	// Start mock SMTP server
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	config := EmailProviderConfig{
+		EmailConfig: EmailConfig{
+			SMTPHost: "smtp.example.com",
+			SMTPPort: 25,
+			From:     "test@example.com",
+			To:       []string{"recipient@example.com"},
+		},
 	}
-	defer l.Close()
 
-	addr := l.Addr().String()
-	host, portStr, _ := net.SplitHostPort(addr)
-	port, _ := net.LookupPort("tcp", portStr)
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	origDial := smtpDialTimeout
+	smtpDialTimeout = func(network, addr string, timeout time.Duration) (net.Conn, error) {
+		return clientConn, nil
+	}
+	t.Cleanup(func() { smtpDialTimeout = origDial })
 
 	go func() {
-		conn, err := l.Accept()
-		if err != nil {
-			return
-		}
-		defer conn.Close()
+		defer serverConn.Close()
 
-		w := bufio.NewWriter(conn)
-		r := textproto.NewReader(bufio.NewReader(conn))
+		w := bufio.NewWriter(serverConn)
+		r := textproto.NewReader(bufio.NewReader(serverConn))
 
-		// Handshake
+		// Greeting
 		fmt.Fprint(w, "220 smtp.example.com ESMTP\r\n")
-		w.Flush()
+		_ = w.Flush()
 
 		for {
 			line, err := r.ReadLine()
 			if err != nil {
 				return
 			}
-			if strings.HasPrefix(line, "HELO") || strings.HasPrefix(line, "EHLO") {
-				fmt.Fprint(w, "250-smtp.example.com\r\n250-AUTH PLAIN\r\n250 8BITMIME\r\n")
-				w.Flush()
-			} else if strings.HasPrefix(line, "MAIL FROM:") {
+			switch {
+			case strings.HasPrefix(line, "HELO") || strings.HasPrefix(line, "EHLO"):
+				fmt.Fprint(w, "250-smtp.example.com\r\n250 8BITMIME\r\n")
+				_ = w.Flush()
+			case strings.HasPrefix(line, "MAIL FROM:"):
 				fmt.Fprint(w, "250 OK\r\n")
-				w.Flush()
-			} else if strings.HasPrefix(line, "RCPT TO:") {
+				_ = w.Flush()
+			case strings.HasPrefix(line, "RCPT TO:"):
 				fmt.Fprint(w, "250 OK\r\n")
-				w.Flush()
-			} else if strings.HasPrefix(line, "DATA") {
+				_ = w.Flush()
+			case strings.HasPrefix(line, "DATA"):
 				fmt.Fprint(w, "354 Start mail input; end with <CRLF>.<CRLF>\r\n")
-				w.Flush()
+				_ = w.Flush()
 				for {
-					l, _ := r.ReadLine()
-					if l == "." {
+					l, err := r.ReadLine()
+					if err != nil || l == "." {
 						break
 					}
 				}
 				fmt.Fprint(w, "250 OK\r\n")
-				w.Flush()
-			} else if strings.HasPrefix(line, "QUIT") {
+				_ = w.Flush()
+			case strings.HasPrefix(line, "QUIT"):
 				fmt.Fprint(w, "221 Bye\r\n")
-				w.Flush()
+				_ = w.Flush()
 				return
+			default:
+				// Default OK to tolerate extra commands.
+				fmt.Fprint(w, "250 OK\r\n")
+				_ = w.Flush()
 			}
 		}
 	}()
 
-	config := EmailProviderConfig{
-		EmailConfig: EmailConfig{
-			SMTPHost: host,
-			SMTPPort: port,
-			From:     "test@example.com",
-			To:       []string{"recipient@example.com"},
-		},
-	}
-
 	manager := NewEnhancedEmailManager(config)
-	err = manager.sendPlain(addr, []byte("Test Message"))
+	err := manager.sendPlain("ignored:25", []byte("Test Message"))
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 }
 func TestSendTLS_Success(t *testing.T) {
-	// Generate a self-signed cert for the mock TLS server
-	// This is simplified but good enough for testing the handshake logic
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-
-	addr := l.Addr().String()
-	_, portStr, _ := net.SplitHostPort(addr)
-	port, _ := net.LookupPort("tcp", portStr)
-
-	// Since we can't easily generate a cert on the fly without a lot of code,
-	// we'll use a pre-existing cert if possible or just skip the actual TLS write
-	// and test the manager's configuration instead.
-	// Actually, let's use a simpler approach: just test that sendTLS calls the right dialer.
-	// We've already verified the connection error path.
+	// We don't need a real TLS server here. This is an error-path sanity check that
+	// exercises the TLS dialer logic without binding ports (which can be blocked in CI).
+	addr := "127.0.0.1:1"
 
 	config := EmailProviderConfig{
 		EmailConfig: EmailConfig{
 			SMTPHost: "invalid.host.test",
-			SMTPPort: port,
+			SMTPPort: 1,
 			TLS:      true,
 		},
 		SkipTLSVerify: true,
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err = manager.sendTLS(addr, []byte("test"))
+	err := manager.sendTLS(addr, []byte("test"))
 	// It will still fail because we aren't running a real TLS server here,
 	// but we can verify it reaches the TLS dialer.
 	if err == nil {
@@ -580,53 +566,56 @@ func TestSendTLS_Success(t *testing.T) {
 }
 
 func TestSendStartTLS_Success(t *testing.T) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-
-	addr := l.Addr().String()
-	host, portStr, _ := net.SplitHostPort(addr)
-	port, _ := net.LookupPort("tcp", portStr)
-
-	go func() {
-		conn, err := l.Accept()
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-
-		w := bufio.NewWriter(conn)
-		r := textproto.NewReader(bufio.NewReader(conn))
-
-		fmt.Fprint(w, "220 smtp.example.com ESMTP\r\n")
-		w.Flush()
-
-		for {
-			line, _ := r.ReadLine()
-			if strings.HasPrefix(line, "EHLO") {
-				fmt.Fprint(w, "250-smtp.example.com\r\n250 STARTTLS\r\n")
-				w.Flush()
-			} else if strings.HasPrefix(line, "STARTTLS") {
-				fmt.Fprint(w, "220 Ready to start TLS\r\n")
-				w.Flush()
-				return // Manager will try to upgrade, server just closes context for test
-			}
-		}
-	}()
-
 	config := EmailProviderConfig{
 		EmailConfig: EmailConfig{
-			SMTPHost: host,
-			SMTPPort: port,
+			SMTPHost: "smtp.example.com",
+			SMTPPort: 587,
 			StartTLS: true,
 		},
 		SkipTLSVerify: true,
 	}
 
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	origDial := smtpDialTimeout
+	smtpDialTimeout = func(network, addr string, timeout time.Duration) (net.Conn, error) {
+		return clientConn, nil
+	}
+	t.Cleanup(func() { smtpDialTimeout = origDial })
+
+	go func() {
+		defer serverConn.Close()
+
+		w := bufio.NewWriter(serverConn)
+		r := textproto.NewReader(bufio.NewReader(serverConn))
+
+		fmt.Fprint(w, "220 smtp.example.com ESMTP\r\n")
+		_ = w.Flush()
+
+		for {
+			line, err := r.ReadLine()
+			if err != nil {
+				return
+			}
+			if strings.HasPrefix(line, "EHLO") {
+				fmt.Fprint(w, "250-smtp.example.com\r\n250 STARTTLS\r\n")
+				_ = w.Flush()
+				continue
+			}
+			if strings.HasPrefix(line, "STARTTLS") {
+				fmt.Fprint(w, "220 Ready to start TLS\r\n")
+				_ = w.Flush()
+				return // Client will attempt TLS handshake and fail.
+			}
+			fmt.Fprint(w, "250 OK\r\n")
+			_ = w.Flush()
+		}
+	}()
+
 	manager := NewEnhancedEmailManager(config)
-	err = manager.sendStartTLS(addr, []byte("Test Message"))
+	err := manager.sendStartTLS("ignored:587", []byte("Test Message"))
 	// Should fail at TLS upgrade because mock server doesn't actually do TLS
 	if err == nil {
 		t.Error("expected STARTTLS upgrade error")

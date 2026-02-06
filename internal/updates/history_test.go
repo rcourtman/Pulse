@@ -28,16 +28,6 @@ func TestNewUpdateHistory(t *testing.T) {
 		}
 	})
 
-	t.Run("uses default directory when empty", func(t *testing.T) {
-		// Skip if we can't create /var/lib/pulse
-		if _, err := os.Stat("/var/lib"); os.IsNotExist(err) {
-			t.Skip("Skipping test that requires /var/lib")
-		}
-
-		// Just verify it doesn't panic; we can't test the actual default path
-		// without potentially modifying system directories
-	})
-
 	t.Run("initializes with empty cache", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, err := NewUpdateHistory(tmpDir)

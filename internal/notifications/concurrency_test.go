@@ -73,6 +73,4 @@ func TestNotificationManagerEmailConfigConcurrency(t *testing.T) {
 	}()
 
 	wg.Wait()
-
-	time.Sleep(500 * time.Millisecond)
 }

@@ -107,7 +107,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 func TestAISettingsHandler_ListModels_Ollama(t *testing.T) {
 	t.Parallel()
 
-	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/tags":
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -165,7 +165,7 @@ func TestAISettingsHandler_ListModels_Ollama(t *testing.T) {
 func TestAISettingsHandler_Execute_Ollama(t *testing.T) {
 	t.Parallel()
 
-	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/chat":
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -228,7 +228,7 @@ func ptr[T any](v T) *T { return &v }
 func TestAISettingsHandler_TestConnection_Ollama(t *testing.T) {
 	t.Parallel()
 
-	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/version" {
 			http.NotFound(w, r)
 			return
@@ -274,7 +274,7 @@ func TestAISettingsHandler_TestConnection_Ollama(t *testing.T) {
 func TestAISettingsHandler_TestProvider_Ollama(t *testing.T) {
 	t.Parallel()
 
-	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/version" {
 			http.NotFound(w, r)
 			return
@@ -932,24 +932,12 @@ func TestAISettingsHandler_SetConfig(t *testing.T) {
 
 	// SetConfig with nil should be a no-op
 	handler.SetConfig(nil)
+	require.Same(t, cfg, handler.legacyConfig)
 
 	// SetConfig with new config should update the handler's config
 	newCfg := &config.Config{DataPath: tmp}
 	handler.SetConfig(newCfg)
-	// No assertion needed - just verifying it doesn't panic
-}
-
-func TestAISettingsHandler_StopPatrol(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	// StopPatrol should be safe to call even when patrol is not running
-	handler.StopPatrol()
-	// No assertion needed - just verifying it doesn't panic
+	require.Same(t, newCfg, handler.legacyConfig)
 }
 
 func TestAISettingsHandler_GetAlertTriggeredAnalyzer(t *testing.T) {
@@ -960,10 +948,13 @@ func TestAISettingsHandler_GetAlertTriggeredAnalyzer(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	// Should return the analyzer (may be nil if not initialized)
+	handler.SetStateProvider(&MockStateProvider{})
+
 	analyzer := handler.GetAlertTriggeredAnalyzer(context.Background())
-	// Just verify it doesn't panic and returns something
-	_ = analyzer
+	require.NotNil(t, analyzer)
+
+	again := handler.GetAlertTriggeredAnalyzer(context.Background())
+	require.Same(t, analyzer, again)
 }
 
 func TestAISettingsHandler_StartPatrol(t *testing.T) {
@@ -974,14 +965,31 @@ func TestAISettingsHandler_StartPatrol(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.OllamaBaseURL = "http://localhost:11434"
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.PatrolEnabled = true
+	aiCfg.PatrolSchedulePreset = "6hr"
+	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
+	require.NoError(t, handler.legacyAIService.LoadConfig())
+
+	handler.SetStateProvider(&MockStateProvider{})
+
 	// Start patrol with a cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
 	handler.StartPatrol(ctx)
 
-	// Give it a brief moment then stop
-	time.Sleep(10 * time.Millisecond)
+	patrol := handler.legacyAIService.GetPatrolService()
+	require.NotNil(t, patrol)
+	status := patrol.GetStatus()
+	require.True(t, status.Enabled)
+
 	cancel()
-	handler.StopPatrol()
+	assert.NotPanics(t, func() { handler.StopPatrol() })
+
+	after := patrol.GetStatus()
+	require.False(t, after.Running)
 }
 
 func TestAISettingsHandler_SetPatrolFindingsPersistence(t *testing.T) {
@@ -1014,89 +1022,6 @@ func TestAISettingsHandler_SetPatrolRunHistoryPersistence(t *testing.T) {
 	}
 }
 
-func TestAISettingsHandler_SetPatrolThresholdProvider(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	// Set nil threshold provider should not panic
-	handler.SetPatrolThresholdProvider(nil)
-}
-
-func TestAISettingsHandler_SetMetricsHistoryProvider(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	// Set nil metrics provider should not panic
-	handler.SetMetricsHistoryProvider(nil)
-}
-
-func TestAISettingsHandler_SetBaselineStore(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	// Set nil baseline store should not panic
-	handler.SetBaselineStore(nil)
-}
-
-func TestAISettingsHandler_SetChangeDetector(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	// Set nil change detector should not panic
-	handler.SetChangeDetector(nil)
-}
-
-func TestAISettingsHandler_SetRemediationLog(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	// Set nil remediation log should not panic
-	handler.SetRemediationLog(nil)
-}
-
-func TestAISettingsHandler_SetPatternDetector(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	// Set nil pattern detector should not panic
-	handler.SetPatternDetector(nil)
-}
-
-func TestAISettingsHandler_SetCorrelationDetector(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	// Set nil correlation detector should not panic
-	handler.SetCorrelationDetector(nil)
-}
 func TestAISettingsHandler_Approvals(t *testing.T) {
 	t.Parallel()
 

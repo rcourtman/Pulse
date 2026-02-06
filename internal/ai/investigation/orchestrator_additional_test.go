@@ -243,6 +243,28 @@ func TestOrchestrator_ParseInvestigationSummary(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_ProcessResult_BlockedCommandForcesNeedsAttention(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStore(tempDir)
+	findings := &stubFindingsStore{finding: &Finding{ID: "finding-1", Severity: "warning"}}
+	orchestrator := NewOrchestrator(nil, store, findings, nil, DefaultConfig())
+
+	investigation := store.Create("finding-1", "session-1")
+	investigation.Summary = "PROPOSED_FIX: rm -rf /tmp/something\nTARGET_HOST: local"
+	store.Update(investigation)
+
+	if err := orchestrator.processResult(context.Background(), investigation, findings.finding, "approval"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	updated := store.Get(investigation.ID)
+	if updated.Outcome != OutcomeNeedsAttention {
+		t.Fatalf("expected needs attention outcome, got %s", updated.Outcome)
+	}
+	if findings.finding.InvestigationOutcome != string(OutcomeNeedsAttention) {
+		t.Fatalf("expected finding outcome to be needs_attention, got %s", findings.finding.InvestigationOutcome)
+	}
+}
+
 func TestOrchestrator_ReinvestigateFinding(t *testing.T) {
 	store := NewStore("")
 	findings := &stubFindingsStore{finding: &Finding{ID: "finding-1"}}

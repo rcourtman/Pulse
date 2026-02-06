@@ -97,7 +97,7 @@ func TestLifecycle_FindingToFixVerificationFailed(t *testing.T) {
 	chatService := &stubChatService{
 		execute: func(cb StreamCallback) error {
 			payload, _ := json.Marshal(map[string]string{
-				"text": "PROPOSED_FIX: apt autoremove -y\nTARGET_HOST: local",
+				"text": "PROPOSED_FIX: echo ok\nTARGET_HOST: local",
 			})
 			cb(StreamEvent{Type: "content", Data: payload})
 			return nil

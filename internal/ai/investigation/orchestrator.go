@@ -11,6 +11,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/finding"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rs/zerolog/log"
 )
 
@@ -662,6 +664,25 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 			return nil
 		}
 
+		// Blocked commands must never be executed (even with approval). If the
+		// investigation suggests a blocked command, keep the record but require
+		// manual attention.
+		for _, cmd := range fix.Commands {
+			if safety.IsBlockedCommand(cmd) {
+				log.Warn().
+					Str("finding_id", finding.ID).
+					Str("command", cmd).
+					Msg("Investigation proposed blocked command; forcing needs_attention")
+				outcome = OutcomeNeedsAttention
+				fix.Rationale = fmt.Sprintf("%s\n\nBlocked by safety policy: %s", fix.Rationale, cmd)
+				o.store.Complete(investigation.ID, outcome, summary, fix)
+				finding.InvestigationStatus = string(StatusCompleted)
+				finding.InvestigationOutcome = string(outcome)
+				o.updateFinding(finding)
+				return nil
+			}
+		}
+
 		// Re-check current autonomy level before deciding on fix execution
 		// This handles cases where user changed autonomy during investigation
 		currentLevel := autonomyLevel
@@ -674,22 +695,46 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 		}
 
 		// Defense-in-depth: clamp autonomy if no auto-fix license
-		if o.licenseChecker != nil && !o.licenseChecker.HasFeature("ai_autofix") {
+		if o.licenseChecker != nil && !o.licenseChecker.HasFeature(license.FeatureAIAutoFix) {
 			if currentLevel == "assisted" || currentLevel == "full" {
 				currentLevel = "approval"
 				log.Warn().Str("finding_id", finding.ID).Msg("Auto-fix requires Pro license - clamping to approval mode")
 			}
 		}
 
-		// Check if fix requires approval based on current autonomy level
-		requiresApproval := o.guardrails.RequiresApproval(
-			finding.Severity,
-			currentLevel,
-			fix.Commands[0],
-		)
-
-		fix.RiskLevel = o.guardrails.ClassifyRisk(fix.Commands[0])
-		fix.Destructive = o.guardrails.IsDestructiveAction(fix.Commands[0])
+		// Check if fix requires approval based on current autonomy level.
+		// Any risky command in a sequence requires approval.
+		requiresApproval := false
+		riskRank := func(level string) int {
+			switch strings.ToLower(strings.TrimSpace(level)) {
+			case "low":
+				return 0
+			case "medium":
+				return 1
+			case "high":
+				return 2
+			case "critical":
+				return 3
+			default:
+				return 1
+			}
+		}
+		bestRisk := "medium"
+		destructive := false
+		for _, cmd := range fix.Commands {
+			if o.guardrails.RequiresApproval(finding.Severity, currentLevel, cmd) {
+				requiresApproval = true
+			}
+			if o.guardrails.IsDestructiveAction(cmd) {
+				destructive = true
+			}
+			level := o.guardrails.ClassifyRisk(cmd)
+			if riskRank(level) > riskRank(bestRisk) {
+				bestRisk = level
+			}
+		}
+		fix.RiskLevel = bestRisk
+		fix.Destructive = destructive
 
 		if requiresApproval {
 			// Queue for approval
@@ -699,7 +744,7 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 				FindingID:   finding.ID,
 				SessionID:   investigation.SessionID,
 				Description: fix.Description,
-				Command:     fix.Commands[0],
+				Command:     strings.Join(fix.Commands, "\n"),
 				RiskLevel:   fix.RiskLevel,
 				CreatedAt:   time.Now(),
 			}
@@ -719,37 +764,54 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 			if o.commandExecutor != nil {
 				log.Info().
 					Str("finding_id", finding.ID).
-					Str("command", fix.Commands[0]).
+					Int("command_count", len(fix.Commands)).
 					Str("target_host", fix.TargetHost).
 					Str("risk_level", fix.RiskLevel).
 					Msg("Auto-executing fix (full autonomy mode)")
 
-				output, exitCode, execErr := o.commandExecutor.ExecuteCommand(ctx, fix.Commands[0], fix.TargetHost)
-				if execErr != nil {
-					log.Error().
-						Err(execErr).
-						Str("finding_id", finding.ID).
-						Str("command", fix.Commands[0]).
-						Msg("Auto-executed fix failed")
-					outcome = OutcomeFixFailed
-					fix.Rationale = fmt.Sprintf("%s\n\nAuto-execution failed: %v", fix.Rationale, execErr)
-				} else if exitCode != 0 {
-					log.Warn().
-						Str("finding_id", finding.ID).
-						Str("command", fix.Commands[0]).
-						Int("exit_code", exitCode).
-						Str("output", output).
-						Msg("Auto-executed fix returned non-zero exit code")
-					outcome = OutcomeFixFailed
-					fix.Rationale = fmt.Sprintf("%s\n\nAuto-execution returned exit code %d:\n%s", fix.Rationale, exitCode, output)
-				} else {
+				var combined strings.Builder
+				allOK := true
+				for i, cmd := range fix.Commands {
+					output, exitCode, execErr := o.commandExecutor.ExecuteCommand(ctx, cmd, fix.TargetHost)
+					if combined.Len() > 0 {
+						combined.WriteString("\n\n")
+					}
+					combined.WriteString(fmt.Sprintf("Command %d/%d: %s\n", i+1, len(fix.Commands), cmd))
+					if output != "" {
+						combined.WriteString(output)
+					}
+					if execErr != nil {
+						log.Error().
+							Err(execErr).
+							Str("finding_id", finding.ID).
+							Str("command", cmd).
+							Msg("Auto-executed fix command failed")
+						outcome = OutcomeFixFailed
+						fix.Rationale = fmt.Sprintf("%s\n\nAuto-execution failed: %v\n\n%s", fix.Rationale, execErr, combined.String())
+						allOK = false
+						break
+					}
+					if exitCode != 0 {
+						log.Warn().
+							Str("finding_id", finding.ID).
+							Str("command", cmd).
+							Int("exit_code", exitCode).
+							Str("output", output).
+							Msg("Auto-executed fix command returned non-zero exit code")
+						outcome = OutcomeFixFailed
+						fix.Rationale = fmt.Sprintf("%s\n\nAuto-execution returned exit code %d\n\n%s", fix.Rationale, exitCode, combined.String())
+						allOK = false
+						break
+					}
+				}
+
+				if allOK {
 					log.Info().
 						Str("finding_id", finding.ID).
-						Str("command", fix.Commands[0]).
-						Str("output", output).
+						Int("command_count", len(fix.Commands)).
 						Msg("Auto-executed fix successfully")
 					outcome = OutcomeFixExecuted
-					fix.Rationale = fmt.Sprintf("%s\n\nAuto-executed successfully:\n%s", fix.Rationale, output)
+					fix.Rationale = fmt.Sprintf("%s\n\nAuto-executed successfully:\n%s", fix.Rationale, combined.String())
 
 					// Verify the fix actually resolved the issue
 					o.mu.RLock()
@@ -793,7 +855,7 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 				// No command executor available, fall back to queueing for approval
 				log.Warn().
 					Str("finding_id", finding.ID).
-					Str("command", fix.Commands[0]).
+					Int("command_count", len(fix.Commands)).
 					Msg("Full autonomy enabled but no command executor available, queueing for approval")
 				outcome = OutcomeFixQueued
 			}
@@ -830,6 +892,11 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 // Commands longer than this are rejected as likely malformed.
 const maxCommandLength = 2000
 
+// maxCommandsPerFix is the maximum number of commands the investigation may
+// propose as a single fix. This prevents accidentally interpreting long
+// explanations as commands.
+const maxCommandsPerFix = 10
+
 // parseInvestigationSummary extracts fix proposals from the investigation output.
 // Marker detection is case-insensitive to handle varying LLM output styles.
 func (o *Orchestrator) parseInvestigationSummary(summary string) (*Fix, Outcome) {
@@ -842,7 +909,7 @@ func (o *Orchestrator) parseInvestigationSummary(summary string) (*Fix, Outcome)
 
 		// If the remaining text starts with a code fence, extract until the closing fence
 		// so multiline fenced commands are captured correctly.
-		var command string
+		var commandText string
 		trimmedRemaining := strings.TrimSpace(remaining)
 		if strings.HasPrefix(trimmedRemaining, "```") {
 			// Find the closing fence after the opening one
@@ -850,14 +917,14 @@ func (o *Orchestrator) parseInvestigationSummary(summary string) (*Fix, Outcome)
 			closeIdx := strings.Index(afterOpen, "```")
 			if closeIdx >= 0 {
 				fenced := trimmedRemaining[:3+closeIdx+3]
-				command = stripMarkdownCodeFences(fenced)
+				commandText = stripMarkdownCodeFences(fenced)
 			} else {
 				// No closing fence — take the first line only
 				endIdx := strings.Index(remaining, "\n")
 				if endIdx < 0 {
 					endIdx = len(remaining)
 				}
-				command = trim(remaining[:endIdx])
+				commandText = trim(remaining[:endIdx])
 			}
 		} else {
 			// Single-line command — take to end of line
@@ -865,13 +932,44 @@ func (o *Orchestrator) parseInvestigationSummary(summary string) (*Fix, Outcome)
 			if endIdx < 0 {
 				endIdx = len(remaining)
 			}
-			command = trim(remaining[:endIdx])
-			command = stripMarkdownCodeFences(command)
+			commandText = trim(remaining[:endIdx])
+			commandText = stripMarkdownCodeFences(commandText)
+		}
+
+		commandText = strings.TrimSpace(commandText)
+
+		// Split a fenced multi-line "script" into individual commands. This allows
+		// investigations to propose a short sequence like:
+		// 1) check something
+		// 2) apply fix
+		// 3) restart service
+		//
+		// Each command is still safety-checked and guardrailed independently later.
+		commandText = strings.ReplaceAll(commandText, "\r\n", "\n")
+		lines := strings.Split(commandText, "\n")
+		commands := make([]string, 0, len(lines))
+		for _, line := range lines {
+			l := strings.TrimSpace(line)
+			if l == "" {
+				continue
+			}
+			// Accept common "shell prompt" prefixes in model output.
+			if strings.HasPrefix(l, "$") {
+				l = strings.TrimSpace(strings.TrimPrefix(l, "$"))
+			}
+			if l == "" {
+				continue
+			}
+			commands = append(commands, l)
+			if len(commands) >= maxCommandsPerFix {
+				break
+			}
 		}
 
 		log.Debug().
 			Int("marker_pos", idx).
-			Str("raw_command", command).
+			Str("raw_command", commandText).
+			Int("command_count", len(commands)).
 			Msg("Found PROPOSED_FIX marker")
 
 		// Look for TARGET_HOST (case-insensitive)
@@ -885,23 +983,25 @@ func (o *Orchestrator) parseInvestigationSummary(summary string) (*Fix, Outcome)
 			targetHost = trim(hostRemaining[:hostEndIdx])
 		}
 
-		// Validate command
-		if command == "" {
+		// Validate commands
+		if len(commands) == 0 {
 			log.Warn().Msg("PROPOSED_FIX marker found but command is empty, falling back to needs_attention")
 			return nil, OutcomeNeedsAttention
 		}
-		if len(command) > maxCommandLength {
-			log.Warn().
-				Int("command_length", len(command)).
-				Int("max_length", maxCommandLength).
-				Msg("PROPOSED_FIX command exceeds max length, falling back to needs_attention")
-			return nil, OutcomeNeedsAttention
+		for _, cmd := range commands {
+			if len(cmd) > maxCommandLength {
+				log.Warn().
+					Int("command_length", len(cmd)).
+					Int("max_length", maxCommandLength).
+					Msg("PROPOSED_FIX command exceeds max length, falling back to needs_attention")
+				return nil, OutcomeNeedsAttention
+			}
 		}
 
 		return &Fix{
 			ID:          uuid.New().String(),
 			Description: "Proposed fix from investigation",
-			Commands:    []string{command},
+			Commands:    commands,
 			TargetHost:  targetHost,
 			Rationale:   summary,
 		}, OutcomeFixQueued

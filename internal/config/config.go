@@ -576,10 +576,14 @@ type PMGInstance struct {
 // Global persistence instance for saving
 var globalPersistence *ConfigPersistence
 
+// defaultDataDir is the fallback config/data directory when PULSE_DATA_DIR is not set.
+// Kept as a var to allow tests to override without requiring /etc/pulse to exist.
+var defaultDataDir = "/etc/pulse"
+
 // Load reads configuration from encrypted persistence files
 func Load() (*Config, error) {
 	// Get data directory from environment
-	dataDir := "/etc/pulse"
+	dataDir := defaultDataDir
 	if dir := os.Getenv("PULSE_DATA_DIR"); dir != "" {
 		dataDir = dir
 	}

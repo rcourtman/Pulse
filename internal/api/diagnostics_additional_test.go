@@ -40,7 +40,7 @@ type proxmoxTestResponse struct {
 func newProxmoxTestServer(t *testing.T, responses map[string]proxmoxTestResponse) *httptest.Server {
 	t.Helper()
 
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp, ok := responses[r.URL.Path]
 		if !ok {
 			http.NotFound(w, r)

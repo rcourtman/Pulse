@@ -145,6 +145,17 @@ var webEnabledCategories = map[ServiceCategory]bool{
 // Used as fallback when service type is not in the defaults table.
 var commonWebPorts = []int{80, 443, 8080, 8443, 3000, 5000, 8000, 8888, 9000}
 
+const (
+	urlReasonServiceDefaultMatch = "service_default_match"
+	urlReasonServiceVariation    = "service_default_variation_match"
+	urlReasonWebPortInference    = "web_port_inference"
+	urlReasonNoDiscovery         = "no_discovery"
+	urlReasonNoHost              = "no_host"
+	urlReasonCategoryNotWeb      = "category_not_web_enabled"
+	urlReasonNoPortsDetected     = "no_ports_detected"
+	urlReasonNoCommonWebPort     = "no_common_web_ports"
+)
+
 // SuggestWebURL generates a suggested web interface URL for a discovered resource.
 // It uses service defaults when available, falling back to discovered ports.
 // Returns empty string if no suitable URL can be constructed.
@@ -153,13 +164,23 @@ var commonWebPorts = []int{80, 443, 8080, 8443, 3000, 5000, 8000, 8888, 9000}
 // uses internal container ports. However, this only affects unknown services not
 // in the defaults table - known services use their standard ports.
 func SuggestWebURL(discovery *ResourceDiscovery, hostIP string) string {
+	url, _, _ := suggestWebURLWithReason(discovery, hostIP)
+	return url
+}
+
+func suggestWebURLWithReason(discovery *ResourceDiscovery, hostIP string) (string, string, string) {
 	if discovery == nil || hostIP == "" {
-		return ""
+		switch {
+		case discovery == nil:
+			return "", urlReasonNoDiscovery, "missing discovery payload"
+		default:
+			return "", urlReasonNoHost, "no host or IP candidate available"
+		}
 	}
 
 	// Skip if category doesn't typically have web UI
 	if !webEnabledCategories[discovery.Category] && discovery.Category != CategoryUnknown {
-		return ""
+		return "", urlReasonCategoryNotWeb, fmt.Sprintf("service category %q is not typically web-facing", discovery.Category)
 	}
 
 	// Normalize service type for lookup
@@ -169,7 +190,7 @@ func SuggestWebURL(discovery *ResourceDiscovery, hostIP string) string {
 
 	// Try service defaults first
 	if defaults, ok := webServiceDefaults[serviceType]; ok {
-		return buildURL(defaults.Protocol, hostIP, defaults.Port, defaults.Path)
+		return buildURL(defaults.Protocol, hostIP, defaults.Port, defaults.Path), urlReasonServiceDefaultMatch, fmt.Sprintf("service default: %s", serviceType)
 	}
 
 	// Try variations of service type
@@ -181,7 +202,7 @@ func SuggestWebURL(discovery *ResourceDiscovery, hostIP string) string {
 	}
 	for _, variation := range variations {
 		if defaults, ok := webServiceDefaults[variation]; ok {
-			return buildURL(defaults.Protocol, hostIP, defaults.Port, defaults.Path)
+			return buildURL(defaults.Protocol, hostIP, defaults.Port, defaults.Path), urlReasonServiceVariation, fmt.Sprintf("normalized match: %s", variation)
 		}
 	}
 
@@ -194,13 +215,14 @@ func SuggestWebURL(discovery *ResourceDiscovery, hostIP string) string {
 				if port.Port == 443 || port.Port == 8443 {
 					protocol = "https"
 				}
-				return buildURL(protocol, hostIP, port.Port, "")
+				return buildURL(protocol, hostIP, port.Port, ""), urlReasonWebPortInference, fmt.Sprintf("detected web port %d/%s", port.Port, port.Protocol)
 			}
 		}
+		return "", urlReasonNoCommonWebPort, "no common web UI ports detected"
 	}
 
 	// No suitable URL could be determined
-	return ""
+	return "", urlReasonNoPortsDetected, "no detected ports for web UI inference"
 }
 
 // buildURL constructs a URL from components.

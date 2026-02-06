@@ -347,6 +347,12 @@ func TestHandleGetWebhooks(t *testing.T) {
 
 func TestHandleUpdateWebhooks(t *testing.T) {
 	handler := NewAuditHandlers()
+	// Make hostname resolution deterministic in tests.
+	prevResolve := resolveWebhookIPs
+	resolveWebhookIPs = func(ctx context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil // example.com
+	}
+	t.Cleanup(func() { resolveWebhookIPs = prevResolve })
 
 	// Test success
 	body := `{"urls": ["https://example.com/webhook"]}`

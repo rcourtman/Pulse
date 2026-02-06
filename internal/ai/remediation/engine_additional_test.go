@@ -121,6 +121,36 @@ func TestEngine_ListPlans_SkipsExpiredAndOrders(t *testing.T) {
 	}
 }
 
+func TestEngine_CreatePlan_ExpiresPriorPlansForFinding(t *testing.T) {
+	engine := NewEngine(DefaultEngineConfig())
+
+	plan1 := &RemediationPlan{
+		FindingID: "finding-1",
+		Title:     "p1",
+		Steps:     []RemediationStep{{Command: "echo one"}},
+	}
+	if err := engine.CreatePlan(plan1); err != nil {
+		t.Fatalf("create plan1 failed: %v", err)
+	}
+
+	plan2 := &RemediationPlan{
+		FindingID: "finding-1",
+		Title:     "p2",
+		Steps:     []RemediationStep{{Command: "echo two"}},
+	}
+	if err := engine.CreatePlan(plan2); err != nil {
+		t.Fatalf("create plan2 failed: %v", err)
+	}
+
+	plans := engine.ListPlans(10)
+	if len(plans) != 1 {
+		t.Fatalf("expected only the latest plan to remain active, got %d", len(plans))
+	}
+	if plans[0].Title != "p2" {
+		t.Fatalf("expected latest plan to be p2, got %q", plans[0].Title)
+	}
+}
+
 func TestEngine_GetPlanForFinding_SkipsExpired(t *testing.T) {
 	engine := NewEngine(DefaultEngineConfig())
 	expiredAt := time.Now().Add(-1 * time.Hour)

@@ -214,6 +214,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	}
 
 	start := time.Now()
+	runID := fmt.Sprintf("%d", start.UnixNano())
 	patrolType := "patrol"
 	GetPatrolMetrics().RecordRun(string(trigger), "full")
 
@@ -316,6 +317,8 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		return
 	} else {
 		p.clearBlockedReason()
+		// Ensure stream state is clean for this run before the first streamed event.
+		p.resetStreamForRun(runID)
 		// Run agentic AI analysis — the LLM uses tools to investigate and reports findings
 		aiResult, aiErr := p.runAIAnalysis(ctx, state, scope)
 		if aiErr != nil {
@@ -469,7 +472,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 
 	// Create run record
 	runRecord := PatrolRunRecord{
-		ID:                fmt.Sprintf("%d", start.UnixNano()),
+		ID:                runID,
 		StartedAt:         start,
 		CompletedAt:       completedAt,
 		Duration:          duration,
@@ -604,6 +607,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	}
 
 	start := time.Now()
+	runID := fmt.Sprintf("%d", start.UnixNano())
 	GetPatrolMetrics().RecordRun(string(scope.Reason), "scoped")
 	var runStats struct {
 		resourceCount     int
@@ -718,6 +722,10 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		return
 	} else {
 		p.clearBlockedReason()
+		if !scope.NoStream {
+			// Ensure stream state is clean for this run before the first streamed event.
+			p.resetStreamForRun(runID)
+		}
 		// Run agentic AI analysis on filtered state with scope
 		aiResult, aiErr := p.runAIAnalysis(ctx, filteredState, &scope)
 		if aiErr != nil {
@@ -775,7 +783,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	}
 
 	runRecord := PatrolRunRecord{
-		ID:                 fmt.Sprintf("%d", start.UnixNano()),
+		ID:                 runID,
 		StartedAt:          start,
 		CompletedAt:        completedAt,
 		Duration:           duration,
@@ -1085,27 +1093,90 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 
 // SubscribeToStream returns a channel that will receive streaming patrol events
 func (p *PatrolService) SubscribeToStream() chan PatrolStreamEvent {
+	return p.SubscribeToStreamFrom(0)
+}
+
+// SubscribeToStreamFrom subscribes a client to patrol streaming events and optionally replays
+// events with Seq > lastSeq (best-effort). This allows SSE clients to resume after disconnects
+// using the Last-Event-ID header.
+func (p *PatrolService) SubscribeToStreamFrom(lastSeq int64) chan PatrolStreamEvent {
 	ch := make(chan PatrolStreamEvent, 100) // Buffered to prevent blocking
 	sub := &streamSubscriber{ch: ch}
+	replayedCount := 0
+	snapshotReasons := make([]string, 0, 2)
+	snapshotReasonSeen := make(map[string]struct{}, 2)
 
 	p.streamMu.Lock()
 	p.streamSubscribers[ch] = sub
-	// Send current state to new subscriber (late joiner)
-	if p.streamPhase != "idle" {
-		// First send the current phase so UI can update its phase display
-		ch <- PatrolStreamEvent{
-			Type:  "phase",
-			Phase: p.streamPhase,
+
+	trySendSnapshot := func(reason string) bool {
+		if _, seen := snapshotReasonSeen[reason]; seen {
+			return true
 		}
-		// Then send any accumulated content
-		if p.currentOutput.Len() > 0 {
-			ch <- PatrolStreamEvent{
-				Type:    "content",
-				Content: p.currentOutput.String(),
+		snap := p.makeSnapshotLocked(reason)
+		select {
+		case ch <- snap:
+			snapshotReasonSeen[reason] = struct{}{}
+			snapshotReasons = append(snapshotReasons, reason)
+			return true
+		default:
+			return false
+		}
+	}
+
+	bufferStart, bufferEnd := p.streamBufferWindowLocked()
+	// If the client is behind the buffered window, proactively emit a snapshot that
+	// advertises truncation. (We may still replay what we have.)
+	if lastSeq > 0 && bufferStart > 0 && lastSeq < bufferStart && p.streamPhase != "idle" {
+		trySendSnapshot("buffer_rotated")
+	}
+
+	// Best-effort replay / snapshot:
+	// - If client provides lastSeq, replay newer buffered events (Seq > lastSeq).
+	// - If lastSeq is stale/ahead (e.g. from a different run), send a snapshot so UI can resync.
+	// - If no lastSeq, send a snapshot (late-joiner).
+	if lastSeq > 0 && len(p.streamEvents) > 0 {
+		events := p.streamEventsSinceLocked(lastSeq)
+	replayLoop:
+		for _, ev := range events {
+			select {
+			case ch <- ev:
+				replayedCount++
+			default:
+				// If subscriber can't catch up, stop replaying and let it receive live events.
+				break replayLoop
 			}
 		}
 	}
+	if replayedCount == 0 && len(snapshotReasons) == 0 && lastSeq > 0 && p.streamPhase != "idle" {
+		// lastSeq is likely stale (ahead of this run) or we're missing buffered events.
+		// Provide a snapshot to allow the UI to resync.
+		reason := "stale_last_event_id"
+		if bufferEnd > 0 && lastSeq > bufferEnd {
+			reason = "stale_last_event_id"
+		} else if bufferStart > 0 && lastSeq < bufferStart {
+			reason = "buffer_rotated"
+		}
+		trySendSnapshot(reason)
+	}
+	if lastSeq == 0 && p.streamPhase != "idle" {
+		trySendSnapshot("late_joiner")
+	}
 	p.streamMu.Unlock()
+
+	metrics := GetPatrolMetrics()
+	if replayedCount > 0 {
+		metrics.RecordStreamReplay(replayedCount)
+		log.Debug().Int64("last_seq", lastSeq).Int("replayed_events", replayedCount).Msg("Patrol stream replayed buffered events")
+	}
+	for _, reason := range snapshotReasons {
+		metrics.RecordStreamSnapshot(reason)
+		log.Debug().Int64("last_seq", lastSeq).Str("resync_reason", reason).Msg("Patrol stream sent synthetic snapshot")
+	}
+	if lastSeq > 0 && replayedCount == 0 && len(snapshotReasons) == 0 {
+		metrics.RecordStreamMiss()
+		log.Debug().Int64("last_seq", lastSeq).Msg("Patrol stream resume had no replay or snapshot")
+	}
 
 	return ch
 }
@@ -1130,14 +1201,44 @@ func (p *PatrolService) broadcast(event PatrolStreamEvent) {
 	p.streamMu.Lock()
 	defer p.streamMu.Unlock()
 
+	// Track a couple pieces of best-effort state for snapshots/resync.
+	switch event.Type {
+	case "tool_start":
+		if event.ToolName != "" {
+			p.streamCurrentTool = event.ToolName
+		}
+	case "tool_end":
+		p.streamCurrentTool = ""
+	}
+
+	// Bound payload sizes so streaming and replay buffers can't balloon due to a single tool
+	// output or oversized content chunk.
+	event = truncateStreamEvent(event)
+
+	// Decorate once so every subscriber sees identical meta.
+	event = p.decorateStreamEventLocked(event)
+	p.appendStreamEventLocked(event)
+
 	var staleChannels []chan PatrolStreamEvent
-	for ch := range p.streamSubscribers {
+	dropReasons := make(map[chan PatrolStreamEvent]string)
+	for ch, sub := range p.streamSubscribers {
+		if sub == nil || sub.closed.Load() {
+			staleChannels = append(staleChannels, ch)
+			dropReasons[ch] = "closed"
+			continue
+		}
 		select {
 		case ch <- event:
 			// Successfully sent
+			sub.fullCount = 0
 		default:
-			// Channel full - mark for removal (likely dead subscriber)
-			staleChannels = append(staleChannels, ch)
+			// Channel full. Tolerate bursts, but disconnect subscribers that are
+			// consistently unable to receive events (likely dead/slow clients).
+			sub.fullCount++
+			if sub.fullCount >= 25 {
+				staleChannels = append(staleChannels, ch)
+				dropReasons[ch] = "backpressure"
+			}
 		}
 	}
 
@@ -1145,9 +1246,121 @@ func (p *PatrolService) broadcast(event PatrolStreamEvent) {
 	for _, ch := range staleChannels {
 		sub := p.streamSubscribers[ch]
 		delete(p.streamSubscribers, ch)
+		reason := dropReasons[ch]
+		GetPatrolMetrics().RecordStreamSubscriberDrop(reason)
+		log.Debug().Str("reason", reason).Msg("Patrol stream subscriber dropped")
 		if sub != nil && sub.closed.CompareAndSwap(false, true) {
 			close(ch)
 		}
+	}
+}
+
+// resetStreamForRun resets stream state for a new run so late-joiners don't see stale output.
+// This should only be called for runs that will actually stream events (NoStream=false).
+func (p *PatrolService) resetStreamForRun(runID string) {
+	p.streamMu.Lock()
+	p.streamRunID = runID
+	p.streamSeq = 0
+	p.streamPhase = "idle"
+	p.streamCurrentTool = ""
+	p.currentOutput.Reset()
+	p.streamEvents = nil
+	p.streamMu.Unlock()
+}
+
+func (p *PatrolService) decorateStreamEventLocked(event PatrolStreamEvent) PatrolStreamEvent {
+	if event.RunID == "" {
+		event.RunID = p.streamRunID
+	}
+	if event.Seq == 0 {
+		p.streamSeq++
+		event.Seq = p.streamSeq
+	}
+	if event.TsMs == 0 {
+		event.TsMs = time.Now().UnixMilli()
+	}
+	return event
+}
+
+const patrolStreamReplayBufferSize = 200
+const patrolStreamMaxEventFieldBytes = 8 * 1024
+
+func truncateStreamEvent(event PatrolStreamEvent) PatrolStreamEvent {
+	event.Content = truncateStreamField(event.Content, patrolStreamMaxEventFieldBytes)
+	event.ToolInput = truncateStreamField(event.ToolInput, patrolStreamMaxEventFieldBytes)
+	event.ToolRawInput = truncateStreamField(event.ToolRawInput, patrolStreamMaxEventFieldBytes)
+	event.ToolOutput = truncateStreamField(event.ToolOutput, patrolStreamMaxEventFieldBytes)
+	return event
+}
+
+func truncateStreamField(s string, max int) string {
+	if max <= 0 || len(s) <= max {
+		return s
+	}
+	const suffix = "...[truncated]"
+	if max <= len(suffix) {
+		return s[:max]
+	}
+	return s[:max-len(suffix)] + suffix
+}
+
+func (p *PatrolService) appendStreamEventLocked(event PatrolStreamEvent) {
+	// Keep a bounded buffer for Last-Event-ID replay (best-effort).
+	p.streamEvents = append(p.streamEvents, event)
+	if len(p.streamEvents) > patrolStreamReplayBufferSize {
+		p.streamEvents = p.streamEvents[len(p.streamEvents)-patrolStreamReplayBufferSize:]
+	}
+}
+
+func (p *PatrolService) streamEventsSinceLocked(lastSeq int64) []PatrolStreamEvent {
+	// Seq is monotonic within a run; we reset buffer on new run.
+	for i := len(p.streamEvents) - 1; i >= 0; i-- {
+		if p.streamEvents[i].Seq <= lastSeq {
+			// Return events after i
+			out := make([]PatrolStreamEvent, len(p.streamEvents)-(i+1))
+			copy(out, p.streamEvents[i+1:])
+			return out
+		}
+	}
+	// All buffered events are newer
+	out := make([]PatrolStreamEvent, len(p.streamEvents))
+	copy(out, p.streamEvents)
+	return out
+}
+
+func (p *PatrolService) streamBufferWindowLocked() (start, end int64) {
+	if len(p.streamEvents) == 0 {
+		return 0, 0
+	}
+	return p.streamEvents[0].Seq, p.streamEvents[len(p.streamEvents)-1].Seq
+}
+
+func (p *PatrolService) makeSnapshotLocked(reason string) PatrolStreamEvent {
+	start, end := p.streamBufferWindowLocked()
+	phase := p.streamPhase
+	if phase == "idle" {
+		phase = ""
+	}
+	tr := p.currentOutput.Truncated()
+	var trPtr *bool
+	if tr {
+		trPtr = &tr
+	}
+	// Snapshot is synthetic and should not advance seq; use the most recent real event seq
+	// so clients can resume from a meaningful Last-Event-ID.
+	seq := end
+	return PatrolStreamEvent{
+		Type:             "snapshot",
+		RunID:            p.streamRunID,
+		Seq:              seq,
+		TsMs:             time.Now().UnixMilli(),
+		ResyncReason:     reason,
+		BufferStart:      start,
+		BufferEnd:        end,
+		ContentTruncated: trPtr,
+		Phase:            phase,
+		Content:          p.currentOutput.String(),
+		ToolName:         p.streamCurrentTool,
 	}
 }
 
@@ -1170,9 +1383,6 @@ func (p *PatrolService) setStreamPhase(phase string) {
 	p.streamMu.Lock()
 	oldPhase := p.streamPhase
 	p.streamPhase = phase
-	if phase == "idle" {
-		p.currentOutput.Reset()
-	}
 	p.streamMu.Unlock()
 
 	// Broadcast phase change (except for idle which just clears state)

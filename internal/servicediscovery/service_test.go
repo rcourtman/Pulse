@@ -409,6 +409,59 @@ func TestService_getResourceMetadata(t *testing.T) {
 	}
 }
 
+func TestService_getResourceExternalIP_Host(t *testing.T) {
+	state := StateSnapshot{
+		Hosts: []Host{
+			{ID: "agent-pve1", Hostname: "10.0.0.15"},
+		},
+		Nodes: []Node{
+			{ID: "node-1", Name: "pve-node-01"},
+		},
+	}
+
+	service := NewService(nil, nil, stubStateProvider{state: state}, DefaultConfig())
+
+	got := service.getResourceExternalIP(DiscoveryRequest{
+		ResourceType: ResourceTypeHost,
+		ResourceID:   "agent-pve1",
+		HostID:       "agent-pve1",
+		Hostname:     "ignored-hostname",
+	})
+	if got != "10.0.0.15" {
+		t.Fatalf("host lookup by ID = %q, want %q", got, "10.0.0.15")
+	}
+
+	got = service.getResourceExternalIP(DiscoveryRequest{
+		ResourceType: ResourceTypeHost,
+		ResourceID:   "node-1",
+		HostID:       "node-1",
+		Hostname:     "ignored-hostname",
+	})
+	if got != "pve-node-01" {
+		t.Fatalf("node fallback lookup = %q, want %q", got, "pve-node-01")
+	}
+
+	got = service.getResourceExternalIP(DiscoveryRequest{
+		ResourceType: ResourceTypeHost,
+		ResourceID:   "missing-host",
+		HostID:       "missing-host",
+		Hostname:     "valid-hostname.local",
+	})
+	if got != "valid-hostname.local" {
+		t.Fatalf("hostname fallback = %q, want %q", got, "valid-hostname.local")
+	}
+
+	got = service.getResourceExternalIP(DiscoveryRequest{
+		ResourceType: ResourceTypeHost,
+		ResourceID:   "missing-host",
+		HostID:       "host-id-fallback",
+		Hostname:     "Display Name With Spaces",
+	})
+	if got != "" {
+		t.Fatalf("invalid host fallback = %q, want empty", got)
+	}
+}
+
 func TestService_formatCLIAccessAndStatus(t *testing.T) {
 	service := NewService(nil, nil, nil, DefaultConfig())
 	formatted := service.formatCLIAccess(ResourceTypeDocker, "redis", "")
@@ -1014,6 +1067,43 @@ func TestService_Redirection(t *testing.T) {
 		t.Errorf("DiscoverResource HostID mismatch. Got %s, want agent-pve1", discovery.HostID)
 	}
 
+	// 1b. Hostname aliases should canonicalize to the same host agent ID and
+	// old alias records should be cleaned up so we keep one discovery per resource.
+	hostnameAliasID := MakeResourceID(ResourceTypeHost, "pve1-host", "pve1-host")
+	if err := store.Save(&ResourceDiscovery{
+		ID:           hostnameAliasID,
+		ResourceType: ResourceTypeHost,
+		HostID:       "pve1-host",
+		ResourceID:   "pve1-host",
+		ServiceName:  "Alias Entry",
+	}); err != nil {
+		t.Fatalf("failed to seed hostname alias discovery: %v", err)
+	}
+
+	discoveryFromHostname, err := service.DiscoverResource(ctx, DiscoveryRequest{
+		ResourceType: ResourceTypeHost,
+		HostID:       "pve1-host",
+		ResourceID:   "pve1-host",
+		Hostname:     "pve1-host",
+		Force:        true,
+	})
+	if err != nil {
+		t.Fatalf("DiscoverResource hostname alias error: %v", err)
+	}
+	if discoveryFromHostname == nil {
+		t.Fatalf("DiscoverResource hostname alias returned nil")
+	}
+	if discoveryFromHostname.ID != expectedID {
+		t.Errorf("hostname alias canonicalization failed. Got %s, want %s", discoveryFromHostname.ID, expectedID)
+	}
+	aliasAfter, err := store.Get(hostnameAliasID)
+	if err != nil {
+		t.Fatalf("failed to load hostname alias after canonicalization: %v", err)
+	}
+	if aliasAfter != nil {
+		t.Errorf("expected hostname alias discovery to be cleaned up, still found %s", hostnameAliasID)
+	}
+
 	// 2. Test GetDiscoveryByResource redirection (standard case)
 	// Try to get discovery using the PVE node name
 	got, err := service.GetDiscoveryByResource(ResourceTypeHost, "pve1", "pve1")
@@ -1027,6 +1117,18 @@ func TestService_Redirection(t *testing.T) {
 	// It should return the discovery we just created (which is under agent-pve1)
 	if got.ID != expectedID {
 		t.Errorf("GetDiscoveryByResource returned wrong discovery. Got ID %s, want %s", got.ID, expectedID)
+	}
+
+	// 2b. Hostname lookups should resolve to the same canonical discovery.
+	gotByHostname, err := service.GetDiscoveryByResource(ResourceTypeHost, "pve1-host", "pve1-host")
+	if err != nil {
+		t.Fatalf("GetDiscoveryByResource hostname lookup error: %v", err)
+	}
+	if gotByHostname == nil {
+		t.Fatalf("GetDiscoveryByResource hostname lookup returned nil")
+	}
+	if gotByHostname.ID != expectedID {
+		t.Errorf("GetDiscoveryByResource hostname lookup returned wrong discovery. Got ID %s, want %s", gotByHostname.ID, expectedID)
 	}
 
 	// 3. Test GetDiscoveryByResource fallback
@@ -1088,5 +1190,208 @@ func TestService_Redirection(t *testing.T) {
 	}
 	if !foundAgent {
 		t.Errorf("Deduplication failed: Agent discovery should be present")
+	}
+}
+
+func TestService_DiscoverResource_HostSuggestedURLFallbackForLinkedNode(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	state := StateSnapshot{
+		Nodes: []Node{
+			{
+				ID:                "pve-id-1",
+				Name:              "pve1",
+				LinkedHostAgentID: "agent-pve1",
+			},
+		},
+		Hosts: []Host{
+			{
+				ID:       "agent-pve1",
+				Hostname: "pve1-host",
+			},
+		},
+	}
+
+	service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+	service.SetAIAnalyzer(&stubAnalyzer{
+		response: `{"service_type":"unknown","service_name":"Linux Host","service_version":"","category":"unknown","cli_access":"ssh root@host","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.5,"reasoning":"metadata only"}`,
+	})
+
+	discovery, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeHost,
+		HostID:       "pve1",
+		ResourceID:   "pve1",
+		Force:        true,
+	})
+	if err != nil {
+		t.Fatalf("DiscoverResource error: %v", err)
+	}
+	if discovery == nil {
+		t.Fatalf("DiscoverResource returned nil discovery")
+	}
+	if discovery.SuggestedURL != "https://pve1-host:8006" {
+		t.Fatalf("unexpected suggested URL. got %q want %q", discovery.SuggestedURL, "https://pve1-host:8006")
+	}
+	if discovery.SuggestedURLSourceCode == "" {
+		t.Fatalf("expected URL suggestion source code")
+	}
+	if discovery.SuggestedURLSourceDetail == "" {
+		t.Fatalf("expected URL suggestion source detail")
+	}
+	if discovery.SuggestedURLDiagnostic != "" {
+		t.Fatalf("expected no URL suggestion diagnostic, got %q", discovery.SuggestedURLDiagnostic)
+	}
+}
+
+func TestService_DiscoverResource_URLSuggestionDiagnostics(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	service := NewService(store, nil, stubStateProvider{state: StateSnapshot{}}, DefaultConfig())
+	service.SetAIAnalyzer(&stubAnalyzer{
+		response: `{"service_type":"unknown","service_name":"Generic Host","service_version":"","category":"unknown","cli_access":"ssh root@host","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.6,"reasoning":"metadata-only identification"}`,
+	})
+
+	discovery, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeHost,
+		HostID:       "missing-host",
+		ResourceID:   "missing-host",
+		Hostname:     "Display Name With Spaces",
+		Force:        true,
+	})
+	if err != nil {
+		t.Fatalf("DiscoverResource error: %v", err)
+	}
+	if discovery == nil {
+		t.Fatalf("DiscoverResource returned nil discovery")
+	}
+	if discovery.SuggestedURL != "" {
+		t.Fatalf("expected no suggested URL, got %q", discovery.SuggestedURL)
+	}
+	if discovery.SuggestedURLDiagnostic != "no host or IP candidate available" {
+		t.Fatalf("expected URL suggestion diagnostic, got %q", discovery.SuggestedURLDiagnostic)
+	}
+}
+
+func TestService_DiscoverResource_URLSuggestionSource_Primary(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	state := StateSnapshot{
+		DockerHosts: []DockerHost{
+			{
+				AgentID:  "host1",
+				Hostname: "10.0.0.22",
+				Containers: []DockerContainer{
+					{Name: "web", Image: "nginx:latest", Status: "running"},
+				},
+			},
+		},
+	}
+
+	service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+	service.SetAIAnalyzer(&stubAnalyzer{
+		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec web nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"identified from image"}`,
+	})
+
+	discovery, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "web",
+		HostID:       "host1",
+		Hostname:     "10.0.0.22",
+		Force:        true,
+	})
+	if err != nil {
+		t.Fatalf("DiscoverResource error: %v", err)
+	}
+	if discovery == nil {
+		t.Fatalf("DiscoverResource returned nil discovery")
+	}
+	if discovery.SuggestedURL != "http://10.0.0.22" {
+		t.Fatalf("expected nginx default suggested URL, got %q", discovery.SuggestedURL)
+	}
+	if discovery.SuggestedURLSourceCode != "service_default_match" {
+		t.Fatalf("expected primary URL suggestion source code, got %q", discovery.SuggestedURLSourceCode)
+	}
+	if discovery.SuggestedURLSourceDetail == "" {
+		t.Fatalf("expected primary URL suggestion source detail")
+	}
+	if discovery.SuggestedURLDiagnostic != "" {
+		t.Fatalf("expected no URL diagnostic for successful suggestion, got %q", discovery.SuggestedURLDiagnostic)
+	}
+}
+
+func TestParseLegacyURLSuggestionReasoning(t *testing.T) {
+	reasoning := `[URL suggestion source: service_default_match (service default: nginx)] [URL suggestion unavailable: no host or IP candidate available] metadata-only discovery`
+	cleaned, code, detail, diagnostic := parseLegacyURLSuggestionReasoning(reasoning)
+
+	if cleaned != "metadata-only discovery" {
+		t.Fatalf("unexpected cleaned reasoning: got %q", cleaned)
+	}
+	if code != "service_default_match" {
+		t.Fatalf("unexpected source code: got %q", code)
+	}
+	if detail != "service default: nginx" {
+		t.Fatalf("unexpected source detail: got %q", detail)
+	}
+	if diagnostic != "no host or IP candidate available" {
+		t.Fatalf("unexpected diagnostic: got %q", diagnostic)
+	}
+}
+
+func TestService_DiscoverResource_ReturnsUpgradedCachedDiscovery(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	id := MakeResourceID(ResourceTypeDocker, "host1", "web")
+	legacy := &ResourceDiscovery{
+		ID:           id,
+		ResourceType: ResourceTypeDocker,
+		HostID:       "host1",
+		ResourceID:   "web",
+		ServiceType:  "nginx",
+		Category:     CategoryWebServer,
+		CLIAccess:    "docker exec web bash",
+		AIReasoning:  `[URL suggestion source: service_default_match (service default: nginx)] previous discovery`,
+		DiscoveredAt: time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := store.Save(legacy); err != nil {
+		t.Fatalf("save legacy discovery error: %v", err)
+	}
+
+	service := NewService(store, nil, nil, DefaultConfig())
+	got, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeDocker,
+		HostID:       "host1",
+		ResourceID:   "web",
+	})
+	if err != nil {
+		t.Fatalf("DiscoverResource cached error: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("DiscoverResource returned nil")
+	}
+	if got.SuggestedURLSourceCode != "service_default_match" {
+		t.Fatalf("expected structured source code from legacy reasoning, got %q", got.SuggestedURLSourceCode)
+	}
+	if got.SuggestedURLSourceDetail != "service default: nginx" {
+		t.Fatalf("expected structured source detail from legacy reasoning, got %q", got.SuggestedURLSourceDetail)
+	}
+	if got.AIReasoning != "previous discovery" {
+		t.Fatalf("expected cleaned AI reasoning without legacy URL note, got %q", got.AIReasoning)
 	}
 }

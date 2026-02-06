@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -88,7 +87,7 @@ func TestOIDCServiceAuthCodeURLIncludesPKCE(t *testing.T) {
 }
 
 func TestOIDCServiceExchangeCode(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -337,7 +336,7 @@ func TestOIDCServiceContextWithHTTPClientNil(t *testing.T) {
 }
 
 func TestOIDCServiceRefreshTokenKeepsOldRefresh(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"access_token":"access","token_type":"Bearer","expires_in":3600}`)
 	}))
@@ -361,7 +360,7 @@ func TestOIDCServiceRefreshTokenKeepsOldRefresh(t *testing.T) {
 }
 
 func TestOIDCServiceRefreshTokenReplacesRefresh(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"access_token":"access","refresh_token":"new-refresh","token_type":"Bearer","expires_in":3600}`)
 	}))
@@ -385,7 +384,7 @@ func TestOIDCServiceRefreshTokenReplacesRefresh(t *testing.T) {
 }
 
 func TestOIDCServiceExchangeCodeMissingVerifier(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		if strings.Contains(string(body), "code_verifier") {
 			w.WriteHeader(http.StatusBadRequest)

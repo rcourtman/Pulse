@@ -86,7 +86,7 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 		return nil
 	}, version)
 
-	srv := httptest.NewServer(router.Handler())
+	srv := newIPv4HTTPServer(t, router.Handler())
 	t.Cleanup(func() {
 		srv.Close()
 		if monitor != nil {

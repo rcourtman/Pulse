@@ -1061,25 +1061,9 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 // - Runs discovery only when fingerprint changed or discovery is too old
 // - Prevents duplicate concurrent discoveries for the same resource
 func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*ResourceDiscovery, error) {
-	// Redirect PVE node requests to linked host agent if available
-	// This ensures we always scan and store data under the canonical Host Agent ID
-	if req.ResourceType == ResourceTypeHost && s.stateProvider != nil {
-		state := s.stateProvider.GetState()
-		for _, node := range state.Nodes {
-			// Check if the requested ID matches the Node Name or ID
-			if node.Name == req.HostID || node.Name == req.ResourceID || node.ID == req.ResourceID {
-				if node.LinkedHostAgentID != "" {
-					log.Info().
-						Str("from_host", req.HostID).
-						Str("to_agent", node.LinkedHostAgentID).
-						Msg("Redirecting discovery scan to linked host agent")
-					req.HostID = node.LinkedHostAgentID
-					req.ResourceID = node.LinkedHostAgentID
-				}
-				break
-			}
-		}
-	}
+	originalReq := req
+	aliasIDs := []string{MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)}
+	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
 
 	resourceID := MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)
 
@@ -1122,6 +1106,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 
 	// Return cached discovery if still valid
 	if !needsDiscovery && existing != nil {
+		s.upgradeCLIAccessIfNeeded(existing)
 		log.Debug().Str("id", resourceID).Msg("Discovery still valid, returning cached")
 		return existing, nil
 	}
@@ -1302,12 +1287,46 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		}
 	}
 
-	// Suggest web interface URL based on service type and external IP
-	if s.stateProvider != nil {
-		if externalIP := s.getResourceExternalIP(req); externalIP != "" {
-			discovery.SuggestedURL = SuggestWebURL(discovery, externalIP)
+	// Suggest web interface URL based on service type and external IP.
+	// If no URL can be inferred, capture diagnostics for logs and UI.
+	urlSuggestionDiagnostic := ""
+	urlSuggestionSourceCode := ""
+	urlSuggestionSourceDetail := ""
+	if s.stateProvider == nil {
+		urlSuggestionDiagnostic = "state provider unavailable"
+	} else {
+		externalIP := s.getResourceExternalIP(req)
+		if externalIP == "" {
+			urlSuggestionDiagnostic = "no host or IP candidate available"
+		} else {
+			primaryURL, primaryCode, primaryDetail := suggestWebURLWithReason(discovery, externalIP)
+			discovery.SuggestedURL = primaryURL
+			if discovery.SuggestedURL != "" {
+				urlSuggestionSourceCode = primaryCode
+				urlSuggestionSourceDetail = primaryDetail
+			} else {
+				fallbackURL, fallbackCode, fallbackDetail := s.suggestHostManagementURLWithReason(req, externalIP)
+				discovery.SuggestedURL = fallbackURL
+				if discovery.SuggestedURL != "" {
+					urlSuggestionSourceCode = fallbackCode
+					urlSuggestionSourceDetail = fallbackDetail
+				} else {
+					urlSuggestionDiagnostic = formatURLSuggestionDiagnostic(primaryCode, primaryDetail, fallbackCode, fallbackDetail)
+					log.Debug().
+						Str("id", discovery.ID).
+						Str("resource_type", string(req.ResourceType)).
+						Str("host", externalIP).
+						Str("primary_reason_code", primaryCode).
+						Str("fallback_reason_code", fallbackCode).
+						Str("diagnostic", urlSuggestionDiagnostic).
+						Msg("Unable to infer suggested URL")
+				}
+			}
 		}
 	}
+	discovery.SuggestedURLSourceCode = urlSuggestionSourceCode
+	discovery.SuggestedURLSourceDetail = urlSuggestionSourceDetail
+	discovery.SuggestedURLDiagnostic = urlSuggestionDiagnostic
 
 	// Broadcast progress: Discovery complete
 	s.broadcastProgress(&DiscoveryProgress{
@@ -1322,10 +1341,92 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		inProg.err = fmt.Errorf("failed to save discovery: %w", err)
 		return nil, inProg.err
 	}
+	s.cleanupAliasedDiscoveries(resourceID, aliasIDs)
 
 	// Store result for any waiting goroutines
 	inProg.result = discovery
+	if originalReq != req {
+		log.Debug().
+			Str("original_id", MakeResourceID(originalReq.ResourceType, originalReq.HostID, originalReq.ResourceID)).
+			Str("canonical_id", resourceID).
+			Msg("Discovery request canonicalized")
+	}
 	return discovery, nil
+}
+
+// normalizeDiscoveryRequest resolves host discovery aliases to a canonical ID.
+// This prevents duplicate discoveries for the same physical host under different IDs.
+func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]string) DiscoveryRequest {
+	if req.ResourceType != ResourceTypeHost || s.stateProvider == nil {
+		return req
+	}
+	state := s.stateProvider.GetState()
+	addAlias := func(hostID, resourceID string) {
+		if hostID == "" || resourceID == "" {
+			return
+		}
+		id := MakeResourceID(ResourceTypeHost, hostID, resourceID)
+		for _, existing := range *aliasIDs {
+			if existing == id {
+				return
+			}
+		}
+		*aliasIDs = append(*aliasIDs, id)
+	}
+
+	for _, host := range state.Hosts {
+		if host.ID == req.HostID || host.ID == req.ResourceID || host.Hostname == req.HostID || host.Hostname == req.ResourceID || (req.Hostname != "" && host.Hostname == req.Hostname) {
+			addAlias(host.ID, host.ID)
+			addAlias(host.Hostname, host.Hostname)
+			if req.Hostname == "" {
+				req.Hostname = host.Hostname
+			}
+			req.HostID = host.ID
+			req.ResourceID = host.ID
+			return req
+		}
+	}
+
+	for _, node := range state.Nodes {
+		if node.Name == req.HostID || node.Name == req.ResourceID || node.ID == req.HostID || node.ID == req.ResourceID || (req.Hostname != "" && node.Name == req.Hostname) {
+			addAlias(node.Name, node.Name)
+			addAlias(node.ID, node.ID)
+			if req.Hostname == "" {
+				req.Hostname = node.Name
+			}
+			if node.LinkedHostAgentID != "" {
+				log.Info().
+					Str("from_host", req.HostID).
+					Str("to_agent", node.LinkedHostAgentID).
+					Msg("Redirecting discovery scan to linked host agent")
+				addAlias(node.LinkedHostAgentID, node.LinkedHostAgentID)
+				req.HostID = node.LinkedHostAgentID
+				req.ResourceID = node.LinkedHostAgentID
+				return req
+			}
+			req.HostID = node.Name
+			req.ResourceID = node.Name
+			return req
+		}
+	}
+
+	return req
+}
+
+func (s *Service) cleanupAliasedDiscoveries(canonicalID string, aliasIDs []string) {
+	seen := make(map[string]struct{}, len(aliasIDs))
+	for _, aliasID := range aliasIDs {
+		if aliasID == "" || aliasID == canonicalID {
+			continue
+		}
+		if _, ok := seen[aliasID]; ok {
+			continue
+		}
+		seen[aliasID] = struct{}{}
+		if err := s.store.Delete(aliasID); err != nil {
+			log.Debug().Err(err).Str("id", aliasID).Msg("Failed to clean up aliased discovery")
+		}
+	}
 }
 
 // getResourceMetadata retrieves metadata for a resource from the state.
@@ -1448,9 +1549,202 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 				}
 			}
 		}
+	case ResourceTypeHost:
+		// Host-agent resources: prefer the reported hostname from state
+		for _, host := range state.Hosts {
+			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == req.HostID || host.Hostname == req.HostID {
+				if isURLHostCandidate(host.Hostname) {
+					return host.Hostname
+				}
+			}
+		}
+
+		// Proxmox node resources routed through host discovery: fall back to node name
+		for _, node := range state.Nodes {
+			if node.ID == req.ResourceID || node.Name == req.ResourceID || node.ID == req.HostID || node.Name == req.HostID {
+				if isURLHostCandidate(node.Name) {
+					return node.Name
+				}
+			}
+		}
+
+		// Last-resort fallback from request values (when state snapshot doesn't have a direct match yet)
+		if isURLHostCandidate(req.Hostname) {
+			return req.Hostname
+		}
 	}
 
 	return ""
+}
+
+func isURLHostCandidate(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	// Reject obvious non-host labels (display names, paths, etc.)
+	if strings.ContainsAny(trimmed, " /\\") {
+		return false
+	}
+	return true
+}
+
+func formatURLSuggestionDiagnostic(primaryCode, primaryDetail, fallbackCode, fallbackDetail string) string {
+	parts := make([]string, 0, 2)
+	if primaryCode != "" {
+		if primaryDetail != "" {
+			parts = append(parts, fmt.Sprintf("primary=%s (%s)", primaryCode, primaryDetail))
+		} else {
+			parts = append(parts, "primary="+primaryCode)
+		}
+	}
+	if fallbackCode != "" {
+		if fallbackDetail != "" {
+			parts = append(parts, fmt.Sprintf("fallback=%s (%s)", fallbackCode, fallbackDetail))
+		} else {
+			parts = append(parts, "fallback="+fallbackCode)
+		}
+	}
+	if len(parts) == 0 {
+		return "no suggestion diagnostics available"
+	}
+	return strings.Join(parts, "; ")
+}
+
+const (
+	legacyURLSuggestionUnavailablePrefix = "[URL suggestion unavailable:"
+	legacyURLSuggestionSourcePrefix      = "[URL suggestion source:"
+)
+
+func parseLegacyURLSuggestionReasoning(reasoning string) (cleanedReasoning, sourceCode, sourceDetail, diagnostic string) {
+	cleaned := strings.TrimSpace(reasoning)
+	for {
+		changed := false
+		if note, next, ok := consumeLegacyURLSuggestionNote(cleaned, legacyURLSuggestionUnavailablePrefix); ok {
+			if diagnostic == "" {
+				diagnostic = note
+			}
+			cleaned = next
+			changed = true
+		}
+		if note, next, ok := consumeLegacyURLSuggestionNote(cleaned, legacyURLSuggestionSourcePrefix); ok {
+			if sourceCode == "" && sourceDetail == "" {
+				sourceCode, sourceDetail = parseLegacyURLSuggestionSource(note)
+			}
+			cleaned = next
+			changed = true
+		}
+		if !changed {
+			break
+		}
+	}
+	return cleaned, sourceCode, sourceDetail, diagnostic
+}
+
+func consumeLegacyURLSuggestionNote(text, prefix string) (note, remaining string, ok bool) {
+	trimmed := strings.TrimSpace(text)
+	if !strings.HasPrefix(trimmed, prefix) {
+		return "", text, false
+	}
+
+	closingBracket := strings.Index(trimmed, "]")
+	if closingBracket <= len(prefix) {
+		return "", text, false
+	}
+
+	note = strings.TrimSpace(trimmed[len(prefix):closingBracket])
+	remaining = strings.TrimSpace(trimmed[closingBracket+1:])
+	return note, remaining, true
+}
+
+func parseLegacyURLSuggestionSource(note string) (sourceCode, sourceDetail string) {
+	trimmed := strings.TrimSpace(note)
+	if trimmed == "" {
+		return "", ""
+	}
+	if strings.HasSuffix(trimmed, ")") {
+		if idx := strings.Index(trimmed, " ("); idx > 0 {
+			sourceCode = strings.TrimSpace(trimmed[:idx])
+			sourceDetail = strings.TrimSpace(trimmed[idx+2 : len(trimmed)-1])
+			if sourceCode != "" {
+				return sourceCode, sourceDetail
+			}
+		}
+	}
+	return trimmed, ""
+}
+
+// suggestHostManagementURL provides host-level fallback URL suggestions when
+// AI discovery does not identify a known web service.
+func (s *Service) suggestHostManagementURL(req DiscoveryRequest, host string) string {
+	url, _, _ := s.suggestHostManagementURLWithReason(req, host)
+	return url
+}
+
+func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host string) (string, string, string) {
+	if req.ResourceType != ResourceTypeHost {
+		return "", "host_fallback_not_applicable", "not a host resource"
+	}
+	if host == "" {
+		return "", "no_host", "no host or IP candidate available"
+	}
+	if s.stateProvider == nil {
+		return "", "state_provider_unavailable", "state unavailable"
+	}
+
+	state := s.stateProvider.GetState()
+
+	nodeMatchesReq := func(node Node) bool {
+		return node.ID == req.HostID ||
+			node.Name == req.HostID ||
+			node.ID == req.ResourceID ||
+			node.Name == req.ResourceID ||
+			(req.Hostname != "" && node.Name == req.Hostname)
+	}
+
+	var matchedHost *Host
+	for i := range state.Hosts {
+		h := &state.Hosts[i]
+		if h.ID == req.HostID || h.Hostname == req.HostID || h.ID == req.ResourceID || h.Hostname == req.ResourceID {
+			matchedHost = h
+			break
+		}
+	}
+
+	// Proxmox nodes (or host agents linked to nodes) should suggest the node UI.
+	for _, node := range state.Nodes {
+		if nodeMatchesReq(node) {
+			return buildURL("https", host, 8006, ""), "host_management_profile_proxmox_node", "Proxmox node profile"
+		}
+		if matchedHost != nil && node.LinkedHostAgentID != "" && node.LinkedHostAgentID == matchedHost.ID {
+			return buildURL("https", host, 8006, ""), "host_management_profile_linked_proxmox_node", "Linked Proxmox node profile"
+		}
+	}
+
+	if matchedHost == nil {
+		return "", "host_not_found_in_state", "host not found in state"
+	}
+
+	descriptor := strings.ToLower(strings.TrimSpace(strings.Join([]string{
+		matchedHost.OSName,
+		matchedHost.DisplayName,
+		matchedHost.Platform,
+	}, " ")))
+
+	switch {
+	case strings.Contains(descriptor, "proxmox backup"):
+		return buildURL("https", host, 8007, ""), "host_management_profile_pbs", "Proxmox Backup profile"
+	case strings.Contains(descriptor, "proxmox mail gateway"), strings.Contains(descriptor, "pmg"):
+		return buildURL("https", host, 8006, ""), "host_management_profile_pmg", "Proxmox Mail Gateway profile"
+	case strings.Contains(descriptor, "proxmox ve"), strings.Contains(descriptor, "proxmox"):
+		return buildURL("https", host, 8006, ""), "host_management_profile_pve", "Proxmox VE profile"
+	case strings.Contains(descriptor, "truenas"),
+		strings.Contains(descriptor, "unraid"),
+		strings.Contains(descriptor, "openmediavault"):
+		return buildURL("http", host, 80, ""), "host_management_profile_nas", "NAS management profile"
+	default:
+		return "", "host_platform_not_recognized", "unknown host management profile"
+	}
 }
 
 // formatCLIAccess formats the CLI access string with actual values.
@@ -1755,50 +2049,29 @@ func (s *Service) GetDiscovery(id string) (*ResourceDiscovery, error) {
 }
 
 func (s *Service) GetDiscoveryByResource(resourceType ResourceType, hostID, resourceID string) (*ResourceDiscovery, error) {
-	originalHostID := hostID
-	originalResourceID := resourceID
-	redirected := false
+	req := DiscoveryRequest{
+		ResourceType: resourceType,
+		HostID:       hostID,
+		ResourceID:   resourceID,
+	}
+	aliasIDs := []string{MakeResourceID(resourceType, hostID, resourceID)}
+	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
 
-	// Redirect PVE node lookups to linked host agent if available
-	// This ensures UI components looking up a PVE node by name (e.g. NodeDrawer) get the data associated with the Host Agent
-	if resourceType == ResourceTypeHost && s.stateProvider != nil {
-		state := s.stateProvider.GetState()
-		for _, node := range state.Nodes {
-			if node.Name == hostID || node.Name == resourceID || node.ID == resourceID {
-				if node.LinkedHostAgentID != "" {
-					log.Debug().
-						Str("from_host", hostID).
-						Str("to_agent", node.LinkedHostAgentID).
-						Msg("Redirecting discovery lookup to linked host agent")
-					hostID = node.LinkedHostAgentID
-					resourceID = node.LinkedHostAgentID
-					redirected = true
-				}
-				break
+	d, err := s.store.GetByResource(resourceType, req.HostID, req.ResourceID)
+	if err != nil || d == nil {
+		for _, aliasID := range aliasIDs {
+			if aliasID == "" {
+				continue
+			}
+			dAlias, errAlias := s.store.Get(aliasID)
+			if errAlias == nil && dAlias != nil {
+				s.upgradeCLIAccessIfNeeded(dAlias)
+				return dAlias, nil
 			}
 		}
-	}
-
-	d, err := s.store.GetByResource(resourceType, hostID, resourceID)
-	// If redirected and not found, try the original ID (fallback for unmigrated data)
-	if (err != nil || d == nil) && redirected {
-		log.Debug().
-			Str("redirected_host", hostID).
-			Str("original_host", originalHostID).
-			Msg("Redirected lookup failed, trying fallback to original ID")
-		dOriginal, errOriginal := s.store.GetByResource(resourceType, originalHostID, originalResourceID)
-		if errOriginal == nil && dOriginal != nil {
-			log.Debug().
-				Str("original_host", originalHostID).
-				Msg("Fallback lookup succeeded - returning legacy discovery")
-			s.upgradeCLIAccessIfNeeded(dOriginal)
-			return dOriginal, nil
-		}
-	}
-
-	if err != nil || d == nil {
 		return d, err
 	}
+
 	s.upgradeCLIAccessIfNeeded(d)
 	return d, nil
 }
@@ -1909,7 +2182,7 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 	return filtered
 }
 
-// upgradeDiscoveryIfNeeded upgrades cached discovery fields to current versions.
+// upgradeCLIAccessIfNeeded upgrades cached discovery fields to current versions.
 // This ensures cached discoveries get the new instructional CLI access format
 // and have hostname populated without requiring a full re-discovery.
 func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
@@ -1946,6 +2219,25 @@ func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
 				Str("hostname", hostname).
 				Msg("Populated missing hostname from state")
 		}
+	}
+
+	// Migrate legacy URL suggestion notes from AI reasoning into structured fields.
+	cleanedReasoning, sourceCode, sourceDetail, diagnostic := parseLegacyURLSuggestionReasoning(d.AIReasoning)
+	if d.SuggestedURLSourceCode == "" && sourceCode != "" {
+		d.SuggestedURLSourceCode = sourceCode
+		upgraded = true
+	}
+	if d.SuggestedURLSourceDetail == "" && sourceDetail != "" {
+		d.SuggestedURLSourceDetail = sourceDetail
+		upgraded = true
+	}
+	if d.SuggestedURLDiagnostic == "" && diagnostic != "" {
+		d.SuggestedURLDiagnostic = diagnostic
+		upgraded = true
+	}
+	if cleanedReasoning != d.AIReasoning {
+		d.AIReasoning = cleanedReasoning
+		upgraded = true
 	}
 
 	_ = upgraded // Suppress unused variable warning if logging is disabled

@@ -11617,8 +11617,16 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 			t.Fatal("expected restart loop alert to be raised initially")
 		}
 
-		// Wait for time window to pass
-		time.Sleep(1100 * time.Millisecond)
+		// Simulate time passing by shifting tracked restarts outside the configured window.
+		m.mu.Lock()
+		if rec, ok := m.dockerRestartTracking[resourceID]; ok {
+			past := time.Now().Add(-2 * time.Second)
+			for i := range rec.times {
+				rec.times[i] = past
+			}
+			rec.lastChecked = past
+		}
+		m.mu.Unlock()
 
 		// Check again with same restart count - old restarts should be cleaned up
 		m.CheckDockerHost(host)

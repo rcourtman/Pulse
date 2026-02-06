@@ -784,30 +784,6 @@ func TestCanCapturePublicURL_NilInputs(t *testing.T) {
 	}
 }
 
-func TestCapturePublicURLFromRequest_NilInputs(t *testing.T) {
-	t.Parallel()
-
-	t.Run("nil router", func(t *testing.T) {
-		var r *Router
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		// Should not panic
-		r.capturePublicURLFromRequest(req)
-	})
-
-	t.Run("nil request", func(t *testing.T) {
-		r := &Router{config: &config.Config{}}
-		// Should not panic
-		r.capturePublicURLFromRequest(nil)
-	})
-
-	t.Run("nil config", func(t *testing.T) {
-		r := &Router{config: nil}
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		// Should not panic
-		r.capturePublicURLFromRequest(req)
-	})
-}
-
 func TestHostAgentSearchCandidates(t *testing.T) {
 	t.Parallel()
 

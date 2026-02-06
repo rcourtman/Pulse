@@ -404,7 +404,7 @@ func newHostAgentHandlerForTests(t *testing.T, hosts ...models.Host) *HostAgentH
 	setUnexportedField(t, monitor, "state", state)
 
 	return &HostAgentHandlers{
-		legacyMonitor: monitor,
+		baseAgentHandlers: baseAgentHandlers{legacyMonitor: monitor},
 	}
 }
 

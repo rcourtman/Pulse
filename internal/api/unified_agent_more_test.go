@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 )
@@ -166,13 +165,6 @@ func TestDownloadUnifiedAgent_MethodNotAllowed(t *testing.T) {
 func TestDownloadUnifiedAgent_NoArchNotFound(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_BIN_DIR", tempDir)
-
-	if _, err := os.Stat("/opt/pulse/pulse-agent"); err == nil {
-		t.Skip("local /opt/pulse/pulse-agent exists; skipping")
-	}
-	if _, err := os.Stat("/app/pulse-agent"); err == nil {
-		t.Skip("local /app/pulse-agent exists; skipping")
-	}
 
 	router := &Router{projectRoot: tempDir}
 	req := httptest.NewRequest(http.MethodGet, "/download/pulse-agent", nil)

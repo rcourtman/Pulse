@@ -3,7 +3,6 @@ package notifications
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -28,7 +27,7 @@ func createTestNotificationManager(t *testing.T) *NotificationManager {
 func TestSecureWebhookClientRedirectLimit(t *testing.T) {
 	redirectCount := 0
 	// Create a server that always redirects to itself
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		redirectCount++
 		http.Redirect(w, r, r.URL.String()+"x", http.StatusFound)
 	}))
@@ -62,7 +61,7 @@ func TestSecureWebhookClientRedirectLimit(t *testing.T) {
 // localhost/private networks are blocked when not in allowlist.
 func TestSecureWebhookClientBlocksUnsafeRedirect(t *testing.T) {
 	// Create a server that redirects to localhost (allowlist 127.0.0.1 only, not 127.0.0.2)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Redirect to a different localhost IP that's not in our allowlist
 		http.Redirect(w, r, "http://127.0.0.2:8080/evil", http.StatusFound)
 	}))
@@ -100,7 +99,7 @@ func TestSecureWebhookClientBlocksPrivateNetworkRedirect(t *testing.T) {
 
 	for _, privateURL := range privateIPs {
 		t.Run(privateURL, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, privateURL, http.StatusFound)
 			}))
 			defer server.Close()
@@ -132,20 +131,20 @@ func TestSecureWebhookClientBlocksPrivateNetworkRedirect(t *testing.T) {
 func TestSecureWebhookClientAllowsValidRedirects(t *testing.T) {
 	// Create a chain of servers for redirect testing
 	// Final server returns 200 OK
-	finalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	finalServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("success"))
 	}))
 	defer finalServer.Close()
 
 	// Middle server redirects to final
-	middleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	middleServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, finalServer.URL, http.StatusFound)
 	}))
 	defer middleServer.Close()
 
 	// First server redirects to middle
-	firstServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	firstServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, middleServer.URL, http.StatusFound)
 	}))
 	defer firstServer.Close()
@@ -168,7 +167,7 @@ func TestSecureWebhookClientAllowsValidRedirects(t *testing.T) {
 // TestSecureWebhookClientBlocksLinkLocalRedirect verifies that redirects to
 // link-local addresses (169.254.x.x) are blocked.
 func TestSecureWebhookClientBlocksLinkLocalRedirect(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://169.254.169.254/latest/meta-data/", http.StatusFound)
 	}))
 	defer server.Close()
@@ -187,7 +186,7 @@ func TestSecureWebhookClientBlocksLinkLocalRedirect(t *testing.T) {
 }
 
 func TestSecureWebhookClientDialContextBlocksPrivateIP(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -208,7 +207,7 @@ func TestSecureWebhookClientDialContextBlocksPrivateIP(t *testing.T) {
 }
 
 func TestSecureWebhookClientDialContextBlocksHostnameWithoutAllowlist(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -232,7 +231,7 @@ func TestSecureWebhookClientDialContextBlocksHostnameWithoutAllowlist(t *testing
 }
 
 func TestSecureWebhookClientDialContextAllowsHostnameWithAllowlist(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()

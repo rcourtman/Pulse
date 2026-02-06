@@ -430,13 +430,11 @@ func TestPatrolService_SetStreamPhase(t *testing.T) {
 
 	ps.setStreamPhase("idle")
 
-	output, phase := ps.GetCurrentStreamOutput()
+	_, phase := ps.GetCurrentStreamOutput()
 	if phase != "idle" {
 		t.Errorf("Expected phase 'idle', got '%s'", phase)
 	}
-	if output != "" {
-		t.Errorf("Expected empty output after reset to idle, got '%s'", output)
-	}
+	// Output is no longer cleared on idle; it is cleared when a new run starts.
 }
 
 func TestPatrolService_GetCurrentStreamOutput(t *testing.T) {
@@ -715,15 +713,6 @@ func TestPatrolService_GetBaselineStore(t *testing.T) {
 	}
 }
 
-func TestPatrolService_SetMetricsHistoryProvider(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
-
-	// Set a nil provider (should not panic)
-	ps.SetMetricsHistoryProvider(nil)
-
-	// Verify it was set (field is internal, just checking no panic)
-}
-
 func TestJoinParts(t *testing.T) {
 	tests := []struct {
 		input    []string
@@ -965,15 +954,6 @@ func TestPatrolService_Stop(t *testing.T) {
 	default:
 		t.Error("Expected stop channel to be closed")
 	}
-}
-
-func TestPatrolService_SetKnowledgeStore(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
-
-	// Setting nil knowledge store should not panic
-	ps.SetKnowledgeStore(nil)
-
-	// Verify it was set (field is internal, just checking no panic)
 }
 
 // ========================================

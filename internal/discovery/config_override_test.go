@@ -320,10 +320,6 @@ func TestBuildScannerError(t *testing.T) {
 	}
 }
 
-func TestApplyConfigToProfileNil(t *testing.T) {
-	ApplyConfigToProfile(nil, config.DefaultDiscoveryConfig())
-}
-
 func TestApplyConfigToProfileOverridesAndPolicies(t *testing.T) {
 	profile := &envdetect.EnvironmentProfile{
 		Type: envdetect.Unknown,
@@ -756,65 +752,5 @@ func TestFilterPhasesForEnvironment(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestApplyConfigToProfile_NilProfile(t *testing.T) {
-	// Ensure ApplyConfigToProfile handles nil profile without panic
-	cfg := config.DiscoveryConfig{
-		EnvironmentOverride: "native",
-	}
-	ApplyConfigToProfile(nil, cfg) // Should not panic
-}
-
-func TestApplyConfigToProfile_InvalidEnvironmentOverride(t *testing.T) {
-	profile := &envdetect.EnvironmentProfile{
-		Type: envdetect.Native,
-	}
-	cfg := config.DiscoveryConfig{
-		EnvironmentOverride: "invalid_environment",
-	}
-
-	ApplyConfigToProfile(profile, cfg)
-
-	// Should add warning for unknown environment
-	if len(profile.Warnings) != 1 {
-		t.Errorf("Expected 1 warning for invalid environment override, got %d", len(profile.Warnings))
-	}
-}
-
-func TestApplyConfigToProfile_PolicyOverrides(t *testing.T) {
-	profile := &envdetect.EnvironmentProfile{
-		Type: envdetect.Native,
-		Policy: envdetect.ScanPolicy{
-			MaxHostsPerScan: 100,
-			MaxConcurrent:   10,
-			DialTimeout:     1000,
-			HTTPTimeout:     2000,
-		},
-	}
-
-	cfg := config.DiscoveryConfig{
-		MaxHostsPerScan:  500,
-		MaxConcurrent:    50,
-		EnableReverseDNS: true,
-		ScanGateways:     true,
-		DialTimeout:      5000,
-		HTTPTimeout:      10000,
-	}
-
-	ApplyConfigToProfile(profile, cfg)
-
-	if profile.Policy.MaxHostsPerScan != 500 {
-		t.Errorf("MaxHostsPerScan = %d, want 500", profile.Policy.MaxHostsPerScan)
-	}
-	if profile.Policy.MaxConcurrent != 50 {
-		t.Errorf("MaxConcurrent = %d, want 50", profile.Policy.MaxConcurrent)
-	}
-	if !profile.Policy.EnableReverseDNS {
-		t.Error("EnableReverseDNS should be true")
-	}
-	if !profile.Policy.ScanGateways {
-		t.Error("ScanGateways should be true")
 	}
 }

@@ -514,8 +514,8 @@ func TestFindingsStore_Add_UpdateExisting(t *testing.T) {
 	if stored.Title != "Updated Title" {
 		t.Errorf("Expected 'Updated Title', got %s", stored.Title)
 	}
-	if stored.TimesRaised != 1 {
-		t.Errorf("Expected TimesRaised=1, got %d", stored.TimesRaised)
+	if stored.TimesRaised != 2 {
+		t.Errorf("Expected TimesRaised=2, got %d", stored.TimesRaised)
 	}
 }
 

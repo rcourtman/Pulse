@@ -20,7 +20,7 @@ func TestHandleSecureAutoRegister_PVE(t *testing.T) {
 	}
 	handler := newTestConfigHandlers(t, cfg)
 
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()

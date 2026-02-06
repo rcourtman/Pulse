@@ -6,11 +6,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConfigWatcher_WatchForChanges_Live(t *testing.T) {
+	origEnv := debounceEnvWrite
+	origAPITokens := debounceAPITokensWrite
+	origMock := debounceMockWrite
+	debounceEnvWrite = 0
+	debounceAPITokensWrite = 0
+	debounceMockWrite = 0
+	t.Cleanup(func() {
+		debounceEnvWrite = origEnv
+		debounceAPITokensWrite = origAPITokens
+		debounceMockWrite = origMock
+	})
+
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, ".env")
 	apiTokensPath := filepath.Join(tempDir, "api_tokens.json")
@@ -38,9 +51,6 @@ func TestConfigWatcher_WatchForChanges_Live(t *testing.T) {
 	require.NoError(t, err)
 	defer cw.Stop()
 
-	// Give watcher time to start
-	time.Sleep(100 * time.Millisecond)
-
 	// 1. Test .env change
 	require.NoError(t, os.WriteFile(envPath, []byte("PULSE_AUTH_USER=something-different"), 0644))
 
@@ -48,7 +58,7 @@ func TestConfigWatcher_WatchForChanges_Live(t *testing.T) {
 		Mu.RLock()
 		defer Mu.RUnlock()
 		return cfg.AuthUser == "something-different"
-	}, 5*time.Second, 200*time.Millisecond)
+	}, 5*time.Second, 25*time.Millisecond)
 
 	// 2. Test api_tokens.json change
 	// Mock global persistence for API token reloads
@@ -79,26 +89,16 @@ func TestConfigWatcher_WatchForChanges_Live(t *testing.T) {
 }
 
 func TestConfigWatcher_WatchForChanges_ErrorHandling(t *testing.T) {
-	tempDir := t.TempDir()
-	envPath := filepath.Join(tempDir, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte(""), 0644))
+	cw := &ConfigWatcher{stopChan: make(chan struct{})}
 
-	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
-	cfg := &Config{}
-	cw, err := NewConfigWatcher(cfg)
-	require.NoError(t, err)
+	events := make(chan fsnotify.Event)
+	errors := make(chan error, 1)
+	errors <- os.ErrPermission
+	close(errors)
+	close(events)
 
-	// Inject error into watcher channel
-	go func() {
-		cw.watcher.Errors <- os.ErrPermission
-	}()
-
-	// Start normally but we want to see it Doesn't crash on error
-	go cw.watchForChanges()
-	defer cw.Stop()
-
-	// Wait a bit to ensure loop handles error
-	time.Sleep(100 * time.Millisecond)
+	// Should return cleanly even when error channel yields values.
+	cw.handleEvents(events, errors)
 }
 
 func TestConfigWatcher_CalculateFileHash_NotFound(t *testing.T) {

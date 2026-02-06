@@ -195,30 +195,11 @@ func writeMultiTenantDisabledError(w http.ResponseWriter) {
 	})
 }
 
-// CheckMultiTenantLicense checks if multi-tenant is licensed for the given org ID.
+// CheckMultiTenantLicense checks if multi-tenant is enabled and licensed for the given org ID.
 // Returns true if:
 // - The org ID is "default" or empty (always allowed)
 // - The feature flag is enabled AND the multi-tenant feature is licensed
-// Deprecated: Use CheckMultiTenantLicenseWithContext for proper per-tenant license checking.
-func CheckMultiTenantLicense(orgID string) bool {
-	if orgID == "" || orgID == "default" {
-		return true
-	}
-	// Feature flag must be enabled
-	if !multiTenantEnabled {
-		return false
-	}
-	// Without context, we can't look up the per-tenant license service properly.
-	// Fall back to a new service (won't have persisted license).
-	return license.NewService().HasFeature(license.FeatureMultiTenant)
-}
-
-// CheckMultiTenantLicenseWithContext checks if multi-tenant is enabled and licensed
-// using the proper per-tenant license service from the context.
-// Returns true if:
-// - The org ID is "default" or empty (always allowed)
-// - The feature flag is enabled AND the multi-tenant feature is licensed
-func CheckMultiTenantLicenseWithContext(ctx context.Context, orgID string) bool {
+func CheckMultiTenantLicense(ctx context.Context, orgID string) bool {
 	if orgID == "" || orgID == "default" {
 		return true
 	}

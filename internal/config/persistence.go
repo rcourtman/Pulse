@@ -231,6 +231,67 @@ func (c *ConfigPersistence) writeConfigFileLocked(path string, data []byte, perm
 	return nil
 }
 
+// saveJSON is a generic helper that marshals data to JSON, optionally encrypts,
+// and writes to file. Caller must NOT already hold c.mu.
+func saveJSON[T any](c *ConfigPersistence, filePath string, data T, encrypt bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if encrypt && c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(jsonData)
+		if err != nil {
+			return err
+		}
+		jsonData = encrypted
+	}
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	return c.writeConfigFileLocked(filePath, jsonData, 0600)
+}
+
+// loadSlice is a generic helper that reads a JSON file, optionally decrypts,
+// and unmarshals into a slice of T. Returns an empty slice if the file doesn't
+// exist or is empty. Caller must NOT already hold c.mu.
+func loadSlice[T any](c *ConfigPersistence, filePath string, decrypt bool) ([]T, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := c.fs.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []T{}, nil
+		}
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return []T{}, nil
+	}
+
+	if decrypt && c.crypto != nil {
+		if decrypted, err := c.crypto.Decrypt(data); err == nil {
+			data = decrypted
+		} else {
+			log.Warn().Err(err).Str("file", filePath).Msg("Failed to decrypt config - falling back to plaintext")
+		}
+	}
+
+	var result []T
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 // LoadAPITokens loads API token metadata from disk.
 func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 	c.mu.RLock()
@@ -262,44 +323,12 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 
 // LoadEnvTokenSuppressions loads the list of suppressed env token hashes.
 func (c *ConfigPersistence) LoadEnvTokenSuppressions() ([]string, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	data, err := c.fs.ReadFile(c.envTokenSuppressionsFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []string{}, nil
-	}
-
-	var hashes []string
-	if err := json.Unmarshal(data, &hashes); err != nil {
-		return nil, err
-	}
-
-	return hashes, nil
+	return loadSlice[string](c, c.envTokenSuppressionsFile, false)
 }
 
 // SaveEnvTokenSuppressions persists the suppressed env token hashes to disk.
 func (c *ConfigPersistence) SaveEnvTokenSuppressions(hashes []string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	data, err := json.Marshal(hashes)
-	if err != nil {
-		return err
-	}
-
-	return c.writeConfigFileLocked(c.envTokenSuppressionsFile, data, 0600)
+	return saveJSON(c, c.envTokenSuppressionsFile, hashes, false)
 }
 
 // SaveAPITokens persists API token metadata to disk.
@@ -1862,6 +1891,7 @@ type AIFindingRecord struct {
 	LastSeenAt     time.Time  `json:"last_seen_at"`
 	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
 	AutoResolved   bool       `json:"auto_resolved"`
+	ResolveReason  string     `json:"resolve_reason,omitempty"`
 	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
 	SnoozedUntil   *time.Time `json:"snoozed_until,omitempty"`
 	AlertID        string     `json:"alert_id,omitempty"`
@@ -1877,6 +1907,17 @@ type AIFindingRecord struct {
 	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`
 	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`
 	InvestigationAttempts  int        `json:"investigation_attempts"`
+	LoopState              string     `json:"loop_state,omitempty"`
+	Lifecycle              []struct {
+		At       time.Time         `json:"at"`
+		Type     string            `json:"type"`
+		Message  string            `json:"message,omitempty"`
+		From     string            `json:"from,omitempty"`
+		To       string            `json:"to,omitempty"`
+		Metadata map[string]string `json:"metadata,omitempty"`
+	} `json:"lifecycle,omitempty"`
+	RegressionCount  int        `json:"regression_count,omitempty"`
+	LastRegressionAt *time.Time `json:"last_regression_at,omitempty"`
 }
 
 // SaveAIFindings persists AI findings to disk
@@ -2368,282 +2409,52 @@ func (c *ConfigPersistence) LoadDockerMetadata() (*DockerMetadataStore, error) {
 
 // LoadAgentProfiles loads agent profiles from file
 func (c *ConfigPersistence) LoadAgentProfiles() ([]models.AgentProfile, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	data, err := c.fs.ReadFile(c.agentProfilesFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.AgentProfile{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []models.AgentProfile{}, nil
-	}
-
-	if c.crypto != nil {
-		if decrypted, err := c.crypto.Decrypt(data); err == nil {
-			data = decrypted
-		} else {
-			log.Warn().Err(err).Msg("Failed to decrypt agent profiles - falling back to plaintext")
-		}
-	}
-
-	var profiles []models.AgentProfile
-	if err := json.Unmarshal(data, &profiles); err != nil {
-		return nil, err
-	}
-
-	return profiles, nil
+	return loadSlice[models.AgentProfile](c, c.agentProfilesFile, true)
 }
 
 // SaveAgentProfiles saves agent profiles to file
 func (c *ConfigPersistence) SaveAgentProfiles(profiles []models.AgentProfile) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.MarshalIndent(profiles, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return err
-		}
-		data = encrypted
-	}
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	return c.writeConfigFileLocked(c.agentProfilesFile, data, 0600)
+	return saveJSON(c, c.agentProfilesFile, profiles, true)
 }
 
 // LoadAgentProfileAssignments loads agent profile assignments from file
 func (c *ConfigPersistence) LoadAgentProfileAssignments() ([]models.AgentProfileAssignment, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	data, err := c.fs.ReadFile(c.agentAssignmentsFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.AgentProfileAssignment{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []models.AgentProfileAssignment{}, nil
-	}
-
-	if c.crypto != nil {
-		if decrypted, err := c.crypto.Decrypt(data); err == nil {
-			data = decrypted
-		} else {
-			log.Warn().Err(err).Msg("Failed to decrypt agent profile assignments - falling back to plaintext")
-		}
-	}
-
-	var assignments []models.AgentProfileAssignment
-	if err := json.Unmarshal(data, &assignments); err != nil {
-		return nil, err
-	}
-
-	return assignments, nil
+	return loadSlice[models.AgentProfileAssignment](c, c.agentAssignmentsFile, true)
 }
 
 // SaveAgentProfileAssignments saves agent profile assignments to file
 func (c *ConfigPersistence) SaveAgentProfileAssignments(assignments []models.AgentProfileAssignment) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.MarshalIndent(assignments, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return err
-		}
-		data = encrypted
-	}
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	return c.writeConfigFileLocked(c.agentAssignmentsFile, data, 0600)
+	return saveJSON(c, c.agentAssignmentsFile, assignments, true)
 }
 
 // LoadAgentProfileVersions loads profile version history from file
 func (c *ConfigPersistence) LoadAgentProfileVersions() ([]models.AgentProfileVersion, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	filePath := filepath.Join(c.configDir, "profile-versions.json")
-	data, err := c.fs.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.AgentProfileVersion{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []models.AgentProfileVersion{}, nil
-	}
-
-	if c.crypto != nil {
-		if decrypted, err := c.crypto.Decrypt(data); err == nil {
-			data = decrypted
-		} else {
-			log.Warn().Err(err).Msg("Failed to decrypt agent profile versions - falling back to plaintext")
-		}
-	}
-
-	var versions []models.AgentProfileVersion
-	if err := json.Unmarshal(data, &versions); err != nil {
-		return nil, err
-	}
-
-	return versions, nil
+	return loadSlice[models.AgentProfileVersion](c, filepath.Join(c.configDir, "profile-versions.json"), true)
 }
 
 // SaveAgentProfileVersions saves profile version history to file
 func (c *ConfigPersistence) SaveAgentProfileVersions(versions []models.AgentProfileVersion) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.MarshalIndent(versions, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return err
-		}
-		data = encrypted
-	}
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	filePath := filepath.Join(c.configDir, "profile-versions.json")
-	return c.writeConfigFileLocked(filePath, data, 0600)
+	return saveJSON(c, filepath.Join(c.configDir, "profile-versions.json"), versions, true)
 }
 
 // LoadProfileDeploymentStatus loads deployment status from file
 func (c *ConfigPersistence) LoadProfileDeploymentStatus() ([]models.ProfileDeploymentStatus, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	filePath := filepath.Join(c.configDir, "profile-deployments.json")
-	data, err := c.fs.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.ProfileDeploymentStatus{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []models.ProfileDeploymentStatus{}, nil
-	}
-
-	if c.crypto != nil {
-		if decrypted, err := c.crypto.Decrypt(data); err == nil {
-			data = decrypted
-		} else {
-			log.Warn().Err(err).Msg("Failed to decrypt profile deployment status - falling back to plaintext")
-		}
-	}
-
-	var status []models.ProfileDeploymentStatus
-	if err := json.Unmarshal(data, &status); err != nil {
-		return nil, err
-	}
-
-	return status, nil
+	return loadSlice[models.ProfileDeploymentStatus](c, filepath.Join(c.configDir, "profile-deployments.json"), true)
 }
 
 // SaveProfileDeploymentStatus saves deployment status to file
 func (c *ConfigPersistence) SaveProfileDeploymentStatus(status []models.ProfileDeploymentStatus) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.MarshalIndent(status, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return err
-		}
-		data = encrypted
-	}
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	filePath := filepath.Join(c.configDir, "profile-deployments.json")
-	return c.writeConfigFileLocked(filePath, data, 0600)
+	return saveJSON(c, filepath.Join(c.configDir, "profile-deployments.json"), status, true)
 }
 
 // LoadProfileChangeLogs loads change logs from file
 func (c *ConfigPersistence) LoadProfileChangeLogs() ([]models.ProfileChangeLog, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	filePath := filepath.Join(c.configDir, "profile-changelog.json")
-	data, err := c.fs.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.ProfileChangeLog{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []models.ProfileChangeLog{}, nil
-	}
-
-	var logs []models.ProfileChangeLog
-	if err := json.Unmarshal(data, &logs); err != nil {
-		return nil, err
-	}
-
-	return logs, nil
+	return loadSlice[models.ProfileChangeLog](c, filepath.Join(c.configDir, "profile-changelog.json"), false)
 }
 
 // SaveProfileChangeLogs saves change logs to file
 func (c *ConfigPersistence) SaveProfileChangeLogs(logs []models.ProfileChangeLog) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.MarshalIndent(logs, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	filePath := filepath.Join(c.configDir, "profile-changelog.json")
-	return c.writeConfigFileLocked(filePath, data, 0600)
+	return saveJSON(c, filepath.Join(c.configDir, "profile-changelog.json"), logs, false)
 }
 
 // AppendProfileChangeLog adds a new entry to the change log

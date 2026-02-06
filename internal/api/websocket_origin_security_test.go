@@ -21,7 +21,7 @@ func newWebSocketRouter(t *testing.T, allowedOrigins []string, tokenRecord confi
 	go hub.Run()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	server := httptest.NewServer(router.Handler())
+	server := newIPv4HTTPServer(t, router.Handler())
 
 	cleanup := func() {
 		server.Close()

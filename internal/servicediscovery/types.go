@@ -102,7 +102,10 @@ type ResourceDiscovery struct {
 	RawCommandOutput map[string]string `json:"raw_command_output,omitempty"`
 
 	// Auto-suggested web interface URL based on service type and discovered ports
-	SuggestedURL string `json:"suggested_url,omitempty"`
+	SuggestedURL             string `json:"suggested_url,omitempty"`
+	SuggestedURLSourceCode   string `json:"suggested_url_source_code,omitempty"`
+	SuggestedURLSourceDetail string `json:"suggested_url_source_detail,omitempty"`
+	SuggestedURLDiagnostic   string `json:"suggested_url_diagnostic,omitempty"`
 }
 
 // DiscoveryFact represents a single discovered fact about a resource.

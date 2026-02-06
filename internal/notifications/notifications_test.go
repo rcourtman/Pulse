@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -257,7 +256,7 @@ func TestSendGroupedAppriseHTTP(t *testing.T) {
 	requests := make(chan capturedRequest, 1)
 	errs := make(chan error, 1)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
 		body, err := io.ReadAll(r.Body)
@@ -787,7 +786,7 @@ func TestSendTestNotificationAppriseHTTP(t *testing.T) {
 
 	requests := make(chan apprisePayload, 1)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
 		body, err := io.ReadAll(r.Body)
@@ -2711,33 +2710,11 @@ func TestSendHTMLEmailWithError_ExistingEmailManager(t *testing.T) {
 	}
 }
 
-func TestSendNotificationsDirect_AllDisabled(t *testing.T) {
-	nm := &NotificationManager{}
-
-	emailConfig := EmailConfig{Enabled: false}
-	webhooks := []WebhookConfig{}
-	appriseConfig := AppriseConfig{Enabled: false}
-	alertList := []*alerts.Alert{}
-
-	// Should complete without panic - all notification channels disabled
-	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
-}
-
-func TestSendNotificationsDirect_WebhookDisabled(t *testing.T) {
-	nm := &NotificationManager{}
-
-	emailConfig := EmailConfig{Enabled: false}
-	webhooks := []WebhookConfig{
-		{Name: "test", Enabled: false, URL: "http://example.com"},
-	}
-	appriseConfig := AppriseConfig{Enabled: false}
-	alertList := []*alerts.Alert{}
-
-	// Should skip disabled webhook without panic
-	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
-}
-
 func TestSendNotificationsDirect_MultipleWebhooks(t *testing.T) {
+	origSpawn := spawnAsync
+	spawnAsync = func(func()) {}
+	t.Cleanup(func() { spawnAsync = origSpawn })
+
 	nm := &NotificationManager{}
 
 	emailConfig := EmailConfig{Enabled: false}
@@ -2751,46 +2728,6 @@ func TestSendNotificationsDirect_MultipleWebhooks(t *testing.T) {
 
 	// Should iterate all webhooks, launching goroutines for enabled ones
 	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
-	// Goroutines will fail but shouldn't panic
-}
-
-func TestSendNotificationsDirect_EmailEnabled(t *testing.T) {
-	nm := &NotificationManager{}
-
-	// Enable email with invalid host - will fail send but covers code path
-	emailConfig := EmailConfig{
-		Enabled:  true,
-		SMTPHost: "invalid.localhost.test",
-		SMTPPort: 25,
-		To:       []string{"test@example.com"},
-	}
-	webhooks := []WebhookConfig{}
-	appriseConfig := AppriseConfig{Enabled: false}
-	alertList := []*alerts.Alert{}
-
-	// Should enter the email enabled branch and log, goroutine will fail silently
-	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
-	// Allow goroutine to start
-	time.Sleep(10 * time.Millisecond)
-}
-
-func TestSendNotificationsDirect_AppriseEnabled(t *testing.T) {
-	nm := &NotificationManager{}
-
-	emailConfig := EmailConfig{Enabled: false}
-	webhooks := []WebhookConfig{}
-	// Enable apprise with invalid config - will fail send but covers code path
-	appriseConfig := AppriseConfig{
-		Enabled:   true,
-		ServerURL: "http://invalid.localhost.test/apprise",
-		Targets:   []string{"mailto://test@example.com"},
-	}
-	alertList := []*alerts.Alert{}
-
-	// Should enter the apprise enabled branch
-	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
-	// Allow goroutine to start
-	time.Sleep(10 * time.Millisecond)
 }
 
 func TestProcessQueuedNotification_InvalidEmailConfig(t *testing.T) {
@@ -3159,7 +3096,7 @@ func TestSendResolvedAlert(t *testing.T) {
 
 	// Use a mock captured channel for webhooks
 	webhookHits := make(chan string, 1)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		webhookHits <- string(body)
 		w.WriteHeader(http.StatusOK)
@@ -3210,7 +3147,7 @@ func TestSendResolvedWebhook(t *testing.T) {
 	nm := NewNotificationManager("https://pulse.local")
 	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -3249,7 +3186,7 @@ func TestSendTestWebhook(t *testing.T) {
 	nm := NewNotificationManager("https://pulse.local")
 	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -3264,18 +3201,6 @@ func TestSendTestWebhook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SendTestWebhook failed: %v", err)
 	}
-}
-
-func TestSendEmail(t *testing.T) {
-	nm := NewNotificationManager("")
-	// Void function, just ensure no panic
-	nm.sendEmail(&alerts.Alert{ID: "test"})
-}
-
-func TestSendHTMLEmail(t *testing.T) {
-	nm := NewNotificationManager("")
-	// Void function, just ensure no panic
-	nm.sendHTMLEmail("subject", "html", "text", EmailConfig{Enabled: false})
 }
 
 func TestSendTestNotificationWithConfig(t *testing.T) {

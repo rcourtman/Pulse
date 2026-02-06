@@ -323,6 +323,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/storage/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorage)))
 	r.mux.HandleFunc("/api/storage-charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorageCharts)))
 	r.mux.HandleFunc("/api/charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleCharts)))
+	r.mux.HandleFunc("/api/charts/infrastructure", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleInfrastructureCharts)))
+	r.mux.HandleFunc("/api/charts/infrastructure-summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleInfrastructureSummaryCharts)))
 	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
 	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsHistory)))
 	r.mux.HandleFunc("/api/diagnostics", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleDiagnostics)))
@@ -2346,6 +2348,23 @@ func (r *Router) StartPatrol(ctx context.Context) {
 		patrol := r.aiSettingsHandler.GetAIService(ctx).GetPatrolService()
 		if patrol != nil {
 			if unifiedStore := r.aiSettingsHandler.GetUnifiedStore(); unifiedStore != nil {
+				toUnifiedLifecycle := func(events []ai.FindingLifecycleEvent) []unified.UnifiedFindingLifecycleEvent {
+					if len(events) == 0 {
+						return nil
+					}
+					out := make([]unified.UnifiedFindingLifecycleEvent, 0, len(events))
+					for _, e := range events {
+						out = append(out, unified.UnifiedFindingLifecycleEvent{
+							At:       e.At,
+							Type:     e.Type,
+							Message:  e.Message,
+							From:     e.From,
+							To:       e.To,
+							Metadata: e.Metadata,
+						})
+					}
+					return out
+				}
 				patrol.SetUnifiedFindingCallback(func(f *ai.Finding) bool {
 					// Convert ai.Finding to unified.UnifiedFinding
 					uf := &unified.UnifiedFinding{
@@ -2363,11 +2382,16 @@ func (r *Router) StartPatrol(ctx context.Context) {
 						Evidence:               f.Evidence,
 						DetectedAt:             f.DetectedAt,
 						LastSeenAt:             f.LastSeenAt,
+						ResolvedAt:             f.ResolvedAt,
 						InvestigationSessionID: f.InvestigationSessionID,
 						InvestigationStatus:    f.InvestigationStatus,
 						InvestigationOutcome:   f.InvestigationOutcome,
 						LastInvestigatedAt:     f.LastInvestigatedAt,
 						InvestigationAttempts:  f.InvestigationAttempts,
+						LoopState:              f.LoopState,
+						Lifecycle:              toUnifiedLifecycle(f.Lifecycle),
+						RegressionCount:        f.RegressionCount,
+						LastRegressionAt:       f.LastRegressionAt,
 						AcknowledgedAt:         f.AcknowledgedAt,
 						SnoozedUntil:           f.SnoozedUntil,
 						DismissedReason:        f.DismissedReason,
@@ -2406,11 +2430,16 @@ func (r *Router) StartPatrol(ctx context.Context) {
 							Evidence:               f.Evidence,
 							DetectedAt:             f.DetectedAt,
 							LastSeenAt:             f.LastSeenAt,
+							ResolvedAt:             f.ResolvedAt,
 							InvestigationSessionID: f.InvestigationSessionID,
 							InvestigationStatus:    f.InvestigationStatus,
 							InvestigationOutcome:   f.InvestigationOutcome,
 							LastInvestigatedAt:     f.LastInvestigatedAt,
 							InvestigationAttempts:  f.InvestigationAttempts,
+							LoopState:              f.LoopState,
+							Lifecycle:              toUnifiedLifecycle(f.Lifecycle),
+							RegressionCount:        f.RegressionCount,
+							LastRegressionAt:       f.LastRegressionAt,
 							AcknowledgedAt:         f.AcknowledgedAt,
 							SnoozedUntil:           f.SnoozedUntil,
 							DismissedReason:        f.DismissedReason,
@@ -5039,6 +5068,7 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 // handleCharts handles chart data requests
 func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	log.Debug().Str("method", req.Method).Str("url", req.URL.String()).Msg("Charts endpoint hit")
+	const inMemoryChartThreshold = 2 * time.Hour
 
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -5052,36 +5082,17 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		timeRange = "1h"
 	}
 
-	// Convert time range to duration
-	var duration time.Duration
-	switch timeRange {
-	case "5m":
-		duration = 5 * time.Minute
-	case "15m":
-		duration = 15 * time.Minute
-	case "30m":
-		duration = 30 * time.Minute
-	case "1h":
-		duration = time.Hour
-	case "4h":
-		duration = 4 * time.Hour
-	case "8h":
-		duration = 8 * time.Hour
-	case "12h":
-		duration = 12 * time.Hour
-	case "24h":
-		duration = 24 * time.Hour
-	case "7d":
-		duration = 7 * 24 * time.Hour
-	case "30d":
-		duration = 30 * 24 * time.Hour
-	default:
-		duration = time.Hour
-	}
+	// Convert time range to duration.
+	duration := parseChartsRangeDuration(timeRange)
 
 	// Get tenant-specific monitor and current state
 	monitor := r.getTenantMonitor(req.Context())
 	state := monitor.GetState()
+	metricsStoreEnabled := monitor.GetMetricsStore() != nil
+	primarySourceHint := "memory"
+	if metricsStoreEnabled && duration > inMemoryChartThreshold {
+		primarySourceHint = "store_or_memory_fallback"
+	}
 
 	// Create chart data structure that matches frontend expectations
 	chartData := make(map[string]VMChartData)
@@ -5233,7 +5244,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Get historical metrics for each type (falls back to SQLite + LTTB for long ranges)
-		for _, metricType := range []string{"cpu", "memory", "disk"} {
+		for _, metricType := range []string{"cpu", "memory", "disk", "netin", "netout"} {
 			points := monitor.GetNodeMetricsForChart(node.ID, metricType, duration)
 			nodeData[node.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
@@ -5250,6 +5261,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			// If no historical data, add current value
 			if len(nodeData[node.ID][metricType]) == 0 {
 				var value float64
+				hasFallbackValue := true
 				switch metricType {
 				case "cpu":
 					value = node.CPU * 100
@@ -5257,9 +5269,15 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 					value = node.Memory.Usage
 				case "disk":
 					value = node.Disk.Usage
+				default:
+					// No synthetic fallback for node netin/netout.
+					// We only emit these when actual history exists.
+					hasFallbackValue = false
 				}
-				nodeData[node.ID][metricType] = []MetricPoint{
-					{Timestamp: currentTime, Value: value},
+				if hasFallbackValue {
+					nodeData[node.ID][metricType] = []MetricPoint{
+						{Timestamp: currentTime, Value: value},
+					}
 				}
 			}
 		}
@@ -5360,20 +5378,13 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 
 		// If no historical data, add current value
 		if len(dockerHostData[host.ID]["cpu"]) == 0 {
-			dockerHostData[host.ID]["cpu"] = []MetricPoint{
-				{Timestamp: currentTime, Value: host.CPUUsage},
-			}
-			dockerHostData[host.ID]["memory"] = []MetricPoint{
-				{Timestamp: currentTime, Value: host.Memory.Usage},
-			}
-			// Use first disk for host disk percentage
+			dockerHostData[host.ID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: host.CPUUsage}}
+			dockerHostData[host.ID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: host.Memory.Usage}}
 			var diskPercent float64
 			if len(host.Disks) > 0 {
 				diskPercent = host.Disks[0].Usage
 			}
-			dockerHostData[host.ID]["disk"] = []MetricPoint{
-				{Timestamp: currentTime, Value: diskPercent},
-			}
+			dockerHostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
 		}
 	}
 
@@ -5409,22 +5420,52 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 
 		// If no historical data, add current value
 		if len(hostData[host.ID]["cpu"]) == 0 {
-			hostData[host.ID]["cpu"] = []MetricPoint{
-				{Timestamp: currentTime, Value: host.CPUUsage},
-			}
-			hostData[host.ID]["memory"] = []MetricPoint{
-				{Timestamp: currentTime, Value: host.Memory.Usage},
-			}
-			// Use first disk for host disk percentage
+			hostData[host.ID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: host.CPUUsage}}
+			hostData[host.ID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: host.Memory.Usage}}
 			var diskPercent float64
 			if len(host.Disks) > 0 {
 				diskPercent = host.Disks[0].Usage
 			}
-			hostData[host.ID]["disk"] = []MetricPoint{
-				{Timestamp: currentTime, Value: diskPercent},
-			}
+			hostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
 		}
 	}
+
+	countChartPoints := func(metricsMap map[string]VMChartData) int {
+		total := 0
+		for _, metricSeries := range metricsMap {
+			for _, points := range metricSeries {
+				total += len(points)
+			}
+		}
+		return total
+	}
+
+	countNodePoints := func(metricsMap map[string]NodeChartData) int {
+		total := 0
+		for _, metricSeries := range metricsMap {
+			for _, points := range metricSeries {
+				total += len(points)
+			}
+		}
+		return total
+	}
+
+	countStoragePoints := func(metricsMap map[string]StorageChartData) int {
+		total := 0
+		for _, metricSeries := range metricsMap {
+			for _, points := range metricSeries {
+				total += len(points)
+			}
+		}
+		return total
+	}
+
+	guestPoints := countChartPoints(chartData)
+	nodePoints := countNodePoints(nodeData)
+	storagePoints := countStoragePoints(storageData)
+	dockerContainerPoints := countChartPoints(dockerData)
+	dockerHostPoints := countChartPoints(dockerHostData)
+	hostPoints := countChartPoints(hostData)
 
 	response := ChartResponse{
 		ChartData:      chartData,
@@ -5436,7 +5477,21 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		GuestTypes:     guestTypes,
 		Timestamp:      currentTime,
 		Stats: ChartStats{
-			OldestDataTimestamp: oldestTimestamp,
+			OldestDataTimestamp:   oldestTimestamp,
+			Range:                 timeRange,
+			RangeSeconds:          int64(duration / time.Second),
+			MetricsStoreEnabled:   metricsStoreEnabled,
+			PrimarySourceHint:     primarySourceHint,
+			InMemoryThresholdSecs: int64(inMemoryChartThreshold / time.Second),
+			PointCounts: ChartPointCounts{
+				Total:            guestPoints + nodePoints + storagePoints + dockerContainerPoints + dockerHostPoints + hostPoints,
+				Guests:           guestPoints,
+				Nodes:            nodePoints,
+				Storage:          storagePoints,
+				DockerContainers: dockerContainerPoints,
+				DockerHosts:      dockerHostPoints,
+				Hosts:            hostPoints,
+			},
 		},
 	}
 
@@ -5455,6 +5510,227 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		Int("hosts", len(hostData)).
 		Str("range", timeRange).
 		Msg("Chart data response sent")
+}
+
+// parseChartsRangeDuration converts the UI chart range query (e.g. "5m", "1h")
+// into a duration. This is shared by /api/charts and /api/charts/infrastructure
+// to prevent drift.
+func parseChartsRangeDuration(rangeStr string) time.Duration {
+	switch rangeStr {
+	case "5m":
+		return 5 * time.Minute
+	case "15m":
+		return 15 * time.Minute
+	case "30m":
+		return 30 * time.Minute
+	case "1h":
+		return time.Hour
+	case "4h":
+		return 4 * time.Hour
+	case "8h":
+		return 8 * time.Hour
+	case "12h":
+		return 12 * time.Hour
+	case "24h":
+		return 24 * time.Hour
+	case "7d":
+		return 7 * 24 * time.Hour
+	case "30d":
+		return 30 * 24 * time.Hour
+	default:
+		return time.Hour
+	}
+}
+
+// handleInfrastructureCharts serves infrastructure-only chart data.
+// This is intentionally narrower than /api/charts to reduce payload size and server-side compute
+// for the Infrastructure page summary cards.
+func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Request) {
+	log.Debug().Str("method", req.Method).Str("url", req.URL.String()).Msg("Infrastructure charts endpoint hit")
+	const inMemoryChartThreshold = 2 * time.Hour
+
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get time range from query parameters
+	query := req.URL.Query()
+	timeRange := query.Get("range")
+	if timeRange == "" {
+		timeRange = "1h"
+	}
+
+	// Convert time range to duration.
+	duration := parseChartsRangeDuration(timeRange)
+
+	monitor := r.getTenantMonitor(req.Context())
+	state := monitor.GetState()
+	metricsStoreEnabled := monitor.GetMetricsStore() != nil
+	primarySourceHint := "memory"
+	if metricsStoreEnabled && duration > inMemoryChartThreshold {
+		primarySourceHint = "store_or_memory_fallback"
+	}
+
+	currentTime := time.Now().Unix() * 1000
+	oldestTimestamp := currentTime
+
+	// Nodes - cpu/memory/disk/netin/netout
+	nodeData := make(map[string]NodeChartData)
+	for _, node := range state.Nodes {
+		if nodeData[node.ID] == nil {
+			nodeData[node.ID] = make(NodeChartData)
+		}
+		for _, metricType := range []string{"cpu", "memory", "disk", "netin", "netout"} {
+			points := monitor.GetNodeMetricsForChart(node.ID, metricType, duration)
+			nodeData[node.ID][metricType] = make([]MetricPoint, len(points))
+			for i, point := range points {
+				ts := point.Timestamp.Unix() * 1000
+				if ts < oldestTimestamp {
+					oldestTimestamp = ts
+				}
+				nodeData[node.ID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
+			}
+			if len(nodeData[node.ID][metricType]) == 0 {
+				var value float64
+				hasFallbackValue := true
+				switch metricType {
+				case "cpu":
+					value = node.CPU * 100
+				case "memory":
+					value = node.Memory.Usage
+				case "disk":
+					value = node.Disk.Usage
+				default:
+					hasFallbackValue = false
+				}
+				if hasFallbackValue {
+					nodeData[node.ID][metricType] = []MetricPoint{{Timestamp: currentTime, Value: value}}
+				}
+			}
+		}
+	}
+
+	// Docker hosts - cpu/memory/disk
+	dockerHostData := make(map[string]VMChartData)
+	for _, host := range state.DockerHosts {
+		if host.ID == "" {
+			continue
+		}
+		if dockerHostData[host.ID] == nil {
+			dockerHostData[host.ID] = make(VMChartData)
+		}
+		metricKey := fmt.Sprintf("dockerHost:%s", host.ID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerHost", host.ID, duration)
+		for metricType, points := range metrics {
+			dockerHostData[host.ID][metricType] = make([]MetricPoint, len(points))
+			for i, point := range points {
+				ts := point.Timestamp.Unix() * 1000
+				if ts < oldestTimestamp {
+					oldestTimestamp = ts
+				}
+				dockerHostData[host.ID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
+			}
+		}
+		if len(dockerHostData[host.ID]["cpu"]) == 0 {
+			dockerHostData[host.ID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: host.CPUUsage}}
+			dockerHostData[host.ID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: host.Memory.Usage}}
+			var diskPercent float64
+			if len(host.Disks) > 0 {
+				diskPercent = host.Disks[0].Usage
+			}
+			dockerHostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
+		}
+	}
+
+	// Unified host agents - cpu/memory/disk + optional diskread/diskwrite
+	hostData := make(map[string]VMChartData)
+	for _, host := range state.Hosts {
+		if host.ID == "" {
+			continue
+		}
+		if hostData[host.ID] == nil {
+			hostData[host.ID] = make(VMChartData)
+		}
+		metricKey := fmt.Sprintf("host:%s", host.ID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "host", host.ID, duration)
+		for metricType, points := range metrics {
+			hostData[host.ID][metricType] = make([]MetricPoint, len(points))
+			for i, point := range points {
+				ts := point.Timestamp.Unix() * 1000
+				if ts < oldestTimestamp {
+					oldestTimestamp = ts
+				}
+				hostData[host.ID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
+			}
+		}
+		if len(hostData[host.ID]["cpu"]) == 0 {
+			hostData[host.ID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: host.CPUUsage}}
+			hostData[host.ID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: host.Memory.Usage}}
+			var diskPercent float64
+			if len(host.Disks) > 0 {
+				diskPercent = host.Disks[0].Usage
+			}
+			hostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
+		}
+	}
+
+	countNodePoints := func(metricsMap map[string]NodeChartData) int {
+		total := 0
+		for _, metricSeries := range metricsMap {
+			for _, points := range metricSeries {
+				total += len(points)
+			}
+		}
+		return total
+	}
+	countChartPoints := func(metricsMap map[string]VMChartData) int {
+		total := 0
+		for _, metricSeries := range metricsMap {
+			for _, points := range metricSeries {
+				total += len(points)
+			}
+		}
+		return total
+	}
+
+	nodePoints := countNodePoints(nodeData)
+	dockerHostPoints := countChartPoints(dockerHostData)
+	hostPoints := countChartPoints(hostData)
+
+	response := InfrastructureChartsResponse{
+		NodeData:       nodeData,
+		DockerHostData: dockerHostData,
+		HostData:       hostData,
+		Timestamp:      currentTime,
+		Stats: ChartStats{
+			OldestDataTimestamp:   oldestTimestamp,
+			Range:                 timeRange,
+			RangeSeconds:          int64(duration / time.Second),
+			MetricsStoreEnabled:   metricsStoreEnabled,
+			PrimarySourceHint:     primarySourceHint,
+			InMemoryThresholdSecs: int64(inMemoryChartThreshold / time.Second),
+			PointCounts: ChartPointCounts{
+				Total:       nodePoints + dockerHostPoints + hostPoints,
+				Nodes:       nodePoints,
+				DockerHosts: dockerHostPoints,
+				Hosts:       hostPoints,
+			},
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Error().Err(err).Msg("Failed to encode infrastructure chart data response")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+}
+
+// handleInfrastructureSummaryCharts is a compatibility endpoint for older UIs.
+// It currently serves the same payload as handleInfrastructureCharts.
+func (r *Router) handleInfrastructureSummaryCharts(w http.ResponseWriter, req *http.Request) {
+	r.handleInfrastructureCharts(w, req)
 }
 
 // handleStorageCharts handles storage chart data requests
@@ -5636,20 +5912,10 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	// Enforce license limits: 7d free, 30d/90d require Pro
-	// Returns 402 Payment Required for unlicensed long-term requests
+	// Enforce license limits: 7d free, longer ranges require Pro
 	maxFreeDuration := 7 * 24 * time.Hour
-	// Check license for long-term metrics
 	if duration > maxFreeDuration && !r.licenseHandlers.Service(req.Context()).HasFeature(license.FeatureLongTermMetrics) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusPaymentRequired)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":       "license_required",
-			"message":     "Long-term metrics history (30d/90d) requires a Pulse Pro license",
-			"feature":     license.FeatureLongTermMetrics,
-			"upgrade_url": "https://pulserelay.pro/",
-			"max_free":    "7d",
-		})
+		WriteLicenseRequired(w, license.FeatureLongTermMetrics, "Long-term metrics history requires a Pulse Pro license")
 		return
 	}
 

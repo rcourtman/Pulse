@@ -154,10 +154,23 @@ type Service struct {
 	onLicenseChange func(*License)
 }
 
+// DefaultGracePeriod is the duration after license expiration during which
+// features remain available. All grace period logic MUST use this constant.
+const DefaultGracePeriod = 7 * 24 * time.Hour
+
 // NewService creates a new license service.
 func NewService() *Service {
 	return &Service{
-		gracePeriod: 7 * 24 * time.Hour, // 7 days grace period
+		gracePeriod: DefaultGracePeriod,
+	}
+}
+
+// ensureGracePeriodEnd sets the grace period end time on the license if not already set.
+// Must be called while holding s.mu.
+func (s *Service) ensureGracePeriodEnd() {
+	if s.license != nil && s.license.GracePeriodEnd == nil {
+		gracePeriodEnd := time.Unix(s.license.Claims.ExpiresAt, 0).Add(s.gracePeriod)
+		s.license.GracePeriodEnd = &gracePeriodEnd
 	}
 }
 
@@ -239,11 +252,7 @@ func (s *Service) HasFeature(feature string) bool {
 		return TierHasFeature(TierFree, feature)
 	}
 	if s.license.IsExpired() {
-		// If license just expired and grace period not yet set, set it now
-		if s.license.GracePeriodEnd == nil {
-			gracePeriodEnd := time.Unix(s.license.Claims.ExpiresAt, 0).Add(s.gracePeriod)
-			s.license.GracePeriodEnd = &gracePeriodEnd
-		}
+		s.ensureGracePeriodEnd()
 		// Check grace period - still allow features during grace
 		if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
 			return s.license.HasFeature(feature)
@@ -284,12 +293,7 @@ func (s *Service) GetLicenseState() (LicenseState, *License) {
 	}
 
 	if s.license.IsExpired() {
-		// If license just expired and grace period not yet set, set it now
-		if s.license.GracePeriodEnd == nil {
-			gracePeriodEnd := time.Unix(s.license.Claims.ExpiresAt, 0).Add(s.gracePeriod)
-			s.license.GracePeriodEnd = &gracePeriodEnd
-		}
-		// Check if within grace period
+		s.ensureGracePeriodEnd()
 		if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
 			return LicenseStateGracePeriod, s.license
 		}
@@ -348,11 +352,7 @@ func (s *Service) Status() *LicenseStatus {
 	if !s.license.IsExpired() {
 		status.Valid = true
 	} else {
-		// License is expired - ensure grace period is set
-		if s.license.GracePeriodEnd == nil {
-			gracePeriodEnd := time.Unix(s.license.Claims.ExpiresAt, 0).Add(s.gracePeriod)
-			s.license.GracePeriodEnd = &gracePeriodEnd
-		}
+		s.ensureGracePeriodEnd()
 		// Check if within grace period
 		if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
 			status.Valid = true
@@ -457,9 +457,7 @@ func ValidateLicense(licenseKey string) (*License, error) {
 	if license.IsExpired() {
 		// Calculate how long ago it expired
 		expirationTime := time.Unix(claims.ExpiresAt, 0)
-		// Grace period: 7 days after expiration
-		gracePeriodDuration := 7 * 24 * time.Hour
-		gracePeriodEnd := expirationTime.Add(gracePeriodDuration)
+		gracePeriodEnd := expirationTime.Add(DefaultGracePeriod)
 
 		if time.Now().Before(gracePeriodEnd) {
 			// Within grace period - allow activation but mark as in grace period

@@ -196,6 +196,182 @@ func TestHandleCharts_Success(t *testing.T) {
 	}
 }
 
+func TestHandleCharts_StatsDebugMetadata(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.VMs = []models.VM{{ID: "vm-1", Name: "vm-one", CPU: 0.2}}
+	state.Nodes = []models.Node{{ID: "node-1", Name: "node-one", CPU: 0.1}}
+	state.Storage = []models.Storage{{ID: "store-1", Name: "Store One", Used: 50, Total: 100}}
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/charts?range=5m", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	body := rec.Body.Bytes()
+
+	var decoded ChartResponse
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("unmarshal ChartResponse: %v", err)
+	}
+
+	if decoded.Stats.Range != "5m" {
+		t.Fatalf("expected stats.range=5m, got %q", decoded.Stats.Range)
+	}
+	if decoded.Stats.RangeSeconds != 300 {
+		t.Fatalf("expected stats.rangeSeconds=300, got %d", decoded.Stats.RangeSeconds)
+	}
+	if decoded.Stats.MetricsStoreEnabled {
+		t.Fatalf("expected stats.metricsStoreEnabled=false in test monitor, got true")
+	}
+	if decoded.Stats.PrimarySourceHint != "memory" {
+		t.Fatalf("expected stats.primarySourceHint=memory, got %q", decoded.Stats.PrimarySourceHint)
+	}
+	if decoded.Stats.InMemoryThresholdSecs != 7200 {
+		t.Fatalf("expected stats.inMemoryThresholdSecs=7200, got %d", decoded.Stats.InMemoryThresholdSecs)
+	}
+	if decoded.Stats.OldestDataTimestamp <= 0 {
+		t.Fatalf("expected stats.oldestDataTimestamp to be set, got %d", decoded.Stats.OldestDataTimestamp)
+	}
+	if decoded.Stats.OldestDataTimestamp > decoded.Timestamp {
+		t.Fatalf(
+			"expected stats.oldestDataTimestamp <= timestamp, got oldest=%d timestamp=%d",
+			decoded.Stats.OldestDataTimestamp,
+			decoded.Timestamp,
+		)
+	}
+
+	// With no history in the test monitor, handleCharts falls back to synthetic points:
+	// guests: cpu/memory/disk/diskread/diskwrite/netin/netout (7)
+	// nodes: cpu/memory/disk (3)
+	// storage: disk (1)
+	if decoded.Stats.PointCounts.Guests != 7 {
+		t.Fatalf("expected stats.pointCounts.guests=7, got %d", decoded.Stats.PointCounts.Guests)
+	}
+	if decoded.Stats.PointCounts.Nodes != 3 {
+		t.Fatalf("expected stats.pointCounts.nodes=3, got %d", decoded.Stats.PointCounts.Nodes)
+	}
+	if decoded.Stats.PointCounts.Storage != 1 {
+		t.Fatalf("expected stats.pointCounts.storage=1, got %d", decoded.Stats.PointCounts.Storage)
+	}
+	if decoded.Stats.PointCounts.DockerContainers != 0 || decoded.Stats.PointCounts.DockerHosts != 0 || decoded.Stats.PointCounts.Hosts != 0 {
+		t.Fatalf(
+			"expected dockerContainers/dockerHosts/hosts all 0, got dc=%d dh=%d hosts=%d",
+			decoded.Stats.PointCounts.DockerContainers,
+			decoded.Stats.PointCounts.DockerHosts,
+			decoded.Stats.PointCounts.Hosts,
+		)
+	}
+
+	sum := decoded.Stats.PointCounts.Guests +
+		decoded.Stats.PointCounts.Nodes +
+		decoded.Stats.PointCounts.Storage +
+		decoded.Stats.PointCounts.DockerContainers +
+		decoded.Stats.PointCounts.DockerHosts +
+		decoded.Stats.PointCounts.Hosts
+	if decoded.Stats.PointCounts.Total != sum {
+		t.Fatalf("expected stats.pointCounts.total=%d, got %d", sum, decoded.Stats.PointCounts.Total)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatalf("unmarshal raw JSON: %v", err)
+	}
+	stats, ok := raw["stats"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stats object in JSON response")
+	}
+	if _, ok := stats["pointCounts"]; !ok {
+		t.Fatalf("expected stats.pointCounts to be present in JSON response")
+	}
+}
+
+func TestHandleInfrastructureSummaryCharts_Lightweight(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.Nodes = []models.Node{{
+		ID:     "node-1",
+		Name:   "node-one",
+		Status: "online",
+		CPU:    0.1,
+		Memory: models.Memory{Usage: 12.0},
+		Disk:   models.Disk{Usage: 34.0},
+	}}
+	state.DockerHosts = []models.DockerHost{{
+		ID:       "docker-host-1",
+		Runtime:  "docker",
+		CPUUsage: 23.0,
+		Memory:   models.Memory{Usage: 45.0},
+		Disks:    []models.Disk{{Usage: 67.0}},
+		Status:   "online",
+	}}
+	state.Hosts = []models.Host{{
+		ID:       "host-1",
+		Hostname: "host-one",
+		CPUUsage: 11.0,
+		Memory:   models.Memory{Usage: 22.0},
+		Disks:    []models.Disk{{Usage: 33.0}},
+		Status:   "online",
+	}}
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/infrastructure-summary?range=5m", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleInfrastructureSummaryCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected application/json, got %q", ct)
+	}
+
+	body := rec.Body.Bytes()
+
+	var decoded InfrastructureChartsResponse
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("unmarshal InfrastructureChartsResponse: %v", err)
+	}
+	if decoded.Stats.Range != "5m" {
+		t.Fatalf("expected stats.range=5m, got %q", decoded.Stats.Range)
+	}
+	if decoded.Stats.RangeSeconds != 300 {
+		t.Fatalf("expected stats.rangeSeconds=300, got %d", decoded.Stats.RangeSeconds)
+	}
+
+	// With no history in the test monitor, handler falls back to synthetic points:
+	// nodes: cpu/memory/disk (3)
+	// dockerHosts: cpu/memory/disk (3)
+	// hosts: cpu/memory/disk (3)
+	if decoded.Stats.PointCounts.Nodes != 3 {
+		t.Fatalf("expected stats.pointCounts.nodes=3, got %d", decoded.Stats.PointCounts.Nodes)
+	}
+	if decoded.Stats.PointCounts.DockerHosts != 3 {
+		t.Fatalf("expected stats.pointCounts.dockerHosts=3, got %d", decoded.Stats.PointCounts.DockerHosts)
+	}
+	if decoded.Stats.PointCounts.Hosts != 3 {
+		t.Fatalf("expected stats.pointCounts.hosts=3, got %d", decoded.Stats.PointCounts.Hosts)
+	}
+	sum := decoded.Stats.PointCounts.Nodes + decoded.Stats.PointCounts.DockerHosts + decoded.Stats.PointCounts.Hosts
+	if decoded.Stats.PointCounts.Total != sum {
+		t.Fatalf("expected stats.pointCounts.total=%d, got %d", sum, decoded.Stats.PointCounts.Total)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatalf("unmarshal raw JSON: %v", err)
+	}
+	for _, forbidden := range []string{"data", "storageData", "dockerData", "guestTypes"} {
+		if _, ok := raw[forbidden]; ok {
+			t.Fatalf("expected %q to be absent from infra summary response", forbidden)
+		}
+	}
+}
+
 func TestHandleStorageCharts_Success(t *testing.T) {
 	monitor, state, metricsHistory := newTestMonitor(t)
 	state.Storage = []models.Storage{{ID: "store-1", Name: "Store One"}}
@@ -252,14 +428,6 @@ func TestEstablishOIDCSession(t *testing.T) {
 	}
 }
 
-func TestLearnBaselines_NoMonitor(t *testing.T) {
-	router := &Router{}
-	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
-	history := monitoring.NewMetricsHistory(10, time.Hour)
-
-	router.learnBaselines(store, history)
-}
-
 func TestLearnBaselines_WithData(t *testing.T) {
 	monitor, state, history := newTestMonitor(t)
 	state.Nodes = []models.Node{{ID: "node-1", Name: "node"}}
@@ -279,12 +447,4 @@ func TestLearnBaselines_WithData(t *testing.T) {
 	if store.ResourceCount() == 0 {
 		t.Fatalf("expected baselines to be learned")
 	}
-}
-
-func TestWireAlertTriggeredAI_EarlyReturns(t *testing.T) {
-	router := &Router{}
-	router.WireAlertTriggeredAI()
-
-	router.aiSettingsHandler = &AISettingsHandler{legacyAIService: ai.NewService(nil, nil)}
-	router.WireAlertTriggeredAI()
 }

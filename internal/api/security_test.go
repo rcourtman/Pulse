@@ -1040,39 +1040,6 @@ func TestSecurityHeadersWithConfig_NextHandlerCalled(t *testing.T) {
 	}
 }
 
-func TestLogAuditEvent_Success(t *testing.T) {
-	// Should not panic and should log at Info level
-	LogAuditEvent(
-		"test_event",
-		"testuser",
-		"192.168.1.100",
-		"/api/test",
-		true,
-		"test details",
-	)
-	// If we got here without panic, the test passes
-}
-
-func TestLogAuditEvent_Failure(t *testing.T) {
-	// Should not panic and should log at Warn level
-	LogAuditEvent(
-		"failed_login",
-		"attacker",
-		"203.0.113.42",
-		"/api/login",
-		false,
-		"invalid credentials",
-	)
-	// If we got here without panic, the test passes
-}
-
-func TestLogAuditEvent_EmptyFields(t *testing.T) {
-	// Should handle empty strings gracefully
-	LogAuditEvent("", "", "", "", true, "")
-	LogAuditEvent("", "", "", "", false, "")
-	// If we got here without panic, the test passes
-}
-
 func TestLoadTrustedProxyCIDRs_InvalidCIDR(t *testing.T) {
 	// Test that invalid CIDR is logged and skipped
 	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "invalid/cidr, 10.0.0.0/8")

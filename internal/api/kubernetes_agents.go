@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -16,46 +15,12 @@ import (
 
 // KubernetesAgentHandlers manages ingest from the Kubernetes agent.
 type KubernetesAgentHandlers struct {
-	mtMonitor     *monitoring.MultiTenantMonitor
-	legacyMonitor *monitoring.Monitor
-	wsHub         *websocket.Hub
+	baseAgentHandlers
 }
 
 // NewKubernetesAgentHandlers constructs a new Kubernetes agent handler group.
 func NewKubernetesAgentHandlers(mtm *monitoring.MultiTenantMonitor, m *monitoring.Monitor, hub *websocket.Hub) *KubernetesAgentHandlers {
-	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
-	if m == nil && mtm != nil {
-		if mon, err := mtm.GetMonitor("default"); err == nil {
-			m = mon
-		}
-	}
-	return &KubernetesAgentHandlers{mtMonitor: mtm, legacyMonitor: m, wsHub: hub}
-}
-
-// SetMonitor updates the monitor reference for kubernetes agent handlers.
-func (h *KubernetesAgentHandlers) SetMonitor(m *monitoring.Monitor) {
-	h.legacyMonitor = m
-}
-
-// SetMultiTenantMonitor updates the multi-tenant monitor reference
-func (h *KubernetesAgentHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	h.mtMonitor = mtm
-	if mtm != nil {
-		if m, err := mtm.GetMonitor("default"); err == nil {
-			h.legacyMonitor = m
-		}
-	}
-}
-
-// getMonitor helper
-func (h *KubernetesAgentHandlers) getMonitor(ctx context.Context) *monitoring.Monitor {
-	orgID := GetOrgID(ctx)
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
-			return m
-		}
-	}
-	return h.legacyMonitor
+	return &KubernetesAgentHandlers{baseAgentHandlers: newBaseAgentHandlers(mtm, m, hub)}
 }
 
 // HandleReport accepts heartbeat payloads from the Kubernetes agent.
@@ -95,7 +60,7 @@ func (h *KubernetesAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Re
 		Int("deployments", len(cluster.Deployments)).
 		Msg("Kubernetes agent report processed")
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":     true,
@@ -165,7 +130,7 @@ func (h *KubernetesAgentHandlers) HandleDeleteCluster(w http.ResponseWriter, r *
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
@@ -225,7 +190,7 @@ func (h *KubernetesAgentHandlers) HandleUnhideCluster(w http.ResponseWriter, r *
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
@@ -257,7 +222,7 @@ func (h *KubernetesAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWrit
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
@@ -303,7 +268,7 @@ func (h *KubernetesAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWrit
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,

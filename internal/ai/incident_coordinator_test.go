@@ -191,18 +191,6 @@ func TestIncidentCoordinator_OnAnomalyDetected(t *testing.T) {
 	// Anomaly ID format check (internal detail, but verify implicitly via count)
 }
 
-func TestNewIncidentCoordinator_Defaults(t *testing.T) {
-	cfg := IncidentCoordinatorConfig{
-		PreBuffer:     0,
-		PostDuration:  0,
-		MaxConcurrent: 0,
-	}
-
-	coord := NewIncidentCoordinator(cfg)
-	_ = coord
-	// Just coverage trace, logic verified in other tests
-}
-
 func TestIncidentCoordinator_GetRecordingWindowID(t *testing.T) {
 	cfg := DefaultIncidentCoordinatorConfig()
 	coord := NewIncidentCoordinator(cfg)

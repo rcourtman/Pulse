@@ -209,6 +209,7 @@ func TestTimeRangeConversion(t *testing.T) {
 		{"30m", 30 * time.Minute},
 		{"1h", time.Hour},
 		{"4h", 4 * time.Hour},
+		{"8h", 8 * time.Hour},
 		{"12h", 12 * time.Hour},
 		{"24h", 24 * time.Hour},
 		{"7d", 7 * 24 * time.Hour},
@@ -220,29 +221,7 @@ func TestTimeRangeConversion(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run("range_"+tt.rangeStr, func(t *testing.T) {
-			var duration time.Duration
-			switch tt.rangeStr {
-			case "5m":
-				duration = 5 * time.Minute
-			case "15m":
-				duration = 15 * time.Minute
-			case "30m":
-				duration = 30 * time.Minute
-			case "1h":
-				duration = time.Hour
-			case "4h":
-				duration = 4 * time.Hour
-			case "12h":
-				duration = 12 * time.Hour
-			case "24h":
-				duration = 24 * time.Hour
-			case "7d":
-				duration = 7 * 24 * time.Hour
-			case "30d":
-				duration = 30 * 24 * time.Hour
-			default:
-				duration = time.Hour
-			}
+			duration := parseChartsRangeDuration(tt.rangeStr)
 
 			if duration != tt.expectedDur {
 				t.Errorf("Time range %q: got %v, want %v", tt.rangeStr, duration, tt.expectedDur)
@@ -403,6 +382,52 @@ func TestChartStatsOldestTimestamp(t *testing.T) {
 	if stats.OldestDataTimestamp != fourHoursAgo {
 		t.Errorf("ChartStats.OldestDataTimestamp: got %d, want %d",
 			stats.OldestDataTimestamp, fourHoursAgo)
+	}
+}
+
+func TestChartStatsDebugMetadata(t *testing.T) {
+	t.Parallel()
+
+	stats := ChartStats{
+		OldestDataTimestamp:   1_730_000_000_000,
+		Range:                 "24h",
+		RangeSeconds:          86_400,
+		MetricsStoreEnabled:   true,
+		PrimarySourceHint:     "store_or_memory_fallback",
+		InMemoryThresholdSecs: 7_200,
+		PointCounts: ChartPointCounts{
+			Total:            1200,
+			Guests:           300,
+			Nodes:            200,
+			Storage:          100,
+			DockerContainers: 250,
+			DockerHosts:      150,
+			Hosts:            200,
+		},
+	}
+
+	raw, err := json.Marshal(stats)
+	if err != nil {
+		t.Fatalf("Failed to marshal ChartStats: %v", err)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("Failed to unmarshal ChartStats JSON: %v", err)
+	}
+
+	if decoded["range"] != "24h" {
+		t.Errorf("Expected range=24h, got %v", decoded["range"])
+	}
+	if decoded["primarySourceHint"] != "store_or_memory_fallback" {
+		t.Errorf("Expected primarySourceHint, got %v", decoded["primarySourceHint"])
+	}
+	pointCounts, ok := decoded["pointCounts"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected pointCounts object in debug stats")
+	}
+	if pointCounts["total"] != float64(1200) {
+		t.Errorf("Expected pointCounts.total=1200, got %v", pointCounts["total"])
 	}
 }
 

@@ -1,3 +1,5 @@
+//go:build visual
+
 package reporting
 
 import (

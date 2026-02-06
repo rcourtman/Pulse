@@ -54,7 +54,7 @@ const testOIDCDiscovery = `{
 
 func TestHandleTestSSOProvider_SAMLSuccess(t *testing.T) {
 	// Create mock SAML metadata server
-	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	metadataServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.Write([]byte(testSAMLMetadata))
 	}))
@@ -139,7 +139,7 @@ func TestHandleTestSSOProvider_SAMLMetadataXML(t *testing.T) {
 
 func TestHandleTestSSOProvider_SAMLFetchError(t *testing.T) {
 	// Server that returns 500
-	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	errorServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer errorServer.Close()
@@ -205,7 +205,7 @@ func TestHandleTestSSOProvider_SAMLInvalidXML(t *testing.T) {
 
 func TestHandleTestSSOProvider_OIDCSuccess(t *testing.T) {
 	// Create mock OIDC discovery server
-	discoveryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	discoveryServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.well-known/openid-configuration" {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(testOIDCDiscovery))
@@ -361,7 +361,7 @@ func TestHandleTestSSOProvider_MissingConfig(t *testing.T) {
 
 func TestHandleMetadataPreview_Success(t *testing.T) {
 	// Create mock metadata server
-	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	metadataServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.Write([]byte(testSAMLMetadata))
 	}))

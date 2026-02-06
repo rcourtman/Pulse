@@ -309,11 +309,6 @@ func TestSaveIfDirty_WritesFile(t *testing.T) {
 	}
 }
 
-func TestSaveIfDirty_NotDirty(t *testing.T) {
-	store := NewLearningStore(LearningStoreConfig{})
-	store.saveIfDirty()
-}
-
 func TestSaveToDisk_NoDir(t *testing.T) {
 	store := NewLearningStore(LearningStoreConfig{})
 	if err := store.saveToDisk(); err != nil {

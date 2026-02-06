@@ -150,22 +150,6 @@ func TestPatrolService_RunPatrol_FullCoverage(t *testing.T) {
 	}
 }
 
-// TestPatrolService_StartStop verifies the startup and shutdown sequence covering patrolLoop
-func TestPatrolService_StartStop(t *testing.T) {
-	svc := NewService(nil, nil)
-	stateProvider := &mockStateProvider{}
-	ps := NewPatrolService(svc, stateProvider)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ps.Start(ctx)
-	time.Sleep(10 * time.Millisecond)
-	ps.Start(ctx) // Idempotency check
-	ps.Stop()
-	ps.Stop() // Idempotency check
-}
-
 // TestPatrolService_Setters_Coverage tests setter methods not covered in existing tests
 func TestPatrolService_Setters_Coverage(t *testing.T) {
 	ps := NewPatrolService(nil, nil)

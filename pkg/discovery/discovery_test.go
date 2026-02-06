@@ -303,7 +303,7 @@ func TestDiscoverServersWithCallback(t *testing.T) {
 
 	noTLSListener, err := net.Listen("tcp", "127.0.0.1:9009")
 	if err != nil {
-		t.Fatalf("failed to listen on 9009: %v", err)
+		t.Skipf("port 9009 unavailable: %v", err)
 	}
 	go func() {
 		for {

@@ -3,7 +3,6 @@ package notifications
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -46,7 +45,7 @@ func TestSendResolvedApprise_HTTP(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()

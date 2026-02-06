@@ -224,6 +224,36 @@ func (e *Engine) CreatePlan(plan *RemediationPlan) error {
 		plan.ExpiresAt = &expiry
 	}
 
+	// Keep at most one active plan per finding: when a new plan is created for a
+	// finding, expire any existing active plans for that finding so the UI/API
+	// has a deterministic "latest" plan to show.
+	//
+	// Note: This only applies when FindingID is set (some callers may create
+	// general plans not tied to a finding).
+	if plan.FindingID != "" {
+		// Use a timestamp strictly before this plan's CreatedAt so ListPlans() and
+		// other expiry checks (which use time.After) reliably treat old plans as
+		// expired even when called immediately after CreatePlan.
+		expiredAt := plan.CreatedAt.Add(-1 * time.Nanosecond)
+		for _, existing := range e.plans {
+			if existing == nil {
+				continue
+			}
+			if existing.ID == plan.ID {
+				continue
+			}
+			if existing.FindingID != plan.FindingID {
+				continue
+			}
+			if existing.ExpiresAt != nil && expiredAt.After(*existing.ExpiresAt) {
+				// Already expired earlier than (or at) this new plan's timestamp.
+				continue
+			}
+			t := expiredAt
+			existing.ExpiresAt = &t
+		}
+	}
+
 	// Assess risk level if not set
 	if plan.RiskLevel == "" {
 		plan.RiskLevel = e.assessRiskLevel(plan)
@@ -349,15 +379,23 @@ func (e *Engine) GetPlanForFinding(findingID string) *RemediationPlan {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
+	var best *RemediationPlan
+	now := time.Now()
 	for _, plan := range e.plans {
-		if plan.FindingID == findingID {
-			// Check if expired
-			if plan.ExpiresAt != nil && time.Now().After(*plan.ExpiresAt) {
-				continue
-			}
-			copy := *plan
-			return &copy
+		if plan == nil || plan.FindingID != findingID {
+			continue
 		}
+		// Skip expired plans
+		if plan.ExpiresAt != nil && now.After(*plan.ExpiresAt) {
+			continue
+		}
+		if best == nil || plan.CreatedAt.After(best.CreatedAt) {
+			best = plan
+		}
+	}
+	if best != nil {
+		copy := *best
+		return &copy
 	}
 	return nil
 }

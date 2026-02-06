@@ -101,6 +101,11 @@ type EnhancedEmailManager struct {
 	rateLimit *RateLimiter
 }
 
+var (
+	smtpDialTimeout       = net.DialTimeout
+	smtpTLSDialWithDialer = tls.DialWithDialer
+)
+
 // RateLimiter implements a simple rate limiter
 type RateLimiter struct {
 	mu        sync.Mutex
@@ -278,7 +283,7 @@ func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte) error {
 	dialer := &net.Dialer{
 		Timeout: 10 * time.Second,
 	}
-	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
+	conn, err := smtpTLSDialWithDialer(dialer, "tcp", addr, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("TLS dial failed: %w", err)
 	}
@@ -336,7 +341,7 @@ func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte) error {
 // sendStartTLS sends email using STARTTLS
 func (e *EnhancedEmailManager) sendStartTLS(addr string, msg []byte) error {
 	// Use DialTimeout to prevent hanging on unreachable servers
-	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	conn, err := smtpDialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("TCP dial failed: %w", err)
 	}
@@ -460,7 +465,7 @@ func (e *EnhancedEmailManager) TestConnection() error {
 // sendPlain sends email over plain SMTP connection with timeout
 func (e *EnhancedEmailManager) sendPlain(addr string, msg []byte) error {
 	// Use DialTimeout to prevent hanging on unreachable servers
-	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	conn, err := smtpDialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("TCP dial failed: %w", err)
 	}

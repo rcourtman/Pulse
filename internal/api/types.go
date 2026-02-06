@@ -73,9 +73,37 @@ type ChartResponse struct {
 	Stats          ChartStats                  `json:"stats"`
 }
 
+// InfrastructureChartsResponse is a lightweight variant of ChartResponse used by
+// infra-only clients (Infrastructure summary sparklines, prewarm caches).
+// It avoids the heavy guest/storage chart payload and associated compute.
+type InfrastructureChartsResponse struct {
+	NodeData       map[string]NodeChartData `json:"nodeData"`
+	DockerHostData map[string]VMChartData   `json:"dockerHostData,omitempty"` // Docker host metrics (keyed by host ID)
+	HostData       map[string]VMChartData   `json:"hostData,omitempty"`       // Unified host agent metrics (keyed by host ID)
+	Timestamp      int64                    `json:"timestamp"`
+	Stats          ChartStats               `json:"stats"`
+}
+
 // ChartStats represents chart statistics
 type ChartStats struct {
-	OldestDataTimestamp int64 `json:"oldestDataTimestamp"`
+	OldestDataTimestamp   int64            `json:"oldestDataTimestamp"`
+	Range                 string           `json:"range,omitempty"`
+	RangeSeconds          int64            `json:"rangeSeconds,omitempty"`
+	MetricsStoreEnabled   bool             `json:"metricsStoreEnabled"`
+	PrimarySourceHint     string           `json:"primarySourceHint,omitempty"`
+	InMemoryThresholdSecs int64            `json:"inMemoryThresholdSecs,omitempty"`
+	PointCounts           ChartPointCounts `json:"pointCounts,omitempty"`
+}
+
+// ChartPointCounts summarizes how many points were returned in /api/charts.
+type ChartPointCounts struct {
+	Total            int `json:"total,omitempty"`
+	Guests           int `json:"guests,omitempty"`
+	Nodes            int `json:"nodes,omitempty"`
+	Storage          int `json:"storage,omitempty"`
+	DockerContainers int `json:"dockerContainers,omitempty"`
+	DockerHosts      int `json:"dockerHosts,omitempty"`
+	Hosts            int `json:"hosts,omitempty"`
 }
 
 // VMChartData represents chart data for a VM

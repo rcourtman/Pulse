@@ -3,7 +3,6 @@ package notifications
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -32,7 +31,7 @@ func TestSendAppriseViaHTTPSkipTLSVerifyAndDefaultHeader(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-API-KEY"); got != "secret" {
 			t.Fatalf("expected default API key header, got %q", got)
 		}
@@ -67,7 +66,7 @@ func TestSendAppriseViaHTTPIncludesTargetsAndCustomHeader(t *testing.T) {
 		URLs  []string `json:"urls"`
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-Test-Key"); got != "secret" {
 			t.Fatalf("expected custom API key header, got %q", got)
 		}
@@ -110,7 +109,7 @@ func TestSendAppriseViaHTTPStatusErrorWithBody(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("boom"))
 	}))
@@ -133,7 +132,7 @@ func TestSendAppriseViaHTTPStatusErrorWithoutBody(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()

@@ -100,13 +100,6 @@ func TestManagerCloseAndBackup(t *testing.T) {
 	dataDir := filepath.Join(installDir, "data")
 	configDir := filepath.Join(installDir, "config")
 
-	if _, err := os.Stat(dataDir); err == nil {
-		t.Skip("data dir already exists; skip backup test to avoid interference")
-	}
-	if _, err := os.Stat(configDir); err == nil {
-		t.Skip("config dir already exists; skip backup test to avoid interference")
-	}
-
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatalf("mkdir data: %v", err)
 	}

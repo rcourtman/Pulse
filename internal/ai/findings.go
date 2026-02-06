@@ -10,9 +10,10 @@ import (
 
 // Investigation limits for automatic finding investigation.
 const (
-	investigationCooldown        = 1 * time.Hour    // Minimum time between investigation attempts
-	investigationTimeoutCooldown = 10 * time.Minute // Shorter cooldown for timeout failures
-	maxInvestigationAttempts     = 3                // Maximum number of investigation retries
+	investigationCooldown         = 1 * time.Hour    // Minimum time between investigation attempts
+	investigationTimeoutCooldown  = 10 * time.Minute // Shorter cooldown for timeout failures
+	investigationFixRetryCooldown = 20 * time.Minute // Retry faster after failed fix attempts
+	maxInvestigationAttempts      = 3                // Maximum number of investigation retries
 )
 
 // FindingSeverity represents how urgent a finding is
@@ -41,6 +42,23 @@ const (
 	FindingCategoryGeneral     FindingCategory = "general"
 )
 
+// FindingLoopState represents the current stage of the patrol detect/remediate loop.
+type FindingLoopState string
+
+const (
+	FindingLoopStateDetected           FindingLoopState = "detected"
+	FindingLoopStateInvestigating      FindingLoopState = "investigating"
+	FindingLoopStateRemediationPlanned FindingLoopState = "remediation_planned"
+	FindingLoopStateRemediating        FindingLoopState = "remediating"
+	FindingLoopStateRemediationFailed  FindingLoopState = "remediation_failed"
+	FindingLoopStateNeedsAttention     FindingLoopState = "needs_attention"
+	FindingLoopStateTimedOut           FindingLoopState = "timed_out"
+	FindingLoopStateResolved           FindingLoopState = "resolved"
+	FindingLoopStateDismissed          FindingLoopState = "dismissed"
+	FindingLoopStateSnoozed            FindingLoopState = "snoozed"
+	FindingLoopStateSuppressed         FindingLoopState = "suppressed"
+)
+
 // InvestigationStatus represents the current investigation state of a finding
 type InvestigationStatus string
 
@@ -56,12 +74,29 @@ const (
 type InvestigationOutcome string
 
 const (
-	InvestigationOutcomeResolved       InvestigationOutcome = "resolved"        // Issue was automatically fixed
-	InvestigationOutcomeFixQueued      InvestigationOutcome = "fix_queued"      // Fix identified, awaiting approval
-	InvestigationOutcomeNeedsAttention InvestigationOutcome = "needs_attention" // Requires user intervention
-	InvestigationOutcomeCannotFix      InvestigationOutcome = "cannot_fix"      // AI determined it cannot fix this
-	InvestigationOutcomeTimedOut       InvestigationOutcome = "timed_out"       // Transient timeout, will retry sooner
+	InvestigationOutcomeResolved              InvestigationOutcome = "resolved"                // Issue was automatically fixed
+	InvestigationOutcomeFixQueued             InvestigationOutcome = "fix_queued"              // Fix identified, awaiting approval
+	InvestigationOutcomeFixExecuted           InvestigationOutcome = "fix_executed"            // Fix command executed
+	InvestigationOutcomeFixFailed             InvestigationOutcome = "fix_failed"              // Fix command failed
+	InvestigationOutcomeFixVerified           InvestigationOutcome = "fix_verified"            // Fix command verified successful
+	InvestigationOutcomeFixVerificationFailed InvestigationOutcome = "fix_verification_failed" // Fix ran but issue persists
+	InvestigationOutcomeNeedsAttention        InvestigationOutcome = "needs_attention"         // Requires user intervention
+	InvestigationOutcomeCannotFix             InvestigationOutcome = "cannot_fix"              // AI determined it cannot fix this
+	InvestigationOutcomeTimedOut              InvestigationOutcome = "timed_out"               // Transient timeout, will retry sooner
 )
+
+// FindingLifecycleEvent represents an append-only log entry of finding lifecycle transitions.
+// It is used to make the patrol detect/remediate/verify loop observable and debuggable in the UI.
+type FindingLifecycleEvent struct {
+	At       time.Time         `json:"at"`
+	Type     string            `json:"type"`
+	Message  string            `json:"message,omitempty"`
+	From     string            `json:"from,omitempty"`
+	To       string            `json:"to,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+const maxFindingLifecycleEvents = 50
 
 // Finding represents an AI-discovered insight about infrastructure
 type Finding struct {
@@ -96,11 +131,15 @@ type Finding struct {
 	Suppressed      bool   `json:"suppressed"`                 // Permanently suppress similar findings for this resource
 
 	// Investigation fields - tracks autonomous AI investigation of findings
-	InvestigationSessionID string     `json:"investigation_session_id,omitempty"` // Chat session ID if being investigated
-	InvestigationStatus    string     `json:"investigation_status,omitempty"`     // pending, running, completed, failed, needs_attention
-	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`    // resolved, fix_queued, needs_attention, cannot_fix
-	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`     // When last investigation completed
-	InvestigationAttempts  int        `json:"investigation_attempts"`             // Number of investigation attempts
+	InvestigationSessionID string                  `json:"investigation_session_id,omitempty"` // Chat session ID if being investigated
+	InvestigationStatus    string                  `json:"investigation_status,omitempty"`     // pending, running, completed, failed, needs_attention
+	InvestigationOutcome   string                  `json:"investigation_outcome,omitempty"`    // resolved, fix_queued, fix_executed, fix_failed, fix_verified, fix_verification_failed, needs_attention, cannot_fix
+	LastInvestigatedAt     *time.Time              `json:"last_investigated_at,omitempty"`     // When last investigation completed
+	InvestigationAttempts  int                     `json:"investigation_attempts"`             // Number of investigation attempts
+	LoopState              string                  `json:"loop_state,omitempty"`               // detected, investigating, remediating, resolved, etc.
+	Lifecycle              []FindingLifecycleEvent `json:"lifecycle,omitempty"`                // Bounded, append-only lifecycle log
+	RegressionCount        int                     `json:"regression_count,omitempty"`         // Times the issue reappeared after resolution
+	LastRegressionAt       *time.Time              `json:"last_regression_at,omitempty"`       // Timestamp of most recent regression
 }
 
 // IsActive returns true if the finding is still active (not resolved, not snoozed, not suppressed, not dismissed)
@@ -121,6 +160,63 @@ func (f *Finding) IsSnoozed() bool {
 // IsResolved returns true if the finding has been resolved (ignores snooze)
 func (f *Finding) IsResolved() bool {
 	return f.ResolvedAt != nil
+}
+
+func investigationCooldownForOutcome(outcome string) time.Duration {
+	switch InvestigationOutcome(outcome) {
+	case InvestigationOutcomeTimedOut:
+		return investigationTimeoutCooldown
+	case InvestigationOutcomeFixFailed, InvestigationOutcomeFixVerificationFailed:
+		return investigationFixRetryCooldown
+	default:
+		return investigationCooldown
+	}
+}
+
+func deriveLoopState(f *Finding) FindingLoopState {
+	if f == nil {
+		return FindingLoopStateDetected
+	}
+
+	switch {
+	case f.Suppressed:
+		return FindingLoopStateSuppressed
+	case f.ResolvedAt != nil || InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerified:
+		return FindingLoopStateResolved
+	case f.IsSnoozed():
+		return FindingLoopStateSnoozed
+	case f.DismissedReason != "":
+		return FindingLoopStateDismissed
+	}
+
+	switch InvestigationStatus(f.InvestigationStatus) {
+	case InvestigationStatusRunning:
+		return FindingLoopStateInvestigating
+	case InvestigationStatusNeedsAttention:
+		return FindingLoopStateNeedsAttention
+	}
+
+	switch InvestigationOutcome(f.InvestigationOutcome) {
+	case InvestigationOutcomeFixQueued:
+		return FindingLoopStateRemediationPlanned
+	case InvestigationOutcomeFixExecuted:
+		return FindingLoopStateRemediating
+	case InvestigationOutcomeFixFailed, InvestigationOutcomeFixVerificationFailed:
+		return FindingLoopStateRemediationFailed
+	case InvestigationOutcomeNeedsAttention, InvestigationOutcomeCannotFix:
+		return FindingLoopStateNeedsAttention
+	case InvestigationOutcomeTimedOut:
+		return FindingLoopStateTimedOut
+	}
+
+	return FindingLoopStateDetected
+}
+
+func (f *Finding) syncLoopState() {
+	if f == nil {
+		return
+	}
+	f.LoopState = string(deriveLoopState(f))
 }
 
 // ShouldInvestigate returns true if this finding should be automatically investigated
@@ -147,9 +243,16 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 		return false
 	}
 
-	// Don't re-investigate findings where the fix was verified as failed
-	// (user should review manually)
-	if f.InvestigationOutcome == "fix_verification_failed" {
+	// Don't re-investigate when a fix is queued for approval/user action.
+	if InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixQueued {
+		return false
+	}
+
+	// Don't auto-reinvestigate fully terminal outcomes.
+	if InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerified ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeResolved ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeCannotFix ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention {
 		return false
 	}
 
@@ -171,10 +274,7 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 	// Don't re-investigate within cooldown period
 	// Timeout failures use a shorter cooldown (10min) since they're transient
 	if f.LastInvestigatedAt != nil {
-		cooldown := investigationCooldown
-		if f.InvestigationOutcome == string(InvestigationOutcomeTimedOut) {
-			cooldown = investigationTimeoutCooldown
-		}
+		cooldown := investigationCooldownForOutcome(f.InvestigationOutcome)
 		if time.Since(*f.LastInvestigatedAt) < cooldown {
 			return false
 		}
@@ -242,13 +342,17 @@ func (f *Finding) CanRetryInvestigation() bool {
 	// Can't retry if still in cooldown
 	// Timeout failures use a shorter cooldown (10min) since they're transient
 	if f.LastInvestigatedAt != nil {
-		cooldown := investigationCooldown
-		if f.InvestigationOutcome == string(InvestigationOutcomeTimedOut) {
-			cooldown = investigationTimeoutCooldown
-		}
+		cooldown := investigationCooldownForOutcome(f.InvestigationOutcome)
 		if time.Since(*f.LastInvestigatedAt) < cooldown {
 			return false
 		}
+	}
+	if InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixQueued ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerified ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeResolved ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeCannotFix ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention {
+		return false
 	}
 	// Can't retry if currently running
 	if f.InvestigationStatus == string(InvestigationStatusRunning) {
@@ -298,6 +402,7 @@ func (f *Finding) GetInvestigationStatus() string    { return f.InvestigationSta
 func (f *Finding) GetInvestigationOutcome() string   { return f.InvestigationOutcome }
 func (f *Finding) GetLastInvestigatedAt() *time.Time { return f.LastInvestigatedAt }
 func (f *Finding) GetInvestigationAttempts() int     { return f.InvestigationAttempts }
+func (f *Finding) GetLoopState() string              { return f.LoopState }
 
 // Setter methods for investigation.AIFinding interface
 
@@ -306,6 +411,7 @@ func (f *Finding) SetInvestigationStatus(v string)    { f.InvestigationStatus = 
 func (f *Finding) SetInvestigationOutcome(v string)   { f.InvestigationOutcome = v }
 func (f *Finding) SetLastInvestigatedAt(v *time.Time) { f.LastInvestigatedAt = v }
 func (f *Finding) SetInvestigationAttempts(v int)     { f.InvestigationAttempts = v }
+func (f *Finding) SetLoopState(v string)              { f.LoopState = v }
 
 // SuppressionRule represents a user-defined rule to suppress certain AI findings
 // Users can create these manually to prevent alerts before they happen
@@ -375,6 +481,8 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 		if len(findings) > 0 {
 			s.mu.Lock()
 			for id, f := range findings {
+				// Ensure derived fields are consistent after load.
+				f.syncLoopState()
 				s.findings[id] = f
 				s.byResource[f.ResourceID] = append(s.byResource[f.ResourceID], id)
 				if f.IsActive() {
@@ -481,6 +589,101 @@ func (s *FindingsStore) GetPersistenceStatus() (lastError error, lastSaveTime ti
 	return s.lastSaveError, s.lastSaveTime, s.persistence != nil
 }
 
+// appendLifecycleLocked appends a lifecycle event to a finding and bounds the history.
+// Caller must hold s.mu.
+func (s *FindingsStore) appendLifecycleLocked(f *Finding, typ, msg, from, to string, meta map[string]string) {
+	if f == nil {
+		return
+	}
+	e := FindingLifecycleEvent{
+		At:       time.Now(),
+		Type:     typ,
+		Message:  msg,
+		From:     from,
+		To:       to,
+		Metadata: meta,
+	}
+	f.Lifecycle = append(f.Lifecycle, e)
+	if len(f.Lifecycle) > maxFindingLifecycleEvents {
+		f.Lifecycle = f.Lifecycle[len(f.Lifecycle)-maxFindingLifecycleEvents:]
+	}
+}
+
+func isKnownLoopState(v string) bool {
+	switch FindingLoopState(v) {
+	case FindingLoopStateDetected, FindingLoopStateInvestigating, FindingLoopStateRemediationPlanned, FindingLoopStateRemediating, FindingLoopStateRemediationFailed, FindingLoopStateNeedsAttention, FindingLoopStateTimedOut, FindingLoopStateResolved, FindingLoopStateDismissed, FindingLoopStateSnoozed, FindingLoopStateSuppressed:
+		return true
+	default:
+		return false
+	}
+}
+
+func isAllowedLoopTransition(from, to string) bool {
+	if from == "" || from == to {
+		return true
+	}
+	if !isKnownLoopState(from) || !isKnownLoopState(to) {
+		return false
+	}
+
+	switch FindingLoopState(from) {
+	case FindingLoopStateResolved:
+		// Resolved findings should only remain resolved or reopen as detected.
+		return to == string(FindingLoopStateResolved) || to == string(FindingLoopStateDetected)
+	case FindingLoopStateSuppressed:
+		// Suppressed findings should remain suppressed unless explicitly unsuppressed.
+		return to == string(FindingLoopStateSuppressed) || to == string(FindingLoopStateDetected)
+	case FindingLoopStateDismissed:
+		// Dismissed findings can be re-opened or further suppressed/resolved.
+		return to == string(FindingLoopStateDismissed) ||
+			to == string(FindingLoopStateDetected) ||
+			to == string(FindingLoopStateSuppressed) ||
+			to == string(FindingLoopStateResolved)
+	case FindingLoopStateSnoozed:
+		// Snoozed findings can wake up (detected) or be resolved/suppressed/dismissed.
+		return to == string(FindingLoopStateSnoozed) ||
+			to == string(FindingLoopStateDetected) ||
+			to == string(FindingLoopStateResolved) ||
+			to == string(FindingLoopStateSuppressed) ||
+			to == string(FindingLoopStateDismissed)
+	default:
+		return true
+	}
+}
+
+// syncLoopStateLocked recomputes loop state and records a lifecycle event if it changed.
+// Caller must hold s.mu.
+func (s *FindingsStore) syncLoopStateLocked(f *Finding) {
+	if f == nil {
+		return
+	}
+	prev := f.LoopState
+	f.syncLoopState()
+	if prev == f.LoopState {
+		return
+	}
+	if !isAllowedLoopTransition(prev, f.LoopState) {
+		next := f.LoopState
+		f.LoopState = prev
+		s.appendLifecycleLocked(f, "loop_transition_violation", "Blocked invalid loop-state transition", prev, next, map[string]string{
+			"from": prev,
+			"to":   next,
+		})
+		return
+	}
+	meta := map[string]string{}
+	if prev != "" {
+		meta["prev"] = prev
+	}
+	if f.LoopState != "" {
+		meta["next"] = f.LoopState
+	}
+	if !isKnownLoopState(f.LoopState) {
+		meta["invalid_next"] = "true"
+	}
+	s.appendLifecycleLocked(f, "loop_state", "", prev, f.LoopState, meta)
+}
+
 // Add adds or updates a finding
 // If a finding with the same ID exists, it updates LastSeenAt and increments TimesRaised
 // If the finding is suppressed or dismissed, it may be skipped
@@ -491,6 +694,8 @@ func (s *FindingsStore) Add(f *Finding) bool {
 	if f.ResourceType == "" {
 		f.ResourceType = inferFindingResourceType(f.ResourceID, f.ResourceName)
 	}
+	// Keep loop state derived from the current flags/outcomes.
+	f.syncLoopState()
 
 	existing, exists := s.findings[f.ID]
 	if exists {
@@ -515,6 +720,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			if severityOrder[f.Severity] <= severityOrder[existing.Severity] {
 				existing.LastSeenAt = time.Now()
 				existing.TimesRaised++
+				s.appendLifecycleLocked(existing, "seen_while_suppressed", "Re-detected while dismissed/suppressed with non-escalated severity", existing.LoopState, existing.LoopState, nil)
 				s.mu.Unlock()
 				s.scheduleSave()
 				return false
@@ -535,13 +741,34 @@ func (s *FindingsStore) Add(f *Finding) bool {
 		existing.Severity = f.Severity
 		existing.TimesRaised++ // Track recurrence
 		if wasResolved {
+			prevResolvedAt := existing.ResolvedAt
+			prevResolveReason := existing.ResolveReason
 			existing.ResolvedAt = nil
 			existing.AutoResolved = false
 			existing.ResolveReason = ""
+			// Reset investigation loop metadata when a previously resolved issue reappears.
+			existing.InvestigationSessionID = ""
+			existing.InvestigationStatus = ""
+			existing.InvestigationOutcome = ""
+			existing.LastInvestigatedAt = nil
+			existing.InvestigationAttempts = 0
+			existing.RegressionCount++
+			now := time.Now()
+			existing.LastRegressionAt = &now
+			meta := map[string]string{}
+			if prevResolvedAt != nil {
+				meta["previous_resolved_at"] = prevResolvedAt.Format(time.RFC3339)
+			}
+			if prevResolveReason != "" {
+				meta["previous_resolve_reason"] = prevResolveReason
+			}
+			s.appendLifecycleLocked(existing, "regressed", "Finding re-detected after resolution", string(FindingLoopStateResolved), string(FindingLoopStateDetected), meta)
 			if existing.IsActive() {
 				s.activeCounts[existing.Severity]++
 			}
 		}
+		s.syncLoopStateLocked(existing)
+		s.appendLifecycleLocked(existing, "detected", "Detected by Pulse Patrol", existing.LoopState, existing.LoopState, nil)
 		severity := existing.Severity
 		s.mu.Unlock()
 		s.scheduleSave()
@@ -563,6 +790,11 @@ func (s *FindingsStore) Add(f *Finding) bool {
 		f.DetectedAt = time.Now()
 	}
 	f.LastSeenAt = time.Now()
+	if f.TimesRaised <= 0 {
+		f.TimesRaised = 1
+	}
+	s.syncLoopStateLocked(f)
+	s.appendLifecycleLocked(f, "detected", "Detected by Pulse Patrol", "", f.LoopState, nil)
 
 	s.findings[f.ID] = f
 	s.byResource[f.ResourceID] = append(s.byResource[f.ResourceID], f.ID)
@@ -593,6 +825,12 @@ func (s *FindingsStore) Resolve(id string, auto bool) bool {
 	now := time.Now()
 	f.ResolvedAt = &now
 	f.AutoResolved = auto
+	etype := "resolved"
+	if auto {
+		etype = "auto_resolved"
+	}
+	s.appendLifecycleLocked(f, etype, f.ResolveReason, f.LoopState, string(FindingLoopStateResolved), nil)
+	s.syncLoopStateLocked(f)
 	s.activeCounts[f.Severity]--
 	s.mu.Unlock()
 	s.scheduleSave()
@@ -615,6 +853,8 @@ func (s *FindingsStore) ResolveWithReason(id string, reason string) bool {
 	f.ResolvedAt = &now
 	f.AutoResolved = true
 	f.ResolveReason = reason
+	s.appendLifecycleLocked(f, "auto_resolved", reason, f.LoopState, string(FindingLoopStateResolved), nil)
+	s.syncLoopStateLocked(f)
 	s.activeCounts[f.Severity]--
 	s.mu.Unlock()
 	s.scheduleSave()
@@ -634,6 +874,7 @@ func (s *FindingsStore) Acknowledge(id string) bool {
 
 	now := time.Now()
 	f.AcknowledgedAt = &now
+	s.appendLifecycleLocked(f, "acknowledged", "", "", "", nil)
 	s.mu.Unlock()
 	s.scheduleSave()
 	return true
@@ -657,6 +898,10 @@ func (s *FindingsStore) Snooze(id string, duration time.Duration) bool {
 
 	until := time.Now().Add(duration)
 	f.SnoozedUntil = &until
+	s.appendLifecycleLocked(f, "snoozed", "", f.LoopState, string(FindingLoopStateSnoozed), map[string]string{
+		"until": until.Format(time.RFC3339),
+	})
+	s.syncLoopStateLocked(f)
 	s.mu.Unlock()
 	s.scheduleSave()
 	return true
@@ -673,9 +918,16 @@ func (s *FindingsStore) Unsnooze(id string) bool {
 	}
 
 	if f.SnoozedUntil != nil {
+		prev := f.SnoozedUntil
 		f.SnoozedUntil = nil
 		s.activeCounts[f.Severity]++
+		meta := map[string]string{}
+		if prev != nil {
+			meta["previous_until"] = prev.Format(time.RFC3339)
+		}
+		s.appendLifecycleLocked(f, "unsnoozed", "", string(FindingLoopStateSnoozed), string(FindingLoopStateDetected), meta)
 	}
+	s.syncLoopStateLocked(f)
 	s.mu.Unlock()
 	s.scheduleSave()
 	return true
@@ -709,12 +961,16 @@ func (s *FindingsStore) Dismiss(id, reason, note string) bool {
 	// Mark as acknowledged for all dismiss reasons
 	now := time.Now()
 	f.AcknowledgedAt = &now
+	s.appendLifecycleLocked(f, "dismissed", "", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
+		"reason": reason,
+	})
 
 	// Only "not_an_issue" creates permanent suppression
 	// This is for true false positives where the detection logic is wrong
 	if reason == "not_an_issue" {
 		f.Suppressed = true
 	}
+	s.syncLoopStateLocked(f)
 	// For "expected_behavior" and "will_fix_later":
 	// - Finding stays visible (not suppressed, not snoozed)
 	// - But is marked as dismissed/acknowledged so user knows they've reviewed it
@@ -747,6 +1003,7 @@ func (s *FindingsStore) Undismiss(id string) bool {
 	f.DismissedReason = ""
 	f.Suppressed = false
 	f.AcknowledgedAt = nil
+	s.appendLifecycleLocked(f, "undismissed", "", string(FindingLoopStateDismissed), string(FindingLoopStateDetected), nil)
 	// Keep UserNote in case user wants to see their notes
 
 	// If it was resolved, don't reactivate - user should manually reopen
@@ -754,6 +1011,7 @@ func (s *FindingsStore) Undismiss(id string) bool {
 	if f.ResolvedAt == nil && !f.IsSnoozed() {
 		s.activeCounts[f.Severity]++
 	}
+	s.syncLoopStateLocked(f)
 
 	s.mu.Unlock()
 	s.scheduleSave()
@@ -771,6 +1029,11 @@ func (s *FindingsStore) SetUserNote(id, note string) bool {
 	}
 
 	f.UserNote = note
+	msg := "User note updated"
+	if strings.TrimSpace(note) == "" {
+		msg = "User note cleared"
+	}
+	s.appendLifecycleLocked(f, "user_note_updated", msg, "", "", nil)
 	s.mu.Unlock()
 	s.scheduleSave()
 	return true
@@ -786,7 +1049,32 @@ func (s *FindingsStore) UpdateInvestigationOutcome(id, outcome string) bool {
 		return false
 	}
 
+	prevOutcome := f.InvestigationOutcome
 	f.InvestigationOutcome = outcome
+	// If a fix was verified, close the loop by resolving the finding.
+	if InvestigationOutcome(outcome) == InvestigationOutcomeFixVerified {
+		now := time.Now()
+		// Only decrement active count once.
+		if f.ResolvedAt == nil && f.IsActive() {
+			s.activeCounts[f.Severity]--
+		}
+		f.ResolvedAt = &now
+		f.AutoResolved = true
+		if f.ResolveReason == "" {
+			f.ResolveReason = "Fix verified"
+		}
+		s.appendLifecycleLocked(f, "verification_passed", "Fix verified; finding resolved", f.LoopState, string(FindingLoopStateResolved), nil)
+	} else {
+		msg := "Investigation outcome updated"
+		if InvestigationOutcome(outcome) == InvestigationOutcomeFixFailed || InvestigationOutcome(outcome) == InvestigationOutcomeFixVerificationFailed {
+			msg = "Remediation failed verification"
+		}
+		s.appendLifecycleLocked(f, "investigation_outcome", msg, f.LoopState, f.LoopState, map[string]string{
+			"prev_outcome": prevOutcome,
+			"next_outcome": outcome,
+		})
+	}
+	s.syncLoopStateLocked(f)
 	s.mu.Unlock()
 	s.scheduleSave()
 	return true
@@ -802,11 +1090,34 @@ func (s *FindingsStore) UpdateInvestigation(id, sessionID, status, outcome strin
 		return false
 	}
 
+	prevStatus := f.InvestigationStatus
+	prevOutcome := f.InvestigationOutcome
 	f.InvestigationSessionID = sessionID
 	f.InvestigationStatus = status
 	f.InvestigationOutcome = outcome
 	f.LastInvestigatedAt = lastInvestigatedAt
 	f.InvestigationAttempts = attempts
+	// If a fix was verified, close the loop by resolving the finding.
+	if InvestigationOutcome(outcome) == InvestigationOutcomeFixVerified {
+		now := time.Now()
+		if f.ResolvedAt == nil && f.IsActive() {
+			s.activeCounts[f.Severity]--
+		}
+		f.ResolvedAt = &now
+		f.AutoResolved = true
+		if f.ResolveReason == "" {
+			f.ResolveReason = "Fix verified"
+		}
+		s.appendLifecycleLocked(f, "verification_passed", "Fix verified; finding resolved", f.LoopState, string(FindingLoopStateResolved), nil)
+	} else {
+		s.appendLifecycleLocked(f, "investigation_updated", "Investigation state updated", f.LoopState, f.LoopState, map[string]string{
+			"prev_status":  prevStatus,
+			"next_status":  status,
+			"prev_outcome": prevOutcome,
+			"next_outcome": outcome,
+		})
+	}
+	s.syncLoopStateLocked(f)
 	s.mu.Unlock()
 	s.scheduleSave()
 	return true
@@ -827,6 +1138,8 @@ func (s *FindingsStore) Suppress(id string) bool {
 	f.DismissedReason = "suppressed"
 	now := time.Now()
 	f.AcknowledgedAt = &now
+	s.appendLifecycleLocked(f, "suppressed", "Permanently suppressed by user", f.LoopState, string(FindingLoopStateSuppressed), nil)
+	s.syncLoopStateLocked(f)
 
 	// Create a suppression rule to block future findings with same resource+category
 	s.addSuppressionRuleInternal(f.ResourceID, f.ResourceName, f.Category, "Suppressed via finding", "suppress")

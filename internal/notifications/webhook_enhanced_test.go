@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -15,7 +14,7 @@ func TestEnhancedWebhook(t *testing.T) {
 	nm := NewNotificationManager("http://pulse.local")
 	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	}))
@@ -170,7 +169,7 @@ func TestSendWebhookWithRetry_429RetryAfter(t *testing.T) {
 	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
 	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
 		if attempts == 1 {
 			w.Header().Set("Retry-After", "1")
@@ -200,7 +199,7 @@ func TestSendEnhancedWebhook_TemplateRendering(t *testing.T) {
 	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
 	receivedPayload := ""
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		receivedPayload = string(body)
 		w.WriteHeader(http.StatusOK)
@@ -231,7 +230,7 @@ func TestSendEnhancedWebhook_SpecialServices(t *testing.T) {
 	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
 	t.Run("Telegram ChatID", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer server.Close()
@@ -248,7 +247,7 @@ func TestSendEnhancedWebhook_SpecialServices(t *testing.T) {
 	})
 
 	t.Run("PagerDuty RoutingKey", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer server.Close()
@@ -270,7 +269,7 @@ func TestEnhancedWebhook_ntfy(t *testing.T) {
 	nm := NewNotificationManager("http://pulse.local")
 	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "text/plain", r.Header.Get("Content-Type"))
 		assert.NotEmpty(t, r.Header.Get("Title"))
 		assert.NotEmpty(t, r.Header.Get("Priority"))

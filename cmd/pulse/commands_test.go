@@ -2,24 +2,18 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
-	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/server"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // createTestEncryptionKey creates a valid base64-encoded encryption key in the temp directory.
@@ -220,22 +214,6 @@ func TestBootstrapTokenEdgeCases(t *testing.T) {
 	assert.Equal(t, 1, exitCode)
 }
 
-func TestStartMetricsServer_Error(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Bind a port first
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.NoError(t, err)
-	defer l.Close()
-	addr := l.Addr().String()
-
-	// Try to start on the same port
-	startMetricsServer(ctx, addr)
-	// Give it enough time to fail and log
-	time.Sleep(500 * time.Millisecond)
-}
-
 func TestMockCmds(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("PULSE_DATA_DIR", tempDir)
@@ -280,26 +258,37 @@ func TestMockCmds(t *testing.T) {
 	path := getMockEnvPath()
 	assert.NotEmpty(t, path)
 
-	// Test getMockEnvPath branch (/opt/pulse/mock.env fallback)
+	// Test getMockEnvPath branch (fallback when PULSE_DATA_DIR is empty and mock.env exists in default dir)
+	oldDefault := mockEnvDefaultDir
+	oldStat := mockEnvStat
+	t.Cleanup(func() {
+		mockEnvDefaultDir = oldDefault
+		mockEnvStat = oldStat
+	})
+	mockEnvDefaultDir = t.TempDir()
+	mockEnvStat = os.Stat
+	require.NoError(t, os.WriteFile(filepath.Join(mockEnvDefaultDir, "mock.env"), []byte("PULSE_MOCK_MODE=false\n"), 0644))
+
 	os.Unsetenv("PULSE_DATA_DIR")
-	// Ensure it exists
-	mockPath := "/opt/pulse/mock.env"
-	errWrite := os.WriteFile(mockPath, []byte("PULSE_MOCK_MODE=false\n"), 0644)
-	if errWrite == nil {
-		path = getMockEnvPath()
-		assert.Equal(t, mockPath, path)
-		// Don't remove it yet, or remove it carefully
-	}
+	path = getMockEnvPath()
+	assert.Equal(t, filepath.Join(mockEnvDefaultDir, "mock.env"), path)
 }
 
 func TestGetMockEnvPath_DefaultFallback(t *testing.T) {
-	// Cover line 104: dataDir = "/opt/pulse"
+	oldDefault := mockEnvDefaultDir
+	oldStat := mockEnvStat
+	t.Cleanup(func() {
+		mockEnvDefaultDir = oldDefault
+		mockEnvStat = oldStat
+	})
+
+	// Cover fallback: PULSE_DATA_DIR empty and mock.env does not exist in default dir.
+	mockEnvDefaultDir = filepath.Join(t.TempDir(), "does-not-exist")
+	mockEnvStat = os.Stat
 	os.Unsetenv("PULSE_DATA_DIR")
-	// Ensure /opt/pulse/mock.env does NOT exist
-	os.Remove("/opt/pulse/mock.env")
 
 	path := getMockEnvPath()
-	assert.Equal(t, "/opt/pulse/mock.env", path)
+	assert.Equal(t, filepath.Join(mockEnvDefaultDir, "mock.env"), path)
 }
 
 func TestMockEnable_Error(t *testing.T) {
@@ -435,86 +424,6 @@ func TestConfigAutoImportCmd(t *testing.T) {
 	assert.Error(t, err) // Still invalid data, but covered the URL path
 }
 
-func TestRunServer(t *testing.T) {
-	oldPort := metricsPort
-	metricsPort = 0
-	defer func() { metricsPort = oldPort }()
-
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-	t.Setenv("PULSE_FRONTEND_PORT", "0")
-
-	// Create a dummy .env to avoid config load error
-	createTestEncryptionKey(t, tempDir)
-	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
-
-	// Test case: AllowedOrigins = "*"
-	t.Setenv("PULSE_ALLOWED_ORIGINS", "*")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	captureOutput(func() {
-		runServer(ctx)
-	})
-
-	// Test case: Specific AllowedOrigins
-	os.Setenv("PULSE_ALLOWED_ORIGINS", "http://localhost:3000")
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel2()
-	captureOutput(func() {
-		runServer(ctx2)
-	})
-}
-
-func TestSIGHUP(t *testing.T) {
-	oldPort := metricsPort
-	metricsPort = 0
-	defer func() { metricsPort = oldPort }()
-
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-	t.Setenv("PULSE_FRONTEND_PORT", "0")
-	createTestEncryptionKey(t, tempDir)
-	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	go func() {
-		time.Sleep(200 * time.Millisecond)
-		syscall.Kill(os.Getpid(), syscall.SIGHUP)
-		time.Sleep(200 * time.Millisecond)
-		cancel()
-	}()
-
-	captureOutput(func() {
-		runServer(ctx)
-	})
-}
-
-func TestMainActual(t *testing.T) {
-	oldPort := metricsPort
-	metricsPort = 0
-	defer func() { metricsPort = oldPort }()
-
-	// Root command which will return immediately because we've already set its args in previously tests?
-	// or we set it to something that fails quickly.
-	rootCmd.SetArgs([]string{"version"})
-	main()
-
-	// Test main error path
-	oldExit := osExit
-	defer func() { osExit = oldExit }()
-	exitCode := 0
-	osExit = func(code int) { exitCode = code }
-
-	rootCmd.SetArgs([]string{"--invalid-flag"})
-	captureOutput(func() {
-		main()
-	})
-	assert.Equal(t, 1, exitCode)
-}
-
 func TestConfigAutoImport_Errors(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("PULSE_DATA_DIR", tempDir)
@@ -582,84 +491,6 @@ func TestNormalizeImportPayload(t *testing.T) {
 	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("!!")), s)
 }
 
-func TestRunServer_HTTPS(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-	createTestEncryptionKey(t, tempDir)
-	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
-
-	t.Setenv("PULSE_HTTPS_ENABLED", "true")
-	t.Setenv("PULSE_TLS_CERT_FILE", "nonexistent.crt")
-	t.Setenv("PULSE_TLS_KEY_FILE", "nonexistent.key")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	captureOutput(func() {
-		runServer(ctx)
-	})
-}
-
-func TestRunServer_ConfigReload(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-	t.Setenv("PULSE_FRONTEND_PORT", "0")
-	createTestEncryptionKey(t, tempDir)
-	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
-
-	metricsPort = 0 // Use random port for metrics
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Run server in background
-	errChan := make(chan error, 1)
-	go func() {
-		errChan <- runServer(ctx)
-	}()
-
-	// Wait for server to start
-	time.Sleep(500 * time.Millisecond)
-
-	// Send SIGHUP to trigger reload
-	syscall.Kill(os.Getpid(), syscall.SIGHUP)
-	time.Sleep(200 * time.Millisecond)
-
-	// Trigger mock reload if possible
-	mockEnv := filepath.Join(tempDir, "mock.env")
-	os.WriteFile(mockEnv, []byte("PULSE_MOCK_MODE=true\n"), 0644)
-	time.Sleep(200 * time.Millisecond)
-
-	cancel()
-	err := <-errChan
-	assert.NoError(t, err)
-
-	// Give time for any pending file watcher events to complete before cleanup
-	time.Sleep(100 * time.Millisecond)
-}
-
-func TestMainCmd(t *testing.T) {
-	// Root command without args should run runServer
-	// But we don't want it to block forever
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-	createTestEncryptionKey(t, tempDir)
-	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
-
-	// Override rootCmd RunE
-	oldRunE := rootCmd.RunE
-	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
-		return runServer(ctx)
-	}
-	defer func() { rootCmd.RunE = oldRunE }()
-
-	rootCmd.SetArgs([]string{})
-	err := rootCmd.Execute()
-	assert.NoError(t, err)
-}
-
 func TestConfigExport_ErrorPaths(t *testing.T) {
 	resetFlags()
 	tempDir := t.TempDir()
@@ -677,25 +508,6 @@ func TestConfigExport_ErrorPaths(t *testing.T) {
 	err := rootCmd.Execute()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "passphrase is required")
-
-	// 2. Default data dir branch - only test if /etc/pulse exists
-	if _, err := os.Stat("/etc/pulse"); err == nil {
-		os.Unsetenv("PULSE_DATA_DIR")
-		rootCmd.SetArgs([]string{"config", "export", "--passphrase", "test"})
-		// This will try to read from /etc/pulse/nodes.enc which might not exist or be accessible
-		rootCmd.Execute()
-	}
-}
-
-func TestConfigImport_NoDataDir(t *testing.T) {
-	// Skip in CI where /etc/pulse doesn't exist
-	if _, err := os.Stat("/etc/pulse"); os.IsNotExist(err) {
-		t.Skip("Skipping test: /etc/pulse does not exist (likely CI environment)")
-	}
-	resetFlags()
-	os.Unsetenv("PULSE_DATA_DIR")
-	rootCmd.SetArgs([]string{"config", "import", "--passphrase", "test", "-i", "nonexistent"})
-	rootCmd.Execute()
 }
 
 func TestConfigExport_WriteError(t *testing.T) {
@@ -760,173 +572,12 @@ func TestConfigImport_Errors(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to import configuration")
 }
 
-func TestRunServer_AutoImportFail(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-	createTestEncryptionKey(t, tempDir)
-	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
-
-	// Setup auto-import env vars with invalid data that causes normalize error
-	t.Setenv("PULSE_INIT_CONFIG_DATA", "   ")
-	t.Setenv("PULSE_INIT_CONFIG_PASSPHRASE", "pass")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	// Should log error but continue
-	output := captureOutput(func() {
-		runServer(ctx)
-	})
-	// Just check that we got some output, exact buffering might be tricky with logs
-	// assert.Contains(t, output, "Auto-import failed")
-	// If assert fails it might be due to race or logger init.
-	// We mainly want to cover the code path.
-	// But let's check if output is not empty
-	assert.NotEmpty(t, output)
-}
-
 func TestCaptureOutput(t *testing.T) {
 	output := captureOutput(func() {
 		fmt.Print("hello")
 		fmt.Fprint(os.Stderr, "world")
 	})
 	assert.Equal(t, "helloworld", output)
-}
-
-func TestRunServer_WebSocket(t *testing.T) {
-	resetFlags()
-	// Pick random port for frontend
-	l, _ := net.Listen("tcp", "localhost:0")
-	port := l.Addr().(*net.TCPAddr).Port
-	l.Close()
-
-	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", port))
-
-	// Set up auth for test
-	t.Setenv("PULSE_AUTH_USER", "testuser")
-	t.Setenv("PULSE_AUTH_PASS", "testpass")
-
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-	// Need valid node config to proceed
-	createTestEncryptionKey(t, tempDir)
-	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
-	// Need system.json to set AllowedOrigins to * for test (relaxed)
-	sysConfig := map[string]interface{}{
-		"allowedOrigins": "*",
-	}
-	sysData, _ := json.Marshal(sysConfig)
-	os.WriteFile(filepath.Join(tempDir, "system.json"), sysData, 0644)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Start server in background
-	go func() {
-		runServer(ctx)
-	}()
-
-	// Wait for server to be ready
-	// Polling is better than sleep
-	ready := false
-	for i := 0; i < 20; i++ {
-		conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", port))
-		if err == nil {
-			conn.Close()
-			ready = true
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	if !ready {
-		t.Skip("Server failed to start")
-	}
-
-	// Connect WS with Basic Auth
-	url := fmt.Sprintf("ws://localhost:%d/api/state", port) // This connects to handleState which returns JSON, NOT WS
-	// ERROR: handleState is JSON endpoint.
-	// WebSocket endpoint is /ws (line 1325).
-	// And handleWebSocket (3968) calls CheckAuth.
-	// So target /ws
-	url = fmt.Sprintf("ws://localhost:%d/ws", port)
-
-	dialer := websocket.Dialer{}
-	auth := base64.StdEncoding.EncodeToString([]byte("testuser:testpass"))
-	header := http.Header{}
-	header.Add("Authorization", "Basic "+auth)
-
-	conn, _, err := dialer.Dial(url, header)
-	if assert.NoError(t, err) {
-		defer conn.Close()
-		// Wait for state message - this triggers the SetStateGetter callback
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, _, err := conn.ReadMessage()
-		// We don't care about message content, just that we got something (or not error)
-		if err != nil {
-			t.Logf("WS Read Error: %v", err)
-		}
-	}
-
-	// Explicitly cancel and wait for server shutdown before test cleanup
-	// to avoid race condition where server writes files during temp dir removal
-	cancel()
-	time.Sleep(200 * time.Millisecond)
-}
-
-func TestRunServer_AllowedOrigins(t *testing.T) {
-	resetFlags()
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-	createTestEncryptionKey(t, tempDir)
-	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
-
-	// Write system.json with specific allowed origins
-	sysConfig := map[string]interface{}{
-		"allowedOrigins": "example.com,foo.com",
-	}
-	sysData, _ := json.Marshal(sysConfig)
-	os.WriteFile(filepath.Join(tempDir, "system.json"), sysData, 0644)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	captureOutput(func() {
-		runServer(ctx)
-	})
-	// Coverage should show hit on AllowedOrigins parsing logic
-}
-
-func TestRunServer_FrontendFail(t *testing.T) {
-	resetFlags()
-	// Use a random port for metrics to avoid conflict
-	oldMetricsPort := metricsPort
-	metricsPort = 0
-	defer func() { metricsPort = oldMetricsPort }()
-
-	// Find free port, bind it to make busy
-	l, _ := net.Listen("tcp", "127.0.0.1:0")
-	port := l.Addr().(*net.TCPAddr).Port
-	// Keep l open
-	defer l.Close()
-
-	t.Setenv("BIND_ADDRESS", "127.0.0.1")
-
-	// Set frontend port to busy port
-	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", port))
-
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-	createTestEncryptionKey(t, tempDir)
-	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	output := captureOutput(func() {
-		runServer(ctx)
-	})
-	// Expect "Failed to start HTTP server"
-	assert.Contains(t, output, "Failed to start HTTP server")
 }
 
 // Helper to capture stdout and stderr

@@ -190,27 +190,6 @@ func TestService_EnforceBudget_NoBudget(t *testing.T) {
 	}
 }
 
-func TestService_StartPatrol_NoPatrol(t *testing.T) {
-	svc := NewService(nil, nil)
-
-	// Should not panic when patrol is nil
-	svc.StartPatrol(context.Background())
-}
-
-func TestService_StopPatrol_NoPatrol(t *testing.T) {
-	svc := NewService(nil, nil)
-
-	// Should not panic when patrol is nil
-	svc.StopPatrol()
-}
-
-func TestService_ReconfigurePatrol_NoPatrol(t *testing.T) {
-	svc := NewService(nil, nil)
-
-	// Should not panic when patrol is nil
-	svc.ReconfigurePatrol()
-}
-
 func TestService_LookupGuestsByVMID(t *testing.T) {
 	svc := NewService(nil, nil)
 
@@ -427,34 +406,6 @@ func TestParseApprovalNeededMarker(t *testing.T) {
 
 // Note: GetDebugContext tests removed - they require persistence to be properly
 // initialized and are better suited for integration tests
-
-func TestService_SetProviders(t *testing.T) {
-	svc := NewService(nil, nil)
-
-	// Set up state provider first (needed for patrol service)
-	stateProvider := &mockStateProvider{}
-	svc.SetStateProvider(stateProvider)
-
-	// Test SetPatrolThresholdProvider
-	thresholdProvider := &mockThresholdProvider{
-		nodeCPU:    90,
-		nodeMemory: 85,
-	}
-	svc.SetPatrolThresholdProvider(thresholdProvider)
-	// No direct way to verify, but shouldn't panic
-
-	// Test SetChangeDetector with nil
-	svc.SetChangeDetector(nil)
-
-	// Test SetRemediationLog with nil
-	svc.SetRemediationLog(nil)
-
-	// Test SetPatternDetector with nil
-	svc.SetPatternDetector(nil)
-
-	// Test SetCorrelationDetector with nil
-	svc.SetCorrelationDetector(nil)
-}
 
 func TestService_Execute(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pulse-ai-execute-test-*")

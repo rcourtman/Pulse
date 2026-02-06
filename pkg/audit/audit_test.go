@@ -92,14 +92,6 @@ func TestSetLogger_GetLogger(t *testing.T) {
 	}
 }
 
-func TestLog_ConvenienceFunction(t *testing.T) {
-	// Set a console logger
-	SetLogger(NewConsoleLogger())
-
-	// This should not panic
-	Log("test_event", "user", "127.0.0.1", "/test", true, "test details")
-}
-
 func TestGetLogger_DefaultsToConsole(t *testing.T) {
 	// Reset global state for this test
 	loggerMu.Lock()

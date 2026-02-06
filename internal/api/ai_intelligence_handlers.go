@@ -1163,11 +1163,15 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 		EnhancedByAI   bool       `json:"enhanced_by_ai,omitempty"`
 		AIEnhancedAt   *time.Time `json:"ai_enhanced_at,omitempty"`
 		// Investigation fields
-		InvestigationSessionID string     `json:"investigationSessionId,omitempty"`
-		InvestigationStatus    string     `json:"investigationStatus,omitempty"`
-		InvestigationOutcome   string     `json:"investigationOutcome,omitempty"`
-		LastInvestigatedAt     *time.Time `json:"lastInvestigatedAt,omitempty"`
-		InvestigationAttempts  int        `json:"investigationAttempts,omitempty"`
+		InvestigationSessionID string                                 `json:"investigation_session_id,omitempty"`
+		InvestigationStatus    string                                 `json:"investigation_status,omitempty"`
+		InvestigationOutcome   string                                 `json:"investigation_outcome,omitempty"`
+		LastInvestigatedAt     *time.Time                             `json:"last_investigated_at,omitempty"`
+		InvestigationAttempts  int                                    `json:"investigation_attempts,omitempty"`
+		LoopState              string                                 `json:"loop_state,omitempty"`
+		Lifecycle              []unified.UnifiedFindingLifecycleEvent `json:"lifecycle,omitempty"`
+		RegressionCount        int                                    `json:"regression_count,omitempty"`
+		LastRegressionAt       *time.Time                             `json:"last_regression_at,omitempty"`
 		// Timestamps and user feedback
 		DetectedAt      time.Time  `json:"detected_at"`
 		LastSeenAt      time.Time  `json:"last_seen_at"`
@@ -1240,6 +1244,10 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 			InvestigationOutcome:   f.InvestigationOutcome,
 			LastInvestigatedAt:     f.LastInvestigatedAt,
 			InvestigationAttempts:  f.InvestigationAttempts,
+			LoopState:              f.LoopState,
+			Lifecycle:              f.Lifecycle,
+			RegressionCount:        f.RegressionCount,
+			LastRegressionAt:       f.LastRegressionAt,
 			DetectedAt:             f.DetectedAt,
 			LastSeenAt:             f.LastSeenAt,
 			ResolvedAt:             f.ResolvedAt,

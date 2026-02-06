@@ -54,6 +54,40 @@ func TestHandleGetPatrolStatus_NoPatrolService(t *testing.T) {
 	}
 }
 
+func TestHandleGetPatrolStatus_NoAIService(t *testing.T) {
+	t.Parallel()
+
+	// Handler with no legacy AI service should not panic.
+	handler := &AISettingsHandler{}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.Running {
+		t.Error("expected Running to be false when AI service missing")
+	}
+	if resp.Enabled {
+		t.Error("expected Enabled to be false when AI service missing")
+	}
+	if !resp.Healthy {
+		t.Error("expected Healthy to be true when AI service missing")
+	}
+	if resp.LicenseStatus == "" {
+		t.Error("expected LicenseStatus to be set when AI service missing")
+	}
+}
+
 func TestHandleGetPatrolFindings_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 	handler := createTestAIHandler(t)

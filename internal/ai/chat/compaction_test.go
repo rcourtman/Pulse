@@ -169,13 +169,6 @@ func TestCompactOldToolResults_KeepTurnsZero(t *testing.T) {
 	assert.Contains(t, msgs[2].ToolResult.Content, "[Tool result compacted:", "should compact with keepTurns=0")
 }
 
-func TestCompactOldToolResults_EmptyMessages(t *testing.T) {
-	// Edge case: empty or nil-ish slices should not panic
-	compactOldToolResults(nil, 0, 3, 500, nil)
-	compactOldToolResults([]providers.Message{}, 0, 3, 500, nil)
-	compactOldToolResults([]providers.Message{{Role: "user", Content: "hi"}}, 0, 3, 500, nil)
-}
-
 func TestCompactOldToolResults_ContextSavings(t *testing.T) {
 	// Simulate a patrol-like scenario: 10 tool calls, each returning ~4000 chars.
 	// After compaction with keepTurns=2, old results should be dramatically smaller.

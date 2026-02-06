@@ -15,7 +15,7 @@ import (
 func newOIDCTestServer(t *testing.T, tokenStatus int, tokenBody map[string]interface{}) *httptest.Server {
 	t.Helper()
 
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scheme := "http"
 		if r.TLS != nil {
 			scheme = "https"

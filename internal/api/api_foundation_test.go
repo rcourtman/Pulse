@@ -122,14 +122,15 @@ func TestRequireMultiTenant_Middleware(t *testing.T) {
 
 func TestCheckMultiTenantLicense_Variations(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
+	ctx := context.Background()
 
-	assert.True(t, CheckMultiTenantLicense("default"))
-	assert.True(t, CheckMultiTenantLicense(""))
+	assert.True(t, CheckMultiTenantLicense(ctx, "default"))
+	assert.True(t, CheckMultiTenantLicense(ctx, ""))
 
 	SetMultiTenantEnabled(false)
-	assert.False(t, CheckMultiTenantLicense("acme"))
+	assert.False(t, CheckMultiTenantLicense(ctx, "acme"))
 
 	SetMultiTenantEnabled(true)
-	// Without context or real license, this falls back to a new service (false)
-	assert.False(t, CheckMultiTenantLicense("acme"))
+	// Without provider or real license, this falls back to a new service (false)
+	assert.False(t, CheckMultiTenantLicense(ctx, "acme"))
 }

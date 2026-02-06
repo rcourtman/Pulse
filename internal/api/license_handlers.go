@@ -332,6 +332,19 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 
 // RequireLicenseFeature is a middleware that checks if a license feature is available.
 // Returns HTTP 402 Payment Required if the feature is not licensed.
+// WriteLicenseRequired writes a 402 Payment Required response for a missing license feature.
+// ALL license gate responses in handlers MUST use this function to ensure consistent response format.
+func WriteLicenseRequired(w http.ResponseWriter, feature, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusPaymentRequired)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":       "license_required",
+		"message":     message,
+		"feature":     feature,
+		"upgrade_url": "https://pulserelay.pro/",
+	})
+}
+
 // RequireLicenseFeature is a middleware that checks if a license feature is available.
 // Returns HTTP 402 Payment Required if the feature is not licensed.
 // Note: Changed to take *LicenseHandlers to access service at runtime.
@@ -339,14 +352,7 @@ func RequireLicenseFeature(handlers *LicenseHandlers, feature string, next http.
 	return func(w http.ResponseWriter, r *http.Request) {
 		service := handlers.Service(r.Context())
 		if err := service.RequireFeature(feature); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "license_required",
-				"message":     err.Error(),
-				"feature":     feature,
-				"upgrade_url": "https://pulserelay.pro/",
-			})
+			WriteLicenseRequired(w, feature, err.Error())
 			return
 		}
 		next(w, r)
