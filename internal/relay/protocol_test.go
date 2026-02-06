@@ -298,6 +298,7 @@ func TestProtocolDriftGuardrail(t *testing.T) {
 		0x0A: "ERROR",
 		0x0B: "DRAIN",
 		0x0C: "KEY_EXCHANGE",
+		0x0D: "PUSH_NOTIFICATION",
 	}
 
 	for val, wantName := range expectedFrameTypes {

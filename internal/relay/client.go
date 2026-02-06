@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdh"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -13,6 +14,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
+
+// ErrNotConnected is returned when attempting to send on a disconnected client.
+var ErrNotConnected = errors.New("relay client not connected")
 
 const (
 	// Reconnect backoff parameters
@@ -66,6 +70,7 @@ type Client struct {
 	// Connection state (protected by mu)
 	mu           sync.RWMutex
 	conn         *websocket.Conn
+	sendCh       chan<- []byte // per-connection send channel (nil when disconnected)
 	instanceID   string
 	sessionToken string
 	channels     map[uint32]*channelState // channelID → channel state
@@ -169,6 +174,36 @@ func (c *Client) Status() ClientStatus {
 	}
 }
 
+// SendPushNotification sends a push notification through the relay.
+// Returns ErrNotConnected if the client has not completed registration
+// with the relay server.
+func (c *Client) SendPushNotification(notification PushNotificationPayload) error {
+	frame, err := NewControlFrame(FramePushNotification, 0, notification)
+	if err != nil {
+		return fmt.Errorf("build push frame: %w", err)
+	}
+	data, err := EncodeFrame(frame)
+	if err != nil {
+		return fmt.Errorf("encode push frame: %w", err)
+	}
+
+	c.mu.RLock()
+	ch := c.sendCh
+	connected := c.connected
+	c.mu.RUnlock()
+
+	if ch == nil || !connected {
+		return ErrNotConnected
+	}
+
+	select {
+	case ch <- data:
+		return nil
+	default:
+		return fmt.Errorf("send channel full")
+	}
+}
+
 func (c *Client) connectAndHandle(ctx context.Context) error {
 	dialer := websocket.Dialer{
 		HandshakeTimeout: wsHandshakeWait,
@@ -191,6 +226,7 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 
 	defer func() {
 		c.mu.Lock()
+		c.sendCh = nil
 		c.conn = nil
 		c.connected = false
 		c.mu.Unlock()
@@ -202,7 +238,11 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 		return fmt.Errorf("register: %w", err)
 	}
 
+	// Expose sendCh only after successful registration so
+	// SendPushNotification callers can't enqueue frames during
+	// the handshake window before a relay session exists.
 	c.mu.Lock()
+	c.sendCh = sendCh
 	c.connected = true
 	c.lastError = ""
 	c.mu.Unlock()
@@ -507,13 +547,7 @@ func (c *Client) handleKeyExchange(frame Frame, sendCh chan<- []byte) {
 	// Fail closed: refuse key exchange if we can't sign (prevents unsigned/MITM-vulnerable channels).
 	if c.deps.IdentityPrivateKey == "" {
 		c.logger.Error().Uint32("channel", channelID).Msg("Rejecting KEY_EXCHANGE: identity private key not configured")
-		closeFrame, closeErr := NewControlFrame(FrameChannelClose, channelID, ChannelClosePayload{
-			ChannelID: channelID,
-			Reason:    "key exchange signing unavailable",
-		})
-		if closeErr == nil {
-			queueFrame(sendCh, closeFrame, c.logger)
-		}
+		c.closeAndRemoveChannel(channelID, "key exchange signing unavailable", sendCh)
 		return
 	}
 
@@ -521,13 +555,7 @@ func (c *Client) handleKeyExchange(frame Frame, sendCh chan<- []byte) {
 	sig, err := SignKeyExchange(instancePubBytes, c.deps.IdentityPrivateKey)
 	if err != nil {
 		c.logger.Error().Err(err).Uint32("channel", channelID).Msg("Failed to sign KEY_EXCHANGE")
-		closeFrame, closeErr := NewControlFrame(FrameChannelClose, channelID, ChannelClosePayload{
-			ChannelID: channelID,
-			Reason:    "key exchange signing failed",
-		})
-		if closeErr == nil {
-			queueFrame(sendCh, closeFrame, c.logger)
-		}
+		c.closeAndRemoveChannel(channelID, "key exchange signing failed", sendCh)
 		return
 	}
 
@@ -542,6 +570,22 @@ func (c *Client) handleKeyExchange(frame Frame, sendCh chan<- []byte) {
 	c.mu.Unlock()
 
 	c.logger.Info().Uint32("channel", channelID).Msg("Key exchange completed, channel encrypted")
+}
+
+// closeAndRemoveChannel sends CHANNEL_CLOSE to the peer and removes the
+// channel locally so no further DATA frames are processed.
+func (c *Client) closeAndRemoveChannel(channelID uint32, reason string, sendCh chan<- []byte) {
+	c.mu.Lock()
+	delete(c.channels, channelID)
+	c.mu.Unlock()
+
+	closeFrame, err := NewControlFrame(FrameChannelClose, channelID, ChannelClosePayload{
+		ChannelID: channelID,
+		Reason:    reason,
+	})
+	if err == nil {
+		queueFrame(sendCh, closeFrame, c.logger)
+	}
 }
 
 func (c *Client) handleChannelClose(frame Frame) {

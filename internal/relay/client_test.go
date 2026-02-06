@@ -761,10 +761,13 @@ func TestClient_DataWithoutKeyExchange(t *testing.T) {
 }
 
 func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
-	// Verifies that KEY_EXCHANGE fails closed when IdentityPrivateKey is empty.
+	// Verifies that KEY_EXCHANGE fails closed when IdentityPrivateKey is empty:
+	// the instance sends CHANNEL_CLOSE, removes the channel locally, and
+	// ignores any subsequent DATA on that channel.
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	channelCloseCh := make(chan ChannelClosePayload, 1)
+	dataResponseCh := make(chan struct{}, 1)
 
 	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
 		// REGISTER
@@ -817,7 +820,30 @@ func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
 			channelCloseCh <- closePayload
 		} else {
 			t.Logf("expected CHANNEL_CLOSE, got %s", FrameTypeName(frame.Type))
+			return
 		}
+
+		// Non-cooperative peer: send DATA on the closed channel anyway.
+		// The instance must ignore it (channel removed from map).
+		time.Sleep(50 * time.Millisecond)
+		proxyReq := ProxyRequest{
+			ID:     "req_should_be_ignored",
+			Method: "GET",
+			Path:   "/api/status",
+		}
+		proxyReqBytes, _ := json.Marshal(proxyReq)
+		dataFrame := NewFrame(FrameData, 20, proxyReqBytes)
+		dataBytes, _ := EncodeFrame(dataFrame)
+		conn.WriteMessage(websocket.BinaryMessage, dataBytes)
+
+		// Wait briefly for any response — there should be none.
+		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_, _, readErr := conn.ReadMessage()
+		if readErr == nil {
+			// Got a response — the channel wasn't properly removed
+			dataResponseCh <- struct{}{}
+		}
+		conn.SetReadDeadline(time.Time{})
 
 		time.Sleep(100 * time.Millisecond)
 	})
@@ -856,6 +882,155 @@ func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
 		t.Fatal("timed out waiting for CHANNEL_CLOSE from failed KEY_EXCHANGE")
 	}
 
+	// Verify no DATA response was sent for the post-close frame
+	select {
+	case <-dataResponseCh:
+		t.Fatal("instance processed DATA on a channel that should have been removed after KEY_EXCHANGE rejection")
+	case <-time.After(800 * time.Millisecond):
+		// Good — no response
+	}
+
+	// Verify channel is gone from client state
+	status := client.Status()
+	if status.ActiveChannels != 0 {
+		t.Errorf("active channels: got %d, want 0", status.ActiveChannels)
+	}
+
 	cancel()
 	<-errCh
+}
+
+func TestClient_SendPushNotification(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	pushFrameCh := make(chan Frame, 1)
+
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		// REGISTER
+		_, msg, _ := conn.ReadMessage()
+		frame, _ := DecodeFrame(msg)
+		if frame.Type != FrameRegister {
+			return
+		}
+
+		// REGISTER_ACK
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_push",
+			SessionToken: "sess_push",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		// Read frames from the instance; expect PUSH_NOTIFICATION
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			frame, err := DecodeFrame(msg)
+			if err != nil {
+				continue
+			}
+			if frame.Type == FramePushNotification {
+				pushFrameCh <- frame
+				return
+			}
+		}
+	})
+	defer relayServer.Close()
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: wsURL(relayServer),
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc: func() string { return "test-jwt" },
+		TokenValidator:   func(token string) bool { return true },
+		LocalAddr:        "127.0.0.1:9999",
+		ServerVersion:    "1.0.0",
+		IdentityPubKey:   "test-pub-key",
+	}
+
+	client := NewClient(cfg, deps, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	// Wait for connection to be established
+	deadline := time.After(3 * time.Second)
+	for {
+		if client.Status().Connected {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for connection")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+
+	// Send push notification
+	notification := NewPatrolFindingNotification("finding-test", "critical", "performance", "Test Push")
+	if err := client.SendPushNotification(notification); err != nil {
+		t.Fatalf("SendPushNotification() error = %v", err)
+	}
+
+	// Verify the frame was received by the mock server
+	select {
+	case frame := <-pushFrameCh:
+		if frame.Type != FramePushNotification {
+			t.Errorf("frame type: got 0x%02X, want 0x%02X", frame.Type, FramePushNotification)
+		}
+		if frame.Channel != 0 {
+			t.Errorf("channel: got %d, want 0 (control channel)", frame.Channel)
+		}
+		var payload PushNotificationPayload
+		if err := UnmarshalControlPayload(frame.Payload, &payload); err != nil {
+			t.Fatalf("unmarshal push payload: %v", err)
+		}
+		if payload.Type != PushTypePatrolCritical {
+			t.Errorf("payload type: got %q, want %q", payload.Type, PushTypePatrolCritical)
+		}
+		if payload.Title != "Test Push" {
+			t.Errorf("payload title: got %q, want %q", payload.Title, "Test Push")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for PUSH_NOTIFICATION frame")
+	}
+
+	cancel()
+	<-errCh
+}
+
+func TestClient_SendPushNotificationDisconnected(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: "ws://127.0.0.1:1", // unreachable
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc: func() string { return "test-jwt" },
+		TokenValidator:   func(token string) bool { return true },
+		LocalAddr:        "127.0.0.1:9999",
+		ServerVersion:    "1.0.0",
+		IdentityPubKey:   "test-pub-key",
+	}
+
+	// Create client but don't run it — stays disconnected
+	client := NewClient(cfg, deps, logger)
+
+	notification := NewPatrolFindingNotification("finding-test", "warning", "capacity", "Test")
+	err := client.SendPushNotification(notification)
+	if err == nil {
+		t.Fatal("expected error when sending on disconnected client")
+	}
+	if err != ErrNotConnected {
+		t.Errorf("expected ErrNotConnected, got %v", err)
+	}
 }

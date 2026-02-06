@@ -50,6 +50,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 )
 
@@ -165,6 +166,9 @@ type ForecastProvider interface {
 // It allows the unified store to receive patrol findings in addition to alerts
 type UnifiedFindingCallback func(f *Finding) bool
 
+// PushNotifyCallback is called to send a push notification through the relay.
+type PushNotifyCallback func(notification relay.PushNotificationPayload)
+
 // InvestigationOrchestrator defines the interface for autonomous investigation of findings
 type InvestigationOrchestrator interface {
 	// InvestigateFinding starts an investigation for a finding
@@ -271,6 +275,9 @@ type PatrolService struct {
 	unifiedFindingCallback UnifiedFindingCallback
 	// Unified resolver callback - marks findings resolved in unified store
 	unifiedFindingResolver func(findingID string)
+
+	// Push notification callback - sends push via relay to mobile devices
+	pushNotifyCallback PushNotifyCallback
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds    PatrolThresholds

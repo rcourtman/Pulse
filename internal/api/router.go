@@ -106,6 +106,7 @@ type Router struct {
 	checksumMu           sync.RWMutex
 	checksumCache        map[string]checksumCacheEntry
 	installScriptClient  *http.Client
+	relayMu              sync.RWMutex
 	relayClient          *relay.Client
 	relayCancel          context.CancelFunc
 }
@@ -605,6 +606,50 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
+	r.mux.HandleFunc("/api/security/sso/providers/test", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureScope(w, req, config.ScopeSettingsWrite) {
+			return
+		}
+		r.handleTestSSOProvider(w, req)
+	}))
+	r.mux.HandleFunc("/api/security/sso/providers/metadata/preview", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureScope(w, req, config.ScopeSettingsRead) {
+			return
+		}
+		r.handleMetadataPreview(w, req)
+	}))
+	r.mux.HandleFunc("/api/security/sso/providers", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			if !ensureScope(w, req, config.ScopeSettingsRead) {
+				return
+			}
+		case http.MethodPost:
+			if !ensureScope(w, req, config.ScopeSettingsWrite) {
+				return
+			}
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		r.handleSSOProviders(w, req)
+	}))
+	r.mux.HandleFunc("/api/security/sso/providers/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			if !ensureScope(w, req, config.ScopeSettingsRead) {
+				return
+			}
+		case http.MethodPut, http.MethodDelete:
+			if !ensureScope(w, req, config.ScopeSettingsWrite) {
+				return
+			}
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		r.handleSSOProvider(w, req)
+	}))
 	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -2413,6 +2458,19 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				patrol.SetUnifiedFindingResolver(func(findingID string) {
 					unifiedStore.Resolve(findingID)
 				})
+
+				// Wire push notifications: patrol findings → relay client (best-effort)
+				patrol.SetPushNotifyCallback(func(n relay.PushNotificationPayload) {
+					r.relayMu.RLock()
+					client := r.relayClient
+					r.relayMu.RUnlock()
+					if client != nil {
+						if err := client.SendPushNotification(n); err != nil {
+							log.Debug().Err(err).Str("type", n.Type).Msg("Push notification send failed")
+						}
+					}
+				})
+
 				log.Info().Msg("AI Intelligence: Patrol findings wired to unified store")
 
 				// Sync existing findings from persistence to the unified store
@@ -3453,8 +3511,10 @@ func (r *Router) StartRelay(ctx context.Context) {
 	relayCtx, relayCancel := context.WithCancel(ctx)
 	client := relay.NewClient(*cfg, deps, log.Logger)
 
+	r.relayMu.Lock()
 	r.relayClient = client
 	r.relayCancel = relayCancel
+	r.relayMu.Unlock()
 
 	go func() {
 		if err := client.Run(relayCtx); err != nil && relayCtx.Err() == nil {
@@ -3467,12 +3527,18 @@ func (r *Router) StartRelay(ctx context.Context) {
 
 // StopRelay stops the relay client.
 func (r *Router) StopRelay() {
-	if r.relayCancel != nil {
-		r.relayCancel()
+	r.relayMu.Lock()
+	cancel := r.relayCancel
+	client := r.relayClient
+	r.relayClient = nil
+	r.relayCancel = nil
+	r.relayMu.Unlock()
+
+	if cancel != nil {
+		cancel()
 	}
-	if r.relayClient != nil {
-		r.relayClient.Close()
-		r.relayClient = nil
+	if client != nil {
+		client.Close()
 		log.Info().Msg("Relay client stopped")
 	}
 }
@@ -3569,14 +3635,16 @@ func (r *Router) handleUpdateRelayConfig(w http.ResponseWriter, req *http.Reques
 }
 
 func (r *Router) handleGetRelayStatus(w http.ResponseWriter, req *http.Request) {
-	if r.relayClient == nil {
-		w.Header().Set("Content-Type", "application/json")
+	r.relayMu.RLock()
+	client := r.relayClient
+	r.relayMu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if client == nil {
 		json.NewEncoder(w).Encode(relay.ClientStatus{})
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(r.relayClient.Status())
+	json.NewEncoder(w).Encode(client.Status())
 }
 
 // startBaselineLearning runs a background loop that learns baselines from metrics history

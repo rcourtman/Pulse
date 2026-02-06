@@ -23,18 +23,19 @@ const HeaderSize = 6
 
 // Frame types
 const (
-	FrameRegister     = 0x01
-	FrameRegisterAck  = 0x02
-	FrameConnect      = 0x03
-	FrameConnectAck   = 0x04
-	FrameChannelOpen  = 0x05
-	FrameChannelClose = 0x06
-	FrameData         = 0x07
-	FramePing         = 0x08
-	FramePong         = 0x09
-	FrameError        = 0x0A
-	FrameDrain        = 0x0B
-	FrameKeyExchange  = 0x0C
+	FrameRegister         = 0x01
+	FrameRegisterAck      = 0x02
+	FrameConnect          = 0x03
+	FrameConnectAck       = 0x04
+	FrameChannelOpen      = 0x05
+	FrameChannelClose     = 0x06
+	FrameData             = 0x07
+	FramePing             = 0x08
+	FramePong             = 0x09
+	FrameError            = 0x0A
+	FrameDrain            = 0x0B
+	FrameKeyExchange      = 0x0C
+	FramePushNotification = 0x0D
 )
 
 // Error codes sent in ERROR frames
@@ -59,18 +60,19 @@ var (
 
 // frameTypeName maps type bytes to names for debugging.
 var frameTypeName = map[byte]string{
-	FrameRegister:     "REGISTER",
-	FrameRegisterAck:  "REGISTER_ACK",
-	FrameConnect:      "CONNECT",
-	FrameConnectAck:   "CONNECT_ACK",
-	FrameChannelOpen:  "CHANNEL_OPEN",
-	FrameChannelClose: "CHANNEL_CLOSE",
-	FrameData:         "DATA",
-	FramePing:         "PING",
-	FramePong:         "PONG",
-	FrameError:        "ERROR",
-	FrameDrain:        "DRAIN",
-	FrameKeyExchange:  "KEY_EXCHANGE",
+	FrameRegister:         "REGISTER",
+	FrameRegisterAck:      "REGISTER_ACK",
+	FrameConnect:          "CONNECT",
+	FrameConnectAck:       "CONNECT_ACK",
+	FrameChannelOpen:      "CHANNEL_OPEN",
+	FrameChannelClose:     "CHANNEL_CLOSE",
+	FrameData:             "DATA",
+	FramePing:             "PING",
+	FramePong:             "PONG",
+	FrameError:            "ERROR",
+	FrameDrain:            "DRAIN",
+	FrameKeyExchange:      "KEY_EXCHANGE",
+	FramePushNotification: "PUSH_NOTIFICATION",
 }
 
 // FrameTypeName returns the human-readable name of a frame type.
@@ -179,6 +181,21 @@ type ErrorPayload struct {
 type DrainPayload struct {
 	Reason    string `json:"reason,omitempty"`
 	ReconnURL string `json:"reconn_url,omitempty"`
+}
+
+// PushNotificationPayload is sent in PUSH_NOTIFICATION frames.
+// Push payloads are visible to Apple/Google — they must NOT contain
+// API keys, IP addresses, node names, detailed metrics, or anything
+// that would expose infrastructure details.
+type PushNotificationPayload struct {
+	Type       string `json:"type"`                  // "patrol_finding", "patrol_critical", "approval_request", "fix_completed"
+	Priority   string `json:"priority"`              // "normal", "high"
+	Title      string `json:"title"`                 // Short title (≤100 chars)
+	Body       string `json:"body"`                  // Body text (≤200 chars)
+	ActionType string `json:"action_type,omitempty"` // "view_finding", "approve_fix", "view_fix_result"
+	ActionID   string `json:"action_id,omitempty"`   // Finding ID or Approval ID
+	Category   string `json:"category,omitempty"`    // Finding category (performance, capacity, etc.)
+	Severity   string `json:"severity,omitempty"`    // Finding severity
 }
 
 // MarshalControlPayload encodes a control frame payload as JSON bytes.

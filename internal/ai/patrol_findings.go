@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rs/zerolog/log"
 )
 
@@ -43,6 +44,21 @@ func (p *PatrolService) recordFinding(f *Finding) bool {
 		// Skip internal error findings (not actionable by users)
 		if !(stored.Key == "ai-patrol-error" || stored.ResourceID == "ai-service") {
 			p.generateRemediationPlan(stored)
+		}
+
+		// Send push notification for new critical/warning findings
+		if stored.Severity == FindingSeverityCritical || stored.Severity == FindingSeverityWarning {
+			p.mu.RLock()
+			pushCb := p.pushNotifyCallback
+			p.mu.RUnlock()
+			if pushCb != nil {
+				pushCb(relay.NewPatrolFindingNotification(
+					stored.ID,
+					string(stored.Severity),
+					string(stored.Category),
+					stored.Title,
+				))
+			}
 		}
 	}
 
@@ -1167,9 +1183,11 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 		// This makes fix verification and resolution visible as an actual closed loop in the UI.
 		var pushUnified UnifiedFindingCallback
 		var resolveUnified func(string)
+		var pushCb PushNotifyCallback
 		p.mu.RLock()
 		pushUnified = p.unifiedFindingCallback
 		resolveUnified = p.unifiedFindingResolver
+		pushCb = p.pushNotifyCallback
 		p.mu.RUnlock()
 		if latest := p.findings.Get(f.ID); latest != nil {
 			if pushUnified != nil {
@@ -1177,6 +1195,22 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 			}
 			if latest.ResolvedAt != nil && resolveUnified != nil {
 				resolveUnified(latest.ID)
+			}
+
+			// Send push notifications for investigation outcomes
+			if pushCb != nil {
+				switch latest.InvestigationOutcome {
+				case string(InvestigationOutcomeFixQueued):
+					pushCb(relay.NewApprovalRequestNotification(
+						latest.InvestigationSessionID,
+						latest.Title,
+						"",
+					))
+				case string(InvestigationOutcomeFixExecuted), string(InvestigationOutcomeFixVerified):
+					pushCb(relay.NewFixCompletedNotification(latest.ID, latest.Title, true))
+				case string(InvestigationOutcomeFixFailed), string(InvestigationOutcomeFixVerificationFailed):
+					pushCb(relay.NewFixCompletedNotification(latest.ID, latest.Title, false))
+				}
 			}
 		}
 

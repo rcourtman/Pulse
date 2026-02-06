@@ -240,6 +240,13 @@ func (p *PatrolService) GetInvestigationOrchestrator() InvestigationOrchestrator
 	return p.investigationOrchestrator
 }
 
+// SetPushNotifyCallback sets the callback for sending push notifications via relay.
+func (p *PatrolService) SetPushNotifyCallback(cb PushNotifyCallback) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pushNotifyCallback = cb
+}
+
 // SetUnifiedFindingCallback sets the callback for pushing findings to the unified store
 // When set, it also syncs existing active findings to the unified store
 func (p *PatrolService) SetUnifiedFindingCallback(cb UnifiedFindingCallback) {
