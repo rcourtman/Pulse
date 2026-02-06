@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"crypto/ecdh"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -444,6 +445,415 @@ func TestClient_SessionTokenReuse(t *testing.T) {
 		}
 	case <-time.After(8 * time.Second):
 		t.Fatal("timed out waiting for second REGISTER")
+	}
+
+	cancel()
+	<-errCh
+}
+
+// testIdentityKeyPair generates an Ed25519 keypair for testing and returns
+// the base64 private key and public key.
+func testIdentityKeyPair(t *testing.T) (privB64, pubB64 string) {
+	t.Helper()
+	priv, pub, _, err := GenerateIdentityKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return priv, pub
+}
+
+func TestClient_EncryptedChannelLifecycle(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	identityPriv, identityPub := testIdentityKeyPair(t)
+
+	dataResponseCh := make(chan ProxyResponse, 1)
+
+	// Mock local Pulse API
+	mockAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"path": r.URL.Path, "encrypted": "true"})
+	}))
+	defer mockAPI.Close()
+	localAddr := strings.TrimPrefix(mockAPI.URL, "http://")
+
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		// 1. Read REGISTER
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			t.Logf("read register: %v", err)
+			return
+		}
+		frame, _ := DecodeFrame(msg)
+		if frame.Type != FrameRegister {
+			t.Logf("expected REGISTER, got %s", FrameTypeName(frame.Type))
+			return
+		}
+
+		// 2. Send REGISTER_ACK
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_enc",
+			SessionToken: "sess_enc",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		// 3. Send CHANNEL_OPEN
+		chOpen, _ := NewControlFrame(FrameChannelOpen, 10, ChannelOpenPayload{
+			ChannelID: 10,
+			AuthToken: "valid-token",
+		})
+		chOpenBytes, _ := EncodeFrame(chOpen)
+		time.Sleep(50 * time.Millisecond)
+		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+
+		// 4. Read CHANNEL_OPEN ack
+		_, msg, _ = conn.ReadMessage()
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameChannelOpen {
+			t.Logf("expected CHANNEL_OPEN ack, got %s", FrameTypeName(frame.Type))
+			return
+		}
+
+		// 5. Initiate key exchange: generate app's ephemeral keypair
+		appPriv, err := GenerateEphemeralKeyPair()
+		if err != nil {
+			t.Logf("generate app keypair: %v", err)
+			return
+		}
+
+		// Send KEY_EXCHANGE from "app" (no signature — app doesn't sign)
+		kexPayload := MarshalKeyExchangePayload(appPriv.PublicKey().Bytes(), nil)
+		kexFrame := NewFrame(FrameKeyExchange, 10, kexPayload)
+		kexBytes, _ := EncodeFrame(kexFrame)
+		conn.WriteMessage(websocket.BinaryMessage, kexBytes)
+
+		// 6. Read instance's KEY_EXCHANGE response
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			t.Logf("read key exchange: %v", err)
+			return
+		}
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameKeyExchange {
+			t.Logf("expected KEY_EXCHANGE, got %s", FrameTypeName(frame.Type))
+			return
+		}
+
+		instancePub, sig, err := UnmarshalKeyExchangePayload(frame.Payload)
+		if err != nil {
+			t.Logf("unmarshal key exchange: %v", err)
+			return
+		}
+
+		// Verify signature
+		if err := VerifyKeyExchangeSignature(instancePub, sig, identityPub); err != nil {
+			t.Logf("key exchange signature verification failed: %v", err)
+			return
+		}
+
+		// Derive keys on mock-relay side (acting as app)
+		instancePubKey, err := ecdh.X25519().NewPublicKey(instancePub)
+		if err != nil {
+			t.Logf("parse instance pubkey: %v", err)
+			return
+		}
+		appEnc, err := DeriveChannelKeys(appPriv, instancePubKey, false)
+		if err != nil {
+			t.Logf("derive channel keys: %v", err)
+			return
+		}
+
+		// 7. Send encrypted DATA request
+		proxyReq := ProxyRequest{
+			ID:     "req_encrypted",
+			Method: "GET",
+			Path:   "/api/status",
+		}
+		proxyReqBytes, _ := json.Marshal(proxyReq)
+		encryptedReq, err := appEnc.Encrypt(proxyReqBytes)
+		if err != nil {
+			t.Logf("encrypt request: %v", err)
+			return
+		}
+		dataFrame := NewFrame(FrameData, 10, encryptedReq)
+		dataBytes, _ := EncodeFrame(dataFrame)
+		conn.WriteMessage(websocket.BinaryMessage, dataBytes)
+
+		// 8. Read encrypted DATA response
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			t.Logf("read data response: %v", err)
+			return
+		}
+		frame, _ = DecodeFrame(msg)
+		if frame.Type == FrameData {
+			decrypted, err := appEnc.Decrypt(frame.Payload)
+			if err != nil {
+				t.Logf("decrypt response: %v", err)
+				return
+			}
+			var resp ProxyResponse
+			json.Unmarshal(decrypted, &resp)
+			dataResponseCh <- resp
+		}
+
+		time.Sleep(2 * time.Second)
+	})
+	defer relayServer.Close()
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: wsURL(relayServer),
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc:   func() string { return "test-jwt" },
+		TokenValidator:     func(token string) bool { return token == "valid-token" },
+		LocalAddr:          localAddr,
+		ServerVersion:      "1.0.0-test",
+		IdentityPubKey:     identityPub,
+		IdentityPrivateKey: identityPriv,
+	}
+
+	client := NewClient(cfg, deps, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- client.Run(ctx)
+	}()
+
+	select {
+	case resp := <-dataResponseCh:
+		if resp.ID != "req_encrypted" {
+			t.Errorf("response ID: got %q, want %q", resp.ID, "req_encrypted")
+		}
+		if resp.Status != 200 {
+			t.Errorf("response status: got %d, want 200", resp.Status)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for encrypted DATA response")
+	}
+
+	cancel()
+	select {
+	case <-errCh:
+	case <-time.After(3 * time.Second):
+		t.Fatal("client.Run didn't return after cancel")
+	}
+}
+
+func TestClient_DataWithoutKeyExchange(t *testing.T) {
+	// Verifies backward compatibility: unencrypted DATA still works when no KEY_EXCHANGE occurs.
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	dataResponseCh := make(chan ProxyResponse, 1)
+
+	mockAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"path": r.URL.Path})
+	}))
+	defer mockAPI.Close()
+	localAddr := strings.TrimPrefix(mockAPI.URL, "http://")
+
+	identityPriv, identityPub := testIdentityKeyPair(t)
+
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		// REGISTER
+		_, msg, _ := conn.ReadMessage()
+		frame, _ := DecodeFrame(msg)
+		if frame.Type != FrameRegister {
+			return
+		}
+
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_plain",
+			SessionToken: "sess_plain",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		// CHANNEL_OPEN (no KEY_EXCHANGE follows)
+		chOpen, _ := NewControlFrame(FrameChannelOpen, 5, ChannelOpenPayload{
+			ChannelID: 5,
+			AuthToken: "plain-token",
+		})
+		chOpenBytes, _ := EncodeFrame(chOpen)
+		time.Sleep(50 * time.Millisecond)
+		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+
+		// Read CHANNEL_OPEN ack
+		_, msg, _ = conn.ReadMessage()
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameChannelOpen {
+			return
+		}
+
+		// Send unencrypted DATA
+		proxyReq := ProxyRequest{
+			ID:     "req_plain",
+			Method: "GET",
+			Path:   "/api/health",
+		}
+		proxyReqBytes, _ := json.Marshal(proxyReq)
+		dataFrame := NewFrame(FrameData, 5, proxyReqBytes)
+		dataBytes, _ := EncodeFrame(dataFrame)
+		conn.WriteMessage(websocket.BinaryMessage, dataBytes)
+
+		// Read unencrypted DATA response
+		_, msg, _ = conn.ReadMessage()
+		frame, _ = DecodeFrame(msg)
+		if frame.Type == FrameData {
+			var resp ProxyResponse
+			// Should be plain JSON, not encrypted
+			if err := json.Unmarshal(frame.Payload, &resp); err != nil {
+				t.Logf("unmarshal response: %v", err)
+				return
+			}
+			dataResponseCh <- resp
+		}
+
+		time.Sleep(2 * time.Second)
+	})
+	defer relayServer.Close()
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: wsURL(relayServer),
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc:   func() string { return "test-jwt" },
+		TokenValidator:     func(token string) bool { return token == "plain-token" },
+		LocalAddr:          localAddr,
+		ServerVersion:      "1.0.0-test",
+		IdentityPubKey:     identityPub,
+		IdentityPrivateKey: identityPriv,
+	}
+
+	client := NewClient(cfg, deps, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- client.Run(ctx)
+	}()
+
+	select {
+	case resp := <-dataResponseCh:
+		if resp.ID != "req_plain" {
+			t.Errorf("response ID: got %q, want %q", resp.ID, "req_plain")
+		}
+		if resp.Status != 200 {
+			t.Errorf("response status: got %d, want 200", resp.Status)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for unencrypted DATA response")
+	}
+
+	cancel()
+	<-errCh
+}
+
+func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
+	// Verifies that KEY_EXCHANGE fails closed when IdentityPrivateKey is empty.
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	channelCloseCh := make(chan ChannelClosePayload, 1)
+
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		// REGISTER
+		_, msg, _ := conn.ReadMessage()
+		frame, _ := DecodeFrame(msg)
+		if frame.Type != FrameRegister {
+			return
+		}
+
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_nosign",
+			SessionToken: "sess_nosign",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		// CHANNEL_OPEN
+		chOpen, _ := NewControlFrame(FrameChannelOpen, 20, ChannelOpenPayload{
+			ChannelID: 20,
+			AuthToken: "token-nosign",
+		})
+		chOpenBytes, _ := EncodeFrame(chOpen)
+		time.Sleep(50 * time.Millisecond)
+		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+
+		// Read CHANNEL_OPEN ack
+		_, msg, _ = conn.ReadMessage()
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameChannelOpen {
+			return
+		}
+
+		// Send KEY_EXCHANGE from "app"
+		appPriv, _ := GenerateEphemeralKeyPair()
+		kexPayload := MarshalKeyExchangePayload(appPriv.PublicKey().Bytes(), nil)
+		kexFrame := NewFrame(FrameKeyExchange, 20, kexPayload)
+		kexBytes, _ := EncodeFrame(kexFrame)
+		conn.WriteMessage(websocket.BinaryMessage, kexBytes)
+
+		// Should receive CHANNEL_CLOSE (not KEY_EXCHANGE response)
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, _ = DecodeFrame(msg)
+		if frame.Type == FrameChannelClose {
+			var closePayload ChannelClosePayload
+			UnmarshalControlPayload(frame.Payload, &closePayload)
+			channelCloseCh <- closePayload
+		} else {
+			t.Logf("expected CHANNEL_CLOSE, got %s", FrameTypeName(frame.Type))
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	})
+	defer relayServer.Close()
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: wsURL(relayServer),
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc:   func() string { return "test-jwt" },
+		TokenValidator:     func(token string) bool { return token == "token-nosign" },
+		LocalAddr:          "127.0.0.1:9999",
+		ServerVersion:      "1.0.0-test",
+		IdentityPubKey:     "some-pub-key",
+		IdentityPrivateKey: "", // deliberately empty
+	}
+
+	client := NewClient(cfg, deps, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	select {
+	case closePayload := <-channelCloseCh:
+		if closePayload.ChannelID != 20 {
+			t.Errorf("channel ID: got %d, want 20", closePayload.ChannelID)
+		}
+		if closePayload.Reason != "key exchange signing unavailable" {
+			t.Errorf("reason: got %q, want %q", closePayload.Reason, "key exchange signing unavailable")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for CHANNEL_CLOSE from failed KEY_EXCHANGE")
 	}
 
 	cancel()

@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"crypto/ecdh"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -29,13 +30,21 @@ const (
 // TokenValidator validates an API token and returns the raw token if valid.
 type TokenValidator func(token string) bool
 
+// channelState holds per-channel state including auth and encryption.
+type channelState struct {
+	apiToken   string
+	encryption *ChannelEncryption // nil until key exchange completes
+	ephemeral  *ecdh.PrivateKey   // ephemeral keypair, cleared after handshake
+}
+
 // ClientDeps holds injectable dependencies for the relay client.
 type ClientDeps struct {
-	LicenseTokenFunc func() string  // returns the raw license JWT
-	TokenValidator   TokenValidator // validates API tokens from CHANNEL_OPEN
-	LocalAddr        string         // e.g. "127.0.0.1:7655"
-	ServerVersion    string         // Pulse version for ClientVersion in REGISTER
-	IdentityPubKey   string         // base64-encoded Ed25519 public key for MITM prevention
+	LicenseTokenFunc   func() string  // returns the raw license JWT
+	TokenValidator     TokenValidator // validates API tokens from CHANNEL_OPEN
+	LocalAddr          string         // e.g. "127.0.0.1:7655"
+	ServerVersion      string         // Pulse version for ClientVersion in REGISTER
+	IdentityPubKey     string         // base64-encoded Ed25519 public key for MITM prevention
+	IdentityPrivateKey string         // base64-encoded Ed25519 private key for signing KEY_EXCHANGE
 }
 
 // ClientStatus represents the current state of the relay client.
@@ -59,7 +68,7 @@ type Client struct {
 	conn         *websocket.Conn
 	instanceID   string
 	sessionToken string
-	channels     map[uint32]string // channelID → apiToken
+	channels     map[uint32]*channelState // channelID → channel state
 	connected    bool
 	lastError    string
 
@@ -75,7 +84,7 @@ func NewClient(cfg Config, deps ClientDeps, logger zerolog.Logger) *Client {
 		deps:     deps,
 		proxy:    NewHTTPProxy(deps.LocalAddr, logger),
 		logger:   logger,
-		channels: make(map[uint32]string),
+		channels: make(map[uint32]*channelState),
 		done:     make(chan struct{}),
 	}
 }
@@ -177,7 +186,7 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 
 	c.mu.Lock()
 	c.conn = conn
-	c.channels = make(map[uint32]string)
+	c.channels = make(map[uint32]*channelState)
 	c.mu.Unlock()
 
 	defer func() {
@@ -302,6 +311,9 @@ func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan
 		case FrameChannelOpen:
 			c.handleChannelOpen(frame, sendCh)
 
+		case FrameKeyExchange:
+			c.handleKeyExchange(frame, sendCh)
+
 		case FrameData:
 			c.handleData(frame, sendCh)
 
@@ -385,7 +397,7 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 
 	// Accept: store channel and echo CHANNEL_OPEN back
 	c.mu.Lock()
-	c.channels[payload.ChannelID] = payload.AuthToken
+	c.channels[payload.ChannelID] = &channelState{apiToken: payload.AuthToken}
 	c.mu.Unlock()
 
 	c.logger.Info().Uint32("channel", payload.ChannelID).Msg("Channel opened")
@@ -400,8 +412,16 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 func (c *Client) handleData(frame Frame, sendCh chan<- []byte) {
 	channelID := frame.Channel
 
+	// Snapshot channel state under lock so the goroutine below doesn't race
+	// with handleKeyExchange writing state.encryption.
 	c.mu.RLock()
-	apiToken, ok := c.channels[channelID]
+	state, ok := c.channels[channelID]
+	var enc *ChannelEncryption
+	var apiToken string
+	if ok {
+		enc = state.encryption
+		apiToken = state.apiToken
+	}
 	c.mu.RUnlock()
 
 	if !ok {
@@ -411,15 +431,117 @@ func (c *Client) handleData(frame Frame, sendCh chan<- []byte) {
 
 	// Handle in background goroutine so we don't block the read pump
 	go func() {
-		respPayload, err := c.proxy.HandleRequest(frame.Payload, apiToken)
+		payload := frame.Payload
+
+		// Decrypt incoming if encryption is active
+		if enc != nil {
+			decrypted, err := enc.Decrypt(payload)
+			if err != nil {
+				c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to decrypt DATA payload")
+				return
+			}
+			payload = decrypted
+		}
+
+		respPayload, err := c.proxy.HandleRequest(payload, apiToken)
 		if err != nil {
 			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Proxy error")
 			return
 		}
 
+		// Encrypt response if encryption is active
+		if enc != nil {
+			encrypted, err := enc.Encrypt(respPayload)
+			if err != nil {
+				c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to encrypt DATA response")
+				return
+			}
+			respPayload = encrypted
+		}
+
 		respFrame := NewFrame(FrameData, channelID, respPayload)
 		queueFrame(sendCh, respFrame, c.logger)
 	}()
+}
+
+func (c *Client) handleKeyExchange(frame Frame, sendCh chan<- []byte) {
+	channelID := frame.Channel
+
+	c.mu.RLock()
+	state, ok := c.channels[channelID]
+	c.mu.RUnlock()
+
+	if !ok {
+		c.logger.Warn().Uint32("channel", channelID).Msg("KEY_EXCHANGE for unknown channel")
+		return
+	}
+
+	// Unmarshal the app's ephemeral public key
+	appPubBytes, _, err := UnmarshalKeyExchangePayload(frame.Payload)
+	if err != nil {
+		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to unmarshal KEY_EXCHANGE")
+		return
+	}
+
+	appPubKey, err := ecdh.X25519().NewPublicKey(appPubBytes)
+	if err != nil {
+		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Invalid X25519 public key in KEY_EXCHANGE")
+		return
+	}
+
+	// Generate instance's ephemeral X25519 keypair
+	instancePriv, err := GenerateEphemeralKeyPair()
+	if err != nil {
+		c.logger.Error().Err(err).Uint32("channel", channelID).Msg("Failed to generate ephemeral keypair")
+		return
+	}
+
+	// Derive channel keys
+	encryption, err := DeriveChannelKeys(instancePriv, appPubKey, true)
+	if err != nil {
+		c.logger.Error().Err(err).Uint32("channel", channelID).Msg("Failed to derive channel keys")
+		return
+	}
+
+	// Sign instance's ephemeral public key with Ed25519 identity key.
+	// Fail closed: refuse key exchange if we can't sign (prevents unsigned/MITM-vulnerable channels).
+	if c.deps.IdentityPrivateKey == "" {
+		c.logger.Error().Uint32("channel", channelID).Msg("Rejecting KEY_EXCHANGE: identity private key not configured")
+		closeFrame, closeErr := NewControlFrame(FrameChannelClose, channelID, ChannelClosePayload{
+			ChannelID: channelID,
+			Reason:    "key exchange signing unavailable",
+		})
+		if closeErr == nil {
+			queueFrame(sendCh, closeFrame, c.logger)
+		}
+		return
+	}
+
+	instancePubBytes := instancePriv.PublicKey().Bytes()
+	sig, err := SignKeyExchange(instancePubBytes, c.deps.IdentityPrivateKey)
+	if err != nil {
+		c.logger.Error().Err(err).Uint32("channel", channelID).Msg("Failed to sign KEY_EXCHANGE")
+		closeFrame, closeErr := NewControlFrame(FrameChannelClose, channelID, ChannelClosePayload{
+			ChannelID: channelID,
+			Reason:    "key exchange signing failed",
+		})
+		if closeErr == nil {
+			queueFrame(sendCh, closeFrame, c.logger)
+		}
+		return
+	}
+
+	// Send KEY_EXCHANGE response with instance public key + signature
+	respPayload := MarshalKeyExchangePayload(instancePubBytes, sig)
+	respFrame := NewFrame(FrameKeyExchange, channelID, respPayload)
+	queueFrame(sendCh, respFrame, c.logger)
+
+	// Store encryption state
+	c.mu.Lock()
+	state.encryption = encryption
+	c.mu.Unlock()
+
+	c.logger.Info().Uint32("channel", channelID).Msg("Key exchange completed, channel encrypted")
 }
 
 func (c *Client) handleChannelClose(frame Frame) {
