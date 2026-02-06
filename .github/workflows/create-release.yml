@@ -97,6 +97,9 @@ jobs:
       - name: Lint frontend
         run: npm --prefix frontend-modern run lint
 
+      - name: Check frontend copy-paste duplication
+        run: npm --prefix frontend-modern run lint:cpd
+
   # Backend tests run in parallel with frontend checks
   backend_tests:
     needs: prepare

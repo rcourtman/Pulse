@@ -41,6 +41,9 @@ jobs:
       - name: Lint frontend
         run: npm --prefix frontend-modern run lint
 
+      - name: Check frontend copy-paste duplication
+        run: npm --prefix frontend-modern run lint:cpd
+
       - name: Install docker-compose
         run: |
           sudo apt-get update

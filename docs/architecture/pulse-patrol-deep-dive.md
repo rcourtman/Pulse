@@ -259,6 +259,52 @@ const (
 
 ---
 
+## 4. Live Stream Reliability (SSE)
+
+**📁 Location:** `internal/api/ai_handlers.go`, `internal/ai/patrol_run.go`, `frontend-modern/src/hooks/usePatrolStream.ts`
+
+Pulse Patrol exposes a live SSE stream at `/api/ai/patrol/stream` for run progress, tool activity, and phase updates. The stream is built for unstable network conditions and late-joining clients.
+
+### Reliability Features
+
+- **Heartbeat comments** every 15s (`: ping`) keep proxies/load balancers from timing out idle streams.
+- **Proxy buffering disabled** with `X-Accel-Buffering: no` for near real-time delivery.
+- **Monotonic event IDs** (`id: <seq>`) allow resumable consumers via `Last-Event-ID`.
+- **Browser fallback resume** via query param `?last_event_id=` because native `EventSource` cannot set custom headers.
+- **Bounded replay buffer** (last 200 events) enables best-effort replay after reconnect.
+- **Synthetic snapshots** (`type: "snapshot"`) are emitted for:
+  - `late_joiner`
+  - `stale_last_event_id`
+  - `buffer_rotated`
+- **No duplicate resync snapshots** per resume attempt for the same reason.
+- **Fail-fast writes**: stream exits on initial/event/heartbeat write failures to avoid hung handlers.
+
+### Memory & Payload Safety
+
+- **Current output tail buffer** is capped at 64KB, preventing unbounded growth in long runs.
+- **Per-event field truncation** caps `content`, tool inputs, and tool output to 8KB each.
+- Snapshots include `content_truncated=true` when the tail buffer has dropped older output.
+
+### Resume Semantics
+
+- Resume first tries replay (`Seq > last_event_id`) from the in-memory buffer.
+- If replay is unavailable/incomplete, stream emits a snapshot with `resync_reason` and buffer window metadata (`buffer_start_seq`, `buffer_end_seq`).
+- `Last-Event-ID` header takes precedence over query fallback when both are present.
+
+### Observability
+
+Prometheus metrics track stream quality and reconnect outcomes:
+
+- `pulse_patrol_stream_resume_outcome_total{outcome="replay|snapshot|miss"}`
+- `pulse_patrol_stream_resync_reason_total{reason=...}`
+- `pulse_patrol_stream_replay_events_total`
+- `pulse_patrol_stream_replay_batch_size` (histogram)
+- `pulse_patrol_stream_subscriber_drop_total{reason="backpressure|closed"}`
+
+These metrics make it easy to alert on degraded replay quality or sustained subscriber backpressure.
+
+---
+
 ## 4. Forecast Service
 
 **📁 Location:** `internal/ai/forecast/service.go`

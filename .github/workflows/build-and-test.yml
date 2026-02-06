@@ -49,6 +49,10 @@ jobs:
         working-directory: frontend-modern
         run: npm run lint
 
+      - name: Check frontend copy-paste duplication
+        working-directory: frontend-modern
+        run: npm run lint:cpd
+
       - name: Frontend unit tests
         working-directory: frontend-modern
         run: npm run test
