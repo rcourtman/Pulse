@@ -73,8 +73,6 @@ const toSentence = (text?: string): string => {
 export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     const [isScanning, setIsScanning] = createSignal(false);
     const [editingNotes, setEditingNotes] = createSignal(false);
-    // Track if initial fetch has completed to prevent flash of "no data" state
-    const [hasFetched, setHasFetched] = createSignal(false);
     // Live elapsed time counter (updates every second while scanning)
     const [liveElapsedSeconds, setLiveElapsedSeconds] = createSignal(0);
     const [scanStartTime, setScanStartTime] = createSignal<number | null>(null);
@@ -167,7 +165,6 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     // Reset ephemeral UI state when changing discovery context
     createEffect(() => {
         void discoverySourceKey();
-        setHasFetched(false);
         setIsScanning(false);
         setHttpScanInProgress(false);
         setScanProgress(null);
@@ -303,11 +300,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         discoverySourceKey,
         async () => {
             try {
-                const result = await getDiscovery(props.resourceType, props.hostId, props.resourceId);
-                setHasFetched(true);
-                return result;
+                return await getDiscovery(props.resourceType, props.hostId, props.resourceId);
             } catch {
-                setHasFetched(true);
                 return null;
             }
         }
@@ -522,7 +516,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             </Show>
 
             {/* "What Discovery Does" Explanation - Shown when no discovery yet */}
-            <Show when={hasFetched() && !discovery() && !discovery.loading && showExplanation()}>
+            <Show when={!discovery() && !isScanning() && !showLoadingSpinner() && showExplanation()}>
                 <div class="rounded border border-amber-200 bg-amber-50/80 p-3 shadow-sm dark:border-amber-800/50 dark:bg-amber-900/20">
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex items-start gap-2.5">
@@ -551,7 +545,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             </Show>
 
             {/* Commands Preview - Expandable before first scan */}
-            <Show when={hasFetched() && !discovery() && !discovery.loading && !discoveryInfo.loading && discoveryInfo()?.commands && discoveryInfo()!.commands!.length > 0}>
+            <Show when={!discovery() && !isScanning() && !discovery.loading && !discoveryInfo.loading && discoveryInfo()?.commands && discoveryInfo()!.commands!.length > 0}>
                 <details class="rounded border border-gray-200 bg-white/70 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30" open={showCommandsPreview()}>
                     <summary
                         class="p-2.5 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 flex items-center gap-2"
@@ -674,16 +668,28 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             </Show>
 
             {/* No discovery yet - only show after initial fetch completes to prevent flash */}
-            <Show when={hasFetched() && !discovery.loading && !discovery() && !isScanning()}>
+            <Show when={!discovery() && !isScanning()}>
                 <div class="text-center py-8">
                     <div class="text-gray-500 dark:text-gray-400 mb-4">
                         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
-                        <p class="text-sm">No discovery data yet</p>
-                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                            Run a discovery scan to identify services and configurations
-                        </p>
+                        <Show
+                            when={discovery.loading}
+                            fallback={
+                                <>
+                                    <p class="text-sm">No discovery data yet</p>
+                                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                        Run a discovery scan to identify services and configurations
+                                    </p>
+                                </>
+                            }
+                        >
+                            <p class="text-sm">Checking existing discovery data...</p>
+                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                You can run discovery now if this takes too long.
+                            </p>
+                        </Show>
                     </div>
 
                     {/* Connection Status Warning - Show when commands are needed but not available */}
@@ -698,7 +704,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         <p class="font-medium text-amber-800 dark:text-amber-200">Commands not enabled</p>
                                         <p class="text-amber-700 dark:text-amber-300 mt-0.5">
                                             Discovery requires command execution. Enable "Pulse Commands" in{' '}
-                                            <a href="/settings/agents" class="underline hover:no-underline">Settings → Unified Agents</a>.
+                                            <a href="/settings/workloads" class="underline hover:no-underline">Settings → Unified Agents</a>.
                                         </p>
                                     </div>
                                 </div>
@@ -715,7 +721,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         <p class="text-amber-700 dark:text-amber-300 mt-0.5">
                                             Commands are enabled, but the agent isn't connected via WebSocket. Check that the API token has the{' '}
                                             <code class="px-1 py-0.5 bg-amber-100 dark:bg-amber-800/50 rounded">agent:exec</code>{' '}
-                                            scope in <a href="/settings/api" class="underline hover:no-underline">Settings → API Tokens</a>.
+                                            scope in <a href="/settings/integrations/api" class="underline hover:no-underline">Settings → API Tokens</a>.
                                         </p>
                                     </div>
                                 </div>
@@ -746,14 +752,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 Scanning...
                             </span>
                         ) : (
-                            'Run Discovery'
+                            discovery.loading ? 'Run Discovery Now' : 'Run Discovery'
                         )}
                     </button>
                 </div>
             </Show>
 
             {/* Discovery exists but has no meaningful data - show re-scan option */}
-            <Show when={hasFetched() && !discovery.loading && discovery() && !hasValidDiscovery() && !isScanning()}>
+            <Show when={!discovery.loading && discovery() && !hasValidDiscovery() && !isScanning()}>
                 <div class="text-center py-8">
                     <div class="text-gray-500 dark:text-gray-400 mb-4">
                         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">

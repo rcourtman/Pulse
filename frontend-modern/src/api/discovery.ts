@@ -55,6 +55,43 @@ export async function getDiscovery(
     hostId: string,
     resourceId: string
 ): Promise<ResourceDiscovery | null> {
+    if (resourceType === 'host') {
+        // Host discovery is frequently absent before first scan. Resolve via list endpoint
+        // first to avoid noisy 404s for expected "not discovered yet" states.
+        const hostListResponse = await apiFetch(`${API_BASE}/host/${encodeURIComponent(hostId)}`);
+        if (!hostListResponse.ok) {
+            throw new Error('Failed to list host discoveries');
+        }
+
+        const hostList = await hostListResponse.json() as DiscoveryListResponse;
+        if (!hostList.discoveries || hostList.discoveries.length === 0) {
+            return null;
+        }
+
+        const resolvedHostDiscovery = hostList.discoveries.find(
+            (d) =>
+                d.resource_type === 'host' &&
+                (d.resource_id === resourceId ||
+                    d.resource_id === hostId ||
+                    d.host_id === hostId)
+        ) ?? hostList.discoveries.find((d) => d.resource_type === 'host');
+
+        if (!resolvedHostDiscovery) {
+            return null;
+        }
+
+        const response = await apiFetch(
+            `${API_BASE}/host/${encodeURIComponent(resolvedHostDiscovery.host_id)}/${encodeURIComponent(resolvedHostDiscovery.resource_id)}`
+        );
+        if (response.status === 404) {
+            return null;
+        }
+        if (!response.ok) {
+            throw new Error('Failed to get discovery');
+        }
+        return response.json();
+    }
+
     const response = await apiFetch(
         `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`
     );
