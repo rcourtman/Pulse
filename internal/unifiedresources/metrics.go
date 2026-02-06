@@ -33,6 +33,18 @@ func metricsFromHost(host models.Host) *ResourceMetrics {
 			metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: SourceAgent}
 		}
 	}
+	if host.NetInRate > 0 {
+		metrics.NetIn = &MetricValue{Value: host.NetInRate, Unit: "bytes/s", Source: SourceAgent}
+	}
+	if host.NetOutRate > 0 {
+		metrics.NetOut = &MetricValue{Value: host.NetOutRate, Unit: "bytes/s", Source: SourceAgent}
+	}
+	if host.DiskReadRate > 0 {
+		metrics.DiskRead = &MetricValue{Value: host.DiskReadRate, Unit: "bytes/s", Source: SourceAgent}
+	}
+	if host.DiskWriteRate > 0 {
+		metrics.DiskWrite = &MetricValue{Value: host.DiskWriteRate, Unit: "bytes/s", Source: SourceAgent}
+	}
 	return metrics
 }
 

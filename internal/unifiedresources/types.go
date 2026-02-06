@@ -141,6 +141,7 @@ type ProxmoxData struct {
 
 // AgentData contains host agent-specific data.
 type AgentData struct {
+	AgentID           string             `json:"agentId,omitempty"`
 	AgentVersion      string             `json:"agentVersion,omitempty"`
 	Hostname          string             `json:"hostname,omitempty"`
 	Platform          string             `json:"platform,omitempty"`

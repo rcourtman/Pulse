@@ -67,6 +67,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	}
 
 	agent := &AgentData{
+		AgentID:           host.ID,
 		AgentVersion:      host.AgentVersion,
 		Hostname:          host.Hostname,
 		Platform:          host.Platform,
