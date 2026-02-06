@@ -76,6 +76,9 @@ export interface ResourceDiscovery {
     fingerprint_schema_version?: number; // Schema version when fingerprint was captured
     // Auto-suggested web interface URL
     suggested_url?: string;
+    suggested_url_source_code?: string;
+    suggested_url_source_detail?: string;
+    suggested_url_diagnostic?: string;
 }
 
 export interface DiscoverySummary {

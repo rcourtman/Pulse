@@ -102,48 +102,6 @@ export function downsampleLTTB<T extends TimeSeriesPoint>(
 }
 
 /**
- * Downsample metric snapshots (for Sparkline component)
- * Works with the MetricSnapshot interface from metricsHistory
- */
-export interface MetricSnapshotLike {
-    timestamp: number;
-    cpu: number;
-    memory: number;
-    disk: number;
-}
-
-/**
- * Downsample metric snapshots for a specific metric
- * 
- * @param data - Array of MetricSnapshot data
- * @param metric - Which metric to use for LTTB selection ('cpu', 'memory', 'disk')
- * @param targetPoints - Desired number of output points
- * @returns Downsampled array
- */
-export function downsampleMetricSnapshots<T extends MetricSnapshotLike>(
-    data: T[],
-    metric: 'cpu' | 'memory' | 'disk',
-    targetPoints: number
-): T[] {
-    if (data.length <= targetPoints || targetPoints < 3) {
-        return data;
-    }
-
-    // Convert to TimeSeriesPoint format for LTTB
-    const points: (TimeSeriesPoint & { originalIndex: number })[] = data.map((d, i) => ({
-        timestamp: d.timestamp,
-        value: d[metric],
-        originalIndex: i
-    }));
-
-    // Run LTTB
-    const downsampled = downsampleLTTB(points, targetPoints);
-
-    // Return original data at selected indices
-    return downsampled.map(p => data[p.originalIndex]);
-}
-
-/**
  * Calculate optimal number of points for a given pixel width
  * 
  * Best practices:

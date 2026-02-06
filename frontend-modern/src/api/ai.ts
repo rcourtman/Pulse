@@ -348,6 +348,17 @@ export interface UnifiedFindingRecord {
   investigation_outcome?: string;
   last_investigated_at?: string;
   investigation_attempts?: number;
+  loop_state?: string;
+  lifecycle?: Array<{
+    at: string;
+    type: string;
+    message?: string;
+    from?: string;
+    to?: string;
+    metadata?: Record<string, string>;
+  }>;
+  regression_count?: number;
+  last_regression_at?: string;
   detected_at: string;
   last_seen_at?: string;
   resolved_at?: string;

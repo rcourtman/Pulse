@@ -92,23 +92,41 @@ export function formatAbsoluteTime(timestamp: number | undefined): string {
   return `${day} ${month} ${hours}:${minutes}`;
 }
 
-export function formatRelativeTime(timestamp: number | undefined): string {
-  if (!timestamp) return '';
+/**
+ * Format a timestamp as a human-readable relative time string.
+ * ALL relative time formatting MUST use this function.
+ *
+ * @param timestamp - Unix ms number, ISO date string, Date object, or undefined
+ * @param options.compact - Use short format: "5m ago" instead of "5 mins ago"
+ * @param options.emptyText - Text for falsy input (default: '')
+ */
+export function formatRelativeTime(
+  timestamp: number | string | Date | undefined,
+  options?: { compact?: boolean; emptyText?: string },
+): string {
+  if (!timestamp) return options?.emptyText ?? '';
 
-  const now = Date.now();
-  const diffMs = now - timestamp;
+  let ms: number;
+  if (typeof timestamp === 'number') {
+    ms = timestamp;
+  } else if (typeof timestamp === 'string') {
+    ms = new Date(timestamp).getTime();
+  } else {
+    ms = timestamp.getTime();
+  }
 
-  return formatTimeDiff(diffMs);
+  const diffMs = Date.now() - ms;
+  return formatTimeDiff(diffMs, options?.compact);
 }
 
 /**
  * Formats a time difference in milliseconds to a human-readable string.
  * Internal helper used by formatRelativeTime and formatBackupAge.
  */
-function formatTimeDiff(diffMs: number): string {
+function formatTimeDiff(diffMs: number, compact?: boolean): string {
   // Handle invalid or future timestamps
   if (isNaN(diffMs) || !isFinite(diffMs)) return '';
-  if (diffMs < 0) return '0s ago'; // Future timestamp, treat as current
+  if (diffMs < 0) return compact ? 'just now' : '0s ago';
 
   const diffSeconds = Math.floor(diffMs / 1000);
   const diffMinutes = Math.floor(diffSeconds / 60);
@@ -116,6 +134,13 @@ function formatTimeDiff(diffMs: number): string {
   const diffDays = Math.floor(diffHours / 24);
   const diffMonths = Math.floor(diffDays / 30);
   const diffYears = Math.floor(diffDays / 365);
+
+  if (compact) {
+    if (diffSeconds < 60) return 'just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  }
 
   if (diffSeconds < 60) {
     return `${diffSeconds}s ago`;
@@ -197,6 +222,52 @@ export function getBackupInfo(
     ageMs,
     ageFormatted: formatTimeDiff(ageMs),
   };
+}
+
+/**
+ * Format disk power-on hours into a human-readable duration.
+ * ALL power-on-hours formatting MUST use this function.
+ */
+export function formatPowerOnHours(hours: number, condensed = false): string {
+  if (hours >= 8760) {
+    const years = (hours / 8760).toFixed(1);
+    return condensed ? `${years}y` : `${years} years`;
+  }
+  if (hours >= 24) {
+    const days = Math.round(hours / 24);
+    return condensed ? `${days}d` : `${days} days`;
+  }
+  return condensed ? `${hours}h` : `${hours} hours`;
+}
+
+/**
+ * Estimate rendered text width based on character count.
+ * Used for determining if labels fit inside metric bars.
+ * ALL text-width estimation MUST use this function.
+ */
+export function estimateTextWidth(text: string): number {
+  return text.length * 5.5 + 8;
+}
+
+/**
+ * Format anomaly ratio for display in metric bars.
+ * Returns null if no meaningful anomaly, or a short indicator string.
+ * ALL anomaly ratio formatting MUST use this function.
+ */
+/** CSS class for anomaly severity badge text color. */
+export const ANOMALY_SEVERITY_CLASS: Record<string, string> = {
+  critical: 'text-red-400',
+  high: 'text-orange-400',
+  medium: 'text-yellow-400',
+  low: 'text-blue-400',
+};
+
+export function formatAnomalyRatio(anomaly: { baseline_mean: number; current_value: number } | null | undefined): string | null {
+  if (!anomaly || anomaly.baseline_mean === 0) return null;
+  const ratio = anomaly.current_value / anomaly.baseline_mean;
+  if (ratio >= 2) return `${ratio.toFixed(1)}x`;
+  if (ratio >= 1.5) return '↑↑';
+  return '↑';
 }
 
 /**

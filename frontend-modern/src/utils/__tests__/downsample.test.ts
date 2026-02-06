@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
     downsampleLTTB,
-    downsampleMetricSnapshots,
     calculateOptimalPoints,
     TimeSeriesPoint
 } from '../downsample';
@@ -66,42 +65,6 @@ describe('downsampleLTTB', () => {
         // The peak should be preserved
         const hasPeak = result.some(p => p.value === 100);
         expect(hasPeak).toBe(true);
-    });
-});
-
-describe('downsampleMetricSnapshots', () => {
-    it('downsamples based on selected metric', () => {
-        const data = [];
-        for (let i = 0; i < 100; i++) {
-            data.push({
-                timestamp: i * 1000,
-                cpu: i % 2 === 0 ? 80 : 20, // oscillating
-                memory: 50,
-                disk: 30,
-            });
-        }
-
-        const result = downsampleMetricSnapshots(data, 'cpu', 20);
-
-        expect(result.length).toBe(20);
-        // All points should be valid metric snapshots
-        result.forEach(p => {
-            expect(p).toHaveProperty('timestamp');
-            expect(p).toHaveProperty('cpu');
-            expect(p).toHaveProperty('memory');
-            expect(p).toHaveProperty('disk');
-        });
-    });
-
-    it('returns original data when length is less than target', () => {
-        const data = [
-            { timestamp: 1, cpu: 10, memory: 20, disk: 30 },
-            { timestamp: 2, cpu: 20, memory: 25, disk: 35 },
-        ];
-
-        const result = downsampleMetricSnapshots(data, 'cpu', 10);
-
-        expect(result).toEqual(data);
     });
 });
 

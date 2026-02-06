@@ -9,7 +9,7 @@
 import { createSignal } from 'solid-js';
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import { seedFromBackend, resetSeedingState } from './metricsHistory';
+import { activateSparklines, changeSparklineRange, deactivateSparklines } from './sparklineData';
 import type { TimeRange } from '@/api/charts';
 
 export type MetricsViewMode = 'bars' | 'sparklines';
@@ -94,12 +94,11 @@ export function setMetricsViewModePreference(mode: MetricsViewMode): void {
     }
   }
 
-  // When switching to sparklines, seed historical data from backend
+  // When switching to sparklines, start fetching data
   if (mode === 'sparklines') {
-    // Fire and forget - don't block the UI
-    seedFromBackend(metricsTimeRange()).catch(() => {
-      // Errors are already logged in seedFromBackend
-    });
+    activateSparklines(metricsTimeRange());
+  } else {
+    deactivateSparklines();
   }
 }
 
@@ -119,14 +118,9 @@ export function setMetricsTimeRangePreference(range: TimeRange): void {
     }
   }
 
-  // If we're in sparklines mode and range changed, re-seed from backend
+  // If we're in sparklines mode and range changed, re-fetch
   if (metricsViewMode() === 'sparklines' && range !== previousRange) {
-    // Reset seeding state to force a fresh fetch
-    resetSeedingState();
-    // Fire and forget - don't block the UI
-    seedFromBackend(range).catch(() => {
-      // Errors are already logged in seedFromBackend
-    });
+    changeSparklineRange(range);
   }
 }
 

@@ -65,10 +65,16 @@ export interface ResourceMetric {
     free?: number;         // Free amount (bytes)
 }
 
-// Network I/O metrics
+// Network I/O metrics (rates in bytes/sec from backend)
 export interface ResourceNetwork {
-    rxBytes: number;       // Total bytes received
-    txBytes: number;       // Total bytes transmitted
+    rxBytes: number;       // Inbound rate (bytes/sec)
+    txBytes: number;       // Outbound rate (bytes/sec)
+}
+
+// Disk I/O metrics (rates in bytes/sec from backend)
+export interface ResourceDiskIO {
+    readRate: number;      // Read rate (bytes/sec)
+    writeRate: number;     // Write rate (bytes/sec)
 }
 
 // Alert associated with a resource
@@ -115,6 +121,7 @@ export interface Resource {
     memory?: ResourceMetric;
     disk?: ResourceMetric;
     network?: ResourceNetwork;
+    diskIO?: ResourceDiskIO;
     temperature?: number;
     uptime?: number;      // Seconds
 

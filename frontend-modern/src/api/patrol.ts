@@ -257,6 +257,9 @@ export const severityColors: Record<FindingSeverity, { bg: string; text: string;
  */
 export function formatTimestamp(ts: string): string {
     const date = new Date(ts);
+    if (!ts || Number.isNaN(date.getTime())) {
+        return '';
+    }
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
@@ -385,13 +388,23 @@ export async function getPatrolRunHistoryWithToolCalls(limit: number = 30): Prom
 
 /** SSE event from /api/ai/patrol/stream */
 export interface PatrolStreamEvent {
-    type: 'start' | 'content' | 'phase' | 'complete' | 'error' | 'tool_start' | 'tool_end';
+    // Meta (best-effort; present when backend supports it)
+    run_id?: string;
+    seq?: number;
+    ts_ms?: number;
+    resync_reason?: 'late_joiner' | 'stale_last_event_id' | 'buffer_rotated';
+    buffer_start_seq?: number;
+    buffer_end_seq?: number;
+    content_truncated?: boolean;
+
+    type: 'snapshot' | 'start' | 'content' | 'phase' | 'thinking' | 'complete' | 'error' | 'tool_start' | 'tool_end';
     content?: string;
     phase?: string;
     tokens?: number;
     tool_id?: string;
     tool_name?: string;
     tool_input?: string;
+    tool_raw_input?: string;
     tool_output?: string;
     tool_success?: boolean;
 }

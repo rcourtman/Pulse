@@ -267,7 +267,15 @@ class ApiClient {
 
     // If we get a 401 on an API call (not during initial auth check), redirect to login
     // Skip redirect for specific auth-check endpoints and background data fetching to avoid loops
-    const skipRedirectUrls = ['/api/security/status', '/api/state', '/api/settings/ai', '/api/charts', '/api/resources'];
+    const skipRedirectUrls = [
+      '/api/security/status',
+      '/api/state',
+      '/api/settings/ai',
+      '/api/charts',
+      '/api/charts/infrastructure',
+      '/api/charts/infrastructure-summary',
+      '/api/resources',
+    ];
     const shouldSkipRedirect = skipRedirectUrls.some(path => url.includes(path));
     if (response.status === 401 && !shouldSkipRedirect) {
       logger.warn('Authentication expired - redirecting to login');

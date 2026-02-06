@@ -1,4 +1,4 @@
-import { createSignal, createMemo } from 'solid-js';
+import { createSignal, createMemo, createRoot } from 'solid-js';
 import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import { logger } from '@/utils/logger';
 
@@ -38,10 +38,12 @@ export async function loadLicenseStatus(force = false): Promise<void> {
 /**
  * Helper to check if the current license is Pulse Pro (any paid tier).
  */
-export const isPro = createMemo(() => {
-    const current = licenseStatus();
-    return Boolean(current?.valid && current.tier !== 'free');
-});
+export const isPro = createRoot(() =>
+    createMemo(() => {
+        const current = licenseStatus();
+        return Boolean(current?.valid && current.tier !== 'free');
+    })
+);
 
 /**
  * Check if a specific feature is enabled by the current license.
@@ -51,6 +53,27 @@ export function hasFeature(feature: string): boolean {
     const current = licenseStatus();
     if (!current) return false;
     return current.features.includes(feature);
+}
+
+/**
+ * Max free range in days — must match backend maxFreeDuration (7 * 24 * time.Hour).
+ * Any range exceeding this requires the long_term_metrics feature.
+ */
+const MAX_FREE_DAYS = 7;
+
+function parseRangeDays(range: string): number {
+    const match = range.match(/^(\d+)(h|d)$/);
+    if (!match) return 0;
+    const val = parseInt(match[1], 10);
+    return match[2] === 'd' ? val : val / 24;
+}
+
+/**
+ * Check if a time range requires Pro and the user doesn't have it.
+ * Ranges exceeding 7 days require the long_term_metrics feature.
+ */
+export function isRangeLocked(range: string): boolean {
+    return parseRangeDays(range) > MAX_FREE_DAYS && !hasFeature('long_term_metrics');
 }
 
 /**

@@ -208,8 +208,8 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
   const cpuPercent = resource.metrics?.cpu?.percent ?? resource.metrics?.cpu?.value ?? 0;
 
   // For PVE guests, use the legacy ID format (instance:node:vmid) so metrics keys
-  // match what the WebSocket-based metricsSampler records. Without this, sparklines
-  // show "collecting data" because the hashed v2 ID doesn't match any sampler keys.
+  // match what the backend charts API returns. Without this, sparklines
+  // show no data because the hashed v2 ID doesn't match any backend keys.
   const guestId = (workloadType === 'vm' || workloadType === 'lxc') && instance && node && vmid > 0
     ? `${instance}:${node}:${vmid}`
     : resource.id;

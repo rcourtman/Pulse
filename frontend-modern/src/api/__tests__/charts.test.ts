@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { ChartData, ChartsResponse, TimeRange, MetricPoint, ChartStats } from '@/api/charts';
+import { timeRangeToMs } from '@/utils/timeRange';
 
 // Note: We test the types and interfaces here since the actual API calls
 // require a running backend. Integration tests should cover the full flow.
@@ -10,7 +11,7 @@ import type { ChartData, ChartsResponse, TimeRange, MetricPoint, ChartStats } fr
 describe('Charts API Types', () => {
     describe('TimeRange', () => {
         it('supports all expected time range values', () => {
-            const validRanges: TimeRange[] = ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '7d'];
+            const validRanges: TimeRange[] = ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '7d', '30d'];
 
             validRanges.forEach(range => {
                 // This is a compile-time check - if it compiles, the types are correct
@@ -222,21 +223,6 @@ describe('Charts API Types', () => {
 });
 
 describe('Time Range to Milliseconds Conversion', () => {
-    // This tests the concept matching metricsHistory.ts timeRangeToMs
-    function timeRangeToMs(range: TimeRange): number {
-        switch (range) {
-            case '5m': return 5 * 60 * 1000;
-            case '15m': return 15 * 60 * 1000;
-            case '30m': return 30 * 60 * 1000;
-            case '1h': return 60 * 60 * 1000;
-            case '4h': return 4 * 60 * 60 * 1000;
-            case '12h': return 12 * 60 * 60 * 1000;
-            case '24h': return 24 * 60 * 60 * 1000;
-            case '7d': return 7 * 24 * 60 * 60 * 1000;
-            default: return 60 * 60 * 1000;
-        }
-    }
-
     const expectedValues: [TimeRange, number][] = [
         ['5m', 300000],
         ['15m', 900000],
@@ -246,6 +232,7 @@ describe('Time Range to Milliseconds Conversion', () => {
         ['12h', 43200000],
         ['24h', 86400000],
         ['7d', 604800000],
+        ['30d', 2592000000],
     ];
 
     it.each(expectedValues)('converts %s to %d ms', (range, expectedMs) => {

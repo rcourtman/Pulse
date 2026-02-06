@@ -33,11 +33,13 @@ type V2Resource = {
     disk?: V2MetricValue;
     netIn?: V2MetricValue;
     netOut?: V2MetricValue;
+    diskRead?: V2MetricValue;
+    diskWrite?: V2MetricValue;
   };
   parentId?: string;
   tags?: string[];
   proxmox?: { nodeName?: string; clusterName?: string; uptime?: number };
-  agent?: { hostname?: string; uptimeSeconds?: number; temperature?: number };
+  agent?: { agentId?: string; hostname?: string; uptimeSeconds?: number; temperature?: number };
   docker?: { hostname?: string };
   pbs?: Record<string, unknown>;
   kubernetes?: Record<string, unknown>;
@@ -146,6 +148,13 @@ const toResource = (v2: V2Resource): Resource => {
         ? {
           rxBytes: v2.metrics?.netIn?.value ?? 0,
           txBytes: v2.metrics?.netOut?.value ?? 0,
+        }
+        : undefined,
+    diskIO:
+      v2.metrics?.diskRead || v2.metrics?.diskWrite
+        ? {
+          readRate: v2.metrics?.diskRead?.value ?? 0,
+          writeRate: v2.metrics?.diskWrite?.value ?? 0,
         }
         : undefined,
     uptime: v2.agent?.uptimeSeconds ?? v2.proxmox?.uptime,

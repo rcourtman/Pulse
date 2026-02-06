@@ -33,6 +33,20 @@ export interface ChartData {
 
 export interface ChartStats {
     oldestDataTimestamp: number;
+    range?: string;
+    rangeSeconds?: number;
+    metricsStoreEnabled?: boolean;
+    primarySourceHint?: string;
+    inMemoryThresholdSecs?: number;
+    pointCounts?: {
+        total?: number;
+        guests?: number;
+        nodes?: number;
+        storage?: number;
+        dockerContainers?: number;
+        dockerHosts?: number;
+        hosts?: number;
+    };
 }
 
 export interface ChartsResponse {
@@ -43,6 +57,14 @@ export interface ChartsResponse {
     dockerHostData?: Record<string, ChartData>; // Docker host data keyed by host ID
     hostData?: Record<string, ChartData>; // Unified host agent data keyed by host ID
     guestTypes?: Record<string, 'vm' | 'container'>; // Maps guest ID to type
+    timestamp: number;
+    stats: ChartStats;
+}
+
+export interface InfrastructureChartsResponse {
+    nodeData: Record<string, ChartData>;
+    dockerHostData?: Record<string, ChartData>;
+    hostData?: Record<string, ChartData>;
     timestamp: number;
     stats: ChartStats;
 }
@@ -89,9 +111,31 @@ export class ChartsAPI {
      * Fetch historical chart data for all resources
      * @param range Time range to fetch (default: 1h)
      */
-    static async getCharts(range: TimeRange = '1h'): Promise<ChartsResponse> {
+    static async getCharts(range: TimeRange = '1h', signal?: AbortSignal): Promise<ChartsResponse> {
         const url = `${this.baseUrl}/charts?range=${range}`;
-        return apiFetchJSON(url);
+        return apiFetchJSON(url, { signal });
+    }
+
+    /**
+     * Fetch infrastructure-only chart data for summary sparklines.
+     * This avoids guest/container/storage chart payloads.
+     */
+    static async getInfrastructureSummaryCharts(
+        range: TimeRange = '1h',
+        signal?: AbortSignal,
+    ): Promise<InfrastructureChartsResponse> {
+        const url = `${this.baseUrl}/charts/infrastructure-summary?range=${range}`;
+        return apiFetchJSON(url, { signal });
+    }
+
+    /**
+     * @deprecated Use getInfrastructureSummaryCharts.
+     */
+    static async getInfrastructureCharts(
+        range: TimeRange = '1h',
+        signal?: AbortSignal,
+    ): Promise<InfrastructureChartsResponse> {
+        return this.getInfrastructureSummaryCharts(range, signal);
     }
 
     /**

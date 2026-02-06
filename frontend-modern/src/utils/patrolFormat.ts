@@ -13,25 +13,6 @@ interface PartialRunRecord {
   type?: string;
 }
 
-export function formatRelativeTime(dateStr: string | undefined): string {
-  if (!dateStr) return 'Never';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(Math.abs(diffMs) / 60000);
-  const diffHours = Math.floor(Math.abs(diffMs) / 3600000);
-
-  if (diffMs < 0) {
-    if (diffMins < 60) return `in ${diffMins}m`;
-    return `in ${diffHours}h`;
-  } else {
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return date.toLocaleDateString();
-  }
-}
-
 export function formatDurationMs(ms?: number): string {
   if (!ms || ms <= 0) return '';
   if (ms < 1000) return `${ms}ms`;

@@ -84,6 +84,17 @@ export interface UnifiedFinding {
   investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed';
   lastInvestigatedAt?: string;
   investigationAttempts?: number;
+  loopState?: string;
+  lifecycle?: Array<{
+    at: string;
+    type: string;
+    message?: string;
+    from?: string;
+    to?: string;
+    metadata?: Record<string, string>;
+  }>;
+  regressionCount?: number;
+  lastRegressionAt?: string;
 }
 
 const [unifiedFindings, setUnifiedFindings] = createSignal<UnifiedFinding[]>([]);
@@ -171,6 +182,10 @@ export const aiIntelligenceStore = {
           investigationOutcome: validateInvestigationOutcome(item.investigation_outcome),
           lastInvestigatedAt: item.last_investigated_at || undefined,
           investigationAttempts: item.investigation_attempts || 0,
+          loopState: item.loop_state || undefined,
+          lifecycle: item.lifecycle || [],
+          regressionCount: item.regression_count || 0,
+          lastRegressionAt: item.last_regression_at || undefined,
         };
       });
 
