@@ -39,6 +39,12 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
 ```
 
+### TrueNAS SCALE/CORE
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
+```
+
 ## Features
 
 - **Host Metrics**: CPU, memory, disk, network I/O, temperatures
