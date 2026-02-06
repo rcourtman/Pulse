@@ -36,6 +36,8 @@ import { UpdatesSettingsPanel } from './UpdatesSettingsPanel';
 import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
 import { BackupsSettingsPanel } from './BackupsSettingsPanel';
 import { ProLicensePanel } from './ProLicensePanel';
+import { RelaySettingsPanel } from './RelaySettingsPanel';
+import RadioTower from 'lucide-solid/icons/radio-tower';
 import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
 import { SecurityOverviewPanel } from './SecurityOverviewPanel';
@@ -257,6 +259,7 @@ type SettingsTab =
   | 'system-updates'
   | 'system-backups'
   | 'system-ai'
+  | 'system-relay'
   | 'system-logs'
   | 'system-pro'
   | 'api'
@@ -313,6 +316,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   'system-ai': {
     title: 'AI',
     description: 'Configure AI providers, models, Pulse Assistant, and Patrol.',
+  },
+  'system-relay': {
+    title: 'Remote Access',
+    description: 'Connect to the Pulse relay for mobile app access to your infrastructure.',
   },
   'system-pro': {
     title: 'Pulse Pro',
@@ -428,6 +435,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/system-updates')) return 'system-updates';
     if (path.includes('/settings/system-backups')) return 'system-backups';
     if (path.includes('/settings/system-ai')) return 'system-ai';
+    if (path.includes('/settings/system-relay')) return 'system-relay';
     if (path.includes('/settings/system-pro')) return 'system-pro';
     if (path.includes('/settings/system-logs')) return 'system-logs';
     // Generic /settings/system fallback must come AFTER specific system-* paths
@@ -960,6 +968,13 @@ const Settings: Component<SettingsProps> = (props) => {
             label: 'AI',
             icon: Sparkles,
             iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'system-relay',
+            label: 'Remote Access',
+            icon: RadioTower,
+            iconProps: { strokeWidth: 2 },
+            features: ['relay'],
           },
           {
             id: 'system-pro',
@@ -3503,6 +3518,11 @@ const Settings: Component<SettingsProps> = (props) => {
                   <AISettings />
                   <AICostDashboard />
                 </div>
+              </Show>
+
+              {/* Remote Access (Relay) Tab */}
+              <Show when={activeTab() === 'system-relay'}>
+                <RelaySettingsPanel />
               </Show>
 
               {/* Pulse Pro License Tab */}

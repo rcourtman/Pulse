@@ -44,6 +44,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
@@ -105,6 +106,8 @@ type Router struct {
 	checksumMu           sync.RWMutex
 	checksumCache        map[string]checksumCacheEntry
 	installScriptClient  *http.Client
+	relayClient          *relay.Client
+	relayCancel          context.CancelFunc
 }
 
 func pulseBinDir() string {
@@ -1475,6 +1478,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/oauth/exchange", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleOAuthExchange))) // Manual code input
 	r.mux.HandleFunc("/api/ai/oauth/callback", r.aiSettingsHandler.HandleOAuthCallback)                                                                  // Public - receives redirect from Anthropic
 	r.mux.HandleFunc("/api/ai/oauth/disconnect", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleOAuthDisconnect)))
+
+	// Relay routes for mobile remote access
+	r.mux.HandleFunc("GET /api/settings/relay", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, RequireLicenseFeature(r.licenseHandlers, license.FeatureRelay, r.handleGetRelayConfig))))
+	r.mux.HandleFunc("PUT /api/settings/relay", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, RequireLicenseFeature(r.licenseHandlers, license.FeatureRelay, r.handleUpdateRelayConfig))))
+	r.mux.HandleFunc("GET /api/settings/relay/status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, RequireLicenseFeature(r.licenseHandlers, license.FeatureRelay, r.handleGetRelayStatus))))
 
 	// AI Patrol routes for background monitoring
 	// Note: Status remains accessible so UI can show license/upgrade state
@@ -3388,6 +3396,186 @@ func (r *Router) RestartAIChat(ctx context.Context) {
 			log.Info().Msg("AI chat service restarted with new configuration")
 		}
 	}
+}
+
+// StartRelay starts the relay client if configured and licensed.
+func (r *Router) StartRelay(ctx context.Context) {
+	cfg, err := r.persistence.LoadRelayConfig()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to load relay config")
+		return
+	}
+	if !cfg.Enabled {
+		log.Debug().Msg("Relay not enabled, skipping")
+		return
+	}
+
+	// Check license
+	if r.licenseHandlers != nil {
+		svc := r.licenseHandlers.Service(ctx)
+		if svc != nil {
+			if err := svc.RequireFeature(license.FeatureRelay); err != nil {
+				log.Warn().Msg("Relay feature not licensed, skipping")
+				return
+			}
+		}
+	}
+
+	localAddr := fmt.Sprintf("127.0.0.1:%d", r.config.FrontendPort)
+
+	deps := relay.ClientDeps{
+		LicenseTokenFunc: func() string {
+			if r.licenseHandlers == nil {
+				return ""
+			}
+			svc := r.licenseHandlers.Service(context.Background())
+			if svc == nil {
+				return ""
+			}
+			lic := svc.Current()
+			if lic == nil {
+				return ""
+			}
+			return lic.Raw
+		},
+		TokenValidator: func(token string) bool {
+			config.Mu.Lock()
+			_, ok := r.config.ValidateAPIToken(token)
+			config.Mu.Unlock()
+			return ok
+		},
+		LocalAddr:      localAddr,
+		ServerVersion:  r.serverVersion,
+		IdentityPubKey: cfg.IdentityPublicKey,
+	}
+
+	relayCtx, relayCancel := context.WithCancel(ctx)
+	client := relay.NewClient(*cfg, deps, log.Logger)
+
+	r.relayClient = client
+	r.relayCancel = relayCancel
+
+	go func() {
+		if err := client.Run(relayCtx); err != nil && relayCtx.Err() == nil {
+			log.Error().Err(err).Msg("Relay client stopped unexpectedly")
+		}
+	}()
+
+	log.Info().Str("server_url", cfg.ServerURL).Msg("Relay client started")
+}
+
+// StopRelay stops the relay client.
+func (r *Router) StopRelay() {
+	if r.relayCancel != nil {
+		r.relayCancel()
+	}
+	if r.relayClient != nil {
+		r.relayClient.Close()
+		r.relayClient = nil
+		log.Info().Msg("Relay client stopped")
+	}
+}
+
+func (r *Router) handleGetRelayConfig(w http.ResponseWriter, req *http.Request) {
+	cfg, err := r.persistence.LoadRelayConfig()
+	if err != nil {
+		http.Error(w, "failed to load relay config", http.StatusInternalServerError)
+		return
+	}
+
+	// Omit the instance secret and private key from the response
+	resp := struct {
+		Enabled             bool   `json:"enabled"`
+		ServerURL           string `json:"server_url"`
+		IdentityFingerprint string `json:"identity_fingerprint,omitempty"`
+	}{
+		Enabled:             cfg.Enabled,
+		ServerURL:           cfg.ServerURL,
+		IdentityFingerprint: cfg.IdentityFingerprint,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (r *Router) handleUpdateRelayConfig(w http.ResponseWriter, req *http.Request) {
+	var update struct {
+		Enabled        *bool   `json:"enabled"`
+		ServerURL      *string `json:"server_url"`
+		InstanceSecret *string `json:"instance_secret"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&update); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	prev, err := r.persistence.LoadRelayConfig()
+	if err != nil {
+		http.Error(w, "failed to load relay config", http.StatusInternalServerError)
+		return
+	}
+
+	// Apply updates to a copy
+	cfg := *prev
+	if update.Enabled != nil {
+		cfg.Enabled = *update.Enabled
+	}
+	if update.ServerURL != nil && *update.ServerURL != "" {
+		cfg.ServerURL = *update.ServerURL
+	}
+	if update.InstanceSecret != nil {
+		cfg.InstanceSecret = *update.InstanceSecret
+	}
+
+	// Generate identity keypair on first enable
+	identityGenerated := false
+	if cfg.Enabled && cfg.IdentityPrivateKey == "" {
+		privKey, pubKey, fp, err := relay.GenerateIdentityKeyPair()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to generate relay identity keypair")
+			http.Error(w, "failed to generate identity keypair", http.StatusInternalServerError)
+			return
+		}
+		cfg.IdentityPrivateKey = privKey
+		cfg.IdentityPublicKey = pubKey
+		cfg.IdentityFingerprint = fp
+		identityGenerated = true
+		log.Info().Str("fingerprint", fp).Msg("Generated relay instance identity keypair")
+	}
+
+	if err := r.persistence.SaveRelayConfig(cfg); err != nil {
+		http.Error(w, "failed to save relay config", http.StatusInternalServerError)
+		return
+	}
+
+	// Restart relay client if any connection-relevant field changed.
+	// Also restart when identity keypair was just generated so the running
+	// client picks up the new IdentityPubKey.
+	configChanged := cfg.Enabled != prev.Enabled ||
+		cfg.ServerURL != prev.ServerURL ||
+		cfg.InstanceSecret != prev.InstanceSecret ||
+		identityGenerated
+	if configChanged {
+		r.StopRelay()
+		if cfg.Enabled {
+			// Use Background context — the relay client must outlive this HTTP request.
+			r.StartRelay(context.Background())
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (r *Router) handleGetRelayStatus(w http.ResponseWriter, req *http.Request) {
+	if r.relayClient == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(relay.ClientStatus{})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(r.relayClient.Status())
 }
 
 // startBaselineLearning runs a background loop that learns baselines from metrics history
