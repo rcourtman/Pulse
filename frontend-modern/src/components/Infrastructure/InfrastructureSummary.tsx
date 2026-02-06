@@ -35,6 +35,14 @@ const normalizeHostIdentifier = (value?: string | null): string[] => {
     return Array.from(variants);
 };
 
+const getAgentIdFromResource = (resource: Resource): string | null => {
+    const platformData = resource.platformData as { agent?: { agentId?: string } } | undefined;
+    const agentId = platformData?.agent?.agentId;
+    if (!agentId || typeof agentId !== 'string') return null;
+    const trimmed = agentId.trim();
+    return trimmed.length > 0 ? trimmed : null;
+};
+
 const formatDurationShort = (durationMs: number): string => {
     if (durationMs >= 24 * 60 * 60_000) {
         return `${Math.max(1, Math.round(durationMs / (24 * 60 * 60_000)))}d`;
@@ -273,18 +281,25 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         const map = chartMap();
         if (map.size === 0) return undefined;
 
-        // 1. Direct matches (works for host agents where IDs may align)
+        // 1. Agent ID match from unified platform data (most reliable for host agents).
+        const agentId = getAgentIdFromResource(host);
+        if (agentId) {
+            const agentMatch = map.get(agentId);
+            if (agentMatch) return agentMatch;
+        }
+
+        // 2. Direct matches (works for host agents where IDs may align)
         const direct = map.get(host.id) || map.get(host.name) || map.get(host.platformId);
         if (direct) return direct;
 
-        // 2. Reconstruct composite key for clustered Proxmox nodes: "clusterName-nodeName"
+        // 3. Reconstruct composite key for clustered Proxmox nodes: "clusterName-nodeName"
         if (host.clusterId && host.platformId) {
             const clusterKey = `${host.clusterId}-${host.platformId}`;
             const clusterMatch = map.get(clusterKey);
             if (clusterMatch) return clusterMatch;
         }
 
-        // 3. Suffix match for standalone Proxmox nodes: key ends with "-{nodeName}"
+        // 4. Suffix match for standalone Proxmox nodes: key ends with "-{nodeName}"
         // Handles cases where the instance name prefix is unknown to the frontend
         const nameToMatch = host.platformId || host.name;
         if (nameToMatch) {
@@ -306,6 +321,12 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         if (!hasCurrentRangeCharts()) return undefined;
         const map = chartMap();
         if (map.size === 0) return undefined;
+
+        const agentId = getAgentIdFromResource(host);
+        if (agentId) {
+            const direct = map.get(agentId);
+            if (direct) return direct;
+        }
 
         const wsStore = getGlobalWebSocketStore();
         const wsHosts = wsStore.state.hosts;

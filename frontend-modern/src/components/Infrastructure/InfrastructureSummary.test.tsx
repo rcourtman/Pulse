@@ -333,4 +333,64 @@ describe('InfrastructureSummary range behavior', () => {
       expect(container.textContent).toContain('Showing cached trend data while live history updates.');
     });
   });
+
+  it('maps hostData by agentId from unified platform data when websocket hosts are unavailable', async () => {
+    mockGetCharts.mockReset();
+    const now = Date.now();
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {},
+      dockerHostData: {},
+      hostData: {
+        'agent-host-1': {
+          cpu: [],
+          memory: [],
+          disk: [],
+          netin: [
+            { timestamp: now - 60_000, value: 1024 },
+            { timestamp: now, value: 2048 },
+          ],
+          netout: [
+            { timestamp: now - 60_000, value: 512 },
+            { timestamp: now, value: 1536 },
+          ],
+        },
+      },
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    const agentOnlyHost: Resource = {
+      id: 'unified-host-1',
+      type: 'host',
+      name: 'unraid-node',
+      displayName: 'unraid-node',
+      platformId: 'unraid-node',
+      platformType: 'host-agent',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: now,
+      platformData: {
+        sources: ['agent'],
+        agent: {
+          agentId: 'agent-host-1',
+          hostname: 'unraid-node',
+        },
+      },
+    };
+
+    const { container } = render(() => <InfrastructureSummary hosts={[agentOnlyHost]} timeRange="1h" />);
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      const networkChart = container.querySelector('svg.cursor-crosshair');
+      expect(networkChart).toBeTruthy();
+    });
+
+    expect(container.textContent).toContain('Network');
+  });
 });

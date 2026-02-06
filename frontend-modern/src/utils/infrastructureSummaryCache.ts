@@ -44,6 +44,28 @@ function countChartMapPoints(map: Map<string, ChartData>): number {
   return total;
 }
 
+function pickRicherSeries<T>(incoming?: T[], existing?: T[]): T[] | undefined {
+  const incomingLen = Array.isArray(incoming) ? incoming.length : 0;
+  const existingLen = Array.isArray(existing) ? existing.length : 0;
+  if (incomingLen === 0 && existingLen === 0) return undefined;
+  if (incomingLen >= existingLen) return incoming;
+  return existing;
+}
+
+function mergeChartData(existing: ChartData | undefined, incoming: ChartData): ChartData {
+  if (!existing) return incoming;
+
+  return {
+    cpu: pickRicherSeries(incoming.cpu, existing.cpu),
+    memory: pickRicherSeries(incoming.memory, existing.memory),
+    disk: pickRicherSeries(incoming.disk, existing.disk),
+    diskread: pickRicherSeries(incoming.diskread, existing.diskread),
+    diskwrite: pickRicherSeries(incoming.diskwrite, existing.diskwrite),
+    netin: pickRicherSeries(incoming.netin, existing.netin),
+    netout: pickRicherSeries(incoming.netout, existing.netout),
+  };
+}
+
 
 type CachedChartData = Pick<ChartData, 'cpu' | 'memory' | 'disk' | 'netin' | 'netout'>;
 
@@ -114,17 +136,17 @@ export function extractInfrastructureSummaryChartMap(response: ChartsResponse): 
 
   if (response.nodeData) {
     for (const [id, data] of Object.entries(response.nodeData)) {
-      map.set(id, data);
+      map.set(id, mergeChartData(map.get(id), data));
     }
   }
   if (response.hostData) {
     for (const [id, data] of Object.entries(response.hostData)) {
-      map.set(id, data);
+      map.set(id, mergeChartData(map.get(id), data));
     }
   }
   if (response.dockerHostData) {
     for (const [id, data] of Object.entries(response.dockerHostData)) {
-      map.set(id, data);
+      map.set(id, mergeChartData(map.get(id), data));
     }
   }
 

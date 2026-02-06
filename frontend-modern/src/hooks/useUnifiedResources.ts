@@ -1,4 +1,5 @@
-import { createEffect, createResource, onCleanup } from 'solid-js';
+import { batch, createEffect, createSignal, onCleanup } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { apiFetch } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
@@ -43,6 +44,12 @@ type V2Resource = {
   docker?: { hostname?: string };
   pbs?: Record<string, unknown>;
   kubernetes?: Record<string, unknown>;
+  discoveryTarget?: {
+    resourceType?: string;
+    hostId?: string;
+    resourceId?: string;
+    hostname?: string;
+  };
 };
 
 type V2ListResponse = {
@@ -129,6 +136,18 @@ const toResource = (v2: V2Resource): Resource => {
     name ||
     v2.id;
 
+  const discoveryTarget =
+    v2.discoveryTarget?.resourceType &&
+      v2.discoveryTarget?.hostId &&
+      v2.discoveryTarget?.resourceId
+      ? {
+        resourceType: v2.discoveryTarget.resourceType as 'host' | 'vm' | 'lxc' | 'docker' | 'k8s',
+        hostId: v2.discoveryTarget.hostId,
+        resourceId: v2.discoveryTarget.resourceId,
+        hostname: v2.discoveryTarget.hostname,
+      }
+      : undefined;
+
   return {
     id: v2.id,
     type: resolveType(v2.type),
@@ -166,6 +185,7 @@ const toResource = (v2: V2Resource): Resource => {
       machineId: v2.identity?.machineId,
       ips: v2.identity?.ipAddresses,
     },
+    discoveryTarget,
     platformData: {
       sources: v2.sources,
       sourceStatus: v2.sourceStatus,
@@ -175,6 +195,7 @@ const toResource = (v2: V2Resource): Resource => {
       pbs: v2.pbs,
       kubernetes: v2.kubernetes,
       metrics: v2.metrics,
+      discoveryTarget: v2.discoveryTarget,
     },
   };
 };
@@ -199,11 +220,52 @@ async function fetchUnifiedResources(): Promise<Resource[]> {
 }
 
 export function useUnifiedResources() {
-  const [resources, { refetch, mutate }] = createResource<Resource[]>(fetchUnifiedResources, {
-    initialValue: [],
-  });
+  const [resources, setResources] = createStore<Resource[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<unknown>(undefined);
   const wsStore = getGlobalWebSocketStore();
   let refreshHandle: ReturnType<typeof setTimeout> | undefined;
+  let inFlightRefetch: Promise<Resource[]> | null = null;
+
+  const applyResources = (next: Resource[]) => {
+    setResources(reconcile(next, { key: 'id' }));
+  };
+
+  const refetch = async () => {
+    if (inFlightRefetch) {
+      return inFlightRefetch;
+    }
+
+    const request = (async () => {
+      setLoading(true);
+      try {
+        const next = await fetchUnifiedResources();
+        batch(() => {
+          applyResources(next);
+          setError(undefined);
+        });
+        return next;
+      } catch (err) {
+        setError(err);
+        throw err;
+      } finally {
+        setLoading(false);
+        inFlightRefetch = null;
+      }
+    })();
+
+    inFlightRefetch = request;
+    return request;
+  };
+
+  const mutate = (value: Resource[] | ((prev: Resource[]) => Resource[])) => {
+    const current = resources as unknown as Resource[];
+    const next = typeof value === 'function' ? value(current) : value;
+    applyResources(next ?? []);
+    return resources as unknown as Resource[];
+  };
+
+  void refetch().catch(() => undefined);
 
   const scheduleRefetch = () => {
     if (refreshHandle !== undefined) {
@@ -211,8 +273,8 @@ export function useUnifiedResources() {
     }
     refreshHandle = setTimeout(() => {
       refreshHandle = undefined;
-      if (!resources.loading) {
-        void refetch();
+      if (!loading()) {
+        void refetch().catch(() => undefined);
       }
     }, 800);
   };
@@ -221,15 +283,12 @@ export function useUnifiedResources() {
     if (!wsStore.connected() || !wsStore.initialDataReceived()) {
       return;
     }
-    // Track resource-adjacent updates from the WebSocket store.
-    // Accessing these arrays makes this effect react to updates.
-    void wsStore.state.resources;
-    void wsStore.state.nodes;
-    void wsStore.state.hosts;
-    void wsStore.state.dockerHosts;
-    void wsStore.state.kubernetesClusters;
-    void wsStore.state.pbs;
-    void wsStore.state.pmg;
+
+    // Reconcile() often preserves top-level array identity, so subscribing to
+    // wsStore.state.resources (or other arrays) can miss metric-only updates.
+    // lastUpdate is bumped for every usable payload and gives us a stable
+    // refetch trigger for fresh info/drawer metrics.
+    void wsStore.state.lastUpdate;
 
     scheduleRefetch();
   });
@@ -241,11 +300,11 @@ export function useUnifiedResources() {
   });
 
   return {
-    resources,
+    resources: () => resources,
     refetch,
     mutate,
-    loading: () => resources.loading,
-    error: () => resources.error,
+    loading,
+    error,
   };
 }
 

@@ -75,7 +75,7 @@ type PlatformData = {
   matches?: unknown;
 };
 
-type DiscoveryConfig = {
+export type DiscoveryConfig = {
   resourceType: DiscoveryResourceType;
   hostId: string;
   resourceId: string;
@@ -85,15 +85,63 @@ type DiscoveryConfig = {
   targetLabel: string;
 };
 
-const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
+export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
+  const explicitDiscoveryTarget = resource.discoveryTarget;
+  if (
+    explicitDiscoveryTarget &&
+    explicitDiscoveryTarget.resourceType &&
+    explicitDiscoveryTarget.hostId &&
+    explicitDiscoveryTarget.resourceId
+  ) {
+    const resourceType = (() => {
+      switch (explicitDiscoveryTarget.resourceType) {
+        case 'host':
+        case 'vm':
+        case 'lxc':
+        case 'docker':
+        case 'k8s':
+          return explicitDiscoveryTarget.resourceType;
+        default:
+          return null;
+      }
+    })();
+
+    if (resourceType) {
+      const hostname =
+        explicitDiscoveryTarget.hostname ||
+        resource.identity?.hostname ||
+        resource.displayName ||
+        resource.name ||
+        explicitDiscoveryTarget.resourceId;
+      const isHostDiscovery = resourceType === 'host';
+      const targetLabel = isHostDiscovery
+        ? 'host'
+        : resourceType === 'docker'
+          ? 'container'
+          : resourceType === 'k8s'
+            ? 'workload'
+            : 'guest';
+      return {
+        resourceType,
+        hostId: explicitDiscoveryTarget.hostId,
+        resourceId: explicitDiscoveryTarget.resourceId,
+        hostname,
+        metadataKind: isHostDiscovery ? 'host' : 'guest',
+        metadataId: explicitDiscoveryTarget.resourceId,
+        targetLabel,
+      };
+    }
+  }
+
   const platformData = resource.platformData as PlatformData | undefined;
   const hostLookupId =
     platformData?.agent?.agentId ||
-    resource.identity?.hostname ||
-    platformData?.agent?.hostname ||
     platformData?.proxmox?.nodeName ||
+    platformData?.agent?.hostname ||
     ((platformData?.docker as { hostname?: string } | undefined)?.hostname) ||
+    resource.identity?.hostname ||
     resource.name ||
+    resource.platformId ||
     resource.id;
   const hostLikeId = hostLookupId;
   const workloadHostId = resource.platformId || resource.parentId || resource.id;

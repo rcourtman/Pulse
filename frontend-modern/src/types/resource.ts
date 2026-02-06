@@ -95,6 +95,13 @@ export interface ResourceIdentity {
     ips?: string[];
 }
 
+export interface ResourceDiscoveryTarget {
+    resourceType: 'host' | 'vm' | 'lxc' | 'docker' | 'k8s';
+    hostId: string;
+    resourceId: string;
+    hostname?: string;
+}
+
 /**
  * The core unified Resource type.
  * This is what the frontend receives from WebSocket state.resources[].
@@ -133,6 +140,9 @@ export interface Resource {
 
     // Identity for deduplication
     identity?: ResourceIdentity;
+
+    // Canonical discovery request coordinates from backend
+    discoveryTarget?: ResourceDiscoveryTarget;
 
     // Platform-specific data (varies by type)
     platformData?: Record<string, unknown>;
