@@ -783,6 +783,27 @@ func TestPopulateFromSnapshotFull(t *testing.T) {
 				MemoryUsed:       50,
 				Uptime:           10,
 				LastSeen:         now,
+				Datastores: []models.PBSDatastore{
+					{
+						Name:   "ds-main",
+						Total:  100,
+						Used:   40,
+						Free:   60,
+						Usage:  40,
+						Status: "available",
+					},
+				},
+			},
+		},
+		PMGInstances: []models.PMGInstance{
+			{
+				ID:               "pmg-1",
+				Name:             "pmg",
+				Host:             "pmg.local",
+				Status:           "online",
+				ConnectionHealth: "healthy",
+				LastSeen:         now,
+				LastUpdated:      now,
 			},
 		},
 		Storage: []models.Storage{
@@ -827,6 +848,12 @@ func TestPopulateFromSnapshotFull(t *testing.T) {
 	}
 	if len(store.Query().OfType(ResourceTypePBS).Execute()) != 1 {
 		t.Fatalf("expected 1 PBS instance")
+	}
+	if len(store.Query().OfType(ResourceTypeDatastore).Execute()) != 1 {
+		t.Fatalf("expected 1 datastore resource")
+	}
+	if len(store.Query().OfType(ResourceTypePMG).Execute()) != 1 {
+		t.Fatalf("expected 1 PMG resource")
 	}
 	if len(store.Query().OfType(ResourceTypeStorage).Execute()) != 1 {
 		t.Fatalf("expected 1 storage resource")

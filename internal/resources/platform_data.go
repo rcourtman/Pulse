@@ -349,6 +349,24 @@ type PBSPlatformData struct {
 	NumDatastores    int    `json:"numDatastores"`
 }
 
+// PMGPlatformData contains PMG-specific fields.
+// Stored in Resource.PlatformData when Type is ResourceTypePMG.
+type PMGPlatformData struct {
+	Host             string    `json:"host"`
+	Version          string    `json:"version"`
+	ConnectionHealth string    `json:"connectionHealth"`
+	NodeCount        int       `json:"nodeCount,omitempty"`
+	QueueActive      int       `json:"queueActive,omitempty"`
+	QueueDeferred    int       `json:"queueDeferred,omitempty"`
+	QueueHold        int       `json:"queueHold,omitempty"`
+	QueueIncoming    int       `json:"queueIncoming,omitempty"`
+	QueueTotal       int       `json:"queueTotal,omitempty"`
+	MailCountTotal   float64   `json:"mailCountTotal,omitempty"`
+	SpamIn           float64   `json:"spamIn,omitempty"`
+	VirusIn          float64   `json:"virusIn,omitempty"`
+	LastUpdated      time.Time `json:"lastUpdated,omitempty"`
+}
+
 // DatastorePlatformData contains PBS datastore-specific fields.
 // Stored in Resource.PlatformData when Type is ResourceTypeDatastore.
 type DatastorePlatformData struct {

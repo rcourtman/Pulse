@@ -934,6 +934,117 @@ func FromPBSInstance(pbs models.PBSInstance) Resource {
 	}
 }
 
+// FromPBSDatastore converts a PBS datastore to a unified Resource.
+func FromPBSDatastore(pbs models.PBSInstance, ds models.PBSDatastore) Resource {
+	var disk *MetricValue
+	if ds.Total > 0 {
+		disk = &MetricValue{
+			Current: ds.Usage,
+			Total:   &ds.Total,
+			Used:    &ds.Used,
+			Free:    &ds.Free,
+		}
+	}
+
+	instanceName := strings.TrimSpace(pbs.Name)
+	if instanceName == "" {
+		instanceName = strings.TrimSpace(pbs.ID)
+	}
+
+	platformData := DatastorePlatformData{
+		PBSInstanceID:       pbs.ID,
+		PBSInstanceName:     instanceName,
+		Content:             "backup",
+		Error:               ds.Error,
+		DeduplicationFactor: ds.DeduplicationFactor,
+	}
+	platformDataJSON, _ := json.Marshal(platformData)
+
+	lastSeen := pbs.LastSeen
+	if lastSeen.IsZero() {
+		lastSeen = time.Now()
+	}
+
+	dsName := strings.TrimSpace(ds.Name)
+	if dsName == "" {
+		dsName = "datastore"
+	}
+
+	return Resource{
+		ID:            fmt.Sprintf("%s/datastore/%s", pbs.ID, dsName),
+		Type:          ResourceTypeDatastore,
+		Name:          dsName,
+		PlatformID:    pbs.Host,
+		PlatformType:  PlatformProxmoxPBS,
+		SourceType:    SourceAPI,
+		ParentID:      pbs.ID,
+		Status:        mapDatastoreStatus(ds.Status, ds.Error),
+		Disk:          disk,
+		LastSeen:      lastSeen,
+		PlatformData:  platformDataJSON,
+		SchemaVersion: CurrentSchemaVersion,
+	}
+}
+
+// FromPMGInstance converts a PMG instance to a unified Resource.
+func FromPMGInstance(pmg models.PMGInstance) Resource {
+	queue := models.PMGQueueStatus{}
+	for _, node := range pmg.Nodes {
+		if node.QueueStatus == nil {
+			continue
+		}
+		queue.Active += node.QueueStatus.Active
+		queue.Deferred += node.QueueStatus.Deferred
+		queue.Hold += node.QueueStatus.Hold
+		queue.Incoming += node.QueueStatus.Incoming
+		queue.Total += node.QueueStatus.Total
+	}
+
+	platformData := PMGPlatformData{
+		Host:             pmg.Host,
+		Version:          pmg.Version,
+		ConnectionHealth: pmg.ConnectionHealth,
+		NodeCount:        len(pmg.Nodes),
+		QueueActive:      queue.Active,
+		QueueDeferred:    queue.Deferred,
+		QueueHold:        queue.Hold,
+		QueueIncoming:    queue.Incoming,
+		QueueTotal:       queue.Total,
+		LastUpdated:      pmg.LastUpdated,
+	}
+	if pmg.MailStats != nil {
+		platformData.MailCountTotal = pmg.MailStats.CountTotal
+		platformData.SpamIn = pmg.MailStats.SpamIn
+		platformData.VirusIn = pmg.MailStats.VirusIn
+	}
+	platformDataJSON, _ := json.Marshal(platformData)
+
+	var uptime *int64
+	var maxUptime int64
+	for _, node := range pmg.Nodes {
+		if node.Uptime > maxUptime {
+			maxUptime = node.Uptime
+		}
+	}
+	if maxUptime > 0 {
+		uptime = &maxUptime
+	}
+
+	return Resource{
+		ID:            pmg.ID,
+		Type:          ResourceTypePMG,
+		Name:          pmg.Name,
+		PlatformID:    pmg.Host,
+		PlatformType:  PlatformProxmoxPMG,
+		SourceType:    SourceAPI,
+		Status:        mapPMGStatus(pmg.Status, pmg.ConnectionHealth),
+		Uptime:        uptime,
+		LastSeen:      pmg.LastSeen,
+		PlatformData:  platformDataJSON,
+		SchemaVersion: CurrentSchemaVersion,
+	}
+}
+
 // FromStorage converts a Proxmox Storage to a unified Resource.
 func FromStorage(s models.Storage) Resource {
 	var disk *MetricValue
@@ -1078,6 +1189,36 @@ func mapPBSStatus(status, connectionHealth string) ResourceStatus {
 	case "online":
 		return StatusOnline
 	case "offline":
+		return StatusOffline
+	default:
+		return StatusUnknown
+	}
+}
+
+func mapPMGStatus(status, connectionHealth string) ResourceStatus {
+	if connectionHealth != "healthy" {
+		return StatusDegraded
+	}
+	switch strings.ToLower(status) {
+	case "online":
+		return StatusOnline
+	case "offline":
+		return StatusOffline
+	default:
+		return StatusUnknown
+	}
+}
+
+func mapDatastoreStatus(status, errMsg string) ResourceStatus {
+	if strings.TrimSpace(errMsg) != "" {
+		return StatusDegraded
+	}
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "available", "online", "ok", "active":
+		return StatusOnline
+	case "degraded", "warning":
+		return StatusDegraded
+	case "offline", "unavailable", "error":
 		return StatusOffline
 	default:
 		return StatusUnknown

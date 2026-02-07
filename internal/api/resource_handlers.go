@@ -277,6 +277,17 @@ func (h *ResourceHandlers) PopulateFromSnapshot(snapshot models.StateSnapshot) {
 	for _, pbs := range snapshot.PBSInstances {
 		r := resources.FromPBSInstance(pbs)
 		h.store.Upsert(r)
+
+		for _, ds := range pbs.Datastores {
+			dsResource := resources.FromPBSDatastore(pbs, ds)
+			h.store.Upsert(dsResource)
+		}
+	}
+
+	// Convert PMG instances
+	for _, pmg := range snapshot.PMGInstances {
+		r := resources.FromPMGInstance(pmg)
+		h.store.Upsert(r)
 	}
 
 	// Convert storage
@@ -329,6 +340,17 @@ func (h *ResourceHandlers) PopulateFromSnapshotForTenant(orgID string, snapshot 
 	// Convert PBS instances
 	for _, pbs := range snapshot.PBSInstances {
 		r := resources.FromPBSInstance(pbs)
+		store.Upsert(r)
+
+		for _, ds := range pbs.Datastores {
+			dsResource := resources.FromPBSDatastore(pbs, ds)
+			store.Upsert(dsResource)
+		}
+	}
+
+	// Convert PMG instances
+	for _, pmg := range snapshot.PMGInstances {
+		r := resources.FromPMGInstance(pmg)
 		store.Upsert(r)
 	}
 

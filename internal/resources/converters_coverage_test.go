@@ -437,6 +437,66 @@ func TestFromPBSInstanceAndStorage(t *testing.T) {
 		t.Fatalf("expected offline status for pbs")
 	}
 
+	ds := models.PBSDatastore{
+		Name:                "main",
+		Total:               200,
+		Used:                100,
+		Free:                100,
+		Usage:               50,
+		Status:              "available",
+		DeduplicationFactor: 2.4,
+	}
+	dsr := FromPBSDatastore(pbs, ds)
+	if dsr.Type != ResourceTypeDatastore {
+		t.Fatalf("expected datastore resource type")
+	}
+	if dsr.ParentID != pbs.ID {
+		t.Fatalf("expected datastore parent ID to be PBS instance ID")
+	}
+	if dsr.Status != StatusOnline {
+		t.Fatalf("expected online datastore status")
+	}
+
+	dsErr := ds
+	dsErr.Error = "connect timeout"
+	dsrErr := FromPBSDatastore(pbs, dsErr)
+	if dsrErr.Status != StatusDegraded {
+		t.Fatalf("expected degraded status for datastore with error")
+	}
+
+	pmg := models.PMGInstance{
+		ID:               "pmg-1",
+		Name:             "pmg",
+		Host:             "pmg.local",
+		Status:           "online",
+		ConnectionHealth: "healthy",
+		LastSeen:         now,
+		LastUpdated:      now,
+		Nodes: []models.PMGNodeStatus{
+			{
+				Name:   "pmg-node-1",
+				Uptime: 120,
+				QueueStatus: &models.PMGQueueStatus{
+					Active: 1,
+					Total:  1,
+				},
+			},
+		},
+	}
+	pmgr := FromPMGInstance(pmg)
+	if pmgr.Type != ResourceTypePMG {
+		t.Fatalf("expected PMG resource type")
+	}
+	if pmgr.Status != StatusOnline {
+		t.Fatalf("expected online PMG status")
+	}
+
+	pmg.ConnectionHealth = "unhealthy"
+	pmgr2 := FromPMGInstance(pmg)
+	if pmgr2.Status != StatusDegraded {
+		t.Fatalf("expected degraded PMG status when connection is unhealthy")
+	}
+
 	storageOnline := FromStorage(models.Storage{
 		ID:       "storage-1",
 		Name:     "local",

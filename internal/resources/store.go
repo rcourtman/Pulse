@@ -1250,6 +1250,19 @@ func (s *Store) PopulateFromSnapshot(snapshot models.StateSnapshot) {
 		r := FromPBSInstance(pbs)
 		id := s.Upsert(r)
 		seenIDs[id] = true
+
+		for _, ds := range pbs.Datastores {
+			dsResource := FromPBSDatastore(pbs, ds)
+			dsID := s.Upsert(dsResource)
+			seenIDs[dsID] = true
+		}
+	}
+
+	// Convert PMG instances
+	for _, pmg := range snapshot.PMGInstances {
+		r := FromPMGInstance(pmg)
+		id := s.Upsert(r)
+		seenIDs[id] = true
 	}
 
 	// Convert storage
