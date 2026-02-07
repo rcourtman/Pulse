@@ -5,6 +5,7 @@ import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 const V2_WORKLOADS_URL = '/api/v2/resources?type=vm,lxc,docker_container,pod';
 const V2_WORKLOADS_PAGE_LIMIT = 200;
 const V2_WORKLOADS_MAX_PAGES = 20;
+const V2_WORKLOADS_CACHE_MAX_AGE_MS = 15_000;
 
 type V2MetricValue = {
   value?: number;
@@ -109,6 +110,10 @@ type V2ListResponse = {
     totalPages?: number;
   };
 };
+
+let cachedV2Workloads: WorkloadGuest[] = [];
+let cachedV2WorkloadsAt = 0;
+let sharedFetchV2Workloads: Promise<WorkloadGuest[]> | null = null;
 
 const normalizeWorkloadStatus = (status?: string | null): string => {
   const normalized = (status || '').trim().toLowerCase();
@@ -359,11 +364,78 @@ async function fetchV2Workloads(): Promise<WorkloadGuest[]> {
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 
+const hasFreshV2WorkloadsCache = () =>
+  cachedV2Workloads.length > 0 && Date.now() - cachedV2WorkloadsAt <= V2_WORKLOADS_CACHE_MAX_AGE_MS;
+
+const setV2WorkloadsCache = (workloads: WorkloadGuest[], at = Date.now()) => {
+  cachedV2Workloads = workloads;
+  cachedV2WorkloadsAt = at;
+};
+
+const fetchV2WorkloadsShared = async (force = false): Promise<WorkloadGuest[]> => {
+  if (!force && hasFreshV2WorkloadsCache()) {
+    return cachedV2Workloads;
+  }
+
+  if (sharedFetchV2Workloads) {
+    return sharedFetchV2Workloads;
+  }
+
+  const request = (async () => {
+    const fetched = await fetchV2Workloads();
+    setV2WorkloadsCache(fetched);
+    return fetched;
+  })();
+
+  sharedFetchV2Workloads = request;
+
+  try {
+    return await request;
+  } finally {
+    if (sharedFetchV2Workloads === request) {
+      sharedFetchV2Workloads = null;
+    }
+  }
+};
+
+export const __resetV2WorkloadsCacheForTests = () => {
+  cachedV2Workloads = [];
+  cachedV2WorkloadsAt = 0;
+  sharedFetchV2Workloads = null;
+};
+
 export function useV2Workloads(enabled: Accessor<boolean> = () => true) {
   const source = createMemo(() => (enabled() ? 'v2-workloads' : null));
-  const [workloads, { refetch, mutate }] = createResource(source, fetchV2Workloads, {
-    initialValue: [],
-  });
+  const [workloads, { mutate: resourceMutate }] = createResource(
+    source,
+    () => fetchV2WorkloadsShared(),
+    {
+      initialValue: cachedV2Workloads,
+    },
+  );
+
+  const mutate = (value: WorkloadGuest[] | ((prev: WorkloadGuest[]) => WorkloadGuest[])) =>
+    resourceMutate((previous) => {
+      const current = previous ?? [];
+      const next = typeof value === 'function' ? value(current) : value;
+      setV2WorkloadsCache(next ?? []);
+      return next ?? [];
+    });
+
+  const applyWorkloads = (next: WorkloadGuest[]) => {
+    setV2WorkloadsCache(next);
+    resourceMutate(next);
+  };
+
+  const refetch = async () => {
+    const data = await fetchV2WorkloadsShared(true);
+    applyWorkloads(data);
+    return data;
+  };
+
+  if (!hasFreshV2WorkloadsCache()) {
+    void fetchV2WorkloadsShared().then(applyWorkloads).catch(() => undefined);
+  }
 
   // Poll for fresh metrics while enabled.
   // Use mutate() instead of refetch() so the resource never enters a loading
@@ -373,8 +445,8 @@ export function useV2Workloads(enabled: Accessor<boolean> = () => true) {
     if (!enabled()) return;
     const id = setInterval(async () => {
       try {
-        const data = await fetchV2Workloads();
-        mutate(data);
+        const data = await fetchV2WorkloadsShared(true);
+        applyWorkloads(data);
       } catch {
         // Silently ignore poll errors; keep showing last data
       }
