@@ -357,3 +357,209 @@ func TestResourceV2ReportMergeCreatesExclusions(t *testing.T) {
 		t.Fatalf("expected 2 resources after report-merge, got %d", len(listResp2.Data))
 	}
 }
+
+func TestResourceV2ListIncludesKubernetesPods(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:       "cluster-1",
+				AgentID:  "agent-1",
+				Name:     "prod-k8s",
+				Context:  "prod",
+				Status:   "online",
+				LastSeen: now,
+				Version:  "1.31.2",
+				Hidden:   false,
+				Pods: []models.KubernetesPod{
+					{
+						UID:       "pod-1",
+						Name:      "api-7f8d",
+						Namespace: "default",
+						NodeName:  "worker-1",
+						Phase:     "Running",
+						Containers: []models.KubernetesPodContainer{
+							{Name: "api", Image: "ghcr.io/acme/api:1.2.3", Ready: true, State: "Running"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceV2Handlers(cfg)
+	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=pod", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesV2Response
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 kubernetes pod resource, got %d", len(resp.Data))
+	}
+
+	resource := resp.Data[0]
+	if resource.Type != unified.ResourceTypePod {
+		t.Fatalf("resource type = %q, want %q", resource.Type, unified.ResourceTypePod)
+	}
+	if !containsSource(resource.Sources, unified.SourceK8s) {
+		t.Fatalf("expected kubernetes source, got %+v", resource.Sources)
+	}
+	if resource.Kubernetes == nil || resource.Kubernetes.Namespace != "default" {
+		t.Fatalf("expected kubernetes namespace metadata, got %+v", resource.Kubernetes)
+	}
+	if resource.DiscoveryTarget == nil {
+		t.Fatalf("expected discovery target for kubernetes pod")
+	}
+	if resource.DiscoveryTarget.ResourceType != "k8s" {
+		t.Fatalf("discovery target type = %q, want k8s", resource.DiscoveryTarget.ResourceType)
+	}
+	if resource.DiscoveryTarget.HostID != "agent-1" {
+		t.Fatalf("discovery target hostID = %q, want agent-1", resource.DiscoveryTarget.HostID)
+	}
+	if resource.DiscoveryTarget.ResourceID != "pod-1" {
+		t.Fatalf("discovery target resourceID = %q, want pod-1", resource.DiscoveryTarget.ResourceID)
+	}
+}
+
+func TestResourceV2TypeAliasKubernetesIncludesKubernetesResources(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:       "cluster-1",
+				AgentID:  "agent-1",
+				Name:     "prod-k8s",
+				Status:   "online",
+				LastSeen: now,
+				Nodes: []models.KubernetesNode{
+					{
+						UID:   "node-1",
+						Name:  "worker-1",
+						Ready: true,
+					},
+				},
+				Pods: []models.KubernetesPod{
+					{
+						UID:       "pod-1",
+						Name:      "api-7f8d",
+						Namespace: "default",
+						Phase:     "Running",
+					},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceV2Handlers(cfg)
+	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=k8s", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesV2Response
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.Data) != 3 {
+		t.Fatalf("expected 3 kubernetes resources for k8s alias, got %d", len(resp.Data))
+	}
+}
+
+func TestResourceV2ListIncludesPBSAndPMG(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{
+			{
+				ID:               "pbs-1",
+				Name:             "pbs-main",
+				Host:             "https://pbs.example.com:8007",
+				Status:           "online",
+				CPU:              14.2,
+				Memory:           35.0,
+				MemoryUsed:       4 * 1024 * 1024 * 1024,
+				MemoryTotal:      12 * 1024 * 1024 * 1024,
+				Uptime:           7200,
+				ConnectionHealth: "connected",
+				LastSeen:         now,
+			},
+		},
+		PMGInstances: []models.PMGInstance{
+			{
+				ID:               "pmg-1",
+				Name:             "pmg-main",
+				Host:             "https://pmg.example.com:8006",
+				Status:           "online",
+				ConnectionHealth: "connected",
+				LastSeen:         now,
+				LastUpdated:      now,
+				MailStats: &models.PMGMailStats{
+					BytesIn:  1_500_000,
+					BytesOut: 900_000,
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceV2Handlers(cfg)
+	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=pbs,pmg", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesV2Response
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 resources, got %d", len(resp.Data))
+	}
+
+	var gotPBS, gotPMG bool
+	for _, resource := range resp.Data {
+		switch resource.Type {
+		case unified.ResourceTypePBS:
+			gotPBS = true
+			if resource.PBS == nil {
+				t.Fatalf("expected PBS payload, got nil")
+			}
+			if resource.DiscoveryTarget == nil || resource.DiscoveryTarget.ResourceType != "host" {
+				t.Fatalf("expected host discovery target for PBS, got %+v", resource.DiscoveryTarget)
+			}
+		case unified.ResourceTypePMG:
+			gotPMG = true
+			if resource.PMG == nil {
+				t.Fatalf("expected PMG payload, got nil")
+			}
+			if resource.DiscoveryTarget == nil || resource.DiscoveryTarget.ResourceType != "host" {
+				t.Fatalf("expected host discovery target for PMG, got %+v", resource.DiscoveryTarget)
+			}
+		}
+	}
+
+	if !gotPBS || !gotPMG {
+		t.Fatalf("expected both PBS and PMG resources, got %+v", resp.Data)
+	}
+}

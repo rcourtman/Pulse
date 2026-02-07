@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -600,6 +601,13 @@ func (h *AIHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Optional limit parameter (for relay proxy clients with body size constraints)
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit < len(sessions) {
+			sessions = sessions[:limit]
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(sessions)
 }
@@ -668,6 +676,14 @@ func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessi
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Optional limit parameter — returns the LAST N messages (most recent).
+	// Used by relay proxy clients with body size constraints.
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit < len(messages) {
+			messages = messages[len(messages)-limit:]
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

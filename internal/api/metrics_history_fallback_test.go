@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
@@ -81,5 +82,54 @@ func TestMetricsHistoryFallbackUsesLivePoint(t *testing.T) {
 	}
 	if math.Abs(resp.Points[0].Value-42.0) > 0.001 {
 		t.Fatalf("expected value 42.0, got %f", resp.Points[0].Value)
+	}
+}
+
+func TestMetricsHistoryFallbackMockDiskSynthesizesSeries(t *testing.T) {
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(false) })
+
+	state := mock.GetMockState()
+	var disk models.PhysicalDisk
+	found := false
+	for _, candidate := range state.PhysicalDisks {
+		if candidate.Serial != "" && candidate.Temperature > 0 {
+			disk = candidate
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected at least one mock physical disk with serial and temperature")
+	}
+
+	monitor := &monitoring.Monitor{}
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=disk&resourceId="+disk.Serial+"&metric=smart_temp&range=1h",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.Source != "mock_synthetic" {
+		t.Fatalf("expected source mock_synthetic, got %q", resp.Source)
+	}
+	if len(resp.Points) < 24 {
+		t.Fatalf("expected dense synthetic history points, got %d", len(resp.Points))
+	}
+	if math.Abs(resp.Points[len(resp.Points)-1].Value-float64(disk.Temperature)) > 0.001 {
+		t.Fatalf("expected last point %d, got %f", disk.Temperature, resp.Points[len(resp.Points)-1].Value)
 	}
 }

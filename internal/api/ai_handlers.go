@@ -3350,6 +3350,13 @@ func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *ht
 		findings = patrol.GetAllFindings()
 	}
 
+	// Optional limit parameter (for relay proxy clients with body size constraints)
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit < len(findings) {
+			findings = findings[:limit]
+		}
+	}
+
 	if err := utils.WriteJSONResponse(w, findings); err != nil {
 		log.Error().Err(err).Msg("Failed to write patrol findings response")
 	}

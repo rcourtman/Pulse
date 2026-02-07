@@ -68,7 +68,7 @@ type ChartResponse struct {
 	DockerData     map[string]VMChartData      `json:"dockerData"`     // Docker container metrics (keyed by container ID)
 	DockerHostData map[string]VMChartData      `json:"dockerHostData"` // Docker host metrics (keyed by host ID)
 	HostData       map[string]VMChartData      `json:"hostData"`       // Unified host agent metrics (keyed by host ID)
-	GuestTypes     map[string]string           `json:"guestTypes"`     // Maps guest ID to type ("vm" or "container")
+	GuestTypes     map[string]string           `json:"guestTypes"`     // Maps guest ID to type ("vm", "container", "k8s")
 	Timestamp      int64                       `json:"timestamp"`
 	Stats          ChartStats                  `json:"stats"`
 }
@@ -82,6 +82,75 @@ type InfrastructureChartsResponse struct {
 	HostData       map[string]VMChartData   `json:"hostData,omitempty"`       // Unified host agent metrics (keyed by host ID)
 	Timestamp      int64                    `json:"timestamp"`
 	Stats          ChartStats               `json:"stats"`
+}
+
+// WorkloadChartsResponse is a lightweight chart payload used by Workloads
+// summary sparklines. It intentionally excludes infrastructure/storage series.
+type WorkloadChartsResponse struct {
+	ChartData  map[string]VMChartData `json:"data"`       // Workload metrics keyed by workload ID
+	DockerData map[string]VMChartData `json:"dockerData"` // Docker container metrics keyed by container ID
+	GuestTypes map[string]string      `json:"guestTypes"` // Maps guest ID to type ("vm", "container", "k8s")
+	Timestamp  int64                  `json:"timestamp"`  // Unix timestamp in milliseconds
+	Stats      ChartStats             `json:"stats"`      // Includes pointCounts + source hints
+}
+
+// WorkloadsSummaryMetricData captures aggregate workload trend lines for a
+// single metric (median and p95 across workloads).
+type WorkloadsSummaryMetricData struct {
+	P50 []MetricPoint `json:"p50"`
+	P95 []MetricPoint `json:"p95"`
+}
+
+// WorkloadsGuestCounts captures workload counts used by the workloads summary
+// cards for quick context.
+type WorkloadsGuestCounts struct {
+	Total   int `json:"total"`
+	Running int `json:"running"`
+	Stopped int `json:"stopped"`
+}
+
+// WorkloadsSummaryContributor identifies a high-impact workload for a metric.
+type WorkloadsSummaryContributor struct {
+	ID    string  `json:"id"`
+	Name  string  `json:"name"`
+	Value float64 `json:"value"`
+}
+
+// WorkloadsSummaryContributors groups top contributors by metric.
+type WorkloadsSummaryContributors struct {
+	CPU     []WorkloadsSummaryContributor `json:"cpu"`
+	Memory  []WorkloadsSummaryContributor `json:"memory"`
+	Disk    []WorkloadsSummaryContributor `json:"disk"`
+	Network []WorkloadsSummaryContributor `json:"network"`
+}
+
+// WorkloadsSummaryBlastRadius describes how concentrated each metric pressure is.
+type WorkloadsSummaryBlastRadius struct {
+	Scope           string  `json:"scope"` // idle, concentrated, mixed, distributed
+	Top3Share       float64 `json:"top3Share"`
+	ActiveWorkloads int     `json:"activeWorkloads"`
+}
+
+// WorkloadsSummaryBlastRadiusGroup groups blast-radius insights by metric.
+type WorkloadsSummaryBlastRadiusGroup struct {
+	CPU     WorkloadsSummaryBlastRadius `json:"cpu"`
+	Memory  WorkloadsSummaryBlastRadius `json:"memory"`
+	Disk    WorkloadsSummaryBlastRadius `json:"disk"`
+	Network WorkloadsSummaryBlastRadius `json:"network"`
+}
+
+// WorkloadsSummaryChartsResponse is a compact response for workloads top-card
+// sparklines. It avoids returning per-workload time series.
+type WorkloadsSummaryChartsResponse struct {
+	CPU             WorkloadsSummaryMetricData       `json:"cpu"`
+	Memory          WorkloadsSummaryMetricData       `json:"memory"`
+	Disk            WorkloadsSummaryMetricData       `json:"disk"`
+	Network         WorkloadsSummaryMetricData       `json:"network"`
+	GuestCounts     WorkloadsGuestCounts             `json:"guestCounts"`
+	TopContributors WorkloadsSummaryContributors     `json:"topContributors"`
+	BlastRadius     WorkloadsSummaryBlastRadiusGroup `json:"blastRadius"`
+	Timestamp       int64                            `json:"timestamp"`
+	Stats           ChartStats                       `json:"stats"`
 }
 
 // ChartStats represents chart statistics

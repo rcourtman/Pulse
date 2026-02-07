@@ -9,7 +9,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
+	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -42,6 +45,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
@@ -327,8 +331,10 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/storage/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorage)))
 	r.mux.HandleFunc("/api/storage-charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorageCharts)))
 	r.mux.HandleFunc("/api/charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleCharts)))
+	r.mux.HandleFunc("/api/charts/workloads", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleWorkloadCharts)))
 	r.mux.HandleFunc("/api/charts/infrastructure", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleInfrastructureCharts)))
 	r.mux.HandleFunc("/api/charts/infrastructure-summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleInfrastructureSummaryCharts)))
+	r.mux.HandleFunc("/api/charts/workloads-summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleWorkloadsSummaryCharts)))
 	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
 	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsHistory)))
 	r.mux.HandleFunc("/api/diagnostics", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleDiagnostics)))
@@ -547,7 +553,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/system", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetSystemSettings))(w, req)
+			handler := r.configHandlers.HandleGetSystemSettings
+			if r.systemSettingsHandler != nil {
+				handler = r.systemSettingsHandler.HandleGetSystemSettings
+			}
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, handler))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -3554,10 +3564,12 @@ func (r *Router) handleGetRelayConfig(w http.ResponseWriter, req *http.Request) 
 	resp := struct {
 		Enabled             bool   `json:"enabled"`
 		ServerURL           string `json:"server_url"`
+		IdentityPublicKey   string `json:"identity_public_key,omitempty"`
 		IdentityFingerprint string `json:"identity_fingerprint,omitempty"`
 	}{
 		Enabled:             cfg.Enabled,
 		ServerURL:           cfg.ServerURL,
+		IdentityPublicKey:   cfg.IdentityPublicKey,
 		IdentityFingerprint: cfg.IdentityFingerprint,
 	}
 
@@ -3863,6 +3875,11 @@ func (r *Router) reloadSystemSettings() {
 		// BUT respect environment variable override if present
 		if !r.config.EnvOverrides["PULSE_AUTH_HIDE_LOCAL_LOGIN"] {
 			r.config.HideLocalLogin = systemSettings.HideLocalLogin
+		}
+		// Update DisableLegacyRouteRedirects so frontend sunset behavior applies immediately
+		// BUT respect environment variable override if present
+		if !r.config.EnvOverrides["PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS"] {
+			r.config.DisableLegacyRouteRedirects = systemSettings.DisableLegacyRouteRedirects
 		}
 
 		// Update webhook allowed private CIDRs in notification manager
@@ -5769,6 +5786,858 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		Msg("Chart data response sent")
 }
 
+func parseWorkloadMaxPoints(raw string) int {
+	const (
+		defaultMaxPoints = 180
+		minMaxPoints     = 30
+		maxMaxPoints     = 500
+	)
+
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return defaultMaxPoints
+	}
+
+	value, err := strconv.Atoi(trimmed)
+	if err != nil {
+		return defaultMaxPoints
+	}
+	if value < minMaxPoints {
+		return minMaxPoints
+	}
+	if value > maxMaxPoints {
+		return maxMaxPoints
+	}
+	return value
+}
+
+func capMetricPointSeries(points []MetricPoint, maxPoints int) []MetricPoint {
+	if len(points) <= maxPoints || maxPoints <= 0 {
+		return points
+	}
+	if maxPoints == 1 {
+		return []MetricPoint{points[len(points)-1]}
+	}
+
+	result := make([]MetricPoint, 0, maxPoints)
+	step := float64(len(points)-1) / float64(maxPoints-1)
+	prevIndex := -1
+
+	for i := 0; i < maxPoints; i++ {
+		index := int(float64(i)*step + 0.5)
+		if index <= prevIndex {
+			index = prevIndex + 1
+		}
+		if index >= len(points) {
+			index = len(points) - 1
+		}
+		result = append(result, points[index])
+		prevIndex = index
+	}
+
+	if result[len(result)-1].Timestamp != points[len(points)-1].Timestamp {
+		result[len(result)-1] = points[len(points)-1]
+	}
+	return result
+}
+
+func convertMetricsForChart(
+	metrics map[string][]monitoring.MetricPoint,
+	oldestTimestamp *int64,
+	maxPoints int,
+) VMChartData {
+	converted := make(VMChartData, len(metrics))
+	for metricType, metricPoints := range metrics {
+		points := make([]MetricPoint, len(metricPoints))
+		for i, point := range metricPoints {
+			ts := point.Timestamp.Unix() * 1000
+			if ts < *oldestTimestamp {
+				*oldestTimestamp = ts
+			}
+			points[i] = MetricPoint{
+				Timestamp: ts,
+				Value:     point.Value,
+			}
+		}
+		converted[metricType] = capMetricPointSeries(points, maxPoints)
+	}
+	return converted
+}
+
+const (
+	mockWorkloadMinSeriesPoints = 24
+	mockWorkloadMaxSeriesPoints = 180
+)
+
+func clampChartValue(value, min, max float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return min
+	}
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
+}
+
+func hashChartSeed(parts ...string) uint64 {
+	h := fnv.New64a()
+	for _, p := range parts {
+		_, _ = h.Write([]byte(p))
+		_, _ = h.Write([]byte{0})
+	}
+	return h.Sum64()
+}
+
+func targetMockSeriesPoints(duration time.Duration, maxPoints int) int {
+	target := int(duration / (2 * time.Minute))
+	if target < mockWorkloadMinSeriesPoints {
+		target = mockWorkloadMinSeriesPoints
+	}
+	if maxPoints > 0 && target > maxPoints {
+		target = maxPoints
+	}
+	if target > mockWorkloadMaxSeriesPoints {
+		target = mockWorkloadMaxSeriesPoints
+	}
+	if target < 2 {
+		target = 2
+	}
+	return target
+}
+
+func buildSyntheticWorkloadSeries(
+	nowMillis int64,
+	duration time.Duration,
+	points int,
+	current float64,
+	min float64,
+	max float64,
+	seed uint64,
+) []MetricPoint {
+	if points < 2 {
+		points = 2
+	}
+	current = clampChartValue(current, min, max)
+	durationMillis := int64(duration / time.Millisecond)
+	if durationMillis <= 0 {
+		durationMillis = int64(time.Minute / time.Millisecond)
+	}
+	step := durationMillis / int64(points-1)
+	if step <= 0 {
+		step = 1
+	}
+
+	span := math.Max(1, max-min)
+	rng := rand.New(rand.NewSource(int64(seed)))
+	currentRatio := clampChartValue((current-min)/span, 0.04, 0.96)
+	baselineRatio := clampChartValue(
+		currentRatio+(float64(int(seed%11)-5))*0.008,
+		0.04,
+		0.94,
+	)
+	gradualDrift := float64(int((seed>>8)%9)-4) * 0.0035
+
+	targetRatios := make([]float64, points)
+	activeMask := make([]bool, points)
+	for i := 0; i < points; i++ {
+		progress := float64(i) / float64(points-1)
+		targetRatios[i] = clampChartValue(
+			baselineRatio+gradualDrift*(progress-0.5),
+			0.03,
+			0.96,
+		)
+	}
+
+	type activityWindow struct {
+		start int
+		ramp  int
+		hold  int
+		end   int
+		peak  float64
+	}
+
+	windowCount := 1
+	if points >= 48 && rng.Float64() < 0.35 {
+		windowCount = 2
+	}
+	windows := make([]activityWindow, 0, windowCount)
+
+	for w := 0; w < windowCount; w++ {
+		ramp := 2 + rng.Intn(4)
+		hold := points / (5 + rng.Intn(3))
+		if hold < 3 {
+			hold = 3
+		}
+		total := ramp + hold + ramp
+		maxStart := points - total - 1
+		if maxStart < 1 {
+			maxStart = 1
+		}
+		start := 1 + rng.Intn(maxStart)
+		if w > 0 && len(windows) > 0 {
+			minStart := windows[len(windows)-1].end + 2
+			if minStart > maxStart {
+				minStart = maxStart
+			}
+			if minStart > 1 {
+				start = minStart
+			}
+		}
+		end := start + total
+		if end >= points {
+			end = points - 1
+		}
+		if end-start < 4 {
+			continue
+		}
+
+		peak := clampChartValue(
+			baselineRatio+(0.12+rng.Float64()*0.26),
+			baselineRatio+0.06,
+			0.985,
+		)
+		windows = append(windows, activityWindow{
+			start: start,
+			ramp:  ramp,
+			hold:  hold,
+			end:   end,
+			peak:  peak,
+		})
+	}
+
+	for _, win := range windows {
+		rampUpEnd := win.start + win.ramp
+		holdEnd := rampUpEnd + win.hold
+		if holdEnd > win.end {
+			holdEnd = win.end
+		}
+		for i := win.start; i <= win.end && i < points; i++ {
+			base := targetRatios[i]
+			boost := 0.0
+			switch {
+			case i <= rampUpEnd:
+				den := float64(win.ramp)
+				if den < 1 {
+					den = 1
+				}
+				boost = (float64(i-win.start) / den) * (win.peak - base)
+			case i <= holdEnd:
+				boost = win.peak - base
+			default:
+				den := float64(win.end - holdEnd)
+				if den < 1 {
+					den = 1
+				}
+				boost = (1 - float64(i-holdEnd)/den) * (win.peak - base)
+			}
+			targetRatios[i] = clampChartValue(base+boost, 0.03, 0.99)
+			activeMask[i] = true
+		}
+	}
+
+	seriesValues := make([]float64, points)
+	startJitter := span * (0.015 + float64((seed>>14)%5)*0.003)
+	seriesValues[0] = clampChartValue(
+		min+targetRatios[0]*span+rng.NormFloat64()*startJitter,
+		min,
+		max,
+	)
+
+	for i := 1; i < points; i++ {
+		targetValue := min + targetRatios[i]*span
+		prev := seriesValues[i-1]
+		reversion := 0.20
+		noiseScale := 0.006
+		if activeMask[i] {
+			reversion = 0.28
+			noiseScale = 0.011
+		}
+		delta := (targetValue-prev)*reversion + rng.NormFloat64()*span*noiseScale
+		if rng.Float64() < 0.18 {
+			delta *= 0.35 // gentle flat spots
+		}
+		seriesValues[i] = clampChartValue(prev+delta, min, max)
+	}
+
+	// Light smoothing to prevent erratic zig-zag noise while preserving ramps/plateaus.
+	smoothed := make([]float64, points)
+	smoothed[0] = seriesValues[0]
+	for i := 1; i < points-1; i++ {
+		smoothed[i] = seriesValues[i-1]*0.2 + seriesValues[i]*0.6 + seriesValues[i+1]*0.2
+	}
+	if points > 1 {
+		smoothed[points-1] = seriesValues[points-1]
+	}
+
+	stepQuant := span * (0.0022 + float64(seed%4)*0.0008)
+	if stepQuant <= 0 {
+		stepQuant = span * 0.002
+	}
+	for i := 0; i < points; i++ {
+		if i > 0 && math.Abs(smoothed[i]-smoothed[i-1]) < stepQuant*0.55 {
+			smoothed[i] = smoothed[i-1]
+			continue
+		}
+		smoothed[i] = math.Round(smoothed[i]/stepQuant) * stepQuant
+		smoothed[i] = clampChartValue(smoothed[i], min, max)
+	}
+
+	// Anchor the final point to the current snapshot to avoid tooltip drift.
+	offset := current - smoothed[points-1]
+	series := make([]MetricPoint, points)
+	startMillis := nowMillis - durationMillis
+	lastIdx := float64(points - 1)
+	for i := 0; i < points; i++ {
+		ts := startMillis + int64(i)*step
+		tailWeight := math.Pow(float64(i)/lastIdx, 2.0)
+		value := clampChartValue(smoothed[i]+offset*tailWeight, min, max)
+		series[i] = MetricPoint{
+			Timestamp: ts,
+			Value:     value,
+		}
+	}
+	series[points-1].Timestamp = nowMillis
+	series[points-1].Value = current
+	return series
+}
+
+func ensureMockWorkloadSeries(
+	metrics VMChartData,
+	nowMillis int64,
+	duration time.Duration,
+	maxPoints int,
+	resourceID string,
+	current map[string]float64,
+) VMChartData {
+	targetPoints := targetMockSeriesPoints(duration, maxPoints)
+
+	bounds := map[string][2]float64{
+		"cpu":       {0, 100},
+		"memory":    {0, 100},
+		"disk":      {0, 100},
+		"diskread":  {0, math.Max(current["diskread"]*1.8, 1)},
+		"diskwrite": {0, math.Max(current["diskwrite"]*1.8, 1)},
+		"netin":     {0, math.Max(current["netin"]*1.8, 1)},
+		"netout":    {0, math.Max(current["netout"]*1.8, 1)},
+	}
+
+	for metricType, span := range bounds {
+		if len(metrics[metricType]) >= targetPoints {
+			continue
+		}
+		metrics[metricType] = buildSyntheticWorkloadSeries(
+			nowMillis,
+			duration,
+			targetPoints,
+			current[metricType],
+			span[0],
+			span[1],
+			hashChartSeed("mock", resourceID, metricType),
+		)
+	}
+
+	return metrics
+}
+
+func ensureMockWorkloadSeriesSubset(
+	metrics VMChartData,
+	nowMillis int64,
+	duration time.Duration,
+	maxPoints int,
+	resourceID string,
+	current map[string]float64,
+	metricTypes []string,
+) VMChartData {
+	targetPoints := targetMockSeriesPoints(duration, maxPoints)
+
+	boundsForMetric := func(metricType string, value float64) (float64, float64, bool) {
+		switch metricType {
+		case "cpu", "memory", "disk":
+			return 0, 100, true
+		case "diskread", "diskwrite", "netin", "netout":
+			return 0, math.Max(value*1.8, 1), true
+		default:
+			return 0, 0, false
+		}
+	}
+
+	for _, metricType := range metricTypes {
+		if len(metrics[metricType]) >= targetPoints {
+			continue
+		}
+		min, max, ok := boundsForMetric(metricType, current[metricType])
+		if !ok {
+			continue
+		}
+		metrics[metricType] = buildSyntheticWorkloadSeries(
+			nowMillis,
+			duration,
+			targetPoints,
+			current[metricType],
+			min,
+			max,
+			hashChartSeed("mock", resourceID, metricType),
+		)
+	}
+
+	return metrics
+}
+
+func defaultMockRateCurrent(resourceID, metricType string) float64 {
+	seed := hashChartSeed("infra-default", resourceID, metricType)
+	// Deterministic 64KB/s .. ~4MB/s baseline for visual mock network trends.
+	return 64_000 + float64(seed%3_936_000)
+}
+
+func ensureMockInfrastructureSeries(
+	metrics VMChartData,
+	nowMillis int64,
+	duration time.Duration,
+	maxPoints int,
+	resourceID string,
+	current map[string]float64,
+) VMChartData {
+	targetPoints := targetMockSeriesPoints(duration, maxPoints)
+
+	netInCurrent := clampChartValue(current["netin"], 0, math.Max(current["netin"], 0))
+	netOutCurrent := clampChartValue(current["netout"], 0, math.Max(current["netout"], 0))
+	if netInCurrent <= 0 {
+		netInCurrent = defaultMockRateCurrent(resourceID, "netin")
+	}
+	if netOutCurrent <= 0 {
+		netOutCurrent = defaultMockRateCurrent(resourceID, "netout")
+	}
+
+	values := map[string]float64{
+		"cpu":    current["cpu"],
+		"memory": current["memory"],
+		"disk":   current["disk"],
+		"netin":  netInCurrent,
+		"netout": netOutCurrent,
+	}
+
+	bounds := map[string][2]float64{
+		"cpu":    {0, 100},
+		"memory": {0, 100},
+		"disk":   {0, 100},
+		"netin":  {0, math.Max(netInCurrent*1.8, 1)},
+		"netout": {0, math.Max(netOutCurrent*1.8, 1)},
+	}
+
+	for metricType, span := range bounds {
+		if len(metrics[metricType]) >= targetPoints {
+			continue
+		}
+		metrics[metricType] = buildSyntheticWorkloadSeries(
+			nowMillis,
+			duration,
+			targetPoints,
+			values[metricType],
+			span[0],
+			span[1],
+			hashChartSeed("infra", resourceID, metricType),
+		)
+	}
+
+	return metrics
+}
+
+func updateOldestTimestampFromSeries(metrics VMChartData, oldestTimestamp *int64) {
+	if oldestTimestamp == nil {
+		return
+	}
+	for _, points := range metrics {
+		for _, point := range points {
+			if point.Timestamp < *oldestTimestamp {
+				*oldestTimestamp = point.Timestamp
+			}
+		}
+	}
+}
+
+func buildSyntheticMetricHistorySeries(
+	now time.Time,
+	duration time.Duration,
+	maxPoints int,
+	resourceID string,
+	metricType string,
+	current float64,
+) []monitoring.MetricPoint {
+	var min float64
+	var max float64
+
+	switch metricType {
+	case "smart_temp":
+		if current <= 0 {
+			return nil
+		}
+		min = 25
+		max = 95
+	default:
+		return nil
+	}
+
+	series := buildSyntheticWorkloadSeries(
+		now.UnixMilli(),
+		duration,
+		targetMockSeriesPoints(duration, maxPoints),
+		current,
+		min,
+		max,
+		hashChartSeed("history-mock", resourceID, metricType),
+	)
+
+	converted := make([]monitoring.MetricPoint, len(series))
+	for i, point := range series {
+		converted[i] = monitoring.MetricPoint{
+			Timestamp: time.UnixMilli(point.Timestamp),
+			Value:     point.Value,
+		}
+	}
+
+	return converted
+}
+
+func buildMockWorkloadMetricHistorySeries(
+	now time.Time,
+	duration time.Duration,
+	maxPoints int,
+	resourceID string,
+	metricType string,
+	current float64,
+) []monitoring.MetricPoint {
+	var min float64
+	var max float64
+
+	switch metricType {
+	case "cpu", "memory", "disk":
+		min = 0
+		max = 100
+	case "diskread", "diskwrite", "netin", "netout":
+		min = 0
+		max = math.Max(current*1.8, 1)
+	default:
+		return nil
+	}
+
+	series := buildSyntheticWorkloadSeries(
+		now.UnixMilli(),
+		duration,
+		targetMockSeriesPoints(duration, maxPoints),
+		current,
+		min,
+		max,
+		hashChartSeed("history-mock", resourceID, metricType),
+	)
+
+	converted := make([]monitoring.MetricPoint, len(series))
+	for i, point := range series {
+		converted[i] = monitoring.MetricPoint{
+			Timestamp: time.UnixMilli(point.Timestamp),
+			Value:     point.Value,
+		}
+	}
+
+	return converted
+}
+
+// handleWorkloadCharts serves workload-only chart data used by workloads
+// sparklines. It intentionally excludes infrastructure/storage chart payloads
+// to keep requests small and stable for large fleets.
+func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) {
+	log.Debug().Str("method", req.Method).Str("url", req.URL.String()).Msg("Workload charts endpoint hit")
+	const inMemoryChartThreshold = 2 * time.Hour
+
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := req.URL.Query()
+	timeRange := query.Get("range")
+	if timeRange == "" {
+		timeRange = "1h"
+	}
+	selectedNodeID := strings.TrimSpace(query.Get("node"))
+	maxPoints := parseWorkloadMaxPoints(query.Get("maxPoints"))
+	duration := parseChartsRangeDuration(timeRange)
+
+	monitor := r.getTenantMonitor(req.Context())
+	state := monitor.GetState()
+	mockModeEnabled := mock.IsMockEnabled()
+	metricsStoreEnabled := monitor.GetMetricsStore() != nil
+	primarySourceHint := "memory"
+	if metricsStoreEnabled && duration > inMemoryChartThreshold {
+		primarySourceHint = "store_or_memory_fallback"
+	}
+
+	currentTime := time.Now().Unix() * 1000
+	oldestTimestamp := currentTime
+
+	var selectedNode *models.Node
+	if selectedNodeID != "" {
+		for idx := range state.Nodes {
+			if state.Nodes[idx].ID == selectedNodeID {
+				selectedNode = &state.Nodes[idx]
+				break
+			}
+		}
+		if selectedNode == nil {
+			log.Debug().
+				Str("selectedNodeID", selectedNodeID).
+				Msg("Workload charts node filter not found in current state; falling back to global scope")
+		}
+	}
+
+	matchesSelectedNode := func(instance, nodeName string) bool {
+		if selectedNodeID == "" {
+			return true
+		}
+		if selectedNode == nil {
+			return true
+		}
+		return strings.EqualFold(strings.TrimSpace(instance), strings.TrimSpace(selectedNode.Instance)) &&
+			strings.EqualFold(strings.TrimSpace(nodeName), strings.TrimSpace(selectedNode.Name))
+	}
+
+	matchesSelectedDockerHost := func(host models.DockerHost) bool {
+		if selectedNodeID == "" {
+			return true
+		}
+		if selectedNode == nil {
+			return true
+		}
+		nodeName := strings.TrimSpace(selectedNode.Name)
+		if nodeName == "" {
+			return false
+		}
+		return strings.EqualFold(strings.TrimSpace(host.Hostname), nodeName) ||
+			strings.EqualFold(strings.TrimSpace(host.DisplayName), nodeName)
+	}
+
+	matchesSelectedKubernetesPod := func(pod models.KubernetesPod) bool {
+		if selectedNodeID == "" {
+			return true
+		}
+		if selectedNode == nil {
+			return true
+		}
+		nodeName := strings.TrimSpace(selectedNode.Name)
+		if nodeName == "" {
+			return false
+		}
+		return strings.EqualFold(strings.TrimSpace(pod.NodeName), nodeName)
+	}
+
+	chartData := make(map[string]VMChartData)
+	dockerData := make(map[string]VMChartData)
+
+	guestTypes := make(map[string]string)
+
+	for _, vm := range state.VMs {
+		if !matchesSelectedNode(vm.Instance, vm.Node) {
+			continue
+		}
+
+		metrics := monitor.GetGuestMetricsForChart(vm.ID, "vm", vm.ID, duration)
+		series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
+		guestTypes[vm.ID] = "vm"
+
+		if len(series["cpu"]) == 0 {
+			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: vm.CPU * 100}}
+			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: vm.Memory.Usage}}
+			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: vm.Disk.Usage}}
+			series["diskread"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.DiskRead)}}
+			series["diskwrite"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.DiskWrite)}}
+			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.NetworkIn)}}
+			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.NetworkOut)}}
+		}
+		if mockModeEnabled {
+			series = ensureMockWorkloadSeries(series, currentTime, duration, maxPoints, "vm:"+vm.ID, map[string]float64{
+				"cpu":       vm.CPU * 100,
+				"memory":    vm.Memory.Usage,
+				"disk":      vm.Disk.Usage,
+				"diskread":  float64(vm.DiskRead),
+				"diskwrite": float64(vm.DiskWrite),
+				"netin":     float64(vm.NetworkIn),
+				"netout":    float64(vm.NetworkOut),
+			})
+		}
+		updateOldestTimestampFromSeries(series, &oldestTimestamp)
+		chartData[vm.ID] = series
+	}
+
+	for _, ct := range state.Containers {
+		if !matchesSelectedNode(ct.Instance, ct.Node) {
+			continue
+		}
+
+		metrics := monitor.GetGuestMetricsForChart(ct.ID, "container", ct.ID, duration)
+		series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
+		guestTypes[ct.ID] = "container"
+
+		if len(series["cpu"]) == 0 {
+			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPU * 100}}
+			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: ct.Memory.Usage}}
+			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: ct.Disk.Usage}}
+			series["diskread"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.DiskRead)}}
+			series["diskwrite"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.DiskWrite)}}
+			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.NetworkIn)}}
+			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.NetworkOut)}}
+		}
+		if mockModeEnabled {
+			series = ensureMockWorkloadSeries(series, currentTime, duration, maxPoints, "container:"+ct.ID, map[string]float64{
+				"cpu":       ct.CPU * 100,
+				"memory":    ct.Memory.Usage,
+				"disk":      ct.Disk.Usage,
+				"diskread":  float64(ct.DiskRead),
+				"diskwrite": float64(ct.DiskWrite),
+				"netin":     float64(ct.NetworkIn),
+				"netout":    float64(ct.NetworkOut),
+			})
+		}
+		updateOldestTimestampFromSeries(series, &oldestTimestamp)
+		chartData[ct.ID] = series
+	}
+
+	for _, cluster := range state.KubernetesClusters {
+		if cluster.Hidden {
+			continue
+		}
+		for _, pod := range cluster.Pods {
+			if !matchesSelectedKubernetesPod(pod) {
+				continue
+			}
+
+			metricKey := kubernetesPodMetricID(cluster, pod)
+			if metricKey == "" {
+				continue
+			}
+			currentMetrics := kubernetesPodCurrentMetrics(cluster, pod)
+
+			metrics := monitor.GetGuestMetricsForChart(metricKey, "k8s", metricKey, duration)
+			series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
+			guestTypes[metricKey] = "k8s"
+
+			if len(series["cpu"]) == 0 {
+				series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["cpu"]}}
+				series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["memory"]}}
+				series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["disk"]}}
+				series["diskread"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["diskread"]}}
+				series["diskwrite"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["diskwrite"]}}
+				series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["netin"]}}
+				series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["netout"]}}
+			}
+			if mockModeEnabled {
+				series = ensureMockWorkloadSeriesSubset(
+					series,
+					currentTime,
+					duration,
+					maxPoints,
+					"k8s:"+metricKey,
+					currentMetrics,
+					[]string{"cpu", "memory", "disk", "netin", "netout"},
+				)
+			}
+			updateOldestTimestampFromSeries(series, &oldestTimestamp)
+			chartData[metricKey] = series
+		}
+	}
+
+	for _, host := range state.DockerHosts {
+		if !matchesSelectedDockerHost(host) {
+			continue
+		}
+
+		for _, container := range host.Containers {
+			if container.ID == "" {
+				continue
+			}
+
+			metricKey := fmt.Sprintf("docker:%s", container.ID)
+			metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", container.ID, duration)
+			series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
+
+			if len(series["cpu"]) == 0 {
+				series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: container.CPUPercent}}
+				series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: container.MemoryPercent}}
+
+				var diskPercent float64
+				if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
+					diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
+					if diskPercent > 100 {
+						diskPercent = 100
+					}
+				}
+				series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
+			}
+			if mockModeEnabled {
+				var diskPercent float64
+				if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
+					diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
+					if diskPercent > 100 {
+						diskPercent = 100
+					}
+				}
+				series = ensureMockWorkloadSeries(series, currentTime, duration, maxPoints, "docker:"+container.ID, map[string]float64{
+					"cpu":       container.CPUPercent,
+					"memory":    container.MemoryPercent,
+					"disk":      diskPercent,
+					"diskread":  0,
+					"diskwrite": 0,
+					"netin":     0,
+					"netout":    0,
+				})
+			}
+			updateOldestTimestampFromSeries(series, &oldestTimestamp)
+			dockerData[container.ID] = series
+		}
+	}
+
+	countChartPoints := func(metricsMap map[string]VMChartData) int {
+		total := 0
+		for _, metricSeries := range metricsMap {
+			for _, points := range metricSeries {
+				total += len(points)
+			}
+		}
+		return total
+	}
+
+	guestPoints := countChartPoints(chartData)
+	dockerContainerPoints := countChartPoints(dockerData)
+
+	response := WorkloadChartsResponse{
+		ChartData:  chartData,
+		DockerData: dockerData,
+		GuestTypes: guestTypes,
+		Timestamp:  currentTime,
+		Stats: ChartStats{
+			OldestDataTimestamp:   oldestTimestamp,
+			Range:                 timeRange,
+			RangeSeconds:          int64(duration / time.Second),
+			MetricsStoreEnabled:   metricsStoreEnabled,
+			PrimarySourceHint:     primarySourceHint,
+			InMemoryThresholdSecs: int64(inMemoryChartThreshold / time.Second),
+			PointCounts: ChartPointCounts{
+				Total:            guestPoints + dockerContainerPoints,
+				Guests:           guestPoints,
+				DockerContainers: dockerContainerPoints,
+			},
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Error().Err(err).Msg("Failed to encode workload chart data response")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+}
+
 // parseChartsRangeDuration converts the UI chart range query (e.g. "5m", "1h")
 // into a duration. This is shared by /api/charts and /api/charts/infrastructure
 // to prevent drift.
@@ -5817,12 +6686,14 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 	if timeRange == "" {
 		timeRange = "1h"
 	}
+	maxPoints := parseWorkloadMaxPoints(query.Get("maxPoints"))
 
 	// Convert time range to duration.
 	duration := parseChartsRangeDuration(timeRange)
 
 	monitor := r.getTenantMonitor(req.Context())
 	state := monitor.GetState()
+	mockModeEnabled := mock.IsMockEnabled()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
 	if metricsStoreEnabled && duration > inMemoryChartThreshold {
@@ -5866,6 +6737,24 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 				}
 			}
 		}
+		if mockModeEnabled {
+			series := ensureMockInfrastructureSeries(
+				VMChartData(nodeData[node.ID]),
+				currentTime,
+				duration,
+				maxPoints,
+				"node:"+node.ID,
+				map[string]float64{
+					"cpu":    node.CPU * 100,
+					"memory": node.Memory.Usage,
+					"disk":   node.Disk.Usage,
+					"netin":  0,
+					"netout": 0,
+				},
+			)
+			updateOldestTimestampFromSeries(series, &oldestTimestamp)
+			nodeData[node.ID] = NodeChartData(series)
+		}
 	}
 
 	// Docker hosts - cpu/memory/disk
@@ -5898,6 +6787,27 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 			}
 			dockerHostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
 		}
+		if mockModeEnabled {
+			diskPercent := 0.0
+			if len(host.Disks) > 0 {
+				diskPercent = host.Disks[0].Usage
+			}
+			dockerHostData[host.ID] = ensureMockInfrastructureSeries(
+				dockerHostData[host.ID],
+				currentTime,
+				duration,
+				maxPoints,
+				"dockerHost:"+host.ID,
+				map[string]float64{
+					"cpu":    host.CPUUsage,
+					"memory": host.Memory.Usage,
+					"disk":   diskPercent,
+					"netin":  0,
+					"netout": 0,
+				},
+			)
+			updateOldestTimestampFromSeries(dockerHostData[host.ID], &oldestTimestamp)
+		}
 	}
 
 	// Unified host agents - cpu/memory/disk + optional diskread/diskwrite
@@ -5929,6 +6839,27 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 				diskPercent = host.Disks[0].Usage
 			}
 			hostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
+		}
+		if mockModeEnabled {
+			diskPercent := 0.0
+			if len(host.Disks) > 0 {
+				diskPercent = host.Disks[0].Usage
+			}
+			hostData[host.ID] = ensureMockInfrastructureSeries(
+				hostData[host.ID],
+				currentTime,
+				duration,
+				maxPoints,
+				"host:"+host.ID,
+				map[string]float64{
+					"cpu":    host.CPUUsage,
+					"memory": host.Memory.Usage,
+					"disk":   diskPercent,
+					"netin":  host.NetInRate,
+					"netout": host.NetOutRate,
+				},
+			)
+			updateOldestTimestampFromSeries(hostData[host.ID], &oldestTimestamp)
 		}
 	}
 
@@ -5988,6 +6919,831 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 // It currently serves the same payload as handleInfrastructureCharts.
 func (r *Router) handleInfrastructureSummaryCharts(w http.ResponseWriter, req *http.Request) {
 	r.handleInfrastructureCharts(w, req)
+}
+
+type workloadSummaryBuckets struct {
+	cpu     []float64
+	memory  []float64
+	disk    []float64
+	network []float64
+}
+
+type workloadsSummarySnapshot struct {
+	id      string
+	name    string
+	cpu     float64
+	memory  float64
+	disk    float64
+	network float64
+}
+
+func workloadSummaryBucketTimestamp(timestampMs int64) int64 {
+	const bucketSizeMs = int64(30_000)
+	return (timestampMs / bucketSizeMs) * bucketSizeMs
+}
+
+func clampWorkloadPercent(value float64) float64 {
+	if value != value {
+		return 0
+	}
+	if value < 0 {
+		return 0
+	}
+	if value > 100 {
+		return 100
+	}
+	return value
+}
+
+func clampNonNegativeWorkloadValue(value float64) float64 {
+	if value != value {
+		return 0
+	}
+	if value < 0 {
+		return 0
+	}
+	return value
+}
+
+func kubernetesClusterKey(cluster models.KubernetesCluster) string {
+	if value := strings.TrimSpace(cluster.ID); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(cluster.Name); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(cluster.DisplayName); value != "" {
+		return value
+	}
+	return "k8s-cluster"
+}
+
+func kubernetesPodIdentifier(pod models.KubernetesPod) string {
+	if value := strings.TrimSpace(pod.UID); value != "" {
+		return value
+	}
+	namespace := strings.TrimSpace(pod.Namespace)
+	name := strings.TrimSpace(pod.Name)
+	if namespace != "" || name != "" {
+		return fmt.Sprintf("%s/%s", namespace, name)
+	}
+	return "pod"
+}
+
+func kubernetesPodMetricID(cluster models.KubernetesCluster, pod models.KubernetesPod) string {
+	clusterKey := kubernetesClusterKey(cluster)
+	podKey := kubernetesPodIdentifier(pod)
+	if clusterKey == "" || podKey == "" {
+		return ""
+	}
+	return fmt.Sprintf("k8s:%s:pod:%s", clusterKey, podKey)
+}
+
+func kubernetesPodDisplayName(pod models.KubernetesPod) string {
+	name := strings.TrimSpace(pod.Name)
+	namespace := strings.TrimSpace(pod.Namespace)
+	if namespace == "" {
+		if name == "" {
+			return kubernetesPodIdentifier(pod)
+		}
+		return name
+	}
+	if name == "" {
+		return namespace
+	}
+	return fmt.Sprintf("%s/%s", namespace, name)
+}
+
+func kubernetesPodIsRunning(pod models.KubernetesPod) bool {
+	return strings.EqualFold(strings.TrimSpace(pod.Phase), "running")
+}
+
+func kubernetesPodCurrentMetrics(cluster models.KubernetesCluster, pod models.KubernetesPod) map[string]float64 {
+	cpuPercent := clampWorkloadPercent(pod.UsageCPUPercent)
+	memoryPercent := clampWorkloadPercent(pod.UsageMemoryPercent)
+
+	if memoryPercent <= 0 && pod.UsageMemoryBytes > 0 {
+		totalBytes := kubernetesPodMemoryTotalBytes(cluster, pod)
+		if totalBytes > 0 {
+			memoryPercent = clampWorkloadPercent((float64(pod.UsageMemoryBytes) / float64(totalBytes)) * 100)
+		}
+	}
+
+	diskPercent := clampWorkloadPercent(pod.DiskUsagePercent)
+	netIn := clampNonNegativeWorkloadValue(pod.NetInRate)
+	netOut := clampNonNegativeWorkloadValue(pod.NetOutRate)
+
+	return map[string]float64{
+		"cpu":       cpuPercent,
+		"memory":    memoryPercent,
+		"disk":      diskPercent,
+		"diskread":  0,
+		"diskwrite": 0,
+		"netin":     netIn,
+		"netout":    netOut,
+	}
+}
+
+func kubernetesPodMemoryTotalBytes(cluster models.KubernetesCluster, pod models.KubernetesPod) int64 {
+	nodeName := strings.TrimSpace(pod.NodeName)
+	if nodeName == "" {
+		return 0
+	}
+	for _, node := range cluster.Nodes {
+		if !strings.EqualFold(strings.TrimSpace(node.Name), nodeName) {
+			continue
+		}
+		if node.AllocMemoryBytes > 0 {
+			return node.AllocMemoryBytes
+		}
+		if node.CapacityMemoryBytes > 0 {
+			return node.CapacityMemoryBytes
+		}
+		return 0
+	}
+	return 0
+}
+
+func getOrCreateWorkloadBucket(buckets map[int64]*workloadSummaryBuckets, bucketTs int64) *workloadSummaryBuckets {
+	if bucket, ok := buckets[bucketTs]; ok {
+		return bucket
+	}
+	bucket := &workloadSummaryBuckets{}
+	buckets[bucketTs] = bucket
+	return bucket
+}
+
+func appendWorkloadMetricPoints(
+	buckets map[int64]*workloadSummaryBuckets,
+	points []monitoring.MetricPoint,
+	target string,
+	oldestTimestamp *int64,
+) int {
+	added := 0
+	for _, point := range points {
+		ts := point.Timestamp.Unix() * 1000
+		if ts <= 0 {
+			continue
+		}
+		if ts < *oldestTimestamp {
+			*oldestTimestamp = ts
+		}
+		bucketTs := workloadSummaryBucketTimestamp(ts)
+		bucket := getOrCreateWorkloadBucket(buckets, bucketTs)
+		value := clampNonNegativeWorkloadValue(point.Value)
+		switch target {
+		case "cpu", "memory", "disk":
+			value = clampWorkloadPercent(value)
+		}
+		switch target {
+		case "cpu":
+			bucket.cpu = append(bucket.cpu, value)
+		case "memory":
+			bucket.memory = append(bucket.memory, value)
+		case "disk":
+			bucket.disk = append(bucket.disk, value)
+		case "network":
+			bucket.network = append(bucket.network, value)
+		}
+		added++
+	}
+	return added
+}
+
+func mergeWorkloadNetworkPoints(
+	netIn []monitoring.MetricPoint,
+	netOut []monitoring.MetricPoint,
+) []monitoring.MetricPoint {
+	totals := make(map[int64]float64)
+	for _, point := range netIn {
+		ts := point.Timestamp.Unix() * 1000
+		if ts <= 0 {
+			continue
+		}
+		totals[ts] += clampNonNegativeWorkloadValue(point.Value)
+	}
+	for _, point := range netOut {
+		ts := point.Timestamp.Unix() * 1000
+		if ts <= 0 {
+			continue
+		}
+		totals[ts] += clampNonNegativeWorkloadValue(point.Value)
+	}
+	if len(totals) == 0 {
+		return nil
+	}
+	keys := make([]int64, 0, len(totals))
+	for ts := range totals {
+		keys = append(keys, ts)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	points := make([]monitoring.MetricPoint, 0, len(keys))
+	for _, ts := range keys {
+		points = append(points, monitoring.MetricPoint{
+			Timestamp: time.UnixMilli(ts),
+			Value:     totals[ts],
+		})
+	}
+	return points
+}
+
+func averageValue(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, value := range values {
+		sum += value
+	}
+	return sum / float64(len(values))
+}
+
+func maxValue(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for i := 1; i < len(values); i++ {
+		if values[i] > max {
+			max = values[i]
+		}
+	}
+	return max
+}
+
+func buildWorkloadsSummaryMetric(
+	buckets map[int64]*workloadSummaryBuckets,
+	selector func(*workloadSummaryBuckets) []float64,
+) WorkloadsSummaryMetricData {
+	keys := make([]int64, 0, len(buckets))
+	for ts := range buckets {
+		keys = append(keys, ts)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	data := WorkloadsSummaryMetricData{
+		P50: make([]MetricPoint, 0, len(keys)),
+		P95: make([]MetricPoint, 0, len(keys)),
+	}
+	for _, ts := range keys {
+		values := selector(buckets[ts])
+		if len(values) == 0 {
+			continue
+		}
+		data.P50 = append(data.P50, MetricPoint{
+			Timestamp: ts,
+			Value:     averageValue(values),
+		})
+		data.P95 = append(data.P95, MetricPoint{
+			Timestamp: ts,
+			Value:     maxValue(values),
+		})
+	}
+	return data
+}
+
+func summaryMetricPointCount(metric WorkloadsSummaryMetricData) int {
+	return len(metric.P50) + len(metric.P95)
+}
+
+func latestSummaryMetricValue(points []monitoring.MetricPoint, fallback float64, clamp func(float64) float64) float64 {
+	if len(points) == 0 {
+		return clamp(fallback)
+	}
+
+	latest := points[0]
+	for i := 1; i < len(points); i++ {
+		if points[i].Timestamp.After(latest.Timestamp) {
+			latest = points[i]
+		}
+	}
+	return clamp(latest.Value)
+}
+
+func buildWorkloadsTopContributors(
+	snapshots []workloadsSummarySnapshot,
+	selector func(workloadsSummarySnapshot) float64,
+) []WorkloadsSummaryContributor {
+	contributors := make([]WorkloadsSummaryContributor, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		value := selector(snapshot)
+		if value <= 0 {
+			continue
+		}
+		contributors = append(contributors, WorkloadsSummaryContributor{
+			ID:    snapshot.id,
+			Name:  snapshot.name,
+			Value: value,
+		})
+	}
+
+	sort.Slice(contributors, func(i, j int) bool {
+		if contributors[i].Value == contributors[j].Value {
+			if contributors[i].Name == contributors[j].Name {
+				return contributors[i].ID < contributors[j].ID
+			}
+			return contributors[i].Name < contributors[j].Name
+		}
+		return contributors[i].Value > contributors[j].Value
+	})
+
+	if len(contributors) > 3 {
+		contributors = contributors[:3]
+	}
+	return contributors
+}
+
+func buildWorkloadsBlastRadius(
+	snapshots []workloadsSummarySnapshot,
+	selector func(workloadsSummarySnapshot) float64,
+) WorkloadsSummaryBlastRadius {
+	values := make([]float64, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		value := selector(snapshot)
+		if value <= 0 {
+			continue
+		}
+		values = append(values, value)
+	}
+
+	if len(values) == 0 {
+		return WorkloadsSummaryBlastRadius{
+			Scope:           "idle",
+			Top3Share:       0,
+			ActiveWorkloads: 0,
+		}
+	}
+
+	sort.Slice(values, func(i, j int) bool { return values[i] > values[j] })
+	total := 0.0
+	for _, value := range values {
+		total += value
+	}
+
+	topCount := 3
+	if len(values) < topCount {
+		topCount = len(values)
+	}
+	top3 := 0.0
+	for i := 0; i < topCount; i++ {
+		top3 += values[i]
+	}
+
+	share := 0.0
+	if total > 0 {
+		share = (top3 / total) * 100
+	}
+
+	scope := "distributed"
+	switch {
+	case share >= 80:
+		scope = "concentrated"
+	case share >= 55:
+		scope = "mixed"
+	}
+
+	return WorkloadsSummaryBlastRadius{
+		Scope:           scope,
+		Top3Share:       share,
+		ActiveWorkloads: len(values),
+	}
+}
+
+// handleWorkloadsSummaryCharts serves compact, aggregate workload sparklines
+// for the Workloads top cards. It intentionally avoids returning per-workload
+// time series to keep payloads bounded for large fleets.
+func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.Request) {
+	log.Debug().Str("method", req.Method).Str("url", req.URL.String()).Msg("Workloads summary charts endpoint hit")
+	const inMemoryChartThreshold = 2 * time.Hour
+
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := req.URL.Query()
+	timeRange := query.Get("range")
+	if timeRange == "" {
+		timeRange = "1h"
+	}
+	selectedNodeID := strings.TrimSpace(query.Get("node"))
+	duration := parseChartsRangeDuration(timeRange)
+
+	monitor := r.getTenantMonitor(req.Context())
+	state := monitor.GetState()
+	mockModeEnabled := mock.IsMockEnabled()
+	metricsStoreEnabled := monitor.GetMetricsStore() != nil
+	primarySourceHint := "memory"
+	if metricsStoreEnabled && duration > inMemoryChartThreshold {
+		primarySourceHint = "store_or_memory_fallback"
+	}
+
+	currentTime := time.Now().Unix() * 1000
+	currentTimeTime := time.UnixMilli(currentTime)
+	oldestTimestamp := currentTime
+	buckets := make(map[int64]*workloadSummaryBuckets)
+	guestPointCount := 0
+	guestCounts := WorkloadsGuestCounts{}
+	snapshots := make([]workloadsSummarySnapshot, 0, len(state.VMs)+len(state.Containers))
+
+	var selectedNode *models.Node
+	if selectedNodeID != "" {
+		for idx := range state.Nodes {
+			if state.Nodes[idx].ID == selectedNodeID {
+				selectedNode = &state.Nodes[idx]
+				break
+			}
+		}
+		if selectedNode == nil {
+			log.Debug().
+				Str("selectedNodeID", selectedNodeID).
+				Msg("Workloads summary node filter not found in current state; falling back to global scope")
+		}
+	}
+
+	matchesSelectedNode := func(instance, nodeName string) bool {
+		if selectedNodeID == "" {
+			return true
+		}
+		if selectedNode == nil {
+			return true
+		}
+		return strings.EqualFold(strings.TrimSpace(instance), strings.TrimSpace(selectedNode.Instance)) &&
+			strings.EqualFold(strings.TrimSpace(nodeName), strings.TrimSpace(selectedNode.Name))
+	}
+
+	matchesSelectedDockerHost := func(host models.DockerHost) bool {
+		if selectedNodeID == "" {
+			return true
+		}
+		if selectedNode == nil {
+			return true
+		}
+		nodeName := strings.TrimSpace(selectedNode.Name)
+		if nodeName == "" {
+			return false
+		}
+		return strings.EqualFold(strings.TrimSpace(host.Hostname), nodeName) ||
+			strings.EqualFold(strings.TrimSpace(host.DisplayName), nodeName)
+	}
+
+	matchesSelectedKubernetesPod := func(pod models.KubernetesPod) bool {
+		if selectedNodeID == "" {
+			return true
+		}
+		if selectedNode == nil {
+			return true
+		}
+		nodeName := strings.TrimSpace(selectedNode.Name)
+		if nodeName == "" {
+			return false
+		}
+		return strings.EqualFold(strings.TrimSpace(pod.NodeName), nodeName)
+	}
+
+	for _, vm := range state.VMs {
+		if !matchesSelectedNode(vm.Instance, vm.Node) {
+			continue
+		}
+		guestCounts.Total++
+		if strings.EqualFold(vm.Status, "running") {
+			guestCounts.Running++
+		} else {
+			guestCounts.Stopped++
+		}
+
+		snapshot := workloadsSummarySnapshot{
+			id:      vm.ID,
+			name:    strings.TrimSpace(vm.Name),
+			cpu:     clampWorkloadPercent(vm.CPU * 100),
+			memory:  clampWorkloadPercent(vm.Memory.Usage),
+			disk:    clampWorkloadPercent(vm.Disk.Usage),
+			network: clampNonNegativeWorkloadValue(float64(vm.NetworkIn) + float64(vm.NetworkOut)),
+		}
+		if snapshot.name == "" {
+			snapshot.name = vm.ID
+		}
+
+		metrics := monitor.GetGuestMetricsForChart(vm.ID, "vm", vm.ID, duration)
+		cpuPoints := metrics["cpu"]
+		if len(cpuPoints) == 0 {
+			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.CPU * 100}}
+		}
+		memoryPoints := metrics["memory"]
+		if len(memoryPoints) == 0 {
+			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.Memory.Usage}}
+		}
+		diskPoints := metrics["disk"]
+		if len(diskPoints) == 0 {
+			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.Disk.Usage}}
+		}
+		netInPoints := metrics["netin"]
+		netOutPoints := metrics["netout"]
+		if len(netInPoints) == 0 && len(netOutPoints) == 0 {
+			netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: float64(vm.NetworkIn)}}
+			netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: float64(vm.NetworkOut)}}
+		}
+
+		networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
+
+		snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
+		snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
+		snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
+		snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
+
+		guestPointCount += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, diskPoints, "disk", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, networkPoints, "network", &oldestTimestamp)
+		snapshots = append(snapshots, snapshot)
+	}
+
+	for _, ct := range state.Containers {
+		if !matchesSelectedNode(ct.Instance, ct.Node) {
+			continue
+		}
+		guestCounts.Total++
+		if strings.EqualFold(ct.Status, "running") {
+			guestCounts.Running++
+		} else {
+			guestCounts.Stopped++
+		}
+
+		snapshot := workloadsSummarySnapshot{
+			id:      ct.ID,
+			name:    strings.TrimSpace(ct.Name),
+			cpu:     clampWorkloadPercent(ct.CPU * 100),
+			memory:  clampWorkloadPercent(ct.Memory.Usage),
+			disk:    clampWorkloadPercent(ct.Disk.Usage),
+			network: clampNonNegativeWorkloadValue(float64(ct.NetworkIn) + float64(ct.NetworkOut)),
+		}
+		if snapshot.name == "" {
+			snapshot.name = ct.ID
+		}
+
+		metrics := monitor.GetGuestMetricsForChart(ct.ID, "container", ct.ID, duration)
+		cpuPoints := metrics["cpu"]
+		if len(cpuPoints) == 0 {
+			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.CPU * 100}}
+		}
+		memoryPoints := metrics["memory"]
+		if len(memoryPoints) == 0 {
+			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.Memory.Usage}}
+		}
+		diskPoints := metrics["disk"]
+		if len(diskPoints) == 0 {
+			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.Disk.Usage}}
+		}
+		netInPoints := metrics["netin"]
+		netOutPoints := metrics["netout"]
+		if len(netInPoints) == 0 && len(netOutPoints) == 0 {
+			netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: float64(ct.NetworkIn)}}
+			netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: float64(ct.NetworkOut)}}
+		}
+
+		networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
+
+		snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
+		snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
+		snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
+		snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
+
+		guestPointCount += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, diskPoints, "disk", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, networkPoints, "network", &oldestTimestamp)
+		snapshots = append(snapshots, snapshot)
+	}
+
+	for _, cluster := range state.KubernetesClusters {
+		if cluster.Hidden {
+			continue
+		}
+		for _, pod := range cluster.Pods {
+			if !matchesSelectedKubernetesPod(pod) {
+				continue
+			}
+
+			metricKey := kubernetesPodMetricID(cluster, pod)
+			if metricKey == "" {
+				continue
+			}
+			currentMetrics := kubernetesPodCurrentMetrics(cluster, pod)
+
+			guestCounts.Total++
+			if kubernetesPodIsRunning(pod) {
+				guestCounts.Running++
+			} else {
+				guestCounts.Stopped++
+			}
+
+			snapshot := workloadsSummarySnapshot{
+				id:      metricKey,
+				name:    kubernetesPodDisplayName(pod),
+				cpu:     clampWorkloadPercent(currentMetrics["cpu"]),
+				memory:  clampWorkloadPercent(currentMetrics["memory"]),
+				disk:    clampWorkloadPercent(currentMetrics["disk"]),
+				network: clampNonNegativeWorkloadValue(currentMetrics["netin"] + currentMetrics["netout"]),
+			}
+			if snapshot.name == "" {
+				snapshot.name = metricKey
+			}
+
+			metrics := monitor.GetGuestMetricsForChart(metricKey, "k8s", metricKey, duration)
+			cpuPoints := metrics["cpu"]
+			if len(cpuPoints) == 0 {
+				cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: currentMetrics["cpu"]}}
+			}
+			memoryPoints := metrics["memory"]
+			if len(memoryPoints) == 0 {
+				memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: currentMetrics["memory"]}}
+			}
+			diskPoints := metrics["disk"]
+			if len(diskPoints) == 0 {
+				diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: currentMetrics["disk"]}}
+			}
+			netInPoints := metrics["netin"]
+			if len(netInPoints) == 0 {
+				netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: currentMetrics["netin"]}}
+			}
+			netOutPoints := metrics["netout"]
+			if len(netOutPoints) == 0 {
+				netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: currentMetrics["netout"]}}
+			}
+
+			if mockModeEnabled {
+				if len(cpuPoints) < mockWorkloadMinSeriesPoints {
+					cpuPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "cpu", currentMetrics["cpu"])
+				}
+				if len(memoryPoints) < mockWorkloadMinSeriesPoints {
+					memoryPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "memory", currentMetrics["memory"])
+				}
+				if len(diskPoints) < mockWorkloadMinSeriesPoints {
+					diskPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "disk", currentMetrics["disk"])
+				}
+				if len(netInPoints) < mockWorkloadMinSeriesPoints {
+					netInPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "netin", currentMetrics["netin"])
+				}
+				if len(netOutPoints) < mockWorkloadMinSeriesPoints {
+					netOutPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "netout", currentMetrics["netout"])
+				}
+			}
+
+			networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
+
+			snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
+			snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
+			snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
+			snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
+
+			guestPointCount += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", &oldestTimestamp)
+			guestPointCount += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", &oldestTimestamp)
+			guestPointCount += appendWorkloadMetricPoints(buckets, diskPoints, "disk", &oldestTimestamp)
+			guestPointCount += appendWorkloadMetricPoints(buckets, networkPoints, "network", &oldestTimestamp)
+			snapshots = append(snapshots, snapshot)
+		}
+	}
+
+	for _, host := range state.DockerHosts {
+		if !matchesSelectedDockerHost(host) {
+			continue
+		}
+		for _, container := range host.Containers {
+			if container.ID == "" {
+				continue
+			}
+			guestCounts.Total++
+			if strings.EqualFold(container.State, "running") {
+				guestCounts.Running++
+			} else {
+				guestCounts.Stopped++
+			}
+
+			diskFallback := 0.0
+			if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
+				diskFallback = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
+			}
+			snapshot := workloadsSummarySnapshot{
+				id:      container.ID,
+				name:    strings.TrimSpace(container.Name),
+				cpu:     clampWorkloadPercent(container.CPUPercent),
+				memory:  clampWorkloadPercent(container.MemoryPercent),
+				disk:    clampWorkloadPercent(diskFallback),
+				network: 0,
+			}
+			if snapshot.name == "" {
+				snapshot.name = container.ID
+			}
+
+			metricKey := fmt.Sprintf("docker:%s", container.ID)
+			metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", container.ID, duration)
+			cpuPoints := metrics["cpu"]
+			if len(cpuPoints) == 0 {
+				cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: container.CPUPercent}}
+			}
+			memoryPoints := metrics["memory"]
+			if len(memoryPoints) == 0 {
+				memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: container.MemoryPercent}}
+			}
+			diskPoints := metrics["disk"]
+			if len(diskPoints) == 0 {
+				diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: diskFallback}}
+			}
+			netInPoints := metrics["netin"]
+			netOutPoints := metrics["netout"]
+
+			networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
+
+			snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
+			snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
+			snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
+			snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
+
+			guestPointCount += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", &oldestTimestamp)
+			guestPointCount += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", &oldestTimestamp)
+			guestPointCount += appendWorkloadMetricPoints(buckets, diskPoints, "disk", &oldestTimestamp)
+			guestPointCount += appendWorkloadMetricPoints(buckets, networkPoints, "network", &oldestTimestamp)
+			snapshots = append(snapshots, snapshot)
+		}
+	}
+
+	cpuMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) []float64 {
+		return bucket.cpu
+	})
+	memoryMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) []float64 {
+		return bucket.memory
+	})
+	diskMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) []float64 {
+		return bucket.disk
+	})
+	networkMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) []float64 {
+		return bucket.network
+	})
+
+	summaryPointCount := summaryMetricPointCount(cpuMetric) +
+		summaryMetricPointCount(memoryMetric) +
+		summaryMetricPointCount(diskMetric) +
+		summaryMetricPointCount(networkMetric)
+
+	topContributors := WorkloadsSummaryContributors{
+		CPU: buildWorkloadsTopContributors(snapshots, func(snapshot workloadsSummarySnapshot) float64 {
+			return snapshot.cpu
+		}),
+		Memory: buildWorkloadsTopContributors(snapshots, func(snapshot workloadsSummarySnapshot) float64 {
+			return snapshot.memory
+		}),
+		Disk: buildWorkloadsTopContributors(snapshots, func(snapshot workloadsSummarySnapshot) float64 {
+			return snapshot.disk
+		}),
+		Network: buildWorkloadsTopContributors(snapshots, func(snapshot workloadsSummarySnapshot) float64 {
+			return snapshot.network
+		}),
+	}
+
+	blastRadius := WorkloadsSummaryBlastRadiusGroup{
+		CPU: buildWorkloadsBlastRadius(snapshots, func(snapshot workloadsSummarySnapshot) float64 {
+			return snapshot.cpu
+		}),
+		Memory: buildWorkloadsBlastRadius(snapshots, func(snapshot workloadsSummarySnapshot) float64 {
+			return snapshot.memory
+		}),
+		Disk: buildWorkloadsBlastRadius(snapshots, func(snapshot workloadsSummarySnapshot) float64 {
+			return snapshot.disk
+		}),
+		Network: buildWorkloadsBlastRadius(snapshots, func(snapshot workloadsSummarySnapshot) float64 {
+			return snapshot.network
+		}),
+	}
+
+	response := WorkloadsSummaryChartsResponse{
+		CPU:             cpuMetric,
+		Memory:          memoryMetric,
+		Disk:            diskMetric,
+		Network:         networkMetric,
+		GuestCounts:     guestCounts,
+		TopContributors: topContributors,
+		BlastRadius:     blastRadius,
+		Timestamp:       currentTime,
+		Stats: ChartStats{
+			OldestDataTimestamp:   oldestTimestamp,
+			Range:                 timeRange,
+			RangeSeconds:          int64(duration / time.Second),
+			MetricsStoreEnabled:   metricsStoreEnabled,
+			PrimarySourceHint:     primarySourceHint,
+			InMemoryThresholdSecs: int64(inMemoryChartThreshold / time.Second),
+			PointCounts: ChartPointCounts{
+				Total:  summaryPointCount,
+				Guests: guestPointCount,
+			},
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Error().Err(err).Msg("Failed to encode workloads summary chart data response")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // handleStorageCharts handles storage chart data requests
@@ -6183,9 +7939,11 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		historySourceStore  = "store"
 		historySourceMemory = "memory"
 		historySourceLive   = "live"
+		historySourceMock   = "mock_synthetic"
 	)
 
 	fallbackAllowed := duration <= 24*time.Hour
+	historyMaxPoints := parseWorkloadMaxPoints(query.Get("maxPoints"))
 	buildHistoryPoints := func(points []monitoring.MetricPoint, bucketSecs int64) []map[string]interface{} {
 		if len(points) == 0 {
 			return []map[string]interface{}{}
@@ -6261,6 +8019,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return apiPoints
 	}
 	state := monitor.GetState()
+	mockModeEnabled := mock.IsMockEnabled()
 
 	parseGuestID := func(id string) (string, string, int, bool) {
 		parts := strings.Split(id, ":")
@@ -6514,6 +8273,22 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			return nil, "", false
 		}
 
+		if mockModeEnabled && resourceType == "disk" && metricType == "smart_temp" {
+			if disk := findDisk(resourceID); disk != nil && disk.Temperature > 0 {
+				series := buildSyntheticMetricHistorySeries(
+					end,
+					duration,
+					historyMaxPoints,
+					resourceID,
+					metricType,
+					float64(disk.Temperature),
+				)
+				if len(series) > 0 {
+					return buildHistoryPoints(series, stepSecs), historySourceMock, true
+				}
+			}
+		}
+
 		switch resourceType {
 		case "vm", "container", "guest":
 			metrics := monitor.GetGuestMetrics(resourceID, duration)
@@ -6727,6 +8502,37 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					"end":          end.UnixMilli(),
 					"points":       apiPoints,
 					"source":       source,
+				}
+			}
+		}
+
+		if response == nil && mockModeEnabled && resourceType == "disk" && metricType == "smart_temp" {
+			targetPoints := targetMockSeriesPoints(duration, historyMaxPoints)
+			if len(points) > 0 && len(points) < targetPoints {
+				current := points[len(points)-1].Value
+				if disk := findDisk(resourceID); disk != nil && disk.Temperature > 0 {
+					current = float64(disk.Temperature)
+				}
+				series := buildSyntheticMetricHistorySeries(
+					end,
+					duration,
+					historyMaxPoints,
+					resourceID,
+					metricType,
+					current,
+				)
+				if len(series) > len(points) {
+					source = historySourceMock
+					response = map[string]interface{}{
+						"resourceType": resourceType,
+						"resourceId":   resourceID,
+						"metric":       metricType,
+						"range":        timeRange,
+						"start":        start.UnixMilli(),
+						"end":          end.UnixMilli(),
+						"points":       buildHistoryPoints(series, stepSecs),
+						"source":       source,
+					}
 				}
 			}
 		}

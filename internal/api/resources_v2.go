@@ -692,14 +692,27 @@ func parseResourceTypesV2(raw string) map[unified.ResourceType]struct{} {
 	result := make(map[unified.ResourceType]struct{})
 	for _, part := range splitCSV(raw) {
 		switch part {
-		case "host":
+		case "host", "hosts":
 			result[unified.ResourceTypeHost] = struct{}{}
-		case "vm":
+		case "vm", "vms", "qemu":
 			result[unified.ResourceTypeVM] = struct{}{}
-		case "lxc":
+		case "lxc", "lxcs":
 			result[unified.ResourceTypeLXC] = struct{}{}
-		case "container", "docker_container", "docker-container":
+		case "container", "containers", "docker_container", "docker-container":
 			result[unified.ResourceTypeContainer] = struct{}{}
+		case "pod", "pods", "k8s_pod", "k8s-pod", "kubernetes_pod", "kubernetes-pod":
+			result[unified.ResourceTypePod] = struct{}{}
+		case "k8s_cluster", "k8s-cluster", "kubernetes_cluster", "kubernetes-cluster":
+			result[unified.ResourceTypeK8sCluster] = struct{}{}
+		case "k8s_node", "k8s-node", "kubernetes_node", "kubernetes-node":
+			result[unified.ResourceTypeK8sNode] = struct{}{}
+		case "k8s_deployment", "k8s-deployment", "kubernetes_deployment", "kubernetes-deployment", "deployment", "deployments":
+			result[unified.ResourceTypeK8sDeployment] = struct{}{}
+		case "k8s", "kubernetes":
+			result[unified.ResourceTypeK8sCluster] = struct{}{}
+			result[unified.ResourceTypeK8sNode] = struct{}{}
+			result[unified.ResourceTypePod] = struct{}{}
+			result[unified.ResourceTypeK8sDeployment] = struct{}{}
 		case "storage":
 			result[unified.ResourceTypeStorage] = struct{}{}
 		case "pbs":
@@ -778,42 +791,62 @@ func attachDiscoveryTarget(resource *unified.Resource) {
 func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 	switch resource.Type {
 	case unified.ResourceTypeHost:
-		linkedHostAgentID := ""
-		if hasSource(resource.Sources, unified.SourceAgent) || resource.Agent != nil {
-			linkedHostAgentID = proxmoxLinkedHostAgentID(resource.Proxmox)
-		}
-		hostID := firstNonEmptyTrimmed(
-			agentID(resource.Agent),
-			linkedHostAgentID,
-			proxmoxNodeName(resource.Proxmox),
-			agentHostname(resource.Agent),
-			dockerHostname(resource.Docker),
-			firstResourceHostname(resource),
-			resource.Name,
-			resource.ID,
-		)
-		if hostID == "" {
-			return nil
-		}
-		return &unified.DiscoveryTarget{
-			ResourceType: "host",
-			HostID:       hostID,
-			ResourceID:   hostID,
-			Hostname: firstNonEmptyTrimmed(
-				agentHostname(resource.Agent),
-				proxmoxNodeName(resource.Proxmox),
-				dockerHostname(resource.Docker),
-				firstResourceHostname(resource),
-				resource.Name,
-				hostID,
-			),
-		}
+		return hostDiscoveryTarget(resource)
 	case unified.ResourceTypeVM:
 		return proxmoxGuestDiscoveryTarget(resource, "vm")
 	case unified.ResourceTypeLXC:
 		return proxmoxGuestDiscoveryTarget(resource, "lxc")
+	case unified.ResourceTypePBS:
+		return hostDiscoveryTarget(resource)
+	case unified.ResourceTypePMG:
+		return hostDiscoveryTarget(resource)
+	case unified.ResourceTypeK8sCluster:
+		return kubernetesDiscoveryTarget(resource, "cluster")
+	case unified.ResourceTypeK8sNode:
+		return kubernetesDiscoveryTarget(resource, "node")
+	case unified.ResourceTypePod:
+		return kubernetesDiscoveryTarget(resource, "pod")
+	case unified.ResourceTypeK8sDeployment:
+		return kubernetesDiscoveryTarget(resource, "deployment")
 	default:
 		return nil
+	}
+}
+
+func hostDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	linkedHostAgentID := ""
+	if hasSource(resource.Sources, unified.SourceAgent) || resource.Agent != nil {
+		linkedHostAgentID = proxmoxLinkedHostAgentID(resource.Proxmox)
+	}
+	hostID := firstNonEmptyTrimmed(
+		agentID(resource.Agent),
+		linkedHostAgentID,
+		proxmoxNodeName(resource.Proxmox),
+		agentHostname(resource.Agent),
+		dockerHostname(resource.Docker),
+		pbsHostname(resource.PBS),
+		pmgHostname(resource.PMG),
+		firstResourceHostname(resource),
+		resource.Name,
+		resource.ID,
+	)
+	if hostID == "" {
+		return nil
+	}
+	return &unified.DiscoveryTarget{
+		ResourceType: "host",
+		HostID:       hostID,
+		ResourceID:   hostID,
+		Hostname: firstNonEmptyTrimmed(
+			agentHostname(resource.Agent),
+			proxmoxNodeName(resource.Proxmox),
+			dockerHostname(resource.Docker),
+			pbsHostname(resource.PBS),
+			pmgHostname(resource.PMG),
+			firstResourceHostname(resource),
+			resource.Name,
+			hostID,
+		),
 	}
 }
 
@@ -836,6 +869,75 @@ func proxmoxGuestDiscoveryTarget(resource unified.Resource, resourceType string)
 			resourceID,
 		),
 	}
+}
+
+func kubernetesDiscoveryTarget(resource unified.Resource, kind string) *unified.DiscoveryTarget {
+	if resource.Kubernetes == nil {
+		return nil
+	}
+
+	hostID := firstNonEmptyTrimmed(
+		resource.Kubernetes.AgentID,
+		resource.Kubernetes.ClusterID,
+		resource.Kubernetes.ClusterName,
+	)
+	if hostID == "" {
+		return nil
+	}
+
+	resourceID := ""
+	switch kind {
+	case "cluster":
+		resourceID = firstNonEmptyTrimmed(
+			resource.Kubernetes.ClusterID,
+			resource.Kubernetes.ClusterName,
+			resource.Name,
+		)
+	case "node":
+		resourceID = firstNonEmptyTrimmed(
+			resource.Kubernetes.NodeUID,
+			resource.Kubernetes.NodeName,
+			resource.Name,
+		)
+	case "deployment":
+		resourceID = firstNonEmptyTrimmed(
+			resource.Kubernetes.DeploymentUID,
+			kubernetesNamespacedName(resource.Kubernetes.Namespace, resource.Name),
+			resource.Name,
+		)
+	default:
+		resourceID = firstNonEmptyTrimmed(
+			resource.Kubernetes.PodUID,
+			kubernetesNamespacedName(resource.Kubernetes.Namespace, resource.Name),
+			resource.Name,
+		)
+	}
+	if resourceID == "" {
+		return nil
+	}
+
+	return &unified.DiscoveryTarget{
+		ResourceType: "k8s",
+		HostID:       hostID,
+		ResourceID:   resourceID,
+		Hostname: firstNonEmptyTrimmed(
+			resource.Kubernetes.ClusterName,
+			resource.Kubernetes.Context,
+			resource.Name,
+		),
+	}
+}
+
+func kubernetesNamespacedName(namespace, name string) string {
+	ns := strings.TrimSpace(namespace)
+	n := strings.TrimSpace(name)
+	if ns == "" {
+		return n
+	}
+	if n == "" {
+		return ns
+	}
+	return ns + "/" + n
 }
 
 func firstResourceHostname(resource unified.Resource) string {
@@ -900,6 +1002,20 @@ func dockerHostname(docker *unified.DockerData) string {
 		return ""
 	}
 	return docker.Hostname
+}
+
+func pbsHostname(pbs *unified.PBSData) string {
+	if pbs == nil {
+		return ""
+	}
+	return pbs.Hostname
+}
+
+func pmgHostname(pmg *unified.PMGData) string {
+	if pmg == nil {
+		return ""
+	}
+	return pmg.Hostname
 }
 
 func splitCSV(raw string) []string {
