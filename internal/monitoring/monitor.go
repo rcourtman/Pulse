@@ -5968,14 +5968,35 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		m.state.SetConnectionHealth(instanceName, false)
 
 		preserved := make([]models.Node, 0, len(prevInstanceNodes))
+		now := time.Now()
+		withinGraceCount := 0
+		forcedOfflineCount := 0
 		for _, prevNode := range prevInstanceNodes {
 			nodeCopy := prevNode
-			nodeCopy.Status = "offline"
-			nodeCopy.ConnectionHealth = "error"
-			nodeCopy.Uptime = 0
-			nodeCopy.CPU = 0
+
+			// If a node was seen recently, keep its prior state for one grace window
+			// to avoid false-offline flips during transient cluster/resources gaps.
+			if !nodeCopy.LastSeen.IsZero() && now.Sub(nodeCopy.LastSeen) < nodeOfflineGracePeriod {
+				withinGraceCount++
+				if nodeCopy.ConnectionHealth == "" || nodeCopy.ConnectionHealth == "healthy" {
+					nodeCopy.ConnectionHealth = "degraded"
+				}
+			} else {
+				forcedOfflineCount++
+				nodeCopy.Status = "offline"
+				nodeCopy.ConnectionHealth = "error"
+				nodeCopy.Uptime = 0
+				nodeCopy.CPU = 0
+			}
+
 			preserved = append(preserved, nodeCopy)
 		}
+		log.Warn().
+			Str("instance", instanceName).
+			Int("withinGrace", withinGraceCount).
+			Int("forcedOffline", forcedOfflineCount).
+			Dur("gracePeriod", nodeOfflineGracePeriod).
+			Msg("Applied empty-node fallback state handling")
 		modelNodes = preserved
 	}
 
