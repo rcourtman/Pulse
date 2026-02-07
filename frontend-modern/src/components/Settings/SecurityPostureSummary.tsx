@@ -95,12 +95,40 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
     return Math.round((criticalScore + optionalScore) * 100);
   });
 
-  const scoreColor = () => {
+  const scoreTone = createMemo(() => {
     const score = securityScore();
-    if (score >= 80) return 'bg-green-500';
-    if (score >= 50) return 'bg-amber-500';
-    return 'bg-red-500';
-  };
+    if (score >= 80) {
+      return {
+        headerBg: 'bg-emerald-50 dark:bg-emerald-950/20',
+        headerBorder: 'border-b border-emerald-200 dark:border-emerald-800/60',
+        iconWrap: 'bg-emerald-100 dark:bg-emerald-900/40',
+        icon: 'text-emerald-700 dark:text-emerald-300',
+        subtitle: 'text-emerald-700 dark:text-emerald-300',
+        score: 'text-emerald-800 dark:text-emerald-200',
+        badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+      };
+    }
+    if (score >= 50) {
+      return {
+        headerBg: 'bg-amber-50 dark:bg-amber-950/20',
+        headerBorder: 'border-b border-amber-200 dark:border-amber-800/60',
+        iconWrap: 'bg-amber-100 dark:bg-amber-900/40',
+        icon: 'text-amber-700 dark:text-amber-300',
+        subtitle: 'text-amber-700 dark:text-amber-300',
+        score: 'text-amber-800 dark:text-amber-200',
+        badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+      };
+    }
+    return {
+      headerBg: 'bg-rose-50 dark:bg-rose-950/20',
+      headerBorder: 'border-b border-rose-200 dark:border-rose-800/60',
+      iconWrap: 'bg-rose-100 dark:bg-rose-900/40',
+      icon: 'text-rose-700 dark:text-rose-300',
+      subtitle: 'text-rose-700 dark:text-rose-300',
+      score: 'text-rose-800 dark:text-rose-200',
+      badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+    };
+  });
 
   const scoreLabel = () => {
     const score = securityScore();
@@ -123,18 +151,18 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
       border={false}
     >
       {/* Header with Security Score */}
-      <div class={`${scoreColor()} px-6 py-5`}>
+      <div class={`px-6 py-5 ${scoreTone().headerBg} ${scoreTone().headerBorder}`}>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4">
-            <div class="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+            <div class={`p-3 rounded-xl ${scoreTone().iconWrap}`}>
               {(() => {
                 const Icon = ScoreIcon();
-                return <Icon class="w-6 h-6 text-white" />;
+                return <Icon class={`w-6 h-6 ${scoreTone().icon}`} />;
               })()}
             </div>
             <div>
-              <h2 class="text-lg font-bold text-white">Security Posture</h2>
-              <p class="text-sm text-white/80">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Security Posture</h2>
+              <p class={`text-sm ${scoreTone().subtitle}`}>
                 {props.status.publicAccess && !props.status.isPrivateNetwork
                   ? 'Public network access detected'
                   : 'Private network access'}
@@ -142,8 +170,10 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
             </div>
           </div>
           <div class="text-right">
-            <div class="text-3xl font-bold text-white">{securityScore()}%</div>
-            <div class="text-sm text-white/80">{scoreLabel()}</div>
+            <div class={`text-3xl font-semibold ${scoreTone().score}`}>{securityScore()}%</div>
+            <div class={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${scoreTone().badge}`}>
+              {scoreLabel()}
+            </div>
           </div>
         </div>
       </div>
@@ -154,9 +184,9 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
           <For each={items()}>
             {(item) => (
               <div class={`rounded-xl border p-4 transition-all ${item.enabled
-                  ? 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/20'
+                  ? 'border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/60 dark:bg-emerald-950/20'
                   : item.critical
-                    ? 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/20'
+                    ? 'border-rose-200 dark:border-rose-800/70 bg-rose-50/60 dark:bg-rose-950/20'
                     : 'border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50'
                 }`}>
                 <div class="flex items-center justify-between mb-2">
@@ -164,9 +194,9 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
                     {item.label}
                   </span>
                   <Show when={item.enabled} fallback={
-                    <XCircle class={`w-5 h-5 ${item.critical ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`} />
+                    <XCircle class={`w-5 h-5 ${item.critical ? 'text-rose-500 dark:text-rose-400' : 'text-gray-400 dark:text-gray-500'}`} />
                   }>
-                    <CheckCircle class="w-5 h-5 text-green-500" />
+                    <CheckCircle class="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
                   </Show>
                 </div>
                 <div class="flex items-center justify-between">
@@ -174,7 +204,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
                     {item.description}
                   </p>
                   <Show when={item.critical && !item.enabled}>
-                    <span class="text-[10px] font-medium text-red-600 dark:text-red-400 uppercase">
+                    <span class="text-[10px] font-medium text-rose-600 dark:text-rose-400 uppercase">
                       Critical
                     </span>
                   </Show>

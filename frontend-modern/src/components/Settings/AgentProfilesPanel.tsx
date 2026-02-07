@@ -280,7 +280,7 @@ export const AgentProfilesPanel: Component = () => {
                             href="https://pulserelay.pro/"
                             target="_blank"
                             rel="noopener noreferrer"
-                            class="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-amber-600"
+                            class="inline-flex items-center gap-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-200 dark:hover:bg-amber-900/60"
                         >
                             <Crown class="w-4 h-4" />
                             Upgrade to Pro

@@ -667,7 +667,7 @@ export const AISettings: Component = () => {
 
     let confirmMessage = `Clear ${PROVIDER_DISPLAY_NAMES[provider] || provider} credentials?`;
     if (isLastProvider) {
-      confirmMessage = `⚠️ This is your only configured provider! Clearing it will disable Pulse Assistant until you configure another provider. Continue?`;
+      confirmMessage = `Warning: this is your only configured provider. Clearing it will disable Pulse Assistant until you configure another provider. Continue?`;
     } else if (modelUsesProvider) {
       confirmMessage = `Your current model uses ${PROVIDER_DISPLAY_NAMES[provider] || provider}. Clearing this will require selecting a different model. Continue?`;
     } else {
@@ -721,7 +721,7 @@ export const AISettings: Component = () => {
     <>
       <SettingsPanel
         title="AI"
-        description="Configure AI providers, models, Pulse Assistant, and Patrol"
+        description="Configure AI providers, models, Pulse Assistant, and Patrol."
         icon={
           <svg
             class="w-5 h-5 text-blue-600 dark:text-blue-300"
@@ -867,7 +867,7 @@ export const AISettings: Component = () => {
                     {/* Show unconfigured providers in a separate section with warning */}
                     <For each={Array.from(groupModelsByProvider(availableModels()).entries()).filter(([p]) => !isProviderConfigured(p, settings()))}>
                       {([provider, models]) => (
-                        <optgroup label={`⚠️ ${PROVIDER_DISPLAY_NAMES[provider] || provider} (not configured)`}>
+                        <optgroup label={`${PROVIDER_DISPLAY_NAMES[provider] || provider} (not configured)`}>
                           <For each={models}>
                             {(model) => (
                               <option value={model.id} selected={model.id === form.model} class="text-gray-400">
@@ -1375,20 +1375,20 @@ export const AISettings: Component = () => {
               </div>
 
               {/* Discovery Settings - Collapsible */}
-              <div class="rounded-lg border border-cyan-200 dark:border-cyan-800 overflow-hidden">
+              <div class="rounded-lg border border-blue-200 dark:border-blue-800 overflow-hidden">
                 <button
                   type="button"
-                  class="w-full px-3 py-2 flex items-center justify-between bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-colors text-left"
+                  class="w-full px-3 py-2 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-left"
                   onClick={() => setShowDiscoverySettings(!showDiscoverySettings())}
                 >
                   <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                     <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Discovery Settings</span>
                     {/* Summary badges */}
                     <Show when={form.discoveryEnabled}>
-                      <span class="px-1.5 py-0.5 text-[10px] font-medium bg-cyan-100 dark:bg-cyan-800 text-cyan-700 dark:text-cyan-300 rounded">
+                      <span class="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
                         {form.discoveryIntervalHours > 0 ? `${form.discoveryIntervalHours}h` : 'Manual'}
                       </span>
                     </Show>
@@ -1443,15 +1443,15 @@ export const AISettings: Component = () => {
                     </Show>
 
                     <p class="text-[10px] text-gray-500 dark:text-gray-400">
-                      💡 Without Discovery, Pulse AI won't know what's running where. With it enabled, AI can suggest correct commands like "docker exec mydb psql..." instead of generic advice.
+                      Discovery gives Pulse AI workload context, so responses can reference concrete services and commands instead of generic advice.
                     </p>
                   </div>
                 </Show>
               </div>
 
               {/* Usage Cost Controls - Compact */}
-              <div class="flex items-center gap-3 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
-                <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
+                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <label class="text-xs font-medium text-gray-700 dark:text-gray-300">30-day Budget</label>
@@ -1472,7 +1472,7 @@ export const AISettings: Component = () => {
                   <span class="text-xs text-gray-500">≈ ${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
                 </Show>
                 <Show when={!form.costBudgetUSD30d || parseFloat(form.costBudgetUSD30d) === 0}>
-                  <span class="text-[10px] text-amber-600 dark:text-amber-400">💡 Set budget for alerts</span>
+                  <span class="text-[10px] text-gray-500 dark:text-gray-400">Set a budget to receive usage alerts</span>
                 </Show>
               </div>
 
@@ -1504,13 +1504,13 @@ export const AISettings: Component = () => {
                 </Show>
               </div>
               <p class="text-[10px] text-gray-500 dark:text-gray-400 -mt-4 ml-1">
-                💡 Increase for slow Ollama hardware (default: 300s / 5 min)
+                Increase for slower Ollama hardware (default: 300s / 5 min)
               </p>
 
               {/* Pulse Permission Level */}
-              <div class={`space-y-3 p-4 rounded-lg border ${form.controlLevel === 'autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20' : 'border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20'}`}>
+              <div class={`space-y-3 p-4 rounded-lg border ${form.controlLevel === 'autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20'}`}>
                 <div class="flex items-center gap-2">
-                  <svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                   <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Pulse Permission Level</span>
@@ -1541,9 +1541,9 @@ export const AISettings: Component = () => {
                   </select>
                 </div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 ml-[7.5rem]">
-                  {form.controlLevel === 'read_only' && '🔒 Pulse Assistant can only query and observe - no commands or control actions'}
-                  {form.controlLevel === 'controlled' && '✅ Pulse Assistant can execute commands and control VMs/containers with your approval'}
-                  {form.controlLevel === 'autonomous' && '⚠️ Pulse Assistant executes all commands and control actions without asking'}
+                  {form.controlLevel === 'read_only' && 'Read-only mode: Pulse Assistant can query and observe only.'}
+                  {form.controlLevel === 'controlled' && 'Controlled mode: Pulse Assistant can execute commands and control VMs/containers with approval.'}
+                  {form.controlLevel === 'autonomous' && 'Autonomous mode: Pulse Assistant executes commands and control actions without confirmation.'}
                 </p>
                 <Show when={form.controlLevel === 'autonomous'}>
                   <div class="p-2 bg-amber-100/50 dark:bg-amber-900/30 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
@@ -1553,7 +1553,7 @@ export const AISettings: Component = () => {
                 <Show when={form.controlLevel === 'autonomous' && autoFixLocked()}>
                   <p class="text-xs text-gray-500 dark:text-gray-400">
                     <a
-                      class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
+                      class="text-blue-600 dark:text-blue-400 font-medium hover:underline"
                       href="https://pulserelay.pro/"
                       target="_blank"
                       rel="noreferrer"
@@ -1566,7 +1566,7 @@ export const AISettings: Component = () => {
 
                 {/* Protected Guests - Only show if control is enabled */}
                 <Show when={form.controlLevel !== 'read_only'}>
-                  <div class="flex items-start gap-3 pt-2 border-t border-purple-200 dark:border-purple-700">
+                  <div class="flex items-start gap-3 pt-2 border-t border-blue-200 dark:border-blue-700">
                     <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-28 flex-shrink-0 pt-1">Protected</label>
                     <div class="flex-1">
                       <input
@@ -1708,7 +1708,7 @@ export const AISettings: Component = () => {
                   }`}
               >
                 <div
-                  class={`w-2 h-2 rounded-full ${settings()?.configured ? 'bg-green-500' : 'bg-amber-500'
+                  class={`w-2 h-2 rounded-full ${settings()?.configured ? 'bg-emerald-400' : 'bg-amber-400'
                     }`}
                 />
                 <div class="flex-1">
@@ -1831,8 +1831,8 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('anthropic')}
                   class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'anthropic'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">Anthropic</div>
@@ -1842,8 +1842,8 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('openai')}
                   class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'openai'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">OpenAI</div>
@@ -1853,8 +1853,8 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('deepseek')}
                   class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'deepseek'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">DeepSeek</div>
@@ -1864,8 +1864,8 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('gemini')}
                   class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'gemini'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">Gemini</div>
@@ -1875,8 +1875,8 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('ollama')}
                   class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'ollama'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">Ollama</div>
@@ -1895,7 +1895,7 @@ export const AISettings: Component = () => {
                     value={setupApiKey()}
                     onInput={(e) => setSetupApiKey(e.currentTarget.value)}
                     placeholder={setupProvider() === 'anthropic' ? 'sk-ant-...' : setupProvider() === 'gemini' ? 'AIza...' : 'sk-...'}
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <p class="text-xs text-gray-500 mt-1.5">
                     <a
@@ -1909,7 +1909,7 @@ export const AISettings: Component = () => {
                       }
                       target="_blank"
                       rel="noopener"
-                      class="text-purple-600 hover:underline"
+                      class="text-blue-600 hover:underline"
                     >
                       Get your API key →
                     </a>
@@ -1925,7 +1925,7 @@ export const AISettings: Component = () => {
                     value={setupOllamaUrl()}
                     onInput={(e) => setSetupOllamaUrl(e.currentTarget.value)}
                     placeholder="http://localhost:11434"
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <p class="text-xs text-gray-500 mt-1.5">
                     Ollama runs locally - no API key needed
@@ -2010,7 +2010,7 @@ export const AISettings: Component = () => {
                     setSetupSaving(false);
                   }
                 }}
-                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
                 disabled={setupSaving() || (setupProvider() !== 'ollama' && !setupApiKey().trim()) || (setupProvider() === 'ollama' && !setupOllamaUrl().trim())}
               >
                 {setupSaving() && <span class="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}

@@ -277,7 +277,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                             onInput={(e) => setPrompt(e.currentTarget.value)}
                             placeholder="Describe the agents and use case for this profile..."
                             rows={3}
-                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-purple-400 dark:focus:ring-purple-800/60 resize-none"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800/60 resize-none"
                             disabled={loading()}
                         />
                         <Show when={suggestion()}>
@@ -319,7 +319,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                     {/* Loading State */}
                     <Show when={loading()}>
                         <div class="flex items-center justify-center py-4">
-                            <Loader2 class="w-5 h-5 text-purple-600 dark:text-purple-400 animate-spin" />
+                            <Loader2 class="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
                             <span class="ml-3 text-sm text-gray-600 dark:text-gray-400">Generating suggestion...</span>
                         </div>
                     </Show>
@@ -487,7 +487,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setShowDefaults(!showDefaults())}
-                                                                class="text-xs font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+                                                                class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                                             >
                                                                 {showDefaults() ? 'Hide defaults' : 'Show defaults'}
                                                             </button>
@@ -530,7 +530,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                                 <For each={sugg().rationale}>
                                                     {(reason) => (
                                                         <li class="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                                            <Check class="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                                                            <Check class="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
                                                             <span>{reason}</span>
                                                         </li>
                                                     )}
@@ -557,7 +557,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                                     <button
                                                         type="button"
                                                         onClick={() => handleSelectHistory(item)}
-                                                        class="w-full text-left rounded-md border border-gray-200 dark:border-gray-700 p-3 hover:border-purple-300 hover:bg-purple-50 dark:hover:border-purple-700/60 dark:hover:bg-purple-900/20 transition-colors"
+                                                        class="w-full text-left rounded-md border border-gray-200 dark:border-gray-700 p-3 hover:border-blue-300 hover:bg-blue-50 dark:hover:border-blue-700/60 dark:hover:bg-blue-900/20 transition-colors"
                                                     >
                                                         <div class="flex items-center justify-between gap-3">
                                                             <span class="text-sm font-medium text-gray-900 dark:text-gray-100">

@@ -1,12 +1,12 @@
 import { Component, Show, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { Card } from '@/components/shared/Card';
-import { SectionHeader } from '@/components/shared/SectionHeader';
+import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import Globe from 'lucide-solid/icons/globe';
 
 interface OIDCConfigResponse {
   enabled: boolean;
@@ -210,77 +210,55 @@ export const OIDCPanel: Component<Props> = (props) => {
   };
 
   return (
-    <Card
-      padding="none"
-      class="overflow-hidden border border-gray-200 dark:border-gray-700"
-      border={false}
-    >
-      <div class="bg-blue-50 dark:bg-blue-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-        <div class="flex items-center gap-3">
-          <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-            <svg
-              class="w-5 h-5 text-blue-600 dark:text-blue-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.8"
-                d="M21 12c0 4.97-4.03 9-9 9m9-9c0-4.97-4.03-9-9-9m9 9H3m9 9c-4.97 0-9-4.03-9-9m9 9c-1.5-1.35-3-4.5-3-9s1.5-7.65 3-9m0 18c1.5-1.35 3-4.5 3-9s-1.5-7.65-3-9"
-              />
-            </svg>
-          </div>
-          <SectionHeader
-            title="Single sign-on (OIDC)"
-            description="Connect Pulse to your identity provider"
-            size="sm"
-            class="flex-1"
-          />
-          <Toggle
-            checked={form.enabled}
-            onChange={async (event) => {
-              const newValue = event.currentTarget.checked;
-              setForm('enabled', newValue);
+    <SettingsPanel
+      title="Single Sign-On (OIDC)"
+      description="Connect Pulse to your identity provider."
+      icon={<Globe class="w-5 h-5" />}
+      action={
+        <Toggle
+          checked={form.enabled}
+          onChange={async (event) => {
+            const newValue = event.currentTarget.checked;
+            setForm('enabled', newValue);
 
-              // Auto-save when DISABLING (safe operation)
-              // When ENABLING, require full form save to ensure issuerUrl and clientId are set
-              if (!newValue && config()?.enabled) {
-                try {
-                  const { apiFetch } = await import('@/utils/apiClient');
-                  const response = await apiFetch('/api/security/oidc', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled: false }),
-                  });
-                  if (!response.ok) throw new Error('Failed to disable OIDC');
-                  const updated = (await response.json()) as OIDCConfigResponse;
-                  setConfig(updated);
-                  notificationStore.success('OIDC disabled');
-                  props.onConfigUpdated?.(updated);
-                } catch (error) {
-                  setForm('enabled', true); // Revert
-                  logger.error('[OIDCPanel] Failed to disable OIDC:', error);
-                  notificationStore.error('Failed to disable OIDC');
-                }
-              } else if (newValue && !config()?.enabled) {
-                // Show hint that save is required
-                notificationStore.info('Configure issuer URL and client ID, then click Save', 3000);
+            // Auto-save when DISABLING (safe operation)
+            // When ENABLING, require full form save to ensure issuerUrl and clientId are set
+            if (!newValue && config()?.enabled) {
+              try {
+                const { apiFetch } = await import('@/utils/apiClient');
+                const response = await apiFetch('/api/security/oidc', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ enabled: false }),
+                });
+                if (!response.ok) throw new Error('Failed to disable OIDC');
+                const updated = (await response.json()) as OIDCConfigResponse;
+                setConfig(updated);
+                notificationStore.success('OIDC disabled');
+                props.onConfigUpdated?.(updated);
+              } catch (error) {
+                setForm('enabled', true); // Revert
+                logger.error('[OIDCPanel] Failed to disable OIDC:', error);
+                notificationStore.error('Failed to disable OIDC');
               }
-            }}
-            disabled={isEnvLocked() || loading() || saving()}
-            containerClass="items-center gap-2"
-            label={
-              <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
-                {form.enabled ? 'Enabled' : 'Disabled'}
-              </span>
+            } else if (newValue && !config()?.enabled) {
+              // Show hint that save is required
+              notificationStore.info('Configure issuer URL and client ID, then click Save', 3000);
             }
-          />
-        </div>
-      </div>
+          }}
+          disabled={isEnvLocked() || loading() || saving()}
+          containerClass="items-center gap-2"
+          label={
+            <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+              {form.enabled ? 'Enabled' : 'Disabled'}
+            </span>
+          }
+        />
+      }
+      bodyClass="space-y-5"
+    >
       <Show when={licenseLoaded() && !hasFeature('sso') && !loading()}>
-        <div class="mx-6 mt-6 p-5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl">
+        <div class="p-5 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-xl">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
               <h4 class="text-base font-semibold text-gray-900 dark:text-white">Single Sign-On</h4>
@@ -291,15 +269,15 @@ export const OIDCPanel: Component<Props> = (props) => {
             <a
               href="https://pulserelay.pro/"
               target="_blank"
-              class="px-5 py-2.5 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               Upgrade to Pro
             </a>
           </div>
         </div>
       </Show>
-      <form class="p-6 space-y-5" onSubmit={handleSave}>
-        <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-xs text-blue-800 dark:text-blue-200">
+      <form class="space-y-5" onSubmit={handleSave}>
+        <div class="bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-xs text-gray-700 dark:text-gray-300">
           <ol class="space-y-1 list-decimal pl-4">
             <li>Set PUBLIC_URL environment variable</li>
             <li>Register client with your IdP using redirect URL below</li>
@@ -354,7 +332,7 @@ export const OIDCPanel: Component<Props> = (props) => {
                 <Show when={config()?.clientSecretSet}>
                   <button
                     type="button"
-                    class="text-xs text-blue-600 hover:underline dark:text-blue-300"
+                    class="text-xs text-gray-600 hover:underline dark:text-gray-300"
                     onClick={() => {
                       if (!isEnvLocked() && !saving()) {
                         setForm('clientSecret', '');
@@ -424,7 +402,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           <div class="space-y-4">
             <button
               type="button"
-              class="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-300"
+              class="text-xs font-semibold text-gray-700 hover:underline dark:text-gray-300"
               onClick={() => setAdvancedOpen(!advancedOpen())}
             >
               {advancedOpen() ? 'Hide advanced OIDC options' : 'Show advanced OIDC options'}
@@ -580,7 +558,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           </div>
         </Show>
       </form>
-    </Card>
+    </SettingsPanel>
   );
 };
 

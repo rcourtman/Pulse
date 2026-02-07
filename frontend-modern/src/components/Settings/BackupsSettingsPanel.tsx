@@ -43,7 +43,7 @@ export const BackupsSettingsPanel: Component<BackupsSettingsPanelProps> = (props
     <div class="space-y-6">
       <SettingsPanel
         title="Backups"
-        description="Backup polling and configuration management"
+        description="Manage backup polling and configuration export/import."
         icon={<Clock class="w-5 h-5" strokeWidth={2} />}
         bodyClass="space-y-8"
       >
@@ -253,19 +253,19 @@ export const BackupsSettingsPanel: Component<BackupsSettingsPanelProps> = (props
                 {/* Feature list */}
                 <ul class="space-y-1 mb-4">
                   <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <svg class="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                     <span>All node connections & credentials</span>
                   </li>
                   <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <svg class="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                     <span>Alert thresholds & overrides</span>
                   </li>
                   <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <svg class="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                     <span>AES-256 encryption</span>

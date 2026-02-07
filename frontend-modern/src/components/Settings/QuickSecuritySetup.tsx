@@ -186,23 +186,23 @@ Important:
               />
               <ul class="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
                 <li class="flex items-center">
-                  <span class="text-green-500 mr-2">✓</span>
+                  <span class="text-emerald-400 mr-2">✓</span>
                   {isRotation
                     ? 'Generate a new secure password'
                     : 'Generate secure random password'}
                 </li>
                 <li class="flex items-center">
-                  <span class="text-green-500 mr-2">✓</span>
+                  <span class="text-emerald-400 mr-2">✓</span>
                   {isRotation ? 'Replace the stored admin password' : 'Enable basic authentication'}
                 </li>
                 <li class="flex items-center">
-                  <span class="text-green-500 mr-2">✓</span>
+                  <span class="text-emerald-400 mr-2">✓</span>
                   {isRotation
                     ? 'Create a new API token for automation'
                     : 'Create API token for automation'}
                 </li>
                 <li class="flex items-center">
-                  <span class="text-green-500 mr-2">✓</span>
+                  <span class="text-emerald-400 mr-2">✓</span>
                   Enable audit logging
                 </li>
               </ul>

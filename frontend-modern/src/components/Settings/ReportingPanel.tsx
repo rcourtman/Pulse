@@ -61,7 +61,7 @@ export function ReportingPanel() {
                     format: format(),
                     start: startStr,
                     end: end,
-                    title: title() || `Infrastructure Report - ${res.name}`,
+                    title: title() || `Pulse Report - ${res.name}`,
                 });
 
                 if (metricType()) {
@@ -80,7 +80,7 @@ export function ReportingPanel() {
                     format: format(),
                     start: startStr,
                     end: end,
-                    title: title() || 'Fleet Performance Report',
+                    title: title() || 'Pulse Fleet Report',
                     metricType: metricType() || undefined,
                 };
 
@@ -119,8 +119,8 @@ export function ReportingPanel() {
     return (
         <div class="space-y-6">
             <SettingsPanel
-                title="Advanced Reporting"
-                description="Generate detailed infrastructure reports in PDF or CSV format."
+                title="Detailed Reporting"
+                description="Generate reports across infrastructure, workloads, storage, and backup resources."
                 icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
                 bodyClass="space-y-6"
             >
@@ -138,7 +138,7 @@ export function ReportingPanel() {
                             id="metric-type"
                             type="text"
                             class={formControl}
-                            placeholder="e.g. cpu, memory, netin (leave empty for all)"
+                            placeholder="e.g. cpu, memory, disk, temperature (leave empty for all)"
                             value={metricType()}
                             onInput={(e) => setMetricType(e.currentTarget.value)}
                         />
@@ -163,8 +163,8 @@ export function ReportingPanel() {
                                 {(r) => (
                                     <button
                                         class={`px-4 py-2 rounded-lg border transition-all ${range() === r
-                                            ? 'bg-blue-600/20 border-blue-500 text-blue-400'
-                                            : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-500'
+                                            ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
+                                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
                                             }`}
                                         onClick={() => setRange(r)}
                                     >
@@ -179,8 +179,8 @@ export function ReportingPanel() {
                         <div class="flex gap-2">
                             <button
                                 class={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all ${format() === 'pdf'
-                                    ? 'bg-blue-600/20 border-blue-500 text-blue-400'
-                                    : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-500'
+                                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
+                                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
                                     }`}
                                 onClick={() => setFormat('pdf')}
                             >
@@ -189,8 +189,8 @@ export function ReportingPanel() {
                             </button>
                             <button
                                 class={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all ${format() === 'csv'
-                                    ? 'bg-blue-600/20 border-blue-500 text-blue-400'
-                                    : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-500'
+                                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
+                                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
                                     }`}
                                 onClick={() => setFormat('csv')}
                             >
@@ -201,11 +201,11 @@ export function ReportingPanel() {
                     </FormField>
                 </div>
 
-                <div class="flex justify-end pt-4 border-t border-slate-800">
+                <div class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
                     <button
                         class={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${generating()
-                            ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20'
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white'
                             }`}
                         disabled={generating()}
                         onClick={handleGenerate}
@@ -223,15 +223,15 @@ export function ReportingPanel() {
                 </div>
             </SettingsPanel>
 
-            <div class="bg-blue-900/10 border border-blue-900/20 rounded-xl p-6 mt-8">
+            <div class="rounded-xl border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-900/20">
                 <div class="flex gap-4">
-                    <div class="p-3 bg-blue-600/20 rounded-lg h-fit text-blue-400">
+                    <div class="p-3 rounded-lg h-fit text-blue-600 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40">
                         <BarChart size={24} />
                     </div>
                     <div>
-                        <h3 class="text-lg font-bold text-white mb-2">Advanced Insights</h3>
-                        <p class="text-slate-400 leading-relaxed">
-                            Reports are generated directly from the historical metrics store. PDF reports provide a summarized view with average, minimum, and maximum values, while CSV exports provide raw granular data for external analysis in tools like Excel or BI suites. Select multiple resources to generate a fleet summary report.
+                        <h3 class="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">Advanced Insights</h3>
+                        <p class="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
+                            Reports are generated directly from the historical metrics store. PDF reports provide summarized trends (average, minimum, and maximum), while CSV exports provide raw time-series data for deeper analysis in spreadsheets or BI tools. Select multiple resources to generate a fleet-wide summary.
                         </p>
                     </div>
                 </div>

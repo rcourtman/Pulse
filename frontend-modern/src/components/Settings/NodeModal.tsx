@@ -1022,7 +1022,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </p>
                                   <ul class="text-xs text-blue-700 dark:text-blue-300 space-y-1">
                                     <li class="flex items-start">
-                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                                       <span>
                                         Creates monitoring user{' '}
                                         <code class="bg-blue-100 dark:bg-blue-800/50 px-1 rounded">
@@ -1031,18 +1031,18 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       </span>
                                     </li>
                                     <li class="flex items-start">
-                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                                       <span>Generates secure API token</span>
                                     </li>
                                     <li class="flex items-start">
-                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                                       <span>
                                         Sets up monitoring permissions (PVEAuditor + guest agent
                                         access + backup visibility)
                                       </span>
                                     </li>
                                     <li class="flex items-start">
-                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                                       <span>Automatically registers node with Pulse</span>
                                     </li>
                                   </ul>
@@ -1576,7 +1576,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </p>
                                   <ul class="text-xs text-blue-700 dark:text-blue-300 space-y-1">
                                     <li class="flex items-start">
-                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                                       <span>
                                         Creates monitoring user{' '}
                                         <code class="bg-blue-100 dark:bg-blue-800/50 px-1 rounded">
@@ -1585,18 +1585,18 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       </span>
                                     </li>
                                     <li class="flex items-start">
-                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                                       <span>Generates secure API token</span>
                                     </li>
                                     <li class="flex items-start">
-                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                                       <span>
                                         Sets up Audit permissions (read-only access to backups +
                                         system stats)
                                       </span>
                                     </li>
                                     <li class="flex items-start">
-                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                                       <span>Automatically registers server with Pulse</span>
                                     </li>
                                   </ul>

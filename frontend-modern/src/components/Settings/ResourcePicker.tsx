@@ -21,24 +21,86 @@ interface ResourcePickerProps {
     onSelectionChange: (items: SelectedResource[]) => void;
 }
 
-type TypeFilter = 'all' | 'node' | 'vm' | 'container';
+type TypeFilter = 'all' | 'infrastructure' | 'workloads' | 'storage' | 'backups';
 
 const typeFilterLabels: Record<TypeFilter, string> = {
     all: 'All',
-    node: 'Nodes',
-    vm: 'VMs',
-    container: 'Containers',
+    infrastructure: 'Infrastructure',
+    workloads: 'Workloads',
+    storage: 'Storage',
+    backups: 'Backups',
 };
 
+const REPORTABLE_RESOURCE_TYPES = new Set<ResourceType>([
+    'node',
+    'host',
+    'docker-host',
+    'k8s-cluster',
+    'k8s-node',
+    'vm',
+    'container',
+    'oci-container',
+    'docker-container',
+    'pod',
+    'storage',
+    'datastore',
+    'pool',
+    'dataset',
+    'pbs',
+    'pmg',
+]);
+
+const INFRASTRUCTURE_TYPES = new Set<ResourceType>([
+    'node',
+    'host',
+    'docker-host',
+    'k8s-cluster',
+    'k8s-node',
+    'pbs',
+    'pmg',
+]);
+
+const WORKLOAD_TYPES = new Set<ResourceType>([
+    'vm',
+    'container',
+    'oci-container',
+    'docker-container',
+    'pod',
+]);
+
+const STORAGE_TYPES = new Set<ResourceType>([
+    'storage',
+    'datastore',
+    'pool',
+    'dataset',
+]);
+
+const BACKUP_TYPES = new Set<ResourceType>([
+    'pbs',
+    'datastore',
+]);
+
 function normalizeType(type: ResourceType): string {
-    if (type === 'oci-container') return 'container';
+    if (type === 'oci-container' || type === 'docker-container') return 'container';
+    if (type === 'docker-host') return 'host';
+    if (type === 'k8s-node') return 'node';
+    if (type === 'k8s-cluster') return 'cluster';
+    return type;
+}
+
+function toReportResourceType(type: ResourceType): string {
+    if (type === 'oci-container' || type === 'docker-container') return 'container';
+    if (type === 'docker-host') return 'host';
     return type;
 }
 
 function matchesTypeFilter(resource: Resource, filter: TypeFilter): boolean {
     if (filter === 'all') return true;
-    const normalized = normalizeType(resource.type);
-    return normalized === filter;
+    if (filter === 'infrastructure') return INFRASTRUCTURE_TYPES.has(resource.type);
+    if (filter === 'workloads') return WORKLOAD_TYPES.has(resource.type);
+    if (filter === 'storage') return STORAGE_TYPES.has(resource.type);
+    if (filter === 'backups') return BACKUP_TYPES.has(resource.type);
+    return true;
 }
 
 function getStatusColor(status: string): string {
@@ -59,14 +121,33 @@ function getStatusColor(status: string): string {
 }
 
 function getTypeBadge(type: ResourceType): { label: string; classes: string } {
-    const normalized = normalizeType(type);
-    switch (normalized) {
+    switch (type) {
         case 'node':
-            return { label: 'Node', classes: 'bg-blue-500/20 text-blue-400' };
+        case 'k8s-node':
+            return { label: 'Node', classes: 'bg-blue-500/20 text-blue-300' };
+        case 'host':
+        case 'docker-host':
+            return { label: 'Host', classes: 'bg-gray-500/20 text-gray-300' };
+        case 'k8s-cluster':
+            return { label: 'K8s', classes: 'bg-gray-500/20 text-gray-300' };
         case 'vm':
-            return { label: 'VM', classes: 'bg-purple-500/20 text-purple-400' };
+            return { label: 'VM', classes: 'bg-gray-500/20 text-gray-300' };
         case 'container':
-            return { label: 'CT', classes: 'bg-emerald-500/20 text-emerald-400' };
+        case 'oci-container':
+        case 'docker-container':
+            return { label: 'Container', classes: 'bg-blue-500/20 text-blue-300' };
+        case 'pod':
+            return { label: 'Pod', classes: 'bg-gray-500/20 text-gray-300' };
+        case 'pbs':
+            return { label: 'PBS', classes: 'bg-gray-500/20 text-gray-300' };
+        case 'pmg':
+            return { label: 'PMG', classes: 'bg-gray-500/20 text-gray-300' };
+        case 'datastore':
+            return { label: 'Datastore', classes: 'bg-gray-500/20 text-gray-300' };
+        case 'storage':
+        case 'pool':
+        case 'dataset':
+            return { label: 'Storage', classes: 'bg-gray-500/20 text-gray-300' };
         default:
             return { label: type, classes: 'bg-slate-500/20 text-slate-400' };
     }
@@ -78,11 +159,9 @@ export function ResourcePicker(props: ResourcePickerProps) {
     const [typeFilter, setTypeFilter] = createSignal<TypeFilter>('all');
     const [tagFilter, setTagFilter] = createSignal('');
 
-    // Filter to only reportable resource types (nodes, VMs, containers)
+    // Filter to reportable resource types across infrastructure, workloads, storage, and backups.
     const reportableResources = createMemo(() => {
-        return resources().filter(r =>
-            r.type === 'node' || r.type === 'vm' || r.type === 'container' || r.type === 'oci-container'
-        );
+        return resources().filter((r) => REPORTABLE_RESOURCE_TYPES.has(r.type));
     });
 
     // Apply filters
@@ -110,11 +189,24 @@ export function ResourcePicker(props: ResourcePickerProps) {
             );
         }
 
-        // Sort: nodes first, then VMs, then containers, then alphabetical
+        // Sort by domain first, then by type, then alphabetical.
         result.sort((a, b) => {
-            const typeOrder: Record<string, number> = { node: 0, vm: 1, container: 2 };
-            const aOrder = typeOrder[normalizeType(a.type)] ?? 3;
-            const bOrder = typeOrder[normalizeType(b.type)] ?? 3;
+            const typeOrder: Record<string, number> = {
+                node: 0,
+                host: 1,
+                cluster: 2,
+                pbs: 3,
+                pmg: 4,
+                vm: 5,
+                container: 6,
+                pod: 7,
+                storage: 8,
+                datastore: 9,
+                pool: 10,
+                dataset: 11,
+            };
+            const aOrder = typeOrder[normalizeType(a.type)] ?? 12;
+            const bOrder = typeOrder[normalizeType(b.type)] ?? 12;
             if (aOrder !== bOrder) return aOrder - bOrder;
             return getDisplayName(a).localeCompare(getDisplayName(b));
         });
@@ -137,7 +229,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
             }
             props.onSelectionChange([...current, {
                 id: resource.id,
-                type: normalizeType(resource.type),
+                type: toReportResourceType(resource.type),
                 name: getDisplayName(resource),
             }]);
         }
@@ -150,7 +242,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
             .filter(r => !currentIds.has(r.id))
             .map(r => ({
                 id: r.id,
-                type: normalizeType(r.type),
+                type: toReportResourceType(r.type),
                 name: getDisplayName(r),
             }));
 
@@ -200,7 +292,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
 
                 {/* Type toggle buttons */}
                 <div class="flex gap-1">
-                    <For each={(['all', 'node', 'vm', 'container'] as TypeFilter[])}>
+                    <For each={(['all', 'infrastructure', 'workloads', 'storage', 'backups'] as TypeFilter[])}>
                         {(type) => (
                             <button
                                 class={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
@@ -224,7 +316,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                     fallback={
                         <div class="p-8 text-center text-slate-400">
                             <p class="text-sm">No resources available</p>
-                            <p class="text-xs mt-1 text-slate-500">Resources will appear when connected to a Proxmox instance</p>
+                            <p class="text-xs mt-1 text-slate-500">Resources appear as Pulse collects infrastructure and workload metrics</p>
                         </div>
                     }
                 >

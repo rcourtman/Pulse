@@ -825,22 +825,22 @@ export const UnifiedAgents: Component = () => {
     return (
         <div class="space-y-6">
             <SettingsPanel
-                title="Add a unified agent"
-                description="Monitor server metrics (CPU, RAM, Disk) and Docker containers with a single agent."
+                title="Unified Agents"
+                description="Install and configure host, Docker, and Kubernetes agents."
                 icon={<Server class="w-5 h-5" strokeWidth={2} />}
                 bodyClass="space-y-5"
             >
 
                 <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
                     <div class="flex items-start gap-3">
-                        <ProxmoxIcon class="w-5 h-5 text-orange-500 mt-0.5 shrink-0" />
+                        <ProxmoxIcon class="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
                         <div class="flex-1">
                             <p class="text-sm">
                                 Proxmox nodes can be added here with the unified agent for extra capabilities like temperature monitoring and Pulse Patrol automation (auto-creates the API token and links the node).
                             </p>
                             <button
                                 type="button"
-                                onClick={() => navigate('/settings/proxmox')}
+                                onClick={() => navigate('/settings/infrastructure')}
                                 class="mt-2 text-xs font-medium text-emerald-800 hover:text-emerald-900 dark:text-emerald-200 dark:hover:text-emerald-100 underline"
                             >
                                 Prefer API-only? Use manual setup →
@@ -1238,8 +1238,8 @@ export const UnifiedAgents: Component = () => {
             </SettingsPanel>
 
             <SettingsPanel
-                title="Managed Agents"
-                description="All active and removed agents, including Kubernetes clusters."
+                title="Agent Inventory"
+                description="Review active and removed agents, including Kubernetes clusters."
                 icon={<Users class="w-5 h-5" strokeWidth={2} />}
                 bodyClass="space-y-4"
             >
@@ -1250,7 +1250,7 @@ export const UnifiedAgents: Component = () => {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <p class="text-xs text-blue-700 dark:text-blue-300">
-                            <span class="font-medium">{linkedHostAgents().length}</span> host agent{linkedHostAgents().length > 1 ? 's are' : ' is'} linked to Proxmox node{linkedHostAgents().length > 1 ? 's' : ''} and flagged with a <span class="font-medium text-indigo-700 dark:text-indigo-300">Linked</span> badge.
+                            <span class="font-medium">{linkedHostAgents().length}</span> host agent{linkedHostAgents().length > 1 ? 's are' : ' is'} linked to Proxmox node{linkedHostAgents().length > 1 ? 's' : ''} and flagged with a <span class="font-medium text-blue-700 dark:text-blue-300">Linked</span> badge.
                         </p>
                     </div>
                 </Show>
@@ -1378,7 +1378,7 @@ export const UnifiedAgents: Component = () => {
                                     const agentName = row.displayName || row.hostname || row.name;
                                     const typeBadgeClass = (type: UnifiedAgentType) => {
                                         if (type === 'host') {
-                                            return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+                                            return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
                                         }
                                         if (type === 'docker') {
                                             return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
@@ -1590,7 +1590,7 @@ export const UnifiedAgents: Component = () => {
                                                                         </span>
                                                                     </Show>
                                                                     <Show when={row.linkedNodeId}>
-                                                                        <span class="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                                                        <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
                                                                             Linked
                                                                         </span>
                                                                     </Show>

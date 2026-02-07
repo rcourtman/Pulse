@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, Show, For } from 'solid-js';
-import { Card } from '@/components/shared/Card';
+import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACAPI } from '@/api/rbac';
 import type { Role, Permission } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
@@ -126,29 +126,25 @@ export const RolesPanel: Component = () => {
 
     return (
         <div class="space-y-6">
-            <Card padding="lg" class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
-                            <Shield class="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                        </div>
-                        <div>
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Roles</h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">Manage custom roles and view built-in roles</p>
-                        </div>
-                    </div>
+            <SettingsPanel
+                title="Roles"
+                description="Manage built-in and custom roles with granular permissions."
+                icon={<Shield class="w-5 h-5" />}
+                action={
                     <button
                         type="button"
                         onClick={handleCreate}
-                        class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+                        class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                     >
                         <Plus class="w-4 h-4" />
                         New Role
                     </button>
-                </div>
+                }
+                bodyClass="space-y-4"
+            >
 
                 <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
-                    <div class="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl">
+                    <div class="p-4 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-xl">
                         <div class="flex flex-col sm:flex-row items-center gap-4">
                             <div class="flex-1">
                                 <h4 class="text-base font-semibold text-gray-900 dark:text-white">Custom Roles (Pro)</h4>
@@ -160,7 +156,7 @@ export const RolesPanel: Component = () => {
                                 href="https://pulserelay.pro/"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                class="px-5 py-2.5 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                             >
                                 Upgrade to Pro
                             </a>
@@ -170,7 +166,7 @@ export const RolesPanel: Component = () => {
 
                 <Show when={loading()}>
                     <div class="flex items-center justify-center py-8">
-                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" />
+                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
                     </div>
                 </Show>
 
@@ -216,7 +212,7 @@ export const RolesPanel: Component = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => handleEdit(role)}
-                                                            class="p-1.5 rounded-md text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:text-indigo-400 dark:hover:bg-indigo-900/30"
+                                                            class="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-gray-100 dark:hover:text-blue-300 dark:hover:bg-gray-800"
                                                             title="Edit role"
                                                         >
                                                             <Pencil class="w-4 h-4" />
@@ -242,7 +238,7 @@ export const RolesPanel: Component = () => {
                         </table>
                     </div>
                 </Show>
-            </Card>
+            </SettingsPanel>
 
             {/* Role Modal */}
             <Show when={showModal()}>
@@ -273,7 +269,7 @@ export const RolesPanel: Component = () => {
                                         onInput={(e) => setFormId(e.currentTarget.value)}
                                         placeholder="e.g., custom-auditor"
                                         disabled={!!editingRole()}
-                                        class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-indigo-400 dark:focus:ring-indigo-800/60 disabled:opacity-50"
+                                        class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40 disabled:opacity-50"
                                     />
                                 </div>
                                 <div class="space-y-1">
@@ -285,7 +281,7 @@ export const RolesPanel: Component = () => {
                                         value={formName()}
                                         onInput={(e) => setFormName(e.currentTarget.value)}
                                         placeholder="e.g., Custom Auditor"
-                                        class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-indigo-400 dark:focus:ring-indigo-800/60"
+                                        class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40"
                                     />
                                 </div>
                             </div>
@@ -298,7 +294,7 @@ export const RolesPanel: Component = () => {
                                     value={formDescription()}
                                     onInput={(e) => setFormDescription(e.currentTarget.value)}
                                     placeholder="Brief description of this role's purpose"
-                                    class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-indigo-400 dark:focus:ring-indigo-800/60"
+                                    class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40"
                                 />
                             </div>
 
@@ -310,7 +306,7 @@ export const RolesPanel: Component = () => {
                                     <button
                                         type="button"
                                         onClick={addPermission}
-                                        class="text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1"
+                                        class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300 flex items-center gap-1"
                                     >
                                         <Plus class="w-3 h-3" /> Add Permission
                                     </button>
@@ -366,7 +362,7 @@ export const RolesPanel: Component = () => {
                                 type="button"
                                 onClick={handleSave}
                                 disabled={saving() || !formName().trim()}
-                                class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 {saving() ? 'Saving...' : editingRole() ? 'Update Role' : 'Create Role'}
                             </button>

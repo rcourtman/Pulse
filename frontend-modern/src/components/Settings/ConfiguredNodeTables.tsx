@@ -18,22 +18,22 @@ type StatusMeta = { dotClass: string; label: string; labelClass: string };
 
 const STATUS_META: Record<string, StatusMeta> = {
   online: {
-    dotClass: 'bg-green-500',
+    dotClass: 'bg-emerald-400',
     label: 'Online',
     labelClass: 'text-green-600 dark:text-green-400',
   },
   offline: {
-    dotClass: 'bg-red-500',
+    dotClass: 'bg-rose-400',
     label: 'Offline',
     labelClass: 'text-red-600 dark:text-red-400',
   },
   degraded: {
-    dotClass: 'bg-yellow-500',
+    dotClass: 'bg-amber-300',
     label: 'Degraded',
     labelClass: 'text-amber-600 dark:text-amber-400',
   },
   pending: {
-    dotClass: 'bg-amber-500 animate-pulse',
+    dotClass: 'bg-amber-400 animate-pulse',
     label: 'Pending',
     labelClass: 'text-amber-600 dark:text-amber-400',
   },
@@ -227,8 +227,8 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                         {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                       </span>
                       <Show when={node.source === 'agent'}>
-                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded w-fit">
-                          <span class="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded w-fit">
+                          <span class="h-1.5 w-1.5 rounded-full bg-gray-500"></span>
                           Agent
                         </span>
                       </Show>
@@ -421,8 +421,8 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                         {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                       </span>
                       <Show when={node.source === 'agent'}>
-                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded w-fit">
-                          <span class="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded w-fit">
+                          <span class="h-1.5 w-1.5 rounded-full bg-gray-500"></span>
                           Agent
                         </span>
                       </Show>
@@ -617,8 +617,8 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                         {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                       </span>
                       <Show when={node.source === 'agent'}>
-                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded w-fit">
-                          <span class="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded w-fit">
+                          <span class="h-1.5 w-1.5 rounded-full bg-gray-500"></span>
                           Agent
                         </span>
                       </Show>

@@ -1,7 +1,6 @@
 import { Component, Show, For, createSignal, onMount, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { Card } from '@/components/shared/Card';
-import { SectionHeader } from '@/components/shared/SectionHeader';
+import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
@@ -508,7 +507,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
     <div class="space-y-6">
       {/* License banner */}
       <Show when={licenseLoaded() && !hasAdvancedSSO() && !loading()}>
-        <Card padding="md" class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800">
+        <div class="p-4 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-xl">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
               <h4 class="text-base font-semibold text-gray-900 dark:text-white">Advanced SSO</h4>
@@ -519,60 +518,45 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
             <a
               href="https://pulserelay.pro/"
               target="_blank"
-              class="px-5 py-2.5 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+              class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
             >
               Upgrade to Pro
               <ExternalLink class="w-4 h-4" />
             </a>
           </div>
-        </Card>
+        </div>
       </Show>
 
       {/* Main panel */}
-      <Card
-        padding="none"
-        class="overflow-hidden border border-gray-200 dark:border-gray-700"
-        border={false}
-      >
-        {/* Header */}
-        <div class="bg-blue-50 dark:bg-blue-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-              <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                <Shield class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
-              </div>
-              <SectionHeader
-                title="Single Sign-On Providers"
-                description="Configure OIDC and SAML identity providers"
-                size="sm"
-                class="flex-1"
-              />
-            </div>
-            <div class="flex gap-2">
+      <SettingsPanel
+        title="Single Sign-On Providers"
+        description="Configure OIDC and SAML identity providers."
+        icon={<Shield class="w-5 h-5" strokeWidth={2} />}
+        action={
+          <div class="flex gap-2">
+            <button
+              type="button"
+              onClick={() => openAddModal('oidc')}
+              class="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+            >
+              <Plus class="w-4 h-4" />
+              Add OIDC
+            </button>
+            <Show when={hasAdvancedSSO()}>
               <button
                 type="button"
-                onClick={() => openAddModal('oidc')}
-                class="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+                onClick={() => openAddModal('saml')}
+                class="px-3 py-1.5 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1.5"
               >
                 <Plus class="w-4 h-4" />
-                Add OIDC
+                Add SAML
               </button>
-              <Show when={hasAdvancedSSO()}>
-                <button
-                  type="button"
-                  onClick={() => openAddModal('saml')}
-                  class="px-3 py-1.5 text-sm font-medium bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1.5"
-                >
-                  <Plus class="w-4 h-4" />
-                  Add SAML
-                </button>
-              </Show>
-            </div>
+            </Show>
           </div>
-        </div>
-
+        }
+        bodyClass="space-y-6"
+      >
         {/* Content */}
-        <div class="p-6">
           <Show when={loading()}>
             <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
               <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -595,11 +579,11 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                   <div class={`p-4 rounded-lg border ${provider.enabled ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 opacity-60'}`}>
                     <div class="flex items-center justify-between gap-4">
                       <div class="flex items-center gap-3 min-w-0">
-                        <div class={`p-2 rounded-lg ${provider.type === 'oidc' ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-purple-100 dark:bg-purple-900/40'}`}>
+                        <div class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">
                           {provider.type === 'oidc' ? (
-                            <Globe class="w-5 h-5 text-blue-600 dark:text-blue-300" />
+                            <Globe class="w-5 h-5 text-gray-600 dark:text-gray-300" />
                           ) : (
-                            <Key class="w-5 h-5 text-purple-600 dark:text-purple-300" />
+                            <Key class="w-5 h-5 text-gray-600 dark:text-gray-300" />
                           )}
                         </div>
                         <div class="min-w-0">
@@ -607,7 +591,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                             <span class="font-medium text-gray-900 dark:text-white truncate">
                               {provider.name}
                             </span>
-                            <span class={`px-1.5 py-0.5 text-xs font-medium rounded ${provider.type === 'oidc' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}`}>
+                            <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
                               {provider.type.toUpperCase()}
                             </span>
                           </div>
@@ -627,7 +611,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                         <button
                           type="button"
                           onClick={() => openEditModal(provider)}
-                          class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                          class="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                           title="Edit provider"
                         >
                           <Pencil class="w-4 h-4" />
@@ -677,8 +661,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               </For>
             </div>
           </Show>
-        </div>
-      </Card>
+      </SettingsPanel>
 
       {/* Add/Edit Modal */}
       <Show when={showModal()}>
@@ -785,15 +768,15 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               {/* SAML-specific fields */}
               <Show when={form.type === 'saml'}>
                 <div class="space-y-4">
-                  <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                    <p class="text-xs text-blue-800 dark:text-blue-200">
+                  <div class="bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    <p class="text-xs text-gray-700 dark:text-gray-300">
                       <strong>Setup:</strong> Provide either IdP Metadata URL (preferred) or configure SSO URL + Certificate manually.
                       Use the SP Metadata URL below to configure your Identity Provider.
                     </p>
                     <Show when={publicUrl()}>
                       <div class="mt-2 flex items-center gap-2">
-                        <span class="text-xs text-blue-700 dark:text-blue-300">SP Metadata:</span>
-                        <code class="text-xs bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded">
+                        <span class="text-xs text-gray-600 dark:text-gray-300">SP Metadata:</span>
+                        <code class="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
                           {publicUrl()}/api/saml/{form.id || '{id}'}/metadata
                         </code>
                       </div>
@@ -927,9 +910,9 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                 >
                   <div class="flex items-start gap-3">
                     {testResult()?.success ? (
-                      <CheckCircle class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                      <CheckCircle class="w-5 h-5 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                     ) : (
-                      <XCircle class="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                      <XCircle class="w-5 h-5 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
                     )}
                     <div class="flex-1 min-w-0">
                       <p
@@ -1001,7 +984,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               <div class="pt-2">
                 <button
                   type="button"
-                  class="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-300"
+                  class="text-xs font-semibold text-gray-700 hover:underline dark:text-gray-300"
                   onClick={() => setAdvancedOpen(!advancedOpen())}
                 >
                   {advancedOpen() ? 'Hide' : 'Show'} access restrictions & role mapping

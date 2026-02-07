@@ -126,7 +126,7 @@ export const RelaySettingsPanel: Component = () => {
     return (
       <SettingsPanel
         title="Remote Access"
-        description="Connect to the Pulse relay for mobile app access."
+        description="Configure Pulse relay connectivity for secure remote access."
         icon={<RadioTower size={20} strokeWidth={2} />}
       >
         <Show when={!loading()} fallback={<div class="text-sm text-gray-500">Loading...</div>}>
@@ -151,7 +151,7 @@ export const RelaySettingsPanel: Component = () => {
   return (
     <SettingsPanel
       title="Remote Access"
-      description="Connect to the Pulse relay for mobile app access to your infrastructure."
+      description="Configure Pulse relay connectivity for secure remote access."
       icon={<RadioTower size={20} strokeWidth={2} />}
     >
       <Show when={!loading()} fallback={<div class="text-sm text-gray-500">Loading configuration...</div>}>
@@ -190,14 +190,14 @@ export const RelaySettingsPanel: Component = () => {
         <div class={formField}>
           <div class="flex items-center justify-between">
             <div>
-              <label class={labelClass}>Enable Remote Access</label>
+              <label class={labelClass()}>Enable Remote Access</label>
               <p class={formHelpText}>
                 Connect this Pulse instance to the relay server for mobile app access.
               </p>
             </div>
             <Toggle
               checked={config()?.enabled ?? false}
-              onChange={(e) => void handleToggleEnabled(e.checked)}
+              onChange={(e) => void handleToggleEnabled(e.currentTarget.checked)}
               disabled={saving()}
             />
           </div>
@@ -205,11 +205,11 @@ export const RelaySettingsPanel: Component = () => {
 
         {/* Server URL */}
         <div class={formField}>
-          <label class={labelClass}>Relay Server URL</label>
+          <label class={labelClass()}>Relay Server URL</label>
           <div class="flex gap-2">
             <input
               type="text"
-              class={controlClass}
+              class={controlClass()}
               value={serverUrl()}
               onInput={(e) => setServerUrl(e.currentTarget.value)}
               placeholder="wss://relay.pulserelay.pro/ws/instance"
@@ -233,7 +233,7 @@ export const RelaySettingsPanel: Component = () => {
         {/* Identity Fingerprint */}
         <Show when={config()?.identity_fingerprint}>
           <div class={formField}>
-            <label class={labelClass}>Instance Fingerprint</label>
+            <label class={labelClass()}>Instance Fingerprint</label>
             <code class="block text-xs font-mono text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded px-3 py-2 select-all break-all">
               {config()!.identity_fingerprint}
             </code>

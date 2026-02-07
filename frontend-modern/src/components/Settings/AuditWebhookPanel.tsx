@@ -5,7 +5,8 @@ import Plus from 'lucide-solid/icons/plus';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import ExternalLink from 'lucide-solid/icons/external-link';
 import { Card } from '@/components/shared/Card';
-import { SectionHeader } from '@/components/shared/SectionHeader';
+import SettingsPanel from '@/components/shared/SettingsPanel';
+import { formControl } from '@/components/shared/Form';
 import { showSuccess, showWarning } from '@/utils/toast';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { hasFeature, loadLicenseStatus } from '@/stores/license';
@@ -82,34 +83,55 @@ export function AuditWebhookPanel() {
         }
     };
 
+    if (!hasFeature('audit_logging')) {
+        return (
+            <SettingsPanel
+                title="Audit Webhooks"
+                description="Configure real-time delivery of security audit events to external systems."
+                icon={<Globe class="w-5 h-5" strokeWidth={2} />}
+            >
+                <Show when={!loading()} fallback={<div class="text-sm text-gray-500 dark:text-gray-400">Loading...</div>}>
+                    <Card tone="info" padding="md">
+                        <div class="text-sm">
+                            <p class="font-semibold text-gray-900 dark:text-gray-100">Pulse Pro Required</p>
+                            <p class="mt-1 text-gray-600 dark:text-gray-400">
+                                Audit webhooks are part of the audit logging feature set and require Pulse Pro.
+                            </p>
+                        </div>
+                    </Card>
+                </Show>
+            </SettingsPanel>
+        );
+    }
+
     return (
         <div class="space-y-6">
-            <SectionHeader
-                title={<>Audit Webhooks</>}
-                description={<>Configure real-time delivery of audit events to external systems.</>}
-            />
+            <SettingsPanel
+                title="Audit Webhooks"
+                description="Configure real-time delivery of security audit events to external systems."
+                icon={<Globe class="w-5 h-5" strokeWidth={2} />}
+                bodyClass="space-y-6"
+            >
+                <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                    Pulse can send a signed event payload whenever security-relevant activity occurs
+                    (logins, settings changes, RBAC updates, and similar audit events).
+                </p>
 
-            <Card>
-                <div class="p-6 space-y-6">
-                    <p class="text-slate-400 text-sm leading-relaxed">
-                        Whenever a security-relevant event occurs (login, config change, RBAC update),
-                        Pulse can send a POST request with the JSON-encoded event data to the following endpoints.
-                    </p>
-
-                    <div class="space-y-4">
+                <Show when={!loading()} fallback={<p class="text-sm text-gray-500 dark:text-gray-400">Loading audit webhooks…</p>}>
+                    <div class="space-y-3">
                         <For each={webhookUrls()}>
                             {(url) => (
-                                <div class="flex items-center justify-between p-3 bg-slate-800/50 border border-slate-700 rounded-lg group">
-                                    <div class="flex items-center gap-3 overflow-hidden">
-                                        <div class="p-2 bg-blue-500/10 text-blue-400 rounded-md shrink-0">
+                                <div class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3">
+                                    <div class="flex items-center gap-3 overflow-hidden min-w-0">
+                                        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-md shrink-0">
                                             <ExternalLink size={16} />
                                         </div>
-                                        <span class="text-sm font-medium text-slate-200 truncate">{url}</span>
+                                        <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{url}</span>
                                     </div>
                                     <button
                                         onClick={() => handleRemoveWebhook(url)}
-                                        class="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors"
-                                        title="Remove Webhook"
+                                        class="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                                        title="Remove webhook endpoint"
                                     >
                                         <Trash2 size={16} />
                                     </button>
@@ -117,50 +139,49 @@ export function AuditWebhookPanel() {
                             )}
                         </For>
 
-                        <Show when={webhookUrls().length === 0 && !loading()}>
-                            <div class="py-12 flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-xl">
-                                <Globe size={48} class="opacity-20 mb-4" />
-                                <p>No audit webhooks configured yet.</p>
+                        <Show when={webhookUrls().length === 0}>
+                            <div class="py-10 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl">
+                                <Globe size={36} class="opacity-40 mb-3" />
+                                <p class="text-sm">No audit webhooks configured yet.</p>
                             </div>
                         </Show>
                     </div>
+                </Show>
 
-                    <div class="flex gap-3 pt-4 border-t border-slate-800">
-                        <input
-                            type="text"
-                            placeholder="https://your-api.com/webhook"
-                            class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
-                            value={newUrl()}
-                            onInput={(e) => setNewUrl(e.currentTarget.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
-                        />
-                        <button
-                            onClick={handleAddWebhook}
-                            disabled={saving() || !newUrl()}
-                            class="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20"
-                        >
-                            <Plus size={18} />
-                            Add Endpoint
-                        </button>
-                    </div>
+                <div class="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <input
+                        type="text"
+                        placeholder="https://your-api.com/webhook"
+                        class={`${formControl} flex-1`}
+                        value={newUrl()}
+                        onInput={(e) => setNewUrl(e.currentTarget.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
+                    />
+                    <button
+                        onClick={handleAddWebhook}
+                        disabled={saving() || !newUrl().trim()}
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
+                    >
+                        <Plus size={18} />
+                        Add Endpoint
+                    </button>
                 </div>
-            </Card>
+            </SettingsPanel>
 
-            <div class="bg-amber-900/10 border border-amber-900/20 rounded-xl p-6">
-                <div class="flex gap-4">
-                    <div class="p-3 bg-amber-600/20 rounded-lg h-fit text-amber-500">
-                        <Shield size={24} />
+            <Card tone="warning" class="border border-amber-200 dark:border-amber-800">
+                <div class="p-5 flex gap-4">
+                    <div class="p-3 bg-amber-100 dark:bg-amber-900/40 rounded-lg h-fit text-amber-600 dark:text-amber-300">
+                        <Shield size={22} />
                     </div>
                     <div>
-                        <h3 class="text-lg font-bold text-white mb-2">Security Note</h3>
-                        <p class="text-slate-400 text-sm leading-relaxed">
-                            Webhooks are dispatched asynchronously to ensure zero latency impact on operations.
-                            Each request includes the tamper-proof event payload, but endpoints should still
-                            verify source IP or implement an ingest secret for maximum security.
+                        <h3 class="text-base font-semibold text-amber-900 dark:text-amber-100 mb-1.5">Security Note</h3>
+                        <p class="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
+                            Audit webhooks are dispatched asynchronously to avoid blocking user operations.
+                            Endpoints should still verify source trust (for example via an ingest secret) before processing events.
                         </p>
                     </div>
                 </div>
-            </div>
+            </Card>
         </div>
     );
 }

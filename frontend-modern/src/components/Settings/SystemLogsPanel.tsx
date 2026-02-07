@@ -93,7 +93,7 @@ export const SystemLogsPanel: Component = () => {
         <div class="space-y-6">
             <SettingsPanel
                 title="System Logs"
-                description="View real-time system logs and download support bundles."
+                description="Stream real-time system logs and download support bundles."
                 icon={<Terminal class="w-5 h-5" strokeWidth={2} />}
                 bodyClass="space-y-4"
             >
@@ -173,7 +173,7 @@ export const SystemLogsPanel: Component = () => {
                 <div class="text-xs text-slate-500 dark:text-slate-400 flex justify-between px-1">
                     <span>Buffer: {logs().length} / {MAX_LOGS} lines</span>
                     <span class="flex items-center gap-2">
-                        <div class={`w-2 h-2 rounded-full ${isPaused() ? 'bg-amber-500' : 'bg-green-500 animate-pulse'}`}></div>
+                        <div class={`w-2 h-2 rounded-full ${isPaused() ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`}></div>
                         {isPaused() ? "Stream Paused" : "Live"}
                     </span>
                 </div>

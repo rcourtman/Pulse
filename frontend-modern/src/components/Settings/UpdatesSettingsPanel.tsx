@@ -33,7 +33,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
     <div class="space-y-6">
       <SettingsPanel
         title="Updates"
-        description="Version checking and automatic update configuration"
+        description="Manage version checks and automatic update preferences."
         icon={<RefreshCw class="w-5 h-5" strokeWidth={2} />}
         bodyClass="space-y-6"
       >
@@ -68,7 +68,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                           </span>
                         </Show>
                         <Show when={props.versionInfo()?.isSourceBuild}>
-                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300">
+                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
                             Source
                           </span>
                         </Show>
@@ -230,8 +230,8 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 <div class="px-5 py-4 border-b border-green-200 dark:border-green-800/50 bg-green-100/80 dark:bg-green-900/40">
                   <div class="flex items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
-                      <div class="p-2 bg-green-500 rounded-lg shadow-lg shadow-green-500/20">
-                        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <div class="p-2 bg-green-100 dark:bg-green-900/40 rounded-lg">
+                        <svg class="w-5 h-5 text-green-700 dark:text-green-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                         </svg>
                       </div>
@@ -553,17 +553,17 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                   }}
                   disabled={props.versionInfo()?.isSourceBuild}
                   class={`p-4 rounded-xl border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'rc'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                     : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                     }`}
                 >
                   <div class="flex items-center gap-3">
                     <div class={`p-2 rounded-lg ${props.updateChannel() === 'rc'
-                      ? 'bg-purple-100 dark:bg-purple-900/40'
+                      ? 'bg-blue-100 dark:bg-blue-900/40'
                       : 'bg-gray-100 dark:bg-gray-800'
                       }`}>
                       <svg class={`w-5 h-5 ${props.updateChannel() === 'rc'
-                        ? 'text-purple-600 dark:text-purple-400'
+                        ? 'text-blue-600 dark:text-blue-400'
                         : 'text-gray-500 dark:text-gray-400'
                         }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
@@ -571,7 +571,7 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                     </div>
                     <div>
                       <p class={`text-sm font-semibold ${props.updateChannel() === 'rc'
-                        ? 'text-purple-900 dark:text-purple-100'
+                        ? 'text-blue-900 dark:text-blue-100'
                         : 'text-gray-900 dark:text-gray-100'
                         }`}>Release Candidate</p>
                       <p class="text-xs text-gray-500 dark:text-gray-400">

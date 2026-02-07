@@ -283,7 +283,7 @@ export const ProLicensePanel: Component = () => {
                   <For each={formattedFeatures()}>
                     {(feature) => (
                       <li class="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                        <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                         {feature}
                       </li>
                     )}

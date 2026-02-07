@@ -38,7 +38,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
       {/* Appearance Card */}
       <SettingsPanel
         title="General"
-        description="Appearance and display preferences"
+        description="Manage appearance, layout, and default monitoring cadence."
         icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
         bodyClass="space-y-5"
       >
@@ -46,8 +46,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           <div class="flex items-center gap-3">
             {/* Animated theme icon */}
             <div class={`relative p-2.5 rounded-xl transition-all duration-300 ${props.darkMode()
-              ? 'bg-indigo-500 shadow-lg shadow-indigo-500/25'
-              : 'bg-amber-400 shadow-lg shadow-amber-500/25'
+              ? 'bg-gray-600 shadow-lg shadow-gray-500/20'
+              : 'bg-gray-400 shadow-lg shadow-gray-500/20'
               }`}>
               <div class="relative w-5 h-5">
                 <Sun class={`absolute inset-0 w-5 h-5 text-white transition-all duration-300 ${props.darkMode() ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'
@@ -79,7 +79,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         {/* Temperature Unit Selector */}
         <div class="flex items-center justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
           <div class="flex items-center gap-3">
-            <div class="p-2.5 rounded-xl bg-orange-400 shadow-lg shadow-orange-500/25">
+            <div class="p-2.5 rounded-xl bg-gray-500 shadow-lg shadow-gray-500/20">
               <Thermometer class="w-5 h-5 text-white" strokeWidth={2} />
             </div>
             <div class="text-sm text-gray-600 dark:text-gray-400">

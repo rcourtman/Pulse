@@ -1,5 +1,5 @@
 import { Component, createSignal, createMemo, onMount, Show, For } from 'solid-js';
-import { Card } from '@/components/shared/Card';
+import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACAPI } from '@/api/rbac';
 import type { Role, UserRoleAssignment, Permission } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
@@ -106,17 +106,11 @@ export const UserAssignmentsPanel: Component = () => {
 
     return (
         <div class="space-y-6">
-            <Card padding="lg" class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30">
-                            <Users class="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                        </div>
-                        <div>
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">User Access</h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">Manage user role assignments and view effective permissions</p>
-                        </div>
-                    </div>
+            <SettingsPanel
+                title="User Access"
+                description="Assign roles to users and review effective permissions."
+                icon={<Users class="w-5 h-5" />}
+                action={
                     <div class="relative">
                         <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
@@ -124,13 +118,15 @@ export const UserAssignmentsPanel: Component = () => {
                             placeholder="Search users..."
                             value={searchQuery()}
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                            class="pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-800/60"
+                            class="pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/40"
                         />
                     </div>
-                </div>
+                }
+                bodyClass="space-y-4"
+            >
 
                 <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
-                    <div class="p-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800 rounded-xl">
+                    <div class="p-4 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-xl">
                         <div class="flex flex-col sm:flex-row items-center gap-4">
                             <div class="flex-1">
                                 <h4 class="text-base font-semibold text-gray-900 dark:text-white">Centralized Access Control (Pro)</h4>
@@ -142,7 +138,7 @@ export const UserAssignmentsPanel: Component = () => {
                                 href="https://pulserelay.pro/"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                class="px-5 py-2.5 text-sm font-semibold bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                                class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                             >
                                 Upgrade to Pro
                             </a>
@@ -152,7 +148,7 @@ export const UserAssignmentsPanel: Component = () => {
 
                 <Show when={loading()}>
                     <div class="flex items-center justify-center py-8">
-                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-500" />
+                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
                     </div>
                 </Show>
 
@@ -199,7 +195,7 @@ export const UserAssignmentsPanel: Component = () => {
                                                     </Show>
                                                     <For each={assignment.roleIds}>
                                                         {(roleId) => (
-                                                            <span class="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
+                                                            <span class="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
                                                                 <Shield class="w-3 h-3" />
                                                                 {getRoleName(roleId)}
                                                             </span>
@@ -224,7 +220,7 @@ export const UserAssignmentsPanel: Component = () => {
                         </table>
                     </div>
                 </Show>
-            </Card>
+            </SettingsPanel>
 
             {/* Assignments Modal */}
             <Show when={showModal()}>
@@ -250,15 +246,15 @@ export const UserAssignmentsPanel: Component = () => {
                             {/* Role Selection */}
                             <div class="space-y-4">
                                 <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                    <Shield class="w-4 h-4 text-indigo-500" />
+                                    <Shield class="w-4 h-4 text-blue-500" />
                                     Select Roles
                                 </h4>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <For each={roles()}>
                                         {(role) => (
                                             <label class={`flex flex-col p-3 rounded-xl border transition-all cursor-pointer ${formRoleIds().includes(role.id)
-                                                ? 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800'
-                                                : 'bg-white border-gray-200 hover:border-indigo-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:border-indigo-900'
+                                                ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
+                                                : 'bg-white border-gray-200 hover:border-blue-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:border-blue-900'
                                                 }`}>
                                                 <div class="flex items-center justify-between mb-1">
                                                     <div class="flex items-center gap-2 shadow-sm">
@@ -266,7 +262,7 @@ export const UserAssignmentsPanel: Component = () => {
                                                             type="checkbox"
                                                             checked={formRoleIds().includes(role.id)}
                                                             onChange={() => toggleRole(role.id)}
-                                                            class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 dark:border-gray-600"
+                                                            class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 dark:border-gray-600"
                                                         />
                                                         <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                                             {role.name}
@@ -289,11 +285,11 @@ export const UserAssignmentsPanel: Component = () => {
                             <div class="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                                 <div class="flex items-center justify-between">
                                     <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                        <BadgeCheck class="w-4 h-4 text-teal-500" />
+                                        <BadgeCheck class="w-4 h-4 text-blue-500" />
                                         Effective Permissions Preview
                                     </h4>
                                     <Show when={loadingPermissions()}>
-                                        <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-teal-500" />
+                                        <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
                                     </Show>
                                 </div>
                                 <div class="bg-gray-50 dark:bg-gray-950 rounded-xl p-4 border border-gray-100 dark:border-gray-800">
@@ -306,9 +302,9 @@ export const UserAssignmentsPanel: Component = () => {
                                         <For each={userPermissions()}>
                                             {(perm) => (
                                                 <span class="inline-flex items-center rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-300 border border-gray-200 dark:border-gray-700 shadow-sm">
-                                                    <span class="text-indigo-600 dark:text-indigo-400">{perm.action}</span>
+                                                    <span class="text-blue-600 dark:text-blue-400">{perm.action}</span>
                                                     <span class="mx-1 text-gray-400">:</span>
-                                                    <span class="text-teal-600 dark:text-teal-400">{perm.resource}</span>
+                                                    <span class="text-blue-600 dark:text-blue-400">{perm.resource}</span>
                                                 </span>
                                             )}
                                         </For>
@@ -332,7 +328,7 @@ export const UserAssignmentsPanel: Component = () => {
                                 type="button"
                                 onClick={handleSave}
                                 disabled={saving()}
-                                class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-2 text-sm font-bold text-white shadow-lg shadow-indigo-200 dark:shadow-none transition-all hover:bg-indigo-700 hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                                class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 {saving() ? 'Applying...' : 'Save Changes'}
                             </button>

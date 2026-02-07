@@ -37,6 +37,7 @@ import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
 import { BackupsSettingsPanel } from './BackupsSettingsPanel';
 import { ProLicensePanel } from './ProLicensePanel';
 import { RelaySettingsPanel } from './RelaySettingsPanel';
+import SettingsPanel from '@/components/shared/SettingsPanel';
 import RadioTower from 'lucide-solid/icons/radio-tower';
 import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
@@ -90,7 +91,15 @@ import { eventBus } from '@/stores/events';
 import { updateDockerUpdateActionsSetting } from '@/stores/systemSettings';
 
 import { updateStore } from '@/stores/updates';
-import { isPro, loadLicenseStatus } from '@/stores/license';
+import { hasFeature, licenseLoaded, loadLicenseStatus } from '@/stores/license';
+import {
+  deriveAgentFromPath,
+  deriveTabFromPath,
+  deriveTabFromQuery,
+  settingsTabPath,
+  type AgentKey,
+  type SettingsTab,
+} from './settingsRouting';
 
 // Type definitions
 interface DiscoveredServer {
@@ -249,86 +258,53 @@ interface DiscoveryScanStatus {
   errors?: string[];
 }
 
-type SettingsTab =
-  | 'proxmox'
-  | 'docker'
-  | 'hosts'
-  | 'agents'
-  | 'system-general'
-  | 'system-network'
-  | 'system-updates'
-  | 'system-backups'
-  | 'system-ai'
-  | 'system-relay'
-  | 'system-logs'
-  | 'system-pro'
-  | 'api'
-  | 'security-overview'
-  | 'security-auth'
-  | 'security-sso'
-  | 'security-roles'
-  | 'security-users'
-  | 'security-audit'
-  | 'diagnostics'
-  | 'updates'
-  | 'reporting'
-  | 'security-webhooks'
-  | 'system-logs';
-
-type AgentKey = 'pve' | 'pbs' | 'pmg';
-
 const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
   proxmox: {
-    title: 'Proxmox',
+    title: 'Infrastructure',
     description:
-      'Monitor your Proxmox Virtual Environment, Backup Server, and Mail Gateway infrastructure.',
+      'Manage infrastructure integrations for Proxmox VE, Backup Server, and Mail Gateway.',
   },
   docker: {
-    title: 'Docker',
+    title: 'Docker Workloads',
     description:
-      'Monitor Docker hosts, containers, images, and volumes across your infrastructure.',
-  },
-  hosts: {
-    title: 'Hosts',
-    description: 'Monitor Linux, macOS, and Windows machines—servers, desktops, and laptops.',
+      'Configure Docker-specific workload controls and update behavior across monitored hosts.',
   },
   agents: {
-    title: 'Agents',
-    description: 'Install and manage the unified Pulse agent for host and Docker monitoring.',
+    title: 'Unified Agents',
+    description: 'Install and manage host, Docker, and Kubernetes agents from one workflow.',
   },
   'system-general': {
     title: 'General Settings',
-    description: 'Configure appearance preferences and UI behavior.',
+    description: 'Configure appearance, layout, and default monitoring cadence.',
   },
   'system-network': {
     title: 'Network Settings',
-    description: 'Manage CORS, embedding, and network discovery configuration.',
+    description: 'Configure discovery, CORS, embedding, and webhook network boundaries.',
   },
   'system-updates': {
     title: 'Updates',
-    description:
-      'Check for updates, configure update channels, and manage automatic update checks.',
+    description: 'Manage version checks, update channels, and automatic update behavior.',
   },
   'system-backups': {
-    title: 'Backup Polling',
-    description: 'Control how often Pulse queries Proxmox for backup tasks and snapshots.',
+    title: 'Backups',
+    description: 'Manage backup polling plus configuration export and import workflows.',
   },
   'system-ai': {
-    title: 'AI',
-    description: 'Configure AI providers, models, Pulse Assistant, and Patrol.',
+    title: 'AI Settings',
+    description: 'Configure AI providers, model defaults, Pulse Assistant, and Patrol automation.',
   },
   'system-relay': {
     title: 'Remote Access',
-    description: 'Connect to the Pulse relay for mobile app access to your infrastructure.',
+    description: 'Configure Pulse relay connectivity for secure remote access.',
   },
   'system-pro': {
     title: 'Pulse Pro',
     description: 'Manage license activation and Pulse Pro feature access.',
   },
   api: {
-    title: 'API access',
+    title: 'API Access',
     description:
-      'Generate scoped tokens and manage automation credentials for agents and integrations.',
+      'Generate and manage scoped tokens for agents, automation, and integrations.',
   },
   'security-overview': {
     title: 'Security Overview',
@@ -363,13 +339,9 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     description:
       'Inspect discovery scans, connection health, and runtime metrics for troubleshooting.',
   },
-  updates: {
-    title: 'Update History',
-    description: 'Review past software updates, rollback events, and upgrade audit logs.',
-  },
   reporting: {
-    title: 'Detailed Reporting',
-    description: 'Generate and export comprehensive infrastructure reports in PDF and CSV formats.',
+    title: 'Reporting',
+    description: 'Generate and export infrastructure reports in PDF and CSV formats.',
   },
   'system-logs': {
     title: 'System Logs',
@@ -415,67 +387,6 @@ const Settings: Component<SettingsProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const deriveTabFromPath = (path: string): SettingsTab => {
-    if (path.includes('/settings/proxmox')) return 'proxmox';
-    if (path.includes('/settings/agent-hub')) return 'proxmox';
-    if (path.includes('/settings/docker')) return 'docker';
-    if (path.includes('/settings/containers')) return 'agents';
-    if (
-      path.includes('/settings/hosts') ||
-      path.includes('/settings/host-agents') ||
-      path.includes('/settings/servers') ||
-      path.includes('/settings/linuxServers') ||
-      path.includes('/settings/windowsServers') ||
-      path.includes('/settings/macServers') ||
-      path.includes('/settings/agents')
-    )
-      return 'agents';
-    if (path.includes('/settings/system-general')) return 'system-general';
-    if (path.includes('/settings/system-network')) return 'system-network';
-    if (path.includes('/settings/system-updates')) return 'system-updates';
-    if (path.includes('/settings/system-backups')) return 'system-backups';
-    if (path.includes('/settings/system-ai')) return 'system-ai';
-    if (path.includes('/settings/system-relay')) return 'system-relay';
-    if (path.includes('/settings/system-pro')) return 'system-pro';
-    if (path.includes('/settings/system-logs')) return 'system-logs';
-    // Generic /settings/system fallback must come AFTER specific system-* paths
-    // because /settings/system-logs contains /settings/system as a substring
-    if (path.includes('/settings/system')) return 'system-general';
-    if (path.includes('/settings/api')) return 'api';
-    if (path.includes('/settings/security-overview')) return 'security-overview';
-    if (path.includes('/settings/security-auth')) return 'security-auth';
-    if (path.includes('/settings/security-sso')) return 'security-sso';
-    if (path.includes('/settings/security-roles')) return 'security-roles';
-    if (path.includes('/settings/security-users')) return 'security-users';
-    if (path.includes('/settings/security-audit')) return 'security-audit';
-    if (path.includes('/settings/security-webhooks')) return 'security-webhooks';
-    // Generic /settings/security fallback must come AFTER specific security-* paths
-    if (path.includes('/settings/security')) return 'security-overview';
-    if (path.includes('/settings/updates')) return 'updates';
-    if (path.includes('/settings/diagnostics')) return 'diagnostics';
-    if (path.includes('/settings/reporting')) return 'reporting';
-    // Legacy platform paths map to the Proxmox tab
-    if (
-      path.includes('/settings/pve') ||
-      path.includes('/settings/pbs') ||
-      path.includes('/settings/pmg') ||
-      path.includes('/settings/docker') ||
-      path.includes('/settings/linuxServers') ||
-      path.includes('/settings/windowsServers') ||
-      path.includes('/settings/macServers')
-    ) {
-      return 'proxmox';
-    }
-    return 'proxmox';
-  };
-
-  const deriveAgentFromPath = (path: string): AgentKey | null => {
-    if (path.includes('/settings/pve')) return 'pve';
-    if (path.includes('/settings/pbs')) return 'pbs';
-    if (path.includes('/settings/pmg')) return 'pmg';
-    return null;
-  };
-
   const [currentTab, setCurrentTab] = createSignal<SettingsTab>(
     deriveTabFromPath(location.pathname),
   );
@@ -484,9 +395,9 @@ const Settings: Component<SettingsProps> = (props) => {
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
 
   const agentPaths: Record<AgentKey, string> = {
-    pve: '/settings/pve',
-    pbs: '/settings/pbs',
-    pmg: '/settings/pmg',
+    pve: '/settings/infrastructure/pve',
+    pbs: '/settings/infrastructure/pbs',
+    pmg: '/settings/infrastructure/pmg',
   };
 
   const handleSelectAgent = (agent: AgentKey) => {
@@ -504,7 +415,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (tab === 'proxmox' && deriveAgentFromPath(location.pathname) === null) {
       setSelectedAgent('pve');
     }
-    const targetPath = `/settings/${tab}`;
+    const targetPath = settingsTabPath(tab);
     if (location.pathname !== targetPath) {
       navigate(targetPath, { scroll: false });
       return;
@@ -523,18 +434,32 @@ const Settings: Component<SettingsProps> = (props) => {
   // Keep tab state in sync with URL and handle /settings redirect without flicker
   createEffect(
     on(
-      () => location.pathname,
-      (path) => {
+      () => [location.pathname, location.search] as const,
+      ([path, search]) => {
         if (path === '/settings' || path === '/settings/') {
-          if (currentTab() !== 'proxmox') {
-            setCurrentTab('proxmox');
+          const queryTab = deriveTabFromQuery(search);
+          const resolvedTab = queryTab ?? 'proxmox';
+
+          if (queryTab) {
+            const target = settingsTabPath(resolvedTab);
+            if (target !== path) {
+              navigate(target, { replace: true, scroll: false });
+              return;
+            }
           }
-          setSelectedAgent('pve');
+
+          if (currentTab() !== resolvedTab) {
+            setCurrentTab(resolvedTab);
+          }
+
+          if (resolvedTab === 'proxmox') {
+            setSelectedAgent('pve');
+          }
           return;
         }
 
         if (path.startsWith('/settings/agent-hub')) {
-          navigate(path.replace('/settings/agent-hub', '/settings/proxmox'), {
+          navigate(path.replace('/settings/agent-hub', '/settings/infrastructure'), {
             replace: true,
             scroll: false,
           });
@@ -542,7 +467,7 @@ const Settings: Component<SettingsProps> = (props) => {
         }
 
         if (path.startsWith('/settings/servers')) {
-          navigate(path.replace('/settings/servers', '/settings/hosts'), {
+          navigate(path.replace('/settings/servers', '/settings/infrastructure'), {
             replace: true,
             scroll: false,
           });
@@ -550,7 +475,7 @@ const Settings: Component<SettingsProps> = (props) => {
         }
 
         if (path.startsWith('/settings/containers')) {
-          navigate(path.replace('/settings/containers', '/settings/docker'), {
+          navigate(path.replace('/settings/containers', '/settings/workloads/docker'), {
             replace: true,
             scroll: false,
           });
@@ -562,7 +487,7 @@ const Settings: Component<SettingsProps> = (props) => {
           path.startsWith('/settings/windowsServers') ||
           path.startsWith('/settings/macServers')
         ) {
-          navigate('/settings/hosts', {
+          navigate('/settings/workloads', {
             replace: true,
             scroll: false,
           });
@@ -899,155 +824,208 @@ const Settings: Component<SettingsProps> = (props) => {
     });
   });
 
-  const tabGroups: {
-    id: 'platforms' | 'operations' | 'system' | 'security';
+  type SettingsNavGroupId = 'resources' | 'integrations' | 'operations' | 'system' | 'security';
+  type SettingsNavItem = {
+    id: SettingsTab;
     label: string;
-    items: {
-      id: SettingsTab;
-      label: string;
-      icon: Component<{ class?: string; strokeWidth?: number }>;
-      iconProps?: { strokeWidth?: number };
-      disabled?: boolean;
-      badge?: string;
-      features?: string[];
-      permissions?: string[];
-    }[];
-  }[] = [
-      {
-        id: 'platforms',
-        label: 'Platforms',
-        items: [
-          { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
-          { id: 'agents', label: 'Agents', icon: Bot, iconProps: { strokeWidth: 2 } },
-          { id: 'docker', label: 'Docker', icon: Container, iconProps: { strokeWidth: 2 } },
-        ],
-      },
-      {
-        id: 'operations',
-        label: 'Operations',
-        items: [
-          { id: 'api', label: 'API Tokens', icon: BadgeCheck },
-          {
-            id: 'diagnostics',
-            label: 'Diagnostics',
-            icon: Activity,
-            iconProps: { strokeWidth: 2 },
-          },
-        ],
-      },
-      {
-        id: 'system',
-        label: 'System',
-        items: [
-          {
-            id: 'system-general',
-            label: 'General',
-            icon: Sliders,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'system-network',
-            label: 'Network',
-            icon: Network,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'system-updates',
-            label: 'Updates',
-            icon: RefreshCw,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'system-backups',
-            label: 'Backups',
-            icon: Clock,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'system-ai',
-            label: 'AI',
-            icon: Sparkles,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'system-relay',
-            label: 'Remote Access',
-            icon: RadioTower,
-            iconProps: { strokeWidth: 2 },
-            features: ['relay'],
-          },
-          {
-            id: 'system-pro',
-            label: 'Pulse Pro',
-            icon: PulseLogoIcon,
-          },
-          {
-            id: 'reporting',
-            label: 'Reporting',
-            icon: FileText,
-            iconProps: { strokeWidth: 2 },
-            features: ['advanced_reporting'],
-          },
-          {
-            id: 'system-logs',
-            label: 'System Logs',
-            icon: Terminal,
-            iconProps: { strokeWidth: 2 },
-          },
-        ],
-      },
-      {
-        id: 'security',
-        label: 'Security',
-        items: [
-          {
-            id: 'security-overview',
-            label: 'Overview',
-            icon: Shield,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'security-auth',
-            label: 'Authentication',
-            icon: Lock,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'security-sso',
-            label: 'Single Sign-On',
-            icon: Key,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'security-roles',
-            label: 'Roles',
-            icon: ShieldCheck,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'security-users',
-            label: 'Users',
-            icon: Users,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'security-audit',
-            label: 'Audit Log',
-            icon: Activity,
-            iconProps: { strokeWidth: 2 },
-          },
-          {
-            id: 'security-webhooks',
-            label: 'Webhooks',
-            icon: Globe,
-            iconProps: { strokeWidth: 2 },
-            features: ['audit_logging'],
-          },
-        ],
-      },
-    ];
+    icon: Component<{ class?: string; strokeWidth?: number }>;
+    iconProps?: { strokeWidth?: number };
+    disabled?: boolean;
+    badge?: string;
+    features?: string[];
+    permissions?: string[];
+  };
+  type SettingsNavGroup = {
+    id: SettingsNavGroupId;
+    label: string;
+    items: SettingsNavItem[];
+  };
 
-  const flatTabs = tabGroups.flatMap((group) => group.items);
+  const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
+    'system-relay': ['relay'],
+    reporting: ['advanced_reporting'],
+    'security-webhooks': ['audit_logging'],
+  };
+
+  const isFeatureLocked = (features?: string[]): boolean => {
+    if (!features || features.length === 0) return false;
+    if (!licenseLoaded()) return false;
+    return !features.every((feature) => hasFeature(feature));
+  };
+
+  const isTabLocked = (tab: SettingsTab): boolean => {
+    const requiredFeatures = tabFeatureRequirements[tab];
+    return isFeatureLocked(requiredFeatures);
+  };
+
+  const baseTabGroups: SettingsNavGroup[] = [
+    {
+      id: 'resources',
+      label: 'Resources',
+      items: [
+        { id: 'proxmox', label: 'Infrastructure', icon: ProxmoxIcon },
+        { id: 'agents', label: 'Workloads', icon: Bot, iconProps: { strokeWidth: 2 } },
+        { id: 'docker', label: 'Docker', icon: Container, iconProps: { strokeWidth: 2 } },
+      ],
+    },
+    {
+      id: 'integrations',
+      label: 'Integrations',
+      items: [{ id: 'api', label: 'API Access', icon: BadgeCheck }],
+    },
+    {
+      id: 'operations',
+      label: 'Operations',
+      items: [
+        {
+          id: 'diagnostics',
+          label: 'Diagnostics',
+          icon: Activity,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'reporting',
+          label: 'Reporting',
+          icon: FileText,
+          iconProps: { strokeWidth: 2 },
+          features: ['advanced_reporting'],
+        },
+        {
+          id: 'system-logs',
+          label: 'System Logs',
+          icon: Terminal,
+          iconProps: { strokeWidth: 2 },
+        },
+      ],
+    },
+    {
+      id: 'system',
+      label: 'System',
+      items: [
+        {
+          id: 'system-general',
+          label: 'General',
+          icon: Sliders,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'system-network',
+          label: 'Network',
+          icon: Network,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'system-updates',
+          label: 'Updates',
+          icon: RefreshCw,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'system-backups',
+          label: 'Backups',
+          icon: Clock,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'system-ai',
+          label: 'AI',
+          icon: Sparkles,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'system-relay',
+          label: 'Remote Access',
+          icon: RadioTower,
+          iconProps: { strokeWidth: 2 },
+          features: ['relay'],
+        },
+        {
+          id: 'system-pro',
+          label: 'Pulse Pro',
+          icon: PulseLogoIcon,
+        },
+      ],
+    },
+    {
+      id: 'security',
+      label: 'Security',
+      items: [
+        {
+          id: 'security-overview',
+          label: 'Overview',
+          icon: Shield,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'security-auth',
+          label: 'Authentication',
+          icon: Lock,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'security-sso',
+          label: 'Single Sign-On',
+          icon: Key,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'security-roles',
+          label: 'Roles',
+          icon: ShieldCheck,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'security-users',
+          label: 'Users',
+          icon: Users,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'security-audit',
+          label: 'Audit Log',
+          icon: Activity,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'security-webhooks',
+          label: 'Audit Webhooks',
+          icon: Globe,
+          iconProps: { strokeWidth: 2 },
+          features: ['audit_logging'],
+        },
+      ],
+    },
+  ];
+
+  const tabGroups = createMemo<SettingsNavGroup[]>(() =>
+    baseTabGroups.map((group) => ({
+      ...group,
+      items: group.items.map((item) => {
+        const lockedByFeature = isFeatureLocked(item.features);
+        return {
+          ...item,
+          disabled: item.disabled || lockedByFeature,
+          badge: lockedByFeature ? 'Pro' : item.badge,
+        };
+      }),
+    })),
+  );
+
+  const flatTabs = createMemo(() => tabGroups().flatMap((group) => group.items));
+
+  createEffect(() => {
+    if (!licenseLoaded()) {
+      return;
+    }
+    const tab = activeTab();
+    if (!isTabLocked(tab)) {
+      return;
+    }
+    if (tab !== 'system-pro') {
+      notificationStore.info('This settings section requires Pulse Pro.');
+      setActiveTab('system-pro');
+    }
+  });
 
   onMount(() => {
     loadLicenseStatus();
@@ -2241,11 +2219,11 @@ const Settings: Component<SettingsProps> = (props) => {
               activeTab() === 'system-backups')
           }
         >
-          <div class="bg-amber-50 dark:bg-amber-900/30 border-l-4 border-amber-500 dark:border-amber-400 rounded-r-lg shadow-sm p-4">
+          <div class="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 rounded-lg shadow-sm p-4">
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div class="flex items-start gap-3">
                 <svg
-                  class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                  class="w-5 h-5 text-amber-500 dark:text-amber-300 flex-shrink-0 mt-0.5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -2258,8 +2236,8 @@ const Settings: Component<SettingsProps> = (props) => {
                   />
                 </svg>
                 <div>
-                  <p class="font-semibold text-amber-900 dark:text-amber-100">Unsaved changes</p>
-                  <p class="text-sm text-amber-700 dark:text-amber-200 mt-0.5">
+                  <p class="font-semibold text-gray-900 dark:text-gray-100">Unsaved changes</p>
+                  <p class="text-sm text-gray-600 dark:text-gray-300 mt-0.5">
                     Your changes will be lost if you navigate away
                   </p>
                 </div>
@@ -2267,14 +2245,14 @@ const Settings: Component<SettingsProps> = (props) => {
               <div class="flex w-full sm:w-auto gap-3">
                 <button
                   type="button"
-                  class="flex-1 sm:flex-initial px-5 py-2.5 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm transition-colors"
+                  class="flex-1 sm:flex-initial px-5 py-2.5 text-sm font-medium border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-100 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/60 shadow-sm transition-colors"
                   onClick={saveSettings}
                 >
                   Save Changes
                 </button>
                 <button
                   type="button"
-                  class="px-4 py-2.5 text-sm font-medium text-amber-700 dark:text-amber-200 hover:underline transition-colors"
+                  class="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:underline transition-colors"
                   onClick={() => {
                     window.location.reload();
                   }}
@@ -2338,7 +2316,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 </button>
               </Show>
               <div id="settings-sidebar-menu" class="space-y-5">
-                <For each={tabGroups}>
+                <For each={tabGroups()}>
                   {(group) => (
                     <div class="space-y-2">
                       <Show when={!sidebarCollapsed()}>
@@ -2366,13 +2344,17 @@ const Settings: Component<SettingsProps> = (props) => {
                                   if (item.disabled) return;
                                   setActiveTab(item.id);
                                 }}
-                                title={sidebarCollapsed() ? item.label : undefined}
+                                title={
+                                  sidebarCollapsed()
+                                    ? `${item.label}${item.badge ? ` (${item.badge})` : ''}`
+                                    : undefined
+                                }
                               >
                                 <item.icon class="w-4 h-4" {...(item.iconProps || {})} />
                                 <Show when={!sidebarCollapsed()}>
                                   <span class="truncate">{item.label}</span>
-                                  <Show when={item.badge && !isPro()}>
-                                    <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white rounded-md shadow-sm">
+                                  <Show when={item.badge}>
+                                    <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gray-500 text-white rounded-md shadow-sm">
                                       {item.badge}
                                     </span>
                                   </Show>
@@ -2390,13 +2372,13 @@ const Settings: Component<SettingsProps> = (props) => {
           </div>
 
           <div class="flex-1 overflow-hidden">
-            <Show when={flatTabs.length > 0}>
+            <Show when={flatTabs().length > 0}>
               <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
                 <div
                   class="flex gap-1 px-2 py-1 w-full overflow-x-auto"
                   style="-webkit-overflow-scrolling: touch;"
                 >
-                  <For each={flatTabs}>
+                  <For each={flatTabs()}>
                     {(tab) => {
                       const isActive = () => activeTab() === tab.id;
                       const disabled = tab.disabled;
@@ -2459,7 +2441,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       </p>
                       <button
                         type="button"
-                        onClick={() => navigate('/settings/agents')}
+                        onClick={() => navigate('/settings/workloads')}
                         class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
                       >
                         Install agent →
@@ -3253,7 +3235,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         >
                           <div class="text-center py-6 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
                             <svg
-                              class="h-8 w-8 mx-auto mb-2 animate-pulse text-purple-500"
+                              class="h-8 w-8 mx-auto mb-2 animate-pulse text-gray-400"
                               viewBox="0 0 24 24"
                               fill="none"
                               stroke="currentColor"
@@ -3268,7 +3250,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={discoveredNodes().filter((n) => n.type === 'pmg')}>
                           {(server) => (
                             <div
-                              class="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
+                              class="bg-gray-50 dark:bg-gray-800/50 border-l-4 border-gray-400 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
                               onClick={() => {
                                 setEditingNode(null);
                                 setCurrentNodeType('pmg');
@@ -3294,7 +3276,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                     fill="none"
                                     stroke="currentColor"
                                     stroke-width="2"
-                                    class="text-purple-500 flex-shrink-0 mt-0.5"
+                                    class="text-gray-500 flex-shrink-0 mt-0.5"
                                   >
                                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                                     <polyline points="22,6 12,13 2,6"></polyline>
@@ -3349,63 +3331,61 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* Docker Tab */}
               <Show when={activeTab() === 'docker'}>
-                {/* Docker Settings Card */}
-                <Card padding="lg" class="mb-6">
-                  <div class="space-y-4">
-                    <div class="space-y-1">
-                      <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Docker Settings</h3>
-                      <p class="text-sm text-gray-600 dark:text-gray-400">
-                        Server-wide settings for Docker container management.
+                <SettingsPanel
+                  title="Docker Workload Controls"
+                  description="Configure server-wide Docker workload behavior."
+                  icon={<Container class="w-5 h-5" strokeWidth={2} />}
+                >
+                  <div class="flex items-start justify-between gap-4 p-4 rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                    <div class="flex-1 space-y-1">
+                      <div class="flex items-center gap-2">
+                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          Hide Docker Update Buttons
+                        </span>
+                        <Show when={disableDockerUpdateActionsLocked()}>
+                          <span
+                            class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                            title="Locked by environment variable PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"
+                          >
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            ENV
+                          </span>
+                        </Show>
+                      </div>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        When enabled, the "Update" button on Docker containers is hidden across all views.
+                        Update detection still runs, so available updates remain visible.
+                      </p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Environment variable override:{' '}
+                        <code class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                          PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
+                        </code>
                       </p>
                     </div>
-
-                    {/* Hide Docker Update Buttons Toggle */}
-                    <div class="flex items-start justify-between gap-4 p-4 rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
-                      <div class="flex-1 space-y-1">
-                        <div class="flex items-center gap-2">
-                          <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            Hide Docker Update Buttons
-                          </span>
-                          <Show when={disableDockerUpdateActionsLocked()}>
-                            <span class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title="Locked by environment variable PULSE_DISABLE_DOCKER_UPDATE_ACTIONS">
-                              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                              </svg>
-                              ENV
-                            </span>
-                          </Show>
-                        </div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                          When enabled, the "Update" button on Docker containers will be hidden across all views.
-                          Update detection will still work, allowing you to see which containers have updates available.
-                          Use this in production environments where you prefer Pulse to be read-only.
-                        </p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Can also be set via environment variable: <code class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true</code>
-                        </p>
-                      </div>
-                      <div class="flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleDisableDockerUpdateActionsChange(!disableDockerUpdateActions())}
-                          disabled={disableDockerUpdateActionsLocked() || savingDockerUpdateActions()}
-                          class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${disableDockerUpdateActions()
-                            ? 'bg-blue-600'
-                            : 'bg-gray-300 dark:bg-gray-600'
-                            } ${disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          role="switch"
-                          aria-checked={disableDockerUpdateActions()}
-                          title={disableDockerUpdateActionsLocked() ? 'Locked by environment variable' : undefined}
-                        >
-                          <span
-                            class={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${disableDockerUpdateActions() ? 'translate-x-6' : 'translate-x-1'
-                              }`}
-                          />
-                        </button>
-                      </div>
+                    <div class="flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleDisableDockerUpdateActionsChange(!disableDockerUpdateActions())}
+                        disabled={disableDockerUpdateActionsLocked() || savingDockerUpdateActions()}
+                        class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${disableDockerUpdateActions()
+                          ? 'bg-blue-600'
+                          : 'bg-gray-300 dark:bg-gray-600'
+                          } ${disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        role="switch"
+                        aria-checked={disableDockerUpdateActions()}
+                        title={disableDockerUpdateActionsLocked() ? 'Locked by environment variable' : undefined}
+                      >
+                        <span
+                          class={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${disableDockerUpdateActions() ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                        />
+                      </button>
                     </div>
                   </div>
-                </Card>
+                </SettingsPanel>
               </Show>
 
               {/* System Logs Tab */}

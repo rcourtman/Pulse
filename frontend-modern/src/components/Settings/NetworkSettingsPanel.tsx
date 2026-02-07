@@ -95,7 +95,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
       {/* Main Network Card */}
       <SettingsPanel
         title="Network"
-        description="Discovery, CORS, and embedding settings"
+        description="Configure discovery, CORS, embedding, and webhook network boundaries."
         icon={<Network class="w-5 h-5" strokeWidth={2} />}
         bodyClass="space-y-8"
       >

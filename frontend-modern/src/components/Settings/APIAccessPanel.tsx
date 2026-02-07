@@ -14,7 +14,7 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
     <div class="space-y-6">
       <SettingsPanel
         title="API Access"
-        description="Generate scoped tokens for agents and automation"
+        description="Generate and manage scoped tokens for agents and automation."
         icon={<BadgeCheck class="w-5 h-5" strokeWidth={2} />}
       >
         <div class="space-y-3">

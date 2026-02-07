@@ -128,7 +128,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
       >
         <SettingsPanel
           title="Authentication"
-          description="Password management and credential rotation"
+          description="Manage password authentication and credential rotation."
           icon={<Lock class="w-5 h-5" strokeWidth={2} />}
         >
           {/* Content */}

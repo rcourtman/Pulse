@@ -310,8 +310,8 @@ export default function AuditLogPanel() {
     };
 
     const getEventIcon = (_event: string, success: boolean) => {
-        if (!success) return <XCircle class="w-4 h-4 text-red-500" />;
-        return <CheckCircle class="w-4 h-4 text-green-500" />;
+        if (!success) return <XCircle class="w-4 h-4 text-rose-400" />;
+        return <CheckCircle class="w-4 h-4 text-emerald-400" />;
     };
 
     const getEventTypeBadge = (event: string) => {
@@ -320,7 +320,7 @@ export default function AuditLogPanel() {
             logout: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
             config_change: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
             startup: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-            oidc_token_refresh: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+            oidc_token_refresh: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
         };
         return colors[event] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
     };
@@ -447,7 +447,7 @@ export default function AuditLogPanel() {
             {/* Header */}
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <Shield class="w-6 h-6 text-indigo-500" />
+                    <Shield class="w-6 h-6 text-gray-500" />
                     <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Audit Log</h2>
                 </div>
                 <div class="flex items-center gap-2">
@@ -462,7 +462,7 @@ export default function AuditLogPanel() {
                     <button
                         onClick={() => verifyAllEvents({ showToast: true })}
                         disabled={!isPersistent() || loading() || verifyingAll() || !hasSignedEvents()}
-                        class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-200 bg-indigo-50 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/60 disabled:opacity-50"
+                        class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-50"
                     >
                         <CheckCircle class="w-4 h-4" />
                         {verifyAllLabel()}
@@ -503,7 +503,7 @@ export default function AuditLogPanel() {
 
             {/* Upgrade CTA */}
             <Show when={licenseLoaded() && !hasFeature('audit_logging') && !loading()}>
-                <div class="p-6 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl">
+                <div class="p-6 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-xl">
                     <div class="flex flex-col sm:flex-row items-center gap-4">
                         <div class="flex-1">
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Audit Logging</h3>
@@ -514,7 +514,7 @@ export default function AuditLogPanel() {
                         <a
                             href="https://pulserelay.pro/"
                             target="_blank"
-                            class="px-5 py-2.5 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                            class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
                             Upgrade to Pro
                         </a>
@@ -581,7 +581,7 @@ export default function AuditLogPanel() {
                             setPageOffset(0);
                             void fetchAuditEvents({ offset: 0 });
                         }}
-                        class="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+                        class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
                     >
                         Apply
                     </button>
@@ -720,7 +720,7 @@ export default function AuditLogPanel() {
             {/* Loading State */}
             <Show when={loading()}>
                 <div class="flex items-center justify-center py-12">
-                    <RefreshCw class="w-8 h-8 text-indigo-500 animate-spin" />
+                    <RefreshCw class="w-8 h-8 text-blue-500 animate-spin" />
                 </div>
             </Show>
 
@@ -819,7 +819,7 @@ export default function AuditLogPanel() {
                                                             <button
                                                                 onClick={() => verifyEvent(event)}
                                                                 disabled={verifying()[event.id]}
-                                                                class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+                                                                class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
                                                             >
                                                                 Verify
                                                             </button>
@@ -844,7 +844,7 @@ export default function AuditLogPanel() {
                             when={activeFilterCount() > 0}
                             fallback={<Shield class="w-12 h-12 text-gray-300 dark:text-gray-600 mb-4" />}
                         >
-                            <ShieldAlert class="w-12 h-12 text-indigo-300 dark:text-indigo-900 mb-4" />
+                            <ShieldAlert class="w-12 h-12 text-blue-300 dark:text-blue-900 mb-4" />
                         </Show>
                         <h3 class="text-lg font-medium text-gray-900 dark:text-white">No audit events found</h3>
                         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -862,7 +862,7 @@ export default function AuditLogPanel() {
                                     setPageOffset(0);
                                     void fetchAuditEvents({ offset: 0 });
                                 }}
-                                class="mt-6 px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                                class="mt-6 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30"
                             >
                                 Clear all filters
                             </button>
