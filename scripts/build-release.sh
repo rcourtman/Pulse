@@ -19,12 +19,41 @@ RELEASE_DIR="release"
 
 echo "Building Pulse v${VERSION}..."
 
-# Optional public key embedding for license validation
+# Require public key embedding for release-grade license validation.
+# Explicitly opt out with PULSE_ALLOW_MISSING_LICENSE_KEY=true (not recommended).
 LICENSE_LDFLAGS=""
-if [[ -n "${PULSE_LICENSE_PUBLIC_KEY:-}" ]]; then
-    LICENSE_LDFLAGS="-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"
+if [[ -z "${PULSE_LICENSE_PUBLIC_KEY:-}" ]]; then
+    if [[ "${PULSE_ALLOW_MISSING_LICENSE_KEY:-false}" == "true" ]]; then
+        echo "Warning: PULSE_LICENSE_PUBLIC_KEY not set; continuing because PULSE_ALLOW_MISSING_LICENSE_KEY=true."
+    else
+        echo "Error: PULSE_LICENSE_PUBLIC_KEY is required for release builds." >&2
+        echo "Set PULSE_ALLOW_MISSING_LICENSE_KEY=true only for local non-release debugging." >&2
+        exit 1
+    fi
 else
-    echo "Warning: PULSE_LICENSE_PUBLIC_KEY not set; Pulse Pro license activation will fail for release binaries."
+    decoded_key_len=$(printf '%s' "${PULSE_LICENSE_PUBLIC_KEY}" | openssl base64 -d -A 2>/dev/null | wc -c | tr -d ' ')
+    if [[ "${decoded_key_len}" != "32" ]]; then
+        echo "Error: PULSE_LICENSE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)." >&2
+        exit 1
+    fi
+
+    if [[ -n "${PULSE_LICENSE_PUBLIC_KEY_FINGERPRINT:-}" ]]; then
+        expected_fingerprint="${PULSE_LICENSE_PUBLIC_KEY_FINGERPRINT#SHA256:}"
+        actual_fingerprint=$(printf '%s' "${PULSE_LICENSE_PUBLIC_KEY}" | openssl base64 -d -A 2>/dev/null | openssl dgst -sha256 -binary | openssl base64 -A)
+        if [[ -z "${actual_fingerprint}" ]]; then
+            echo "Error: Failed to compute fingerprint for PULSE_LICENSE_PUBLIC_KEY." >&2
+            exit 1
+        fi
+        if [[ "${actual_fingerprint}" != "${expected_fingerprint}" ]]; then
+            echo "Error: PULSE_LICENSE_PUBLIC_KEY fingerprint mismatch." >&2
+            echo "Expected: SHA256:${expected_fingerprint}" >&2
+            echo "Actual:   SHA256:${actual_fingerprint}" >&2
+            exit 1
+        fi
+        echo "Verified license public key fingerprint: SHA256:${actual_fingerprint}"
+    fi
+
+    LICENSE_LDFLAGS="-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"
 fi
 
 # Clean previous builds
