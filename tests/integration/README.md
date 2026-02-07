@@ -21,6 +21,9 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Alerts thresholds create/delete
   - Settings persistence across refresh
   - Add/delete a Proxmox node (test-only)
+- `tests/02-navigation-perf.spec.ts` — route transition performance budgets for:
+  - Infrastructure → Workloads
+  - Workloads → Infrastructure
 
 ## Running Tests
 
@@ -39,6 +42,10 @@ Credentials used by the E2E suite can be overridden:
 - `PULSE_E2E_USERNAME` (default `admin`)
 - `PULSE_E2E_PASSWORD` (default `adminadminadmin`)
 - `PULSE_E2E_ALLOW_NODE_MUTATION=1` to enable the optional "Add Proxmox node" test (disabled by default for safety)
+- `PULSE_E2E_PERF=1` to enable navigation performance budget checks
+- `PULSE_E2E_PERF_ITERATIONS` (default `3`)
+- `PULSE_E2E_PERF_INFRA_TO_WORKLOADS_BUDGET_MS` (default `2200`)
+- `PULSE_E2E_PERF_WORKLOADS_TO_INFRA_BUDGET_MS` (default `2200`)
 
 ### Run Against An Existing Pulse Instance
 ```bash

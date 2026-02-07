@@ -2,7 +2,7 @@
 #
 # Run Pulse integration tests with different suites
 # Usage: ./run-tests.sh [suite]
-#   suite: all, core, diagnostic, updates-api
+#   suite: all, core, diagnostic, perf, updates-api
 #
 
 set -e
@@ -75,6 +75,9 @@ run_suite() {
         core)
             npx playwright test "tests/01-core-e2e.spec.ts" --reporter=list
             ;;
+        perf)
+            PULSE_E2E_PERF=1 npx playwright test "tests/02-navigation-perf.spec.ts" --reporter=list
+            ;;
         updates-api)
             UPDATE_API_BASE_URL=http://localhost:7655 go test ./api -run TestUpdateFlowIntegration -count=1
             ;;
@@ -108,6 +111,7 @@ case "$SUITE" in
         echo "Running all suites..."
         run_suite "Diagnostic Smoke" "diagnostic" || FAILED_TESTS+=("Diagnostic Smoke")
         run_suite "Core E2E" "core" || FAILED_TESTS+=("Core E2E")
+        run_suite "Navigation Performance" "perf" || FAILED_TESTS+=("Navigation Performance")
         run_suite "Update API Integration" "updates-api" || FAILED_TESTS+=("Update API Integration")
         ;;
 
@@ -119,13 +123,17 @@ case "$SUITE" in
         run_suite "Core E2E" "core" || FAILED_TESTS+=("Core E2E")
         ;;
 
+    perf)
+        run_suite "Navigation Performance" "perf" || FAILED_TESTS+=("Navigation Performance")
+        ;;
+
     updates-api)
         run_suite "Update API Integration" "updates-api" || FAILED_TESTS+=("Update API Integration")
         ;;
 
     *)
         echo "Unknown suite: $SUITE"
-        echo "Available suites: all, diagnostic, core, updates-api"
+        echo "Available suites: all, diagnostic, core, perf, updates-api"
         exit 1
         ;;
 esac
