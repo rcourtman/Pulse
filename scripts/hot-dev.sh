@@ -273,8 +273,8 @@ mkdir -p internal/api/frontend-modern/dist
 touch internal/api/frontend-modern/dist/index.html
 
 # Check if Pro module is available and use it for full audit logging support
-# Use PULSE_REPOS_DIR env var or default to ~/Development/pulse/repos
-PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-$HOME/Development/pulse/repos}"
+# Use PULSE_REPOS_DIR env var or default to /Volumes/Development/pulse/repos
+PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-/Volumes/Development/pulse/repos}"
 PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
 if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
     log_info "Building Pro binary (includes persistent audit logging)..."
@@ -525,7 +525,7 @@ log_info "Starting backend file watcher..."
 
         # Use the same build logic as the initial build
         local build_success=0
-        PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-$HOME/Development/pulse/repos}"
+        PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-/Volumes/Development/pulse/repos}"
         PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
         if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
             log_info "Building Pro binary..."
