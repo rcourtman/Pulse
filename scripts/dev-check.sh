@@ -60,7 +60,7 @@ if curl -s -o /dev/null http://127.0.0.1:5173/ 2>/dev/null; then
     echo -e "${GREEN}✓ Running${NC}"
 else
     echo -e "${RED}✗ NOT RUNNING${NC}"
-    echo "   Fix: cd \${PULSE_REPOS_DIR:-~/Development/pulse/repos}/pulse/frontend-modern && npm run dev"
+    echo "   Fix: cd \${PULSE_REPOS_DIR:-/Volumes/Development/pulse/repos}/pulse/frontend-modern && npm run dev"
 fi
 
 # Check AI status

@@ -28,8 +28,8 @@
 #
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd -P)
 SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 SCRIPT_MTIME=$(stat -c %Y "${SCRIPT_PATH}" 2>/dev/null || stat -f %m "${SCRIPT_PATH}")
 
@@ -273,8 +273,8 @@ mkdir -p internal/api/frontend-modern/dist
 touch internal/api/frontend-modern/dist/index.html
 
 # Check if Pro module is available and use it for full audit logging support
-# Use PULSE_REPOS_DIR env var or default to ~/Development/pulse/repos
-PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-$HOME/Development/pulse/repos}"
+# Use PULSE_REPOS_DIR env var or default to /Volumes/Development/pulse/repos
+PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-/Volumes/Development/pulse/repos}"
 PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
 if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
     log_info "Building Pro binary (includes persistent audit logging)..."
@@ -474,7 +474,17 @@ log_info "Starting backend file watcher..."
 (
     cd "${ROOT_DIR}"
     
+    LAST_RESTART_TIME=0
+
     restart_backend() {
+        # Debounce: skip if we restarted less than 3 seconds ago
+        local now
+        now=$(date +%s)
+        if (( now - LAST_RESTART_TIME < 3 )); then
+            return
+        fi
+        LAST_RESTART_TIME=$now
+
         log_info "Restarting backend..."
 
         # Kill ALL pulse processes (not just one) to prevent duplicates
@@ -512,8 +522,19 @@ log_info "Starting backend file watcher..."
         fi
     }
 
+    LAST_REBUILD_TIME=0
+
     rebuild_backend() {
         local changed_file=$1
+
+        # Debounce: skip if we rebuilt less than 2 seconds ago (batch saves)
+        local now
+        now=$(date +%s)
+        if (( now - LAST_REBUILD_TIME < 2 )); then
+            return
+        fi
+        LAST_REBUILD_TIME=$now
+
         echo ""
         log_info "🔄 Change detected: $(basename "$changed_file")"
         log_info "Rebuilding backend..."
@@ -521,7 +542,7 @@ log_info "Starting backend file watcher..."
         # Use the same build logic as the initial build
         local build_success=0
         local build_output
-        PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-$HOME/Development/pulse/repos}"
+        PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-/Volumes/Development/pulse/repos}"
         PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
         if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
             log_info "Building Pro binary..."
@@ -568,8 +589,23 @@ log_info "Starting backend file watcher..."
         done
     elif command -v fswatch >/dev/null 2>&1; then
         # macOS: fswatch
+        # Note: AttributeModified is needed because `touch` on macOS only fires
+        # that event (not Updated), and touch is the recommended way to trigger
+        # a manual rebuild.
         log_info "Using fswatch for file monitoring"
-        fswatch -r --event Created --event Updated --event Removed --event Renamed \
+
+        # Watch the pulse binary too — if someone does `go build -o pulse`
+        # manually, we should restart without rebuilding.
+        fswatch --event Created --event Updated --event Renamed --event AttributeModified \
+            "${ROOT_DIR}/pulse" 2>/dev/null | \
+        while read -r _; do
+            log_info "🚀 Manual build detected (pulse binary changed), restarting..."
+            restart_backend
+        done &
+        BINARY_WATCH_PID=$!
+
+        fswatch -r -L \
+            --event Created --event Updated --event Removed --event Renamed --event AttributeModified \
             --exclude '\.git/' --exclude 'vendor/' --exclude 'node_modules/' \
             --include '\.go$' \
             "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
