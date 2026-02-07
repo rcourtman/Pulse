@@ -4,7 +4,7 @@ import { apiFetch } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
 
-const UNIFIED_RESOURCES_URL = '/api/v2/resources?type=host';
+const UNIFIED_RESOURCES_URL = '/api/v2/resources?type=host,pbs,pmg,k8s_cluster,k8s_node';
 
 type V2MetricValue = {
   value?: number;
@@ -12,6 +12,19 @@ type V2MetricValue = {
   total?: number;
   percent?: number;
   unit?: string;
+};
+
+type V2KubernetesData = {
+  uptimeSeconds?: number;
+  temperature?: number;
+  metricCapabilities?: {
+    nodeCpuMemory?: boolean;
+    nodeTelemetry?: boolean;
+    podCpuMemory?: boolean;
+    podNetwork?: boolean;
+    podEphemeralDisk?: boolean;
+    podDiskIo?: boolean;
+  };
 };
 
 type V2Resource = {
@@ -39,11 +52,40 @@ type V2Resource = {
   };
   parentId?: string;
   tags?: string[];
-  proxmox?: { nodeName?: string; clusterName?: string; uptime?: number };
+  proxmox?: { nodeName?: string; clusterName?: string; uptime?: number; temperature?: number };
   agent?: { agentId?: string; hostname?: string; uptimeSeconds?: number; temperature?: number };
-  docker?: { hostname?: string };
-  pbs?: Record<string, unknown>;
-  kubernetes?: Record<string, unknown>;
+  docker?: { hostname?: string; temperature?: number };
+  pbs?: {
+    instanceId?: string;
+    hostname?: string;
+    version?: string;
+    uptimeSeconds?: number;
+    datastoreCount?: number;
+    backupJobCount?: number;
+    syncJobCount?: number;
+    verifyJobCount?: number;
+    pruneJobCount?: number;
+    garbageJobCount?: number;
+    connectionHealth?: string;
+  };
+  pmg?: {
+    instanceId?: string;
+    hostname?: string;
+    version?: string;
+    nodeCount?: number;
+    uptimeSeconds?: number;
+    queueActive?: number;
+    queueDeferred?: number;
+    queueHold?: number;
+    queueIncoming?: number;
+    queueTotal?: number;
+    mailCountTotal?: number;
+    spamIn?: number;
+    virusIn?: number;
+    connectionHealth?: string;
+    lastUpdated?: string;
+  };
+  kubernetes?: V2KubernetesData;
   discoveryTarget?: {
     resourceType?: string;
     hostId?: string;
@@ -92,14 +134,44 @@ const resolveType = (value?: string): ResourceType => {
   switch (normalized) {
     case 'host':
       return 'host';
+    case 'node':
+      return 'node';
+    case 'docker-host':
+      return 'docker-host';
+    case 'k8s-cluster':
+      return 'k8s-cluster';
+    case 'k8s-node':
+      return 'k8s-node';
+    case 'truenas':
+      return 'truenas';
     case 'vm':
       return 'vm';
     case 'lxc':
       return 'container';
+    case 'oci-container':
+      return 'oci-container';
     case 'container':
       return 'container';
+    case 'docker-container':
+      return 'docker-container';
+    case 'pod':
+      return 'pod';
+    case 'jail':
+      return 'jail';
+    case 'docker-service':
+      return 'docker-service';
+    case 'k8s-deployment':
+      return 'k8s-deployment';
+    case 'k8s-service':
+      return 'k8s-service';
     case 'storage':
       return 'storage';
+    case 'datastore':
+      return 'datastore';
+    case 'pool':
+      return 'pool';
+    case 'dataset':
+      return 'dataset';
     case 'pbs':
       return 'pbs';
     case 'pmg':
@@ -176,8 +248,17 @@ const toResource = (v2: V2Resource): Resource => {
           writeRate: v2.metrics?.diskWrite?.value ?? 0,
         }
         : undefined,
-    uptime: v2.agent?.uptimeSeconds ?? v2.proxmox?.uptime,
-    temperature: v2.agent?.temperature,
+    uptime:
+      v2.agent?.uptimeSeconds ??
+      v2.proxmox?.uptime ??
+      v2.pbs?.uptimeSeconds ??
+      v2.pmg?.uptimeSeconds ??
+      v2.kubernetes?.uptimeSeconds,
+    temperature:
+      v2.agent?.temperature ??
+      v2.proxmox?.temperature ??
+      v2.docker?.temperature ??
+      v2.kubernetes?.temperature,
     tags: v2.tags,
     lastSeen: Number.isFinite(lastSeen) ? lastSeen : Date.now(),
     identity: {
@@ -193,6 +274,7 @@ const toResource = (v2: V2Resource): Resource => {
       agent: v2.agent,
       docker: v2.docker,
       pbs: v2.pbs,
+      pmg: v2.pmg,
       kubernetes: v2.kubernetes,
       metrics: v2.metrics,
       discoveryTarget: v2.discoveryTarget,
@@ -239,12 +321,12 @@ export function useUnifiedResources() {
     const request = (async () => {
       setLoading(true);
       try {
-        const next = await fetchUnifiedResources();
+        const fetched = await fetchUnifiedResources();
         batch(() => {
-          applyResources(next);
+          applyResources(fetched);
           setError(undefined);
         });
-        return next;
+        return fetched;
       } catch (err) {
         setError(err);
         throw err;

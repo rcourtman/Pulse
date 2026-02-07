@@ -1,5 +1,11 @@
 import { createSignal, onCleanup, type Accessor } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
+import {
+  buildBackupsPath,
+  buildInfrastructurePath,
+  buildStoragePath,
+  buildWorkloadsPath,
+} from '@/routing/resourceLinks';
 
 type KeyboardShortcutsOptions = {
   enabled?: Accessor<boolean>;
@@ -52,6 +58,11 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     if (el) {
       el.focus();
       el.select?.();
+      return;
+    }
+    const trigger = document.querySelector<HTMLElement>('[data-global-search-trigger]');
+    if (trigger) {
+      trigger.click();
     }
   };
 
@@ -72,10 +83,10 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
   };
 
   const routes: Record<string, string> = {
-    i: '/infrastructure',
-    w: '/workloads',
-    s: '/storage',
-    b: '/backups',
+    i: buildInfrastructurePath(),
+    w: buildWorkloadsPath(),
+    s: buildStoragePath(),
+    b: buildBackupsPath(),
     a: '/alerts',
     t: '/settings',
   };

@@ -2,7 +2,9 @@ import { createMemo, createResource, onCleanup, createEffect, type Accessor } fr
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 
-const V2_WORKLOADS_URL = '/api/v2/resources?type=vm,lxc,docker_container';
+const V2_WORKLOADS_URL = '/api/v2/resources?type=vm,lxc,docker_container,pod';
+const V2_WORKLOADS_PAGE_LIMIT = 200;
+const V2_WORKLOADS_MAX_PAGES = 20;
 
 type V2MetricValue = {
   value?: number;
@@ -77,6 +79,7 @@ type V2Resource = {
     disks?: V2DiskInfo[];
   };
   docker?: {
+    containerId?: string;
     hostname?: string;
     image?: string;
     imageName?: string;
@@ -84,15 +87,27 @@ type V2Resource = {
     uptimeSeconds?: number;
   };
   kubernetes?: {
+    clusterId?: string;
+    agentId?: string;
     clusterName?: string;
     namespace?: string;
     context?: string;
+    nodeName?: string;
+    podUid?: string;
+    image?: string;
+    uptimeSeconds?: number;
   };
 };
 
 type V2ListResponse = {
   data?: V2Resource[];
   resources?: V2Resource[];
+  meta?: {
+    page?: number;
+    limit?: number;
+    total?: number;
+    totalPages?: number;
+  };
 };
 
 const normalizeWorkloadStatus = (status?: string | null): string => {
@@ -168,24 +183,40 @@ const toIsoString = (value?: string): string => {
   return new Date(parsed).toISOString();
 };
 
-const resolveWorkloadsPayload = (payload: unknown): V2Resource[] => {
-  if (Array.isArray(payload)) return payload as V2Resource[];
-  if (!payload || typeof payload !== 'object') return [];
+const resolveWorkloadsPayload = (payload: unknown): { data: V2Resource[]; totalPages: number } => {
+  if (Array.isArray(payload)) {
+    return { data: payload as V2Resource[], totalPages: 1 };
+  }
+  if (!payload || typeof payload !== 'object') {
+    return { data: [], totalPages: 1 };
+  }
   const record = payload as V2ListResponse;
-  if (Array.isArray(record.data)) return record.data;
-  if (Array.isArray(record.resources)) return record.resources;
-  return [];
+  const data = Array.isArray(record.data)
+    ? record.data
+    : Array.isArray(record.resources)
+      ? record.resources
+      : [];
+  const totalPages = Number.isFinite(record.meta?.totalPages)
+    ? Math.max(1, Number(record.meta?.totalPages))
+    : 1;
+  return { data, totalPages };
 };
+
+const buildV2WorkloadsUrl = (page: number) =>
+  `${V2_WORKLOADS_URL}&page=${page}&limit=${V2_WORKLOADS_PAGE_LIMIT}`;
 
 const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
   const workloadType = resolveWorkloadType(resource.type);
   if (!workloadType) return null;
 
   const name = (resource.name || resource.id || '').toString().trim();
-  const node = resource.node ?? resource.proxmox?.nodeName ?? '';
+  const node = resource.node ?? resource.proxmox?.nodeName ?? resource.kubernetes?.nodeName ?? '';
   const instance =
     resource.instance ??
     resource.proxmox?.instance ??
+    resource.kubernetes?.clusterId ??
+    resource.kubernetes?.clusterName ??
+    resource.kubernetes?.context ??
     resource.proxmox?.clusterName ??
     resource.identity?.clusterName ??
     '';
@@ -210,9 +241,22 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
   // For PVE guests, use the legacy ID format (instance:node:vmid) so metrics keys
   // match what the backend charts API returns. Without this, sparklines
   // show no data because the hashed v2 ID doesn't match any backend keys.
-  const guestId = (workloadType === 'vm' || workloadType === 'lxc') && instance && node && vmid > 0
-    ? `${instance}:${node}:${vmid}`
-    : resource.id;
+  const guestId = (() => {
+    if ((workloadType === 'vm' || workloadType === 'lxc') && instance && node && vmid > 0) {
+      return `${instance}:${node}:${vmid}`;
+    }
+    if (workloadType === 'docker') {
+      return resource.docker?.containerId || resource.id;
+    }
+    if (workloadType === 'k8s') {
+      const clusterId = resource.kubernetes?.clusterId;
+      const podUid = resource.kubernetes?.podUid;
+      if (clusterId && podUid) {
+        return `k8s:${clusterId}:pod:${podUid}`;
+      }
+    }
+    return resource.id;
+  })();
 
   return {
     id: guestId,
@@ -221,7 +265,14 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
     node,
     instance,
     status: normalizeWorkloadStatus(resource.status),
-    type: workloadType === 'vm' ? 'vm' : workloadType === 'lxc' ? 'lxc' : 'docker',
+    type:
+      workloadType === 'vm'
+        ? 'vm'
+        : workloadType === 'lxc'
+          ? 'lxc'
+          : workloadType === 'k8s'
+            ? 'k8s'
+            : 'docker',
     cpu: cpuPercent / 100,
     cpus: resource.proxmox?.cpus ?? 1,
     memory: buildMetric(resource.metrics?.memory),
@@ -237,7 +288,7 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
     networkOut: resource.metrics?.netOut?.value ?? 0,
     diskRead: resource.metrics?.diskRead?.value ?? 0,
     diskWrite: resource.metrics?.diskWrite?.value ?? 0,
-    uptime: resource.proxmox?.uptime ?? resource.agent?.uptimeSeconds ?? resource.docker?.uptimeSeconds ?? 0,
+    uptime: resource.proxmox?.uptime ?? resource.agent?.uptimeSeconds ?? resource.docker?.uptimeSeconds ?? resource.kubernetes?.uptimeSeconds ?? 0,
     template: resource.proxmox?.template ?? false,
     lastBackup: (() => {
       if (!resource.proxmox?.lastBackup) return 0;
@@ -255,25 +306,53 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
     image:
       workloadType === 'docker'
         ? resource.docker?.image || resource.docker?.imageName || resource.docker?.imageRef
+        : workloadType === 'k8s'
+          ? resource.kubernetes?.image
         : undefined,
     namespace:
       workloadType === 'k8s'
         ? resource.kubernetes?.namespace
         : undefined,
     contextLabel:
-      workloadType === 'docker'
+      workloadType === 'vm' || workloadType === 'lxc'
+        ? node
+          ? instance && instance !== node
+            ? `${node} (${instance})`
+            : node
+          : undefined
+        : workloadType === 'docker'
         ? resource.parentName || resource.docker?.hostname
         : workloadType === 'k8s'
-          ? resource.kubernetes?.clusterName
+          ? resource.kubernetes?.clusterName || resource.kubernetes?.context
           : undefined,
     platformType: resolvePlatformType(resource.sources),
   };
 };
 
 async function fetchV2Workloads(): Promise<WorkloadGuest[]> {
-  const response = await apiFetchJSON<unknown>(V2_WORKLOADS_URL, { cache: 'no-store' });
-  const resources = resolveWorkloadsPayload(response);
-  return resources
+  const firstResponse = await apiFetchJSON<unknown>(buildV2WorkloadsUrl(1), { cache: 'no-store' });
+  const firstPage = resolveWorkloadsPayload(firstResponse);
+  const allResources: V2Resource[] = [...firstPage.data];
+
+  const totalPages = Math.min(firstPage.totalPages, V2_WORKLOADS_MAX_PAGES);
+  if (totalPages > 1) {
+    const pageRequests: Promise<unknown>[] = [];
+    for (let page = 2; page <= totalPages; page++) {
+      pageRequests.push(apiFetchJSON<unknown>(buildV2WorkloadsUrl(page), { cache: 'no-store' }));
+    }
+    const settled = await Promise.allSettled(pageRequests);
+    for (const result of settled) {
+      if (result.status !== 'fulfilled') continue;
+      const pageData = resolveWorkloadsPayload(result.value);
+      allResources.push(...pageData.data);
+    }
+  }
+
+  const dedupedResources = Array.from(
+    new Map(allResources.map((resource) => [resource.id, resource])).values(),
+  );
+
+  return dedupedResources
     .map((resource) => mapResourceToWorkload(resource))
     .filter((resource): resource is WorkloadGuest => !!resource);
 }

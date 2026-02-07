@@ -42,17 +42,13 @@ import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
 import { MobileNavBar } from './components/shared/MobileNavBar';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State, Alert } from '@/types/api';
-import { activateSparklines } from './stores/sparklineData';
-import { getMetricsViewMode, getMetricsTimeRange } from './stores/metricsViewMode';
 import { startMetricsCollector } from './stores/metricsCollector';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import ServerIcon from 'lucide-solid/icons/server';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
 import ArchiveIcon from 'lucide-solid/icons/archive';
-import WrenchIcon from 'lucide-solid/icons/wrench';
 import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
-import NetworkIcon from 'lucide-solid/icons/network';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
@@ -62,16 +58,29 @@ import { UpdateProgressModal } from './components/UpdateProgressModal';
 import type { UpdateStatus } from './api/updates';
 import { AIChat } from './components/AI/Chat';
 import { aiChatStore } from './stores/aiChat';
-import { useResourcesAsLegacy } from './hooks/useResources';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
+import {
+  updateSystemSettingsFromResponse,
+  markSystemSettingsLoadedWithDefaults,
+  shouldDisableLegacyRouteRedirects,
+} from './stores/systemSettings';
 import {
   fetchInfrastructureSummaryAndCache,
-  INFRASTRUCTURE_TREND_RANGE_STORAGE_KEY,
   hasFreshInfrastructureSummaryCache,
-  parseChartsTimeRange,
 } from '@/utils/infrastructureSummaryCache';
 import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode, getKioskModePreference } from './utils/url';
+import {
+  buildLegacyRedirectTarget,
+  getActiveTabForPath,
+  mergeRedirectQueryParams,
+} from './routing/navigation';
+import { LEGACY_REDIRECTS } from './routing/legacyRedirects';
+import {
+  buildBackupsPath,
+  buildInfrastructurePath,
+  buildStoragePath,
+  buildWorkloadsPath,
+} from './routing/resourceLinks';
 
 import { showToast } from '@/utils/toast';
 
@@ -82,22 +91,20 @@ const Dashboard = lazy(() =>
 const StorageComponent = lazy(() => import('./components/Storage/Storage'));
 const UnifiedBackups = lazy(() => import('./components/Backups/UnifiedBackups'));
 const Replication = lazy(() => import('./components/Replication/Replication'));
-const MailGateway = lazy(() => import('./components/PMG/MailGateway'));
-const Services = lazy(() => import('./components/Services/Services'));
 const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
-const KubernetesClusters = lazy(() =>
-  import('./components/Kubernetes/KubernetesClusters').then((module) => ({
-    default: module.KubernetesClusters,
-  })),
-);
 const InfrastructurePage = lazy(() => import('./pages/Infrastructure'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
+const MigrationGuidePage = lazy(() => import('./pages/MigrationGuide'));
+const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
+const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
+const STORAGE_PATH = buildStoragePath();
+const BACKUPS_PATH = buildBackupsPath();
 
 
 // Enhanced store type with proper typing
@@ -122,14 +129,6 @@ export const useDarkMode = () => {
   }
   return context;
 };
-
-function KubernetesRoute() {
-  const wsContext = useContext(WebSocketContext);
-  if (!wsContext) {
-    return <div>Loading...</div>;
-  }
-  return <KubernetesClusters clusters={wsContext.state.kubernetesClusters ?? []} />;
-}
 
 // Helper to detect if an update is actively in progress (not just checking for updates)
 function isUpdateInProgress(status: string | undefined): boolean {
@@ -211,7 +210,7 @@ function GlobalUpdateProgressWatcher() {
       onClose={() => setShowProgressModal(false)}
       onViewHistory={() => {
         setShowProgressModal(false);
-        navigate('/settings/updates');
+        navigate('/settings/system-updates');
       }}
       connected={wsContext?.connected}
       reconnecting={wsContext?.reconnecting}
@@ -230,11 +229,13 @@ type LegacyRedirectProps = {
 
 function LegacyRedirect(props: LegacyRedirectProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   onMount(() => {
     if (props.toast) {
       showToast(props.toast.type ?? 'info', props.toast.title, props.toast.message);
     }
-    navigate(props.to, { replace: true });
+    const target = mergeRedirectQueryParams(props.to, location.search);
+    navigate(target, { replace: true });
   });
   return null;
 }
@@ -264,22 +265,15 @@ function App() {
   const alertsActivation = useAlertsActivation();
 
   // Start metrics collector (always runs for Storage page)
-  // and activate sparklines if the user has that mode enabled
   onMount(() => {
     startMetricsCollector();
-    if (getMetricsViewMode() === 'sparklines') {
-      activateSparklines(getMetricsTimeRange());
-    }
   });
 
   let hasPreloadedRoutes = false;
   let hasFetchedVersionInfo = false;
   let hasPrewarmedInfrastructureCharts = false;
 
-  const getInfrastructureTrendRangeForPrewarm = (): TimeRange => {
-    if (typeof window === 'undefined') return '1h';
-    return parseChartsTimeRange(window.localStorage.getItem(INFRASTRUCTURE_TREND_RANGE_STORAGE_KEY), '1h');
-  };
+  const getInfrastructureTrendRangeForPrewarm = (): TimeRange => '1h';
 
   const shouldPrewarmInfrastructure = (): boolean => {
     if (typeof window === 'undefined') return false;
@@ -295,7 +289,7 @@ function App() {
 
     const pathname = window.location.pathname;
     if (!pathname) return true;
-    if (pathname === '/infrastructure') return false;
+    if (pathname === ROOT_INFRASTRUCTURE_PATH) return false;
     return true;
   };
 
@@ -326,7 +320,6 @@ function App() {
       () => import('./components/Storage/Storage'),
       () => import('./components/Backups/UnifiedBackups'),
       () => import('./components/Replication/Replication'),
-      () => import('./components/PMG/MailGateway'),
       () => import('./pages/Alerts'),
       () => import('./components/Settings/Settings'),
     ];
@@ -672,31 +665,29 @@ function App() {
         // Initialize WebSocket for proxy auth users
         setWsStore(acquireWsStore());
 
-        // Load theme preference from server for cross-device sync
-        // Only use server preference if no local preference exists
-        if (!hasLocalPreference) {
-          try {
-            const systemSettings = await SettingsAPI.getSystemSettings();
-            // Update system settings store (for Docker update actions, etc.)
-            updateSystemSettingsFromResponse(systemSettings);
-            if (systemSettings.theme && systemSettings.theme !== '') {
-              const prefersDark = systemSettings.theme === 'dark';
-              setDarkMode(prefersDark);
-              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
-              if (prefersDark) {
-                document.documentElement.classList.add('dark');
-              } else {
-                document.documentElement.classList.remove('dark');
-              }
+        // Load system settings (theme + server-wide feature flags + layout prefs)
+        try {
+          const systemSettings = await SettingsAPI.getSystemSettings();
+          updateSystemSettingsFromResponse(systemSettings);
+
+          // Only apply server theme if user has no local preference on this device.
+          if (!hasLocalPreference && systemSettings.theme && systemSettings.theme !== '') {
+            const prefersDark = systemSettings.theme === 'dark';
+            setDarkMode(prefersDark);
+            localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
+            if (prefersDark) {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
             }
-            setHasLoadedServerTheme(true);
-            // Also load full-width mode from server
-            layoutStore.loadFromServer();
-          } catch (error) {
-            logger.error('Failed to load theme from server', error);
-            // Ensure settings are marked as loaded so UI doesn't stay in loading state
-            markSystemSettingsLoadedWithDefaults();
           }
+
+          setHasLoadedServerTheme(true);
+          layoutStore.loadFromServer();
+        } catch (error) {
+          logger.error('Failed to load system settings from server', error);
+          // Ensure settings are marked as loaded so UI doesn't stay in loading state
+          markSystemSettingsLoadedWithDefaults();
         }
 
         // Load version info
@@ -724,31 +715,29 @@ function App() {
         // Initialize WebSocket for OIDC users
         setWsStore(acquireWsStore());
 
-        // Load theme preference from server for cross-device sync
-        // Only use server preference if no local preference exists
-        if (!hasLocalPreference) {
-          try {
-            const systemSettings = await SettingsAPI.getSystemSettings();
-            // Update system settings store (for Docker update actions, etc.)
-            updateSystemSettingsFromResponse(systemSettings);
-            if (systemSettings.theme && systemSettings.theme !== '') {
-              const prefersDark = systemSettings.theme === 'dark';
-              setDarkMode(prefersDark);
-              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
-              if (prefersDark) {
-                document.documentElement.classList.add('dark');
-              } else {
-                document.documentElement.classList.remove('dark');
-              }
+        // Load system settings (theme + server-wide feature flags + layout prefs)
+        try {
+          const systemSettings = await SettingsAPI.getSystemSettings();
+          updateSystemSettingsFromResponse(systemSettings);
+
+          // Only apply server theme if user has no local preference on this device.
+          if (!hasLocalPreference && systemSettings.theme && systemSettings.theme !== '') {
+            const prefersDark = systemSettings.theme === 'dark';
+            setDarkMode(prefersDark);
+            localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
+            if (prefersDark) {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
             }
-            setHasLoadedServerTheme(true);
-            // Also load full-width mode from server
-            layoutStore.loadFromServer();
-          } catch (error) {
-            logger.error('Failed to load theme from server', error);
-            // Ensure settings are marked as loaded so UI doesn't stay in loading state
-            markSystemSettingsLoadedWithDefaults();
           }
+
+          setHasLoadedServerTheme(true);
+          layoutStore.loadFromServer();
+        } catch (error) {
+          logger.error('Failed to load system settings from server', error);
+          // Ensure settings are marked as loaded so UI doesn't stay in loading state
+          markSystemSettingsLoadedWithDefaults();
         }
 
         // Load version info
@@ -787,42 +776,29 @@ function App() {
         // Only initialize WebSocket after successful auth check
         setWsStore(acquireWsStore());
 
-        // Load theme preference from server for cross-device sync
-        // Only use server preference if no local preference exists
-        if (!hasLocalPreference) {
-          try {
-            const systemSettings = await SettingsAPI.getSystemSettings();
-            // Update system settings store (for Docker update actions, etc.)
-            updateSystemSettingsFromResponse(systemSettings);
-            if (systemSettings.theme && systemSettings.theme !== '') {
-              const prefersDark = systemSettings.theme === 'dark';
-              setDarkMode(prefersDark);
-              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
-              if (prefersDark) {
-                document.documentElement.classList.add('dark');
-              } else {
-                document.documentElement.classList.remove('dark');
-              }
+        // Load system settings (theme + server-wide feature flags + layout prefs)
+        try {
+          const systemSettings = await SettingsAPI.getSystemSettings();
+          updateSystemSettingsFromResponse(systemSettings);
+
+          // Only apply server theme if user has no local preference on this device.
+          if (!hasLocalPreference && systemSettings.theme && systemSettings.theme !== '') {
+            const prefersDark = systemSettings.theme === 'dark';
+            setDarkMode(prefersDark);
+            localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
+            if (prefersDark) {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
             }
-            setHasLoadedServerTheme(true);
-            // Also load full-width mode from server
-            layoutStore.loadFromServer();
-          } catch (error) {
-            logger.error('Failed to load theme from server', error);
-            // Ensure settings are marked as loaded so UI doesn't stay in loading state
-            markSystemSettingsLoadedWithDefaults();
           }
-        } else {
-          // We have a local preference, just mark that we've checked the server
+
           setHasLoadedServerTheme(true);
-          // Still load system settings for other features (Docker update actions, etc.)
-          SettingsAPI.getSystemSettings()
-            .then((settings) => updateSystemSettingsFromResponse(settings))
-            .catch((error) => {
-              logger.warn('Failed to load system settings', error);
-              // Ensure settings are marked as loaded so UI doesn't stay in loading state
-              markSystemSettingsLoadedWithDefaults();
-            });
+          layoutStore.loadFromServer();
+        } catch (error) {
+          logger.error('Failed to load system settings from server', error);
+          // Ensure settings are marked as loaded so UI doesn't stay in loading state
+          markSystemSettingsLoadedWithDefaults();
         }
       }
     } catch (error) {
@@ -897,15 +873,13 @@ function App() {
   // Pass through the store directly (only when initialized)
   const enhancedStore = () => wsStore();
 
-  // Workloads view - uses v2 workloads with legacy fallback
+  // Workloads view - v2 resources only
   const WorkloadsView = () => {
-    const { asVMs, asContainers, asNodes } = useResourcesAsLegacy();
-
     return (
       <Dashboard
-        vms={asVMs() as any}
-        containers={asContainers() as any}
-        nodes={asNodes() as any}
+        vms={[]}
+        containers={[]}
+        nodes={[]}
         useV2Workloads
       />
     );
@@ -1044,60 +1018,126 @@ function App() {
   // Use Router with routes
   return (
     <Router root={RootLayout}>
-      <Route path="/" component={() => <Navigate href="/infrastructure" />} />
-      <Route path="/proxmox" component={() => <Navigate href="/infrastructure" />} />
-      <Route
-        path="/proxmox/overview"
-        component={() => (
-          <LegacyRedirect
-            to="/infrastructure"
-            toast={{
-              title: 'Overview moved',
-              message: 'Hosts and nodes are now in Infrastructure. Workloads live under Workloads.',
-            }}
-          />
-        )}
-      />
-      <Route
-        path="/hosts"
-        component={() => (
-          <LegacyRedirect
-            to="/infrastructure?source=agent"
-            toast={{
-              title: 'Hosts moved',
-              message: 'Agent hosts are now under Infrastructure.',
-            }}
-          />
-        )}
-      />
-      <Route
-        path="/docker"
-        component={() => (
-          <LegacyRedirect
-            to="/infrastructure?source=docker"
-            toast={{
-              title: 'Docker moved',
-              message: 'Docker hosts are in Infrastructure. Containers are in Workloads.',
-            }}
-          />
-        )}
-      />
-      <Route path="/workloads" component={WorkloadsView} />
-      <Route path="/proxmox/storage" component={() => <Navigate href="/storage" />} />
-      <Route path="/proxmox/ceph" component={() => <Navigate href="/ceph" />} />
-      <Route path="/proxmox/replication" component={() => <Navigate href="/replication" />} />
-      <Route path="/proxmox/mail" component={() => <Navigate href="/mail" />} />
-      <Route path="/proxmox/backups" component={() => <Navigate href="/backups" />} />
-      <Route path="/storage" component={StorageComponent} />
-      <Route path="/backups" component={UnifiedBackups} />
+      <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
+      <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
+      <Route path={STORAGE_PATH} component={StorageComponent} />
+      <Route path={BACKUPS_PATH} component={UnifiedBackups} />
       <Route path="/ceph" component={CephPage} />
       <Route path="/replication" component={Replication} />
-      <Route path="/mail" component={MailGateway} />
-      <Route path="/services" component={Services} />
-      <Route path="/kubernetes" component={KubernetesRoute} />
-      <Route path="/infrastructure" component={InfrastructurePage} />
+      <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />
+      <Route path="/migration-guide" component={MigrationGuidePage} />
 
-      <Route path="/servers" component={() => <Navigate href="/infrastructure" />} />
+      <Show when={!shouldDisableLegacyRouteRedirects()}>
+        <Route path="/proxmox" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
+        <Route
+          path={LEGACY_REDIRECTS.proxmoxOverview.path}
+          component={() => (
+            <LegacyRedirect
+              to={buildLegacyRedirectTarget(
+                LEGACY_REDIRECTS.proxmoxOverview.destination,
+                LEGACY_REDIRECTS.proxmoxOverview.source,
+              )}
+              toast={{
+                title: LEGACY_REDIRECTS.proxmoxOverview.toastTitle,
+                message: LEGACY_REDIRECTS.proxmoxOverview.toastMessage,
+              }}
+            />
+          )}
+        />
+        <Route
+          path={LEGACY_REDIRECTS.hosts.path}
+          component={() => (
+            <LegacyRedirect
+              to={buildLegacyRedirectTarget(
+                LEGACY_REDIRECTS.hosts.destination,
+                LEGACY_REDIRECTS.hosts.source,
+              )}
+              toast={{
+                title: LEGACY_REDIRECTS.hosts.toastTitle,
+                message: LEGACY_REDIRECTS.hosts.toastMessage,
+              }}
+            />
+          )}
+        />
+        <Route
+          path={LEGACY_REDIRECTS.docker.path}
+          component={() => (
+            <LegacyRedirect
+              to={buildLegacyRedirectTarget(
+                LEGACY_REDIRECTS.docker.destination,
+                LEGACY_REDIRECTS.docker.source,
+              )}
+              toast={{
+                title: LEGACY_REDIRECTS.docker.toastTitle,
+                message: LEGACY_REDIRECTS.docker.toastMessage,
+              }}
+            />
+          )}
+        />
+        <Route path="/proxmox/storage" component={() => <Navigate href={STORAGE_PATH} />} />
+        <Route path="/proxmox/ceph" component={() => <Navigate href="/ceph" />} />
+        <Route path="/proxmox/replication" component={() => <Navigate href="/replication" />} />
+        <Route
+          path={LEGACY_REDIRECTS.proxmoxMail.path}
+          component={() => (
+            <LegacyRedirect
+              to={buildLegacyRedirectTarget(
+                LEGACY_REDIRECTS.proxmoxMail.destination,
+                LEGACY_REDIRECTS.proxmoxMail.source,
+              )}
+              toast={{
+                title: LEGACY_REDIRECTS.proxmoxMail.toastTitle,
+                message: LEGACY_REDIRECTS.proxmoxMail.toastMessage,
+              }}
+            />
+          )}
+        />
+        <Route path="/proxmox/backups" component={() => <Navigate href={BACKUPS_PATH} />} />
+        <Route
+          path={LEGACY_REDIRECTS.mail.path}
+          component={() => (
+            <LegacyRedirect
+              to={buildLegacyRedirectTarget(LEGACY_REDIRECTS.mail.destination, LEGACY_REDIRECTS.mail.source)}
+              toast={{
+                title: LEGACY_REDIRECTS.mail.toastTitle,
+                message: LEGACY_REDIRECTS.mail.toastMessage,
+              }}
+            />
+          )}
+        />
+        <Route
+          path={LEGACY_REDIRECTS.services.path}
+          component={() => (
+            <LegacyRedirect
+              to={buildLegacyRedirectTarget(
+                LEGACY_REDIRECTS.services.destination,
+                LEGACY_REDIRECTS.services.source,
+              )}
+              toast={{
+                title: LEGACY_REDIRECTS.services.toastTitle,
+                message: LEGACY_REDIRECTS.services.toastMessage,
+              }}
+            />
+          )}
+        />
+        <Route
+          path={LEGACY_REDIRECTS.kubernetes.path}
+          component={() => (
+            <LegacyRedirect
+              to={buildLegacyRedirectTarget(
+                LEGACY_REDIRECTS.kubernetes.destination,
+                LEGACY_REDIRECTS.kubernetes.source,
+              )}
+              toast={{
+                title: LEGACY_REDIRECTS.kubernetes.toastTitle,
+                message: LEGACY_REDIRECTS.kubernetes.toastMessage,
+              }}
+            />
+          )}
+        />
+        <Route path="/servers" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
+      </Show>
+
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/ai/*" component={AIIntelligencePage} />
       <Route path="/settings/*" component={SettingsRoute} />
@@ -1207,29 +1247,7 @@ function AppLayout(props: {
   };
 
   // Determine active tab from current path
-  const getActiveTab = () => {
-    const path = location.pathname;
-    if (path.startsWith('/infrastructure')) return 'infrastructure';
-    if (path.startsWith('/workloads')) return 'workloads';
-    if (path.startsWith('/storage')) return 'storage';
-    if (path.startsWith('/ceph')) return 'storage';
-    if (path.startsWith('/backups')) return 'backups';
-    if (path.startsWith('/replication')) return 'backups';
-    if (path.startsWith('/services')) return 'services';
-    if (path.startsWith('/mail')) return 'services';
-    if (path.startsWith('/proxmox/ceph') || path.startsWith('/proxmox/storage')) return 'storage';
-    if (path.startsWith('/proxmox/replication') || path.startsWith('/proxmox/backups')) return 'backups';
-    if (path.startsWith('/proxmox/mail')) return 'services';
-    if (path.startsWith('/proxmox')) return 'infrastructure';
-    if (path.startsWith('/kubernetes')) return 'kubernetes';
-    if (path.startsWith('/servers')) return 'infrastructure';
-    if (path.startsWith('/alerts')) return 'alerts';
-    if (path.startsWith('/ai')) return 'ai';
-    if (path.startsWith('/settings')) return 'settings';
-    return 'infrastructure';
-  };
-  const hasKubernetesClusters = createMemo(() => (props.state().kubernetesClusters?.length ?? 0) > 0);
-  const hasPMGServices = createMemo(() => (props.state().pmg?.length ?? 0) > 0);
+  const getActiveTab = () => getActiveTabForPath(location.pathname);
 
   type PlatformTab = {
     id: string;
@@ -1249,8 +1267,8 @@ function AppLayout(props: {
       {
         id: 'infrastructure' as const,
         label: 'Infrastructure',
-        route: '/infrastructure',
-        settingsRoute: '/settings',
+        route: ROOT_INFRASTRUCTURE_PATH,
+        settingsRoute: '/settings/infrastructure',
         tooltip: 'All hosts and nodes across platforms',
         enabled: true,
         live: true,
@@ -1262,8 +1280,8 @@ function AppLayout(props: {
       {
         id: 'workloads' as const,
         label: 'Workloads',
-        route: '/workloads',
-        settingsRoute: '/settings',
+        route: ROOT_WORKLOADS_PATH,
+        settingsRoute: '/settings/workloads',
         tooltip: 'VMs, containers, and Kubernetes workloads',
         enabled: true,
         live: true,
@@ -1275,8 +1293,8 @@ function AppLayout(props: {
       {
         id: 'storage' as const,
         label: 'Storage',
-        route: '/storage',
-        settingsRoute: '/settings',
+        route: STORAGE_PATH,
+        settingsRoute: '/settings/infrastructure/pbs',
         tooltip: 'Storage pools, disks, and Ceph',
         enabled: true,
         live: true,
@@ -1288,8 +1306,8 @@ function AppLayout(props: {
       {
         id: 'backups' as const,
         label: 'Backups',
-        route: '/backups',
-        settingsRoute: '/settings',
+        route: BACKUPS_PATH,
+        settingsRoute: '/settings/backups',
         tooltip: 'Backup jobs, history, and replication',
         enabled: true,
         live: true,
@@ -1297,32 +1315,6 @@ function AppLayout(props: {
           <ArchiveIcon class="w-4 h-4 shrink-0" />
         ),
         alwaysShow: true,
-      },
-      {
-        id: 'services' as const,
-        label: 'Services',
-        route: '/services',
-        settingsRoute: '/settings',
-        tooltip: 'Mail gateway status and service health',
-        enabled: hasPMGServices(),
-        live: hasPMGServices(),
-        icon: (
-          <WrenchIcon class="w-4 h-4 shrink-0" />
-        ),
-        alwaysShow: false,
-      },
-      {
-        id: 'kubernetes' as const,
-        label: 'Kubernetes',
-        route: '/kubernetes',
-        settingsRoute: '/settings/agents',
-        tooltip: 'Monitor Kubernetes clusters and workloads',
-        enabled: hasKubernetesClusters(),
-        live: hasKubernetesClusters(),
-        icon: (
-          <NetworkIcon class="w-4 h-4 shrink-0" />
-        ),
-        alwaysShow: false, // Only show when clusters exist
       },
     ];
 
