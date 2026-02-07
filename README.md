@@ -26,9 +26,11 @@ Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" wit
 
 Pulse now groups everything by task instead of data source:
 - **Infrastructure** for hosts and nodes
-- **Workloads** for VMs and containers
+- **Workloads** for VMs, containers, and Kubernetes pods
 - **Storage** and **Backups** as top-level views
-- **Services** for PMG instances (when connected)
+- PMG now routes into **Infrastructure** (source filter), and Kubernetes routes into **Workloads** (K8s filter)
+- Legacy `/services` and `/kubernetes` URLs are transitional redirects and are planned for removal after the migration window
+- Admins can sunset all legacy redirects immediately with `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true` (or `disableLegacyRouteRedirects` in `system.json`)
 
 Power-user shortcuts:
 - `g i` → Infrastructure, `g w` → Workloads, `?` → shortcuts help
