@@ -339,9 +339,9 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 }
 
 func TestGenerateSeededSeries_Deterministic(t *testing.T) {
-	seed := hashSeed("node", "deterministic", "cpu")
-	seriesA := generateSeededSeries(57.3, 240, seed, 0, 100)
-	seriesB := generateSeededSeries(57.3, 240, seed, 0, 100)
+	seed := HashSeed("node", "deterministic", "cpu")
+	seriesA := GenerateSeededSeries(57.3, 240, seed, 0, 100, styleSpiky)
+	seriesB := GenerateSeededSeries(57.3, 240, seed, 0, 100, styleSpiky)
 
 	if len(seriesA) != len(seriesB) {
 		t.Fatalf("expected same length, got %d vs %d", len(seriesA), len(seriesB))
@@ -356,7 +356,7 @@ func TestGenerateSeededSeries_Deterministic(t *testing.T) {
 
 func TestGenerateSeededSeries_BoundsAndAnchor(t *testing.T) {
 	current := 42.0
-	series := generateSeededSeries(current, 360, hashSeed("storage", "local-zfs", "usage"), 10, 85)
+	series := GenerateSeededSeries(current, 360, HashSeed("storage", "local-zfs", "usage"), 10, 85, styleFlat)
 	if len(series) != 360 {
 		t.Fatalf("expected 360 points, got %d", len(series))
 	}
@@ -371,23 +371,28 @@ func TestGenerateSeededSeries_BoundsAndAnchor(t *testing.T) {
 	}
 }
 
-func TestGenerateSeededSeries_VolatileProducesJaggedChanges(t *testing.T) {
-	// Seed 3 maps to trendVolatile via pickTrendClass(seed % 4).
-	series := generateSeededSeries(63, 360, 3, 0, 100)
+func TestGenerateSeededSeries_SpikyProducesSpikes(t *testing.T) {
+	series := GenerateSeededSeries(15, 360, 3, 0, 100, styleSpiky)
 	if len(series) != 360 {
 		t.Fatalf("expected 360 points, got %d", len(series))
 	}
 
-	kinks := 0
-	for i := 2; i < len(series); i++ {
-		s1 := series[i-1] - series[i-2]
-		s2 := series[i] - series[i-1]
-		if math.Abs(s2-s1) >= 0.9 {
-			kinks++
+	// Most points should be near baseline (low), with some spikes above.
+	lowCount := 0
+	spikeCount := 0
+	for _, v := range series[:len(series)-1] { // exclude last (forced to current)
+		if v < 30 {
+			lowCount++
+		}
+		if v > 40 {
+			spikeCount++
 		}
 	}
 
-	if kinks < 35 {
-		t.Fatalf("expected jagged volatile series with many kinks; got %d", kinks)
+	if lowCount < len(series)/2 {
+		t.Fatalf("expected majority of points near baseline; only %d/%d below 30", lowCount, len(series))
+	}
+	if spikeCount < 3 {
+		t.Fatalf("expected some spike events above 40; only got %d", spikeCount)
 	}
 }

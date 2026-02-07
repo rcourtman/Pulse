@@ -54,7 +54,8 @@ func mockMetricsSamplerConfigFromEnv() mockMetricsSamplerConfig {
 	}
 }
 
-func hashSeed(parts ...string) uint64 {
+// HashSeed produces a deterministic uint64 from the given parts.
+func HashSeed(parts ...string) uint64 {
 	h := fnv.New64a()
 	for _, p := range parts {
 		_, _ = h.Write([]byte(p))
@@ -103,7 +104,7 @@ func kubernetesPodCurrentMetrics(cluster models.KubernetesCluster, pod models.Ku
 	if podKey == "" {
 		podKey = strings.TrimSpace(pod.Namespace) + "/" + strings.TrimSpace(pod.Name)
 	}
-	seed := hashSeed("k8s-pod-current", clusterKey, podKey)
+	seed := HashSeed("k8s-pod-current", clusterKey, podKey)
 	rng := rand.New(rand.NewSource(int64(seed)))
 
 	phase := strings.ToLower(strings.TrimSpace(pod.Phase))
@@ -234,254 +235,247 @@ func kubernetesPodCurrentMetrics(cluster models.KubernetesCluster, pod models.Ku
 	}
 }
 
-type seededTrendClass int
+// SeriesStyle controls the visual character of generated metric series.
+type SeriesStyle int
 
 const (
-	trendStable seededTrendClass = iota
-	trendGrowing
-	trendDeclining
-	trendVolatile
+	// StyleSpiky: low baseline with sharp spike events (CPU, network/disk I/O).
+	StyleSpiky SeriesStyle = iota
+	// StylePlateau: stable level with slow drift between plateaus (memory).
+	StylePlateau
+	// StyleFlat: nearly constant with very gradual trend (disk usage, temperature).
+	StyleFlat
 )
 
-func pickTrendClass(seed uint64) seededTrendClass {
-	switch seed % 4 {
-	case 0:
-		return trendStable
-	case 1:
-		return trendGrowing
-	case 2:
-		return trendDeclining
-	default:
-		return trendVolatile
-	}
-}
+// Package-level aliases for internal callers that use the unexported names.
+const (
+	styleSpiky   = StyleSpiky
+	stylePlateau = StylePlateau
+	styleFlat    = StyleFlat
+)
 
-func generateSeededSeries(current float64, points int, seed uint64, min, max float64) []float64 {
+// GenerateSeededSeries produces a deterministic metric series with the
+// given style. Exported so the API chart layer can use the same generation.
+func GenerateSeededSeries(current float64, points int, seed uint64, min, max float64, style SeriesStyle) []float64 {
 	current = clampFloat(current, min, max)
 	if points <= 1 {
 		return []float64{current}
 	}
 
-	class := pickTrendClass(seed)
-	rng := rand.New(rand.NewSource(int64(seed))) // Deterministic per resource/metric
+	rng := rand.New(rand.NewSource(int64(seed)))
 	span := math.Max(1, max-min)
-	profile := getSeededTrendProfile(class, seed, span)
-	lastIdx := float64(points - 1)
 
-	// Build a piecewise-linear baseline with random jumps at segment boundaries.
-	anchorCount := profile.segmentMin + int(seed%uint64(profile.segmentMax-profile.segmentMin+1))
-	if anchorCount > points {
-		anchorCount = points
-	}
-	if anchorCount < 3 {
-		anchorCount = 3
-	}
-
-	anchorValues := make([]float64, anchorCount)
-	anchorIndexes := make([]int, anchorCount)
-	for i := 0; i < anchorCount; i++ {
-		anchorIndexes[i] = (i * (points - 1)) / (anchorCount - 1)
+	var raw []float64
+	switch style {
+	case styleSpiky:
+		raw = generateSpikySeries(current, points, seed, min, max, span, rng)
+	case stylePlateau:
+		raw = generatePlateauSeries(current, points, min, max, span, rng)
+	default:
+		raw = generateFlatSeries(current, points, min, max, span, rng)
 	}
 
-	startTarget := current - profile.totalSlope
-	anchorValues[0] = clampFloat(startTarget+rng.NormFloat64()*profile.anchorNoise, min, max)
-
-	for i := 1; i < anchorCount; i++ {
-		progress := float64(i) / float64(anchorCount-1)
-		baseline := startTarget + (profile.totalSlope * progress)
-		noise := rng.NormFloat64() * profile.anchorNoise
-
-		jump := 0.0
-		if i < anchorCount-1 && rng.Float64() < profile.jumpChance {
-			jump = (rng.Float64()*2 - 1) * profile.jumpAmplitude
-		}
-
-		anchorValues[i] = clampFloat(baseline+noise+jump, min, max)
-	}
-	anchorValues[anchorCount-1] = current
-
-	raw := make([]float64, points)
-	for seg := 0; seg < anchorCount-1; seg++ {
-		i0 := anchorIndexes[seg]
-		i1 := anchorIndexes[seg+1]
-		v0 := anchorValues[seg]
-		v1 := anchorValues[seg+1]
-
-		if i1 <= i0 {
-			raw[i0] = v1
-			continue
-		}
-
-		spanIdx := float64(i1 - i0)
-		for i := i0; i <= i1; i++ {
-			t := float64(i-i0) / spanIdx
-			raw[i] = v0 + ((v1 - v0) * t)
-		}
-	}
-
-	// Overlay jagged waveform components (triangle + saw), then inject sparse
-	// burst events to create sharper inflections for sparkline readability.
-	cycles := 2 + int(seed%5)
-	phaseOffset := float64(seed%17) / 17.0
-	for i := 0; i < points; i++ {
-		progress := float64(i) / lastIdx
-		waveInput := (progress * float64(cycles)) + phaseOffset
-
-		tri := triangleWave(waveInput)
-		saw := sawWave(waveInput * 0.7)
-		jitterScale := 0.4 + (0.6 * (1 - progress))
-		jitter := rng.NormFloat64() * profile.jitter * jitterScale
-
-		raw[i] += (tri * profile.triangleAmplitude) + (saw * profile.sawAmplitude) + jitter
-	}
-
-	burstCount := int(math.Round(float64(points) * profile.burstDensity))
-	if class == trendVolatile && burstCount < 2 {
-		burstCount = 2
-	}
-	if burstCount > points/3 {
-		burstCount = points / 3
-	}
-	for b := 0; b < burstCount; b++ {
-		if points < 3 {
-			break
-		}
-		center := 1 + rng.Intn(points-2)
-		width := 1 + rng.Intn(maxInt(2, points/40+1))
-		magnitude := (rng.Float64()*2 - 1) * profile.burstAmplitude
-
-		start := center - width
-		if start < 0 {
-			start = 0
-		}
-		end := center + width
-		if end >= points {
-			end = points - 1
-		}
-
-		for i := start; i <= end; i++ {
-			distance := math.Abs(float64(i - center))
-			weight := 1 - (distance / float64(width+1))
-			if weight < 0 {
-				weight = 0
-			}
-			raw[i] += magnitude * weight
-		}
-	}
-
-	if profile.stepSize > 0 {
-		for i := 0; i < points; i++ {
-			raw[i] = math.Round(raw[i]/profile.stepSize) * profile.stepSize
-		}
-	}
-
-	// Shift so the last point exactly matches current.
-	offset := current - raw[points-1]
 	for i := range raw {
-		raw[i] = clampFloat(raw[i]+offset, min, max)
+		raw[i] = clampFloat(raw[i], min, max)
 	}
 	raw[points-1] = current
 	return raw
 }
 
-type seededTrendProfile struct {
-	totalSlope        float64
-	anchorNoise       float64
-	jumpChance        float64
-	jumpAmplitude     float64
-	triangleAmplitude float64
-	sawAmplitude      float64
-	jitter            float64
-	burstDensity      float64
-	burstAmplitude    float64
-	stepSize          float64
-	segmentMin        int
-	segmentMax        int
-}
+// generateSpikySeries produces a low baseline with occasional sharp spikes —
+// matching how real CPU and I/O metrics behave (mostly idle, with bursts).
+func generateSpikySeries(current float64, points int, seed uint64, min, max, span float64, rng *rand.Rand) []float64 {
+	// Baseline: most resources idle low. Seed determines personality tier.
+	personality := seed % 20
+	r := rng.Float64()
+	var baselineFraction float64
+	switch {
+	case personality == 0: // 5%: busy resource
+		baselineFraction = 0.30 + r*0.15
+	case personality <= 4: // 20%: moderate
+		baselineFraction = 0.16 + r*0.14
+	default: // 75%: idle
+		baselineFraction = 0.04 + r*0.12
+	}
+	baseline := min + span*baselineFraction
 
-func getSeededTrendProfile(class seededTrendClass, seed uint64, span float64) seededTrendProfile {
-	slopeFactor := 0.06 + (float64(seed%7) * 0.012)
-	stepBase := span * (0.006 + float64(seed%4)*0.0015)
+	// Small drift over the series to avoid perfect flatness.
+	baselineDrift := span * 0.03 * (rng.Float64()*2 - 1)
 
-	switch class {
-	case trendGrowing:
-		return seededTrendProfile{
-			totalSlope:        span * slopeFactor,
-			anchorNoise:       span * 0.018,
-			jumpChance:        0.16,
-			jumpAmplitude:     span * 0.07,
-			triangleAmplitude: span * 0.020,
-			sawAmplitude:      span * 0.014,
-			jitter:            span * 0.010,
-			burstDensity:      0.015,
-			burstAmplitude:    span * 0.11,
-			stepSize:          stepBase,
-			segmentMin:        6,
-			segmentMax:        11,
-		}
-	case trendDeclining:
-		return seededTrendProfile{
-			totalSlope:        -span * slopeFactor,
-			anchorNoise:       span * 0.018,
-			jumpChance:        0.16,
-			jumpAmplitude:     span * 0.07,
-			triangleAmplitude: span * 0.020,
-			sawAmplitude:      span * 0.014,
-			jitter:            span * 0.010,
-			burstDensity:      0.015,
-			burstAmplitude:    span * 0.11,
-			stepSize:          stepBase,
-			segmentMin:        6,
-			segmentMax:        11,
-		}
-	case trendVolatile:
-		return seededTrendProfile{
-			totalSlope:        span * ((float64(seed%5) - 2) * 0.015),
-			anchorNoise:       span * 0.040,
-			jumpChance:        0.28,
-			jumpAmplitude:     span * 0.12,
-			triangleAmplitude: span * 0.040,
-			sawAmplitude:      span * 0.030,
-			jitter:            span * 0.022,
-			burstDensity:      0.030,
-			burstAmplitude:    span * 0.18,
-			stepSize:          stepBase * 0.8,
-			segmentMin:        8,
-			segmentMax:        14,
-		}
-	default:
-		return seededTrendProfile{
-			totalSlope:        span * ((float64(seed%5) - 2) * 0.01),
-			anchorNoise:       span * 0.012,
-			jumpChance:        0.10,
-			jumpAmplitude:     span * 0.05,
-			triangleAmplitude: span * 0.014,
-			sawAmplitude:      span * 0.010,
-			jitter:            span * 0.007,
-			burstDensity:      0.008,
-			burstAmplitude:    span * 0.08,
-			stepSize:          stepBase,
-			segmentMin:        5,
-			segmentMax:        9,
+	raw := make([]float64, points)
+	for i := range raw {
+		progress := float64(i) / float64(points-1)
+		raw[i] = baseline + baselineDrift*progress + rng.NormFloat64()*span*0.004
+	}
+
+	// Generate spike events: fast rise, power-law decay.
+	spikeMinWidth := 3 + int(seed%6)
+	spikeProb := 0.015 + float64(seed%10)*0.003
+	for i := 0; i < points-spikeMinWidth; {
+		if rng.Float64() < spikeProb {
+			height := span * (0.10 + rng.Float64()*0.45)
+			width := spikeMinWidth + rng.Intn(10)
+			if i+width > points {
+				width = points - i
+			}
+			for j := 0; j < width; j++ {
+				progress := float64(j) / float64(width)
+				var envelope float64
+				if progress < 0.12 {
+					envelope = progress / 0.12
+				} else {
+					decay := (progress - 0.12) / 0.88
+					envelope = math.Pow(1-decay, 1.5)
+				}
+				raw[i+j] = math.Max(raw[i+j], baseline+height*envelope)
+			}
+			i += width + 2 + rng.Intn(5) // gap after spike
+		} else {
+			i++
 		}
 	}
-}
 
-func triangleWave(x float64) float64 {
-	phase := x - math.Floor(x)
-	return 1 - (4 * math.Abs(phase-0.5))
-}
-
-func sawWave(x float64) float64 {
-	phase := x - math.Floor(x)
-	return (2 * phase) - 1
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
+	// Taper-shift so the last point approaches current without distorting spikes.
+	diff := current - raw[points-1]
+	taperLen := points / 8
+	if taperLen < 5 {
+		taperLen = 5
 	}
-	return b
+	if taperLen > points {
+		taperLen = points
+	}
+	for j := 0; j < taperLen; j++ {
+		idx := points - 1 - j
+		weight := float64(taperLen-j) / float64(taperLen)
+		raw[idx] += diff * weight
+	}
+	return raw
+}
+
+// generatePlateauSeries produces stable levels with slow transitions —
+// matching how real memory usage behaves (applications hold allocations).
+func generatePlateauSeries(current float64, points int, min, max, span float64, rng *rand.Rand) []float64 {
+	plateauCount := 3 + rng.Intn(4) // 3-6 plateaus
+
+	// Generate plateau levels near current.
+	levels := make([]float64, plateauCount)
+	for i := range levels {
+		offset := (rng.Float64()*2 - 1) * span * 0.12
+		levels[i] = clampFloat(current+offset, min, max)
+	}
+	levels[plateauCount-1] = current + rng.NormFloat64()*span*0.01
+
+	raw := make([]float64, points)
+	segmentLen := points / plateauCount
+
+	for i := 0; i < points; i++ {
+		seg := i / segmentLen
+		if seg >= plateauCount {
+			seg = plateauCount - 1
+		}
+		nextSeg := seg + 1
+		if nextSeg >= plateauCount {
+			nextSeg = plateauCount - 1
+		}
+
+		segEnd := segmentLen
+		if seg == plateauCount-1 {
+			segEnd = points - seg*segmentLen
+		}
+		if segEnd <= 0 {
+			segEnd = 1
+		}
+		posInSeg := i - seg*segmentLen
+		progress := float64(posInSeg) / float64(segEnd)
+
+		// Smooth transition in last 20% of each segment.
+		var value float64
+		if progress < 0.8 || seg == nextSeg {
+			value = levels[seg]
+		} else {
+			t := (progress - 0.8) / 0.2
+			t = t * t * (3 - 2*t) // smoothstep
+			value = levels[seg]*(1-t) + levels[nextSeg]*t
+		}
+		raw[i] = value + rng.NormFloat64()*span*0.002
+	}
+	return raw
+}
+
+// generateFlatSeries produces a nearly constant series with very gradual
+// trend — matching disk usage or temperature that barely changes.
+func generateFlatSeries(current float64, points int, min, max, span float64, rng *rand.Rand) []float64 {
+	raw := make([]float64, points)
+
+	trendDir := 1.0
+	if rng.Float64() < 0.33 {
+		trendDir = -1.0
+	}
+	totalDrift := span * 0.02 * trendDir
+
+	for i := range raw {
+		progress := float64(i) / float64(points-1)
+		raw[i] = current - totalDrift*(1-progress) + rng.NormFloat64()*span*0.001
+	}
+	return raw
+}
+
+// buildTieredTimestamps generates a sorted list of timestamps with denser
+// intervals for recent data:
+//
+//	Last 2h:   30s intervals  (~240 points)
+//	2h–24h:    2min intervals  (~660 points)
+//	24h–end:   ~65min intervals (variable)
+//
+// This ensures short time ranges (1h, 4h) have enough data points without
+// needing an API-level fallback layer.
+func buildTieredTimestamps(now time.Time, totalDuration time.Duration) []time.Time {
+	// Each segment covers [now - startOffset, now - endOffset) and is walked
+	// chronologically from oldest to newest. Segments are defined oldest-first
+	// so the resulting slice is in chronological order.
+	type segment struct {
+		startOffset time.Duration // how far back from now this segment starts
+		endOffset   time.Duration // how far back from now this segment ends
+		interval    time.Duration
+	}
+	segments := []segment{
+		{totalDuration, 24 * time.Hour, 65 * time.Minute},
+		{24 * time.Hour, 2 * time.Hour, 2 * time.Minute},
+		{2 * time.Hour, 0, time.Minute},
+	}
+
+	var timestamps []time.Time
+
+	for _, seg := range segments {
+		startOff := seg.startOffset
+		if startOff > totalDuration {
+			startOff = totalDuration
+		}
+		endOff := seg.endOffset
+		if endOff > totalDuration {
+			endOff = totalDuration
+		}
+		if startOff <= endOff {
+			continue
+		}
+
+		segStart := now.Add(-startOff)
+		segEnd := now.Add(-endOff)
+
+		for ts := segStart; ts.Before(segEnd); ts = ts.Add(seg.interval) {
+			timestamps = append(timestamps, ts)
+		}
+	}
+
+	// Add "now" as the final point
+	if len(timestamps) > 0 {
+		last := timestamps[len(timestamps)-1]
+		if !last.Equal(now) {
+			timestamps = append(timestamps, now)
+		}
+	}
+
+	return timestamps
 }
 
 func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.StateSnapshot, now time.Time, seedDuration, interval time.Duration) {
@@ -492,19 +486,13 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		return
 	}
 
-	// Choose a seed interval that respects the requested sample interval
-	// while keeping the total number of points bounded.
-	seedInterval := interval
-	if seedInterval <= 0 {
-		seedInterval = 30 * time.Second
-	}
-	const maxSeedPoints = 2000
-	if seedDuration/seedInterval > maxSeedPoints {
-		seedInterval = seedDuration / maxSeedPoints
-	}
-	if seedInterval < 30*time.Second {
-		seedInterval = 30 * time.Second
-	}
+	// Build a tiered timestamp list so short time ranges (1h, 4h) have dense
+	// data without needing an API-level fallback layer.
+	//   Last 2h:   30s intervals  (~240 points)
+	//   2h–24h:    2min intervals  (~660 points)
+	//   24h–90d:   ~65min intervals (~1920 points)
+	// Total: ~2820 points per metric per resource.
+	seedTimestamps := buildTieredTimestamps(now, seedDuration)
 	const seedBatchSize = 5000
 
 	var seedBatch []metrics.WriteMetric
@@ -542,14 +530,13 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			return
 		}
 
-		numPoints := int(seedDuration / seedInterval)
-		cpuSeries := generateSeededSeries(node.CPU*100, numPoints, hashSeed("node", node.ID, "cpu"), 5, 85)
-		memSeries := generateSeededSeries(node.Memory.Usage, numPoints, hashSeed("node", node.ID, "memory"), 10, 85)
-		diskSeries := generateSeededSeries(node.Disk.Usage, numPoints, hashSeed("node", node.ID, "disk"), 5, 95)
+		numPoints := len(seedTimestamps)
+		cpuSeries := GenerateSeededSeries(node.CPU*100, numPoints, HashSeed("node", node.ID, "cpu"), 5, 85, styleSpiky)
+		memSeries := GenerateSeededSeries(node.Memory.Usage, numPoints, HashSeed("node", node.ID, "memory"), 10, 85, stylePlateau)
+		diskSeries := GenerateSeededSeries(node.Disk.Usage, numPoints, HashSeed("node", node.ID, "disk"), 5, 95, styleFlat)
 
-		startTime := now.Add(-seedDuration)
 		for i := 0; i < numPoints; i++ {
-			ts := startTime.Add(time.Duration(i) * seedInterval)
+			ts := seedTimestamps[i]
 			mh.AddNodeMetric(node.ID, "cpu", cpuSeries[i], ts)
 			mh.AddNodeMetric(node.ID, "memory", memSeries[i], ts)
 			mh.AddNodeMetric(node.ID, "disk", diskSeries[i], ts)
@@ -578,29 +565,28 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			return
 		}
 
-		numPoints := int(seedDuration / seedInterval)
-		cpuSeries := generateSeededSeries(cpuPercent, numPoints, hashSeed(storeType, storeID, "cpu"), 0, 100)
-		memSeries := generateSeededSeries(memPercent, numPoints, hashSeed(storeType, storeID, "memory"), 0, 100)
+		numPoints := len(seedTimestamps)
+		cpuSeries := GenerateSeededSeries(cpuPercent, numPoints, HashSeed(storeType, storeID, "cpu"), 0, 100, styleSpiky)
+		memSeries := GenerateSeededSeries(memPercent, numPoints, HashSeed(storeType, storeID, "memory"), 0, 100, stylePlateau)
 		var diskSeries []float64
 		if includeDisk {
-			diskSeries = generateSeededSeries(diskPercent, numPoints, hashSeed(storeType, storeID, "disk"), 0, 100)
+			diskSeries = GenerateSeededSeries(diskPercent, numPoints, HashSeed(storeType, storeID, "disk"), 0, 100, styleFlat)
 		}
 		ioMax := func(value float64) float64 {
 			return math.Max(value*1.8, 1)
 		}
 		var diskReadSeries, diskWriteSeries, netInSeries, netOutSeries []float64
 		if includeDiskIO {
-			diskReadSeries = generateSeededSeries(diskRead, numPoints, hashSeed(storeType, storeID, "diskread"), 0, ioMax(diskRead))
-			diskWriteSeries = generateSeededSeries(diskWrite, numPoints, hashSeed(storeType, storeID, "diskwrite"), 0, ioMax(diskWrite))
+			diskReadSeries = GenerateSeededSeries(diskRead, numPoints, HashSeed(storeType, storeID, "diskread"), 0, ioMax(diskRead), styleSpiky)
+			diskWriteSeries = GenerateSeededSeries(diskWrite, numPoints, HashSeed(storeType, storeID, "diskwrite"), 0, ioMax(diskWrite), styleSpiky)
 		}
 		if includeNetwork {
-			netInSeries = generateSeededSeries(netIn, numPoints, hashSeed(storeType, storeID, "netin"), 0, ioMax(netIn))
-			netOutSeries = generateSeededSeries(netOut, numPoints, hashSeed(storeType, storeID, "netout"), 0, ioMax(netOut))
+			netInSeries = GenerateSeededSeries(netIn, numPoints, HashSeed(storeType, storeID, "netin"), 0, ioMax(netIn), styleSpiky)
+			netOutSeries = GenerateSeededSeries(netOut, numPoints, HashSeed(storeType, storeID, "netout"), 0, ioMax(netOut), styleSpiky)
 		}
 
-		startTime := now.Add(-seedDuration)
 		for i := 0; i < numPoints; i++ {
-			ts := startTime.Add(time.Duration(i) * seedInterval)
+			ts := seedTimestamps[i]
 			mh.AddGuestMetric(metricID, "cpu", cpuSeries[i], ts)
 			mh.AddGuestMetric(metricID, "memory", memSeries[i], ts)
 			queueMetric(storeType, storeID, "cpu", cpuSeries[i], ts)
@@ -724,12 +710,11 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		if storage.ID == "" {
 			continue
 		}
-		numPoints := int(seedDuration / seedInterval)
-		usageSeries := generateSeededSeries(storage.Usage, numPoints, hashSeed("storage", storage.ID, "usage"), 0, 100)
+		numPoints := len(seedTimestamps)
+		usageSeries := GenerateSeededSeries(storage.Usage, numPoints, HashSeed("storage", storage.ID, "usage"), 0, 100, styleFlat)
 
-		startTime := now.Add(-seedDuration)
 		for i := 0; i < numPoints; i++ {
-			ts := startTime.Add(time.Duration(i) * seedInterval)
+			ts := seedTimestamps[i]
 			mh.AddStorageMetric(storage.ID, "usage", usageSeries[i], ts)
 			queueMetric("storage", storage.ID, "usage", usageSeries[i], ts)
 		}
@@ -750,17 +735,17 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			continue
 		}
 
-		numPoints := int(seedDuration / seedInterval)
-		tempSeries := generateSeededSeries(
+		numPoints := len(seedTimestamps)
+		tempSeries := GenerateSeededSeries(
 			float64(disk.Temperature),
 			numPoints,
-			hashSeed("disk", resourceID, "smart_temp"),
+			HashSeed("disk", resourceID, "smart_temp"),
 			25,
 			95,
+			styleFlat,
 		)
-		startTime := now.Add(-seedDuration)
 		for i := 0; i < numPoints; i++ {
-			ts := startTime.Add(time.Duration(i) * seedInterval)
+			ts := seedTimestamps[i]
 			queueMetric("disk", resourceID, "smart_temp", tempSeries[i], ts)
 		}
 
@@ -801,6 +786,21 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			recordGuest("docker:"+container.ID, "docker", container.ID, container.CPUPercent, container.MemoryPercent, containerDisk, 0, 0, 0, 0, true, false, false)
 		}
 		time.Sleep(50 * time.Millisecond) // Add delay for docker hosts
+	}
+
+	log.Debug().Int("count", len(state.Hosts)).Msg("Mock seeding: processing host agents")
+	for _, host := range state.Hosts {
+		if host.ID == "" || host.Status != "online" {
+			continue
+		}
+
+		var diskPercent float64
+		if len(host.Disks) > 0 {
+			diskPercent = host.Disks[0].Usage
+		}
+
+		recordGuest("host:"+host.ID, "host", host.ID, host.CPUUsage, host.Memory.Usage, diskPercent, host.DiskReadRate, host.DiskWriteRate, host.NetInRate, host.NetOutRate, true, true, true)
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	if ms != nil && len(seedBatch) > 0 {
@@ -1004,6 +1004,36 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 			}
 		}
 	}
+
+	for _, host := range state.Hosts {
+		if host.ID == "" || host.Status != "online" {
+			continue
+		}
+
+		var diskPercent float64
+		if len(host.Disks) > 0 {
+			diskPercent = host.Disks[0].Usage
+		}
+
+		hostKey := "host:" + host.ID
+		mh.AddGuestMetric(hostKey, "cpu", host.CPUUsage, ts)
+		mh.AddGuestMetric(hostKey, "memory", host.Memory.Usage, ts)
+		mh.AddGuestMetric(hostKey, "disk", diskPercent, ts)
+		mh.AddGuestMetric(hostKey, "diskread", host.DiskReadRate, ts)
+		mh.AddGuestMetric(hostKey, "diskwrite", host.DiskWriteRate, ts)
+		mh.AddGuestMetric(hostKey, "netin", host.NetInRate, ts)
+		mh.AddGuestMetric(hostKey, "netout", host.NetOutRate, ts)
+
+		if ms != nil {
+			ms.Write("host", host.ID, "cpu", host.CPUUsage, ts)
+			ms.Write("host", host.ID, "memory", host.Memory.Usage, ts)
+			ms.Write("host", host.ID, "disk", diskPercent, ts)
+			ms.Write("host", host.ID, "diskread", host.DiskReadRate, ts)
+			ms.Write("host", host.ID, "diskwrite", host.DiskWriteRate, ts)
+			ms.Write("host", host.ID, "netin", host.NetInRate, ts)
+			ms.Write("host", host.ID, "netout", host.NetOutRate, ts)
+		}
+	}
 }
 
 func diskMetricsResourceID(disk models.PhysicalDisk) string {
@@ -1038,7 +1068,9 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	if seedDuration < time.Hour {
 		seedDuration = time.Hour
 	}
-	maxPoints := int(seedDuration / cfg.SampleInterval)
+	// Tiered seeding produces ~2820 points per metric; allow headroom for
+	// live updates on top of that.
+	maxPoints := 3500
 
 	m.mu.Lock()
 	if m.mockMetricsCancel != nil {

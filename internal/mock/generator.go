@@ -3297,6 +3297,117 @@ func clampFloat(value, min, max float64) float64 {
 	return value
 }
 
+// naturalMetricUpdate produces realistic time-driven metric values that mimic
+// real infrastructure behavior. CPU-like metrics (speed >= 0.8) sit at a low
+// baseline with occasional sharp spikes — matching how real servers behave
+// (mostly idle, with bursts of activity). Memory uses stable plateaus with
+// slow drift. Disk changes very gradually.
+//
+// speed controls metric character: 1.0 = CPU (low baseline + spikes),
+// ~0.5 = memory (stable plateau), ~0.12 = disk (very gradual drift).
+func naturalMetricUpdate(current, min, max float64, resourceID, metric string, speed float64) float64 {
+	seed := mockStableHash64(resourceID, metric)
+	now := time.Now()
+	span := math.Max(1, max-min)
+	if speed <= 0 {
+		speed = 1.0
+	}
+
+	// Time-varying noise seed (unique per tick).
+	noiseSeed := seed ^ uint64(now.UnixNano()/int64(time.Millisecond))
+	rng := rand.New(rand.NewSource(int64(noiseSeed)))
+
+	// --- Baseline target ---
+	// Shifts periodically, but stays in a characteristic range for each
+	// metric type. The personality (seed) determines where in the range
+	// each resource sits, so different resources have different baselines.
+	targetWindow := int64(float64(300+seed%420) / math.Max(speed, 0.1))
+	if targetWindow < 60 {
+		targetWindow = 60
+	}
+	targetSeed := seed ^ uint64(now.Unix()/targetWindow)
+	targetRng := rand.New(rand.NewSource(int64(targetSeed)))
+
+	isCPULike := speed >= 0.8
+	var baselineFraction float64
+	if isCPULike {
+		// CPU: most resources idle low. Personality determines the tier.
+		// ~75% low (5-18%), ~20% moderate (18-32%), ~5% busy (32-48%).
+		personality := seed % 20
+		r := targetRng.Float64()
+		switch {
+		case personality == 0: // 5%: busy resource
+			baselineFraction = 0.32 + r*0.16
+		case personality <= 4: // 20%: moderate load
+			baselineFraction = 0.18 + r*0.14
+		default: // 75%: low/idle
+			baselineFraction = 0.05 + r*0.13
+		}
+	} else if speed >= 0.3 {
+		// Memory: moderate stable level.
+		baselineFraction = 0.28 + targetRng.Float64()*0.37
+	} else {
+		// Disk: moderate, very stable.
+		baselineFraction = 0.22 + targetRng.Float64()*0.42
+	}
+	baseTarget := min + span*baselineFraction
+
+	// --- Spike events (CPU-like metrics only) ---
+	// Each time bucket is deterministically either a spike or not.
+	// Spikes ramp up fast and decay gradually, like real CPU bursts.
+	var spikeValue float64
+	if isCPULike {
+		spikeBucket := int64(25 + seed%75) // 25-100 second spike windows
+		bucketSeed := seed ^ uint64(now.Unix()/spikeBucket)
+		bucketRng := rand.New(rand.NewSource(int64(bucketSeed)))
+
+		// ~12-22% of buckets are spike periods (varies per resource).
+		spikeFreq := 0.10 + float64(seed%12)*0.01
+		if bucketRng.Float64() < spikeFreq {
+			// Spike height: 15-50% of range above baseline.
+			spikeHeight := span * (0.12 + bucketRng.Float64()*0.38)
+			// Position within bucket: fast rise (~12%), then power-law decay.
+			progress := float64(now.Unix()%spikeBucket) / float64(spikeBucket)
+			if progress < 0.12 {
+				spikeValue = spikeHeight * (progress / 0.12)
+			} else {
+				decay := (progress - 0.12) / 0.88
+				spikeValue = spikeHeight * math.Pow(1-decay, 1.5)
+			}
+		}
+	}
+
+	// --- Smoothing toward ideal ---
+	// Exponential smoothing: fast tracking during spikes so the value
+	// actually reaches the peak, slower drift otherwise.
+	ideal := baseTarget + spikeValue
+	alpha := 0.06 * speed
+	if spikeValue > span*0.03 {
+		alpha = 0.30 // snap toward spike quickly
+	}
+	if alpha < 0.005 {
+		alpha = 0.005
+	}
+	if alpha > 0.5 {
+		alpha = 0.5
+	}
+	newValue := current + alpha*(ideal-current)
+
+	// --- Per-tick noise ---
+	noiseScale := span * 0.003 * math.Min(speed, 1.0)
+	newValue += rng.NormFloat64() * noiseScale
+
+	// --- Step quantization for fast metrics ---
+	if speed >= 0.25 {
+		step := span * (0.004 + float64(seed%3)*0.001)
+		if step > 0.05 {
+			newValue = math.Round(newValue/step) * step
+		}
+	}
+
+	return clampFloat(newValue, min, max)
+}
+
 func randomHexString(n int) string {
 	const hexChars = "0123456789abcdef"
 	if n <= 0 {
@@ -4011,10 +4122,10 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 			continue
 		}
 
-		// Generate 1-3 backups per VM
-		numBackups := 1 + rand.Intn(3)
+		// Generate 4-10 backups per VM spread across the past year
+		numBackups := 4 + rand.Intn(7)
 		for i := 0; i < numBackups; i++ {
-			backupTime := time.Now().Add(-time.Duration(rand.Intn(30*24)) * time.Hour)
+			backupTime := time.Now().Add(-time.Duration(rand.Intn(365*24)) * time.Hour)
 			backupSize := vm.Disk.Total/10 + rand.Int63n(vm.Disk.Total/5) // 10-30% of disk size
 
 			backup := models.StorageBackup{
@@ -4049,10 +4160,10 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 			continue
 		}
 
-		// Generate 1-2 backups per container
-		numBackups := 1 + rand.Intn(2)
+		// Generate 3-8 backups per container spread across the past year
+		numBackups := 3 + rand.Intn(6)
 		for i := 0; i < numBackups; i++ {
-			backupTime := time.Now().Add(-time.Duration(rand.Intn(30*24)) * time.Hour)
+			backupTime := time.Now().Add(-time.Duration(rand.Intn(365*24)) * time.Hour)
 			backupSize := ct.Disk.Total/20 + rand.Int63n(ct.Disk.Total/10) // 5-15% of disk size
 
 			backup := models.StorageBackup{
@@ -4082,11 +4193,11 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 	}
 
 	// Generate PMG host config backups (VMID=0)
-	// Add 2-4 PMG host backups
-	numPMGBackups := 2 + rand.Intn(3)
+	// Add 5-12 PMG host backups spread across the past year
+	numPMGBackups := 5 + rand.Intn(8)
 	pmgNodes := []string{"pmg-01", "pmg-02", "mail-gateway"}
 	for i := 0; i < numPMGBackups; i++ {
-		backupTime := time.Now().Add(-time.Duration(rand.Intn(60*24)) * time.Hour)
+		backupTime := time.Now().Add(-time.Duration(rand.Intn(365*24)) * time.Hour)
 		nodeIdx := rand.Intn(len(pmgNodes))
 
 		backup := models.StorageBackup{
@@ -4249,10 +4360,10 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 			continue
 		}
 
-		// Generate 2-4 PBS backups per VM
-		numBackups := 2 + rand.Intn(3)
+		// Generate 5-12 PBS backups per VM spread across the past year
+		numBackups := 5 + rand.Intn(8)
 		for i := 0; i < numBackups; i++ {
-			backupTime := time.Now().Add(-time.Duration(rand.Intn(60*24)) * time.Hour)
+			backupTime := time.Now().Add(-time.Duration(rand.Intn(365*24)) * time.Hour)
 
 			backup := models.PBSBackup{
 				ID:         fmt.Sprintf("pbs-backup-vm-%d-%d", vm.VMID, i),
@@ -4279,10 +4390,10 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 			continue
 		}
 
-		// Generate 1-3 PBS backups per container
-		numBackups := 1 + rand.Intn(3)
+		// Generate 4-10 PBS backups per container spread across the past year
+		numBackups := 4 + rand.Intn(7)
 		for i := 0; i < numBackups; i++ {
-			backupTime := time.Now().Add(-time.Duration(rand.Intn(45*24)) * time.Hour)
+			backupTime := time.Now().Add(-time.Duration(rand.Intn(365*24)) * time.Hour)
 
 			backup := models.PBSBackup{
 				ID:         fmt.Sprintf("pbs-backup-ct-%d-%d", ct.VMID, i),
@@ -4305,9 +4416,9 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 
 	// Generate host config backups (VMID 0) - PMG/PVE host configs
 	// These are common when backing up Proxmox Mail Gateway hosts
-	hostBackupCount := 2 + rand.Intn(3) // 2-4 host backups
+	hostBackupCount := 5 + rand.Intn(6) // 5-10 host backups
 	for i := 0; i < hostBackupCount; i++ {
-		backupTime := time.Now().Add(-time.Duration(rand.Intn(30*24)) * time.Hour)
+		backupTime := time.Now().Add(-time.Duration(rand.Intn(365*24)) * time.Hour)
 
 		backup := models.PBSBackup{
 			ID:         fmt.Sprintf("pbs-backup-host-0-%d", i),
@@ -4515,10 +4626,10 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 			continue
 		}
 
-		// Generate 1-3 snapshots per VM
-		numSnapshots := 1 + rand.Intn(3)
+		// Generate 3-8 snapshots per VM spread across the past year
+		numSnapshots := 3 + rand.Intn(6)
 		for i := 0; i < numSnapshots; i++ {
-			snapshotTime := time.Now().Add(-time.Duration(rand.Intn(90*24)) * time.Hour)
+			snapshotTime := time.Now().Add(-time.Duration(rand.Intn(365*24)) * time.Hour)
 
 			snapshot := models.GuestSnapshot{
 				ID:          fmt.Sprintf("snapshot-%s-vm-%d-%d", vm.Node, vm.VMID, i),
@@ -4548,10 +4659,10 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 			continue
 		}
 
-		// Generate 1-2 snapshots per container
-		numSnapshots := 1 + rand.Intn(2)
+		// Generate 2-6 snapshots per container spread across the past year
+		numSnapshots := 2 + rand.Intn(5)
 		for i := 0; i < numSnapshots; i++ {
-			snapshotTime := time.Now().Add(-time.Duration(rand.Intn(60*24)) * time.Hour)
+			snapshotTime := time.Now().Add(-time.Duration(rand.Intn(365*24)) * time.Hour)
 
 			snapshot := models.GuestSnapshot{
 				ID:          fmt.Sprintf("snapshot-%s-ct-%d-%d", ct.Node, ct.VMID, i),
@@ -4592,18 +4703,9 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 	// Update node metrics
 	for i := range data.Nodes {
 		node := &data.Nodes[i]
-		// Small random walk for CPU with mean reversion
-		change := (rand.Float64() - 0.5) * 0.03
-		// Mean reversion: pull toward 20% CPU
-		meanReversion := (0.20 - node.CPU) * 0.05
-		node.CPU += change + meanReversion
-		node.CPU = math.Max(0.05, math.Min(0.85, node.CPU))
+		node.CPU = naturalMetricUpdate(node.CPU, 0.05, 0.85, node.ID, "cpu", 1.0)
 
-		// Update memory with very small changes and mean reversion toward 50%
-		memChange := (rand.Float64() - 0.5) * 0.02
-		memMeanReversion := (50.0 - node.Memory.Usage) * 0.03
-		node.Memory.Usage += (memChange * 100) + memMeanReversion
-		node.Memory.Usage = math.Max(10, math.Min(85, node.Memory.Usage))
+		node.Memory.Usage = naturalMetricUpdate(node.Memory.Usage, 10, 85, node.ID, "memory", 0.5)
 		node.Memory.Used = int64(float64(node.Memory.Total) * (node.Memory.Usage / 100))
 		node.Memory.Free = node.Memory.Total - node.Memory.Used
 	}
@@ -4615,28 +4717,15 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 			continue
 		}
 
-		// Random walk for CPU with mean reversion toward 15%
-		cpuChange := (rand.Float64() - 0.5) * 0.04
-		cpuMeanReversion := (0.15 - vm.CPU) * 0.08
-		vm.CPU += cpuChange + cpuMeanReversion
-		vm.CPU = math.Max(0.01, math.Min(0.85, vm.CPU))
+		vm.CPU = naturalMetricUpdate(vm.CPU, 0.01, 0.85, vm.ID, "cpu", 1.0)
 
-		// Update memory with smaller fluctuations and mean reversion toward 50%
-		memChange := (rand.Float64() - 0.5) * 0.03 // 3% swing
-		memMeanReversion := (50.0 - vm.Memory.Usage) * 0.04
-		vm.Memory.Usage += (memChange * 100) + memMeanReversion
-		vm.Memory.Usage = math.Max(10, math.Min(85, vm.Memory.Usage))
+		vm.Memory.Usage = naturalMetricUpdate(vm.Memory.Usage, 10, 85, vm.ID, "memory", 0.5)
 		vm.Memory.Used = int64(float64(vm.Memory.Total) * (vm.Memory.Usage / 100))
 		vm.Memory.Free = vm.Memory.Total - vm.Memory.Used
 
-		// Update disk usage very slowly (disks fill up gradually)
-		if rand.Float64() < 0.05 { // 5% chance to change disk usage
-			diskChange := (rand.Float64() - 0.48) * 0.3 // Very slight bias toward filling
-			vm.Disk.Usage += diskChange
-			vm.Disk.Usage = math.Max(10, math.Min(90, vm.Disk.Usage))
-			vm.Disk.Used = int64(float64(vm.Disk.Total) * (vm.Disk.Usage / 100))
-			vm.Disk.Free = vm.Disk.Total - vm.Disk.Used
-		}
+		vm.Disk.Usage = naturalMetricUpdate(vm.Disk.Usage, 10, 90, vm.ID, "disk", 0.12)
+		vm.Disk.Used = int64(float64(vm.Disk.Total) * (vm.Disk.Usage / 100))
+		vm.Disk.Free = vm.Disk.Total - vm.Disk.Used
 
 		// Update network/disk I/O with small chance of changing
 		if rand.Float64() < 0.15 { // 15% chance of I/O change
@@ -4657,28 +4746,15 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 			continue
 		}
 
-		// Random walk for CPU with mean reversion toward 8% (containers typically lower)
-		cpuChange := (rand.Float64() - 0.5) * 0.02
-		cpuMeanReversion := (0.08 - ct.CPU) * 0.10
-		ct.CPU += cpuChange + cpuMeanReversion
-		ct.CPU = math.Max(0.01, math.Min(0.75, ct.CPU))
+		ct.CPU = naturalMetricUpdate(ct.CPU, 0.01, 0.75, ct.ID, "cpu", 1.0)
 
-		// Update memory with smaller fluctuations and mean reversion toward 55%
-		memChange := (rand.Float64() - 0.5) * 0.02 // 2% swing
-		memMeanReversion := (55.0 - ct.Memory.Usage) * 0.04
-		ct.Memory.Usage += (memChange * 100) + memMeanReversion
-		ct.Memory.Usage = math.Max(5, math.Min(85, ct.Memory.Usage))
+		ct.Memory.Usage = naturalMetricUpdate(ct.Memory.Usage, 5, 85, ct.ID, "memory", 0.5)
 		ct.Memory.Used = int64(float64(ct.Memory.Total) * (ct.Memory.Usage / 100))
 		ct.Memory.Free = ct.Memory.Total - ct.Memory.Used
 
-		// Update disk usage very slowly
-		if rand.Float64() < 0.03 { // 3% chance (containers change disk less)
-			diskChange := (rand.Float64() - 0.48) * 0.2 // Very slight bias toward filling
-			ct.Disk.Usage += diskChange
-			ct.Disk.Usage = math.Max(5, math.Min(85, ct.Disk.Usage))
-			ct.Disk.Used = int64(float64(ct.Disk.Total) * (ct.Disk.Usage / 100))
-			ct.Disk.Free = ct.Disk.Total - ct.Disk.Used
-		}
+		ct.Disk.Usage = naturalMetricUpdate(ct.Disk.Usage, 5, 85, ct.ID, "disk", 0.10)
+		ct.Disk.Used = int64(float64(ct.Disk.Total) * (ct.Disk.Usage / 100))
+		ct.Disk.Free = ct.Disk.Total - ct.Disk.Used
 
 		// Update network/disk I/O with small chance of changing
 		if rand.Float64() < 0.10 { // 10% chance of I/O change (containers change less often)
@@ -4884,7 +4960,7 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 			host.UptimeSeconds += step
 			if config.RandomMetrics {
 				updateMockDockerHostRates(host)
-				host.CPUUsage = clampFloat(host.CPUUsage+(rand.Float64()-0.5)*4, 3, 99)
+				host.CPUUsage = naturalMetricUpdate(host.CPUUsage, 3, 99, host.ID, "cpu", 1.0)
 			}
 			host.Temperature = generateMockTemperature(host.CPUUsage)
 		} else if config.RandomMetrics && rand.Float64() < 0.01 {
@@ -4943,11 +5019,8 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 				running++
 
 				if config.RandomMetrics {
-					cpuChange := (rand.Float64() - 0.5) * 6
-					container.CPUPercent = clampFloat(container.CPUPercent+cpuChange, 0, 190)
-
-					memChange := (rand.Float64() - 0.5) * 4
-					container.MemoryPercent = clampFloat(container.MemoryPercent+memChange, 1, 97)
+					container.CPUPercent = naturalMetricUpdate(container.CPUPercent, 0, 190, container.ID, "cpu", 1.0)
+					container.MemoryPercent = naturalMetricUpdate(container.MemoryPercent, 1, 97, container.ID, "memory", 0.6)
 					if container.MemoryLimit > 0 {
 						container.MemoryUsage = int64(float64(container.MemoryLimit) * (container.MemoryPercent / 100.0))
 					}
@@ -5220,16 +5293,15 @@ func updateHosts(data *models.StateSnapshot, config MockConfig) {
 
 		updateMockHostRates(host)
 
-		host.CPUUsage = clampFloat(host.CPUUsage+(rand.Float64()-0.5)*5, 4, 97)
+		host.CPUUsage = naturalMetricUpdate(host.CPUUsage, 4, 97, host.ID, "cpu", 1.0)
 
-		memUsage := clampFloat(host.Memory.Usage+(rand.Float64()-0.5)*3, 12, 96)
-		host.Memory.Usage = memUsage
-		host.Memory.Used = int64(float64(host.Memory.Total) * (memUsage / 100.0))
+		host.Memory.Usage = naturalMetricUpdate(host.Memory.Usage, 12, 96, host.ID, "memory", 0.5)
+		host.Memory.Used = int64(float64(host.Memory.Total) * (host.Memory.Usage / 100.0))
 		host.Memory.Free = host.Memory.Total - host.Memory.Used
 
 		for j := range host.Disks {
-			change := (rand.Float64() - 0.5) * 1.2
-			host.Disks[j].Usage = clampFloat(host.Disks[j].Usage+change, 5, 98)
+			diskID := fmt.Sprintf("%s-disk-%d", host.ID, j)
+			host.Disks[j].Usage = naturalMetricUpdate(host.Disks[j].Usage, 5, 98, diskID, "disk", 0.12)
 			host.Disks[j].Used = int64(float64(host.Disks[j].Total) * (host.Disks[j].Usage / 100.0))
 			host.Disks[j].Free = host.Disks[j].Total - host.Disks[j].Used
 		}
