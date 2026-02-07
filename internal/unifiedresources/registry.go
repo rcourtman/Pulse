@@ -83,6 +83,12 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	for _, dh := range snapshot.DockerHosts {
 		rr.ingestDockerHost(dh)
 	}
+	for _, instance := range snapshot.PBSInstances {
+		rr.ingestPBSInstance(instance)
+	}
+	for _, instance := range snapshot.PMGInstances {
+		rr.ingestPMGInstance(instance)
+	}
 	for _, vm := range snapshot.VMs {
 		rr.ingestVM(vm)
 	}
@@ -92,6 +98,24 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	for _, dh := range snapshot.DockerHosts {
 		for _, dc := range dh.Containers {
 			rr.ingestDockerContainer(dc, dh)
+		}
+	}
+	kubernetesHostLookup := buildKubernetesNodeHostLookup(snapshot.Hosts)
+	for _, cluster := range snapshot.KubernetesClusters {
+		if cluster.Hidden {
+			continue
+		}
+		linkedHosts := linkedHostsForKubernetesCluster(cluster, kubernetesHostLookup)
+		clusterID := rr.ingestKubernetesCluster(cluster, linkedHosts)
+		for _, node := range cluster.Nodes {
+			linkedHost := resolveKubernetesNodeHost(node, kubernetesHostLookup)
+			rr.ingestKubernetesNode(cluster, node, linkedHost, clusterID)
+		}
+		for _, pod := range cluster.Pods {
+			rr.ingestKubernetesPod(cluster, pod, clusterID)
+		}
+		for _, deployment := range cluster.Deployments {
+			rr.ingestKubernetesDeployment(cluster, deployment, clusterID)
 		}
 	}
 
@@ -224,6 +248,18 @@ func (rr *ResourceRegistry) ingestDockerHost(host models.DockerHost) {
 	rr.ingest(SourceDocker, host.ID, resource, identity)
 }
 
+func (rr *ResourceRegistry) ingestPBSInstance(instance models.PBSInstance) {
+	resource, identity := resourceFromPBSInstance(instance)
+	sourceID := pbsInstanceSourceID(instance)
+	rr.ingest(SourcePBS, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestPMGInstance(instance models.PMGInstance) {
+	resource, identity := resourceFromPMGInstance(instance)
+	sourceID := pmgInstanceSourceID(instance)
+	rr.ingest(SourcePMG, sourceID, resource, identity)
+}
+
 func (rr *ResourceRegistry) ingestVM(vm models.VM) {
 	resource, identity := resourceFromVM(vm)
 	parentSourceID := proxmoxNodeSourceID(vm.Instance, vm.Node)
@@ -248,6 +284,39 @@ func (rr *ResourceRegistry) ingestDockerContainer(ct models.DockerContainer, hos
 		resource.ParentID = &parentID
 	}
 	rr.ingest(SourceDocker, ct.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host) string {
+	resource, identity := resourceFromKubernetesCluster(cluster, linkedHosts)
+	sourceID := kubernetesClusterSourceID(cluster)
+	return rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesNode(cluster models.KubernetesCluster, node models.KubernetesNode, linkedHost *models.Host, clusterResourceID string) {
+	resource, identity := resourceFromKubernetesNode(cluster, node, linkedHost)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesNodeSourceID(kubernetesClusterSourceID(cluster), node)
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesPod(cluster models.KubernetesCluster, pod models.KubernetesPod, clusterResourceID string) {
+	resource, identity := resourceFromKubernetesPod(cluster, pod)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesPodSourceID(kubernetesClusterSourceID(cluster), pod)
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesDeployment(cluster models.KubernetesCluster, deployment models.KubernetesDeployment, clusterResourceID string) {
+	resource, identity := resourceFromKubernetesDeployment(cluster, deployment)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesDeploymentSourceID(kubernetesClusterSourceID(cluster), deployment)
+	rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
 func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource Resource, identity ResourceIdentity) string {
@@ -387,6 +456,8 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 		existing.PBS = incoming.PBS
 	case SourceK8s:
 		existing.Kubernetes = incoming.Kubernetes
+	case SourcePMG:
+		existing.PMG = incoming.PMG
 	}
 
 	existing.Sources = addSource(existing.Sources, source)
@@ -478,6 +549,9 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 	if primary.PBS == nil {
 		primary.PBS = other.PBS
 	}
+	if primary.PMG == nil {
+		primary.PMG = other.PMG
+	}
 	if primary.Kubernetes == nil {
 		primary.Kubernetes = other.Kubernetes
 	}
@@ -563,6 +637,139 @@ func proxmoxNodeSourceID(instance, nodeName string) string {
 		return nodeName
 	}
 	return fmt.Sprintf("%s-%s", instance, nodeName)
+}
+
+func kubernetesClusterSourceID(cluster models.KubernetesCluster) string {
+	if v := strings.TrimSpace(cluster.ID); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(cluster.AgentID); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(cluster.Name); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(cluster.DisplayName); v != "" {
+		return v
+	}
+	return strings.TrimSpace(cluster.Context)
+}
+
+func kubernetesNodeSourceID(clusterSourceID string, node models.KubernetesNode) string {
+	nodeID := strings.TrimSpace(node.UID)
+	if nodeID == "" {
+		nodeID = strings.TrimSpace(node.Name)
+	}
+	return fmt.Sprintf("%s:node:%s", clusterSourceID, nodeID)
+}
+
+func kubernetesPodSourceID(clusterSourceID string, pod models.KubernetesPod) string {
+	podID := strings.TrimSpace(pod.UID)
+	if podID == "" {
+		podID = fmt.Sprintf("%s/%s", strings.TrimSpace(pod.Namespace), strings.TrimSpace(pod.Name))
+	}
+	return fmt.Sprintf("%s:pod:%s", clusterSourceID, podID)
+}
+
+func kubernetesDeploymentSourceID(clusterSourceID string, deployment models.KubernetesDeployment) string {
+	deploymentID := strings.TrimSpace(deployment.UID)
+	if deploymentID == "" {
+		deploymentID = fmt.Sprintf("%s/%s", strings.TrimSpace(deployment.Namespace), strings.TrimSpace(deployment.Name))
+	}
+	return fmt.Sprintf("%s:deployment:%s", clusterSourceID, deploymentID)
+}
+
+func buildKubernetesNodeHostLookup(hosts []models.Host) map[string]*models.Host {
+	lookup := make(map[string]*models.Host, len(hosts)*2)
+	for i := range hosts {
+		host := &hosts[i]
+		if host == nil {
+			continue
+		}
+
+		exactKey := strings.ToLower(strings.TrimSpace(host.Hostname))
+		if exactKey != "" {
+			lookup["host:"+exactKey] = host
+		}
+
+		normalized := NormalizeHostname(host.Hostname)
+		if normalized != "" {
+			if _, exists := lookup["short:"+normalized]; !exists {
+				lookup["short:"+normalized] = host
+			}
+		}
+	}
+	return lookup
+}
+
+func resolveKubernetesNodeHost(node models.KubernetesNode, lookup map[string]*models.Host) *models.Host {
+	if len(lookup) == 0 {
+		return nil
+	}
+
+	exactKey := strings.ToLower(strings.TrimSpace(node.Name))
+	if exactKey != "" {
+		if host, ok := lookup["host:"+exactKey]; ok {
+			return host
+		}
+	}
+
+	normalized := NormalizeHostname(node.Name)
+	if normalized != "" {
+		if host, ok := lookup["short:"+normalized]; ok {
+			return host
+		}
+	}
+
+	return nil
+}
+
+func linkedHostsForKubernetesCluster(cluster models.KubernetesCluster, lookup map[string]*models.Host) []*models.Host {
+	if len(cluster.Nodes) == 0 || len(lookup) == 0 {
+		return nil
+	}
+
+	hosts := make([]*models.Host, 0, len(cluster.Nodes))
+	seen := make(map[string]struct{}, len(cluster.Nodes))
+	for _, node := range cluster.Nodes {
+		host := resolveKubernetesNodeHost(node, lookup)
+		if host == nil {
+			continue
+		}
+		hostID := strings.TrimSpace(host.ID)
+		if hostID == "" {
+			hostID = strings.ToLower(strings.TrimSpace(host.Hostname))
+		}
+		if hostID == "" {
+			continue
+		}
+		if _, exists := seen[hostID]; exists {
+			continue
+		}
+		seen[hostID] = struct{}{}
+		hosts = append(hosts, host)
+	}
+	return hosts
+}
+
+func pbsInstanceSourceID(instance models.PBSInstance) string {
+	if v := strings.TrimSpace(instance.ID); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(instance.Name); v != "" {
+		return v
+	}
+	return extractHostname(instance.Host)
+}
+
+func pmgInstanceSourceID(instance models.PMGInstance) string {
+	if v := strings.TrimSpace(instance.ID); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(instance.Name); v != "" {
+		return v
+	}
+	return extractHostname(instance.Host)
 }
 
 func mergeIdentity(existing ResourceIdentity, incoming ResourceIdentity) ResourceIdentity {

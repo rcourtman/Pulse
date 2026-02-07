@@ -26,6 +26,7 @@ func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
 	proxmox := &ProxmoxData{
 		NodeName:          node.Name,
 		ClusterName:       node.ClusterName,
+		Temperature:       maxNodeTemp(node.Temperature),
 		PVEVersion:        node.PVEVersion,
 		KernelVersion:     node.KernelVersion,
 		Uptime:            node.Uptime,
@@ -120,6 +121,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 
 	docker := &DockerData{
 		Hostname:          host.Hostname,
+		Temperature:       host.Temperature,
 		Runtime:           host.Runtime,
 		RuntimeVersion:    host.RuntimeVersion,
 		DockerVersion:     host.DockerVersion,
@@ -145,6 +147,89 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		Tags:      nil,
 	}
 
+	return resource, identity
+}
+
+func resourceFromPBSInstance(instance models.PBSInstance) (Resource, ResourceIdentity) {
+	name := instance.Name
+	if strings.TrimSpace(name) == "" {
+		name = extractHostname(instance.Host)
+	}
+
+	resource := Resource{
+		Type:      ResourceTypePBS,
+		Name:      name,
+		Status:    statusFromPBSInstance(instance),
+		LastSeen:  instance.LastSeen,
+		UpdatedAt: time.Now().UTC(),
+		Metrics:   metricsFromPBSInstance(instance),
+		CustomURL: instance.GuestURL,
+		PBS: &PBSData{
+			InstanceID:       instance.ID,
+			Hostname:         extractHostname(instance.Host),
+			Version:          instance.Version,
+			UptimeSeconds:    instance.Uptime,
+			DatastoreCount:   len(instance.Datastores),
+			BackupJobCount:   len(instance.BackupJobs),
+			SyncJobCount:     len(instance.SyncJobs),
+			VerifyJobCount:   len(instance.VerifyJobs),
+			PruneJobCount:    len(instance.PruneJobs),
+			GarbageJobCount:  len(instance.GarbageJobs),
+			ConnectionHealth: instance.ConnectionHealth,
+		},
+	}
+
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{
+			instance.Name,
+			extractHostname(instance.Host),
+		}),
+	}
+	return resource, identity
+}
+
+func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIdentity) {
+	name := instance.Name
+	if strings.TrimSpace(name) == "" {
+		name = extractHostname(instance.Host)
+	}
+	uptime := maxPMGUptime(instance.Nodes)
+	resource := Resource{
+		Type:      ResourceTypePMG,
+		Name:      name,
+		Status:    statusFromPMGInstance(instance),
+		LastSeen:  instance.LastSeen,
+		UpdatedAt: time.Now().UTC(),
+		Metrics:   metricsFromPMGInstance(instance),
+		CustomURL: instance.GuestURL,
+		PMG: &PMGData{
+			InstanceID:       instance.ID,
+			Hostname:         extractHostname(instance.Host),
+			Version:          instance.Version,
+			NodeCount:        len(instance.Nodes),
+			UptimeSeconds:    uptime,
+			ConnectionHealth: instance.ConnectionHealth,
+			LastUpdated:      instance.LastUpdated,
+		},
+	}
+	if instance.MailStats != nil {
+		resource.PMG.MailCountTotal = instance.MailStats.CountTotal
+		resource.PMG.SpamIn = instance.MailStats.SpamIn
+		resource.PMG.VirusIn = instance.MailStats.VirusIn
+	}
+	queue := aggregatePMGQueue(instance.Nodes)
+	resource.PMG.QueueActive = queue.Active
+	resource.PMG.QueueDeferred = queue.Deferred
+	resource.PMG.QueueHold = queue.Hold
+	resource.PMG.QueueIncoming = queue.Incoming
+	resource.PMG.QueueTotal = queue.Total
+
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{
+			instance.Name,
+			extractHostname(instance.Host),
+		}),
+	}
 	return resource, identity
 }
 
@@ -213,12 +298,243 @@ func resourceFromDockerContainer(ct models.DockerContainer) (Resource, ResourceI
 		LastSeen:  time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metrics,
-		Docker:    &DockerData{Image: ct.Image, UptimeSeconds: ct.UptimeSeconds},
+		Docker:    &DockerData{ContainerID: ct.ID, Image: ct.Image, UptimeSeconds: ct.UptimeSeconds},
 	}
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{ct.Name}),
 	}
 	return resource, identity
+}
+
+func resourceFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	metrics := metricsFromKubernetesCluster(cluster, linkedHosts)
+	resource := Resource{
+		Type:      ResourceTypeK8sCluster,
+		Name:      clusterName,
+		Status:    statusFromKubernetesCluster(cluster),
+		LastSeen:  cluster.LastSeen,
+		UpdatedAt: time.Now().UTC(),
+		Metrics:   metrics,
+		Kubernetes: &K8sData{
+			ClusterID:        cluster.ID,
+			ClusterName:      clusterName,
+			AgentID:          cluster.AgentID,
+			Context:          cluster.Context,
+			Server:           cluster.Server,
+			Version:          cluster.Version,
+			PendingUninstall: cluster.PendingUninstall,
+		},
+		Tags: nil,
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{
+			cluster.Name,
+			cluster.DisplayName,
+			cluster.CustomDisplayName,
+			cluster.Context,
+			extractHostname(cluster.Server),
+		}),
+		ClusterName: clusterName,
+	}
+	return resource, identity
+}
+
+func resourceFromKubernetesNode(cluster models.KubernetesCluster, node models.KubernetesNode, linkedHost *models.Host) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	metrics := metricsFromKubernetesNode(cluster, node, linkedHost)
+	uptimeSeconds := int64(0)
+	var temperature *float64
+	if linkedHost != nil {
+		uptimeSeconds = linkedHost.UptimeSeconds
+		temperature = maxCPUTemp(linkedHost.Sensors)
+	}
+	resource := Resource{
+		Type:      ResourceTypeK8sNode,
+		Name:      node.Name,
+		Status:    statusFromKubernetesNode(node),
+		LastSeen:  cluster.LastSeen,
+		UpdatedAt: time.Now().UTC(),
+		Metrics:   metrics,
+		Kubernetes: &K8sData{
+			ClusterID:               cluster.ID,
+			ClusterName:             clusterName,
+			AgentID:                 cluster.AgentID,
+			Context:                 cluster.Context,
+			Server:                  cluster.Server,
+			Version:                 cluster.Version,
+			NodeUID:                 node.UID,
+			NodeName:                node.Name,
+			Ready:                   node.Ready,
+			Unschedulable:           node.Unschedulable,
+			Roles:                   append([]string(nil), node.Roles...),
+			KubeletVersion:          node.KubeletVersion,
+			ContainerRuntimeVersion: node.ContainerRuntimeVersion,
+			OSImage:                 node.OSImage,
+			KernelVersion:           node.KernelVersion,
+			Architecture:            node.Architecture,
+			CapacityCPU:             node.CapacityCPU,
+			CapacityMemoryBytes:     node.CapacityMemoryBytes,
+			CapacityPods:            node.CapacityPods,
+			AllocCPU:                node.AllocCPU,
+			AllocMemoryBytes:        node.AllocMemoryBytes,
+			AllocPods:               node.AllocPods,
+			UptimeSeconds:           uptimeSeconds,
+			Temperature:             temperature,
+		},
+		Tags: append([]string(nil), node.Roles...),
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{
+			node.Name,
+			clusterName + ":" + node.Name,
+		}),
+		ClusterName: clusterName,
+	}
+	return resource, identity
+}
+
+func resourceFromKubernetesPod(cluster models.KubernetesCluster, pod models.KubernetesPod) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(pod.Labels)
+	primaryImage := ""
+	now := time.Now().UTC()
+	if len(pod.Containers) > 0 {
+		primaryImage = pod.Containers[0].Image
+	}
+	metrics := metricsFromKubernetesPod(cluster, pod)
+	resource := Resource{
+		Type:      ResourceTypePod,
+		Name:      pod.Name,
+		Status:    statusFromKubernetesPod(pod),
+		LastSeen:  cluster.LastSeen,
+		UpdatedAt: now,
+		Metrics:   metrics,
+		Kubernetes: &K8sData{
+			ClusterID:   cluster.ID,
+			ClusterName: clusterName,
+			AgentID:     cluster.AgentID,
+			Context:     cluster.Context,
+			Server:      cluster.Server,
+			Version:     cluster.Version,
+			Namespace:   pod.Namespace,
+			PodUID:      pod.UID,
+			NodeName:    pod.NodeName,
+			PodPhase:    pod.Phase,
+			UptimeSeconds: func() int64 {
+				if pod.StartTime != nil {
+					start := pod.StartTime.UTC()
+					if !start.IsZero() && !start.After(now) {
+						return int64(now.Sub(start).Seconds())
+					}
+				}
+				created := pod.CreatedAt.UTC()
+				if !created.IsZero() && !created.After(now) {
+					return int64(now.Sub(created).Seconds())
+				}
+				return 0
+			}(),
+			Restarts:  pod.Restarts,
+			OwnerKind: pod.OwnerKind,
+			OwnerName: pod.OwnerName,
+			Image:     primaryImage,
+			Labels:    labels,
+		},
+		Tags: labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{
+			pod.Name,
+			pod.Namespace + "/" + pod.Name,
+		}),
+		ClusterName: clusterName,
+	}
+	return resource, identity
+}
+
+func resourceFromKubernetesDeployment(cluster models.KubernetesCluster, deployment models.KubernetesDeployment) (Resource, ResourceIdentity) {
+	clusterName := kubernetesClusterDisplayName(cluster)
+	labels := cloneLabelMap(deployment.Labels)
+	resource := Resource{
+		Type:      ResourceTypeK8sDeployment,
+		Name:      deployment.Name,
+		Status:    statusFromKubernetesDeployment(deployment),
+		LastSeen:  cluster.LastSeen,
+		UpdatedAt: time.Now().UTC(),
+		Kubernetes: &K8sData{
+			ClusterID:         cluster.ID,
+			ClusterName:       clusterName,
+			AgentID:           cluster.AgentID,
+			Context:           cluster.Context,
+			Server:            cluster.Server,
+			Version:           cluster.Version,
+			Namespace:         deployment.Namespace,
+			DeploymentUID:     deployment.UID,
+			DesiredReplicas:   deployment.DesiredReplicas,
+			UpdatedReplicas:   deployment.UpdatedReplicas,
+			ReadyReplicas:     deployment.ReadyReplicas,
+			AvailableReplicas: deployment.AvailableReplicas,
+			Labels:            labels,
+		},
+		Tags: labelsToTags(labels),
+	}
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{
+			deployment.Name,
+			deployment.Namespace + "/" + deployment.Name,
+		}),
+		ClusterName: clusterName,
+	}
+	return resource, identity
+}
+
+func kubernetesClusterDisplayName(cluster models.KubernetesCluster) string {
+	if v := strings.TrimSpace(cluster.CustomDisplayName); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(cluster.DisplayName); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(cluster.Name); v != "" {
+		return v
+	}
+	return strings.TrimSpace(cluster.ID)
+}
+
+func cloneLabelMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		if strings.TrimSpace(k) == "" {
+			continue
+		}
+		out[k] = v
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func labelsToTags(labels map[string]string) []string {
+	if len(labels) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(labels))
+	for k, v := range labels {
+		key := strings.TrimSpace(k)
+		if key == "" {
+			continue
+		}
+		if strings.TrimSpace(v) == "" {
+			out = append(out, key)
+			continue
+		}
+		out = append(out, key+":"+v)
+	}
+	return uniqueStrings(out)
 }
 
 func convertInterfaces(interfaces []models.HostNetworkInterface) []NetworkInterface {
@@ -332,6 +648,66 @@ func maxCPUTemp(sensors models.HostSensorSummary) *float64 {
 		return &best
 	}
 	return nil
+}
+
+// maxNodeTemp returns the best CPU temperature from a proxmox node temperature snapshot.
+func maxNodeTemp(temperature *models.Temperature) *float64 {
+	if temperature == nil || !temperature.Available {
+		return nil
+	}
+
+	if temperature.CPUMax > 0 {
+		v := temperature.CPUMax
+		return &v
+	}
+	if temperature.CPUPackage > 0 {
+		v := temperature.CPUPackage
+		return &v
+	}
+
+	var best float64
+	found := false
+	for _, core := range temperature.Cores {
+		if !found || core.Temp > best {
+			best = core.Temp
+			found = true
+		}
+	}
+	if found {
+		return &best
+	}
+	return nil
+}
+
+func maxPMGUptime(nodes []models.PMGNodeStatus) int64 {
+	var best int64
+	for _, node := range nodes {
+		if node.Uptime > best {
+			best = node.Uptime
+		}
+	}
+	return best
+}
+
+func aggregatePMGQueue(nodes []models.PMGNodeStatus) models.PMGQueueStatus {
+	var out models.PMGQueueStatus
+	for _, node := range nodes {
+		if node.QueueStatus == nil {
+			continue
+		}
+		out.Active += node.QueueStatus.Active
+		out.Deferred += node.QueueStatus.Deferred
+		out.Hold += node.QueueStatus.Hold
+		out.Incoming += node.QueueStatus.Incoming
+		out.Total += node.QueueStatus.Total
+		if node.QueueStatus.OldestAge > out.OldestAge {
+			out.OldestAge = node.QueueStatus.OldestAge
+		}
+		if node.QueueStatus.UpdatedAt.After(out.UpdatedAt) {
+			out.UpdatedAt = node.QueueStatus.UpdatedAt
+		}
+	}
+	return out
 }
 
 func uniqueStrings(values []string) []string {

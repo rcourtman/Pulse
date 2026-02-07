@@ -31,6 +31,7 @@ type Resource struct {
 	Agent      *AgentData   `json:"agent,omitempty"`
 	Docker     *DockerData  `json:"docker,omitempty"`
 	PBS        *PBSData     `json:"pbs,omitempty"`
+	PMG        *PMGData     `json:"pmg,omitempty"`
 	Kubernetes *K8sData     `json:"kubernetes,omitempty"`
 }
 
@@ -47,14 +48,18 @@ type DiscoveryTarget struct {
 type ResourceType string
 
 const (
-	ResourceTypeHost      ResourceType = "host"
-	ResourceTypeVM        ResourceType = "vm"
-	ResourceTypeLXC       ResourceType = "lxc"
-	ResourceTypeContainer ResourceType = "container"
-	ResourceTypeStorage   ResourceType = "storage"
-	ResourceTypePBS       ResourceType = "pbs"
-	ResourceTypePMG       ResourceType = "pmg"
-	ResourceTypeCeph      ResourceType = "ceph"
+	ResourceTypeHost          ResourceType = "host"
+	ResourceTypeVM            ResourceType = "vm"
+	ResourceTypeLXC           ResourceType = "lxc"
+	ResourceTypeContainer     ResourceType = "container"
+	ResourceTypeK8sCluster    ResourceType = "k8s-cluster"
+	ResourceTypeK8sNode       ResourceType = "k8s-node"
+	ResourceTypePod           ResourceType = "pod"
+	ResourceTypeK8sDeployment ResourceType = "k8s-deployment"
+	ResourceTypeStorage       ResourceType = "storage"
+	ResourceTypePBS           ResourceType = "pbs"
+	ResourceTypePMG           ResourceType = "pmg"
+	ResourceTypeCeph          ResourceType = "ceph"
 )
 
 // ResourceStatus represents the high-level status of a resource.
@@ -141,6 +146,7 @@ type ProxmoxData struct {
 	VMID          int       `json:"vmid,omitempty"`
 	CPUs          int       `json:"cpus,omitempty"`
 	Template      bool      `json:"template,omitempty"`
+	Temperature   *float64  `json:"temperature,omitempty"` // Max node CPU temp in Celsius
 	PVEVersion    string    `json:"pveVersion,omitempty"`
 	KernelVersion string    `json:"kernelVersion,omitempty"`
 	Uptime        int64     `json:"uptime,omitempty"`
@@ -172,8 +178,10 @@ type AgentData struct {
 
 // DockerData contains Docker host-specific data.
 type DockerData struct {
+	ContainerID       string             `json:"containerId,omitempty"`
 	Hostname          string             `json:"hostname,omitempty"`
 	Image             string             `json:"image,omitempty"`
+	Temperature       *float64           `json:"temperature,omitempty"`
 	Runtime           string             `json:"runtime,omitempty"`
 	RuntimeVersion    string             `json:"runtimeVersion,omitempty"`
 	DockerVersion     string             `json:"dockerVersion,omitempty"`
@@ -187,14 +195,80 @@ type DockerData struct {
 	Disks             []DiskInfo         `json:"disks,omitempty"`
 }
 
-// PBSData contains Proxmox Backup Server data (placeholder).
+// PBSData contains Proxmox Backup Server data.
 type PBSData struct {
-	Hostname string `json:"hostname,omitempty"`
+	InstanceID       string `json:"instanceId,omitempty"`
+	Hostname         string `json:"hostname,omitempty"`
+	Version          string `json:"version,omitempty"`
+	UptimeSeconds    int64  `json:"uptimeSeconds,omitempty"`
+	DatastoreCount   int    `json:"datastoreCount,omitempty"`
+	BackupJobCount   int    `json:"backupJobCount,omitempty"`
+	SyncJobCount     int    `json:"syncJobCount,omitempty"`
+	VerifyJobCount   int    `json:"verifyJobCount,omitempty"`
+	PruneJobCount    int    `json:"pruneJobCount,omitempty"`
+	GarbageJobCount  int    `json:"garbageJobCount,omitempty"`
+	ConnectionHealth string `json:"connectionHealth,omitempty"`
+}
+
+// PMGData contains Proxmox Mail Gateway data.
+type PMGData struct {
+	InstanceID       string    `json:"instanceId,omitempty"`
+	Hostname         string    `json:"hostname,omitempty"`
+	Version          string    `json:"version,omitempty"`
+	NodeCount        int       `json:"nodeCount,omitempty"`
+	UptimeSeconds    int64     `json:"uptimeSeconds,omitempty"`
+	QueueActive      int       `json:"queueActive,omitempty"`
+	QueueDeferred    int       `json:"queueDeferred,omitempty"`
+	QueueHold        int       `json:"queueHold,omitempty"`
+	QueueIncoming    int       `json:"queueIncoming,omitempty"`
+	QueueTotal       int       `json:"queueTotal,omitempty"`
+	MailCountTotal   float64   `json:"mailCountTotal,omitempty"`
+	SpamIn           float64   `json:"spamIn,omitempty"`
+	VirusIn          float64   `json:"virusIn,omitempty"`
+	ConnectionHealth string    `json:"connectionHealth,omitempty"`
+	LastUpdated      time.Time `json:"lastUpdated,omitempty"`
 }
 
 // K8sData contains Kubernetes data (placeholder).
 type K8sData struct {
-	ClusterName string `json:"clusterName,omitempty"`
+	ClusterID               string            `json:"clusterId,omitempty"`
+	ClusterName             string            `json:"clusterName,omitempty"`
+	AgentID                 string            `json:"agentId,omitempty"`
+	Context                 string            `json:"context,omitempty"`
+	Server                  string            `json:"server,omitempty"`
+	Version                 string            `json:"version,omitempty"`
+	PendingUninstall        bool              `json:"pendingUninstall,omitempty"`
+	NodeUID                 string            `json:"nodeUid,omitempty"`
+	NodeName                string            `json:"nodeName,omitempty"`
+	Ready                   bool              `json:"ready,omitempty"`
+	Unschedulable           bool              `json:"unschedulable,omitempty"`
+	Roles                   []string          `json:"roles,omitempty"`
+	KubeletVersion          string            `json:"kubeletVersion,omitempty"`
+	ContainerRuntimeVersion string            `json:"containerRuntimeVersion,omitempty"`
+	OSImage                 string            `json:"osImage,omitempty"`
+	KernelVersion           string            `json:"kernelVersion,omitempty"`
+	Architecture            string            `json:"architecture,omitempty"`
+	CapacityCPU             int64             `json:"capacityCpuCores,omitempty"`
+	CapacityMemoryBytes     int64             `json:"capacityMemoryBytes,omitempty"`
+	CapacityPods            int64             `json:"capacityPods,omitempty"`
+	AllocCPU                int64             `json:"allocatableCpuCores,omitempty"`
+	AllocMemoryBytes        int64             `json:"allocatableMemoryBytes,omitempty"`
+	AllocPods               int64             `json:"allocatablePods,omitempty"`
+	Namespace               string            `json:"namespace,omitempty"`
+	PodUID                  string            `json:"podUid,omitempty"`
+	PodPhase                string            `json:"podPhase,omitempty"`
+	UptimeSeconds           int64             `json:"uptimeSeconds,omitempty"`
+	Temperature             *float64          `json:"temperature,omitempty"`
+	Restarts                int               `json:"restarts,omitempty"`
+	OwnerKind               string            `json:"ownerKind,omitempty"`
+	OwnerName               string            `json:"ownerName,omitempty"`
+	Image                   string            `json:"image,omitempty"`
+	Labels                  map[string]string `json:"labels,omitempty"`
+	DeploymentUID           string            `json:"deploymentUid,omitempty"`
+	DesiredReplicas         int32             `json:"desiredReplicas,omitempty"`
+	UpdatedReplicas         int32             `json:"updatedReplicas,omitempty"`
+	ReadyReplicas           int32             `json:"readyReplicas,omitempty"`
+	AvailableReplicas       int32             `json:"availableReplicas,omitempty"`
 }
 
 // CPUInfo describes CPU characteristics.
