@@ -2,6 +2,7 @@ package mock
 
 import (
 	"fmt"
+	"hash/fnv"
 	"math"
 	"math/rand"
 	"sort"
@@ -346,6 +347,9 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 		Stats:                     models.Stats{},
 		ActiveAlerts:              []models.Alert{},
 	}
+
+	ensureMockNodeHostLinks(&data)
+	ensureMockKubernetesNodeHostLinks(&data)
 
 	// Generate physical disks for each node
 	for _, node := range data.Nodes {
@@ -770,8 +774,8 @@ func generateNode(name string, highLoad bool, config MockConfig) models.Node {
 
 // generateNodeTemperature generates realistic temperature data for a node
 func generateNodeTemperature(cores int) *models.Temperature {
-	// 30% chance of no temperature data (sensors not available)
-	if rand.Float64() < 0.3 {
+	// Keep missing temperatures uncommon in mock mode so Infrastructure has broad coverage.
+	if rand.Float64() < 0.1 {
 		return &models.Temperature{
 			Available: false,
 			HasCPU:    false,
@@ -1180,11 +1184,14 @@ func generateKubernetesClusters(config MockConfig) []models.KubernetesCluster {
 		if clusterCount > 1 && i == clusterCount-1 && rand.Float64() < 0.55 {
 			status = "offline"
 			lastSeen = now.Add(-time.Duration(5+rand.Intn(20)) * time.Minute)
+			for nodeIdx := range nodes {
+				nodes[nodeIdx].Ready = false
+			}
 		} else if clusterHasIssues(nodes, pods, deployments) {
 			status = "degraded"
 		}
 
-		clusters = append(clusters, models.KubernetesCluster{
+		cluster := models.KubernetesCluster{
 			ID:               clusterID,
 			AgentID:          fmt.Sprintf("%s-agent", clusterID),
 			Name:             name,
@@ -1201,10 +1208,482 @@ func generateKubernetesClusters(config MockConfig) []models.KubernetesCluster {
 			Deployments:      deployments,
 			Hidden:           false,
 			PendingUninstall: false,
-		})
+		}
+		initializeMockKubernetesClusterUsage(&cluster, now, true)
+		clusters = append(clusters, cluster)
 	}
 
 	return clusters
+}
+
+func initializeMockKubernetesClusterUsage(cluster *models.KubernetesCluster, now time.Time, randomize bool) {
+	if cluster == nil {
+		return
+	}
+
+	reconcileMockKubernetesPodScheduling(cluster, randomize)
+
+	nodeByName := make(map[string]*models.KubernetesNode, len(cluster.Nodes))
+	for i := range cluster.Nodes {
+		node := &cluster.Nodes[i]
+		normalizeMockKubernetesNodeCapacity(node)
+		name := strings.TrimSpace(node.Name)
+		if name != "" {
+			nodeByName[name] = node
+		}
+	}
+
+	clusterOffline := strings.EqualFold(strings.TrimSpace(cluster.Status), "offline")
+	for i := range cluster.Pods {
+		pod := &cluster.Pods[i]
+		node := nodeByName[strings.TrimSpace(pod.NodeName)]
+		updateMockKubernetesPodUsage(pod, node, now, randomize, clusterOffline)
+	}
+
+	recomputeMockKubernetesNodeUsage(cluster, now)
+}
+
+func reconcileMockKubernetesPodScheduling(cluster *models.KubernetesCluster, randomize bool) {
+	if cluster == nil {
+		return
+	}
+	clusterOffline := strings.EqualFold(strings.TrimSpace(cluster.Status), "offline")
+
+	if clusterOffline {
+		for i := range cluster.Nodes {
+			cluster.Nodes[i].Ready = false
+		}
+		for i := range cluster.Pods {
+			pod := &cluster.Pods[i]
+			if strings.EqualFold(strings.TrimSpace(pod.Phase), "running") {
+				pod.Phase = "Unknown"
+				pod.Reason = "ClusterOffline"
+				pod.Message = "Cluster telemetry temporarily unavailable"
+				for j := range pod.Containers {
+					if strings.EqualFold(strings.TrimSpace(pod.Containers[j].State), "terminated") {
+						continue
+					}
+					pod.Containers[j].Ready = false
+					pod.Containers[j].State = "unknown"
+					pod.Containers[j].Reason = "ClusterOffline"
+					pod.Containers[j].Message = "Cluster telemetry temporarily unavailable"
+				}
+			}
+		}
+		return
+	}
+
+	readyNodes := make([]string, 0, len(cluster.Nodes))
+	readyLookup := make(map[string]struct{}, len(cluster.Nodes))
+	for _, node := range cluster.Nodes {
+		name := strings.TrimSpace(node.Name)
+		if name == "" {
+			continue
+		}
+		if node.Ready && !node.Unschedulable {
+			readyNodes = append(readyNodes, name)
+			readyLookup[name] = struct{}{}
+		}
+	}
+
+	for i := range cluster.Pods {
+		pod := &cluster.Pods[i]
+		phase := strings.ToLower(strings.TrimSpace(pod.Phase))
+		nodeName := strings.TrimSpace(pod.NodeName)
+		_, nodeReady := readyLookup[nodeName]
+
+		switch phase {
+		case "running":
+			if nodeReady {
+				continue
+			}
+			if len(readyNodes) == 0 {
+				pod.Phase = "Pending"
+				pod.Reason = "Unschedulable"
+				pod.Message = "No ready nodes available"
+				pod.StartTime = nil
+				continue
+			}
+			if randomize && rand.Float64() < 0.25 {
+				pod.Phase = "Pending"
+				pod.Reason = "NodeNotReady"
+				pod.Message = "Waiting for node recovery"
+				pod.StartTime = nil
+				continue
+			}
+			assignIndex := int(mockStableHash64(strings.TrimSpace(pod.UID), pod.Name, "ready-node") % uint64(len(readyNodes)))
+			pod.NodeName = readyNodes[assignIndex]
+			pod.Reason = ""
+			pod.Message = ""
+			if pod.StartTime == nil {
+				start := time.Now().Add(-time.Duration(30+rand.Intn(240)) * time.Second)
+				pod.StartTime = &start
+			}
+		case "pending", "unknown":
+			if len(readyNodes) == 0 {
+				continue
+			}
+			if randomize && rand.Float64() >= 0.22 {
+				continue
+			}
+			assignIndex := int(mockStableHash64(strings.TrimSpace(pod.UID), pod.Name, "recover-node") % uint64(len(readyNodes)))
+			pod.NodeName = readyNodes[assignIndex]
+			pod.Phase = "Running"
+			pod.Reason = ""
+			pod.Message = ""
+			start := time.Now().Add(-time.Duration(20+rand.Intn(180)) * time.Second)
+			pod.StartTime = &start
+			for j := range pod.Containers {
+				if strings.EqualFold(pod.Containers[j].State, "terminated") {
+					continue
+				}
+				pod.Containers[j].State = "running"
+				pod.Containers[j].Reason = ""
+				pod.Containers[j].Message = ""
+				pod.Containers[j].Ready = true
+			}
+		}
+	}
+}
+
+func normalizeMockKubernetesNodeCapacity(node *models.KubernetesNode) {
+	if node == nil {
+		return
+	}
+	if node.CapacityCPU <= 0 {
+		node.CapacityCPU = 4
+	}
+	if node.AllocCPU <= 0 || node.AllocCPU > node.CapacityCPU {
+		node.AllocCPU = node.CapacityCPU
+	}
+	if node.CapacityMemoryBytes <= 0 {
+		node.CapacityMemoryBytes = int64(16) * 1024 * 1024 * 1024
+	}
+	if node.AllocMemoryBytes <= 0 || node.AllocMemoryBytes > node.CapacityMemoryBytes {
+		node.AllocMemoryBytes = node.CapacityMemoryBytes
+	}
+	if node.CapacityPods <= 0 {
+		node.CapacityPods = 110
+	}
+	if node.AllocPods <= 0 || node.AllocPods > node.CapacityPods {
+		node.AllocPods = node.CapacityPods
+	}
+}
+
+func updateMockKubernetesPodUsage(
+	pod *models.KubernetesPod,
+	node *models.KubernetesNode,
+	now time.Time,
+	randomize bool,
+	clusterOffline bool,
+) {
+	if pod == nil {
+		return
+	}
+	if clusterOffline || !mockKubernetesPodIsActive(pod, node) {
+		applyMockKubernetesPodZeroUsage(pod)
+		return
+	}
+
+	allocCPU := int64(2)
+	allocMemory := int64(8) * 1024 * 1024 * 1024
+	if node != nil {
+		if node.AllocCPU > 0 {
+			allocCPU = node.AllocCPU
+		} else if node.CapacityCPU > 0 {
+			allocCPU = node.CapacityCPU
+		}
+		if node.AllocMemoryBytes > 0 {
+			allocMemory = node.AllocMemoryBytes
+		} else if node.CapacityMemoryBytes > 0 {
+			allocMemory = node.CapacityMemoryBytes
+		}
+	}
+	if allocCPU <= 0 {
+		allocCPU = 2
+	}
+	if allocMemory <= 0 {
+		allocMemory = int64(8) * 1024 * 1024 * 1024
+	}
+
+	seedID := strings.TrimSpace(pod.UID)
+	if seedID == "" {
+		seedID = strings.TrimSpace(pod.Namespace) + "/" + strings.TrimSpace(pod.Name)
+	}
+
+	ownerKind := strings.ToLower(strings.TrimSpace(pod.OwnerKind))
+	ownerScale := 1.0
+	switch ownerKind {
+	case "statefulset":
+		ownerScale = 1.28
+	case "daemonset":
+		ownerScale = 0.82
+	case "job":
+		ownerScale = 0.74
+	}
+	switch strings.ToLower(strings.TrimSpace(pod.QoSClass)) {
+	case "guaranteed":
+		ownerScale *= 1.12
+	case "besteffort":
+		ownerScale *= 0.78
+	}
+
+	readyContainers := 0
+	for _, container := range pod.Containers {
+		if container.Ready {
+			readyContainers++
+		}
+	}
+	readyRatio := 1.0
+	if len(pod.Containers) > 0 {
+		readyRatio = float64(readyContainers) / float64(len(pod.Containers))
+		if readyRatio < 0.3 {
+			readyRatio = 0.3
+		}
+	}
+
+	activity := mockKubernetesActivity(seedID, now, 5*60, randomize)
+	activity *= 0.65 + (readyRatio * 0.45)
+	activity = clampFloat(activity, 0.05, 0.98)
+
+	baseCPU := 1.5 + float64(mockStableHash64(seedID, "cpu-base")%10)
+	burstCPU := 18.0 + float64(mockStableHash64(seedID, "cpu-burst")%52)
+	targetCPU := (baseCPU + activity*burstCPU) * ownerScale
+	pod.UsageCPUPercent = clampFloat(smoothMetricToward(pod.UsageCPUPercent, targetCPU, 0.34), 0.1, 96)
+
+	cpuMilli := int((pod.UsageCPUPercent / 100.0) * float64(allocCPU*1000))
+	if cpuMilli < 1 {
+		cpuMilli = 1
+	}
+	pod.UsageCPUMilliCores = cpuMilli
+
+	baseMemory := 9.0 + float64(mockStableHash64(seedID, "mem-base")%20)
+	burstMemory := 14.0 + float64(mockStableHash64(seedID, "mem-burst")%36)
+	targetMemory := (baseMemory + activity*burstMemory) * (0.92 + ownerScale*0.12)
+	pod.UsageMemoryPercent = clampFloat(smoothMetricToward(pod.UsageMemoryPercent, targetMemory, 0.22), 3, 97)
+	pod.UsageMemoryBytes = int64(float64(allocMemory) * (pod.UsageMemoryPercent / 100.0))
+
+	baseNetIn := float64((24 + int(mockStableHash64(seedID, "netin-base")%180)) * 1024)
+	burstNetIn := float64((128 + int(mockStableHash64(seedID, "netin-burst")%4096)) * 1024)
+	baseNetOut := float64((20 + int(mockStableHash64(seedID, "netout-base")%160)) * 1024)
+	burstNetOut := float64((96 + int(mockStableHash64(seedID, "netout-burst")%3072)) * 1024)
+	if ownerKind == "statefulset" {
+		baseNetOut *= 0.75
+		burstNetOut *= 0.75
+	}
+
+	targetNetIn := (baseNetIn + activity*burstNetIn) * (0.85 + ownerScale*0.25)
+	targetNetOut := (baseNetOut + activity*burstNetOut) * (0.8 + ownerScale*0.2)
+	pod.NetInRate = clampFloat(smoothMetricToward(pod.NetInRate, targetNetIn, 0.36), 4*1024, 180*1024*1024)
+	pod.NetOutRate = clampFloat(smoothMetricToward(pod.NetOutRate, targetNetOut, 0.36), 4*1024, 150*1024*1024)
+
+	seconds := updateInterval.Seconds()
+	if seconds <= 0 {
+		seconds = 2
+	}
+	if pod.NetworkRxBytes <= 0 {
+		seedSeconds := int64(180 + (mockStableHash64(seedID, "rx-seed") % 1800))
+		pod.NetworkRxBytes = int64(pod.NetInRate * float64(seedSeconds))
+	} else {
+		pod.NetworkRxBytes += int64(pod.NetInRate * seconds)
+	}
+	if pod.NetworkTxBytes <= 0 {
+		seedSeconds := int64(180 + (mockStableHash64(seedID, "tx-seed") % 1800))
+		pod.NetworkTxBytes = int64(pod.NetOutRate * float64(seedSeconds))
+	} else {
+		pod.NetworkTxBytes += int64(pod.NetOutRate * seconds)
+	}
+
+	capacityGiB := int64(8 + (mockStableHash64(seedID, "ephemeral-cap") % 180))
+	if ownerKind == "statefulset" {
+		capacityGiB += 64
+	}
+	if ownerKind == "daemonset" {
+		capacityGiB += 16
+	}
+	if capacityGiB < 4 {
+		capacityGiB = 4
+	}
+	capacityBytes := capacityGiB * 1024 * 1024 * 1024
+	if pod.EphemeralStorageCapacityBytes > 0 && pod.EphemeralStorageCapacityBytes > capacityBytes/2 {
+		capacityBytes = pod.EphemeralStorageCapacityBytes
+	}
+	pod.EphemeralStorageCapacityBytes = capacityBytes
+
+	baseDisk := 8.0 + float64(mockStableHash64(seedID, "disk-base")%18)
+	burstDisk := 12.0 + float64(mockStableHash64(seedID, "disk-burst")%40)
+	targetDisk := (baseDisk + activity*burstDisk) * (0.95 + ownerScale*0.08)
+	if ownerKind == "statefulset" {
+		targetDisk += 8
+	}
+	pod.DiskUsagePercent = clampFloat(smoothMetricToward(pod.DiskUsagePercent, targetDisk, 0.18), 1, 95)
+	pod.EphemeralStorageUsedBytes = int64(float64(capacityBytes) * (pod.DiskUsagePercent / 100.0))
+}
+
+func mockKubernetesPodIsActive(pod *models.KubernetesPod, node *models.KubernetesNode) bool {
+	if pod == nil {
+		return false
+	}
+	if !strings.EqualFold(strings.TrimSpace(pod.Phase), "running") {
+		return false
+	}
+	if strings.TrimSpace(pod.NodeName) == "" {
+		return false
+	}
+	if node != nil && !node.Ready {
+		return false
+	}
+	return true
+}
+
+func applyMockKubernetesPodZeroUsage(pod *models.KubernetesPod) {
+	if pod == nil {
+		return
+	}
+	pod.UsageCPUMilliCores = 0
+	pod.UsageMemoryBytes = 0
+	pod.UsageCPUPercent = 0
+	pod.UsageMemoryPercent = 0
+	pod.NetInRate = 0
+	pod.NetOutRate = 0
+	pod.DiskUsagePercent = 0
+	pod.EphemeralStorageUsedBytes = 0
+}
+
+func recomputeMockKubernetesNodeUsage(cluster *models.KubernetesCluster, now time.Time) {
+	if cluster == nil {
+		return
+	}
+
+	type aggregate struct {
+		cpuMilli int64
+		memBytes int64
+	}
+
+	podTotals := make(map[string]aggregate, len(cluster.Nodes))
+	for _, pod := range cluster.Pods {
+		if !strings.EqualFold(strings.TrimSpace(pod.Phase), "running") {
+			continue
+		}
+		nodeName := strings.TrimSpace(pod.NodeName)
+		if nodeName == "" {
+			continue
+		}
+		sum := podTotals[nodeName]
+		if pod.UsageCPUMilliCores > 0 {
+			sum.cpuMilli += int64(pod.UsageCPUMilliCores)
+		}
+		if pod.UsageMemoryBytes > 0 {
+			sum.memBytes += pod.UsageMemoryBytes
+		}
+		podTotals[nodeName] = sum
+	}
+
+	clusterOffline := strings.EqualFold(strings.TrimSpace(cluster.Status), "offline")
+	for i := range cluster.Nodes {
+		node := &cluster.Nodes[i]
+		normalizeMockKubernetesNodeCapacity(node)
+		if clusterOffline || !node.Ready {
+			node.UsageCPUMilliCores = 0
+			node.UsageMemoryBytes = 0
+			node.UsageCPUPercent = 0
+			node.UsageMemoryPercent = 0
+			continue
+		}
+
+		allocCPU := node.AllocCPU
+		if allocCPU <= 0 {
+			allocCPU = node.CapacityCPU
+		}
+		allocMemory := node.AllocMemoryBytes
+		if allocMemory <= 0 {
+			allocMemory = node.CapacityMemoryBytes
+		}
+		if allocCPU <= 0 || allocMemory <= 0 {
+			continue
+		}
+
+		name := strings.TrimSpace(node.Name)
+		sum := podTotals[name]
+		activity := mockKubernetesActivity(name+"-node", now, 7*60, true)
+		overheadCPU := int64(float64(allocCPU*1000) * clampFloat(0.04+activity*0.08, 0.03, 0.18))
+		overheadMemory := int64(float64(allocMemory) * clampFloat(0.1+activity*0.12, 0.08, 0.26))
+
+		usedCPU := sum.cpuMilli + overheadCPU
+		maxCPU := allocCPU * 1000
+		if usedCPU < 0 {
+			usedCPU = 0
+		}
+		if usedCPU > maxCPU {
+			usedCPU = maxCPU
+		}
+
+		usedMemory := sum.memBytes + overheadMemory
+		if usedMemory < 0 {
+			usedMemory = 0
+		}
+		if usedMemory > allocMemory {
+			usedMemory = allocMemory
+		}
+
+		node.UsageCPUMilliCores = usedCPU
+		node.UsageMemoryBytes = usedMemory
+		node.UsageCPUPercent = clampFloat((float64(usedCPU)/float64(maxCPU))*100, 0, 100)
+		node.UsageMemoryPercent = clampFloat((float64(usedMemory)/float64(allocMemory))*100, 0, 100)
+	}
+}
+
+func mockStableHash64(parts ...string) uint64 {
+	h := fnv.New64a()
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		_, _ = h.Write([]byte(part))
+		_, _ = h.Write([]byte{0})
+	}
+	return h.Sum64()
+}
+
+func mockKubernetesActivity(seed string, now time.Time, windowSeconds int64, randomize bool) float64 {
+	if windowSeconds <= 0 {
+		windowSeconds = 5 * 60
+	}
+	hash := mockStableHash64(seed)
+	bucket := (now.Unix() / windowSeconds) + int64(hash%19)
+	phase := bucket % 9
+
+	base := 0.2
+	switch phase {
+	case 0, 1, 2, 3:
+		base = 0.16
+	case 4, 5:
+		base = 0.42
+	case 6:
+		base = 0.74
+	case 7:
+		base = 0.55
+	default:
+		base = 0.3
+	}
+
+	progress := float64(now.Unix()%windowSeconds) / float64(windowSeconds)
+	phaseOffset := float64(hash%628) / 100.0
+	wave := 0.1 * math.Sin((progress*2*math.Pi)+phaseOffset)
+	if randomize {
+		wave += (rand.Float64() - 0.5) * 0.08
+	}
+	return clampFloat(base+wave, 0.05, 0.98)
+}
+
+func smoothMetricToward(current, target, weight float64) float64 {
+	if weight <= 0 || weight > 1 {
+		weight = 0.25
+	}
+	if current <= 0 {
+		current = target * (0.68 + rand.Float64()*0.22)
+	}
+	return current + ((target - current) * weight)
 }
 
 func generateKubernetesNodes(clusterID string, count int) []models.KubernetesNode {
@@ -1657,6 +2136,10 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 				TXBytes:   uint64(rand.Int63n(1_500_000_000) + 150_000_000),
 			})
 		}
+		temperature := generateMockTemperature(cpuUsage)
+		if status == "offline" {
+			temperature = nil
+		}
 
 		host := models.DockerHost{
 			ID:                hostID,
@@ -1686,6 +2169,17 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			Services:          services,
 			Tasks:             tasks,
 			Swarm:             swarmInfo,
+			Temperature:       temperature,
+			NetInRate:         generateMockHostRate("network-in"),
+			NetOutRate:        generateMockHostRate("network-out"),
+			DiskReadRate:      generateMockHostRate("disk-read"),
+			DiskWriteRate:     generateMockHostRate("disk-write"),
+		}
+		if status == "offline" {
+			host.NetInRate = 0
+			host.NetOutRate = 0
+			host.DiskReadRate = 0
+			host.DiskWriteRate = 0
 		}
 
 		hosts = append(hosts, host)
@@ -1890,6 +2384,16 @@ func generateHosts(config MockConfig) []models.Host {
 			TokenName:         tokenName,
 			TokenHint:         tokenHint,
 			TokenLastUsedAt:   tokenLastUsed,
+			NetInRate:         generateMockHostRate("network-in"),
+			NetOutRate:        generateMockHostRate("network-out"),
+			DiskReadRate:      generateMockHostRate("disk-read"),
+			DiskWriteRate:     generateMockHostRate("disk-write"),
+		}
+		if status == "offline" {
+			host.NetInRate = 0
+			host.NetOutRate = 0
+			host.DiskReadRate = 0
+			host.DiskWriteRate = 0
 		}
 
 		hosts = append(hosts, host)
@@ -1901,6 +2405,554 @@ func generateHosts(config MockConfig) []models.Host {
 
 	return hosts
 }
+
+func ensureMockNodeHostLinks(data *models.StateSnapshot) {
+	if data == nil || len(data.Nodes) == 0 {
+		return
+	}
+
+	now := time.Now()
+
+	for i := range data.Hosts {
+		host := &data.Hosts[i]
+		host.LinkedNodeID = ""
+		host.LinkedVMID = ""
+		host.LinkedContainerID = ""
+		if host.Status == "offline" {
+			host.NetInRate = 0
+			host.NetOutRate = 0
+			host.DiskReadRate = 0
+			host.DiskWriteRate = 0
+			continue
+		}
+		if host.NetInRate <= 0 {
+			host.NetInRate = generateMockHostRate("network-in")
+		}
+		if host.NetOutRate <= 0 {
+			host.NetOutRate = generateMockHostRate("network-out")
+		}
+		if host.DiskReadRate <= 0 {
+			host.DiskReadRate = generateMockHostRate("disk-read")
+		}
+		if host.DiskWriteRate <= 0 {
+			host.DiskWriteRate = generateMockHostRate("disk-write")
+		}
+	}
+
+	for i := range data.Nodes {
+		node := &data.Nodes[i]
+		hostID := ""
+		if i < len(data.Hosts) {
+			hostID = data.Hosts[i].ID
+		}
+		linkedHost := buildMockLinkedHostFromNode(*node, hostID, i, now)
+		if i < len(data.Hosts) {
+			data.Hosts[i] = linkedHost
+		} else {
+			data.Hosts = append(data.Hosts, linkedHost)
+		}
+		node.LinkedHostAgentID = linkedHost.ID
+	}
+}
+
+func ensureMockKubernetesNodeHostLinks(data *models.StateSnapshot) {
+	if data == nil || len(data.KubernetesClusters) == 0 {
+		return
+	}
+
+	now := time.Now()
+	hostsByName := make(map[string]int, len(data.Hosts))
+	for i := range data.Hosts {
+		name := strings.ToLower(strings.TrimSpace(data.Hosts[i].Hostname))
+		if name != "" {
+			hostsByName[name] = i
+		}
+	}
+
+	nextHostIndex := len(data.Hosts)
+	for clusterIndex := range data.KubernetesClusters {
+		cluster := &data.KubernetesClusters[clusterIndex]
+		for nodeIndex := range cluster.Nodes {
+			node := &cluster.Nodes[nodeIndex]
+			hostname := strings.ToLower(strings.TrimSpace(node.Name))
+			if hostname == "" {
+				continue
+			}
+
+			hostIndex, exists := hostsByName[hostname]
+			hostID := ""
+			if exists && hostIndex >= 0 && hostIndex < len(data.Hosts) {
+				hostID = data.Hosts[hostIndex].ID
+			}
+
+			host := buildMockLinkedHostFromKubernetesNode(*cluster, *node, hostID, nextHostIndex, now)
+			if exists && hostIndex >= 0 && hostIndex < len(data.Hosts) {
+				data.Hosts[hostIndex] = host
+			} else {
+				data.Hosts = append(data.Hosts, host)
+				hostsByName[hostname] = len(data.Hosts) - 1
+				nextHostIndex++
+			}
+		}
+	}
+}
+
+func buildMockLinkedHostFromKubernetesNode(
+	cluster models.KubernetesCluster,
+	node models.KubernetesNode,
+	hostID string,
+	hostIndex int,
+	now time.Time,
+) models.Host {
+	if hostID == "" {
+		hostID = fmt.Sprintf("host-k8s-%s-%s", strings.TrimSpace(cluster.ID), strings.TrimSpace(node.UID))
+		if strings.TrimSpace(node.UID) == "" {
+			hostID = fmt.Sprintf("host-k8s-%s-%d", strings.TrimSpace(cluster.ID), hostIndex+1)
+		}
+	}
+
+	allocCPU := node.AllocCPU
+	if allocCPU <= 0 {
+		allocCPU = node.CapacityCPU
+	}
+	if allocCPU <= 0 {
+		allocCPU = 4
+	}
+	allocMemory := node.AllocMemoryBytes
+	if allocMemory <= 0 {
+		allocMemory = node.CapacityMemoryBytes
+	}
+	if allocMemory <= 0 {
+		allocMemory = int64(16) * 1024 * 1024 * 1024
+	}
+
+	cpuUsage := node.UsageCPUPercent
+	if cpuUsage <= 0 && node.UsageCPUMilliCores > 0 {
+		cpuUsage = (float64(node.UsageCPUMilliCores) / float64(allocCPU*1000)) * 100
+	}
+	cpuUsage = clampFloat(cpuUsage, 4, 96)
+
+	memUsage := node.UsageMemoryPercent
+	if memUsage <= 0 && node.UsageMemoryBytes > 0 {
+		memUsage = (float64(node.UsageMemoryBytes) / float64(allocMemory)) * 100
+	}
+	memUsage = clampFloat(memUsage, 12, 94)
+	memUsed := int64(float64(allocMemory) * (memUsage / 100.0))
+	memFree := allocMemory - memUsed
+	if memFree < 0 {
+		memFree = 0
+	}
+
+	status := "online"
+	if !node.Ready {
+		status = "degraded"
+	}
+	if strings.EqualFold(strings.TrimSpace(cluster.Status), "offline") {
+		status = "offline"
+	}
+	lastSeen := now.Add(-time.Duration(rand.Intn(20)) * time.Second)
+	if status == "offline" {
+		lastSeen = now.Add(-time.Duration(180+rand.Intn(1200)) * time.Second)
+	}
+
+	diskTotal := int64(128+(mockStableHash64(cluster.ID, node.Name, "disk-total")%1024)) * 1024 * 1024 * 1024
+	diskUsage := clampFloat(24+float64(mockStableHash64(cluster.ID, node.Name, "disk-usage")%44), 8, 92)
+	diskUsed := int64(float64(diskTotal) * (diskUsage / 100.0))
+	diskFree := diskTotal - diskUsed
+	if diskFree < 0 {
+		diskFree = 0
+	}
+
+	sensors := models.HostSensorSummary{}
+	if temp := generateMockTemperature(cpuUsage); temp != nil {
+		sensors.TemperatureCelsius = map[string]float64{
+			"cpu_package": *temp,
+		}
+	}
+
+	tags := []string{"mock", "kubernetes-node"}
+	for _, role := range node.Roles {
+		role = strings.TrimSpace(role)
+		if role == "" {
+			continue
+		}
+		already := false
+		for _, existing := range tags {
+			if existing == role {
+				already = true
+				break
+			}
+		}
+		if !already {
+			tags = append(tags, role)
+		}
+	}
+
+	host := models.Host{
+		ID:            hostID,
+		Hostname:      node.Name,
+		DisplayName:   humanizeHostDisplayName(node.Name),
+		Platform:      "linux",
+		OSName:        node.OSImage,
+		KernelVersion: node.KernelVersion,
+		Architecture:  node.Architecture,
+		CPUCount:      int(allocCPU),
+		CPUUsage:      cpuUsage,
+		Memory: models.Memory{
+			Total: allocMemory,
+			Used:  memUsed,
+			Free:  memFree,
+			Usage: memUsage,
+		},
+		Disks: []models.Disk{
+			{
+				Total:      diskTotal,
+				Used:       diskUsed,
+				Free:       diskFree,
+				Usage:      diskUsage,
+				Mountpoint: "/",
+				Type:       "ext4",
+				Device:     "/dev/nvme0n1p1",
+			},
+		},
+		NetworkInterfaces: []models.HostNetworkInterface{
+			{
+				Name: "eth0",
+				MAC:  fmt.Sprintf("02:6f:%02x:%02x:%02x:%02x", hostIndex%255, (hostIndex*17)%255, (hostIndex*31)%255, (hostIndex*41)%255),
+				Addresses: []string{
+					fmt.Sprintf("10.%d.%d.%d", 20+(hostIndex%90), 10+rand.Intn(120), 20+rand.Intn(200)),
+				},
+			},
+		},
+		Sensors:         sensors,
+		Status:          status,
+		UptimeSeconds:   int64(3600 * (24 + int(mockStableHash64(cluster.ID, node.Name, "uptime")%720))),
+		IntervalSeconds: 30,
+		LastSeen:        lastSeen,
+		AgentVersion:    hostAgentVersions[rand.Intn(len(hostAgentVersions))],
+		MachineID:       randomHexString(32),
+		Tags:            tags,
+	}
+	updateMockHostRates(&host)
+	if status == "offline" {
+		host.NetInRate = 0
+		host.NetOutRate = 0
+		host.DiskReadRate = 0
+		host.DiskWriteRate = 0
+	}
+	return host
+}
+
+func syncMockKubernetesNodeHosts(data *models.StateSnapshot) {
+	if data == nil || len(data.Hosts) == 0 || len(data.KubernetesClusters) == 0 {
+		return
+	}
+
+	hostsByName := make(map[string]*models.Host, len(data.Hosts))
+	for i := range data.Hosts {
+		host := &data.Hosts[i]
+		hostname := strings.ToLower(strings.TrimSpace(host.Hostname))
+		if hostname != "" {
+			hostsByName[hostname] = host
+		}
+	}
+
+	for _, cluster := range data.KubernetesClusters {
+		for _, node := range cluster.Nodes {
+			host := hostsByName[strings.ToLower(strings.TrimSpace(node.Name))]
+			if host == nil {
+				continue
+			}
+
+			if strings.EqualFold(strings.TrimSpace(cluster.Status), "offline") {
+				host.Status = "offline"
+				host.NetInRate = 0
+				host.NetOutRate = 0
+				host.DiskReadRate = 0
+				host.DiskWriteRate = 0
+				continue
+			}
+
+			if !node.Ready {
+				host.Status = "degraded"
+			} else if strings.EqualFold(host.Status, "offline") {
+				host.Status = "online"
+			}
+
+			if node.UsageCPUPercent > 0 {
+				host.CPUUsage = clampFloat(smoothMetricToward(host.CPUUsage, node.UsageCPUPercent, 0.42), 2, 99)
+			}
+
+			totalMemory := node.AllocMemoryBytes
+			if totalMemory <= 0 {
+				totalMemory = node.CapacityMemoryBytes
+			}
+			if totalMemory > 0 {
+				usedMemory := node.UsageMemoryBytes
+				if usedMemory <= 0 && node.UsageMemoryPercent > 0 {
+					usedMemory = int64(float64(totalMemory) * (node.UsageMemoryPercent / 100.0))
+				}
+				if usedMemory < 0 {
+					usedMemory = 0
+				}
+				if usedMemory > totalMemory {
+					usedMemory = totalMemory
+				}
+				host.Memory.Total = totalMemory
+				host.Memory.Used = usedMemory
+				host.Memory.Free = totalMemory - usedMemory
+				if totalMemory > 0 {
+					host.Memory.Usage = clampFloat((float64(usedMemory)/float64(totalMemory))*100, 0, 100)
+				}
+			}
+
+			if temp := generateMockTemperature(host.CPUUsage); temp != nil {
+				if host.Sensors.TemperatureCelsius == nil {
+					host.Sensors.TemperatureCelsius = make(map[string]float64)
+				}
+				host.Sensors.TemperatureCelsius["cpu_package"] = *temp
+			}
+		}
+	}
+}
+
+func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int, now time.Time) models.Host {
+	if hostID == "" {
+		hostID = fmt.Sprintf("host-node-%s", node.ID)
+	}
+
+	cpuCount := node.CPUInfo.Cores
+	if cpuCount <= 0 {
+		cpuCount = 8
+	}
+
+	cpuUsage := node.CPU
+	if cpuUsage <= 1.0 {
+		cpuUsage = cpuUsage * 100
+	}
+	cpuUsage = clampFloat(cpuUsage, 0, 100)
+
+	memory := node.Memory
+	if memory.Total <= 0 {
+		memory.Total = int64(32) * 1024 * 1024 * 1024
+		memory.Used = int64(float64(memory.Total) * 0.5)
+	}
+	if memory.Used <= 0 && memory.Usage > 0 {
+		memory.Used = int64(float64(memory.Total) * (memory.Usage / 100.0))
+	}
+	if memory.Usage <= 0 && memory.Total > 0 {
+		memory.Usage = float64(memory.Used) / float64(memory.Total) * 100.0
+	}
+	memory.Free = memory.Total - memory.Used
+	if memory.Free < 0 {
+		memory.Free = 0
+	}
+
+	disk := node.Disk
+	if disk.Total <= 0 {
+		disk.Total = int64(512) * 1024 * 1024 * 1024
+		disk.Used = int64(float64(disk.Total) * 0.45)
+	}
+	if disk.Used <= 0 && disk.Usage > 0 {
+		disk.Used = int64(float64(disk.Total) * (disk.Usage / 100.0))
+	}
+	if disk.Usage <= 0 && disk.Total > 0 {
+		disk.Usage = float64(disk.Used) / float64(disk.Total) * 100.0
+	}
+	disk.Free = disk.Total - disk.Used
+	if disk.Free < 0 {
+		disk.Free = 0
+	}
+
+	disk.Mountpoint = "/"
+	disk.Type = "zfs"
+	disk.Device = "rpool"
+
+	status := nodeStatusToHostStatus(node.Status)
+	lastSeen := now.Add(-time.Duration(rand.Intn(12)) * time.Second)
+	if status == "offline" {
+		lastSeen = now.Add(-time.Duration(240+rand.Intn(1200)) * time.Second)
+	}
+
+	displayName := node.DisplayName
+	if strings.TrimSpace(displayName) == "" {
+		displayName = humanizeHostDisplayName(node.Name)
+	}
+
+	host := models.Host{
+		ID:            hostID,
+		Hostname:      node.Name,
+		DisplayName:   displayName,
+		Platform:      "linux",
+		OSName:        "Proxmox VE",
+		OSVersion:     node.PVEVersion,
+		KernelVersion: node.KernelVersion,
+		Architecture:  "x86_64",
+		CPUCount:      cpuCount,
+		CPUUsage:      cpuUsage,
+		LoadAverage: []float64{
+			clampFloat((cpuUsage/100.0)*float64(cpuCount)*0.8, 0.05, float64(cpuCount)*1.2),
+			clampFloat((cpuUsage/100.0)*float64(cpuCount)*0.7, 0.05, float64(cpuCount)*1.2),
+			clampFloat((cpuUsage/100.0)*float64(cpuCount)*0.6, 0.05, float64(cpuCount)*1.2),
+		},
+		Memory: memory,
+		Disks:  []models.Disk{disk},
+		NetworkInterfaces: []models.HostNetworkInterface{
+			{
+				Name: "eth0",
+				MAC:  fmt.Sprintf("02:50:%02x:%02x:%02x:%02x", hostIndex%255, (hostIndex*13)%255, (hostIndex*29)%255, (hostIndex*37)%255),
+				Addresses: []string{
+					fmt.Sprintf("192.168.%d.%d", 80+(hostIndex%10), 20+(hostIndex%200)),
+				},
+				RXBytes: uint64(1_000_000_000 + rand.Int63n(5_000_000_000)),
+				TXBytes: uint64(750_000_000 + rand.Int63n(4_000_000_000)),
+			},
+		},
+		Sensors:         nodeTemperatureToHostSensors(node.Temperature),
+		Status:          status,
+		UptimeSeconds:   node.Uptime,
+		IntervalSeconds: 30,
+		LastSeen:        lastSeen,
+		AgentVersion:    hostAgentVersions[rand.Intn(len(hostAgentVersions))],
+		MachineID:       randomHexString(32),
+		Tags:            []string{"mock", "proxmox-node"},
+		LinkedNodeID:    node.ID,
+	}
+
+	updateMockHostRates(&host)
+	if status == "offline" {
+		host.NetInRate = 0
+		host.NetOutRate = 0
+		host.DiskReadRate = 0
+		host.DiskWriteRate = 0
+	}
+
+	return host
+}
+
+func nodeStatusToHostStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "offline":
+		return "offline"
+	case "degraded":
+		return "degraded"
+	default:
+		return "online"
+	}
+}
+
+func nodeTemperatureToHostSensors(temperature *models.Temperature) models.HostSensorSummary {
+	if temperature == nil || !temperature.Available {
+		return models.HostSensorSummary{}
+	}
+
+	sensors := models.HostSensorSummary{
+		TemperatureCelsius: map[string]float64{},
+	}
+
+	if temperature.CPUPackage > 0 {
+		sensors.TemperatureCelsius["cpu_package"] = temperature.CPUPackage
+	}
+	for _, core := range temperature.Cores {
+		sensors.TemperatureCelsius[fmt.Sprintf("cpu_core_%d", core.Core)] = core.Temp
+	}
+
+	if len(temperature.NVMe) > 0 {
+		sensors.Additional = make(map[string]float64, len(temperature.NVMe))
+		for _, nvme := range temperature.NVMe {
+			if nvme.Device == "" {
+				continue
+			}
+			sensors.Additional[nvme.Device] = nvme.Temp
+		}
+	}
+
+	if len(sensors.TemperatureCelsius) == 0 {
+		sensors.TemperatureCelsius = nil
+	}
+	if len(sensors.Additional) == 0 {
+		sensors.Additional = nil
+	}
+
+	return sensors
+}
+
+func generateMockHostRate(ioType string) float64 {
+	rate := float64(generateRealisticIO(ioType))
+	if rate > 0 {
+		return rate
+	}
+
+	switch ioType {
+	case "network-in":
+		return float64((128 + rand.Intn(4096)) * 1024) // 128 KiB/s - 4 MiB/s
+	case "network-out":
+		return float64((96 + rand.Intn(3072)) * 1024) // 96 KiB/s - 3 MiB/s
+	case "disk-read":
+		return float64((64 + rand.Intn(2048)) * 1024) // 64 KiB/s - 2 MiB/s
+	case "disk-write":
+		return float64((32 + rand.Intn(1536)) * 1024) // 32 KiB/s - 1.5 MiB/s
+	default:
+		return float64((32 + rand.Intn(512)) * 1024)
+	}
+}
+
+func generateMockTemperature(cpuUsagePercent float64) *float64 {
+	if cpuUsagePercent <= 0 {
+		return nil
+	}
+	temp := clampFloat(34+(cpuUsagePercent*0.45)+rand.Float64()*4, 32, 88)
+	return &temp
+}
+
+func fluctuateMockHostRate(current float64, ioType string, min, max float64) float64 {
+	if current <= 0 {
+		current = generateMockHostRate(ioType)
+	}
+	changeFactor := 1 + ((rand.Float64()*2)-1)*0.25
+	next := current * changeFactor
+	if rand.Float64() < 0.04 {
+		next *= 1.4 + rand.Float64()*0.8
+	}
+	return clampFloat(next, min, max)
+}
+
+func updateMockHostRates(host *models.Host) {
+	if host == nil {
+		return
+	}
+	if strings.EqualFold(host.Status, "offline") {
+		host.NetInRate = 0
+		host.NetOutRate = 0
+		host.DiskReadRate = 0
+		host.DiskWriteRate = 0
+		return
+	}
+
+	host.NetInRate = fluctuateMockHostRate(host.NetInRate, "network-in", 32*1024, 250*1024*1024)
+	host.NetOutRate = fluctuateMockHostRate(host.NetOutRate, "network-out", 24*1024, 200*1024*1024)
+	host.DiskReadRate = fluctuateMockHostRate(host.DiskReadRate, "disk-read", 16*1024, 120*1024*1024)
+	host.DiskWriteRate = fluctuateMockHostRate(host.DiskWriteRate, "disk-write", 8*1024, 90*1024*1024)
+}
+
+func updateMockDockerHostRates(host *models.DockerHost) {
+	if host == nil {
+		return
+	}
+	if strings.EqualFold(host.Status, "offline") {
+		host.NetInRate = 0
+		host.NetOutRate = 0
+		host.DiskReadRate = 0
+		host.DiskWriteRate = 0
+		return
+	}
+
+	host.NetInRate = fluctuateMockHostRate(host.NetInRate, "network-in", 32*1024, 250*1024*1024)
+	host.NetOutRate = fluctuateMockHostRate(host.NetOutRate, "network-out", 24*1024, 200*1024*1024)
+	host.DiskReadRate = fluctuateMockHostRate(host.DiskReadRate, "disk-read", 16*1024, 120*1024*1024)
+	host.DiskWriteRate = fluctuateMockHostRate(host.DiskWriteRate, "disk-write", 8*1024, 90*1024*1024)
+}
+
 func generateDockerContainers(hostName string, hostIdx int, config MockConfig, podman bool) []models.DockerContainer {
 	base := config.DockerContainersPerHost
 	if base < 1 {
@@ -3531,6 +4583,7 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 	updateDockerHosts(data, config)
 	updateKubernetesClusters(data, config)
 	updateHosts(data, config)
+	syncMockKubernetesNodeHosts(data)
 
 	if !config.RandomMetrics {
 		return
@@ -3754,6 +4807,9 @@ func updateKubernetesClusters(data *models.StateSnapshot, config MockConfig) {
 		} else if config.RandomMetrics && rand.Float64() < 0.01 {
 			cluster.Status = "online"
 			cluster.LastSeen = now
+			for nodeIdx := range cluster.Nodes {
+				cluster.Nodes[nodeIdx].Ready = rand.Float64() > 0.12
+			}
 		}
 
 		if config.RandomMetrics {
@@ -3801,6 +4857,8 @@ func updateKubernetesClusters(data *models.StateSnapshot, config MockConfig) {
 			}
 		}
 
+		initializeMockKubernetesClusterUsage(cluster, now, config.RandomMetrics)
+
 		if data.ConnectionHealth != nil {
 			data.ConnectionHealth[kubernetesConnectionPrefix+cluster.ID] = cluster.Status != "offline"
 		}
@@ -3824,14 +4882,28 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 		if host.Status != "offline" {
 			host.LastSeen = now.Add(-time.Duration(rand.Intn(6)) * time.Second)
 			host.UptimeSeconds += step
+			if config.RandomMetrics {
+				updateMockDockerHostRates(host)
+				host.CPUUsage = clampFloat(host.CPUUsage+(rand.Float64()-0.5)*4, 3, 99)
+			}
+			host.Temperature = generateMockTemperature(host.CPUUsage)
 		} else if config.RandomMetrics && rand.Float64() < 0.01 {
 			// Occasionally bring an offline host back online
 			host.Status = "online"
 			host.LastSeen = now
+			updateMockDockerHostRates(host)
+			host.CPUUsage = clampFloat(8+rand.Float64()*35, 3, 99)
+			host.Temperature = generateMockTemperature(host.CPUUsage)
 			if len(host.Containers) == 0 {
 				isPodman := strings.EqualFold(host.Runtime, "podman")
 				host.Containers = generateDockerContainers(host.Hostname, i, config, isPodman)
 			}
+		} else {
+			host.NetInRate = 0
+			host.NetOutRate = 0
+			host.DiskReadRate = 0
+			host.DiskWriteRate = 0
+			host.Temperature = nil
 		}
 
 		running := 0
@@ -3924,12 +4996,18 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 		ensureDockerSwarmInfo(host)
 
 		if host.Status == "offline" {
+			host.NetInRate = 0
+			host.NetOutRate = 0
+			host.DiskReadRate = 0
+			host.DiskWriteRate = 0
+			host.Temperature = nil
 			continue
 		}
 
 		total := len(host.Containers)
 		if total == 0 {
 			host.Status = "offline"
+			host.Temperature = nil
 			if data.ConnectionHealth != nil {
 				data.ConnectionHealth[dockerConnectionPrefix+host.ID] = false
 			}
@@ -3939,6 +5017,7 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 		if running == 0 {
 			host.Status = "offline"
 			host.LastSeen = now.Add(-90 * time.Second)
+			host.Temperature = nil
 			if data.ConnectionHealth != nil {
 				data.ConnectionHealth[dockerConnectionPrefix+host.ID] = false
 			}
@@ -3951,6 +5030,7 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 		} else {
 			host.Status = "online"
 		}
+		host.Temperature = generateMockTemperature(host.CPUUsage)
 	}
 }
 
@@ -4118,10 +5198,15 @@ func updateHosts(data *models.StateSnapshot, config MockConfig) {
 		}
 
 		if host.Status == "offline" {
+			host.NetInRate = 0
+			host.NetOutRate = 0
+			host.DiskReadRate = 0
+			host.DiskWriteRate = 0
 			if config.RandomMetrics && rand.Float64() < 0.02 {
 				host.Status = "online"
 				host.LastSeen = now
 				host.UptimeSeconds = int64(120 + rand.Intn(3600))
+				updateMockHostRates(host)
 			}
 			continue
 		}
@@ -4132,6 +5217,8 @@ func updateHosts(data *models.StateSnapshot, config MockConfig) {
 		if !config.RandomMetrics {
 			continue
 		}
+
+		updateMockHostRates(host)
 
 		host.CPUUsage = clampFloat(host.CPUUsage+(rand.Float64()-0.5)*5, 4, 97)
 
