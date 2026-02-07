@@ -12,7 +12,6 @@ import (
 	"hash/fnv"
 	"io"
 	"math"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -5384,8 +5383,11 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		// Get historical metrics (falls back to SQLite + LTTB for long ranges)
 		metrics := monitor.GetGuestMetricsForChart(vm.ID, "vm", vm.ID, duration)
 
-		// Convert metric points to API format
+		// Convert metric points to API format (sparkline metrics only)
 		for metricType, points := range metrics {
+			if !sparklineMetrics[metricType] {
+				continue
+			}
 			chartData[vm.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
@@ -5410,12 +5412,6 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			chartData[vm.ID]["disk"] = []MetricPoint{
 				{Timestamp: currentTime, Value: vm.Disk.Usage},
 			}
-			chartData[vm.ID]["diskread"] = []MetricPoint{
-				{Timestamp: currentTime, Value: float64(vm.DiskRead)},
-			}
-			chartData[vm.ID]["diskwrite"] = []MetricPoint{
-				{Timestamp: currentTime, Value: float64(vm.DiskWrite)},
-			}
 			chartData[vm.ID]["netin"] = []MetricPoint{
 				{Timestamp: currentTime, Value: float64(vm.NetworkIn)},
 			}
@@ -5434,8 +5430,11 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		// Get historical metrics (falls back to SQLite + LTTB for long ranges)
 		metrics := monitor.GetGuestMetricsForChart(ct.ID, "container", ct.ID, duration)
 
-		// Convert metric points to API format
+		// Convert metric points to API format (sparkline metrics only)
 		for metricType, points := range metrics {
+			if !sparklineMetrics[metricType] {
+				continue
+			}
 			chartData[ct.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
@@ -5459,12 +5458,6 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			}
 			chartData[ct.ID]["disk"] = []MetricPoint{
 				{Timestamp: currentTime, Value: ct.Disk.Usage},
-			}
-			chartData[ct.ID]["diskread"] = []MetricPoint{
-				{Timestamp: currentTime, Value: float64(ct.DiskRead)},
-			}
-			chartData[ct.ID]["diskwrite"] = []MetricPoint{
-				{Timestamp: currentTime, Value: float64(ct.DiskWrite)},
 			}
 			chartData[ct.ID]["netin"] = []MetricPoint{
 				{Timestamp: currentTime, Value: float64(ct.NetworkIn)},
@@ -5582,8 +5575,11 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			metricKey := fmt.Sprintf("docker:%s", container.ID)
 			metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", container.ID, duration)
 
-			// Convert metric points to API format
+			// Convert metric points to API format (sparkline metrics only)
 			for metricType, points := range metrics {
+				if !sparklineMetrics[metricType] {
+					continue
+				}
 				dockerData[container.ID][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
 					ts := point.Timestamp.Unix() * 1000
@@ -5635,8 +5631,11 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		metricKey := fmt.Sprintf("dockerHost:%s", host.ID)
 		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerHost", host.ID, duration)
 
-		// Convert metric points to API format
+		// Convert metric points to API format (sparkline metrics only)
 		for metricType, points := range metrics {
+			if !sparklineMetrics[metricType] {
+				continue
+			}
 			dockerHostData[host.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
@@ -5677,8 +5676,11 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		metricKey := fmt.Sprintf("host:%s", host.ID)
 		metrics := monitor.GetGuestMetricsForChart(metricKey, "host", host.ID, duration)
 
-		// Convert metric points to API format
+		// Convert metric points to API format (sparkline metrics only)
 		for metricType, points := range metrics {
+			if !sparklineMetrics[metricType] {
+				continue
+			}
 			hostData[host.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
@@ -5841,6 +5843,17 @@ func capMetricPointSeries(points []MetricPoint, maxPoints int) []MetricPoint {
 	return result
 }
 
+// sparklineMetrics lists the metric types consumed by summary sparklines.
+// Metrics not in this set (e.g. diskread, diskwrite) are omitted to keep
+// payloads small.
+var sparklineMetrics = map[string]bool{
+	"cpu":    true,
+	"memory": true,
+	"disk":   true,
+	"netin":  true,
+	"netout": true,
+}
+
 func convertMetricsForChart(
 	metrics map[string][]monitoring.MetricPoint,
 	oldestTimestamp *int64,
@@ -5848,6 +5861,9 @@ func convertMetricsForChart(
 ) VMChartData {
 	converted := make(VMChartData, len(metrics))
 	for metricType, metricPoints := range metrics {
+		if !sparklineMetrics[metricType] {
+			continue
+		}
 		points := make([]MetricPoint, len(metricPoints))
 		for i, point := range metricPoints {
 			ts := point.Timestamp.Unix() * 1000
@@ -5908,341 +5924,52 @@ func targetMockSeriesPoints(duration time.Duration, maxPoints int) int {
 	return target
 }
 
-func buildSyntheticWorkloadSeries(
+// mockMetricStyle returns the series style for a given metric type.
+func mockMetricStyle(metricType string) monitoring.SeriesStyle {
+	switch metricType {
+	case "cpu", "diskread", "diskwrite", "netin", "netout":
+		return monitoring.StyleSpiky
+	case "memory":
+		return monitoring.StylePlateau
+	default:
+		return monitoring.StyleFlat
+	}
+}
+
+// generateStyledMockSeries produces a MetricPoint slice using the style-based
+// generator from the monitoring package.
+func generateStyledMockSeries(
 	nowMillis int64,
 	duration time.Duration,
-	points int,
+	numPoints int,
 	current float64,
 	min float64,
 	max float64,
-	seed uint64,
+	seedPrefix string,
+	resourceID string,
+	metricType string,
 ) []MetricPoint {
-	if points < 2 {
-		points = 2
-	}
-	current = clampChartValue(current, min, max)
+	seed := monitoring.HashSeed(seedPrefix, resourceID, metricType)
+	style := mockMetricStyle(metricType)
+	values := monitoring.GenerateSeededSeries(current, numPoints, seed, min, max, style)
+
 	durationMillis := int64(duration / time.Millisecond)
 	if durationMillis <= 0 {
 		durationMillis = int64(time.Minute / time.Millisecond)
 	}
-	step := durationMillis / int64(points-1)
+	step := durationMillis / int64(numPoints-1)
 	if step <= 0 {
 		step = 1
 	}
-
-	span := math.Max(1, max-min)
-	rng := rand.New(rand.NewSource(int64(seed)))
-	currentRatio := clampChartValue((current-min)/span, 0.04, 0.96)
-	baselineRatio := clampChartValue(
-		currentRatio+(float64(int(seed%11)-5))*0.008,
-		0.04,
-		0.94,
-	)
-	gradualDrift := float64(int((seed>>8)%9)-4) * 0.0035
-
-	targetRatios := make([]float64, points)
-	activeMask := make([]bool, points)
-	for i := 0; i < points; i++ {
-		progress := float64(i) / float64(points-1)
-		targetRatios[i] = clampChartValue(
-			baselineRatio+gradualDrift*(progress-0.5),
-			0.03,
-			0.96,
-		)
-	}
-
-	type activityWindow struct {
-		start int
-		ramp  int
-		hold  int
-		end   int
-		peak  float64
-	}
-
-	windowCount := 1
-	if points >= 48 && rng.Float64() < 0.35 {
-		windowCount = 2
-	}
-	windows := make([]activityWindow, 0, windowCount)
-
-	for w := 0; w < windowCount; w++ {
-		ramp := 2 + rng.Intn(4)
-		hold := points / (5 + rng.Intn(3))
-		if hold < 3 {
-			hold = 3
-		}
-		total := ramp + hold + ramp
-		maxStart := points - total - 1
-		if maxStart < 1 {
-			maxStart = 1
-		}
-		start := 1 + rng.Intn(maxStart)
-		if w > 0 && len(windows) > 0 {
-			minStart := windows[len(windows)-1].end + 2
-			if minStart > maxStart {
-				minStart = maxStart
-			}
-			if minStart > 1 {
-				start = minStart
-			}
-		}
-		end := start + total
-		if end >= points {
-			end = points - 1
-		}
-		if end-start < 4 {
-			continue
-		}
-
-		peak := clampChartValue(
-			baselineRatio+(0.12+rng.Float64()*0.26),
-			baselineRatio+0.06,
-			0.985,
-		)
-		windows = append(windows, activityWindow{
-			start: start,
-			ramp:  ramp,
-			hold:  hold,
-			end:   end,
-			peak:  peak,
-		})
-	}
-
-	for _, win := range windows {
-		rampUpEnd := win.start + win.ramp
-		holdEnd := rampUpEnd + win.hold
-		if holdEnd > win.end {
-			holdEnd = win.end
-		}
-		for i := win.start; i <= win.end && i < points; i++ {
-			base := targetRatios[i]
-			boost := 0.0
-			switch {
-			case i <= rampUpEnd:
-				den := float64(win.ramp)
-				if den < 1 {
-					den = 1
-				}
-				boost = (float64(i-win.start) / den) * (win.peak - base)
-			case i <= holdEnd:
-				boost = win.peak - base
-			default:
-				den := float64(win.end - holdEnd)
-				if den < 1 {
-					den = 1
-				}
-				boost = (1 - float64(i-holdEnd)/den) * (win.peak - base)
-			}
-			targetRatios[i] = clampChartValue(base+boost, 0.03, 0.99)
-			activeMask[i] = true
-		}
-	}
-
-	seriesValues := make([]float64, points)
-	startJitter := span * (0.015 + float64((seed>>14)%5)*0.003)
-	seriesValues[0] = clampChartValue(
-		min+targetRatios[0]*span+rng.NormFloat64()*startJitter,
-		min,
-		max,
-	)
-
-	for i := 1; i < points; i++ {
-		targetValue := min + targetRatios[i]*span
-		prev := seriesValues[i-1]
-		reversion := 0.20
-		noiseScale := 0.006
-		if activeMask[i] {
-			reversion = 0.28
-			noiseScale = 0.011
-		}
-		delta := (targetValue-prev)*reversion + rng.NormFloat64()*span*noiseScale
-		if rng.Float64() < 0.18 {
-			delta *= 0.35 // gentle flat spots
-		}
-		seriesValues[i] = clampChartValue(prev+delta, min, max)
-	}
-
-	// Light smoothing to prevent erratic zig-zag noise while preserving ramps/plateaus.
-	smoothed := make([]float64, points)
-	smoothed[0] = seriesValues[0]
-	for i := 1; i < points-1; i++ {
-		smoothed[i] = seriesValues[i-1]*0.2 + seriesValues[i]*0.6 + seriesValues[i+1]*0.2
-	}
-	if points > 1 {
-		smoothed[points-1] = seriesValues[points-1]
-	}
-
-	stepQuant := span * (0.0022 + float64(seed%4)*0.0008)
-	if stepQuant <= 0 {
-		stepQuant = span * 0.002
-	}
-	for i := 0; i < points; i++ {
-		if i > 0 && math.Abs(smoothed[i]-smoothed[i-1]) < stepQuant*0.55 {
-			smoothed[i] = smoothed[i-1]
-			continue
-		}
-		smoothed[i] = math.Round(smoothed[i]/stepQuant) * stepQuant
-		smoothed[i] = clampChartValue(smoothed[i], min, max)
-	}
-
-	// Anchor the final point to the current snapshot to avoid tooltip drift.
-	offset := current - smoothed[points-1]
-	series := make([]MetricPoint, points)
 	startMillis := nowMillis - durationMillis
-	lastIdx := float64(points - 1)
-	for i := 0; i < points; i++ {
-		ts := startMillis + int64(i)*step
-		tailWeight := math.Pow(float64(i)/lastIdx, 2.0)
-		value := clampChartValue(smoothed[i]+offset*tailWeight, min, max)
-		series[i] = MetricPoint{
-			Timestamp: ts,
-			Value:     value,
+	points := make([]MetricPoint, numPoints)
+	for i := 0; i < numPoints; i++ {
+		points[i] = MetricPoint{
+			Timestamp: startMillis + int64(i)*step,
+			Value:     values[i],
 		}
 	}
-	series[points-1].Timestamp = nowMillis
-	series[points-1].Value = current
-	return series
-}
-
-func ensureMockWorkloadSeries(
-	metrics VMChartData,
-	nowMillis int64,
-	duration time.Duration,
-	maxPoints int,
-	resourceID string,
-	current map[string]float64,
-) VMChartData {
-	targetPoints := targetMockSeriesPoints(duration, maxPoints)
-
-	bounds := map[string][2]float64{
-		"cpu":       {0, 100},
-		"memory":    {0, 100},
-		"disk":      {0, 100},
-		"diskread":  {0, math.Max(current["diskread"]*1.8, 1)},
-		"diskwrite": {0, math.Max(current["diskwrite"]*1.8, 1)},
-		"netin":     {0, math.Max(current["netin"]*1.8, 1)},
-		"netout":    {0, math.Max(current["netout"]*1.8, 1)},
-	}
-
-	for metricType, span := range bounds {
-		if len(metrics[metricType]) >= targetPoints {
-			continue
-		}
-		metrics[metricType] = buildSyntheticWorkloadSeries(
-			nowMillis,
-			duration,
-			targetPoints,
-			current[metricType],
-			span[0],
-			span[1],
-			hashChartSeed("mock", resourceID, metricType),
-		)
-	}
-
-	return metrics
-}
-
-func ensureMockWorkloadSeriesSubset(
-	metrics VMChartData,
-	nowMillis int64,
-	duration time.Duration,
-	maxPoints int,
-	resourceID string,
-	current map[string]float64,
-	metricTypes []string,
-) VMChartData {
-	targetPoints := targetMockSeriesPoints(duration, maxPoints)
-
-	boundsForMetric := func(metricType string, value float64) (float64, float64, bool) {
-		switch metricType {
-		case "cpu", "memory", "disk":
-			return 0, 100, true
-		case "diskread", "diskwrite", "netin", "netout":
-			return 0, math.Max(value*1.8, 1), true
-		default:
-			return 0, 0, false
-		}
-	}
-
-	for _, metricType := range metricTypes {
-		if len(metrics[metricType]) >= targetPoints {
-			continue
-		}
-		min, max, ok := boundsForMetric(metricType, current[metricType])
-		if !ok {
-			continue
-		}
-		metrics[metricType] = buildSyntheticWorkloadSeries(
-			nowMillis,
-			duration,
-			targetPoints,
-			current[metricType],
-			min,
-			max,
-			hashChartSeed("mock", resourceID, metricType),
-		)
-	}
-
-	return metrics
-}
-
-func defaultMockRateCurrent(resourceID, metricType string) float64 {
-	seed := hashChartSeed("infra-default", resourceID, metricType)
-	// Deterministic 64KB/s .. ~4MB/s baseline for visual mock network trends.
-	return 64_000 + float64(seed%3_936_000)
-}
-
-func ensureMockInfrastructureSeries(
-	metrics VMChartData,
-	nowMillis int64,
-	duration time.Duration,
-	maxPoints int,
-	resourceID string,
-	current map[string]float64,
-) VMChartData {
-	targetPoints := targetMockSeriesPoints(duration, maxPoints)
-
-	netInCurrent := clampChartValue(current["netin"], 0, math.Max(current["netin"], 0))
-	netOutCurrent := clampChartValue(current["netout"], 0, math.Max(current["netout"], 0))
-	if netInCurrent <= 0 {
-		netInCurrent = defaultMockRateCurrent(resourceID, "netin")
-	}
-	if netOutCurrent <= 0 {
-		netOutCurrent = defaultMockRateCurrent(resourceID, "netout")
-	}
-
-	values := map[string]float64{
-		"cpu":    current["cpu"],
-		"memory": current["memory"],
-		"disk":   current["disk"],
-		"netin":  netInCurrent,
-		"netout": netOutCurrent,
-	}
-
-	bounds := map[string][2]float64{
-		"cpu":    {0, 100},
-		"memory": {0, 100},
-		"disk":   {0, 100},
-		"netin":  {0, math.Max(netInCurrent*1.8, 1)},
-		"netout": {0, math.Max(netOutCurrent*1.8, 1)},
-	}
-
-	for metricType, span := range bounds {
-		if len(metrics[metricType]) >= targetPoints {
-			continue
-		}
-		metrics[metricType] = buildSyntheticWorkloadSeries(
-			nowMillis,
-			duration,
-			targetPoints,
-			values[metricType],
-			span[0],
-			span[1],
-			hashChartSeed("infra", resourceID, metricType),
-		)
-	}
-
-	return metrics
+	return points
 }
 
 func updateOldestTimestampFromSeries(metrics VMChartData, oldestTimestamp *int64) {
@@ -6280,14 +6007,11 @@ func buildSyntheticMetricHistorySeries(
 		return nil
 	}
 
-	series := buildSyntheticWorkloadSeries(
-		now.UnixMilli(),
-		duration,
-		targetMockSeriesPoints(duration, maxPoints),
-		current,
-		min,
-		max,
-		hashChartSeed("history-mock", resourceID, metricType),
+	numPoints := targetMockSeriesPoints(duration, maxPoints)
+	series := generateStyledMockSeries(
+		now.UnixMilli(), duration, numPoints,
+		current, min, max,
+		"history-mock", resourceID, metricType,
 	)
 
 	converted := make([]monitoring.MetricPoint, len(series))
@@ -6323,14 +6047,11 @@ func buildMockWorkloadMetricHistorySeries(
 		return nil
 	}
 
-	series := buildSyntheticWorkloadSeries(
-		now.UnixMilli(),
-		duration,
-		targetMockSeriesPoints(duration, maxPoints),
-		current,
-		min,
-		max,
-		hashChartSeed("history-mock", resourceID, metricType),
+	numPoints := targetMockSeriesPoints(duration, maxPoints)
+	series := generateStyledMockSeries(
+		now.UnixMilli(), duration, numPoints,
+		current, min, max,
+		"history-mock", resourceID, metricType,
 	)
 
 	converted := make([]monitoring.MetricPoint, len(series))
@@ -6367,7 +6088,6 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 
 	monitor := r.getTenantMonitor(req.Context())
 	state := monitor.GetState()
-	mockModeEnabled := mock.IsMockEnabled()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
 	if metricsStoreEnabled && duration > inMemoryChartThreshold {
@@ -6450,21 +6170,8 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: vm.CPU * 100}}
 			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: vm.Memory.Usage}}
 			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: vm.Disk.Usage}}
-			series["diskread"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.DiskRead)}}
-			series["diskwrite"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.DiskWrite)}}
 			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.NetworkIn)}}
 			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.NetworkOut)}}
-		}
-		if mockModeEnabled {
-			series = ensureMockWorkloadSeries(series, currentTime, duration, maxPoints, "vm:"+vm.ID, map[string]float64{
-				"cpu":       vm.CPU * 100,
-				"memory":    vm.Memory.Usage,
-				"disk":      vm.Disk.Usage,
-				"diskread":  float64(vm.DiskRead),
-				"diskwrite": float64(vm.DiskWrite),
-				"netin":     float64(vm.NetworkIn),
-				"netout":    float64(vm.NetworkOut),
-			})
 		}
 		updateOldestTimestampFromSeries(series, &oldestTimestamp)
 		chartData[vm.ID] = series
@@ -6483,21 +6190,8 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPU * 100}}
 			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: ct.Memory.Usage}}
 			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: ct.Disk.Usage}}
-			series["diskread"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.DiskRead)}}
-			series["diskwrite"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.DiskWrite)}}
 			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.NetworkIn)}}
 			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.NetworkOut)}}
-		}
-		if mockModeEnabled {
-			series = ensureMockWorkloadSeries(series, currentTime, duration, maxPoints, "container:"+ct.ID, map[string]float64{
-				"cpu":       ct.CPU * 100,
-				"memory":    ct.Memory.Usage,
-				"disk":      ct.Disk.Usage,
-				"diskread":  float64(ct.DiskRead),
-				"diskwrite": float64(ct.DiskWrite),
-				"netin":     float64(ct.NetworkIn),
-				"netout":    float64(ct.NetworkOut),
-			})
 		}
 		updateOldestTimestampFromSeries(series, &oldestTimestamp)
 		chartData[ct.ID] = series
@@ -6526,21 +6220,8 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 				series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["cpu"]}}
 				series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["memory"]}}
 				series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["disk"]}}
-				series["diskread"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["diskread"]}}
-				series["diskwrite"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["diskwrite"]}}
 				series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["netin"]}}
 				series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["netout"]}}
-			}
-			if mockModeEnabled {
-				series = ensureMockWorkloadSeriesSubset(
-					series,
-					currentTime,
-					duration,
-					maxPoints,
-					"k8s:"+metricKey,
-					currentMetrics,
-					[]string{"cpu", "memory", "disk", "netin", "netout"},
-				)
 			}
 			updateOldestTimestampFromSeries(series, &oldestTimestamp)
 			chartData[metricKey] = series
@@ -6573,24 +6254,6 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 					}
 				}
 				series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
-			}
-			if mockModeEnabled {
-				var diskPercent float64
-				if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
-					diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
-					if diskPercent > 100 {
-						diskPercent = 100
-					}
-				}
-				series = ensureMockWorkloadSeries(series, currentTime, duration, maxPoints, "docker:"+container.ID, map[string]float64{
-					"cpu":       container.CPUPercent,
-					"memory":    container.MemoryPercent,
-					"disk":      diskPercent,
-					"diskread":  0,
-					"diskwrite": 0,
-					"netin":     0,
-					"netout":    0,
-				})
 			}
 			updateOldestTimestampFromSeries(series, &oldestTimestamp)
 			dockerData[container.ID] = series
@@ -6686,14 +6349,11 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 	if timeRange == "" {
 		timeRange = "1h"
 	}
-	maxPoints := parseWorkloadMaxPoints(query.Get("maxPoints"))
-
 	// Convert time range to duration.
 	duration := parseChartsRangeDuration(timeRange)
 
 	monitor := r.getTenantMonitor(req.Context())
 	state := monitor.GetState()
-	mockModeEnabled := mock.IsMockEnabled()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
 	if metricsStoreEnabled && duration > inMemoryChartThreshold {
@@ -6737,24 +6397,6 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 				}
 			}
 		}
-		if mockModeEnabled {
-			series := ensureMockInfrastructureSeries(
-				VMChartData(nodeData[node.ID]),
-				currentTime,
-				duration,
-				maxPoints,
-				"node:"+node.ID,
-				map[string]float64{
-					"cpu":    node.CPU * 100,
-					"memory": node.Memory.Usage,
-					"disk":   node.Disk.Usage,
-					"netin":  0,
-					"netout": 0,
-				},
-			)
-			updateOldestTimestampFromSeries(series, &oldestTimestamp)
-			nodeData[node.ID] = NodeChartData(series)
-		}
 	}
 
 	// Docker hosts - cpu/memory/disk
@@ -6769,6 +6411,9 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		metricKey := fmt.Sprintf("dockerHost:%s", host.ID)
 		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerHost", host.ID, duration)
 		for metricType, points := range metrics {
+			if !sparklineMetrics[metricType] {
+				continue
+			}
 			dockerHostData[host.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
@@ -6787,30 +6432,9 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 			}
 			dockerHostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
 		}
-		if mockModeEnabled {
-			diskPercent := 0.0
-			if len(host.Disks) > 0 {
-				diskPercent = host.Disks[0].Usage
-			}
-			dockerHostData[host.ID] = ensureMockInfrastructureSeries(
-				dockerHostData[host.ID],
-				currentTime,
-				duration,
-				maxPoints,
-				"dockerHost:"+host.ID,
-				map[string]float64{
-					"cpu":    host.CPUUsage,
-					"memory": host.Memory.Usage,
-					"disk":   diskPercent,
-					"netin":  0,
-					"netout": 0,
-				},
-			)
-			updateOldestTimestampFromSeries(dockerHostData[host.ID], &oldestTimestamp)
-		}
 	}
 
-	// Unified host agents - cpu/memory/disk + optional diskread/diskwrite
+	// Unified host agents - cpu/memory/disk
 	hostData := make(map[string]VMChartData)
 	for _, host := range state.Hosts {
 		if host.ID == "" {
@@ -6822,6 +6446,9 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		metricKey := fmt.Sprintf("host:%s", host.ID)
 		metrics := monitor.GetGuestMetricsForChart(metricKey, "host", host.ID, duration)
 		for metricType, points := range metrics {
+			if !sparklineMetrics[metricType] {
+				continue
+			}
 			hostData[host.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
@@ -6839,27 +6466,6 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 				diskPercent = host.Disks[0].Usage
 			}
 			hostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
-		}
-		if mockModeEnabled {
-			diskPercent := 0.0
-			if len(host.Disks) > 0 {
-				diskPercent = host.Disks[0].Usage
-			}
-			hostData[host.ID] = ensureMockInfrastructureSeries(
-				hostData[host.ID],
-				currentTime,
-				duration,
-				maxPoints,
-				"host:"+host.ID,
-				map[string]float64{
-					"cpu":    host.CPUUsage,
-					"memory": host.Memory.Usage,
-					"disk":   diskPercent,
-					"netin":  host.NetInRate,
-					"netout": host.NetOutRate,
-				},
-			)
-			updateOldestTimestampFromSeries(hostData[host.ID], &oldestTimestamp)
 		}
 	}
 

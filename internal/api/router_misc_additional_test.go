@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -248,11 +247,11 @@ func TestHandleCharts_StatsDebugMetadata(t *testing.T) {
 	}
 
 	// With no history in the test monitor, handleCharts falls back to synthetic points:
-	// guests: cpu/memory/disk/diskread/diskwrite/netin/netout (7)
+	// guests: cpu/memory/disk/netin/netout (5 — diskread/diskwrite excluded from sparkline payloads)
 	// nodes: cpu/memory/disk (3)
 	// storage: disk (1)
-	if decoded.Stats.PointCounts.Guests != 7 {
-		t.Fatalf("expected stats.pointCounts.guests=7, got %d", decoded.Stats.PointCounts.Guests)
+	if decoded.Stats.PointCounts.Guests != 5 {
+		t.Fatalf("expected stats.pointCounts.guests=5, got %d", decoded.Stats.PointCounts.Guests)
 	}
 	if decoded.Stats.PointCounts.Nodes != 3 {
 		t.Fatalf("expected stats.pointCounts.nodes=3, got %d", decoded.Stats.PointCounts.Nodes)
@@ -371,42 +370,6 @@ func TestHandleInfrastructureSummaryCharts_Lightweight(t *testing.T) {
 		if _, ok := raw[forbidden]; ok {
 			t.Fatalf("expected %q to be absent from infra summary response", forbidden)
 		}
-	}
-}
-
-func TestHandleInfrastructureSummaryCharts_MockModeSynthesizesDenseSeries(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
-
-	monitor, _, _ := newTestMonitor(t)
-	router := &Router{monitor: monitor}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/charts/infrastructure-summary?range=5m", nil)
-	rec := httptest.NewRecorder()
-	router.handleInfrastructureSummaryCharts(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	var decoded InfrastructureChartsResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("unmarshal InfrastructureChartsResponse: %v", err)
-	}
-
-	if len(decoded.NodeData) == 0 {
-		t.Fatalf("expected nodeData entries in mock mode")
-	}
-
-	foundDenseSeries := false
-	for _, metrics := range decoded.NodeData {
-		if len(metrics["cpu"]) >= 24 && len(metrics["memory"]) >= 24 && len(metrics["disk"]) >= 24 {
-			foundDenseSeries = true
-			break
-		}
-	}
-	if !foundDenseSeries {
-		t.Fatalf("expected at least one node with dense synthetic series (>=24 points for cpu/memory/disk)")
 	}
 }
 
@@ -670,50 +633,6 @@ func TestHandleWorkloadCharts_WorkloadOnlyPayloadAndNodeFilter(t *testing.T) {
 	}
 }
 
-func TestHandleWorkloadCharts_MockModeSynthesizesDenseSeries(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
-
-	monitor, state, _ := newTestMonitor(t)
-	state.Nodes = []models.Node{{
-		ID:       "node-pve-1",
-		Name:     "pve-1",
-		Instance: "pve",
-	}}
-	state.VMs = []models.VM{{
-		ID:       "vm-101",
-		Name:     "vm-101",
-		Node:     "pve-1",
-		Instance: "pve",
-		CPU:      0.3,
-		Memory:   models.Memory{Usage: 42},
-		Disk:     models.Disk{Usage: 55},
-	}}
-
-	router := &Router{monitor: monitor}
-	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads?range=5m", nil)
-	rec := httptest.NewRecorder()
-	router.handleWorkloadCharts(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	var decoded WorkloadChartsResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("unmarshal WorkloadChartsResponse: %v", err)
-	}
-	if len(decoded.ChartData) == 0 {
-		t.Fatalf("expected workload chart entries in mock mode")
-	}
-	for id, metricSeries := range decoded.ChartData {
-		cpuSeries := metricSeries["cpu"]
-		if len(cpuSeries) < 24 {
-			t.Fatalf("expected at least 24 mock cpu points for %s, got %d", id, len(cpuSeries))
-		}
-	}
-}
-
 func TestHandleWorkloadCharts_IncludesKubernetesPods(t *testing.T) {
 	prevMock := mock.IsMockEnabled()
 	mock.SetEnabled(false)
@@ -780,59 +699,6 @@ func TestHandleWorkloadCharts_IncludesKubernetesPods(t *testing.T) {
 	}
 	if got := len(series["netin"]); got != 1 || series["netin"][0].Value != 0 {
 		t.Fatalf("expected unsupported kubernetes pod network metric fallback to single zero point; got len=%d value=%v", got, series["netin"])
-	}
-}
-
-func TestHandleWorkloadCharts_MockModeSynthesizesDenseSeriesForKubernetesPods(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
-
-	monitor, state, _ := newTestMonitor(t)
-	_ = state
-
-	router := &Router{monitor: monitor}
-	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads?range=5m", nil)
-	rec := httptest.NewRecorder()
-	router.handleWorkloadCharts(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	var decoded WorkloadChartsResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("unmarshal WorkloadChartsResponse: %v", err)
-	}
-
-	var foundID string
-	for id, typ := range decoded.GuestTypes {
-		if typ == "k8s" {
-			foundID = id
-			break
-		}
-	}
-	if foundID == "" {
-		t.Fatal("expected at least one kubernetes workload series in mock mode")
-	}
-
-	series, ok := decoded.ChartData[foundID]
-	if !ok {
-		t.Fatalf("expected kubernetes pod series for %s", foundID)
-	}
-	if got := len(series["cpu"]); got < 24 {
-		t.Fatalf("expected dense mock kubernetes cpu series for %s, got %d points", foundID, got)
-	}
-	if got := len(series["memory"]); got < 24 {
-		t.Fatalf("expected dense mock kubernetes memory series for %s, got %d points", foundID, got)
-	}
-	if got := len(series["disk"]); got < 24 {
-		t.Fatalf("expected dense mock kubernetes disk series for %s, got %d points", foundID, got)
-	}
-	if got := len(series["netin"]); got < 24 {
-		t.Fatalf("expected dense mock kubernetes netin series for %s, got %d points", foundID, got)
-	}
-	if got := len(series["netout"]); got < 24 {
-		t.Fatalf("expected dense mock kubernetes netout series for %s, got %d points", foundID, got)
 	}
 }
 
@@ -966,43 +832,6 @@ func TestHandleWorkloadsSummaryCharts_UnknownNodeFilterFallsBackToGlobalScope(t 
 	}
 	if decoded.GuestCounts.Total == 0 {
 		t.Fatalf("expected fallback to global scope when summary node filter is stale")
-	}
-}
-
-func TestBuildSyntheticWorkloadSeries_ProducesJaggedDeterministicSeries(t *testing.T) {
-	now := time.Now().UnixMilli()
-	seed := hashChartSeed("test", "jagged", "cpu")
-	seriesA := buildSyntheticWorkloadSeries(now, time.Hour, 120, 48, 0, 100, seed)
-	seriesB := buildSyntheticWorkloadSeries(now, time.Hour, 120, 48, 0, 100, seed)
-
-	if len(seriesA) != 120 {
-		t.Fatalf("expected 120 points, got %d", len(seriesA))
-	}
-	if len(seriesA) != len(seriesB) {
-		t.Fatalf("expected deterministic length, got %d vs %d", len(seriesA), len(seriesB))
-	}
-	for i := range seriesA {
-		if seriesA[i] != seriesB[i] {
-			t.Fatalf("determinism failure at %d", i)
-		}
-		if seriesA[i].Value < 0 || seriesA[i].Value > 100 {
-			t.Fatalf("value out of bounds at %d: %.3f", i, seriesA[i].Value)
-		}
-	}
-	if seriesA[len(seriesA)-1].Value != 48 {
-		t.Fatalf("expected anchored final value 48, got %.3f", seriesA[len(seriesA)-1].Value)
-	}
-
-	kinks := 0
-	for i := 2; i < len(seriesA); i++ {
-		s1 := seriesA[i-1].Value - seriesA[i-2].Value
-		s2 := seriesA[i].Value - seriesA[i-1].Value
-		if math.Abs(s2-s1) >= 0.8 {
-			kinks++
-		}
-	}
-	if kinks < 16 {
-		t.Fatalf("expected jagged synthetic series with many inflection points; got %d", kinks)
 	}
 }
 
