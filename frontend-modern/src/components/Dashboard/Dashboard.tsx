@@ -34,6 +34,9 @@ import {
   type WorkloadSummarySnapshot,
 } from '@/components/Workloads/WorkloadsSummary';
 import {
+  isSummaryTimeRange,
+} from '@/components/shared/summaryTimeRange';
+import {
   dismissMigrationNotice,
   isMigrationNoticeDismissed,
   resolveMigrationNotice,
@@ -44,6 +47,7 @@ import {
   WORKLOADS_PATH,
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
+import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -296,7 +300,6 @@ interface DashboardProps {
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
 type WorkloadSortKey = keyof WorkloadGuest | 'diskIo' | 'netIo';
-const WORKLOADS_SUMMARY_RANGE = '1h' as const;
 export function Dashboard(props: DashboardProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -616,6 +619,13 @@ export function Dashboard(props: DashboardProps) {
     {
       deserialize: (raw) => raw === 'true',
       serialize: (value) => String(value),
+    },
+  );
+  const [workloadsSummaryRange, setWorkloadsSummaryRange] = usePersistentSignal(
+    STORAGE_KEYS.WORKLOADS_SUMMARY_RANGE,
+    '1h',
+    {
+      deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '1h'),
     },
   );
 
@@ -1283,14 +1293,16 @@ export function Dashboard(props: DashboardProps) {
   return (
     <div class="space-y-3">
       <Show when={isWorkloadsRoute()}>
-        <div class="sticky top-0 z-20">
+        <div class="sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
           <WorkloadsSummary
-            timeRange={WORKLOADS_SUMMARY_RANGE}
+            timeRange={workloadsSummaryRange()}
+            onTimeRangeChange={setWorkloadsSummaryRange}
             selectedNodeId={selectedNode()}
             fallbackGuestCounts={workloadsSummaryFallbackCounts()}
             fallbackSnapshots={workloadsSummaryFallbackSnapshots()}
             visibleWorkloadIds={workloadsSummaryVisibleIds()}
             hoveredWorkloadId={hoveredWorkloadId()}
+            focusedWorkloadId={selectedGuestId()}
           />
         </div>
       </Show>
@@ -1315,64 +1327,6 @@ export function Dashboard(props: DashboardProps) {
         searchTerm={search()}
         showNodeSummary={!isWorkloadsRoute()}
       />
-
-      {/* Dashboard Filter - hidden in kiosk mode */}
-      <Show when={!kioskMode()}>
-        <DashboardFilter
-          search={search}
-          setSearch={setSearch}
-          isSearchLocked={isSearchLocked}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          statusMode={statusMode}
-          setStatusMode={setStatusMode}
-          groupingMode={groupingMode}
-          setGroupingMode={setGroupingMode}
-          setSortKey={setSortKey}
-          setSortDirection={setSortDirection}
-          searchInputRef={(el) => (searchInputRef = el)}
-          onBeforeAutoFocus={() => {
-            if (aiChatStore.focusInput()) return true;
-            if (!showFilters()) setShowFilters(true);
-            return false;
-          }}
-          availableColumns={columnVisibility.availableToggles()}
-          isColumnHidden={columnVisibility.isHiddenByUser}
-          onColumnToggle={columnVisibility.toggle}
-          onColumnReset={columnVisibility.resetToDefaults}
-          hostFilter={(() => {
-            if (!isWorkloadsRoute()) return undefined;
-            if (viewMode() === 'k8s') {
-              return {
-                id: 'workloads-k8s-context-filter',
-                label: 'Cluster',
-                value: selectedKubernetesContext() ?? '',
-                options: [
-                  { value: '', label: 'All clusters' },
-                  ...kubernetesContextOptions().map((context) => ({
-                    value: context,
-                    label: context,
-                  })),
-                ],
-                onChange: (value: string) => setSelectedKubernetesContext(value || null),
-              };
-            }
-            return {
-              id: 'workloads-node-filter',
-              label: 'Host',
-              value: selectedNode() ?? '',
-              options: [
-                { value: '', label: 'All nodes' },
-                ...workloadNodeOptions(),
-              ],
-              onChange: (value: string) => {
-                setSelectedHostHint(null);
-                handleNodeSelect(value || null, value ? 'pve' : null);
-              },
-            };
-          })()}
-        />
-      </Show>
 
       {/* Loading State */}
       <Show when={connected() && !initialDataReceived()}>
@@ -1488,6 +1442,64 @@ export function Dashboard(props: DashboardProps) {
             }
           />
         </Card>
+      </Show>
+
+      {/* Dashboard Filter - hidden in kiosk mode */}
+      <Show when={!kioskMode() && connected() && initialDataReceived() && allGuests().length > 0}>
+        <DashboardFilter
+          search={search}
+          setSearch={setSearch}
+          isSearchLocked={isSearchLocked}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          statusMode={statusMode}
+          setStatusMode={setStatusMode}
+          groupingMode={groupingMode}
+          setGroupingMode={setGroupingMode}
+          setSortKey={setSortKey}
+          setSortDirection={setSortDirection}
+          searchInputRef={(el) => (searchInputRef = el)}
+          onBeforeAutoFocus={() => {
+            if (aiChatStore.focusInput()) return true;
+            if (!showFilters()) setShowFilters(true);
+            return false;
+          }}
+          availableColumns={columnVisibility.availableToggles()}
+          isColumnHidden={columnVisibility.isHiddenByUser}
+          onColumnToggle={columnVisibility.toggle}
+          onColumnReset={columnVisibility.resetToDefaults}
+          hostFilter={(() => {
+            if (!isWorkloadsRoute()) return undefined;
+            if (viewMode() === 'k8s') {
+              return {
+                id: 'workloads-k8s-context-filter',
+                label: 'Cluster',
+                value: selectedKubernetesContext() ?? '',
+                options: [
+                  { value: '', label: 'All clusters' },
+                  ...kubernetesContextOptions().map((context) => ({
+                    value: context,
+                    label: context,
+                  })),
+                ],
+                onChange: (value: string) => setSelectedKubernetesContext(value || null),
+              };
+            }
+            return {
+              id: 'workloads-node-filter',
+              label: 'Host',
+              value: selectedNode() ?? '',
+              options: [
+                { value: '', label: 'All nodes' },
+                ...workloadNodeOptions(),
+              ],
+              onChange: (value: string) => {
+                setSelectedHostHint(null);
+                handleNodeSelect(value || null, value ? 'pve' : null);
+              },
+            };
+          })()}
+        />
       </Show>
 
       {/* Table View */}
@@ -1697,6 +1709,7 @@ export function Dashboard(props: DashboardProps) {
         </div>
       </Show>
 
+      <ScrollToTopButton />
     </div>
   );
 }
