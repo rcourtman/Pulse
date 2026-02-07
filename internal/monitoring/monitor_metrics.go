@@ -16,6 +16,15 @@ const inMemoryChartThreshold = 2 * time.Hour
 // sparkline or thumbnail chart.
 const chartDownsampleTarget = 500
 
+const (
+	// When the requested chart window has no data (for example after running in
+	// mock mode for a while), query a broader historical window so sparklines
+	// can render immediately instead of waiting for enough fresh samples.
+	chartGapFillLookbackMultiplier = 12
+	chartGapFillLookbackMin        = 6 * time.Hour
+	chartGapFillLookbackMax        = 7 * 24 * time.Hour
+)
+
 // For short chart ranges (<= inMemoryChartThreshold), we prefer in-memory data
 // for freshness unless coverage is too shallow (for example after a restart).
 // In that case we fall back to SQLite history to avoid mostly-empty charts.
@@ -46,14 +55,10 @@ func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResou
 		return inMemoryResult
 	}
 
-	end := time.Now()
-	start := end.Add(-duration)
-	sqlResult, err := m.metricsStore.QueryAll(sqlResourceType, sqlResourceID, start, end, 0)
-	if err != nil || len(sqlResult) == 0 {
+	converted, ok := m.queryStoreMetricMapWithGapFill(sqlResourceType, sqlResourceID, duration)
+	if !ok {
 		return inMemoryResult
 	}
-
-	converted := convertAndDownsample(sqlResult, chartDownsampleTarget)
 	if duration <= inMemoryChartThreshold && chartMapCoverageSpan(converted) <= chartMapCoverageSpan(inMemoryResult) {
 		return inMemoryResult
 	}
@@ -76,18 +81,10 @@ func (m *Monitor) GetNodeMetricsForChart(nodeID, metricType string, duration tim
 		return inMemoryPoints
 	}
 
-	end := time.Now()
-	start := end.Add(-duration)
-	sqlPoints, err := m.metricsStore.Query("node", nodeID, metricType, start, end, 0)
-	if err != nil || len(sqlPoints) == 0 {
+	downsampled, ok := m.queryStoreMetricSeriesWithGapFill("node", nodeID, metricType, duration)
+	if !ok {
 		return inMemoryPoints
 	}
-	converted := make([]MetricPoint, len(sqlPoints))
-	for i, p := range sqlPoints {
-		converted[i] = MetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-	}
-
-	downsampled := lttb(converted, chartDownsampleTarget)
 	if duration <= inMemoryChartThreshold && chartSeriesCoverageSpan(downsampled) <= chartSeriesCoverageSpan(inMemoryPoints) {
 		return inMemoryPoints
 	}
@@ -110,18 +107,79 @@ func (m *Monitor) GetStorageMetricsForChart(storageID string, duration time.Dura
 		return inMemoryResult
 	}
 
-	end := time.Now()
-	start := end.Add(-duration)
-	sqlResult, err := m.metricsStore.QueryAll("storage", storageID, start, end, 0)
-	if err != nil || len(sqlResult) == 0 {
+	converted, ok := m.queryStoreMetricMapWithGapFill("storage", storageID, duration)
+	if !ok {
 		return inMemoryResult
 	}
-
-	converted := convertAndDownsample(sqlResult, chartDownsampleTarget)
 	if duration <= inMemoryChartThreshold && chartMapCoverageSpan(converted) <= chartMapCoverageSpan(inMemoryResult) {
 		return inMemoryResult
 	}
 	return converted
+}
+
+func chartGapFillLookbackWindow(duration time.Duration) time.Duration {
+	lookback := duration * chartGapFillLookbackMultiplier
+	if lookback < chartGapFillLookbackMin {
+		lookback = chartGapFillLookbackMin
+	}
+	if lookback > chartGapFillLookbackMax {
+		lookback = chartGapFillLookbackMax
+	}
+	return lookback
+}
+
+func convertSeriesAndDownsample(points []metrics.MetricPoint, target int) []MetricPoint {
+	converted := make([]MetricPoint, len(points))
+	for i, p := range points {
+		converted[i] = MetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+	}
+	return lttb(converted, target)
+}
+
+func (m *Monitor) queryStoreMetricMapWithGapFill(resourceType, resourceID string, duration time.Duration) (map[string][]MetricPoint, bool) {
+	if m == nil || m.metricsStore == nil {
+		return nil, false
+	}
+
+	end := time.Now()
+	start := end.Add(-duration)
+
+	query := func(from time.Time) (map[string][]MetricPoint, bool) {
+		sqlResult, err := m.metricsStore.QueryAll(resourceType, resourceID, from, end, 0)
+		if err != nil || len(sqlResult) == 0 {
+			return nil, false
+		}
+		return convertAndDownsample(sqlResult, chartDownsampleTarget), true
+	}
+
+	if result, ok := query(start); ok {
+		return result, true
+	}
+
+	return query(end.Add(-chartGapFillLookbackWindow(duration)))
+}
+
+func (m *Monitor) queryStoreMetricSeriesWithGapFill(resourceType, resourceID, metricType string, duration time.Duration) ([]MetricPoint, bool) {
+	if m == nil || m.metricsStore == nil {
+		return nil, false
+	}
+
+	end := time.Now()
+	start := end.Add(-duration)
+
+	query := func(from time.Time) ([]MetricPoint, bool) {
+		sqlPoints, err := m.metricsStore.Query(resourceType, resourceID, metricType, from, end, 0)
+		if err != nil || len(sqlPoints) == 0 {
+			return nil, false
+		}
+		return convertSeriesAndDownsample(sqlPoints, chartDownsampleTarget), true
+	}
+
+	if points, ok := query(start); ok {
+		return points, true
+	}
+
+	return query(end.Add(-chartGapFillLookbackWindow(duration)))
 }
 
 // convertAndDownsample converts pkg/metrics.MetricPoint slices to

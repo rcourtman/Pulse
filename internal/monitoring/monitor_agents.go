@@ -812,23 +812,25 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	containers := make([]models.DockerContainer, 0, len(report.Containers))
 	for _, payload := range report.Containers {
 		container := models.DockerContainer{
-			ID:            payload.ID,
-			Name:          payload.Name,
-			Image:         payload.Image,
-			ImageDigest:   payload.ImageDigest,
-			State:         payload.State,
-			Status:        payload.Status,
-			Health:        payload.Health,
-			CPUPercent:    safeFloat(payload.CPUPercent),
-			MemoryUsage:   payload.MemoryUsageBytes,
-			MemoryLimit:   payload.MemoryLimitBytes,
-			MemoryPercent: safeFloat(payload.MemoryPercent),
-			UptimeSeconds: payload.UptimeSeconds,
-			RestartCount:  payload.RestartCount,
-			ExitCode:      payload.ExitCode,
-			CreatedAt:     payload.CreatedAt,
-			StartedAt:     payload.StartedAt,
-			FinishedAt:    payload.FinishedAt,
+			ID:             payload.ID,
+			Name:           payload.Name,
+			Image:          payload.Image,
+			ImageDigest:    payload.ImageDigest,
+			State:          payload.State,
+			Status:         payload.Status,
+			Health:         payload.Health,
+			CPUPercent:     safeFloat(payload.CPUPercent),
+			MemoryUsage:    payload.MemoryUsageBytes,
+			MemoryLimit:    payload.MemoryLimitBytes,
+			MemoryPercent:  safeFloat(payload.MemoryPercent),
+			UptimeSeconds:  payload.UptimeSeconds,
+			RestartCount:   payload.RestartCount,
+			ExitCode:       payload.ExitCode,
+			CreatedAt:      payload.CreatedAt,
+			StartedAt:      payload.StartedAt,
+			FinishedAt:     payload.FinishedAt,
+			NetworkRXBytes: payload.NetworkRXBytes,
+			NetworkTXBytes: payload.NetworkTXBytes,
 		}
 
 		// Copy update status if provided by agent
@@ -883,26 +885,41 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 				ReadBytes:  payload.BlockIO.ReadBytes,
 				WriteBytes: payload.BlockIO.WriteBytes,
 			}
+		}
 
-			containerIdentifier := payload.ID
-			if strings.TrimSpace(containerIdentifier) == "" {
-				containerIdentifier = payload.Name
+		containerIdentifier := payload.ID
+		if strings.TrimSpace(containerIdentifier) == "" {
+			containerIdentifier = payload.Name
+		}
+		if strings.TrimSpace(containerIdentifier) != "" {
+			metrics := types.IOMetrics{
+				NetworkIn:  clampUint64ToInt64(payload.NetworkRXBytes),
+				NetworkOut: clampUint64ToInt64(payload.NetworkTXBytes),
+				Timestamp:  timestamp,
 			}
-			if strings.TrimSpace(containerIdentifier) != "" {
-				metrics := types.IOMetrics{
-					DiskRead:  clampUint64ToInt64(payload.BlockIO.ReadBytes),
-					DiskWrite: clampUint64ToInt64(payload.BlockIO.WriteBytes),
-					Timestamp: timestamp,
-				}
-				readRate, writeRate, _, _ := m.rateTracker.CalculateRates(fmt.Sprintf("docker:%s:%s", identifier, containerIdentifier), metrics)
-				if readRate >= 0 {
-					value := readRate
-					container.BlockIO.ReadRateBytesPerSecond = &value
-				}
-				if writeRate >= 0 {
-					value := writeRate
-					container.BlockIO.WriteRateBytesPerSecond = &value
-				}
+			if payload.BlockIO != nil {
+				metrics.DiskRead = clampUint64ToInt64(payload.BlockIO.ReadBytes)
+				metrics.DiskWrite = clampUint64ToInt64(payload.BlockIO.WriteBytes)
+			}
+
+			readRate, writeRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
+				fmt.Sprintf("docker:%s:%s", identifier, containerIdentifier),
+				metrics,
+			)
+
+			if container.BlockIO != nil && readRate >= 0 {
+				value := readRate
+				container.BlockIO.ReadRateBytesPerSecond = &value
+			}
+			if container.BlockIO != nil && writeRate >= 0 {
+				value := writeRate
+				container.BlockIO.WriteRateBytesPerSecond = &value
+			}
+			if netInRate >= 0 {
+				container.NetInRate = netInRate
+			}
+			if netOutRate >= 0 {
+				container.NetOutRate = netOutRate
 			}
 		}
 
@@ -1130,11 +1147,46 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		}
 		m.metricsHistory.AddGuestMetric(metricKey, "disk", diskPercent, now)
 
+		var diskReadRate float64
+		var diskWriteRate float64
+		if container.BlockIO != nil {
+			if container.BlockIO.ReadRateBytesPerSecond != nil {
+				diskReadRate = *container.BlockIO.ReadRateBytesPerSecond
+			}
+			if container.BlockIO.WriteRateBytesPerSecond != nil {
+				diskWriteRate = *container.BlockIO.WriteRateBytesPerSecond
+			}
+		}
+		if container.NetInRate > 0 {
+			m.metricsHistory.AddGuestMetric(metricKey, "netin", container.NetInRate, now)
+		}
+		if container.NetOutRate > 0 {
+			m.metricsHistory.AddGuestMetric(metricKey, "netout", container.NetOutRate, now)
+		}
+		if diskReadRate > 0 {
+			m.metricsHistory.AddGuestMetric(metricKey, "diskread", diskReadRate, now)
+		}
+		if diskWriteRate > 0 {
+			m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", diskWriteRate, now)
+		}
+
 		// Also write to persistent SQLite store for long-term storage
 		if m.metricsStore != nil {
 			m.metricsStore.Write("dockerContainer", container.ID, "cpu", container.CPUPercent, now)
 			m.metricsStore.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, now)
 			m.metricsStore.Write("dockerContainer", container.ID, "disk", diskPercent, now)
+			if container.NetInRate > 0 {
+				m.metricsStore.Write("dockerContainer", container.ID, "netin", container.NetInRate, now)
+			}
+			if container.NetOutRate > 0 {
+				m.metricsStore.Write("dockerContainer", container.ID, "netout", container.NetOutRate, now)
+			}
+			if diskReadRate > 0 {
+				m.metricsStore.Write("dockerContainer", container.ID, "diskread", diskReadRate, now)
+			}
+			if diskWriteRate > 0 {
+				m.metricsStore.Write("dockerContainer", container.ID, "diskwrite", diskWriteRate, now)
+			}
 		}
 	}
 

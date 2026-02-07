@@ -140,3 +140,48 @@ func TestGetStorageMetricsForChart_ShortRangeFallsBackToStoreWhenInMemoryCoverag
 		t.Fatalf("expected store-backed storage coverage >= %s, got %s", wantMin, got)
 	}
 }
+
+func TestGetGuestMetricsForChart_UsesGapFillLookbackWhenRequestedRangeIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour
+
+	writeRawMetricBatch(t, monitor.metricsStore, "host", "host-1", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-4 * time.Hour), Value: 37},
+		{Timestamp: now.Add(-3*time.Hour - 30*time.Minute), Value: 39},
+		{Timestamp: now.Add(-3 * time.Hour), Value: 42},
+	})
+
+	result := monitor.GetGuestMetricsForChart("host:host-1", "host", "host-1", duration)
+	cpu := result["cpu"]
+	if len(cpu) == 0 {
+		t.Fatal("expected gap-fill fallback to return historical cpu points")
+	}
+	if cpu[len(cpu)-1].Timestamp.Before(now.Add(-4*time.Hour)) || cpu[len(cpu)-1].Timestamp.After(now.Add(-3*time.Hour+time.Minute)) {
+		t.Fatalf("expected latest fallback point to come from older store data window, got %s", cpu[len(cpu)-1].Timestamp)
+	}
+}
+
+func TestGetNodeMetricsForChart_UsesGapFillLookbackWhenRequestedRangeIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour
+
+	writeRawMetricBatch(t, monitor.metricsStore, "node", "node-1", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-5 * time.Hour), Value: 21},
+		{Timestamp: now.Add(-4*time.Hour - 30*time.Minute), Value: 24},
+		{Timestamp: now.Add(-4 * time.Hour), Value: 26},
+	})
+
+	result := monitor.GetNodeMetricsForChart("node-1", "cpu", duration)
+	if len(result) == 0 {
+		t.Fatal("expected gap-fill fallback to return historical node cpu points")
+	}
+	if result[len(result)-1].Timestamp.Before(now.Add(-5*time.Hour)) || result[len(result)-1].Timestamp.After(now.Add(-4*time.Hour+time.Minute)) {
+		t.Fatalf("expected latest fallback node point to come from older store data window, got %s", result[len(result)-1].Timestamp)
+	}
+}

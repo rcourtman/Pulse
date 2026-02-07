@@ -267,6 +267,91 @@ func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
 	}
 }
 
+func TestApplyDockerReportComputesContainerNetworkAndDiskRates(t *testing.T) {
+	monitor := newTestMonitor(t)
+	baseTime := time.Now().UTC()
+
+	baseReport := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-rates",
+			Version:         "1.2.3",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "rates-host",
+		},
+		Containers: []agentsdocker.Container{
+			{
+				ID:             "ctr-rates",
+				Name:           "api",
+				NetworkRXBytes: 10_000,
+				NetworkTXBytes: 20_000,
+				BlockIO: &agentsdocker.ContainerBlockIO{
+					ReadBytes:  5_000,
+					WriteBytes: 7_000,
+				},
+			},
+		},
+		Timestamp: baseTime,
+	}
+
+	first, err := monitor.ApplyDockerReport(baseReport, nil)
+	if err != nil {
+		t.Fatalf("first ApplyDockerReport returned error: %v", err)
+	}
+	if len(first.Containers) != 1 {
+		t.Fatalf("expected 1 container on first report, got %d", len(first.Containers))
+	}
+	if first.Containers[0].NetInRate != 0 || first.Containers[0].NetOutRate != 0 {
+		t.Fatalf("expected network rates unset on first sample, got in=%f out=%f", first.Containers[0].NetInRate, first.Containers[0].NetOutRate)
+	}
+	if first.Containers[0].BlockIO == nil {
+		t.Fatal("expected block IO on first sample")
+	}
+	if first.Containers[0].BlockIO.ReadRateBytesPerSecond != nil || first.Containers[0].BlockIO.WriteRateBytesPerSecond != nil {
+		t.Fatalf("expected disk rates unset on first sample, got %+v", first.Containers[0].BlockIO)
+	}
+
+	secondReport := baseReport
+	secondReport.Timestamp = baseTime.Add(30 * time.Second)
+	secondReport.Containers = []agentsdocker.Container{
+		{
+			ID:             "ctr-rates",
+			Name:           "api",
+			NetworkRXBytes: 16_000,
+			NetworkTXBytes: 29_000,
+			BlockIO: &agentsdocker.ContainerBlockIO{
+				ReadBytes:  8_000,
+				WriteBytes: 10_000,
+			},
+		},
+	}
+
+	second, err := monitor.ApplyDockerReport(secondReport, nil)
+	if err != nil {
+		t.Fatalf("second ApplyDockerReport returned error: %v", err)
+	}
+	if len(second.Containers) != 1 {
+		t.Fatalf("expected 1 container on second report, got %d", len(second.Containers))
+	}
+	container := second.Containers[0]
+	if container.NetInRate <= 0 {
+		t.Fatalf("expected positive net in rate, got %f", container.NetInRate)
+	}
+	if container.NetOutRate <= 0 {
+		t.Fatalf("expected positive net out rate, got %f", container.NetOutRate)
+	}
+	if container.BlockIO == nil {
+		t.Fatal("expected block IO on second sample")
+	}
+	if container.BlockIO.ReadRateBytesPerSecond == nil || *container.BlockIO.ReadRateBytesPerSecond <= 0 {
+		t.Fatalf("expected positive disk read rate, got %+v", container.BlockIO.ReadRateBytesPerSecond)
+	}
+	if container.BlockIO.WriteRateBytesPerSecond == nil || *container.BlockIO.WriteRateBytesPerSecond <= 0 {
+		t.Fatalf("expected positive disk write rate, got %+v", container.BlockIO.WriteRateBytesPerSecond)
+	}
+}
+
 func TestApplyDockerReportPodmanRuntimeMetadata(t *testing.T) {
 	monitor := newTestMonitor(t)
 

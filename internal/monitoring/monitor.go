@@ -40,6 +40,20 @@ const (
 	maxTaskTimeout     = 3 * time.Minute
 )
 
+const mockKeepRealPollingEnv = "PULSE_MOCK_KEEP_REAL_POLLING"
+
+func keepRealPollingInMockMode() bool {
+	raw := strings.TrimSpace(strings.ToLower(os.Getenv(mockKeepRealPollingEnv)))
+	switch raw {
+	case "", "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
+}
+
 // newProxmoxClientFunc is a variable that holds the function to create a new Proxmox client.
 // It is used to allow mocking the client creation in tests.
 var newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
@@ -1222,16 +1236,16 @@ func New(cfg *config.Config) (*Monitor, error) {
 		log.Warn().Err(err).Msg("Failed to load webhook configuration")
 	}
 
-	// Check if mock mode is enabled before initializing clients
+	// In mock mode we keep real polling enabled by default so production metrics
+	// continue to accumulate while the UI renders mock data.
 	mockEnabled := mock.IsMockEnabled()
-
-	if mockEnabled {
-		log.Info().Msg("Mock mode enabled - skipping PVE/PBS client initialization")
+	if mockEnabled && !keepRealPollingInMockMode() {
+		log.Info().Msg("Mock mode enabled - real client initialization disabled by env override")
 	} else {
 		m.initPVEClients(cfg)
 		m.initPBSClients(cfg)
 		m.initPMGClients(cfg)
-	} // End of else block for mock mode check
+	}
 
 	// Initialize state stats
 	m.state.Stats = models.Stats{
@@ -1518,16 +1532,24 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	broadcastTicker := time.NewTicker(pollingInterval)
 	defer broadcastTicker.Stop()
 
+	keepRealPolling := keepRealPollingInMockMode()
+
 	// Start connection retry mechanism for failed clients
 	// This handles cases where network/Proxmox isn't ready on initial startup
-	if !mock.IsMockEnabled() {
+	if !mock.IsMockEnabled() || keepRealPolling {
 		go m.retryFailedConnections(ctx)
 	}
 
-	// Do an immediate poll on start (only if not in mock mode)
+	// Do an immediate poll on start.
 	if mock.IsMockEnabled() {
-		log.Info().Msg("Mock mode enabled - skipping real node polling")
-		go m.checkMockAlerts()
+		if keepRealPolling {
+			log.Info().Msg("Mock mode enabled - running mock alerts and real metric polling")
+			go m.checkMockAlerts()
+			go m.poll(ctx, wsHub)
+		} else {
+			log.Info().Msg("Mock mode enabled - skipping real node polling")
+			go m.checkMockAlerts()
+		}
 	} else {
 		go m.poll(ctx, wsHub)
 	}
@@ -1550,6 +1572,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
 				go m.checkMockAlerts()
+				if keepRealPolling {
+					// Keep real metrics flowing while mock UI mode is active.
+					go m.poll(ctx, wsHub)
+				}
 			} else {
 				// Poll real infrastructure
 				go m.poll(ctx, wsHub)
@@ -1614,7 +1640,11 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	m.state.Performance.LastPollDuration = time.Since(startTime).Seconds()
 	m.state.Stats.PollingCycles++
 	m.state.Stats.Uptime = int64(time.Since(m.startTime).Seconds())
-	m.state.Stats.WebSocketClients = wsHub.GetClientCount()
+	if wsHub != nil {
+		m.state.Stats.WebSocketClients = wsHub.GetClientCount()
+	} else {
+		m.state.Stats.WebSocketClients = 0
+	}
 
 	// Sync alert state so broadcasts include the latest acknowledgement data
 	m.syncAlertsToState()
@@ -2495,10 +2525,15 @@ func (m *Monitor) SetMockMode(enable bool) {
 		m.broadcastState(hub, frontendState)
 	}
 
-	if !enable && ctx != nil && hub != nil {
-		// Kick off an immediate poll to repopulate state with live data
+	if enable && ctx != nil && keepRealPollingInMockMode() {
+		// Keep real metrics flowing while mock mode is enabled.
 		go m.poll(ctx, hub)
-		if m.config.DiscoveryEnabled {
+	}
+
+	if !enable && ctx != nil {
+		// Kick off an immediate poll to repopulate state with live data.
+		go m.poll(ctx, hub)
+		if hub != nil && m.config.DiscoveryEnabled {
 			go m.StartDiscoveryService(ctx, hub, m.config.DiscoverySubnet)
 		}
 	}
