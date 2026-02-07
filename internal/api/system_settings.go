@@ -431,6 +431,8 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		settings.TemperatureMonitoringEnabled = h.config.TemperatureMonitoringEnabled
 		// Expose Docker update actions setting (respects env override)
 		settings.DisableDockerUpdateActions = h.config.DisableDockerUpdateActions
+		// Expose legacy route redirect setting (respects env override)
+		settings.DisableLegacyRouteRedirects = h.config.DisableLegacyRouteRedirects
 	}
 
 	// Include env override information
@@ -642,6 +644,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["disableDockerUpdateActions"]; ok {
 		settings.DisableDockerUpdateActions = updates.DisableDockerUpdateActions
 		h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
+	}
+	if _, ok := rawRequest["disableLegacyRouteRedirects"]; ok {
+		settings.DisableLegacyRouteRedirects = updates.DisableLegacyRouteRedirects
+		h.config.DisableLegacyRouteRedirects = settings.DisableLegacyRouteRedirects
 	}
 	if _, ok := rawRequest["fullWidthMode"]; ok {
 		settings.FullWidthMode = updates.FullWidthMode

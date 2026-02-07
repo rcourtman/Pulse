@@ -27,6 +27,7 @@ export interface AuthConfig {
 export interface SystemConfig {
   pvePollingInterval?: number; // PVE polling interval in seconds
   pbsPollingInterval?: number; // PBS polling interval in seconds
+  pmgPollingInterval?: number; // PMG polling interval in seconds
   connectionTimeout?: number; // Seconds before timeout (default: 10)
   autoUpdateEnabled: boolean; // Enable auto-updates
   updateChannel?: string; // Update channel: 'stable' | 'rc' | 'beta'
@@ -48,6 +49,7 @@ export interface SystemConfig {
   hideLocalLogin?: boolean; // Hide local login form (username/password)
   publicURL?: string; // Public URL for email notifications (e.g., http://192.168.1.100:8080)
   disableDockerUpdateActions?: boolean; // Hide Docker update buttons while still detecting updates (server-wide)
+  disableLegacyRouteRedirects?: boolean; // Disable legacy frontend URL redirects globally
 }
 
 /**

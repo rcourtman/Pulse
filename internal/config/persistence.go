@@ -1145,7 +1145,8 @@ type SystemSettings struct {
 	// Docker update control - server-wide settings
 	// These allow admins to control Docker update features globally, addressing concerns
 	// about Pulse being a "monitoring-first" tool vs an orchestration tool.
-	DisableDockerUpdateActions bool `json:"disableDockerUpdateActions"` // Hide update buttons while still detecting updates
+	DisableDockerUpdateActions  bool `json:"disableDockerUpdateActions"`            // Hide update buttons while still detecting updates
+	DisableLegacyRouteRedirects bool `json:"disableLegacyRouteRedirects,omitempty"` // Disable legacy frontend route redirects globally
 
 	// APIToken removed - now handled via .env file only
 }

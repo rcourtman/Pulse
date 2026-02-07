@@ -3254,10 +3254,16 @@ func (h *ConfigHandlers) getNodeStatus(ctx context.Context, nodeType, nodeName s
 // HandleGetSystemSettings returns current system settings
 func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
 	// Load settings from persistence to get all fields including theme
-	persistedSettings, err := h.getPersistence(r.Context()).LoadSystemSettings()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to load persisted system settings")
-		persistedSettings = config.DefaultSystemSettings()
+	persistedSettings := config.DefaultSystemSettings()
+	if persistence := h.getPersistence(r.Context()); persistence != nil {
+		loadedSettings, err := persistence.LoadSystemSettings()
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to load persisted system settings")
+		} else if loadedSettings != nil {
+			persistedSettings = loadedSettings
+		}
+	} else {
+		log.Warn().Msg("Failed to load persisted system settings: persistence unavailable")
 	}
 	if persistedSettings == nil {
 		persistedSettings = config.DefaultSystemSettings()
@@ -3265,22 +3271,31 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 
 	// Get current values from running config
 	settings := *persistedSettings
-	settings.PVEPollingInterval = int(h.getConfig(r.Context()).PVEPollingInterval.Seconds())
-	settings.PBSPollingInterval = int(h.getConfig(r.Context()).PBSPollingInterval.Seconds())
-	settings.BackupPollingInterval = int(h.getConfig(r.Context()).BackupPollingInterval.Seconds())
-	settings.FrontendPort = h.getConfig(r.Context()).FrontendPort
-	settings.AllowedOrigins = h.getConfig(r.Context()).AllowedOrigins
-	settings.ConnectionTimeout = int(h.getConfig(r.Context()).ConnectionTimeout.Seconds())
-	settings.UpdateChannel = h.getConfig(r.Context()).UpdateChannel
-	settings.AutoUpdateEnabled = h.getConfig(r.Context()).AutoUpdateEnabled
-	settings.AutoUpdateCheckInterval = int(h.getConfig(r.Context()).AutoUpdateCheckInterval.Hours())
-	settings.AutoUpdateTime = h.getConfig(r.Context()).AutoUpdateTime
-	settings.LogLevel = h.getConfig(r.Context()).LogLevel
-	settings.DiscoveryEnabled = h.getConfig(r.Context()).DiscoveryEnabled
-	settings.DiscoverySubnet = h.getConfig(r.Context()).DiscoverySubnet
-	settings.DiscoveryConfig = config.CloneDiscoveryConfig(h.getConfig(r.Context()).Discovery)
-	backupEnabled := h.getConfig(r.Context()).EnableBackupPolling
-	settings.BackupPollingEnabled = &backupEnabled
+	cfg := h.getConfig(r.Context())
+	if cfg != nil {
+		settings.PVEPollingInterval = int(cfg.PVEPollingInterval.Seconds())
+		settings.PBSPollingInterval = int(cfg.PBSPollingInterval.Seconds())
+		settings.PMGPollingInterval = int(cfg.PMGPollingInterval.Seconds())
+		settings.BackupPollingInterval = int(cfg.BackupPollingInterval.Seconds())
+		settings.FrontendPort = cfg.FrontendPort
+		settings.AllowedOrigins = cfg.AllowedOrigins
+		settings.ConnectionTimeout = int(cfg.ConnectionTimeout.Seconds())
+		settings.UpdateChannel = cfg.UpdateChannel
+		settings.AutoUpdateEnabled = cfg.AutoUpdateEnabled
+		settings.AutoUpdateCheckInterval = int(cfg.AutoUpdateCheckInterval.Hours())
+		settings.AutoUpdateTime = cfg.AutoUpdateTime
+		settings.LogLevel = cfg.LogLevel
+		settings.DiscoveryEnabled = cfg.DiscoveryEnabled
+		settings.DiscoverySubnet = cfg.DiscoverySubnet
+		settings.DiscoveryConfig = config.CloneDiscoveryConfig(cfg.Discovery)
+		settings.TemperatureMonitoringEnabled = cfg.TemperatureMonitoringEnabled
+		settings.HideLocalLogin = cfg.HideLocalLogin
+		settings.PublicURL = cfg.PublicURL
+		settings.DisableDockerUpdateActions = cfg.DisableDockerUpdateActions
+		settings.DisableLegacyRouteRedirects = cfg.DisableLegacyRouteRedirects
+		backupEnabled := cfg.EnableBackupPolling
+		settings.BackupPollingEnabled = &backupEnabled
+	}
 
 	// Create response structure that includes environment overrides
 	response := struct {
@@ -3291,9 +3306,19 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 		EnvOverrides:   make(map[string]bool),
 	}
 
-	// Check for environment variable overrides
-	if os.Getenv("PULSE_AUTH_HIDE_LOCAL_LOGIN") != "" {
+	if cfg != nil {
+		for key, val := range cfg.EnvOverrides {
+			response.EnvOverrides[key] = val
+		}
+	}
+
+	// Legacy fallback: preserve historic key when env var is set directly.
+	if os.Getenv("PULSE_AUTH_HIDE_LOCAL_LOGIN") != "" && !response.EnvOverrides["hideLocalLogin"] {
 		response.EnvOverrides["hideLocalLogin"] = true
+	}
+
+	if len(response.EnvOverrides) == 0 {
+		response.EnvOverrides = nil
 	}
 
 	w.Header().Set("Content-Type", "application/json")

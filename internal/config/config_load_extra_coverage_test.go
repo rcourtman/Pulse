@@ -67,6 +67,7 @@ func TestLoad_EnvOverrides_More(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("PULSE_AUTH_HIDE_LOCAL_LOGIN", "true")
 	t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "true")
+	t.Setenv("PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS", "true")
 	t.Setenv("ENABLE_BACKUP_POLLING", "0")
 	t.Setenv("ADAPTIVE_POLLING_ENABLED", "on")
 	t.Setenv("GUEST_METADATA_MIN_REFRESH_INTERVAL", "1s")
@@ -80,6 +81,7 @@ func TestLoad_EnvOverrides_More(t *testing.T) {
 
 	assert.True(t, cfg.HideLocalLogin)
 	assert.True(t, cfg.DisableDockerUpdateActions)
+	assert.True(t, cfg.DisableLegacyRouteRedirects)
 	assert.False(t, cfg.EnableBackupPolling)
 	assert.True(t, cfg.AdaptivePollingEnabled)
 	assert.Equal(t, 1*time.Second, cfg.GuestMetadataMinRefreshInterval)

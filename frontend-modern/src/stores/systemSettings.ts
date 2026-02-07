@@ -12,6 +12,8 @@ import type { SystemConfig } from '@/types/config';
 
 // Server-side setting to hide Docker update buttons while still detecting updates
 const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
+// Server-side setting to disable all legacy frontend route redirects
+const [disableLegacyRouteRedirects, setDisableLegacyRouteRedirects] = createSignal(false);
 
 // Track if settings have been loaded
 const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
@@ -22,9 +24,11 @@ const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
  */
 export function updateSystemSettingsFromResponse(settings: SystemConfig): void {
     setDisableDockerUpdateActions(settings.disableDockerUpdateActions ?? false);
+    setDisableLegacyRouteRedirects(settings.disableLegacyRouteRedirects ?? false);
     setSystemSettingsLoaded(true);
     logger.debug('System settings updated from response', {
-        disableDockerUpdateActions: settings.disableDockerUpdateActions
+        disableDockerUpdateActions: settings.disableDockerUpdateActions,
+        disableLegacyRouteRedirects: settings.disableLegacyRouteRedirects,
     });
 }
 
@@ -41,6 +45,7 @@ export async function loadSystemSettings(): Promise<void> {
         logger.warn('Failed to load system settings, using defaults', err);
         // Use safe defaults
         setDisableDockerUpdateActions(false);
+        setDisableLegacyRouteRedirects(false);
         setSystemSettingsLoaded(true);
     }
 }
@@ -51,6 +56,13 @@ export async function loadSystemSettings(): Promise<void> {
  */
 export function shouldHideDockerUpdateActions(): boolean {
     return disableDockerUpdateActions();
+}
+
+/**
+ * Check if legacy frontend route redirects should be disabled globally.
+ */
+export function shouldDisableLegacyRouteRedirects(): boolean {
+    return disableLegacyRouteRedirects();
 }
 
 /**
@@ -66,6 +78,7 @@ export function areSystemSettingsLoaded(): boolean {
  */
 export function markSystemSettingsLoadedWithDefaults(): void {
     setDisableDockerUpdateActions(false);
+    setDisableLegacyRouteRedirects(false);
     setSystemSettingsLoaded(true);
     logger.debug('System settings marked as loaded with defaults');
 }

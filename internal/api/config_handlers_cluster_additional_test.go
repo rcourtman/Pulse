@@ -348,6 +348,7 @@ func TestHandleGetSystemSettings_ConfigOverrides(t *testing.T) {
 		EnableBackupPolling:          false,
 		PublicURL:                    "https://public.example",
 		TemperatureMonitoringEnabled: true,
+		DisableLegacyRouteRedirects:  true,
 	}
 	handler := newTestConfigHandlers(t, cfg)
 
@@ -383,6 +384,9 @@ func TestHandleGetSystemSettings_ConfigOverrides(t *testing.T) {
 	}
 	if resp.BackupPollingEnabled == nil || *resp.BackupPollingEnabled {
 		t.Fatalf("expected backup polling enabled to be false")
+	}
+	if !resp.DisableLegacyRouteRedirects {
+		t.Fatalf("expected disableLegacyRouteRedirects to be true")
 	}
 	if !resp.EnvOverrides["hideLocalLogin"] {
 		t.Fatalf("expected hideLocalLogin env override to be true")

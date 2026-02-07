@@ -18,6 +18,7 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 		"ENABLE_TEMPERATURE_MONITORING",
 		"PULSE_AUTH_HIDE_LOCAL_LOGIN",
 		"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS",
+		"PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS",
 		"ENABLE_BACKUP_POLLING",
 		"ADAPTIVE_POLLING_ENABLED",
 		"ADAPTIVE_POLLING_BASE_INTERVAL",
@@ -40,6 +41,7 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 	t.Setenv("ENABLE_TEMPERATURE_MONITORING", "false")
 	t.Setenv("PULSE_AUTH_HIDE_LOCAL_LOGIN", "true")
 	t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "true")
+	t.Setenv("PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS", "true")
 	t.Setenv("ENABLE_BACKUP_POLLING", "false")
 	t.Setenv("ADAPTIVE_POLLING_ENABLED", "true")
 	t.Setenv("ADAPTIVE_POLLING_BASE_INTERVAL", "20s")
@@ -57,6 +59,7 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 	assert.False(t, cfg.TemperatureMonitoringEnabled)
 	assert.True(t, cfg.HideLocalLogin)
 	assert.True(t, cfg.DisableDockerUpdateActions)
+	assert.True(t, cfg.DisableLegacyRouteRedirects)
 	assert.False(t, cfg.EnableBackupPolling)
 	assert.True(t, cfg.AdaptivePollingEnabled)
 	assert.Equal(t, 20*time.Second, cfg.AdaptivePollingBaseInterval)
