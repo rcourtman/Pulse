@@ -2,8 +2,10 @@ package license
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -113,5 +115,24 @@ func TestDecodePublicKey(t *testing.T) {
 				t.Errorf("decodePublicKey() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestPublicKeyFingerprint(t *testing.T) {
+	pub, _, _ := ed25519.GenerateKey(nil)
+
+	got := publicKeyFingerprint(pub)
+	if !strings.HasPrefix(got, "SHA256:") {
+		t.Fatalf("expected SHA256 prefix, got %q", got)
+	}
+
+	sum := sha256.Sum256(pub)
+	want := "SHA256:" + base64.StdEncoding.EncodeToString(sum[:])
+	if got != want {
+		t.Fatalf("fingerprint mismatch: got %q want %q", got, want)
+	}
+
+	if empty := publicKeyFingerprint(nil); empty != "" {
+		t.Fatalf("expected empty fingerprint for nil key, got %q", empty)
 	}
 }

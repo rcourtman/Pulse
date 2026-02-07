@@ -1623,6 +1623,163 @@ func TestDockerServiceReplicaAlerts(t *testing.T) {
 	}
 }
 
+func TestDockerServiceAlertDoesNotRenotifyWhenUnchanged(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = ActivationActive
+	cfg.Schedule.MaxAlertsHour = 100
+	m.UpdateConfig(cfg)
+
+	dispatched := make(chan string, 4)
+	m.SetAlertCallback(func(alert *Alert) {
+		dispatched <- alert.ID
+	})
+
+	host := models.DockerHost{
+		ID:          "host-1",
+		DisplayName: "Prod Swarm",
+		Hostname:    "swarm-prod",
+		Services: []models.DockerService{
+			{
+				ID:           "svc-1",
+				Name:         "web",
+				DesiredTasks: 4,
+				RunningTasks: 2,
+				Mode:         "replicated",
+			},
+		},
+	}
+
+	m.CheckDockerHost(host)
+
+	select {
+	case <-dispatched:
+	case <-time.After(1 * time.Second):
+		t.Fatal("expected initial docker service alert notification")
+	}
+
+	// Same degraded state should update LastSeen/value but not re-notify every poll.
+	m.CheckDockerHost(host)
+
+	select {
+	case id := <-dispatched:
+		t.Fatalf("expected no second notification for unchanged service alert, got %s", id)
+	case <-time.After(250 * time.Millisecond):
+	}
+}
+
+func TestDockerServiceAlertPreservesLastNotifiedWhenUnchanged(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = ActivationActive
+	cfg.Schedule.MaxAlertsHour = 100
+	m.UpdateConfig(cfg)
+
+	host := models.DockerHost{
+		ID:          "host-1",
+		DisplayName: "Prod Swarm",
+		Hostname:    "swarm-prod",
+		Services: []models.DockerService{
+			{
+				ID:           "svc-1",
+				Name:         "web",
+				DesiredTasks: 4,
+				RunningTasks: 2,
+				Mode:         "replicated",
+			},
+		},
+	}
+
+	m.CheckDockerHost(host)
+
+	resourceID := dockerServiceResourceID(host.ID, "svc-1", "web")
+	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		t.Fatalf("expected service alert %s to be raised", alertID)
+	}
+
+	notifiedAt := time.Now().Add(-2 * time.Minute).UTC()
+	alert.LastNotified = &notifiedAt
+
+	// Same degraded state should keep LastNotified while refreshing state.
+	m.CheckDockerHost(host)
+
+	updated, exists := m.activeAlerts[alertID]
+	if !exists {
+		t.Fatalf("expected service alert %s to remain active", alertID)
+	}
+	if updated.LastNotified == nil {
+		t.Fatal("expected LastNotified to be preserved, got nil")
+	}
+	if !updated.LastNotified.Equal(notifiedAt) {
+		t.Fatalf("expected LastNotified %s, got %s", notifiedAt, updated.LastNotified)
+	}
+}
+
+func TestDockerServiceAlertRenotifiesOnEscalationToCritical(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = ActivationActive
+	cfg.Schedule.MaxAlertsHour = 100
+	cfg.DockerDefaults.ServiceWarnGapPct = 10
+	cfg.DockerDefaults.ServiceCritGapPct = 50
+	m.UpdateConfig(cfg)
+
+	dispatched := make(chan AlertLevel, 4)
+	m.SetAlertCallback(func(alert *Alert) {
+		dispatched <- alert.Level
+	})
+
+	host := models.DockerHost{
+		ID:          "host-1",
+		DisplayName: "Prod Swarm",
+		Hostname:    "swarm-prod",
+		Services: []models.DockerService{
+			{
+				ID:           "svc-1",
+				Name:         "web",
+				DesiredTasks: 4,
+				RunningTasks: 3, // 25% missing -> warning
+				Mode:         "replicated",
+			},
+		},
+	}
+
+	m.CheckDockerHost(host)
+
+	select {
+	case level := <-dispatched:
+		if level != AlertLevelWarning {
+			t.Fatalf("expected warning notification first, got %s", level)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("expected initial warning notification")
+	}
+
+	// Escalate from warning to critical: should notify again.
+	host.Services[0].RunningTasks = 1 // 75% missing -> critical
+	m.CheckDockerHost(host)
+
+	select {
+	case level := <-dispatched:
+		if level != AlertLevelCritical {
+			t.Fatalf("expected critical escalation notification, got %s", level)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("expected escalation notification")
+	}
+}
+
 func TestDockerServiceUpdateStateAlert(t *testing.T) {
 	m := newTestManager(t)
 	cfg := m.GetConfig()
@@ -9762,6 +9919,7 @@ func TestCheckEscalations(t *testing.T) {
 
 		oldTime := time.Now().Add(-2 * time.Hour)
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = false
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"},
@@ -9784,12 +9942,100 @@ func TestCheckEscalations(t *testing.T) {
 		}
 	})
 
+	t.Run("does nothing when alerts are globally disabled", func(t *testing.T) {
+		m := newTestManager(t)
+
+		oldTime := time.Now().Add(-2 * time.Hour)
+		m.mu.Lock()
+		m.config.Enabled = false
+		m.config.ActivationState = ActivationActive
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},
+		}
+		m.activeAlerts["global-disabled-alert"] = &Alert{
+			ID:             "global-disabled-alert",
+			StartTime:      oldTime,
+			LastEscalation: 0,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["global-disabled-alert"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 0 {
+			t.Errorf("expected no escalation when alerts are globally disabled, got %d", alert.LastEscalation)
+		}
+	})
+
+	t.Run("does nothing when activation state is pending", func(t *testing.T) {
+		m := newTestManager(t)
+
+		oldTime := time.Now().Add(-2 * time.Hour)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.ActivationState = ActivationPending
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},
+		}
+		m.activeAlerts["pending-alert"] = &Alert{
+			ID:             "pending-alert",
+			StartTime:      oldTime,
+			LastEscalation: 0,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pending-alert"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 0 {
+			t.Errorf("expected no escalation when activation is pending, got %d", alert.LastEscalation)
+		}
+	})
+
+	t.Run("does nothing when activation state is snoozed", func(t *testing.T) {
+		m := newTestManager(t)
+
+		oldTime := time.Now().Add(-2 * time.Hour)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.ActivationState = ActivationSnoozed
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},
+		}
+		m.activeAlerts["snoozed-alert"] = &Alert{
+			ID:             "snoozed-alert",
+			StartTime:      oldTime,
+			LastEscalation: 0,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["snoozed-alert"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 0 {
+			t.Errorf("expected no escalation when activation is snoozed, got %d", alert.LastEscalation)
+		}
+	})
+
 	t.Run("skips acknowledged alerts", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-2 * time.Hour)
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = true
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"},
@@ -9819,6 +10065,7 @@ func TestCheckEscalations(t *testing.T) {
 
 		oldTime := time.Now().Add(-45 * time.Minute) // 45 minutes ago
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = true
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"},   // 30 minutes
@@ -9851,6 +10098,7 @@ func TestCheckEscalations(t *testing.T) {
 
 		oldTime := time.Now().Add(-90 * time.Minute) // 90 minutes ago
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = true
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"},   // 30 minutes
@@ -9883,6 +10131,7 @@ func TestCheckEscalations(t *testing.T) {
 
 		oldTime := time.Now().Add(-45 * time.Minute)
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = true
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"},
@@ -9915,6 +10164,7 @@ func TestCheckEscalations(t *testing.T) {
 
 		recentTime := time.Now().Add(-10 * time.Minute) // Only 10 minutes ago
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = true
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"}, // 30 minutes threshold

@@ -530,7 +530,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                                 }`}
                             title={source() === 'live' ? 'Live sample shown because history is not available yet.' : 'In-memory buffer shown while history is warming up.'}
                         >
-                            {source() === 'live' ? 'Live' : 'Memory'}
+                            {source() === 'live' ? 'Live' : 'Buffer'}
                         </span>
                     </Show>
                 </div>
