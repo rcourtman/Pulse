@@ -64,6 +64,7 @@ Pulse Pro unlocks **Auto-Fix and advanced AI analysis** — **Pulse Patrol is av
 
 - **[API Reference](API.md)** – Complete REST API documentation.
 - **[Architecture](../ARCHITECTURE.md)** – System design and component interaction.
+- **[Storage + Backups V2 Plan](architecture/storage-backups-v2-plan.md)** – Source-agnostic migration plan for Storage and Backups.
 - **[Contributing](../CONTRIBUTING.md)** – How to contribute to Pulse.
 
 ---
