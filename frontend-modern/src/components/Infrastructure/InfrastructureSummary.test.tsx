@@ -141,7 +141,6 @@ describe('InfrastructureSummary range behavior', () => {
         ?.querySelector('path[vector-effect="non-scaling-stroke"]');
       expect(path).toBeTruthy();
     });
-    expect(container.textContent).toContain('Showing cached trend data while live history updates.');
   });
 
   it('clears cached-data status once live history is applied', async () => {
@@ -185,13 +184,13 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledWith('1h');
-      expect(container.textContent).toContain('Showing cached trend data while live history updates.');
+      expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
     });
 
     resolveFetch?.(makeChartsResponse());
 
     await waitFor(() => {
-      expect(container.textContent).not.toContain('Showing cached trend data while live history updates.');
+      expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
     });
   });
 
@@ -330,7 +329,6 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
-      expect(container.textContent).toContain('Showing cached trend data while live history updates.');
     });
   });
 

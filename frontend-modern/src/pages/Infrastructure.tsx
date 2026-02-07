@@ -2,7 +2,7 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack }
 import { useLocation, useNavigate } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
-import { CollapsibleSearchInput } from '@/components/shared/CollapsibleSearchInput';
+import { SearchInput } from '@/components/shared/SearchInput';
 import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
@@ -11,7 +11,12 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import type { TimeRange } from '@/api/charts';
 import ServerIcon from 'lucide-solid/icons/server';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import type { Resource } from '@/types/resource';
+import { STORAGE_KEYS } from '@/utils/localStorage';
+import {
+  isSummaryTimeRange,
+} from '@/components/shared/summaryTimeRange';
 import {
   dismissMigrationNotice,
   isMigrationNoticeDismissed,
@@ -23,8 +28,6 @@ import {
   INFRASTRUCTURE_QUERY_PARAMS,
   parseInfrastructureLinkSearch,
 } from '@/routing/resourceLinks';
-
-const INFRASTRUCTURE_SUMMARY_RANGE: TimeRange = '1h';
 
 export function Infrastructure() {
   const { resources, loading, error, refetch } = useUnifiedResources();
@@ -45,6 +48,11 @@ export function Infrastructure() {
   const [selectedSources, setSelectedSources] = createSignal<Set<string>>(new Set());
   const [selectedStatuses, setSelectedStatuses] = createSignal<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = createSignal('');
+  const [infrastructureSummaryRange, setInfrastructureSummaryRange] = usePersistentSignal<TimeRange>(
+    STORAGE_KEYS.INFRASTRUCTURE_SUMMARY_RANGE,
+    '1h',
+    { deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '1h') },
+  );
   type GroupingMode = 'grouped' | 'flat';
   const [groupingMode, setGroupingMode] = usePersistentSignal<GroupingMode>(
     'infrastructureGroupingMode',
@@ -132,16 +140,27 @@ export function Infrastructure() {
       .filter((source) => selectedSources().has(source));
     const nextSource = selectedSourceValues.join(',');
     const nextQuery = searchQuery().trim();
+    const currentLinkedResource = parseInfrastructureLinkSearch(location.search).resource;
+    const selectedResourceId = expandedResourceId();
+    const shouldPreserveIncomingResource =
+      !selectedResourceId &&
+      Boolean(currentLinkedResource) &&
+      !initialLoadComplete();
+    const nextResource = shouldPreserveIncomingResource
+      ? currentLinkedResource
+      : (selectedResourceId ?? '');
 
     const managedPath = buildInfrastructurePath({
       source: nextSource || null,
       query: nextQuery || null,
+      resource: nextResource || null,
     });
     const managedUrl = new URL(managedPath, 'http://pulse.local');
     const params = new URLSearchParams(location.search);
     params.delete(INFRASTRUCTURE_QUERY_PARAMS.source);
     params.delete(INFRASTRUCTURE_QUERY_PARAMS.query);
     params.delete(INFRASTRUCTURE_QUERY_PARAMS.legacyQuery);
+    params.delete(INFRASTRUCTURE_QUERY_PARAMS.resource);
     managedUrl.searchParams.forEach((value, key) => {
       params.set(key, value);
     });
@@ -270,7 +289,7 @@ export function Infrastructure() {
   };
 
   const segmentedButtonClass = (selected: boolean, disabled: boolean) => {
-    const base = 'px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95';
+    const base = 'px-2 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95';
     if (disabled) {
       return `${base} text-gray-400 dark:text-gray-600 cursor-not-allowed`;
     }
@@ -347,15 +366,8 @@ export function Infrastructure() {
     }
   });
 
-  const stats = createMemo(() => {
-    const all = filteredResources();
-    const online = all.filter((r) => r.status === 'online').length;
-    const offline = all.length - online;
-    return { total: all.length, online, offline };
-  });
-
   return (
-    <div class="space-y-4">
+    <div data-testid="infrastructure-page" class="space-y-4">
       <Show when={!loading() || initialLoadComplete()} fallback={
         <Card class="p-6">
           <div class="text-sm text-gray-600 dark:text-gray-300">Loading infrastructure resources...</div>
@@ -405,125 +417,121 @@ export function Infrastructure() {
                 />
               </Show>
 
+              <div class="sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
+                <InfrastructureSummary
+                  hosts={filteredResources()}
+                  timeRange={infrastructureSummaryRange()}
+                  onTimeRangeChange={setInfrastructureSummaryRange}
+                  hoveredHostId={hoveredResourceId()}
+                  focusedHostId={expandedResourceId()}
+                />
+              </div>
+
               <Card padding="sm" class="mb-4">
-                <div class="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
-                  <CollapsibleSearchInput
+                <div class="flex flex-col gap-2">
+                  <SearchInput
                     value={searchQuery}
                     onChange={setSearchQuery}
                     placeholder="Search resources, IDs, IPs, or tags..."
-                    triggerLabel="Search"
-                    class="w-full md:w-64 md:order-last md:ml-auto"
+                    class="w-full"
+                    autoFocus
+                    history={{
+                      storageKey: STORAGE_KEYS.RESOURCES_SEARCH_HISTORY,
+                      emptyMessage: 'Recent infrastructure searches appear here.',
+                    }}
                   />
 
-                  <div class="flex items-center gap-2">
-                    <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
-                    <div class="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <For each={sourceOptions}>
-                        {(source) => {
-                          const isSelected = () => selectedSources().has(source.key);
-                          const isDisabled = () =>
-                            !availableSources().has(source.key) && !selectedSources().has(source.key);
-                          return (
-                            <button
-                              type="button"
-                              disabled={isDisabled()}
-                              aria-pressed={isSelected()}
-                              onClick={() => toggleSource(source.key)}
-                              class={segmentedButtonClass(isSelected(), isDisabled())}
-                            >
-                              {source.label}
-                            </button>
-                          );
-                        }}
-                      </For>
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
+                    <div class="flex items-center gap-2">
+                      <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
+                      <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <For each={sourceOptions}>
+                          {(source) => {
+                            const isSelected = () => selectedSources().has(source.key);
+                            const isDisabled = () =>
+                              !availableSources().has(source.key) && !selectedSources().has(source.key);
+                            return (
+                              <button
+                                type="button"
+                                disabled={isDisabled()}
+                                aria-pressed={isSelected()}
+                                onClick={() => toggleSource(source.key)}
+                                class={segmentedButtonClass(isSelected(), isDisabled())}
+                              >
+                                {source.label}
+                              </button>
+                            );
+                          }}
+                        </For>
+                      </div>
                     </div>
-                  </div>
 
-                  <div class="h-5 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
-
-                  <div class="flex items-center gap-2">
-                    <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
-                    <div class="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <For each={statusOptions()}>
-                        {(status) => {
-                          const isSelected = () => selectedStatuses().has(status.key);
-                          const isDisabled = () =>
-                            !availableStatuses().has(status.key) && !selectedStatuses().has(status.key);
-                          return (
-                            <button
-                              type="button"
-                              disabled={isDisabled()}
-                              aria-pressed={isSelected()}
-                              onClick={() => toggleStatus(status.key)}
-                              class={segmentedButtonClass(isSelected(), isDisabled())}
-                            >
-                              {status.label}
-                            </button>
-                          );
-                        }}
-                      </For>
+                    <div class="flex items-center gap-2">
+                      <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
+                      <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <For each={statusOptions()}>
+                          {(status) => {
+                            const isSelected = () => selectedStatuses().has(status.key);
+                            const isDisabled = () =>
+                              !availableStatuses().has(status.key) && !selectedStatuses().has(status.key);
+                            return (
+                              <button
+                                type="button"
+                                disabled={isDisabled()}
+                                aria-pressed={isSelected()}
+                                onClick={() => toggleStatus(status.key)}
+                                class={segmentedButtonClass(isSelected(), isDisabled())}
+                              >
+                                {status.label}
+                              </button>
+                            );
+                          }}
+                        </For>
+                      </div>
                     </div>
+
+                    <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setGroupingMode('grouped')}
+                        class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'grouped', false)}`}
+                        title="Group by cluster"
+                      >
+                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
+                        </svg>
+                        Grouped
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGroupingMode('flat')}
+                        class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'flat', false)}`}
+                        title="Flat list view"
+                      >
+                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <line x1="8" y1="6" x2="21" y2="6" />
+                          <line x1="8" y1="12" x2="21" y2="12" />
+                          <line x1="8" y1="18" x2="21" y2="18" />
+                          <line x1="3" y1="6" x2="3.01" y2="6" />
+                          <line x1="3" y1="12" x2="3.01" y2="12" />
+                          <line x1="3" y1="18" x2="3.01" y2="18" />
+                        </svg>
+                        List
+                      </button>
+                    </div>
+
+                    <Show when={hasActiveFilters()}>
+                      <button
+                        type="button"
+                        onClick={clearFilters}
+                        class="ml-auto rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                      >
+                        Clear
+                      </button>
+                    </Show>
                   </div>
-
-                  <div class="h-5 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
-
-                  <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setGroupingMode('grouped')}
-                      class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'grouped', false)}`}
-                      title="Group by cluster"
-                    >
-                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
-                      </svg>
-                      Grouped
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setGroupingMode(groupingMode() === 'flat' ? 'grouped' : 'flat')}
-                      class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'flat', false)}`}
-                      title="Flat list view"
-                    >
-                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="8" y1="6" x2="21" y2="6" />
-                        <line x1="8" y1="12" x2="21" y2="12" />
-                        <line x1="8" y1="18" x2="21" y2="18" />
-                        <line x1="3" y1="6" x2="3.01" y2="6" />
-                        <line x1="3" y1="12" x2="3.01" y2="12" />
-                        <line x1="3" y1="18" x2="3.01" y2="18" />
-                      </svg>
-                      List
-                    </button>
-                  </div>
-
-                  <Show when={hasActiveFilters()}>
-                    <button
-                      type="button"
-                      onClick={clearFilters}
-                      class="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 md:order-last"
-                    >
-                      Clear
-                    </button>
-                  </Show>
                 </div>
               </Card>
-
-              <InfrastructureSummary
-                hosts={filteredResources()}
-                timeRange={INFRASTRUCTURE_SUMMARY_RANGE}
-                hoveredHostId={hoveredResourceId()}
-              />
-
-              <div class="flex items-center gap-3 px-1 text-[11px] text-gray-500 dark:text-gray-400">
-                <span class="font-medium text-gray-700 dark:text-gray-200">{stats().total} {stats().total === 1 ? 'resource' : 'resources'}</span>
-                <Show when={stats().online > 0}>
-                  <span class="text-emerald-600 dark:text-emerald-400">{stats().online} online</span>
-                </Show>
-                <Show when={stats().offline > 0}>
-                  <span class="text-gray-400 dark:text-gray-500">{stats().offline} offline</span>
-                </Show>
-              </div>
 
               <Show
                 when={hasFilteredResources()}
@@ -562,6 +570,7 @@ export function Infrastructure() {
           </Show>
         </Show>
       </Show>
+      <ScrollToTopButton />
     </div>
   );
 }

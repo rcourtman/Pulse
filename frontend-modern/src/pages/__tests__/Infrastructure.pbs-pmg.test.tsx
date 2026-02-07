@@ -36,7 +36,12 @@ vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
   return {
     ...actual,
-    useLocation: () => ({ pathname: '/infrastructure', search: mockLocationSearch }),
+    useLocation: () => ({
+      pathname: '/infrastructure',
+      get search() {
+        return mockLocationSearch;
+      },
+    }),
     useNavigate: () => navigateSpy,
   };
 });
@@ -51,21 +56,33 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
 }));
 
 vi.mock('@/components/Infrastructure/UnifiedResourceTable', () => ({
-  UnifiedResourceTable: (props: { resources: Resource[] }) => (
+  UnifiedResourceTable: (props: { resources: Resource[]; onExpandedResourceChange?: (id: string | null) => void }) => (
     <div data-testid="infra-table">
       {props.resources.map((resource) => resource.name).join(',')}
+      <button type="button" onClick={() => props.onExpandedResourceChange?.('pmg-main')}>
+        open-pmg
+      </button>
+      <button type="button" onClick={() => props.onExpandedResourceChange?.(null)}>
+        close-resource
+      </button>
     </div>
   ),
 }));
 
 vi.mock('@/components/Infrastructure/InfrastructureSummary', () => ({
-  InfrastructureSummary: () => <div data-testid="infra-summary">summary</div>,
+  InfrastructureSummary: (props: { hosts: Resource[] }) => (
+    <div data-testid="infra-summary">{props.hosts.length} resources</div>
+  ),
 }));
 
 describe('Infrastructure PBS/PMG integration', () => {
   beforeEach(() => {
     mockLocationSearch = '';
     navigateSpy.mockReset();
+    navigateSpy.mockImplementation((path: string) => {
+      const queryStart = path.indexOf('?');
+      mockLocationSearch = queryStart >= 0 ? path.slice(queryStart) : '';
+    });
   });
 
   it('renders native PBS and PMG resources in infrastructure view', async () => {
@@ -109,5 +126,28 @@ describe('Infrastructure PBS/PMG integration', () => {
     const params = new URLSearchParams(path.split('?')[1] || '');
     expect(params.get('source')).toBe('pmg');
     expect(options?.replace).toBe(true);
+  });
+
+  it('syncs expanded resource state to resource query param for deep-linking', async () => {
+    const { getByRole } = render(() => <Infrastructure />);
+    navigateSpy.mockClear();
+
+    getByRole('button', { name: 'open-pmg' }).click();
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalled();
+    });
+
+    let [path] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
+    let params = new URLSearchParams(path.split('?')[1] || '');
+    expect(params.get('resource')).toBe('pmg-main');
+
+    getByRole('button', { name: 'close-resource' }).click();
+
+    await waitFor(() => {
+      [path] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
+      params = new URLSearchParams(path.split('?')[1] || '');
+      expect(params.get('resource')).toBeNull();
+    });
   });
 });

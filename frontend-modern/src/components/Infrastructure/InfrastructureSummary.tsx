@@ -1,4 +1,4 @@
-import { Component, Show, createMemo, createEffect, createSignal, onCleanup } from 'solid-js';
+import { Component, For, Show, createMemo, createEffect, createSignal, onCleanup } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import type { Resource } from '@/types/resource';
@@ -10,6 +10,10 @@ import {
     fetchInfrastructureSummaryAndCache,
     readInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
+import {
+    SUMMARY_TIME_RANGES,
+    SUMMARY_TIME_RANGE_LABEL,
+} from '@/components/shared/summaryTimeRange';
 
 const HOST_COLORS = [
     '#3b82f6', // blue
@@ -73,6 +77,8 @@ interface InfrastructureSummaryProps {
     hosts: Resource[];
     timeRange?: TimeRange;
     hoveredHostId?: string | null;
+    focusedHostId?: string | null;
+    onTimeRangeChange?: (range: TimeRange) => void;
 }
 
 export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (props) => {
@@ -80,7 +86,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     const [chartMap, setChartMap] = createSignal<Map<string, ChartData>>(new Map());
     const [chartRange, setChartRange] = createSignal<TimeRange | null>(null);
     const [loadedRange, setLoadedRange] = createSignal<TimeRange | null>(null);
-    const [usingCachedData, setUsingCachedData] = createSignal(false);
     const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
     const hasCurrentRangeCharts = createMemo(() => chartRange() === selectedRange());
     const isCurrentRangeLoaded = createMemo(() => loadedRange() === selectedRange());
@@ -122,7 +127,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         setChartMap(cached.map);
         setChartRange(range);
         setLoadedRange(range);
-        setUsingCachedData(true);
         return true;
     };
 
@@ -167,7 +171,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         const requestId = ++activeFetchRequest;
         activeFetchController = controller;
         let requestSucceeded = false;
-        let appliedResponseMap = false;
 
         try {
             const fetched = await awaitAbortable(
@@ -184,7 +187,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             // good map to avoid flashing the "no history / static" fallbacks.
             const currentMapMatchesRequestedRange = chartRange() === requestedRange;
             if (map.size > 0 || chartMap().size === 0 || !currentMapMatchesRequestedRange) {
-                appliedResponseMap = true;
                 setChartMap(map);
                 setChartRange(requestedRange);
             }
@@ -199,9 +201,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             }
             if (requestId === activeFetchRequest && requestSucceeded) {
                 setLoadedRange(requestedRange);
-                if (appliedResponseMap) {
-                    setUsingCachedData(false);
-                }
             }
         }
     };
@@ -224,7 +223,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             setChartMap(new Map());
             setChartRange(null);
             setLoadedRange(null);
-            setUsingCachedData(false);
             return;
         }
 
@@ -237,7 +235,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             activeRange = nextRange;
             if (!hydrateFromRangeCache(nextRange)) {
                 setLoadedRange((current) => (current === nextRange ? current : null));
-                setUsingCachedData(false);
             }
             void fetchCharts({ prioritize: true });
         }
@@ -369,11 +366,27 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         });
     });
 
+    // When a resource drawer is open, filter sparklines to show only that resource
+    const displaySeries = createMemo(() => {
+        const focused = props.focusedHostId;
+        const all = hostSeries();
+        if (!focused) return all;
+        const match = all.find((s) => s.id === focused);
+        return match ? [match] : all;
+    });
+
+    const focusedHostName = createMemo(() => {
+        const focused = props.focusedHostId;
+        if (!focused) return null;
+        const match = hostSeries().find((s) => s.id === focused);
+        return match?.name ?? null;
+    });
+
     const hasData = (metric: 'cpu' | 'memory' | 'disk') =>
-        hostSeries().some((s) => s[metric].length >= 1);
+        displaySeries().some((s) => s[metric].length >= 1);
 
     const networkSeries = createMemo(() =>
-        hostSeries().map((s) => ({
+        displaySeries().map((s) => ({
             id: s.id,
             data: s.network,
             color: s.color,
@@ -382,7 +395,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     );
 
     const hasNetData = () =>
-        hostSeries().some((s) => s.network.length >= 1);
+        displaySeries().some((s) => s.network.length >= 1);
 
     // Keep the network card visible when we have capability but limited history.
     const hasNetworkCapability = createMemo(() =>
@@ -401,7 +414,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     const shouldShowNetworkCard = createMemo(() => hasNetData() || hasNetworkCapability());
 
     const seriesFor = (metric: 'cpu' | 'memory' | 'disk') =>
-        hostSeries().map((s) => ({ id: s.id, data: s[metric], color: s.color, name: s.name }));
+        displaySeries().map((s) => ({ id: s.id, data: s[metric], color: s.color, name: s.name }));
     const rangeLabel = () => props.timeRange || '1h';
 
     // Workload stats from WebSocket state (zero API calls)
@@ -428,21 +441,58 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         return { total: all.length, running, stopped, vms, containers };
     });
 
+    const hostCounts = createMemo(() => {
+        const total = props.hosts.length;
+        const online = props.hosts.filter((host) => host.status === 'online').length;
+        const offline = total - online;
+        return { total, online, offline };
+    });
+
     return (
         <Show when={props.hosts.length > 0}>
-            <div class="space-y-2">
-                <Show when={usingCachedData()}>
-                    <div class="text-[11px] text-sky-700 dark:text-sky-300">
-                        Showing cached trend data while live history updates.
-                    </div>
-                </Show>
+            <div data-testid="infrastructure-summary" class="space-y-2">
                 <div class="rounded-xl border border-gray-200 bg-white p-2 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-3">
+                    <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-1 pb-2 text-[11px] text-gray-500 dark:border-gray-700/80 dark:text-gray-400">
+                        <div class="flex items-center gap-3">
+                            <span class="font-medium text-gray-700 dark:text-gray-200">
+                                {hostCounts().total} {hostCounts().total === 1 ? 'resource' : 'resources'}
+                            </span>
+                            <Show when={hostCounts().online > 0}>
+                                <span class="text-emerald-600 dark:text-emerald-400">{hostCounts().online} online</span>
+                            </Show>
+                            <Show when={hostCounts().offline > 0}>
+                                <span class="text-gray-400 dark:text-gray-500">{hostCounts().offline} offline</span>
+                            </Show>
+                        </div>
+                        <Show when={props.onTimeRangeChange}>
+                            <div class="inline-flex shrink-0 rounded border border-gray-300 bg-white p-0.5 text-xs dark:border-gray-700 dark:bg-gray-900">
+                                <For each={SUMMARY_TIME_RANGES}>
+                                    {(range) => (
+                                        <button
+                                            type="button"
+                                            onClick={() => props.onTimeRangeChange?.(range)}
+                                            class={`rounded px-2 py-1 ${
+                                                selectedRange() === range
+                                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200'
+                                                    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60'
+                                            }`}
+                                        >
+                                            {SUMMARY_TIME_RANGE_LABEL[range]}
+                                        </button>
+                                    )}
+                                </For>
+                            </div>
+                        </Show>
+                    </div>
                     <div class="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
                         {/* CPU Card */}
                         <Card padding="sm" class="h-full">
                             <div class="flex flex-col h-full">
-                                <div class="flex items-center mb-1.5">
-                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">CPU</span>
+                                <div class="flex items-center mb-1.5 min-w-0">
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide shrink-0">CPU</span>
+                                    <Show when={focusedHostName()}>
+                                        <span class="text-xs text-gray-400 dark:text-gray-500 ml-1.5 truncate">&mdash; {focusedHostName()}</span>
+                                    </Show>
                                 </div>
                                 <Show
                                     when={hasData('cpu')}
@@ -469,8 +519,11 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                         {/* Memory Card */}
                         <Card padding="sm" class="h-full">
                             <div class="flex flex-col h-full">
-                                <div class="flex items-center mb-1.5">
-                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Memory</span>
+                                <div class="flex items-center mb-1.5 min-w-0">
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide shrink-0">Memory</span>
+                                    <Show when={focusedHostName()}>
+                                        <span class="text-xs text-gray-400 dark:text-gray-500 ml-1.5 truncate">&mdash; {focusedHostName()}</span>
+                                    </Show>
                                 </div>
                                 <Show
                                     when={hasData('memory')}
@@ -497,8 +550,11 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                         {/* Storage Card */}
                         <Card padding="sm" class="h-full">
                             <div class="flex flex-col h-full">
-                                <div class="flex items-center mb-1.5">
-                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Storage</span>
+                                <div class="flex items-center mb-1.5 min-w-0">
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide shrink-0">Storage</span>
+                                    <Show when={focusedHostName()}>
+                                        <span class="text-xs text-gray-400 dark:text-gray-500 ml-1.5 truncate">&mdash; {focusedHostName()}</span>
+                                    </Show>
                                 </div>
                                 <Show
                                     when={hasData('disk')}
@@ -564,8 +620,11 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                             {/* 4th Card: Network */}
                             <Card padding="sm" class="h-full">
                                 <div class="flex flex-col h-full">
-                                    <div class="flex items-center mb-1.5">
-                                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Network</span>
+                                    <div class="flex items-center mb-1.5 min-w-0">
+                                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide shrink-0">Network</span>
+                                        <Show when={focusedHostName()}>
+                                            <span class="text-xs text-gray-400 dark:text-gray-500 ml-1.5 truncate">&mdash; {focusedHostName()}</span>
+                                        </Show>
                                     </div>
                                     <Show
                                         when={hasNetData()}
