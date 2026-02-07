@@ -40,10 +40,21 @@ const flushAsync = async () => {
   await Promise.resolve();
 };
 
+const waitForResourceCount = async (getCount: () => number, expectedMin = 1) => {
+  for (let i = 0; i < 20; i++) {
+    if (getCount() >= expectedMin) {
+      return;
+    }
+    await flushAsync();
+  }
+  throw new Error(`Timed out waiting for at least ${expectedMin} resources`);
+};
+
 describe('useUnifiedResources', () => {
   let apiFetchMock: ReturnType<typeof vi.fn>;
   let setWsState: SetStoreFunction<TestWsState>;
   let useUnifiedResources: UseUnifiedResourcesModule['useUnifiedResources'];
+  let resetUnifiedResourcesCacheForTests: UseUnifiedResourcesModule['__resetUnifiedResourcesCacheForTests'];
 
   beforeEach(async () => {
     vi.useFakeTimers();
@@ -77,7 +88,8 @@ describe('useUnifiedResources', () => {
       getGlobalWebSocketStore: () => wsStore,
     }));
 
-    ({ useUnifiedResources } = await import('@/hooks/useUnifiedResources'));
+    ({ useUnifiedResources, __resetUnifiedResourcesCacheForTests: resetUnifiedResourcesCacheForTests } = await import('@/hooks/useUnifiedResources'));
+    resetUnifiedResourcesCacheForTests();
   });
 
   afterEach(() => {
@@ -96,6 +108,7 @@ describe('useUnifiedResources', () => {
 
     await flushAsync();
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    await waitForResourceCount(() => result!.resources().length);
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       1,
       '/api/v2/resources?type=host,pbs,pmg,k8s_cluster,k8s_node',
@@ -103,10 +116,9 @@ describe('useUnifiedResources', () => {
     );
     const originalResourceRef = result!.resources()[0];
 
-    // Initial effect schedules a debounced refresh once connected.
     vi.advanceTimersByTime(800);
     await flushAsync();
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
 
     // Simulate a metric update where reconcile keeps array identity stable.
     batch(() => {
@@ -130,11 +142,11 @@ describe('useUnifiedResources', () => {
 
     vi.advanceTimersByTime(799);
     await flushAsync();
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
 
-    vi.advanceTimersByTime(1);
+    vi.advanceTimersByTime(2000);
     await flushAsync();
-    expect(apiFetchMock).toHaveBeenCalledTimes(3);
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
     expect(result!.resources()[0]).toBe(originalResourceRef);
     expect(result!.resources()[0].discoveryTarget).toEqual({
       resourceType: 'host',
@@ -168,7 +180,7 @@ describe('useUnifiedResources', () => {
       result = useUnifiedResources();
     });
 
-    await flushAsync();
+    await result!.refetch();
     expect(result!.resources()[0].temperature).toBe(58.4);
 
     dispose();
@@ -221,11 +233,71 @@ describe('useUnifiedResources', () => {
       result = useUnifiedResources();
     });
 
-    await flushAsync();
+    await result!.refetch();
 
     const resources = result!.resources();
     expect(resources).toHaveLength(2);
     expect(resources.map((resource) => resource.id)).toEqual(['k8s-cluster-native', 'k8s-node-native']);
+
+    dispose();
+  });
+
+  it('reuses fresh cache on remount without an extra network fetch', async () => {
+    let disposeFirst = () => {};
+    let first: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeFirst = d;
+      first = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => first!.resources().length);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    disposeFirst();
+
+    let disposeSecond = () => {};
+    let second: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeSecond = d;
+      second = useUnifiedResources();
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(second!.resources().length).toBeGreaterThan(0);
+
+    disposeSecond();
+  });
+
+  it('coalesces burst websocket updates into a single delayed refetch', async () => {
+    let dispose = () => {};
+    createRoot((d) => {
+      dispose = d;
+      useUnifiedResources();
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    setWsState('lastUpdate', '2026-02-06T12:00:01Z');
+    await flushAsync();
+    vi.advanceTimersByTime(100);
+
+    setWsState('lastUpdate', '2026-02-06T12:00:02Z');
+    await flushAsync();
+    vi.advanceTimersByTime(100);
+
+    setWsState('lastUpdate', '2026-02-06T12:00:03Z');
+    await flushAsync();
+
+    vi.advanceTimersByTime(2_500);
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+
+    vi.advanceTimersByTime(2_500);
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
 
     dispose();
   });

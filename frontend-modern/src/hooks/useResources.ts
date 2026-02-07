@@ -39,6 +39,9 @@ import {
     getMemoryPercent,
     getDiskPercent,
 } from '@/types/resource';
+import type { PMGInstance, PBSInstance, PBSDatastore, Storage } from '@/types/api';
+
+type ResourceStoreLike = Pick<ReturnType<typeof getGlobalWebSocketStore>, 'state'>;
 
 export interface UseResourcesReturn {
     /** All unified resources */
@@ -81,9 +84,9 @@ export interface UseResourcesReturn {
 /**
  * Hook for accessing unified resources with reactive filtering.
  */
-export function useResources(): UseResourcesReturn {
+export function useResources(storeOverride?: ResourceStoreLike): UseResourcesReturn {
     // Get the WebSocket store instance
-    const wsStore = getGlobalWebSocketStore();
+    const wsStore = storeOverride ?? getGlobalWebSocketStore();
 
     // All resources from WebSocket state
     const resources = createMemo<Resource[]>(() => {
@@ -232,11 +235,9 @@ export function useResources(): UseResourcesReturn {
  * initial WebSocket state may not include it. In that case, we fall back
  * to the legacy arrays (nodes, vms, containers, etc.) from the WebSocket state.
  */
-export function useResourcesAsLegacy() {
-    const { resources, byType } = useResources();
-
-    // Get the WebSocket store for legacy array fallback
-    const wsStore = getGlobalWebSocketStore();
+export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
+    const wsStore = storeOverride ?? getGlobalWebSocketStore();
+    const { resources, byType } = useResources(wsStore);
 
     // Check if we have unified resources (populated after first broadcast)
     const hasUnifiedResources = createMemo(() => resources().length > 0);
@@ -253,6 +254,11 @@ export function useResourcesAsLegacy() {
     );
     const hasHostResources = createMemo(() => (resources() || []).some((r) => r.type === 'host'));
     const hasDockerHostResources = createMemo(() => (resources() || []).some((r) => r.type === 'docker-host'));
+    const hasStorageResources = createMemo(() =>
+        (resources() || []).some((r) => r.type === 'storage' || r.type === 'datastore'),
+    );
+    const hasPBSResources = createMemo(() => (resources() || []).some((r) => r.type === 'pbs'));
+    const hasPMGResources = createMemo(() => (resources() || []).some((r) => r.type === 'pmg'));
 
     // Convert resources to legacy VM format
     // Falls back to legacy state.vms array when unified resources aren't yet populated
@@ -653,6 +659,455 @@ export function useResourcesAsLegacy() {
         });
     });
 
+    const toLegacyStorageStatus = (
+        status: string | undefined,
+        active: boolean | undefined,
+        enabled: boolean | undefined,
+    ): string => {
+        if (active === false || enabled === false) return 'offline';
+        switch ((status ?? '').toLowerCase()) {
+            case 'online':
+            case 'running':
+            case 'available':
+                return 'available';
+            case 'degraded':
+            case 'offline':
+            case 'stopped':
+            case 'unknown':
+                return 'offline';
+            default:
+                return 'offline';
+        }
+    };
+
+    const toLegacyPbsDatastoreStatus = (status: string | undefined): string => {
+        switch ((status ?? '').toLowerCase()) {
+            case 'online':
+            case 'running':
+            case 'available':
+                return 'available';
+            case 'degraded':
+            case 'offline':
+            case 'stopped':
+            case 'unknown':
+                return 'offline';
+            default:
+                return status || 'unknown';
+        }
+    };
+
+    const toLegacyPbsInstanceStatus = (status: string | undefined): string => {
+        switch ((status ?? '').toLowerCase()) {
+            case 'online':
+            case 'running':
+                return 'online';
+            case 'offline':
+            case 'stopped':
+                return 'offline';
+            case 'degraded':
+                return 'degraded';
+            default:
+                return status || 'unknown';
+        }
+    };
+
+    const toLegacyPmgStatus = (status: string | undefined): string => {
+        switch ((status ?? '').toLowerCase()) {
+            case 'online':
+            case 'running':
+                return 'online';
+            case 'offline':
+            case 'stopped':
+                return 'offline';
+            case 'degraded':
+                return 'degraded';
+            default:
+                return status || 'unknown';
+        }
+    };
+
+    // Convert resources to legacy PBS format.
+    const asPBS = createMemo<PBSInstance[]>(() => {
+        const legacy = wsStore.state.pbs ?? [];
+        if (!hasUnifiedResources()) {
+            return [...legacy];
+        }
+        if (!hasPBSResources() && !hasStorageResources()) {
+            return [...legacy];
+        }
+
+        const datastoreResources = byType('datastore');
+        const datastoresByInstance = new Map<string, PBSDatastore[]>();
+        const instanceNameByID = new Map<string, string>();
+
+        datastoreResources.forEach((resource) => {
+            const platformData = resource.platformData
+                ? (unwrap(resource.platformData) as Record<string, unknown>)
+                : undefined;
+            const instanceID =
+                (platformData?.pbsInstanceId as string | undefined) ||
+                resource.parentId ||
+                resource.platformId ||
+                'pbs';
+            const instanceName =
+                (platformData?.pbsInstanceName as string | undefined) ||
+                instanceNameByID.get(instanceID) ||
+                instanceID;
+            instanceNameByID.set(instanceID, instanceName);
+
+            const total = resource.disk?.total ?? 0;
+            const used = resource.disk?.used ?? 0;
+            const free = resource.disk?.free ?? Math.max(total - used, 0);
+            const usage = resource.disk?.current ?? (total > 0 ? (used / total) * 100 : 0);
+
+            const datastore: PBSDatastore = {
+                name: resource.name,
+                total,
+                used,
+                free,
+                usage,
+                status: toLegacyPbsDatastoreStatus(resource.status),
+                error: (platformData?.error as string | undefined) || '',
+                namespaces: [],
+                deduplicationFactor:
+                    typeof platformData?.deduplicationFactor === 'number'
+                        ? (platformData.deduplicationFactor as number)
+                        : undefined,
+            };
+
+            const existing = datastoresByInstance.get(instanceID) || [];
+            existing.push(datastore);
+            datastoresByInstance.set(instanceID, existing);
+        });
+
+        const fromResources: PBSInstance[] = byType('pbs').map((resource) => {
+            const platformData = resource.platformData
+                ? (unwrap(resource.platformData) as Record<string, unknown>)
+                : undefined;
+            const instanceID = resource.id;
+            const resourceDatastores = datastoresByInstance.get(instanceID) || [];
+            const memoryUsed = resource.memory?.used ?? (platformData?.memoryUsed as number | undefined) ?? 0;
+            const memoryTotal =
+                resource.memory?.total ?? (platformData?.memoryTotal as number | undefined) ?? 0;
+
+            return {
+                id: instanceID,
+                name: resource.name,
+                host: (platformData?.host as string | undefined) || resource.platformId || '',
+                status: toLegacyPbsInstanceStatus(resource.status),
+                version: (platformData?.version as string | undefined) || '',
+                cpu: resource.cpu?.current ?? 0,
+                memory: resource.memory?.current ?? 0,
+                memoryUsed,
+                memoryTotal,
+                uptime: resource.uptime ?? 0,
+                datastores: resourceDatastores,
+                backupJobs: [],
+                syncJobs: [],
+                verifyJobs: [],
+                pruneJobs: [],
+                garbageJobs: [],
+                connectionHealth:
+                    (platformData?.connectionHealth as string | undefined) ||
+                    (resource.status === 'degraded' ? 'unhealthy' : 'healthy'),
+                lastSeen: new Date(resource.lastSeen).toISOString(),
+            };
+        });
+
+        datastoresByInstance.forEach((datastores, instanceID) => {
+            if (fromResources.some((pbs) => pbs.id === instanceID)) return;
+            const name = instanceNameByID.get(instanceID) || instanceID;
+            fromResources.push({
+                id: instanceID,
+                name,
+                host: instanceID,
+                status: 'unknown',
+                version: '',
+                cpu: 0,
+                memory: 0,
+                memoryUsed: 0,
+                memoryTotal: 0,
+                uptime: 0,
+                datastores,
+                backupJobs: [],
+                syncJobs: [],
+                verifyJobs: [],
+                pruneJobs: [],
+                garbageJobs: [],
+                connectionHealth: 'unknown',
+                lastSeen: new Date().toISOString(),
+            });
+        });
+
+        if (legacy.length === 0) {
+            return fromResources;
+        }
+
+        const merged = legacy.map((pbs) => {
+            const next = fromResources.find((item) => item.id === pbs.id);
+            if (!next) return pbs;
+            const datastoreByName = new Map<string, PBSDatastore>();
+            (pbs.datastores || []).forEach((datastore) => datastoreByName.set(datastore.name, datastore));
+            (next.datastores || []).forEach((datastore) => datastoreByName.set(datastore.name, datastore));
+
+            return {
+                ...pbs,
+                status: next.status || pbs.status,
+                version: next.version || pbs.version,
+                cpu: Number.isFinite(next.cpu) ? next.cpu : pbs.cpu,
+                memory: Number.isFinite(next.memory) ? next.memory : pbs.memory,
+                memoryUsed: Number.isFinite(next.memoryUsed) ? next.memoryUsed : pbs.memoryUsed,
+                memoryTotal: Number.isFinite(next.memoryTotal) ? next.memoryTotal : pbs.memoryTotal,
+                uptime: Number.isFinite(next.uptime) ? next.uptime : pbs.uptime,
+                connectionHealth: next.connectionHealth || pbs.connectionHealth,
+                datastores: Array.from(datastoreByName.values()),
+            };
+        });
+
+        fromResources.forEach((pbs) => {
+            if (!merged.some((existing) => existing.id === pbs.id)) {
+                merged.push(pbs);
+            }
+        });
+
+        return merged;
+    });
+
+    // Convert resources to legacy storage format.
+    const asStorage = createMemo<Storage[]>(() => {
+        const legacy = wsStore.state.storage ?? [];
+        const pbsDatastoresFromPBS = asPBS().flatMap((instance) =>
+            (instance.datastores || []).map((datastore) => {
+                const total = Number.isFinite(datastore.total) ? datastore.total : 0;
+                const used = Number.isFinite(datastore.used) ? datastore.used : 0;
+                const free = Number.isFinite(datastore.free) ? datastore.free : Math.max(total - used, 0);
+                const usage = total > 0 ? (used / total) * 100 : 0;
+                const instanceLabel = instance.name || instance.host || instance.id || 'PBS';
+                return {
+                    id: `pbs-${instance.id || instanceLabel}-${datastore.name}`,
+                    name: datastore.name || 'PBS Datastore',
+                    node: instanceLabel,
+                    instance: instance.id || instanceLabel,
+                    type: 'pbs',
+                    status: toLegacyPbsDatastoreStatus(datastore.status || instance.status),
+                    total,
+                    used,
+                    free,
+                    usage,
+                    content: 'backup',
+                    shared: false,
+                    enabled: true,
+                    active: true,
+                    nodes: [instanceLabel],
+                    pbsNames: [datastore.name],
+                } as Storage;
+            }),
+        );
+
+        if (!hasUnifiedResources()) {
+            const mergedLegacy = [...legacy];
+            const existingKeys = new Set<string>(
+                mergedLegacy.map((item) => item.id || `${item.instance}|${item.node}|${item.name}|${item.type}`),
+            );
+            pbsDatastoresFromPBS.forEach((item) => {
+                const key = item.id || `${item.instance}|${item.node}|${item.name}|${item.type}`;
+                if (existingKeys.has(key)) return;
+                existingKeys.add(key);
+                mergedLegacy.push(item);
+            });
+            return mergedLegacy;
+        }
+
+        const storageResources = resources().filter((r) => r.type === 'storage' || r.type === 'datastore');
+        const synthesized: Storage[] = storageResources.map((resource) => {
+            const platformData = resource.platformData
+                ? (unwrap(resource.platformData) as Record<string, unknown>)
+                : undefined;
+            const total = resource.disk?.total ?? 0;
+            const used = resource.disk?.used ?? 0;
+            const free = resource.disk?.free ?? Math.max(total - used, 0);
+            const usage = resource.disk?.current ?? (total > 0 ? (used / total) * 100 : 0);
+
+            if (resource.type === 'datastore') {
+                const instanceID =
+                    (platformData?.pbsInstanceId as string | undefined) ||
+                    resource.parentId ||
+                    resource.platformId ||
+                    'pbs';
+                const instanceName =
+                    (platformData?.pbsInstanceName as string | undefined) || instanceID;
+                return {
+                    id: resource.id,
+                    name: resource.name,
+                    node: instanceName,
+                    instance: instanceID,
+                    type: 'pbs',
+                    status: toLegacyStorageStatus(resource.status, true, true),
+                    total,
+                    used,
+                    free,
+                    usage,
+                    content: (platformData?.content as string | undefined) || 'backup',
+                    shared: false,
+                    enabled: true,
+                    active: resource.status === 'online' || resource.status === 'running',
+                    nodes: [instanceName],
+                    nodeIds: [`${instanceID}-${instanceName}`],
+                    nodeCount: 1,
+                    pbsNames: [resource.name],
+                };
+            }
+
+            const active = platformData?.active as boolean | undefined;
+            const enabled = platformData?.enabled as boolean | undefined;
+            const node = (platformData?.node as string | undefined) || '';
+            const instance = (platformData?.instance as string | undefined) || resource.platformId || '';
+            const nodes = platformData?.nodes as string[] | undefined;
+
+            return {
+                id: resource.id,
+                name: resource.name,
+                node,
+                instance,
+                type: (platformData?.type as string | undefined) || resource.type,
+                status: toLegacyStorageStatus(resource.status, active, enabled),
+                total,
+                used,
+                free,
+                usage,
+                content: (platformData?.content as string | undefined) || '',
+                shared: Boolean(platformData?.shared),
+                enabled: enabled ?? (resource.status !== 'offline' && resource.status !== 'stopped'),
+                active: active ?? (resource.status === 'online' || resource.status === 'running'),
+                nodes,
+                zfsPool: platformData?.zfsPool as Storage['zfsPool'],
+            };
+        });
+
+        const merged = [...legacy];
+        const existingKeys = new Set<string>(
+            merged.map((item) => item.id || `${item.instance}|${item.node}|${item.name}|${item.type}`),
+        );
+
+        [...synthesized, ...pbsDatastoresFromPBS].forEach((item) => {
+            const key = item.id || `${item.instance}|${item.node}|${item.name}|${item.type}`;
+            if (existingKeys.has(key)) return;
+            existingKeys.add(key);
+            merged.push(item);
+        });
+
+        return merged;
+    });
+
+    // Convert resources to legacy PMG format.
+    const asPMG = createMemo<PMGInstance[]>(() => {
+        const legacy = wsStore.state.pmg ?? [];
+        if (!hasUnifiedResources()) {
+            return [...legacy];
+        }
+        if (!hasPMGResources()) {
+            return [...legacy];
+        }
+
+        const fromResources: PMGInstance[] = byType('pmg').map((resource) => {
+            const platformData = resource.platformData
+                ? (unwrap(resource.platformData) as Record<string, unknown>)
+                : undefined;
+            const queueTotal = Number(platformData?.queueTotal || 0);
+            const queueStatus =
+                queueTotal > 0
+                    ? {
+                        active: Number(platformData?.queueActive || 0),
+                        deferred: Number(platformData?.queueDeferred || 0),
+                        hold: Number(platformData?.queueHold || 0),
+                        incoming: Number(platformData?.queueIncoming || 0),
+                        total: queueTotal,
+                        oldestAge: 0,
+                        updatedAt:
+                            (platformData?.lastUpdated as string | undefined) ||
+                            new Date(resource.lastSeen).toISOString(),
+                    }
+                    : undefined;
+
+            return {
+                id: resource.id,
+                name: resource.name,
+                host: (platformData?.host as string | undefined) || resource.platformId || '',
+                status: toLegacyPmgStatus(resource.status),
+                version: (platformData?.version as string | undefined) || '',
+                nodes: queueStatus
+                    ? [
+                        {
+                            name: resource.name,
+                            status: toLegacyPmgStatus(resource.status),
+                            queueStatus,
+                        },
+                    ]
+                    : [],
+                mailStats:
+                    Number(platformData?.mailCountTotal || 0) > 0
+                        ? {
+                            timeframe: '24h',
+                            countTotal: Number(platformData?.mailCountTotal || 0),
+                            countIn: 0,
+                            countOut: 0,
+                            spamIn: Number(platformData?.spamIn || 0),
+                            spamOut: 0,
+                            virusIn: Number(platformData?.virusIn || 0),
+                            virusOut: 0,
+                            bouncesIn: 0,
+                            bouncesOut: 0,
+                            bytesIn: 0,
+                            bytesOut: 0,
+                            greylistCount: 0,
+                            junkIn: 0,
+                            averageProcessTimeMs: 0,
+                            rblRejects: 0,
+                            pregreetRejects: 0,
+                            updatedAt:
+                                (platformData?.lastUpdated as string | undefined) ||
+                                new Date(resource.lastSeen).toISOString(),
+                        }
+                        : undefined,
+                mailCount: [],
+                spamDistribution: [],
+                quarantine: undefined,
+                connectionHealth:
+                    (platformData?.connectionHealth as string | undefined) ||
+                    (resource.status === 'degraded' ? 'unhealthy' : 'healthy'),
+                lastSeen: new Date(resource.lastSeen).toISOString(),
+                lastUpdated:
+                    (platformData?.lastUpdated as string | undefined) ||
+                    new Date(resource.lastSeen).toISOString(),
+            };
+        });
+
+        if (legacy.length === 0) {
+            return fromResources;
+        }
+
+        const merged = legacy.map((pmg) => {
+            const next = fromResources.find((item) => item.id === pmg.id);
+            if (!next) return pmg;
+            return {
+                ...pmg,
+                status: next.status || pmg.status,
+                version: next.version || pmg.version,
+                connectionHealth: next.connectionHealth || pmg.connectionHealth,
+                lastSeen: next.lastSeen || pmg.lastSeen,
+                lastUpdated: next.lastUpdated || pmg.lastUpdated,
+            };
+        });
+
+        fromResources.forEach((pmg) => {
+            if (!merged.some((existing) => existing.id === pmg.id)) {
+                merged.push(pmg);
+            }
+        });
+
+        return merged;
+    });
+
     return {
         resources,
         asVMs,
@@ -660,6 +1115,9 @@ export function useResourcesAsLegacy() {
         asHosts,
         asNodes,
         asDockerHosts,
+        asStorage,
+        asPBS,
+        asPMG,
     };
 }
 

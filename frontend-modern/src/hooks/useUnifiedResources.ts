@@ -5,6 +5,9 @@ import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
 
 const UNIFIED_RESOURCES_URL = '/api/v2/resources?type=host,pbs,pmg,k8s_cluster,k8s_node';
+const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
+const UNIFIED_RESOURCES_WS_DEBOUNCE_MS = 800;
+const UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS = 2_500;
 
 type V2MetricValue = {
   value?: number;
@@ -99,24 +102,77 @@ type V2ListResponse = {
   resources?: V2Resource[];
 };
 
-const resolvePlatformType = (sources: string[] | undefined): PlatformType => {
-  const set = new Set((sources || []).map((s) => s.toLowerCase()));
-  if (set.has('proxmox')) return 'proxmox-pve';
-  if (set.has('pbs')) return 'proxmox-pbs';
-  if (set.has('pmg')) return 'proxmox-pmg';
-  if (set.has('docker')) return 'docker';
-  if (set.has('kubernetes')) return 'kubernetes';
-  if (set.has('agent')) return 'host-agent';
+type SourceFlags = {
+  hasAgent: boolean;
+  hasProxmox: boolean;
+  hasDocker: boolean;
+  hasKubernetes: boolean;
+  hasPbs: boolean;
+  hasPmg: boolean;
+};
+
+let cachedUnifiedResources: Resource[] = [];
+let cachedUnifiedResourcesAt = 0;
+let lastUnifiedResourcesFetchAt = 0;
+let sharedFetchUnifiedResources: Promise<Resource[]> | null = null;
+
+const readSourceFlags = (sources: string[] | undefined): SourceFlags => {
+  const flags: SourceFlags = {
+    hasAgent: false,
+    hasProxmox: false,
+    hasDocker: false,
+    hasKubernetes: false,
+    hasPbs: false,
+    hasPmg: false,
+  };
+
+  if (!sources || sources.length === 0) {
+    return flags;
+  }
+
+  for (const source of sources) {
+    switch (source.toLowerCase()) {
+      case 'agent':
+        flags.hasAgent = true;
+        break;
+      case 'proxmox':
+        flags.hasProxmox = true;
+        break;
+      case 'docker':
+        flags.hasDocker = true;
+        break;
+      case 'kubernetes':
+        flags.hasKubernetes = true;
+        break;
+      case 'pbs':
+        flags.hasPbs = true;
+        break;
+      case 'pmg':
+        flags.hasPmg = true;
+        break;
+      default:
+        break;
+    }
+  }
+
+  return flags;
+};
+
+const resolvePlatformType = (flags: SourceFlags): PlatformType => {
+  if (flags.hasProxmox) return 'proxmox-pve';
+  if (flags.hasPbs) return 'proxmox-pbs';
+  if (flags.hasPmg) return 'proxmox-pmg';
+  if (flags.hasDocker) return 'docker';
+  if (flags.hasKubernetes) return 'kubernetes';
+  if (flags.hasAgent) return 'host-agent';
   return 'host-agent';
 };
 
-const resolveSourceType = (sources: string[] | undefined): SourceType => {
-  const set = new Set((sources || []).map((s) => s.toLowerCase()));
-  const hasAgent = set.has('agent');
+const resolveSourceType = (flags: SourceFlags): SourceType => {
   const hasOther =
-    set.has('proxmox') || set.has('docker') || set.has('kubernetes') || set.has('pbs') || set.has('pmg');
-  if (hasAgent && hasOther) return 'hybrid';
-  if (hasAgent) return 'agent';
+    flags.hasProxmox || flags.hasDocker || flags.hasKubernetes || flags.hasPbs || flags.hasPmg;
+  if (flags.hasAgent && hasOther) return 'hybrid';
+  if (flags.hasAgent) return 'agent';
   return 'api';
 };
 
@@ -140,7 +196,11 @@ const resolveType = (value?: string): ResourceType => {
       return 'docker-host';
     case 'k8s-cluster':
       return 'k8s-cluster';
+    case 'k8s_cluster':
+      return 'k8s-cluster';
     case 'k8s-node':
+      return 'k8s-node';
+    case 'k8s_node':
       return 'k8s-node';
     case 'truenas':
       return 'truenas';
@@ -153,6 +213,8 @@ const resolveType = (value?: string): ResourceType => {
     case 'container':
       return 'container';
     case 'docker-container':
+      return 'docker-container';
+    case 'docker_container':
       return 'docker-container';
     case 'pod':
       return 'pod';
@@ -199,6 +261,7 @@ const metricToResourceMetric = (metric?: V2MetricValue) => {
 
 const toResource = (v2: V2Resource): Resource => {
   const sources = v2.sources || [];
+  const sourceFlags = readSourceFlags(sources);
   const lastSeen = v2.lastSeen ? Date.parse(v2.lastSeen) : NaN;
   const name = v2.name || v2.id;
   const platformId =
@@ -210,8 +273,8 @@ const toResource = (v2: V2Resource): Resource => {
 
   const discoveryTarget =
     v2.discoveryTarget?.resourceType &&
-      v2.discoveryTarget?.hostId &&
-      v2.discoveryTarget?.resourceId
+    v2.discoveryTarget?.hostId &&
+    v2.discoveryTarget?.resourceId
       ? {
         resourceType: v2.discoveryTarget.resourceType as 'host' | 'vm' | 'lxc' | 'docker' | 'k8s',
         hostId: v2.discoveryTarget.hostId,
@@ -226,8 +289,8 @@ const toResource = (v2: V2Resource): Resource => {
     name,
     displayName: name,
     platformId,
-    platformType: resolvePlatformType(sources),
-    sourceType: resolveSourceType(sources),
+    platformType: resolvePlatformType(sourceFlags),
+    sourceType: resolveSourceType(sourceFlags),
     parentId: v2.parentId,
     clusterId: v2.identity?.clusterName || v2.proxmox?.clusterName,
     status: resolveStatus(v2.status),
@@ -282,6 +345,14 @@ const toResource = (v2: V2Resource): Resource => {
   };
 };
 
+const hasFreshUnifiedResourcesCache = () =>
+  cachedUnifiedResources.length > 0 && Date.now() - cachedUnifiedResourcesAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
+
+const setUnifiedResourcesCache = (resources: Resource[], at = Date.now()) => {
+  cachedUnifiedResources = resources;
+  cachedUnifiedResourcesAt = at;
+};
+
 async function fetchUnifiedResources(): Promise<Resource[]> {
   const response = await apiFetch(UNIFIED_RESOURCES_URL, { cache: 'no-store' });
   if (!response.ok) {
@@ -301,27 +372,83 @@ async function fetchUnifiedResources(): Promise<Resource[]> {
   return rawResources.map((resource) => toResource(resource as V2Resource));
 }
 
+const fetchUnifiedResourcesShared = async (force = false): Promise<Resource[]> => {
+  if (!force && hasFreshUnifiedResourcesCache()) {
+    return cachedUnifiedResources;
+  }
+
+  if (sharedFetchUnifiedResources) {
+    return sharedFetchUnifiedResources;
+  }
+
+  const request = (async () => {
+    const fetched = await fetchUnifiedResources();
+    const now = Date.now();
+    setUnifiedResourcesCache(fetched, now);
+    lastUnifiedResourcesFetchAt = now;
+    return fetched;
+  })();
+
+  sharedFetchUnifiedResources = request;
+
+  try {
+    return await request;
+  } finally {
+    if (sharedFetchUnifiedResources === request) {
+      sharedFetchUnifiedResources = null;
+    }
+  }
+};
+
+const shouldThrottleWsRefetch = () =>
+  Date.now() - lastUnifiedResourcesFetchAt < UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS;
+
+export const __resetUnifiedResourcesCacheForTests = () => {
+  cachedUnifiedResources = [];
+  cachedUnifiedResourcesAt = 0;
+  lastUnifiedResourcesFetchAt = 0;
+  sharedFetchUnifiedResources = null;
+};
+
 export function useUnifiedResources() {
-  const [resources, setResources] = createStore<Resource[]>([]);
-  const [loading, setLoading] = createSignal(true);
+  const initialResources = cachedUnifiedResources;
+  const hasCachedResources = initialResources.length > 0;
+
+  const [resources, setResources] = createStore<Resource[]>(initialResources);
+  const [loading, setLoading] = createSignal(!hasCachedResources);
   const [error, setError] = createSignal<unknown>(undefined);
   const wsStore = getGlobalWebSocketStore();
   let refreshHandle: ReturnType<typeof setTimeout> | undefined;
   let inFlightRefetch: Promise<Resource[]> | null = null;
+  let wsInitialized = false;
+  let lastWsUpdateToken = '';
 
   const applyResources = (next: Resource[]) => {
+    setUnifiedResourcesCache(next);
     setResources(reconcile(next, { key: 'id' }));
   };
 
-  const refetch = async () => {
+  const runRefetch = async (options?: { force?: boolean; source?: 'initial' | 'ws' | 'manual' }) => {
     if (inFlightRefetch) {
       return inFlightRefetch;
     }
 
-    const request = (async () => {
+    const force = options?.force === true;
+    const source = options?.source ?? 'manual';
+
+    if (!force && source === 'ws' && shouldThrottleWsRefetch()) {
+      return resources as unknown as Resource[];
+    }
+
+    const shouldForceNetwork = force || source === 'ws';
+    const shouldShowLoading = force || (resources as unknown as Resource[]).length === 0;
+    if (shouldShowLoading) {
       setLoading(true);
+    }
+
+    const request = (async () => {
       try {
-        const fetched = await fetchUnifiedResources();
+        const fetched = await fetchUnifiedResourcesShared(shouldForceNetwork);
         batch(() => {
           applyResources(fetched);
           setError(undefined);
@@ -331,14 +458,18 @@ export function useUnifiedResources() {
         setError(err);
         throw err;
       } finally {
-        setLoading(false);
         inFlightRefetch = null;
+        if (shouldShowLoading) {
+          setLoading(false);
+        }
       }
     })();
 
     inFlightRefetch = request;
     return request;
   };
+
+  const refetch = async () => runRefetch({ force: true, source: 'manual' });
 
   const mutate = (value: Resource[] | ((prev: Resource[]) => Resource[])) => {
     const current = resources as unknown as Resource[];
@@ -347,31 +478,47 @@ export function useUnifiedResources() {
     return resources as unknown as Resource[];
   };
 
-  void refetch().catch(() => undefined);
+  // If cache is stale, refresh it in the background without blocking initial render.
+  if (!hasFreshUnifiedResourcesCache()) {
+    void runRefetch({ source: 'initial' }).catch(() => undefined);
+  }
 
   const scheduleRefetch = () => {
     if (refreshHandle !== undefined) {
       clearTimeout(refreshHandle);
     }
+
+    const elapsedSinceFetch = Date.now() - lastUnifiedResourcesFetchAt;
+    const minIntervalDelay = Math.max(0, UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS - elapsedSinceFetch);
+    const delay = Math.max(UNIFIED_RESOURCES_WS_DEBOUNCE_MS, minIntervalDelay);
+
     refreshHandle = setTimeout(() => {
       refreshHandle = undefined;
-      if (!loading()) {
-        void refetch().catch(() => undefined);
-      }
-    }, 800);
+      void runRefetch({ source: 'ws' }).catch(() => undefined);
+    }, delay);
   };
 
   createEffect(() => {
     if (!wsStore.connected() || !wsStore.initialDataReceived()) {
+      wsInitialized = false;
+      lastWsUpdateToken = '';
       return;
     }
 
-    // Reconcile() often preserves top-level array identity, so subscribing to
-    // wsStore.state.resources (or other arrays) can miss metric-only updates.
-    // lastUpdate is bumped for every usable payload and gives us a stable
-    // refetch trigger for fresh info/drawer metrics.
-    void wsStore.state.lastUpdate;
+    const lastUpdateToken = String(wsStore.state.lastUpdate ?? '');
 
+    if (!wsInitialized) {
+      wsInitialized = true;
+      lastWsUpdateToken = lastUpdateToken;
+      scheduleRefetch();
+      return;
+    }
+
+    if (lastUpdateToken === lastWsUpdateToken) {
+      return;
+    }
+
+    lastWsUpdateToken = lastUpdateToken;
     scheduleRefetch();
   });
 
