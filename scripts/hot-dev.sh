@@ -431,7 +431,7 @@ log_info "Starting backend health monitor..."
             ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
             LOG_FILE="/tmp/pulse-debug.log" \
             LOG_MAX_SIZE="50" \
-            ./pulse > /dev/null 2>&1 &
+            ./pulse </dev/null > /dev/null 2>&1 &
             NEW_PID=$!
             sleep 2
             if kill -0 "$NEW_PID" 2>/dev/null; then
@@ -455,7 +455,7 @@ log_info "Starting backend health monitor..."
             ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
             LOG_FILE="/tmp/pulse-debug.log" \
             LOG_MAX_SIZE="50" \
-            ./pulse > /dev/null 2>&1 &
+            ./pulse </dev/null > /dev/null 2>&1 &
             NEW_PID=$!
             sleep 2
             if kill -0 "$NEW_PID" 2>/dev/null; then
@@ -494,6 +494,8 @@ log_info "Starting backend file watcher..."
         pkill -9 -f "^\./pulse$" 2>/dev/null || true
         sleep 1
 
+        # Close inherited stdin (</dev/null) to prevent pipe fd leaks when
+        # this function is called from inside a piped while-read loop.
         LOG_LEVEL="${LOG_LEVEL:-debug}" \
         FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
         PORT="${PULSE_DEV_API_PORT:-7655}" \
@@ -506,7 +508,7 @@ log_info "Starting backend file watcher..."
         ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
         LOG_FILE="/tmp/pulse-debug.log" \
         LOG_MAX_SIZE="50" \
-        ./pulse > /dev/null 2>&1 &
+        ./pulse </dev/null > /dev/null 2>&1 &
         NEW_PID=$!
         sleep 1
 
