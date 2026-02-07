@@ -117,6 +117,18 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 	if podResource.Kubernetes == nil || podResource.Kubernetes.Namespace != "default" {
 		t.Fatalf("expected pod namespace metadata, got %+v", podResource.Kubernetes)
 	}
+	if podResource.Kubernetes.MetricCapabilities == nil {
+		t.Fatalf("expected kubernetes metric capabilities on pod resource, got nil")
+	}
+	if podResource.Kubernetes.MetricCapabilities.NodeCPUMemory {
+		t.Fatalf("expected node CPU/memory capability to be false without linked hosts or node usage metrics, got %+v", podResource.Kubernetes.MetricCapabilities)
+	}
+	if podResource.Kubernetes.MetricCapabilities.NodeTelemetry {
+		t.Fatalf("expected node telemetry capability to be false without linked host agent, got %+v", podResource.Kubernetes.MetricCapabilities)
+	}
+	if podResource.Kubernetes.MetricCapabilities.PodDiskIO {
+		t.Fatalf("expected pod disk I/O capability to remain false, got %+v", podResource.Kubernetes.MetricCapabilities)
+	}
 	if podResource.Kubernetes.UptimeSeconds <= 0 {
 		t.Fatalf("expected pod uptimeSeconds to be populated, got %d", podResource.Kubernetes.UptimeSeconds)
 	}
@@ -150,6 +162,9 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 	}
 	if clusterResource.Kubernetes == nil {
 		t.Fatalf("expected cluster kubernetes metadata, got nil")
+	}
+	if clusterResource.Kubernetes.MetricCapabilities == nil {
+		t.Fatalf("expected cluster kubernetes metric capabilities, got nil")
 	}
 	if clusterResource.Kubernetes.UptimeSeconds != 0 {
 		t.Fatalf("expected cluster uptimeSeconds to be unset, got %d", clusterResource.Kubernetes.UptimeSeconds)
@@ -239,12 +254,104 @@ func TestIngestSnapshotLinksKubernetesNodesToHostAgentMetrics(t *testing.T) {
 	if nodeResource.Kubernetes.Temperature == nil || *nodeResource.Kubernetes.Temperature <= 0 {
 		t.Fatalf("expected kubernetes node temperature from linked host, got %+v", nodeResource.Kubernetes)
 	}
+	if nodeResource.Kubernetes.MetricCapabilities == nil {
+		t.Fatalf("expected kubernetes metric capabilities on node resource, got nil")
+	}
+	if !nodeResource.Kubernetes.MetricCapabilities.NodeCPUMemory {
+		t.Fatalf("expected node CPU/memory capability from linked host, got %+v", nodeResource.Kubernetes.MetricCapabilities)
+	}
+	if !nodeResource.Kubernetes.MetricCapabilities.NodeTelemetry {
+		t.Fatalf("expected node telemetry capability from linked host, got %+v", nodeResource.Kubernetes.MetricCapabilities)
+	}
 
 	if clusterResource == nil {
 		t.Fatal("expected kubernetes cluster resource")
 	}
 	if clusterResource.Metrics == nil || clusterResource.Metrics.CPU == nil || clusterResource.Metrics.CPU.Value <= 0 {
 		t.Fatalf("expected kubernetes cluster metrics aggregated from linked hosts, got %+v", clusterResource.Metrics)
+	}
+}
+
+func TestIngestSnapshotKubernetesCapabilitiesFromK8sMetrics(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:       "cluster-k8s-only",
+				AgentID:  "k8s-agent-only",
+				Name:     "k8s-only",
+				Status:   "online",
+				LastSeen: now,
+				Nodes: []models.KubernetesNode{
+					{
+						UID:                "node-uid-1",
+						Name:               "worker-1",
+						UsageCPUMilliCores: 720,
+						UsageCPUPercent:    36,
+						UsageMemoryBytes:   6 * 1024 * 1024 * 1024,
+					},
+				},
+				Pods: []models.KubernetesPod{
+					{
+						UID:                           "pod-uid-1",
+						Name:                          "api-1",
+						Namespace:                     "default",
+						NodeName:                      "worker-1",
+						Phase:                         "Running",
+						UsageCPUMilliCores:            450,
+						UsageCPUPercent:               22,
+						UsageMemoryBytes:              850 * 1024 * 1024,
+						UsageMemoryPercent:            17,
+						NetworkRxBytes:                250000,
+						NetworkTxBytes:                190000,
+						NetInRate:                     1300,
+						NetOutRate:                    900,
+						EphemeralStorageUsedBytes:     3 * 1024 * 1024 * 1024,
+						EphemeralStorageCapacityBytes: 12 * 1024 * 1024 * 1024,
+						DiskUsagePercent:              25,
+					},
+				},
+			},
+		},
+	}
+
+	registry := NewRegistry(NewMemoryStore())
+	registry.IngestSnapshot(snapshot)
+
+	resources := registry.List()
+	var clusterResource *Resource
+	for i := range resources {
+		resource := resources[i]
+		if resource.Type == ResourceTypeK8sCluster {
+			clusterResource = &resource
+			break
+		}
+	}
+	if clusterResource == nil {
+		t.Fatal("expected kubernetes cluster resource")
+	}
+	if clusterResource.Kubernetes == nil || clusterResource.Kubernetes.MetricCapabilities == nil {
+		t.Fatalf("expected kubernetes metric capabilities on cluster resource, got %+v", clusterResource.Kubernetes)
+	}
+
+	cap := clusterResource.Kubernetes.MetricCapabilities
+	if !cap.NodeCPUMemory {
+		t.Fatalf("expected node CPU/memory capability from k8s usage metrics, got %+v", cap)
+	}
+	if cap.NodeTelemetry {
+		t.Fatalf("expected node telemetry capability to be false without linked host agent, got %+v", cap)
+	}
+	if !cap.PodCPUMemory {
+		t.Fatalf("expected pod CPU/memory capability from k8s usage metrics, got %+v", cap)
+	}
+	if !cap.PodNetwork {
+		t.Fatalf("expected pod network capability from pod rates/bytes, got %+v", cap)
+	}
+	if !cap.PodEphemeralDisk {
+		t.Fatalf("expected pod ephemeral disk capability from summary metrics, got %+v", cap)
+	}
+	if cap.PodDiskIO {
+		t.Fatalf("expected pod disk I/O capability to remain false, got %+v", cap)
 	}
 }
 

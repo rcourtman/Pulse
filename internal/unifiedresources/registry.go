@@ -106,16 +106,17 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 			continue
 		}
 		linkedHosts := linkedHostsForKubernetesCluster(cluster, kubernetesHostLookup)
-		clusterID := rr.ingestKubernetesCluster(cluster, linkedHosts)
+		capabilities := kubernetesMetricCapabilities(cluster, linkedHosts)
+		clusterID := rr.ingestKubernetesCluster(cluster, linkedHosts, capabilities)
 		for _, node := range cluster.Nodes {
 			linkedHost := resolveKubernetesNodeHost(node, kubernetesHostLookup)
-			rr.ingestKubernetesNode(cluster, node, linkedHost, clusterID)
+			rr.ingestKubernetesNode(cluster, node, linkedHost, clusterID, capabilities)
 		}
 		for _, pod := range cluster.Pods {
-			rr.ingestKubernetesPod(cluster, pod, clusterID)
+			rr.ingestKubernetesPod(cluster, pod, clusterID, capabilities)
 		}
 		for _, deployment := range cluster.Deployments {
-			rr.ingestKubernetesDeployment(cluster, deployment, clusterID)
+			rr.ingestKubernetesDeployment(cluster, deployment, clusterID, capabilities)
 		}
 	}
 
@@ -286,14 +287,14 @@ func (rr *ResourceRegistry) ingestDockerContainer(ct models.DockerContainer, hos
 	rr.ingest(SourceDocker, ct.ID, resource, identity)
 }
 
-func (rr *ResourceRegistry) ingestKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host) string {
-	resource, identity := resourceFromKubernetesCluster(cluster, linkedHosts)
+func (rr *ResourceRegistry) ingestKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host, capabilities *K8sMetricCapabilities) string {
+	resource, identity := resourceFromKubernetesCluster(cluster, linkedHosts, capabilities)
 	sourceID := kubernetesClusterSourceID(cluster)
 	return rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
-func (rr *ResourceRegistry) ingestKubernetesNode(cluster models.KubernetesCluster, node models.KubernetesNode, linkedHost *models.Host, clusterResourceID string) {
-	resource, identity := resourceFromKubernetesNode(cluster, node, linkedHost)
+func (rr *ResourceRegistry) ingestKubernetesNode(cluster models.KubernetesCluster, node models.KubernetesNode, linkedHost *models.Host, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesNode(cluster, node, linkedHost, capabilities)
 	if clusterResourceID != "" {
 		resource.ParentID = &clusterResourceID
 	}
@@ -301,8 +302,8 @@ func (rr *ResourceRegistry) ingestKubernetesNode(cluster models.KubernetesCluste
 	rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
-func (rr *ResourceRegistry) ingestKubernetesPod(cluster models.KubernetesCluster, pod models.KubernetesPod, clusterResourceID string) {
-	resource, identity := resourceFromKubernetesPod(cluster, pod)
+func (rr *ResourceRegistry) ingestKubernetesPod(cluster models.KubernetesCluster, pod models.KubernetesPod, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesPod(cluster, pod, capabilities)
 	if clusterResourceID != "" {
 		resource.ParentID = &clusterResourceID
 	}
@@ -310,8 +311,8 @@ func (rr *ResourceRegistry) ingestKubernetesPod(cluster models.KubernetesCluster
 	rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
-func (rr *ResourceRegistry) ingestKubernetesDeployment(cluster models.KubernetesCluster, deployment models.KubernetesDeployment, clusterResourceID string) {
-	resource, identity := resourceFromKubernetesDeployment(cluster, deployment)
+func (rr *ResourceRegistry) ingestKubernetesDeployment(cluster models.KubernetesCluster, deployment models.KubernetesDeployment, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesDeployment(cluster, deployment, capabilities)
 	if clusterResourceID != "" {
 		resource.ParentID = &clusterResourceID
 	}

@@ -229,46 +229,58 @@ type PMGData struct {
 	LastUpdated      time.Time `json:"lastUpdated,omitempty"`
 }
 
-// K8sData contains Kubernetes data (placeholder).
+// K8sMetricCapabilities describes which Kubernetes metric families are available
+// for this cluster right now based on active collection paths.
+type K8sMetricCapabilities struct {
+	NodeCPUMemory    bool `json:"nodeCpuMemory"`
+	NodeTelemetry    bool `json:"nodeTelemetry"`
+	PodCPUMemory     bool `json:"podCpuMemory"`
+	PodNetwork       bool `json:"podNetwork"`
+	PodEphemeralDisk bool `json:"podEphemeralDisk"`
+	PodDiskIO        bool `json:"podDiskIo"`
+}
+
+// K8sData contains Kubernetes data.
 type K8sData struct {
-	ClusterID               string            `json:"clusterId,omitempty"`
-	ClusterName             string            `json:"clusterName,omitempty"`
-	AgentID                 string            `json:"agentId,omitempty"`
-	Context                 string            `json:"context,omitempty"`
-	Server                  string            `json:"server,omitempty"`
-	Version                 string            `json:"version,omitempty"`
-	PendingUninstall        bool              `json:"pendingUninstall,omitempty"`
-	NodeUID                 string            `json:"nodeUid,omitempty"`
-	NodeName                string            `json:"nodeName,omitempty"`
-	Ready                   bool              `json:"ready,omitempty"`
-	Unschedulable           bool              `json:"unschedulable,omitempty"`
-	Roles                   []string          `json:"roles,omitempty"`
-	KubeletVersion          string            `json:"kubeletVersion,omitempty"`
-	ContainerRuntimeVersion string            `json:"containerRuntimeVersion,omitempty"`
-	OSImage                 string            `json:"osImage,omitempty"`
-	KernelVersion           string            `json:"kernelVersion,omitempty"`
-	Architecture            string            `json:"architecture,omitempty"`
-	CapacityCPU             int64             `json:"capacityCpuCores,omitempty"`
-	CapacityMemoryBytes     int64             `json:"capacityMemoryBytes,omitempty"`
-	CapacityPods            int64             `json:"capacityPods,omitempty"`
-	AllocCPU                int64             `json:"allocatableCpuCores,omitempty"`
-	AllocMemoryBytes        int64             `json:"allocatableMemoryBytes,omitempty"`
-	AllocPods               int64             `json:"allocatablePods,omitempty"`
-	Namespace               string            `json:"namespace,omitempty"`
-	PodUID                  string            `json:"podUid,omitempty"`
-	PodPhase                string            `json:"podPhase,omitempty"`
-	UptimeSeconds           int64             `json:"uptimeSeconds,omitempty"`
-	Temperature             *float64          `json:"temperature,omitempty"`
-	Restarts                int               `json:"restarts,omitempty"`
-	OwnerKind               string            `json:"ownerKind,omitempty"`
-	OwnerName               string            `json:"ownerName,omitempty"`
-	Image                   string            `json:"image,omitempty"`
-	Labels                  map[string]string `json:"labels,omitempty"`
-	DeploymentUID           string            `json:"deploymentUid,omitempty"`
-	DesiredReplicas         int32             `json:"desiredReplicas,omitempty"`
-	UpdatedReplicas         int32             `json:"updatedReplicas,omitempty"`
-	ReadyReplicas           int32             `json:"readyReplicas,omitempty"`
-	AvailableReplicas       int32             `json:"availableReplicas,omitempty"`
+	ClusterID               string                 `json:"clusterId,omitempty"`
+	ClusterName             string                 `json:"clusterName,omitempty"`
+	AgentID                 string                 `json:"agentId,omitempty"`
+	Context                 string                 `json:"context,omitempty"`
+	Server                  string                 `json:"server,omitempty"`
+	Version                 string                 `json:"version,omitempty"`
+	PendingUninstall        bool                   `json:"pendingUninstall,omitempty"`
+	NodeUID                 string                 `json:"nodeUid,omitempty"`
+	NodeName                string                 `json:"nodeName,omitempty"`
+	Ready                   bool                   `json:"ready,omitempty"`
+	Unschedulable           bool                   `json:"unschedulable,omitempty"`
+	Roles                   []string               `json:"roles,omitempty"`
+	KubeletVersion          string                 `json:"kubeletVersion,omitempty"`
+	ContainerRuntimeVersion string                 `json:"containerRuntimeVersion,omitempty"`
+	OSImage                 string                 `json:"osImage,omitempty"`
+	KernelVersion           string                 `json:"kernelVersion,omitempty"`
+	Architecture            string                 `json:"architecture,omitempty"`
+	CapacityCPU             int64                  `json:"capacityCpuCores,omitempty"`
+	CapacityMemoryBytes     int64                  `json:"capacityMemoryBytes,omitempty"`
+	CapacityPods            int64                  `json:"capacityPods,omitempty"`
+	AllocCPU                int64                  `json:"allocatableCpuCores,omitempty"`
+	AllocMemoryBytes        int64                  `json:"allocatableMemoryBytes,omitempty"`
+	AllocPods               int64                  `json:"allocatablePods,omitempty"`
+	Namespace               string                 `json:"namespace,omitempty"`
+	PodUID                  string                 `json:"podUid,omitempty"`
+	PodPhase                string                 `json:"podPhase,omitempty"`
+	UptimeSeconds           int64                  `json:"uptimeSeconds,omitempty"`
+	Temperature             *float64               `json:"temperature,omitempty"`
+	Restarts                int                    `json:"restarts,omitempty"`
+	OwnerKind               string                 `json:"ownerKind,omitempty"`
+	OwnerName               string                 `json:"ownerName,omitempty"`
+	Image                   string                 `json:"image,omitempty"`
+	Labels                  map[string]string      `json:"labels,omitempty"`
+	DeploymentUID           string                 `json:"deploymentUid,omitempty"`
+	DesiredReplicas         int32                  `json:"desiredReplicas,omitempty"`
+	UpdatedReplicas         int32                  `json:"updatedReplicas,omitempty"`
+	ReadyReplicas           int32                  `json:"readyReplicas,omitempty"`
+	AvailableReplicas       int32                  `json:"availableReplicas,omitempty"`
+	MetricCapabilities      *K8sMetricCapabilities `json:"metricCapabilities,omitempty"`
 }
 
 // CPUInfo describes CPU characteristics.

@@ -306,7 +306,7 @@ func resourceFromDockerContainer(ct models.DockerContainer) (Resource, ResourceI
 	return resource, identity
 }
 
-func resourceFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host) (Resource, ResourceIdentity) {
+func resourceFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
 	clusterName := kubernetesClusterDisplayName(cluster)
 	metrics := metricsFromKubernetesCluster(cluster, linkedHosts)
 	resource := Resource{
@@ -317,13 +317,14 @@ func resourceFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metrics,
 		Kubernetes: &K8sData{
-			ClusterID:        cluster.ID,
-			ClusterName:      clusterName,
-			AgentID:          cluster.AgentID,
-			Context:          cluster.Context,
-			Server:           cluster.Server,
-			Version:          cluster.Version,
-			PendingUninstall: cluster.PendingUninstall,
+			ClusterID:          cluster.ID,
+			ClusterName:        clusterName,
+			AgentID:            cluster.AgentID,
+			Context:            cluster.Context,
+			Server:             cluster.Server,
+			Version:            cluster.Version,
+			PendingUninstall:   cluster.PendingUninstall,
+			MetricCapabilities: cloneKubernetesMetricCapabilities(capabilities),
 		},
 		Tags: nil,
 	}
@@ -340,7 +341,7 @@ func resourceFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts
 	return resource, identity
 }
 
-func resourceFromKubernetesNode(cluster models.KubernetesCluster, node models.KubernetesNode, linkedHost *models.Host) (Resource, ResourceIdentity) {
+func resourceFromKubernetesNode(cluster models.KubernetesCluster, node models.KubernetesNode, linkedHost *models.Host, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
 	clusterName := kubernetesClusterDisplayName(cluster)
 	metrics := metricsFromKubernetesNode(cluster, node, linkedHost)
 	uptimeSeconds := int64(0)
@@ -381,6 +382,7 @@ func resourceFromKubernetesNode(cluster models.KubernetesCluster, node models.Ku
 			AllocPods:               node.AllocPods,
 			UptimeSeconds:           uptimeSeconds,
 			Temperature:             temperature,
+			MetricCapabilities:      cloneKubernetesMetricCapabilities(capabilities),
 		},
 		Tags: append([]string(nil), node.Roles...),
 	}
@@ -394,7 +396,7 @@ func resourceFromKubernetesNode(cluster models.KubernetesCluster, node models.Ku
 	return resource, identity
 }
 
-func resourceFromKubernetesPod(cluster models.KubernetesCluster, pod models.KubernetesPod) (Resource, ResourceIdentity) {
+func resourceFromKubernetesPod(cluster models.KubernetesCluster, pod models.KubernetesPod, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
 	clusterName := kubernetesClusterDisplayName(cluster)
 	labels := cloneLabelMap(pod.Labels)
 	primaryImage := ""
@@ -434,11 +436,12 @@ func resourceFromKubernetesPod(cluster models.KubernetesCluster, pod models.Kube
 				}
 				return 0
 			}(),
-			Restarts:  pod.Restarts,
-			OwnerKind: pod.OwnerKind,
-			OwnerName: pod.OwnerName,
-			Image:     primaryImage,
-			Labels:    labels,
+			Restarts:           pod.Restarts,
+			OwnerKind:          pod.OwnerKind,
+			OwnerName:          pod.OwnerName,
+			Image:              primaryImage,
+			Labels:             labels,
+			MetricCapabilities: cloneKubernetesMetricCapabilities(capabilities),
 		},
 		Tags: labelsToTags(labels),
 	}
@@ -452,7 +455,7 @@ func resourceFromKubernetesPod(cluster models.KubernetesCluster, pod models.Kube
 	return resource, identity
 }
 
-func resourceFromKubernetesDeployment(cluster models.KubernetesCluster, deployment models.KubernetesDeployment) (Resource, ResourceIdentity) {
+func resourceFromKubernetesDeployment(cluster models.KubernetesCluster, deployment models.KubernetesDeployment, capabilities *K8sMetricCapabilities) (Resource, ResourceIdentity) {
 	clusterName := kubernetesClusterDisplayName(cluster)
 	labels := cloneLabelMap(deployment.Labels)
 	resource := Resource{
@@ -462,19 +465,20 @@ func resourceFromKubernetesDeployment(cluster models.KubernetesCluster, deployme
 		LastSeen:  cluster.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		Kubernetes: &K8sData{
-			ClusterID:         cluster.ID,
-			ClusterName:       clusterName,
-			AgentID:           cluster.AgentID,
-			Context:           cluster.Context,
-			Server:            cluster.Server,
-			Version:           cluster.Version,
-			Namespace:         deployment.Namespace,
-			DeploymentUID:     deployment.UID,
-			DesiredReplicas:   deployment.DesiredReplicas,
-			UpdatedReplicas:   deployment.UpdatedReplicas,
-			ReadyReplicas:     deployment.ReadyReplicas,
-			AvailableReplicas: deployment.AvailableReplicas,
-			Labels:            labels,
+			ClusterID:          cluster.ID,
+			ClusterName:        clusterName,
+			AgentID:            cluster.AgentID,
+			Context:            cluster.Context,
+			Server:             cluster.Server,
+			Version:            cluster.Version,
+			Namespace:          deployment.Namespace,
+			DeploymentUID:      deployment.UID,
+			DesiredReplicas:    deployment.DesiredReplicas,
+			UpdatedReplicas:    deployment.UpdatedReplicas,
+			ReadyReplicas:      deployment.ReadyReplicas,
+			AvailableReplicas:  deployment.AvailableReplicas,
+			Labels:             labels,
+			MetricCapabilities: cloneKubernetesMetricCapabilities(capabilities),
 		},
 		Tags: labelsToTags(labels),
 	}
