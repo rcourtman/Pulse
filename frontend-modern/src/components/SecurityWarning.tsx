@@ -209,7 +209,7 @@ export const SecurityWarning: Component = () => {
 
                 <div class="flex items-center gap-3 mt-3">
                   <a
-                    href="/settings?tab=security"
+                    href="/settings/security-overview"
                     class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     Enable Security →

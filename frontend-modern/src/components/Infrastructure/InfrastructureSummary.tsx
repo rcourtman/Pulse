@@ -1,4 +1,4 @@
-import { Component, Show, For, createMemo, createEffect, createSignal, onCleanup } from 'solid-js';
+import { Component, Show, createMemo, createEffect, createSignal, onCleanup } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import type { Resource } from '@/types/resource';
@@ -10,7 +10,6 @@ import {
     fetchInfrastructureSummaryAndCache,
     readInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
-import { timeRangeToMs } from '@/utils/timeRange';
 
 const HOST_COLORS = [
     '#3b82f6', // blue
@@ -43,16 +42,6 @@ const getAgentIdFromResource = (resource: Resource): string | null => {
     return trimmed.length > 0 ? trimmed : null;
 };
 
-const formatDurationShort = (durationMs: number): string => {
-    if (durationMs >= 24 * 60 * 60_000) {
-        return `${Math.max(1, Math.round(durationMs / (24 * 60 * 60_000)))}d`;
-    }
-    if (durationMs >= 60 * 60_000) {
-        return `${Math.max(1, Math.round(durationMs / (60 * 60_000)))}h`;
-    }
-    return `${Math.max(1, Math.round(durationMs / 60_000))}m`;
-};
-
 // Format bytes/sec to human-readable rate
 const formatRate = (bytesPerSec: number): string => {
     if (bytesPerSec >= 1e9) return `${(bytesPerSec / 1e9).toFixed(1)} GB/s`;
@@ -83,6 +72,7 @@ function combineHostNetSeries(inSeries: MetricPoint[], outSeries: MetricPoint[])
 interface InfrastructureSummaryProps {
     hosts: Resource[];
     timeRange?: TimeRange;
+    hoveredHostId?: string | null;
 }
 
 export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (props) => {
@@ -90,8 +80,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     const [chartMap, setChartMap] = createSignal<Map<string, ChartData>>(new Map());
     const [chartRange, setChartRange] = createSignal<TimeRange | null>(null);
     const [loadedRange, setLoadedRange] = createSignal<TimeRange | null>(null);
-    const [isolatedHostKey, setIsolatedHostKey] = createSignal<string | null>(null);
-    const [oldestDataTimestamp, setOldestDataTimestamp] = createSignal<number | null>(null);
     const [usingCachedData, setUsingCachedData] = createSignal(false);
     const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
     const hasCurrentRangeCharts = createMemo(() => chartRange() === selectedRange());
@@ -108,7 +96,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         const cached = readInfrastructureSummaryCache(range);
         if (!cached) {
             if (infraSummaryPerfEnabled) {
-                // eslint-disable-next-line no-console
                 console.debug('[InfraSummaryPerf] cache miss', { caller: 'InfrastructureSummary', range });
             }
             return false;
@@ -123,7 +110,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                 total += data.netout?.length ?? 0;
                 return total;
             }, 0);
-            // eslint-disable-next-line no-console
             console.debug('[InfraSummaryPerf] cache hit', {
                 caller: 'InfrastructureSummary',
                 range,
@@ -135,7 +121,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
 
         setChartMap(cached.map);
         setChartRange(range);
-        setOldestDataTimestamp(cached.oldestDataTimestamp);
         setLoadedRange(range);
         setUsingCachedData(true);
         return true;
@@ -165,7 +150,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
 
     const fetchCharts = async (options?: { prioritize?: boolean }) => {
         if (props.hosts.length === 0) {
-            setOldestDataTimestamp(null);
             return;
         }
 
@@ -194,10 +178,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                 return;
             }
             requestSucceeded = true;
-            const oldestTimestamp = fetched.oldestDataTimestamp;
-            setOldestDataTimestamp(
-                oldestTimestamp
-            );
             const map = fetched.map;
 
             // If the backend returns an empty payload transiently, keep the last
@@ -244,8 +224,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             setChartMap(new Map());
             setChartRange(null);
             setLoadedRange(null);
-            setOldestDataTimestamp(null);
-            setIsolatedHostKey(null);
             setUsingCachedData(false);
             return;
         }
@@ -366,6 +344,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         return props.hosts.map((host, i) => {
             const primaryData = findChartData(host);
             const agentData = findAgentChartData(host);
+            const seriesId = host.id || host.platformId || host.name || `host-${i}`;
 
             const metricSeries = (metric: keyof ChartData): MetricPoint[] => {
                 const primary = primaryData?.[metric];
@@ -376,7 +355,8 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             };
 
             return {
-                key: host.id || host.platformId || host.name || `host-${i}`,
+                key: seriesId,
+                id: seriesId,
                 cpu: metricSeries('cpu'),
                 memory: metricSeries('memory'),
                 disk: metricSeries('disk'),
@@ -389,36 +369,12 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         });
     });
 
-    createEffect(() => {
-        const selected = isolatedHostKey();
-        if (!selected) return;
-        const exists = hostSeries().some((s) => s.key === selected);
-        if (!exists) setIsolatedHostKey(null);
-    });
-
-    const visibleHostSeries = createMemo(() => {
-        const selected = isolatedHostKey();
-        const allHosts = hostSeries();
-        if (!selected) return allHosts;
-        const match = allHosts.find((s) => s.key === selected);
-        return match ? [match] : allHosts;
-    });
-
-    const isolatedHostName = createMemo(() => {
-        const selected = isolatedHostKey();
-        if (!selected) return null;
-        return hostSeries().find((s) => s.key === selected)?.name ?? null;
-    });
-
-    const toggleHostIsolation = (hostKey: string) => {
-        setIsolatedHostKey((current) => (current === hostKey ? null : hostKey));
-    };
-
     const hasData = (metric: 'cpu' | 'memory' | 'disk') =>
-        visibleHostSeries().some((s) => s[metric].length >= 2);
+        hostSeries().some((s) => s[metric].length >= 1);
 
     const networkSeries = createMemo(() =>
-        visibleHostSeries().map((s) => ({
+        hostSeries().map((s) => ({
+            id: s.id,
             data: s.network,
             color: s.color,
             name: s.name,
@@ -426,7 +382,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     );
 
     const hasNetData = () =>
-        visibleHostSeries().some((s) => s.network.length >= 2);
+        hostSeries().some((s) => s.network.length >= 1);
 
     // Keep the network card visible when we have capability but limited history.
     const hasNetworkCapability = createMemo(() =>
@@ -443,25 +399,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     );
 
     const shouldShowNetworkCard = createMemo(() => hasNetData() || hasNetworkCapability());
-    const selectedRangeMs = createMemo(() => timeRangeToMs(props.timeRange || '1h'));
-    const availableRangeMs = createMemo(() => {
-        const oldest = oldestDataTimestamp();
-        if (!oldest) return 0;
-        return Math.max(0, Date.now() - oldest);
-    });
-    const hasLimitedHistory = createMemo(() => {
-        const requested = selectedRangeMs();
-        const available = availableRangeMs();
-        if (!isCurrentRangeLoaded() || requested <= 0 || available <= 0) return false;
-        // Allow one sample interval of tolerance for timestamp jitter.
-        return available + 30_000 < requested;
-    });
 
     const seriesFor = (metric: 'cpu' | 'memory' | 'disk') =>
-        visibleHostSeries().map((s) => ({ data: s[metric], color: s.color, name: s.name }));
-    const networkLegendSeries = createMemo(() =>
-        hostSeries().filter((s) => s.network.length >= 2)
-    );
+        hostSeries().map((s) => ({ id: s.id, data: s[metric], color: s.color, name: s.name }));
     const rangeLabel = () => props.timeRange || '1h';
 
     // Workload stats from WebSocket state (zero API calls)
@@ -488,41 +428,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         return { total: all.length, running, stopped, vms, containers };
     });
 
-    // Mini host legend
-    const HostLegend: Component<{ metric: 'cpu' | 'memory' | 'disk' }> = (legendProps) => {
-        const visible = () => hostSeries().filter((s) => s[legendProps.metric].length >= 2);
-        const selected = () => isolatedHostKey();
-        return (
-            <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                <For each={visible().slice(0, 6)}>
-                    {(s) => (
-                        <button
-                            type="button"
-                            class={`inline-flex items-center gap-1 text-[9px] transition-opacity ${
-                                selected() === s.key
-                                    ? 'text-gray-700 dark:text-gray-200 opacity-100'
-                                    : selected()
-                                        ? 'text-gray-500 dark:text-gray-400 opacity-45 hover:opacity-75'
-                                        : 'text-gray-500 dark:text-gray-400 opacity-100 hover:opacity-75'
-                            }`}
-                            aria-pressed={selected() === s.key}
-                            onClick={() => toggleHostIsolation(s.key)}
-                            title={selected() === s.key ? `Showing only ${s.name}` : `Show only ${s.name}`}
-                        >
-                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
-                            <span class="truncate max-w-[60px]">{s.name}</span>
-                        </button>
-                    )}
-                </For>
-                <Show when={visible().length > 6}>
-                    <span class="text-[9px] text-gray-400 dark:text-gray-500">
-                        +{visible().length - 6}
-                    </span>
-                </Show>
-            </div>
-        );
-    };
-
     return (
         <Show when={props.hosts.length > 0}>
             <div class="space-y-2">
@@ -531,208 +436,164 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                         Showing cached trend data while live history updates.
                     </div>
                 </Show>
-                <Show when={hasLimitedHistory()}>
-                    <div class="text-[11px] text-amber-700 dark:text-amber-300">
-                        Showing {formatDurationShort(availableRangeMs())} of {formatDurationShort(selectedRangeMs())} history; longer-range data is still building.
-                    </div>
-                </Show>
-                <Show when={isolatedHostName()}>
-                    {(name) => (
-                        <div class="text-[11px] text-blue-700 dark:text-blue-300">
-                            Showing host: {name()} (click the legend again to clear)
-                        </div>
-                    )}
-                </Show>
-                <div class="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
-                {/* CPU Card */}
-                <Card padding="sm" tone="glass">
-                    <div class="flex flex-col h-full">
-                        <div class="flex items-center justify-between mb-1.5">
-                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">CPU</span>
-                            <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 6.75v10.5a2.25 2.25 0 002.25 2.25zm.75-12h9v9h-9v-9z" />
-                            </svg>
-                        </div>
-                        <Show
-                            when={hasData('cpu')}
-                            fallback={
-                                <div class="text-sm text-gray-400 dark:text-gray-500 py-2">
-                                    {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
-                                </div>
-                            }
-                        >
-                            <div class="flex-1 min-h-0">
-                                <InteractiveSparkline
-                                    series={seriesFor('cpu')}
-                                    rangeLabel={rangeLabel()}
-                                    timeRange={props.timeRange}
-                                    yMode="percent"
-                                />
-                            </div>
-                            <HostLegend metric="cpu" />
-                        </Show>
-                    </div>
-                </Card>
-
-                {/* Memory Card */}
-                <Card padding="sm" tone="glass">
-                    <div class="flex flex-col h-full">
-                        <div class="flex items-center justify-between mb-1.5">
-                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Memory</span>
-                            <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 3h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2zm0 0v18m12-18v18M8 7h2m4 0h2M8 11h2m4 0h2M8 15h2m4 0h2" />
-                            </svg>
-                        </div>
-                        <Show
-                            when={hasData('memory')}
-                            fallback={
-                                <div class="text-sm text-gray-400 dark:text-gray-500 py-2">
-                                    {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
-                                </div>
-                            }
-                        >
-                            <div class="flex-1 min-h-0">
-                                <InteractiveSparkline
-                                    series={seriesFor('memory')}
-                                    rangeLabel={rangeLabel()}
-                                    timeRange={props.timeRange}
-                                    yMode="percent"
-                                />
-                            </div>
-                            <HostLegend metric="memory" />
-                        </Show>
-                    </div>
-                </Card>
-
-                {/* Storage Card */}
-                <Card padding="sm" tone="glass">
-                    <div class="flex flex-col h-full">
-                        <div class="flex items-center justify-between mb-1.5">
-                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Storage</span>
-                            <svg class="w-4 h-4 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
-                            </svg>
-                        </div>
-                        <Show
-                            when={hasData('disk')}
-                            fallback={
-                                <div class="text-sm text-gray-400 dark:text-gray-500 py-2">
-                                    {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
-                                </div>
-                            }
-                        >
-                            <div class="flex-1 min-h-0">
-                                <InteractiveSparkline
-                                    series={seriesFor('disk')}
-                                    rangeLabel={rangeLabel()}
-                                    timeRange={props.timeRange}
-                                    yMode="percent"
-                                />
-                            </div>
-                            <HostLegend metric="disk" />
-                        </Show>
-                    </div>
-                </Card>
-
-                <Show
-                    when={shouldShowNetworkCard()}
-                    fallback={
-                        <Card padding="sm" tone="glass">
+                <div class="rounded-xl border border-gray-200 bg-white p-2 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-3">
+                    <div class="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
+                        {/* CPU Card */}
+                        <Card padding="sm" class="h-full">
                             <div class="flex flex-col h-full">
-                                <div class="flex items-center justify-between mb-1.5">
-                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Workloads</span>
-                                    <svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122" />
-                                    </svg>
+                                <div class="flex items-center mb-1.5">
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">CPU</span>
                                 </div>
-                                <div class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-                                    {workloadStats().running}
-                                    <span class="text-sm font-normal text-gray-500 dark:text-gray-400 ml-1">running</span>
-                                </div>
-                                <Show when={workloadStats().total > 0} fallback={
-                                    <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-1">No workloads detected</div>
-                                }>
-                                    <div class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                                        <Show when={workloadStats().vms > 0}>
-                                            <span>{workloadStats().vms} VMs</span>
-                                        </Show>
-                                        <Show when={workloadStats().vms > 0 && workloadStats().containers > 0}>
-                                            <span class="mx-0.5">&middot;</span>
-                                        </Show>
-                                        <Show when={workloadStats().containers > 0}>
-                                            <span>{workloadStats().containers} containers</span>
-                                        </Show>
-                                    </div>
-                                    <Show when={workloadStats().stopped > 0}>
-                                        <div class="text-[10px] text-gray-400 dark:text-gray-500">
-                                            {workloadStats().stopped} stopped
+                                <Show
+                                    when={hasData('cpu')}
+                                    fallback={
+                                        <div class="text-sm text-gray-400 dark:text-gray-500 py-2">
+                                            {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
                                         </div>
-                                    </Show>
+                                    }
+                                >
+                                    <div class="flex-1 min-h-0">
+                                        <InteractiveSparkline
+                                            series={seriesFor('cpu')}
+                                            rangeLabel={rangeLabel()}
+                                            timeRange={props.timeRange}
+                                            yMode="percent"
+                                            highlightNearestSeriesOnHover
+                                            highlightSeriesId={props.hoveredHostId}
+                                        />
+                                    </div>
                                 </Show>
                             </div>
                         </Card>
-                    }
-                >
-                    {/* 4th Card: Network */}
-                    <Card padding="sm" tone="glass">
-                        <div class="flex flex-col h-full">
-                            <div class="flex items-center justify-between mb-1.5">
-                                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Network</span>
-                                <svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-                                </svg>
-                            </div>
-                            <Show
-                                when={hasNetData()}
-                                fallback={
-                                    <div class="text-sm text-gray-400 dark:text-gray-500 py-2">
-                                        {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
-                                    </div>
-                                }
-                            >
-                                <div class="flex-1 min-h-0">
-                                    <InteractiveSparkline
-                                        series={networkSeries()}
-                                        rangeLabel={rangeLabel()}
-                                        timeRange={props.timeRange}
-                                        yMode="auto"
-                                        formatValue={formatRate}
-                                        formatTopLabel={formatRate}
-                                        sortTooltipByValue
-                                    />
+
+                        {/* Memory Card */}
+                        <Card padding="sm" class="h-full">
+                            <div class="flex flex-col h-full">
+                                <div class="flex items-center mb-1.5">
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Memory</span>
                                 </div>
-                                <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                                    <For each={networkLegendSeries().slice(0, 6)}>
-                                        {(s) => (
-                                            <button
-                                                type="button"
-                                                class={`inline-flex items-center gap-1 text-[9px] transition-opacity ${
-                                                    isolatedHostKey() === s.key
-                                                        ? 'text-gray-700 dark:text-gray-200 opacity-100'
-                                                        : isolatedHostKey()
-                                                            ? 'text-gray-500 dark:text-gray-400 opacity-45 hover:opacity-75'
-                                                            : 'text-gray-500 dark:text-gray-400 opacity-100 hover:opacity-75'
-                                                }`}
-                                                aria-pressed={isolatedHostKey() === s.key}
-                                                onClick={() => toggleHostIsolation(s.key)}
-                                                title={isolatedHostKey() === s.key ? `Showing only ${s.name}` : `Show only ${s.name}`}
-                                            >
-                                                <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
-                                                <span class="truncate max-w-[60px]">{s.name}</span>
-                                            </button>
-                                        )}
-                                    </For>
-                                    <Show when={networkLegendSeries().length > 6}>
-                                        <span class="text-[9px] text-gray-400 dark:text-gray-500">
-                                            +{networkLegendSeries().length - 6}
-                                        </span>
+                                <Show
+                                    when={hasData('memory')}
+                                    fallback={
+                                        <div class="text-sm text-gray-400 dark:text-gray-500 py-2">
+                                            {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
+                                        </div>
+                                    }
+                                >
+                                    <div class="flex-1 min-h-0">
+                                        <InteractiveSparkline
+                                            series={seriesFor('memory')}
+                                            rangeLabel={rangeLabel()}
+                                            timeRange={props.timeRange}
+                                            yMode="percent"
+                                            highlightNearestSeriesOnHover
+                                            highlightSeriesId={props.hoveredHostId}
+                                        />
+                                    </div>
+                                </Show>
+                            </div>
+                        </Card>
+
+                        {/* Storage Card */}
+                        <Card padding="sm" class="h-full">
+                            <div class="flex flex-col h-full">
+                                <div class="flex items-center mb-1.5">
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Storage</span>
+                                </div>
+                                <Show
+                                    when={hasData('disk')}
+                                    fallback={
+                                        <div class="text-sm text-gray-400 dark:text-gray-500 py-2">
+                                            {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
+                                        </div>
+                                    }
+                                >
+                                    <div class="flex-1 min-h-0">
+                                        <InteractiveSparkline
+                                            series={seriesFor('disk')}
+                                            rangeLabel={rangeLabel()}
+                                            timeRange={props.timeRange}
+                                            yMode="percent"
+                                            highlightNearestSeriesOnHover
+                                            highlightSeriesId={props.hoveredHostId}
+                                        />
+                                    </div>
+                                </Show>
+                            </div>
+                        </Card>
+
+                        <Show
+                            when={shouldShowNetworkCard()}
+                            fallback={
+                                <Card padding="sm" class="h-full">
+                                    <div class="flex flex-col h-full">
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Workloads</span>
+                                            <svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122" />
+                                            </svg>
+                                        </div>
+                                        <div class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                            {workloadStats().running}
+                                            <span class="text-sm font-normal text-gray-500 dark:text-gray-400 ml-1">running</span>
+                                        </div>
+                                        <Show when={workloadStats().total > 0} fallback={
+                                            <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-1">No workloads detected</div>
+                                        }>
+                                            <div class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                                                <Show when={workloadStats().vms > 0}>
+                                                    <span>{workloadStats().vms} VMs</span>
+                                                </Show>
+                                                <Show when={workloadStats().vms > 0 && workloadStats().containers > 0}>
+                                                    <span class="mx-0.5">&middot;</span>
+                                                </Show>
+                                                <Show when={workloadStats().containers > 0}>
+                                                    <span>{workloadStats().containers} containers</span>
+                                                </Show>
+                                            </div>
+                                            <Show when={workloadStats().stopped > 0}>
+                                                <div class="text-[10px] text-gray-400 dark:text-gray-500">
+                                                    {workloadStats().stopped} stopped
+                                                </div>
+                                            </Show>
+                                        </Show>
+                                    </div>
+                                </Card>
+                            }
+                        >
+                            {/* 4th Card: Network */}
+                            <Card padding="sm" class="h-full">
+                                <div class="flex flex-col h-full">
+                                    <div class="flex items-center mb-1.5">
+                                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Network</span>
+                                    </div>
+                                    <Show
+                                        when={hasNetData()}
+                                        fallback={
+                                            <div class="text-sm text-gray-400 dark:text-gray-500 py-2">
+                                                {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
+                                            </div>
+                                        }
+                                    >
+                                        <div class="flex-1 min-h-0">
+                                            <InteractiveSparkline
+                                                series={networkSeries()}
+                                                rangeLabel={rangeLabel()}
+                                                timeRange={props.timeRange}
+                                                yMode="auto"
+                                                formatValue={formatRate}
+                                                formatTopLabel={formatRate}
+                                                sortTooltipByValue
+                                                highlightNearestSeriesOnHover
+                                                highlightSeriesId={props.hoveredHostId}
+                                            />
+                                        </div>
                                     </Show>
                                 </div>
-                            </Show>
-                        </div>
-                    </Card>
-                </Show>
-            </div>
+                            </Card>
+                        </Show>
+                    </div>
+                </div>
             </div>
         </Show>
     );

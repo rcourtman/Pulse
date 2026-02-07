@@ -64,6 +64,8 @@ const typeLabels: Partial<Record<ResourceType, string>> = {
   host: 'Host',
   node: 'Node',
   'docker-host': 'Docker Host',
+  pbs: 'PBS',
+  pmg: 'PMG',
   'k8s-node': 'K8s Node',
   'k8s-cluster': 'K8s Cluster',
   truenas: 'TrueNAS',

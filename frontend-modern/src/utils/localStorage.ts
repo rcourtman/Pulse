@@ -137,10 +137,6 @@ export const STORAGE_KEYS = {
   // Alerts search
   ALERTS_SEARCH_HISTORY: 'alertsSearchHistory',
 
-  // Metrics display
-  METRICS_VIEW_MODE: 'metricsViewMode', // 'bars' | 'sparklines'
-  METRICS_TIME_RANGE: 'metricsTimeRange', // '15m' | '1h' | '4h' | '24h'
-
   // Temperature display
   TEMPERATURE_UNIT: 'temperatureUnit', // 'celsius' | 'fahrenheit'
 

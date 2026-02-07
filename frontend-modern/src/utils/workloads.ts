@@ -31,3 +31,13 @@ export const getWorkloadMetricsKind = (
       return 'container';
   }
 };
+
+export const getCanonicalWorkloadId = (
+  guest: Pick<WorkloadGuest, 'id' | 'workloadType' | 'type' | 'instance' | 'node' | 'vmid'>,
+): string => {
+  const type = resolveWorkloadType(guest);
+  if ((type === 'vm' || type === 'lxc') && guest.instance && guest.node && guest.vmid > 0) {
+    return `${guest.instance}:${guest.node}:${guest.vmid}`;
+  }
+  return guest.id;
+};

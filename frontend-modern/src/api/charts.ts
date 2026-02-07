@@ -56,7 +56,7 @@ export interface ChartsResponse {
     dockerData?: Record<string, ChartData>; // Docker container data keyed by container ID
     dockerHostData?: Record<string, ChartData>; // Docker host data keyed by host ID
     hostData?: Record<string, ChartData>; // Unified host agent data keyed by host ID
-    guestTypes?: Record<string, 'vm' | 'container'>; // Maps guest ID to type
+    guestTypes?: Record<string, 'vm' | 'container' | 'k8s'>; // Maps guest ID to type
     timestamp: number;
     stats: ChartStats;
 }
@@ -65,6 +65,63 @@ export interface InfrastructureChartsResponse {
     nodeData: Record<string, ChartData>;
     dockerHostData?: Record<string, ChartData>;
     hostData?: Record<string, ChartData>;
+    timestamp: number;
+    stats: ChartStats;
+}
+
+export interface WorkloadChartsResponse {
+    data: Record<string, ChartData>;
+    dockerData?: Record<string, ChartData>;
+    guestTypes?: Record<string, 'vm' | 'container' | 'k8s'>;
+    timestamp: number;
+    stats: ChartStats;
+}
+
+export interface WorkloadsSummaryMetricData {
+    p50: MetricPoint[];
+    p95: MetricPoint[];
+}
+
+export interface WorkloadsGuestCounts {
+    total: number;
+    running: number;
+    stopped: number;
+}
+
+export interface WorkloadsSummaryContributor {
+    id: string;
+    name: string;
+    value: number;
+}
+
+export interface WorkloadsSummaryContributors {
+    cpu: WorkloadsSummaryContributor[];
+    memory: WorkloadsSummaryContributor[];
+    disk: WorkloadsSummaryContributor[];
+    network: WorkloadsSummaryContributor[];
+}
+
+export interface WorkloadsSummaryBlastRadius {
+    scope: string;
+    top3Share: number;
+    activeWorkloads: number;
+}
+
+export interface WorkloadsSummaryBlastRadiusGroup {
+    cpu: WorkloadsSummaryBlastRadius;
+    memory: WorkloadsSummaryBlastRadius;
+    disk: WorkloadsSummaryBlastRadius;
+    network: WorkloadsSummaryBlastRadius;
+}
+
+export interface WorkloadsSummaryChartsResponse {
+    cpu: WorkloadsSummaryMetricData;
+    memory: WorkloadsSummaryMetricData;
+    disk: WorkloadsSummaryMetricData;
+    network: WorkloadsSummaryMetricData;
+    guestCounts: WorkloadsGuestCounts;
+    topContributors: WorkloadsSummaryContributors;
+    blastRadius: WorkloadsSummaryBlastRadiusGroup;
     timestamp: number;
     stats: ChartStats;
 }
@@ -107,12 +164,24 @@ export type TimeRange = '5m' | '15m' | '30m' | '1h' | '4h' | '12h' | '24h' | '7d
 export class ChartsAPI {
     private static baseUrl = '/api';
 
+    private static buildChartsUrl(path: string, params: { range: TimeRange; nodeId?: string | null }): string {
+        const searchParams = new URLSearchParams({ range: params.range });
+        if (params.nodeId) {
+            searchParams.set('node', params.nodeId);
+        }
+        return `${this.baseUrl}${path}?${searchParams.toString()}`;
+    }
+
     /**
      * Fetch historical chart data for all resources
      * @param range Time range to fetch (default: 1h)
      */
-    static async getCharts(range: TimeRange = '1h', signal?: AbortSignal): Promise<ChartsResponse> {
-        const url = `${this.baseUrl}/charts?range=${range}`;
+    static async getCharts(
+        range: TimeRange = '1h',
+        signal?: AbortSignal,
+        options?: { nodeId?: string | null },
+    ): Promise<ChartsResponse> {
+        const url = this.buildChartsUrl('/charts', { range, nodeId: options?.nodeId });
         return apiFetchJSON(url, { signal });
     }
 
@@ -123,8 +192,48 @@ export class ChartsAPI {
     static async getInfrastructureSummaryCharts(
         range: TimeRange = '1h',
         signal?: AbortSignal,
+        options?: { nodeId?: string | null },
     ): Promise<InfrastructureChartsResponse> {
-        const url = `${this.baseUrl}/charts/infrastructure-summary?range=${range}`;
+        const url = this.buildChartsUrl('/charts/infrastructure-summary', {
+            range,
+            nodeId: options?.nodeId,
+        });
+        return apiFetchJSON(url, { signal });
+    }
+
+    /**
+     * Fetch workloads aggregate chart data for Workloads top-card sparklines.
+     * Returns compact p50/p95 series, not per-workload lines.
+     */
+    static async getWorkloadsSummaryCharts(
+        range: TimeRange = '1h',
+        signal?: AbortSignal,
+        options?: { nodeId?: string | null },
+    ): Promise<WorkloadsSummaryChartsResponse> {
+        const url = this.buildChartsUrl('/charts/workloads-summary', {
+            range,
+            nodeId: options?.nodeId,
+        });
+        return apiFetchJSON(url, { signal });
+    }
+
+    /**
+     * Fetch workload-only chart data used by WorkloadsSummary sparklines.
+     * Excludes infrastructure/storage series to keep payloads bounded at scale.
+     */
+    static async getWorkloadCharts(
+        range: TimeRange = '1h',
+        signal?: AbortSignal,
+        options?: { nodeId?: string | null; maxPoints?: number | null },
+    ): Promise<WorkloadChartsResponse> {
+        let url = this.buildChartsUrl('/charts/workloads', {
+            range,
+            nodeId: options?.nodeId,
+        });
+        if (typeof options?.maxPoints === 'number' && Number.isFinite(options.maxPoints) && options.maxPoints > 0) {
+            const separator = url.includes('?') ? '&' : '?';
+            url = `${url}${separator}maxPoints=${encodeURIComponent(Math.round(options.maxPoints).toString())}`;
+        }
         return apiFetchJSON(url, { signal });
     }
 
@@ -134,8 +243,9 @@ export class ChartsAPI {
     static async getInfrastructureCharts(
         range: TimeRange = '1h',
         signal?: AbortSignal,
+        options?: { nodeId?: string | null },
     ): Promise<InfrastructureChartsResponse> {
-        return this.getInfrastructureSummaryCharts(range, signal);
+        return this.getInfrastructureSummaryCharts(range, signal, options);
     }
 
     /**

@@ -697,7 +697,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     </Show>
                     <Show when={event.from && event.to}>
                       {' '}
-                      <span class="text-gray-500 dark:text-gray-400">({event.from} -> {event.to})</span>
+                      <span class="text-gray-500 dark:text-gray-400">({event.from} {'->'} {event.to})</span>
                     </Show>
                   </span>
                   <span class="shrink-0">{formatRelativeTime(event.at)}</span>

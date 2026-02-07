@@ -1,13 +1,10 @@
 import { ChartsAPI, type ChartData, type ChartsResponse, type InfrastructureChartsResponse, type TimeRange } from '@/api/charts';
 
-export const INFRASTRUCTURE_TREND_RANGE_STORAGE_KEY = 'infrastructureTrendRange';
 export const INFRA_SUMMARY_CACHE_PREFIX = 'pulse.infrastructureSummaryCharts.';
 export const INFRA_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
 const INFRA_SUMMARY_CACHE_VERSION = 1;
 const INFRA_SUMMARY_CACHE_MAX_CHARS = 900_000;
 const INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
-
-const VALID_TIME_RANGES: readonly TimeRange[] = ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '7d', '30d'];
 
 const INFRA_SUMMARY_PERF_LOG_PREFIX = '[InfraSummaryPerf]';
 
@@ -24,11 +21,9 @@ function infraSummaryPerfNow(): number {
 function infraSummaryPerfLog(message: string, data?: Record<string, unknown>): void {
   if (!infraSummaryPerfEnabled) return;
   if (data) {
-    // eslint-disable-next-line no-console
     console.debug(`${INFRA_SUMMARY_PERF_LOG_PREFIX} ${message}`, data);
     return;
   }
-  // eslint-disable-next-line no-console
   console.debug(`${INFRA_SUMMARY_PERF_LOG_PREFIX} ${message}`);
 }
 
@@ -92,9 +87,6 @@ export interface InfrastructureSummaryFetchResult {
   oldestDataTimestamp: number | null;
 }
 
-const isTimeRange = (value: string): value is TimeRange =>
-  (VALID_TIME_RANGES as readonly string[]).includes(value);
-
 const toCachedChartData = (data: ChartData): CachedChartData => ({
   cpu: trimPoints(data.cpu ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   memory: trimPoints(data.memory ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
@@ -124,11 +116,6 @@ function trimPoints<T>(points: T[], max: number): T[] {
     result.push(sliced[sliced.length - 1]);
   }
   return result.length > max ? result.slice(result.length - max) : result;
-}
-
-export function parseChartsTimeRange(raw: string | null | undefined, fallback: TimeRange = '1h'): TimeRange {
-  if (!raw) return fallback;
-  return isTimeRange(raw) ? raw : fallback;
 }
 
 export function extractInfrastructureSummaryChartMap(response: ChartsResponse): Map<string, ChartData> {
