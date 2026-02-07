@@ -534,7 +534,7 @@ export const UnifiedHistoryChart: Component<UnifiedHistoryChartProps> = (props) 
                                 }`}
                             title={source() === 'live' ? 'Live sample shown because history is not available yet.' : 'In-memory buffer shown while history is warming up.'}
                         >
-                            {source() === 'live' ? 'Live' : 'Memory'}
+                            {source() === 'live' ? 'Live' : 'Buffer'}
                         </span>
                     </Show>
                     <div class="flex items-center gap-2">

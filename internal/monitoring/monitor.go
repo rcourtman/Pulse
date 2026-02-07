@@ -9445,11 +9445,48 @@ func shouldPreserveBackups(nodeCount int, hadSuccessfulNode bool, storagesWithBa
 }
 
 func shouldPreservePBSBackups(datastoreCount, datastoreFetches int) bool {
+	return shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, 0)
+}
+
+func shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, datastoreTerminalFailures int) bool {
 	// If there are datastores but all fetches failed, preserve existing backups
-	if datastoreCount > 0 && datastoreFetches == 0 {
+	if datastoreCount > 0 && datastoreFetches == 0 && datastoreTerminalFailures == 0 {
 		return true
 	}
 	return false
+}
+
+func shouldReuseCachedPBSBackups(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := strings.ToLower(err.Error())
+
+	if strings.Contains(msg, "api error 404") || strings.Contains(msg, "status 404") {
+		return false
+	}
+
+	if strings.Contains(msg, "api error 400") || strings.Contains(msg, "status 400") {
+		if strings.Contains(msg, "datastore") ||
+			strings.Contains(msg, "namespace") ||
+			strings.Contains(msg, "backup group") ||
+			strings.Contains(msg, "not found") ||
+			strings.Contains(msg, "does not exist") ||
+			strings.Contains(msg, "invalid") {
+			return false
+		}
+	}
+
+	if strings.Contains(msg, "does not exist") && (strings.Contains(msg, "datastore") || strings.Contains(msg, "namespace")) {
+		return false
+	}
+
+	if strings.Contains(msg, "not found") && (strings.Contains(msg, "datastore") || strings.Contains(msg, "namespace") || strings.Contains(msg, "backup")) {
+		return false
+	}
+
+	return true
 }
 
 func storageNamesForNode(instanceName, nodeName string, snapshot models.StateSnapshot) []string {
@@ -10238,7 +10275,8 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	var allBackups []models.PBSBackup
 	datastoreCount := len(datastores) // Number of datastores to query
 	datastoreFetches := 0             // Number of successful datastore fetches
-	datastoreErrors := 0              // Number of failed datastore fetches
+	datastoreErrors := 0              // Number of transiently failed datastore fetches
+	datastoreTerminalFailures := 0    // Number of terminal datastore failures
 
 	// Process each datastore
 	for _, ds := range datastores {
@@ -10259,6 +10297,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			Msg("Processing datastore namespaces")
 
 		datastoreHadSuccess := false
+		datastoreHadTerminalFailure := false
 		groupsReused := 0
 		groupsRequested := 0
 
@@ -10272,6 +10311,17 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 			groups, err := client.ListBackupGroups(ctx, ds.Name, namespace)
 			if err != nil {
+				if !shouldReuseCachedPBSBackups(err) {
+					datastoreHadTerminalFailure = true
+					log.Warn().
+						Err(err).
+						Str("instance", instanceName).
+						Str("datastore", ds.Name).
+						Str("namespace", namespace).
+						Msg("PBS backup groups returned terminal error; stale cache will be dropped for this datastore")
+					continue
+				}
+
 				log.Error().
 					Err(err).
 					Str("instance", instanceName).
@@ -10361,6 +10411,15 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				Int("groups_refreshed", groupsRequested).
 				Msg("PBS datastore processed")
 		} else {
+			if datastoreHadTerminalFailure {
+				datastoreTerminalFailures++
+				log.Warn().
+					Str("instance", instanceName).
+					Str("datastore", ds.Name).
+					Msg("Skipping cached PBS backups due to terminal datastore errors")
+				continue
+			}
+
 			// Preserve cached data for this datastore if we couldn't fetch anything new.
 			log.Warn().
 				Str("instance", instanceName).
@@ -10382,7 +10441,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		Msg("PBS backups fetched")
 
 	// Decide whether to keep existing backups when all queries failed
-	if shouldPreservePBSBackups(datastoreCount, datastoreFetches) {
+	if shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, datastoreTerminalFailures) {
 		log.Warn().
 			Str("instance", instanceName).
 			Int("datastores", datastoreCount).
@@ -10531,8 +10590,16 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 					Str("id", req.group.BackupID).
 					Msg("Failed to list PBS backup snapshots")
 
-				if len(req.cached.snapshots) > 0 {
+				if len(req.cached.snapshots) > 0 && shouldReuseCachedPBSBackups(err) {
 					results <- req.cached.snapshots
+				} else if len(req.cached.snapshots) > 0 {
+					log.Warn().
+						Str("instance", instanceName).
+						Str("datastore", req.datastore).
+						Str("namespace", req.namespace).
+						Str("type", req.group.BackupType).
+						Str("id", req.group.BackupID).
+						Msg("Discarding cached PBS snapshots due to terminal API error")
 				}
 				return
 			}
