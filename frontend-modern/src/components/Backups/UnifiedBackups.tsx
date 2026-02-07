@@ -1,5 +1,5 @@
-import { Component, createSignal, Show, For, createMemo, createEffect } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
+import { Component, createSignal, Show, For, createMemo, createEffect, untrack } from 'solid-js';
+import { useLocation, useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { formatBytes, formatAbsoluteTime, formatRelativeTime, formatUptime, formatPercent } from '@/utils/format';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
@@ -16,6 +16,7 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility';
 import { logger } from '@/utils/logger';
+import { BACKUPS_QUERY_PARAMS, buildBackupsPath, parseBackupsLinkSearch } from '@/routing/resourceLinks';
 
 type BackupSortKey = keyof Pick<
   UnifiedBackup,
@@ -52,6 +53,7 @@ interface DateGroup {
 
 const UnifiedBackups: Component = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { state, connected, initialDataReceived } = useWebSocket();
   const pveBackupsState = createMemo(() => state.backups?.pve ?? state.pveBackups);
   const pbsBackupsState = createMemo(() => state.backups?.pbs ?? state.pbsBackups);
@@ -85,6 +87,104 @@ const UnifiedBackups: Component = () => {
   const [backupTypeFilter, setBackupTypeFilter] = createSignal<'all' | BackupType>('all');
   const [statusFilter, setStatusFilter] = createSignal<'all' | 'verified' | 'unverified'>('all');
   const [groupByMode, setGroupByMode] = createSignal<'date' | 'guest'>('date');
+
+  createEffect(() => {
+    const parsed = parseBackupsLinkSearch(location.search);
+
+    if (parsed.query !== untrack(searchTerm)) {
+      setSearchTerm(parsed.query);
+    }
+
+    const nextGuestType =
+      parsed.guestType === 'vm'
+        ? 'VM'
+        : parsed.guestType === 'lxc'
+          ? 'LXC'
+          : parsed.guestType === 'host'
+            ? 'Host'
+            : 'all';
+    if (nextGuestType !== untrack(typeFilter)) {
+      setTypeFilter(nextGuestType);
+    }
+
+    const nextBackupType =
+      parsed.backupType === 'snapshot' || parsed.backupType === 'local' || parsed.backupType === 'remote'
+        ? parsed.backupType
+        : 'all';
+    if (nextBackupType !== untrack(backupTypeFilter)) {
+      setBackupTypeFilter(nextBackupType);
+    }
+
+    const nextStatus =
+      parsed.status === 'verified' || parsed.status === 'unverified' ? parsed.status : 'all';
+    if (nextStatus !== untrack(statusFilter)) {
+      setStatusFilter(nextStatus);
+    }
+
+    const nextGroup = parsed.group === 'guest' ? 'guest' : 'date';
+    if (nextGroup !== untrack(groupByMode)) {
+      setGroupByMode(nextGroup);
+    }
+
+    const nextNode = parsed.node || null;
+    if (nextNode !== untrack(selectedNode)) {
+      setSelectedNode(nextNode);
+    }
+
+    if (!nextNode) {
+      if (untrack(selectedNodeType) !== null) {
+        setSelectedNodeType(null);
+      }
+    } else if (state.nodes?.some((node) => node.id === nextNode)) {
+      if (untrack(selectedNodeType) !== 'pve') {
+        setSelectedNodeType('pve');
+      }
+    } else if (state.pbs?.some((pbs) => pbs.name === nextNode)) {
+      if (untrack(selectedNodeType) !== 'pbs') {
+        setSelectedNodeType('pbs');
+      }
+    } else if (untrack(selectedNodeType) !== null) {
+      setSelectedNodeType(null);
+    }
+  });
+
+  createEffect(() => {
+    if (location.pathname !== '/backups') return;
+
+    const nextGuestType =
+      typeFilter() === 'VM' ? 'vm' : typeFilter() === 'LXC' ? 'lxc' : typeFilter() === 'Host' ? 'host' : '';
+    const nextBackupType = backupTypeFilter() === 'all' ? '' : backupTypeFilter();
+    const nextStatus = statusFilter() === 'all' ? '' : statusFilter();
+    const nextGroup = groupByMode() === 'date' ? '' : groupByMode();
+    const nextNode = selectedNode() ?? '';
+    const nextQuery = searchTerm().trim();
+
+    const managedPath = buildBackupsPath({
+      guestType: nextGuestType || null,
+      backupType: nextBackupType || null,
+      status: nextStatus || null,
+      group: nextGroup || null,
+      node: nextNode || null,
+      query: nextQuery || null,
+    });
+    const [managedBasePath, managedSearch = ''] = managedPath.split('?');
+    const managedParams = new URLSearchParams(managedSearch);
+    const params = new URLSearchParams(location.search);
+
+    Object.values(BACKUPS_QUERY_PARAMS).forEach((key) => {
+      params.delete(key);
+    });
+    managedParams.forEach((value, key) => {
+      params.set(key, value);
+    });
+
+    const nextSearch = params.toString();
+    const nextPath = nextSearch ? `${managedBasePath}?${nextSearch}` : managedBasePath;
+    const currentPath = `${location.pathname}${location.search || ''}`;
+    if (nextPath !== currentPath) {
+      navigate(nextPath, { replace: true });
+    }
+  });
 
   // Convert between UI filter and internal filter for BackupsFilter component
   const uiBackupTypeFilter = createMemo(() => {

@@ -1,4 +1,4 @@
-import { Component, For, Show, createSignal, createMemo, createEffect, onCleanup } from 'solid-js';
+import { Component, For, Show, createSignal, createMemo, createEffect, onCleanup, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -21,6 +21,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { buildStoragePath, parseStorageLinkSearch, STORAGE_QUERY_PARAMS } from '@/routing/resourceLinks';
 
 type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
 type StorageSourceFilter = 'all' | 'proxmox' | 'pbs' | 'ceph';
@@ -68,13 +69,20 @@ const Storage: Component = () => {
         raw === 'all' || raw === 'available' || raw === 'offline' ? raw : 'all',
     },
   );
+  const [sourceFilter, setSourceFilter] = usePersistentSignal<StorageSourceFilter>(
+    STORAGE_KEYS.STORAGE_SOURCE_FILTER,
+    'all',
+    {
+      deserialize: (raw) =>
+        raw === 'all' || raw === 'proxmox' || raw === 'pbs' || raw === 'ceph' ? raw : 'all',
+    },
+  );
 
   const getStorageRowId = (storage: StorageType) =>
     storage.id || `${storage.instance}-${storage.node}-${storage.name}`;
 
   createEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const resourceId = params.get('resource');
+    const { resource: resourceId } = parseStorageLinkSearch(location.search);
     if (!resourceId || resourceId === handledStorageId()) return;
     const match = (state.storage || []).find(
       (storage) => getStorageRowId(storage) === resourceId || storage.name === resourceId,
@@ -88,17 +96,82 @@ const Storage: Component = () => {
     highlightTimer = window.setTimeout(() => setHighlightedStorageId(null), 2000);
   });
 
+  createEffect(() => {
+    const parsed = parseStorageLinkSearch(location.search);
+
+    const nextTab = parsed.tab === 'disks' ? 'disks' : 'pools';
+    if (nextTab !== untrack(tabView)) {
+      setTabView(nextTab);
+    }
+
+    const nextGroup = parsed.group === 'storage' ? 'storage' : 'node';
+    if (nextGroup !== untrack(viewMode)) {
+      setViewMode(nextGroup);
+    }
+
+    const nextSource =
+      parsed.source === 'proxmox' || parsed.source === 'pbs' || parsed.source === 'ceph'
+        ? parsed.source
+        : 'all';
+    if (nextSource !== untrack(sourceFilter)) {
+      setSourceFilter(nextSource);
+    }
+
+    const nextStatus =
+      parsed.status === 'available' || parsed.status === 'offline' ? parsed.status : 'all';
+    if (nextStatus !== untrack(statusFilter)) {
+      setStatusFilter(nextStatus);
+    }
+
+    const nextNode = parsed.node || null;
+    if (nextNode !== untrack(selectedNode)) {
+      setSelectedNode(nextNode);
+    }
+
+    if (parsed.query !== untrack(searchTerm)) {
+      setSearchTerm(parsed.query);
+    }
+  });
+
+  createEffect(() => {
+    if (location.pathname !== '/storage') return;
+    const nextTab = tabView();
+    const nextGroup = viewMode();
+    const nextSource = sourceFilter();
+    const nextStatus = statusFilter();
+    const nextNode = selectedNode() ?? '';
+    const nextQuery = searchTerm().trim();
+
+    const managedPath = buildStoragePath({
+      tab: nextTab !== 'pools' ? nextTab : null,
+      group: nextGroup !== 'node' ? nextGroup : null,
+      source: nextSource !== 'all' ? nextSource : null,
+      status: nextStatus !== 'all' ? nextStatus : null,
+      node: nextNode || null,
+      query: nextQuery || null,
+    });
+    const [managedBasePath, managedSearch = ''] = managedPath.split('?');
+    const managedParams = new URLSearchParams(managedSearch);
+    const params = new URLSearchParams(location.search);
+
+    Object.values(STORAGE_QUERY_PARAMS).forEach((key) => {
+      params.delete(key);
+    });
+    managedParams.forEach((value, key) => {
+      params.set(key, value);
+    });
+
+    const nextSearch = params.toString();
+    const nextPath = nextSearch ? `${managedBasePath}?${nextSearch}` : managedBasePath;
+    const currentPath = `${location.pathname}${location.search || ''}`;
+    if (nextPath !== currentPath) {
+      navigate(nextPath, { replace: true });
+    }
+  });
+
   onCleanup(() => {
     if (highlightTimer) window.clearTimeout(highlightTimer);
   });
-  const [sourceFilter, setSourceFilter] = usePersistentSignal<StorageSourceFilter>(
-    STORAGE_KEYS.STORAGE_SOURCE_FILTER,
-    'all',
-    {
-      deserialize: (raw) =>
-        raw === 'all' || raw === 'proxmox' || raw === 'pbs' || raw === 'ceph' ? raw : 'all',
-    },
-  );
 
   // Column definitions for storage table
   const STORAGE_COLUMNS: ColumnDef[] = [
