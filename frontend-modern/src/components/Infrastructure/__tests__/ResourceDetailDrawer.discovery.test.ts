@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import { toDiscoveryConfig } from '@/components/Infrastructure/ResourceDetailDrawer';
+import { buildWorkloadsHref } from '@/components/Infrastructure/workloadsLink';
 
 const baseResource = (): Resource => ({
   id: 'host-abcd',
@@ -58,5 +59,82 @@ describe('toDiscoveryConfig', () => {
       metadataId: 'host-1',
       targetLabel: 'host',
     });
+  });
+});
+
+describe('buildWorkloadsHref', () => {
+  it('builds k8s workload route for cluster resources with context', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      type: 'k8s-cluster',
+      name: 'cluster-a',
+      displayName: 'cluster-a',
+      clusterId: 'cluster-a',
+      platformData: {
+        sources: ['kubernetes'],
+        kubernetes: {
+          clusterName: 'cluster-a',
+        },
+      },
+    };
+
+    expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=cluster-a');
+  });
+
+  it('builds k8s workload route for node resources using cluster context', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      type: 'k8s-node',
+      name: 'worker-1',
+      displayName: 'worker-1',
+      clusterId: 'cluster-a',
+      platformData: {
+        sources: ['kubernetes'],
+        kubernetes: {
+          clusterId: 'cluster-a',
+        },
+      },
+    };
+
+    expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=cluster-a');
+  });
+
+  it('returns null for non-kubernetes infrastructure resources', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      type: 'pbs',
+      platformType: 'proxmox-pbs',
+      sourceType: 'api',
+      platformData: {
+        sources: ['pbs'],
+      },
+    };
+    expect(buildWorkloadsHref(resource)).toBeNull();
+  });
+
+  it('builds workloads route with host hint for proxmox node resources', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      type: 'node',
+      platformData: {
+        sources: ['proxmox'],
+        proxmox: { nodeName: 'pve1' },
+      },
+    };
+    expect(buildWorkloadsHref(resource)).toBe('/workloads?host=pve1');
+  });
+
+  it('builds workloads route with docker type and host hint for docker hosts', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      type: 'docker-host',
+      platformType: 'docker',
+      sourceType: 'agent',
+      platformData: {
+        sources: ['docker'],
+        docker: { hostname: 'docker-host-1' },
+      },
+    };
+    expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&host=docker-host-1');
   });
 });

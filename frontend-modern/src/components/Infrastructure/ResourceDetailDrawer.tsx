@@ -8,6 +8,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TagBadges } from '@/components/Dashboard/TagBadges';
 import { getHostStatusIndicator } from '@/utils/status';
 import { getPlatformBadge, getSourceBadge, getTypeBadge, getUnifiedSourceBadges } from './resourceBadges';
+import { buildWorkloadsHref } from './workloadsLink';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
 import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
@@ -60,13 +61,46 @@ type AgentPlatformData = {
   memory?: Memory;
 };
 
+type PBSPlatformData = {
+  instanceId?: string;
+  hostname?: string;
+  version?: string;
+  uptimeSeconds?: number;
+  datastoreCount?: number;
+  backupJobCount?: number;
+  syncJobCount?: number;
+  verifyJobCount?: number;
+  pruneJobCount?: number;
+  garbageJobCount?: number;
+  connectionHealth?: string;
+};
+
+type PMGPlatformData = {
+  instanceId?: string;
+  hostname?: string;
+  version?: string;
+  nodeCount?: number;
+  uptimeSeconds?: number;
+  queueActive?: number;
+  queueDeferred?: number;
+  queueHold?: number;
+  queueIncoming?: number;
+  queueTotal?: number;
+  mailCountTotal?: number;
+  spamIn?: number;
+  virusIn?: number;
+  connectionHealth?: string;
+  lastUpdated?: string;
+};
+
 type PlatformData = {
   sources?: string[];
   proxmox?: ProxmoxPlatformData;
   agent?: AgentPlatformData;
   sourceStatus?: Record<string, { status?: string; lastSeen?: string | number; error?: string }>;
   docker?: Record<string, unknown>;
-  pbs?: Record<string, unknown>;
+  pbs?: PBSPlatformData;
+  pmg?: PMGPlatformData;
   kubernetes?: Record<string, unknown>;
   metrics?: Record<string, unknown>;
   identityMatch?: unknown;
@@ -151,6 +185,8 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'host':
     case 'node':
     case 'docker-host':
+    case 'pbs':
+    case 'pmg':
     case 'k8s-cluster':
     case 'k8s-node':
     case 'truenas':
@@ -366,6 +402,32 @@ const buildTemperatureRows = (sensors?: HostSensorSummary) => {
   return rows;
 };
 
+const normalizeHealthLabel = (value?: string): string => {
+  const raw = (value || '').trim();
+  if (!raw) return 'Unknown';
+  if (raw.length <= 3) return raw.toUpperCase();
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+};
+
+const healthToneClass = (value?: string): string => {
+  const normalized = (value || '').trim().toLowerCase();
+  if (['online', 'running', 'healthy', 'connected', 'ok'].includes(normalized)) {
+    return 'text-emerald-600 dark:text-emerald-400';
+  }
+  if (['degraded', 'warning', 'stale'].includes(normalized)) {
+    return 'text-amber-600 dark:text-amber-400';
+  }
+  if (['offline', 'down', 'disconnected', 'error', 'failed'].includes(normalized)) {
+    return 'text-red-600 dark:text-red-400';
+  }
+  return 'text-gray-700 dark:text-gray-200';
+};
+
+const formatInteger = (value?: number): string => {
+  if (value === undefined || value === null || Number.isNaN(value)) return '—';
+  return new Intl.NumberFormat().format(Math.round(value));
+};
+
 export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
   type DrawerTab = 'overview' | 'discovery' | 'debug';
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
@@ -392,10 +454,36 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
   const temperatureRows = createMemo(() => buildTemperatureRows(agentHost()?.sensors));
 
   const platformData = createMemo(() => props.resource.platformData as PlatformData | undefined);
+  const pbsData = createMemo(() => platformData()?.pbs);
+  const pmgData = createMemo(() => platformData()?.pmg);
+  const pbsJobTotal = createMemo(() => {
+    const pbs = pbsData();
+    if (!pbs) return 0;
+    return (
+      (pbs.backupJobCount || 0) +
+      (pbs.syncJobCount || 0) +
+      (pbs.verifyJobCount || 0) +
+      (pbs.pruneJobCount || 0) +
+      (pbs.garbageJobCount || 0)
+    );
+  });
+  const pmgQueueBacklog = createMemo(() => {
+    const pmg = pmgData();
+    if (!pmg) return 0;
+    return (pmg.queueDeferred || 0) + (pmg.queueHold || 0);
+  });
+  const pmgUpdatedRelative = createMemo(() => {
+    const raw = pmgData()?.lastUpdated;
+    if (!raw) return '';
+    const parsed = Date.parse(raw);
+    if (!Number.isFinite(parsed)) return '';
+    return formatRelativeTime(parsed);
+  });
   const sourceStatus = createMemo(() => platformData()?.sourceStatus ?? {});
   const mergedSources = createMemo(() => platformData()?.sources ?? []);
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(props.resource));
+  const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
   const sourceSections = createMemo(() => {
     const data = platformData();
     if (!data) return [];
@@ -404,6 +492,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
       { id: 'agent', label: 'Agent', payload: data.agent },
       { id: 'docker', label: 'Docker', payload: data.docker },
       { id: 'pbs', label: 'PBS', payload: data.pbs },
+      { id: 'pmg', label: 'PMG', payload: data.pmg },
       { id: 'kubernetes', label: 'Kubernetes', payload: data.kubernetes },
       { id: 'metrics', label: 'Metrics', payload: data.metrics },
     ];
@@ -431,6 +520,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
       agent: platformData()?.agent,
       docker: platformData()?.docker,
       pbs: platformData()?.pbs,
+      pmg: platformData()?.pmg,
       kubernetes: platformData()?.kubernetes,
       metrics: platformData()?.metrics,
     },
@@ -552,6 +642,19 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
           </button>
         </Show>
       </div>
+
+      <Show when={workloadsHref()}>
+        {(href) => (
+          <div class="flex items-center justify-end">
+            <a
+              href={href()}
+              class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700/60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+            >
+              Open in Workloads
+            </a>
+          </div>
+        )}
+      </Show>
 
       <div class="flex items-center gap-6 border-b border-gray-200 dark:border-gray-700 px-1 mb-1">
         <For each={tabs()}>
@@ -695,6 +798,108 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
               </Show>
             </div>
           </div>
+
+          <Show when={pbsData()}>
+            {(pbs) => (
+              <div class="rounded border border-indigo-200 bg-indigo-50/60 p-3 shadow-sm dark:border-indigo-700/60 dark:bg-indigo-900/20">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300 mb-2">PBS Service</div>
+                <div class="space-y-1.5 text-[11px]">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-gray-500 dark:text-gray-400">Connection</span>
+                    <span class={`font-medium ${healthToneClass(pbs().connectionHealth)}`}>
+                      {normalizeHealthLabel(pbs().connectionHealth)}
+                    </span>
+                  </div>
+                  <Show when={pbs().version}>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-gray-400">Version</span>
+                      <span class="font-medium text-gray-700 dark:text-gray-200">{pbs().version}</span>
+                    </div>
+                  </Show>
+                  <Show when={pbs().uptimeSeconds || props.resource.uptime}>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-gray-400">Uptime</span>
+                      <span class="font-medium text-gray-700 dark:text-gray-200">
+                        {formatUptime(pbs().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                      </span>
+                    </div>
+                  </Show>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-gray-500 dark:text-gray-400">Datastores</span>
+                    <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().datastoreCount)}</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-gray-500 dark:text-gray-400">Total Jobs</span>
+                    <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbsJobTotal())}</span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-x-3 gap-y-1 pt-1 text-[10px]">
+                    <span class="text-gray-500 dark:text-gray-400">Backup: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().backupJobCount)}</span></span>
+                    <span class="text-gray-500 dark:text-gray-400">Sync: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().syncJobCount)}</span></span>
+                    <span class="text-gray-500 dark:text-gray-400">Verify: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().verifyJobCount)}</span></span>
+                    <span class="text-gray-500 dark:text-gray-400">Prune: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().pruneJobCount)}</span></span>
+                    <span class="text-gray-500 dark:text-gray-400">Garbage: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().garbageJobCount)}</span></span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </Show>
+
+          <Show when={pmgData()}>
+            {(pmg) => (
+              <div class="rounded border border-rose-200 bg-rose-50/60 p-3 shadow-sm dark:border-rose-700/60 dark:bg-rose-900/20">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300 mb-2">Mail Gateway</div>
+                <div class="space-y-1.5 text-[11px]">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-gray-500 dark:text-gray-400">Connection</span>
+                    <span class={`font-medium ${healthToneClass(pmg().connectionHealth)}`}>
+                      {normalizeHealthLabel(pmg().connectionHealth)}
+                    </span>
+                  </div>
+                  <Show when={pmg().version}>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-gray-400">Version</span>
+                      <span class="font-medium text-gray-700 dark:text-gray-200">{pmg().version}</span>
+                    </div>
+                  </Show>
+                  <Show when={pmg().uptimeSeconds || props.resource.uptime}>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-gray-400">Uptime</span>
+                      <span class="font-medium text-gray-700 dark:text-gray-200">
+                        {formatUptime(pmg().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                      </span>
+                    </div>
+                  </Show>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-gray-500 dark:text-gray-400">Nodes</span>
+                    <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().nodeCount)}</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-gray-500 dark:text-gray-400">Queue Total</span>
+                    <span class={`font-medium ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200'}`}>
+                      {formatInteger(pmg().queueTotal)}
+                    </span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-x-3 gap-y-1 pt-1 text-[10px]">
+                    <span class="text-gray-500 dark:text-gray-400">Active: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().queueActive)}</span></span>
+                    <span class="text-gray-500 dark:text-gray-400">Deferred: <span class={`font-medium ${((pmg().queueDeferred || 0) > 0) ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200'}`}>{formatInteger(pmg().queueDeferred)}</span></span>
+                    <span class="text-gray-500 dark:text-gray-400">Hold: <span class={`font-medium ${((pmg().queueHold || 0) > 0) ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200'}`}>{formatInteger(pmg().queueHold)}</span></span>
+                    <span class="text-gray-500 dark:text-gray-400">Incoming: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().queueIncoming)}</span></span>
+                  </div>
+                  <div class="grid grid-cols-3 gap-x-3 gap-y-1 pt-1 text-[10px]">
+                    <span class="text-gray-500 dark:text-gray-400">Mail: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().mailCountTotal)}</span></span>
+                    <span class="text-gray-500 dark:text-gray-400">Spam: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().spamIn)}</span></span>
+                    <span class="text-gray-500 dark:text-gray-400">Virus: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().virusIn)}</span></span>
+                  </div>
+                  <Show when={pmgUpdatedRelative()}>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-gray-400">Updated</span>
+                      <span class="font-medium text-gray-700 dark:text-gray-200">{pmgUpdatedRelative()}</span>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+            )}
+          </Show>
         </div>
       </div>
 

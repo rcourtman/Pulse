@@ -1,29 +1,35 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
-import { useLocation } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
-import { SearchInput } from '@/components/shared/SearchInput';
+import { CollapsibleSearchInput } from '@/components/shared/CollapsibleSearchInput';
+import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { InfrastructureSummary } from '@/components/Infrastructure/InfrastructureSummary';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
-import { isRangeLocked, licenseLoaded, loadLicenseStatus } from '@/stores/license';
 import type { TimeRange } from '@/api/charts';
 import ServerIcon from 'lucide-solid/icons/server';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import type { Resource } from '@/types/resource';
+import {
+  dismissMigrationNotice,
+  isMigrationNoticeDismissed,
+  resolveMigrationNotice,
+} from '@/routing/migrationNotices';
+import {
+  buildInfrastructurePath,
+  INFRASTRUCTURE_PATH,
+  INFRASTRUCTURE_QUERY_PARAMS,
+  parseInfrastructureLinkSearch,
+} from '@/routing/resourceLinks';
 
-const INFRASTRUCTURE_TREND_RANGES: { value: TimeRange; label: string }[] = [
-  { value: '1h', label: '1h' },
-  { value: '4h', label: '4h' },
-  { value: '24h', label: '24h' },
-  { value: '7d', label: '7d' },
-  { value: '30d', label: '30d' },
-];
+const INFRASTRUCTURE_SUMMARY_RANGE: TimeRange = '1h';
 
 export function Infrastructure() {
   const { resources, loading, error, refetch } = useUnifiedResources();
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Track if we've completed initial load to prevent flash of empty state
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
@@ -45,36 +51,46 @@ export function Infrastructure() {
     'grouped',
     { deserialize: (raw) => (raw === 'grouped' || raw === 'flat' ? raw : 'grouped') },
   );
-  const [trendRange, setTrendRange] = usePersistentSignal<TimeRange>(
-    'infrastructureTrendRange',
-    '1h',
-    {
-      deserialize: (raw) =>
-        INFRASTRUCTURE_TREND_RANGES.some((option) => option.value === raw)
-          ? (raw as TimeRange)
-          : '1h',
-    },
-  );
   const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
+  const [hoveredResourceId, setHoveredResourceId] = createSignal<string | null>(null);
   const [highlightedResourceId, setHighlightedResourceId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [handledSourceParam, setHandledSourceParam] = createSignal<string | null>(null);
+  const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
   let highlightTimer: number | undefined;
+  const sourceOptions = [
+    { key: 'proxmox', label: 'PVE' },
+    { key: 'agent', label: 'Agent' },
+    { key: 'docker', label: 'Docker' },
+    { key: 'pbs', label: 'PBS' },
+    { key: 'pmg', label: 'PMG' },
+    { key: 'kubernetes', label: 'K8s' },
+  ];
 
-  createEffect(() => {
-    void loadLicenseStatus();
+  const migrationNotice = createMemo(() => {
+    const notice = resolveMigrationNotice(location.search);
+    if (!notice || notice.target !== 'infrastructure') return null;
+    return notice;
   });
 
   createEffect(() => {
-    if (!licenseLoaded()) return;
-    if (isRangeLocked(trendRange())) {
-      setTrendRange('7d');
+    const notice = migrationNotice();
+    if (!notice) {
+      setHideMigrationNotice(true);
+      return;
     }
+    setHideMigrationNotice(isMigrationNoticeDismissed(notice.id));
   });
 
+  const handleDismissMigrationNotice = () => {
+    const notice = migrationNotice();
+    if (!notice) return;
+    dismissMigrationNotice(notice.id);
+    setHideMigrationNotice(true);
+  };
+
   createEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const resourceId = params.get('resource');
+    const { resource: resourceId } = parseInfrastructureLinkSearch(location.search);
     if (!resourceId || resourceId === handledResourceId()) return;
     const matching = resources().some((resource) => resource.id === resourceId);
     if (!matching) return;
@@ -90,8 +106,7 @@ export function Infrastructure() {
   });
 
   createEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const sourceParam = params.get('source');
+    const { source: sourceParam } = parseInfrastructureLinkSearch(location.search);
     if (!sourceParam || sourceParam === handledSourceParam()) return;
     const sources = sourceParam
       .split(',')
@@ -103,10 +118,39 @@ export function Infrastructure() {
   });
 
   createEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const nextSearch = params.get('q') ?? params.get('search') ?? '';
+    const { query: nextSearch } = parseInfrastructureLinkSearch(location.search);
     if (nextSearch !== untrack(searchQuery)) {
       setSearchQuery(nextSearch);
+    }
+  });
+
+  createEffect(() => {
+    if (location.pathname !== INFRASTRUCTURE_PATH) return;
+
+    const selectedSourceValues = sourceOptions
+      .map((source) => source.key)
+      .filter((source) => selectedSources().has(source));
+    const nextSource = selectedSourceValues.join(',');
+    const nextQuery = searchQuery().trim();
+
+    const managedPath = buildInfrastructurePath({
+      source: nextSource || null,
+      query: nextQuery || null,
+    });
+    const managedUrl = new URL(managedPath, 'http://pulse.local');
+    const params = new URLSearchParams(location.search);
+    params.delete(INFRASTRUCTURE_QUERY_PARAMS.source);
+    params.delete(INFRASTRUCTURE_QUERY_PARAMS.query);
+    params.delete(INFRASTRUCTURE_QUERY_PARAMS.legacyQuery);
+    managedUrl.searchParams.forEach((value, key) => {
+      params.set(key, value);
+    });
+
+    const nextSearch = params.toString();
+    const nextPath = nextSearch ? `${INFRASTRUCTURE_PATH}?${nextSearch}` : INFRASTRUCTURE_PATH;
+    const currentPath = `${location.pathname}${location.search || ''}`;
+    if (nextPath !== currentPath) {
+      navigate(nextPath, { replace: true });
     }
   });
 
@@ -115,15 +159,6 @@ export function Infrastructure() {
       window.clearTimeout(highlightTimer);
     }
   });
-
-  const sourceOptions = [
-    { key: 'proxmox', label: 'PVE' },
-    { key: 'agent', label: 'Agent' },
-    { key: 'docker', label: 'Docker' },
-    { key: 'pbs', label: 'PBS' },
-    { key: 'pmg', label: 'PMG' },
-    { key: 'kubernetes', label: 'K8s' },
-  ];
 
   const statusLabels: Record<string, string> = {
     online: 'Online',
@@ -245,8 +280,6 @@ export function Infrastructure() {
     return `${base} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50`;
   };
 
-  const isTrendRangeLocked = (range: TimeRange) => licenseLoaded() && isRangeLocked(range);
-
   const matchesSearch = (resource: Resource, term: string) => {
     if (!term) return true;
     const normalizedTerm = term.toLowerCase();
@@ -305,6 +338,15 @@ export function Infrastructure() {
 
   const hasFilteredResources = createMemo(() => filteredResources().length > 0);
 
+  createEffect(() => {
+    const hoveredId = hoveredResourceId();
+    if (!hoveredId) return;
+    const exists = filteredResources().some((resource) => resource.id === hoveredId);
+    if (!exists) {
+      setHoveredResourceId(null);
+    }
+  });
+
   const stats = createMemo(() => {
     const all = filteredResources();
     const online = all.filter((r) => r.status === 'online').length;
@@ -348,156 +390,133 @@ export function Infrastructure() {
                 <EmptyState
                   icon={<ServerIcon class="w-6 h-6 text-gray-400" />}
                   title="No infrastructure resources yet"
-                  description="Once hosts are reporting, they will appear here."
+                  description="Once resources are reporting, they will appear here."
                 />
               </Card>
             }
           >
             <div class="space-y-3">
+              <Show when={migrationNotice() && !hideMigrationNotice()}>
+                <MigrationNoticeBanner
+                  title={migrationNotice()!.title}
+                  message={migrationNotice()!.message}
+                  learnMoreHref={migrationNotice()!.learnMoreHref}
+                  onDismiss={handleDismissMigrationNotice}
+                />
+              </Show>
+
               <Card padding="sm" class="mb-4">
-                <div class="space-y-3">
-                  <SearchInput
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
+                  <CollapsibleSearchInput
                     value={searchQuery}
                     onChange={setSearchQuery}
-                    placeholder="Search hosts, IDs, IPs, or tags..."
-                    autoFocus
+                    placeholder="Search resources, IDs, IPs, or tags..."
+                    triggerLabel="Search"
+                    class="w-full md:w-64 md:order-last md:ml-auto"
                   />
 
-                  <div class="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
-                    <div class="flex items-center gap-2">
-                      <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
-                      <div class="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                        <For each={sourceOptions}>
-                          {(source) => {
-                            const isSelected = () => selectedSources().has(source.key);
-                            const isDisabled = () =>
-                              !availableSources().has(source.key) && !selectedSources().has(source.key);
-                            return (
-                              <button
-                                type="button"
-                                disabled={isDisabled()}
-                                aria-pressed={isSelected()}
-                                onClick={() => toggleSource(source.key)}
-                                class={segmentedButtonClass(isSelected(), isDisabled())}
-                              >
-                                {source.label}
-                              </button>
-                            );
-                          }}
-                        </For>
-                      </div>
+                  <div class="flex items-center gap-2">
+                    <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
+                    <div class="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <For each={sourceOptions}>
+                        {(source) => {
+                          const isSelected = () => selectedSources().has(source.key);
+                          const isDisabled = () =>
+                            !availableSources().has(source.key) && !selectedSources().has(source.key);
+                          return (
+                            <button
+                              type="button"
+                              disabled={isDisabled()}
+                              aria-pressed={isSelected()}
+                              onClick={() => toggleSource(source.key)}
+                              class={segmentedButtonClass(isSelected(), isDisabled())}
+                            >
+                              {source.label}
+                            </button>
+                          );
+                        }}
+                      </For>
                     </div>
-
-                    <div class="h-5 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
-
-                    <div class="flex items-center gap-2">
-                      <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
-                      <div class="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                        <For each={statusOptions()}>
-                          {(status) => {
-                            const isSelected = () => selectedStatuses().has(status.key);
-                            const isDisabled = () =>
-                              !availableStatuses().has(status.key) && !selectedStatuses().has(status.key);
-                            return (
-                              <button
-                                type="button"
-                                disabled={isDisabled()}
-                                aria-pressed={isSelected()}
-                                onClick={() => toggleStatus(status.key)}
-                                class={segmentedButtonClass(isSelected(), isDisabled())}
-                              >
-                                {status.label}
-                              </button>
-                            );
-                          }}
-                        </For>
-                      </div>
-                    </div>
-
-                    <div class="h-5 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
-
-                    <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <button
-                        type="button"
-                        onClick={() => setGroupingMode('grouped')}
-                        class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'grouped', false)}`}
-                        title="Group by cluster"
-                      >
-                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
-                        </svg>
-                        Grouped
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setGroupingMode(groupingMode() === 'flat' ? 'grouped' : 'flat')}
-                        class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'flat', false)}`}
-                        title="Flat list view"
-                      >
-                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <line x1="8" y1="6" x2="21" y2="6" />
-                          <line x1="8" y1="12" x2="21" y2="12" />
-                          <line x1="8" y1="18" x2="21" y2="18" />
-                          <line x1="3" y1="6" x2="3.01" y2="6" />
-                          <line x1="3" y1="12" x2="3.01" y2="12" />
-                          <line x1="3" y1="18" x2="3.01" y2="18" />
-                        </svg>
-                        List
-                      </button>
-                    </div>
-
-                    <div class="h-5 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
-
-                    <div class="flex items-center gap-2">
-                      <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Trend</span>
-                      <div class="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                        <For each={INFRASTRUCTURE_TREND_RANGES}>
-                          {(rangeOption) => {
-                            const isSelected = () => trendRange() === rangeOption.value;
-                            const isLocked = () => isTrendRangeLocked(rangeOption.value);
-                            const isDisabled = () => isLocked() && !isSelected();
-                            return (
-                              <button
-                                type="button"
-                                disabled={isDisabled()}
-                                aria-pressed={isSelected()}
-                                onClick={() => setTrendRange(rangeOption.value)}
-                                class={segmentedButtonClass(isSelected(), isDisabled())}
-                                title={isLocked() ? `${rangeOption.label} history requires Pulse Pro` : `Show ${rangeOption.label} trend history`}
-                              >
-                                {rangeOption.label}
-                                <Show when={isLocked()}>
-                                  <span class="ml-0.5 text-[8px] font-semibold uppercase text-blue-600 dark:text-blue-300">
-                                    Pro
-                                  </span>
-                                </Show>
-                              </button>
-                            );
-                          }}
-                        </For>
-                      </div>
-                    </div>
-
-                    <Show when={hasActiveFilters()}>
-                      <button
-                        type="button"
-                        onClick={clearFilters}
-                        class="ml-auto text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                      >
-                        Clear
-                      </button>
-                    </Show>
                   </div>
+
+                  <div class="h-5 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
+
+                  <div class="flex items-center gap-2">
+                    <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
+                    <div class="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <For each={statusOptions()}>
+                        {(status) => {
+                          const isSelected = () => selectedStatuses().has(status.key);
+                          const isDisabled = () =>
+                            !availableStatuses().has(status.key) && !selectedStatuses().has(status.key);
+                          return (
+                            <button
+                              type="button"
+                              disabled={isDisabled()}
+                              aria-pressed={isSelected()}
+                              onClick={() => toggleStatus(status.key)}
+                              class={segmentedButtonClass(isSelected(), isDisabled())}
+                            >
+                              {status.label}
+                            </button>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </div>
+
+                  <div class="h-5 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
+
+                  <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setGroupingMode('grouped')}
+                      class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'grouped', false)}`}
+                      title="Group by cluster"
+                    >
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
+                      </svg>
+                      Grouped
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGroupingMode(groupingMode() === 'flat' ? 'grouped' : 'flat')}
+                      class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'flat', false)}`}
+                      title="Flat list view"
+                    >
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="8" y1="6" x2="21" y2="6" />
+                        <line x1="8" y1="12" x2="21" y2="12" />
+                        <line x1="8" y1="18" x2="21" y2="18" />
+                        <line x1="3" y1="6" x2="3.01" y2="6" />
+                        <line x1="3" y1="12" x2="3.01" y2="12" />
+                        <line x1="3" y1="18" x2="3.01" y2="18" />
+                      </svg>
+                      List
+                    </button>
+                  </div>
+
+                  <Show when={hasActiveFilters()}>
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      class="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 md:order-last"
+                    >
+                      Clear
+                    </button>
+                  </Show>
                 </div>
               </Card>
 
               <InfrastructureSummary
                 hosts={filteredResources()}
-                timeRange={trendRange()}
+                timeRange={INFRASTRUCTURE_SUMMARY_RANGE}
+                hoveredHostId={hoveredResourceId()}
               />
 
               <div class="flex items-center gap-3 px-1 text-[11px] text-gray-500 dark:text-gray-400">
-                <span class="font-medium text-gray-700 dark:text-gray-200">{stats().total} {stats().total === 1 ? 'host' : 'hosts'}</span>
+                <span class="font-medium text-gray-700 dark:text-gray-200">{stats().total} {stats().total === 1 ? 'resource' : 'resources'}</span>
                 <Show when={stats().online > 0}>
                   <span class="text-emerald-600 dark:text-emerald-400">{stats().online} online</span>
                 </Show>
@@ -532,8 +551,10 @@ export function Infrastructure() {
                 <UnifiedResourceTable
                   resources={filteredResources()}
                   expandedResourceId={expandedResourceId()}
+                  hoveredResourceId={hoveredResourceId()}
                   highlightedResourceId={highlightedResourceId()}
                   onExpandedResourceChange={setExpandedResourceId}
+                  onHoverChange={setHoveredResourceId}
                   groupingMode={groupingMode()}
                 />
               </Show>

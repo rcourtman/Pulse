@@ -10,17 +10,45 @@ import { buildMetricKey } from '@/utils/metricsKeys';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getHostStatusIndicator } from '@/utils/status';
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
+import { buildWorkloadsHref } from './workloadsLink';
 import { getPlatformBadge, getSourceBadge, getUnifiedSourceBadges } from './resourceBadges';
 
 interface UnifiedResourceTableProps {
   resources: Resource[];
   expandedResourceId: string | null;
   highlightedResourceId?: string | null;
+  hoveredResourceId?: string | null;
   onExpandedResourceChange: (id: string | null) => void;
+  onHoverChange?: (id: string | null) => void;
   groupingMode?: 'grouped' | 'flat';
 }
 
 type SortKey = 'default' | 'name' | 'uptime' | 'cpu' | 'memory' | 'disk' | 'network' | 'diskio' | 'source' | 'temp';
+
+type PBSServiceData = {
+  datastoreCount?: number;
+  backupJobCount?: number;
+  syncJobCount?: number;
+  verifyJobCount?: number;
+  pruneJobCount?: number;
+  garbageJobCount?: number;
+  connectionHealth?: string;
+};
+
+type PMGServiceData = {
+  nodeCount?: number;
+  queueTotal?: number;
+  queueDeferred?: number;
+  queueHold?: number;
+  connectionHealth?: string;
+};
+
+type ServiceSummaryTone = 'ok' | 'warning' | 'muted';
+
+type ServiceSummary = {
+  text: string;
+  tone: ServiceSummaryTone;
+};
 
 const isResourceOnline = (resource: Resource) => {
   const status = resource.status?.toLowerCase();
@@ -32,6 +60,66 @@ const hasAlternateName = (resource: Resource) => {
   const display = resource.displayName.trim().toLowerCase();
   const name = resource.name.trim().toLowerCase();
   return display !== name;
+};
+
+const summarizeServiceHealthTone = (value?: string): ServiceSummaryTone => {
+  const normalized = (value || '').trim().toLowerCase();
+  if (!normalized) return 'muted';
+  if (['offline', 'down', 'disconnected', 'error', 'failed'].includes(normalized)) return 'warning';
+  if (['degraded', 'warning', 'stale'].includes(normalized)) return 'warning';
+  if (['online', 'running', 'healthy', 'connected', 'ok'].includes(normalized)) return 'ok';
+  return 'muted';
+};
+
+const formatJobCount = (count: number): string => `${count} job${count === 1 ? '' : 's'}`;
+const formatDatastoreCount = (count: number): string => `${count} datastore${count === 1 ? '' : 's'}`;
+const formatNodeCount = (count: number): string => `${count} node${count === 1 ? '' : 's'}`;
+
+const getServiceSummary = (resource: Resource): ServiceSummary | null => {
+  const platformData = resource.platformData as { pbs?: PBSServiceData; pmg?: PMGServiceData } | undefined;
+  if (!platformData) return null;
+
+  if (resource.type === 'pbs' && platformData.pbs) {
+    const pbs = platformData.pbs;
+    const totalJobs =
+      (pbs.backupJobCount || 0) +
+      (pbs.syncJobCount || 0) +
+      (pbs.verifyJobCount || 0) +
+      (pbs.pruneJobCount || 0) +
+      (pbs.garbageJobCount || 0);
+    const parts: string[] = [];
+    if ((pbs.datastoreCount || 0) > 0) {
+      parts.push(formatDatastoreCount(pbs.datastoreCount || 0));
+    }
+    if (totalJobs > 0) {
+      parts.push(formatJobCount(totalJobs));
+    }
+    if (parts.length === 0 && pbs.connectionHealth) {
+      parts.push(pbs.connectionHealth);
+    }
+    if (parts.length === 0) return null;
+    return { text: parts.join(' · '), tone: summarizeServiceHealthTone(pbs.connectionHealth) };
+  }
+
+  if (resource.type === 'pmg' && platformData.pmg) {
+    const pmg = platformData.pmg;
+    const parts: string[] = [];
+    if ((pmg.queueTotal || 0) > 0) {
+      parts.push(`Queue ${pmg.queueTotal}`);
+    }
+    if ((pmg.nodeCount || 0) > 0) {
+      parts.push(formatNodeCount(pmg.nodeCount || 0));
+    }
+    if (parts.length === 0 && pmg.connectionHealth) {
+      parts.push(pmg.connectionHealth);
+    }
+    const backlog = (pmg.queueDeferred || 0) + (pmg.queueHold || 0);
+    const tone = backlog > 0 ? 'warning' : summarizeServiceHealthTone(pmg.connectionHealth);
+    if (parts.length === 0) return null;
+    return { text: parts.join(' · '), tone };
+  }
+
+  return null;
 };
 
 interface IODistributionStats {
@@ -376,7 +464,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             </span>
                           </Show>
                           <span class="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
-                            {group.resources.length} {group.resources.length === 1 ? 'host' : 'hosts'}
+                            {group.resources.length} {group.resources.length === 1 ? 'resource' : 'resources'}
                           </span>
                         </div>
                       </td>
@@ -428,6 +516,9 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         if (isHighlighted()) {
                           className += ' bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600';
                         }
+                        if (props.hoveredResourceId === resource.id) {
+                          className += ' bg-blue-50/60 dark:bg-blue-900/30';
+                        }
                         if (!isResourceOnline(resource)) {
                           className += ' opacity-60';
                         }
@@ -440,6 +531,15 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         getUnifiedSourceBadges(getUnifiedSources(resource)),
                       );
                       const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+                      const serviceSummary = createMemo(() => getServiceSummary(resource));
+                      const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
+                      const serviceSummaryClass = createMemo(() => {
+                        const summary = serviceSummary();
+                        if (!summary) return '';
+                        if (summary.tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
+                        if (summary.tone === 'warning') return 'text-amber-600 dark:text-amber-400';
+                        return 'text-gray-500 dark:text-gray-400';
+                      });
 
                       return (
                         <>
@@ -454,6 +554,8 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             class={rowClass()}
                             style={{ 'min-height': '36px' }}
                             onClick={() => toggleExpand(resource.id)}
+                            onMouseEnter={() => props.onHoverChange?.(resource.id)}
+                            onMouseLeave={() => props.onHoverChange?.(null)}
                           >
                             <td class="pr-1.5 sm:pr-2 py-1 align-middle overflow-hidden pl-2 sm:pl-3">
                               <div class="flex items-center gap-1.5 min-w-0">
@@ -482,6 +584,26 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   </span>
                                 </Show>
                               </div>
+                              <Show when={serviceSummary()}>
+                                {(summary) => (
+                                  <div class={`ml-5 mt-0.5 text-[10px] font-medium ${serviceSummaryClass()}`}>
+                                    {summary().text}
+                                  </div>
+                                )}
+                              </Show>
+                              <Show when={workloadsHref()}>
+                                {(href) => (
+                                  <div class="ml-5 mt-0.5">
+                                    <a
+                                      href={href()}
+                                      class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700/60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      View workloads
+                                    </a>
+                                  </div>
+                                )}
+                              </Show>
                             </td>
 
                             <td class={tdClass}>
