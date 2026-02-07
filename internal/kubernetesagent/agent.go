@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/rs/zerolog"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
@@ -352,6 +354,13 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 		return agentsk8s.Report{}, err
 	}
 
+	nodeUsage, podUsage, usageErr := a.collectUsageMetrics(ctx, nodes)
+	if usageErr != nil {
+		a.logger.Debug().Err(usageErr).Msg("Kubernetes usage metrics unavailable; continuing with inventory-only report")
+	}
+	applyNodeUsage(nodes, nodeUsage)
+	applyPodUsage(pods, podUsage)
+
 	return agentsk8s.Report{
 		Agent: agentsk8s.AgentInfo{
 			ID:              a.agentID,
@@ -371,6 +380,369 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 		Deployments: deployments,
 		Timestamp:   time.Now().UTC(),
 	}, nil
+}
+
+func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node) (map[string]agentsk8s.NodeUsage, map[string]agentsk8s.PodUsage, error) {
+	if a == nil || a.kubeClient == nil {
+		return nil, nil, nil
+	}
+
+	discovery := a.kubeClient.Discovery()
+	if discovery == nil || discovery.RESTClient() == nil {
+		return nil, nil, nil
+	}
+
+	restClient := discovery.RESTClient()
+
+	nodeRaw, nodeErr := restClient.Get().AbsPath("/apis/metrics.k8s.io/v1beta1/nodes").DoRaw(ctx)
+	podRaw, podErr := restClient.Get().AbsPath("/apis/metrics.k8s.io/v1beta1/pods").DoRaw(ctx)
+
+	if nodeErr != nil && podErr != nil {
+		return nil, nil, fmt.Errorf("metrics.k8s.io unavailable (nodes: %w; pods: %v)", nodeErr, podErr)
+	}
+
+	nodeUsage := map[string]agentsk8s.NodeUsage{}
+	if nodeErr == nil {
+		parsed, err := parseNodeMetricsPayload(nodeRaw)
+		if err != nil {
+			a.logger.Debug().Err(err).Msg("Failed to parse Kubernetes node metrics payload")
+		} else {
+			nodeUsage = parsed
+		}
+	}
+
+	podUsage := map[string]agentsk8s.PodUsage{}
+	if podErr == nil {
+		parsed, err := parsePodMetricsPayload(podRaw)
+		if err != nil {
+			a.logger.Debug().Err(err).Msg("Failed to parse Kubernetes pod metrics payload")
+		} else {
+			podUsage = parsed
+		}
+	}
+
+	summaryUsage, summaryErr := a.collectPodSummaryMetrics(ctx, nodes)
+	if summaryErr != nil {
+		a.logger.Debug().Err(summaryErr).Msg("Failed to collect Kubernetes pod summary metrics")
+	}
+	mergePodSummaryUsage(podUsage, summaryUsage)
+
+	if nodeErr != nil && podErr != nil && len(podUsage) == 0 && len(nodeUsage) == 0 {
+		if summaryErr != nil {
+			return nil, nil, fmt.Errorf("metrics.k8s.io unavailable (nodes: %w; pods: %v); summary unavailable: %v", nodeErr, podErr, summaryErr)
+		}
+		return nil, nil, fmt.Errorf("metrics.k8s.io unavailable (nodes: %w; pods: %v)", nodeErr, podErr)
+	}
+
+	return nodeUsage, podUsage, nil
+}
+
+type podSummaryUsage struct {
+	NetworkRxBytes                int64
+	NetworkTxBytes                int64
+	EphemeralStorageUsedBytes     int64
+	EphemeralStorageCapacityBytes int64
+}
+
+func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.Node) (map[string]podSummaryUsage, error) {
+	if a == nil || a.kubeClient == nil {
+		return nil, nil
+	}
+
+	discovery := a.kubeClient.Discovery()
+	if discovery == nil || discovery.RESTClient() == nil {
+		return nil, nil
+	}
+
+	restClient := discovery.RESTClient()
+	result := make(map[string]podSummaryUsage)
+	var failed int
+	var succeeded int
+
+	for _, node := range nodes {
+		nodeName := strings.TrimSpace(node.Name)
+		if nodeName == "" {
+			continue
+		}
+
+		path := "/api/v1/nodes/" + url.PathEscape(nodeName) + "/proxy/stats/summary"
+		raw, err := restClient.Get().AbsPath(path).DoRaw(ctx)
+		if err != nil {
+			failed++
+			continue
+		}
+		succeeded++
+
+		parsed, parseErr := parsePodSummaryMetricsPayload(raw)
+		if parseErr != nil {
+			failed++
+			continue
+		}
+		for key, usage := range parsed {
+			existing := result[key]
+			if usage.NetworkRxBytes > existing.NetworkRxBytes {
+				existing.NetworkRxBytes = usage.NetworkRxBytes
+			}
+			if usage.NetworkTxBytes > existing.NetworkTxBytes {
+				existing.NetworkTxBytes = usage.NetworkTxBytes
+			}
+			if usage.EphemeralStorageUsedBytes > existing.EphemeralStorageUsedBytes {
+				existing.EphemeralStorageUsedBytes = usage.EphemeralStorageUsedBytes
+			}
+			if usage.EphemeralStorageCapacityBytes > existing.EphemeralStorageCapacityBytes {
+				existing.EphemeralStorageCapacityBytes = usage.EphemeralStorageCapacityBytes
+			}
+			result[key] = existing
+		}
+	}
+
+	if succeeded == 0 && failed > 0 {
+		return nil, fmt.Errorf("no node summary metrics endpoints available")
+	}
+	return result, nil
+}
+
+func parseNodeMetricsPayload(raw []byte) (map[string]agentsk8s.NodeUsage, error) {
+	var payload struct {
+		Items []struct {
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+			Usage map[string]string `json:"usage"`
+		} `json:"items"`
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]agentsk8s.NodeUsage, len(payload.Items))
+	for _, item := range payload.Items {
+		name := strings.TrimSpace(item.Metadata.Name)
+		if name == "" {
+			continue
+		}
+
+		cpuMilli := parseCPUMilli(item.Usage["cpu"])
+		memBytes := parseBytes(item.Usage["memory"])
+		if cpuMilli <= 0 && memBytes <= 0 {
+			continue
+		}
+
+		result[name] = agentsk8s.NodeUsage{
+			CPUMilliCores: cpuMilli,
+			MemoryBytes:   memBytes,
+		}
+	}
+	return result, nil
+}
+
+func parsePodMetricsPayload(raw []byte) (map[string]agentsk8s.PodUsage, error) {
+	var payload struct {
+		Items []struct {
+			Metadata struct {
+				Name      string `json:"name"`
+				Namespace string `json:"namespace"`
+			} `json:"metadata"`
+			Containers []struct {
+				Usage map[string]string `json:"usage"`
+			} `json:"containers"`
+		} `json:"items"`
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]agentsk8s.PodUsage, len(payload.Items))
+	for _, item := range payload.Items {
+		key := podUsageKey(item.Metadata.Namespace, item.Metadata.Name)
+		if key == "" {
+			continue
+		}
+
+		var cpuMilli int64
+		var memBytes int64
+		for _, container := range item.Containers {
+			cpuMilli += parseCPUMilli(container.Usage["cpu"])
+			memBytes += parseBytes(container.Usage["memory"])
+		}
+		if cpuMilli <= 0 && memBytes <= 0 {
+			continue
+		}
+		result[key] = agentsk8s.PodUsage{
+			CPUMilliCores: cpuMilli,
+			MemoryBytes:   memBytes,
+		}
+	}
+
+	return result, nil
+}
+
+func parsePodSummaryMetricsPayload(raw []byte) (map[string]podSummaryUsage, error) {
+	var payload struct {
+		Pods []struct {
+			PodRef struct {
+				Name      string `json:"name"`
+				Namespace string `json:"namespace"`
+			} `json:"podRef"`
+			Network struct {
+				RxBytes *uint64 `json:"rxBytes"`
+				TxBytes *uint64 `json:"txBytes"`
+			} `json:"network"`
+			EphemeralStorage struct {
+				UsedBytes     *uint64 `json:"usedBytes"`
+				CapacityBytes *uint64 `json:"capacityBytes"`
+			} `json:"ephemeral-storage"`
+			Volume []struct {
+				UsedBytes     *uint64 `json:"usedBytes"`
+				CapacityBytes *uint64 `json:"capacityBytes"`
+			} `json:"volume"`
+		} `json:"pods"`
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]podSummaryUsage, len(payload.Pods))
+	for _, pod := range payload.Pods {
+		key := podUsageKey(pod.PodRef.Namespace, pod.PodRef.Name)
+		if key == "" {
+			continue
+		}
+
+		usedBytes := int64FromUint64Ptr(pod.EphemeralStorage.UsedBytes)
+		capacityBytes := int64FromUint64Ptr(pod.EphemeralStorage.CapacityBytes)
+		if usedBytes <= 0 || capacityBytes <= 0 {
+			var volumeUsed int64
+			var volumeCapacity int64
+			for _, volume := range pod.Volume {
+				volumeUsed += int64FromUint64Ptr(volume.UsedBytes)
+				volumeCapacity += int64FromUint64Ptr(volume.CapacityBytes)
+			}
+			if usedBytes <= 0 && volumeUsed > 0 {
+				usedBytes = volumeUsed
+			}
+			if capacityBytes <= 0 && volumeCapacity > 0 {
+				capacityBytes = volumeCapacity
+			}
+		}
+
+		result[key] = podSummaryUsage{
+			NetworkRxBytes:                int64FromUint64Ptr(pod.Network.RxBytes),
+			NetworkTxBytes:                int64FromUint64Ptr(pod.Network.TxBytes),
+			EphemeralStorageUsedBytes:     usedBytes,
+			EphemeralStorageCapacityBytes: capacityBytes,
+		}
+	}
+
+	return result, nil
+}
+
+func mergePodSummaryUsage(podUsage map[string]agentsk8s.PodUsage, summary map[string]podSummaryUsage) {
+	if len(summary) == 0 {
+		return
+	}
+	for key, usage := range summary {
+		merged := podUsage[key]
+		if usage.NetworkRxBytes > 0 {
+			merged.NetworkRxBytes = usage.NetworkRxBytes
+		}
+		if usage.NetworkTxBytes > 0 {
+			merged.NetworkTxBytes = usage.NetworkTxBytes
+		}
+		if usage.EphemeralStorageUsedBytes > 0 {
+			merged.EphemeralStorageUsedBytes = usage.EphemeralStorageUsedBytes
+		}
+		if usage.EphemeralStorageCapacityBytes > 0 {
+			merged.EphemeralStorageCapacityBytes = usage.EphemeralStorageCapacityBytes
+		}
+		if hasPodUsage(merged) {
+			podUsage[key] = merged
+		}
+	}
+}
+
+func hasPodUsage(usage agentsk8s.PodUsage) bool {
+	return usage.CPUMilliCores > 0 ||
+		usage.MemoryBytes > 0 ||
+		usage.NetworkRxBytes > 0 ||
+		usage.NetworkTxBytes > 0 ||
+		usage.EphemeralStorageUsedBytes > 0 ||
+		usage.EphemeralStorageCapacityBytes > 0
+}
+
+func parseCPUMilli(value string) int64 {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	quantity, err := k8sresource.ParseQuantity(value)
+	if err != nil {
+		return 0
+	}
+	return quantity.MilliValue()
+}
+
+func int64FromUint64Ptr(value *uint64) int64 {
+	if value == nil {
+		return 0
+	}
+	const maxInt64 = ^uint64(0) >> 1
+	if *value > maxInt64 {
+		return int64(maxInt64)
+	}
+	return int64(*value)
+}
+
+func parseBytes(value string) int64 {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	quantity, err := k8sresource.ParseQuantity(value)
+	if err != nil {
+		return 0
+	}
+	return quantity.Value()
+}
+
+func podUsageKey(namespace, name string) string {
+	namespace = strings.TrimSpace(namespace)
+	name = strings.TrimSpace(name)
+	if namespace == "" || name == "" {
+		return ""
+	}
+	return namespace + "/" + name
+}
+
+func applyNodeUsage(nodes []agentsk8s.Node, usage map[string]agentsk8s.NodeUsage) {
+	if len(nodes) == 0 || len(usage) == 0 {
+		return
+	}
+	for i := range nodes {
+		if nodeUsage, ok := usage[strings.TrimSpace(nodes[i].Name)]; ok {
+			u := nodeUsage
+			nodes[i].Usage = &u
+		}
+	}
+}
+
+func applyPodUsage(pods []agentsk8s.Pod, usage map[string]agentsk8s.PodUsage) {
+	if len(pods) == 0 || len(usage) == 0 {
+		return
+	}
+	for i := range pods {
+		key := podUsageKey(pods[i].Namespace, pods[i].Name)
+		if key == "" {
+			continue
+		}
+		if podUsage, ok := usage[key]; ok {
+			u := podUsage
+			pods[i].Usage = &u
+		}
+	}
 }
 
 func (a *Agent) collectNodes(ctx context.Context) ([]agentsk8s.Node, error) {

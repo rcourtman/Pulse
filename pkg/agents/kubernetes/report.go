@@ -45,6 +45,7 @@ type Node struct {
 	Architecture            string        `json:"architecture,omitempty"`
 	Capacity                NodeResources `json:"capacity,omitempty"`
 	Allocatable             NodeResources `json:"allocatable,omitempty"`
+	Usage                   *NodeUsage    `json:"usage,omitempty"`
 	Roles                   []string      `json:"roles,omitempty"`
 }
 
@@ -69,10 +70,25 @@ type Pod struct {
 	Restarts  int               `json:"restarts,omitempty"`
 	Labels    map[string]string `json:"labels,omitempty"`
 
-	OwnerKind string `json:"ownerKind,omitempty"`
-	OwnerName string `json:"ownerName,omitempty"`
+	OwnerKind string    `json:"ownerKind,omitempty"`
+	OwnerName string    `json:"ownerName,omitempty"`
+	Usage     *PodUsage `json:"usage,omitempty"`
 
 	Containers []PodContainer `json:"containers,omitempty"`
+}
+
+type NodeUsage struct {
+	CPUMilliCores int64 `json:"cpuMilliCores,omitempty"`
+	MemoryBytes   int64 `json:"memoryBytes,omitempty"`
+}
+
+type PodUsage struct {
+	CPUMilliCores                 int64 `json:"cpuMilliCores,omitempty"`
+	MemoryBytes                   int64 `json:"memoryBytes,omitempty"`
+	NetworkRxBytes                int64 `json:"networkRxBytes,omitempty"`
+	NetworkTxBytes                int64 `json:"networkTxBytes,omitempty"`
+	EphemeralStorageUsedBytes     int64 `json:"ephemeralStorageUsedBytes,omitempty"`
+	EphemeralStorageCapacityBytes int64 `json:"ephemeralStorageCapacityBytes,omitempty"`
 }
 
 type PodContainer struct {

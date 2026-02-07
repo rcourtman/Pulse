@@ -109,6 +109,12 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 
 	nodes := make([]models.KubernetesNode, 0, len(report.Nodes))
 	for _, n := range report.Nodes {
+		var usageCPUMilli int64
+		var usageMemoryBytes int64
+		if n.Usage != nil {
+			usageCPUMilli = n.Usage.CPUMilliCores
+			usageMemoryBytes = n.Usage.MemoryBytes
+		}
 		roles := append([]string(nil), n.Roles...)
 		nodes = append(nodes, models.KubernetesNode{
 			UID:                     strings.TrimSpace(n.UID),
@@ -126,12 +132,38 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 			AllocCPU:                n.Allocatable.CPUCores,
 			AllocMemoryBytes:        n.Allocatable.MemoryBytes,
 			AllocPods:               n.Allocatable.Pods,
+			UsageCPUMilliCores:      usageCPUMilli,
+			UsageMemoryBytes:        usageMemoryBytes,
+			UsageCPUPercent:         kubernetesCPUUsagePercent(usageCPUMilli, n.Allocatable.CPUCores, n.Capacity.CPUCores),
+			UsageMemoryPercent:      kubernetesMemoryUsagePercent(usageMemoryBytes, n.Allocatable.MemoryBytes, n.Capacity.MemoryBytes),
 			Roles:                   roles,
 		})
 	}
 
+	nodeByName := make(map[string]models.KubernetesNode, len(nodes))
+	for _, node := range nodes {
+		nodeName := strings.TrimSpace(node.Name)
+		if nodeName != "" {
+			nodeByName[nodeName] = node
+		}
+	}
+
 	pods := make([]models.KubernetesPod, 0, len(report.Pods))
 	for _, p := range report.Pods {
+		var usageCPUMilli int
+		var usageMemoryBytes int64
+		var networkRxBytes int64
+		var networkTxBytes int64
+		var ephemeralStorageUsedBytes int64
+		var ephemeralStorageCapacityBytes int64
+		if p.Usage != nil {
+			usageCPUMilli = int(p.Usage.CPUMilliCores)
+			usageMemoryBytes = p.Usage.MemoryBytes
+			networkRxBytes = p.Usage.NetworkRxBytes
+			networkTxBytes = p.Usage.NetworkTxBytes
+			ephemeralStorageUsedBytes = p.Usage.EphemeralStorageUsedBytes
+			ephemeralStorageCapacityBytes = p.Usage.EphemeralStorageCapacityBytes
+		}
 		labels := make(map[string]string, len(p.Labels))
 		for k, v := range p.Labels {
 			labels[k] = v
@@ -149,22 +181,57 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 			})
 		}
 		pods = append(pods, models.KubernetesPod{
-			UID:        strings.TrimSpace(p.UID),
-			Name:       strings.TrimSpace(p.Name),
-			Namespace:  strings.TrimSpace(p.Namespace),
-			NodeName:   strings.TrimSpace(p.NodeName),
-			Phase:      strings.TrimSpace(p.Phase),
-			Reason:     strings.TrimSpace(p.Reason),
-			Message:    strings.TrimSpace(p.Message),
-			QoSClass:   strings.TrimSpace(p.QoSClass),
-			CreatedAt:  p.CreatedAt,
-			StartTime:  p.StartTime,
-			Restarts:   p.Restarts,
-			Labels:     labels,
-			OwnerKind:  strings.TrimSpace(p.OwnerKind),
-			OwnerName:  strings.TrimSpace(p.OwnerName),
-			Containers: containers,
+			UID:                           strings.TrimSpace(p.UID),
+			Name:                          strings.TrimSpace(p.Name),
+			Namespace:                     strings.TrimSpace(p.Namespace),
+			NodeName:                      strings.TrimSpace(p.NodeName),
+			Phase:                         strings.TrimSpace(p.Phase),
+			Reason:                        strings.TrimSpace(p.Reason),
+			Message:                       strings.TrimSpace(p.Message),
+			QoSClass:                      strings.TrimSpace(p.QoSClass),
+			CreatedAt:                     p.CreatedAt,
+			StartTime:                     p.StartTime,
+			Restarts:                      p.Restarts,
+			UsageCPUMilliCores:            usageCPUMilli,
+			UsageMemoryBytes:              usageMemoryBytes,
+			UsageCPUPercent:               kubernetesCPUUsagePercent(int64(usageCPUMilli), nodeAllocCPU(nodeByName, p.NodeName), nodeCapacityCPU(nodeByName, p.NodeName)),
+			UsageMemoryPercent:            kubernetesMemoryUsagePercent(usageMemoryBytes, nodeAllocMemory(nodeByName, p.NodeName), nodeCapacityMemory(nodeByName, p.NodeName)),
+			NetworkRxBytes:                networkRxBytes,
+			NetworkTxBytes:                networkTxBytes,
+			EphemeralStorageUsedBytes:     ephemeralStorageUsedBytes,
+			EphemeralStorageCapacityBytes: ephemeralStorageCapacityBytes,
+			DiskUsagePercent:              kubernetesDiskUsagePercent(ephemeralStorageUsedBytes, ephemeralStorageCapacityBytes),
+			Labels:                        labels,
+			OwnerKind:                     strings.TrimSpace(p.OwnerKind),
+			OwnerName:                     strings.TrimSpace(p.OwnerName),
+			Containers:                    containers,
 		})
+	}
+
+	clusterKey := models.KubernetesCluster{
+		ID:          identifier,
+		Name:        name,
+		DisplayName: displayName,
+	}
+	if m.rateTracker != nil {
+		for i := range pods {
+			metricID := kubernetesPodMetricID(clusterKey, pods[i])
+			if metricID == "" {
+				continue
+			}
+			currentMetrics := IOMetrics{
+				NetworkIn:  pods[i].NetworkRxBytes,
+				NetworkOut: pods[i].NetworkTxBytes,
+				Timestamp:  timestamp,
+			}
+			_, _, netInRate, netOutRate := m.rateTracker.CalculateRates(metricID, currentMetrics)
+			if netInRate > 0 {
+				pods[i].NetInRate = netInRate
+			}
+			if netOutRate > 0 {
+				pods[i].NetOutRate = netOutRate
+			}
+		}
 	}
 
 	deployments := make([]models.KubernetesDeployment, 0, len(report.Deployments))
@@ -213,8 +280,148 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 
 	m.state.UpsertKubernetesCluster(cluster)
 	m.state.SetConnectionHealth(kubernetesConnectionPrefix+identifier, true)
+	m.recordKubernetesPodMetrics(cluster, timestamp)
 
 	return cluster, nil
+}
+
+func kubernetesCPUUsagePercent(usageMilli, allocCPU, capacityCPU int64) float64 {
+	denom := allocCPU
+	if denom <= 0 {
+		denom = capacityCPU
+	}
+	if usageMilli <= 0 || denom <= 0 {
+		return 0
+	}
+	percent := (float64(usageMilli) / float64(denom*1000)) * 100
+	if percent < 0 {
+		return 0
+	}
+	if percent > 100 {
+		return 100
+	}
+	return percent
+}
+
+func kubernetesMemoryUsagePercent(usageBytes, allocMemoryBytes, capacityMemoryBytes int64) float64 {
+	denom := allocMemoryBytes
+	if denom <= 0 {
+		denom = capacityMemoryBytes
+	}
+	if usageBytes <= 0 || denom <= 0 {
+		return 0
+	}
+	percent := (float64(usageBytes) / float64(denom)) * 100
+	if percent < 0 {
+		return 0
+	}
+	if percent > 100 {
+		return 100
+	}
+	return percent
+}
+
+func kubernetesDiskUsagePercent(usedBytes, capacityBytes int64) float64 {
+	if usedBytes <= 0 || capacityBytes <= 0 {
+		return 0
+	}
+	percent := (float64(usedBytes) / float64(capacityBytes)) * 100
+	if percent < 0 {
+		return 0
+	}
+	if percent > 100 {
+		return 100
+	}
+	return percent
+}
+
+func nodeAllocCPU(nodes map[string]models.KubernetesNode, nodeName string) int64 {
+	if node, ok := nodes[strings.TrimSpace(nodeName)]; ok {
+		return node.AllocCPU
+	}
+	return 0
+}
+
+func nodeCapacityCPU(nodes map[string]models.KubernetesNode, nodeName string) int64 {
+	if node, ok := nodes[strings.TrimSpace(nodeName)]; ok {
+		return node.CapacityCPU
+	}
+	return 0
+}
+
+func nodeAllocMemory(nodes map[string]models.KubernetesNode, nodeName string) int64 {
+	if node, ok := nodes[strings.TrimSpace(nodeName)]; ok {
+		return node.AllocMemoryBytes
+	}
+	return 0
+}
+
+func nodeCapacityMemory(nodes map[string]models.KubernetesNode, nodeName string) int64 {
+	if node, ok := nodes[strings.TrimSpace(nodeName)]; ok {
+		return node.CapacityMemoryBytes
+	}
+	return 0
+}
+
+func (m *Monitor) recordKubernetesPodMetrics(cluster models.KubernetesCluster, timestamp time.Time) {
+	if m == nil {
+		return
+	}
+	if m.metricsHistory == nil && m.metricsStore == nil {
+		return
+	}
+
+	if timestamp.IsZero() {
+		timestamp = time.Now().UTC()
+	}
+
+	for _, pod := range cluster.Pods {
+		metricID := kubernetesPodMetricID(cluster, pod)
+		if metricID == "" {
+			continue
+		}
+
+		if pod.UsageCPUPercent > 0 {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricID, "cpu", pod.UsageCPUPercent, timestamp)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("k8s", metricID, "cpu", pod.UsageCPUPercent, timestamp)
+			}
+		}
+		if pod.UsageMemoryPercent > 0 {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricID, "memory", pod.UsageMemoryPercent, timestamp)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("k8s", metricID, "memory", pod.UsageMemoryPercent, timestamp)
+			}
+		}
+		if pod.DiskUsagePercent > 0 {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricID, "disk", pod.DiskUsagePercent, timestamp)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("k8s", metricID, "disk", pod.DiskUsagePercent, timestamp)
+			}
+		}
+		if pod.NetInRate > 0 {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricID, "netin", pod.NetInRate, timestamp)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("k8s", metricID, "netin", pod.NetInRate, timestamp)
+			}
+		}
+		if pod.NetOutRate > 0 {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricID, "netout", pod.NetOutRate, timestamp)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("k8s", metricID, "netout", pod.NetOutRate, timestamp)
+			}
+		}
+	}
 }
 
 // RemoveKubernetesCluster removes a kubernetes cluster from the shared state and clears related data.

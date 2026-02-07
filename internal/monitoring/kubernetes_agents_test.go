@@ -86,6 +86,91 @@ func TestApplyKubernetesReport(t *testing.T) {
 	}
 }
 
+func TestApplyKubernetesReport_PodNetworkAndEphemeralMetrics(t *testing.T) {
+	monitor := newKubernetesTestMonitor()
+	monitor.rateTracker = NewRateTracker()
+	monitor.metricsHistory = NewMetricsHistory(10, time.Hour)
+
+	baseTime := time.Now().Add(-20 * time.Second).UTC()
+	report := agentsk8s.Report{
+		Agent:   agentsk8s.AgentInfo{ID: "agent-1", IntervalSeconds: 10},
+		Cluster: agentsk8s.ClusterInfo{ID: "cluster-1", Name: "cluster"},
+		Nodes: []agentsk8s.Node{
+			{
+				Name: "node-a",
+				Capacity: agentsk8s.NodeResources{
+					CPUCores:    4,
+					MemoryBytes: 16 * 1024 * 1024 * 1024,
+				},
+				Allocatable: agentsk8s.NodeResources{
+					CPUCores:    4,
+					MemoryBytes: 16 * 1024 * 1024 * 1024,
+				},
+			},
+		},
+		Pods: []agentsk8s.Pod{
+			{
+				UID:       "pod-1",
+				Name:      "api-0",
+				Namespace: "default",
+				NodeName:  "node-a",
+				Phase:     "Running",
+				Usage: &agentsk8s.PodUsage{
+					CPUMilliCores:                 400,
+					MemoryBytes:                   1024 * 1024 * 1024,
+					NetworkRxBytes:                1000,
+					NetworkTxBytes:                2000,
+					EphemeralStorageUsedBytes:     500 * 1024 * 1024,
+					EphemeralStorageCapacityBytes: 2 * 1024 * 1024 * 1024,
+				},
+			},
+		},
+		Timestamp: baseTime,
+	}
+
+	firstCluster, err := monitor.ApplyKubernetesReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyKubernetesReport(first): %v", err)
+	}
+	if len(firstCluster.Pods) != 1 {
+		t.Fatalf("expected one pod, got %d", len(firstCluster.Pods))
+	}
+
+	firstPod := firstCluster.Pods[0]
+	if firstPod.DiskUsagePercent <= 0 {
+		t.Fatalf("expected non-zero disk usage percent from ephemeral storage, got %f", firstPod.DiskUsagePercent)
+	}
+	if firstPod.NetInRate != 0 || firstPod.NetOutRate != 0 {
+		t.Fatalf("expected first sample network rates to be zero, got in=%f out=%f", firstPod.NetInRate, firstPod.NetOutRate)
+	}
+
+	report.Timestamp = baseTime.Add(10 * time.Second)
+	report.Pods[0].Usage.NetworkRxBytes = 61000
+	report.Pods[0].Usage.NetworkTxBytes = 42000
+
+	secondCluster, err := monitor.ApplyKubernetesReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyKubernetesReport(second): %v", err)
+	}
+	secondPod := secondCluster.Pods[0]
+	if secondPod.NetInRate <= 0 || secondPod.NetOutRate <= 0 {
+		t.Fatalf("expected positive network rates, got in=%f out=%f", secondPod.NetInRate, secondPod.NetOutRate)
+	}
+
+	metricID := kubernetesPodMetricID(secondCluster, secondPod)
+	if metricID == "" {
+		t.Fatal("expected kubernetes pod metric id")
+	}
+	netInPoints := monitor.metricsHistory.GetGuestMetrics(metricID, "netin", time.Hour)
+	if len(netInPoints) == 0 {
+		t.Fatal("expected netin points to be recorded")
+	}
+	diskPoints := monitor.metricsHistory.GetGuestMetrics(metricID, "disk", time.Hour)
+	if len(diskPoints) == 0 {
+		t.Fatal("expected disk points to be recorded")
+	}
+}
+
 func TestRemoveAndReenrollKubernetesCluster(t *testing.T) {
 	monitor := newKubernetesTestMonitor()
 	monitor.kubernetesTokenBindings["token-1"] = "agent-1"
