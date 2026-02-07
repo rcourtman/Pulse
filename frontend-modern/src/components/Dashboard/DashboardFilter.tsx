@@ -1,7 +1,6 @@
-import { Component, Show } from 'solid-js';
+import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
-import { SearchInput } from '@/components/shared/SearchInput';
-import { MetricsViewToggle } from '@/components/shared/MetricsViewToggle';
+import { CollapsibleSearchInput } from '@/components/shared/CollapsibleSearchInput';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
@@ -25,108 +24,97 @@ interface DashboardFilterProps {
   isColumnHidden?: (id: string) => boolean;
   onColumnToggle?: (id: string) => void;
   onColumnReset?: () => void;
+  hostFilter?: {
+    id?: string;
+    label?: string;
+    value: string;
+    options: { value: string; label: string }[];
+    onChange: (value: string) => void;
+  };
 }
 
 export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
   return (
     <Card class="dashboard-filter mb-3" padding="sm">
-      <div class="flex flex-col gap-3">
-        {/* Row 1: Search Bar */}
-        <SearchInput
-          value={props.search}
-          onChange={props.setSearch}
-          placeholder="Search or filter..."
-          inputRef={props.searchInputRef}
-          autoFocus
-          onBeforeAutoFocus={props.onBeforeAutoFocus}
-          history={{ storageKey: STORAGE_KEYS.DASHBOARD_SEARCH_HISTORY }}
-          tips={{
-            popoverId: 'dashboard-search-help',
-            intro: 'Combine filters to narrow results',
-            tips: [
-              { code: 'media', description: 'Guests with "media" in the name' },
-              { code: 'cpu>80', description: 'Highlight guests using more than 80% CPU' },
-              { code: 'memory<20', description: 'Find guests under 20% memory usage' },
-              { code: 'tags:prod', description: 'Filter by tag' },
-              { code: 'node:pve1', description: 'Show guests on a specific node' },
-            ],
-            footerHighlight: 'node:pve1 cpu>60',
-            footerText: 'Stack filters to get laser-focused results.',
-          }}
-        />
+      <div class="flex flex-wrap items-center gap-2">
+        <Show when={props.hostFilter}>
+          {(hostFilter) => (
+            <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+              <label
+                for={hostFilter().id ?? 'dashboard-host-filter'}
+                class="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300"
+              >
+                {hostFilter().label ?? 'Host'}
+              </label>
+              <select
+                id={hostFilter().id ?? 'dashboard-host-filter'}
+                value={hostFilter().value}
+                onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
+                class="min-w-[9rem] rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              >
+                <For each={hostFilter().options}>
+                  {(option) => (
+                    <option value={option.value}>{option.label}</option>
+                  )}
+                </For>
+              </select>
+            </div>
+          )}
+        </Show>
 
-        {/* Row 2: All filters on one line */}
-        <div class="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-2">
-          {/* Type Filter */}
-          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-            <button
-              type="button"
-              onClick={() => props.setViewMode('all')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'all'
-                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setViewMode(props.viewMode() === 'vm' ? 'all' : 'vm')}
-              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'vm'
-                ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-blue-200 dark:ring-blue-800'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                }`}
-            >
-              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="3" width="20" height="14" rx="2" />
-                <path d="M8 21h8M12 17v4" />
-              </svg>
-              VMs
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setViewMode(props.viewMode() === 'lxc' ? 'all' : 'lxc')}
-              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'lxc'
-                ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm ring-1 ring-green-200 dark:ring-green-800'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                }`}
-            >
-              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-              </svg>
-              LXCs
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setViewMode(props.viewMode() === 'docker' ? 'all' : 'docker')}
-              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'docker'
-                ? 'bg-white dark:bg-gray-800 text-sky-600 dark:text-sky-400 shadow-sm ring-1 ring-sky-200 dark:ring-sky-800'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                }`}
-            >
-              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="6" width="18" height="12" rx="2" />
-                <path d="M3 10h18M7 6v12M13 6v12" />
-              </svg>
-              Docker
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setViewMode(props.viewMode() === 'k8s' ? 'all' : 'k8s')}
-              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'k8s'
-                ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-200 dark:ring-amber-800'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                }`}
-            >
-              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2l7 4v8l-7 4-7-4V6l7-4z" />
-                <path d="M12 6v12" />
-              </svg>
-              K8s
-            </button>
-          </div>
-
-          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+        {/* Type Filter */}
+        <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+          <button
+            type="button"
+            onClick={() => props.setViewMode('all')}
+            class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'all'
+              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+              }`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => props.setViewMode(props.viewMode() === 'vm' ? 'all' : 'vm')}
+            class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'vm'
+              ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-blue-200 dark:ring-blue-800'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+              }`}
+          >
+            VMs
+          </button>
+          <button
+            type="button"
+            onClick={() => props.setViewMode(props.viewMode() === 'lxc' ? 'all' : 'lxc')}
+            class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'lxc'
+              ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm ring-1 ring-green-200 dark:ring-green-800'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+              }`}
+          >
+            LXCs
+          </button>
+          <button
+            type="button"
+            onClick={() => props.setViewMode(props.viewMode() === 'docker' ? 'all' : 'docker')}
+            class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'docker'
+              ? 'bg-white dark:bg-gray-800 text-sky-600 dark:text-sky-400 shadow-sm ring-1 ring-sky-200 dark:ring-sky-800'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+              }`}
+          >
+            Docker
+          </button>
+          <button
+            type="button"
+            onClick={() => props.setViewMode(props.viewMode() === 'k8s' ? 'all' : 'k8s')}
+            class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.viewMode() === 'k8s'
+              ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-200 dark:ring-amber-800'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+              }`}
+          >
+            K8s
+          </button>
+        </div>
 
           {/* Status Filter */}
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
@@ -175,8 +163,6 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </button>
           </div>
 
-          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-
           {/* Grouping Mode Toggle */}
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
             <button
@@ -188,9 +174,6 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                 }`}
               title="Group by node"
             >
-              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
-              </svg>
               Grouped
             </button>
             <button
@@ -202,24 +185,9 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                 }`}
               title="Flat list view"
             >
-              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="8" y1="6" x2="21" y2="6" />
-                <line x1="8" y1="12" x2="21" y2="12" />
-                <line x1="8" y1="18" x2="21" y2="18" />
-                <line x1="3" y1="6" x2="3.01" y2="6" />
-                <line x1="3" y1="12" x2="3.01" y2="12" />
-                <line x1="3" y1="18" x2="3.01" y2="18" />
-              </svg>
               List
             </button>
           </div>
-
-          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-
-          {/* Metrics View Toggle */}
-          <MetricsViewToggle />
-
-          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
           {/* Column Picker */}
           <Show when={props.availableColumns && props.isColumnHidden && props.onColumnToggle}>
@@ -231,18 +199,39 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             />
           </Show>
 
-          <Show when={props.availableColumns}>
-            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-          </Show>
+          <CollapsibleSearchInput
+            value={props.search}
+            onChange={props.setSearch}
+            placeholder="Search or filter..."
+            triggerLabel="Search"
+            class="w-56 shrink-0 sm:w-64"
+            fullWidthWhenExpanded
+            inputRef={props.searchInputRef}
+            onBeforeAutoFocus={props.onBeforeAutoFocus}
+            history={{ storageKey: STORAGE_KEYS.DASHBOARD_SEARCH_HISTORY }}
+            tips={{
+              popoverId: 'dashboard-search-help',
+              intro: 'Combine filters to narrow results',
+              tips: [
+                { code: 'media', description: 'Guests with "media" in the name' },
+                { code: 'cpu>80', description: 'Highlight guests using more than 80% CPU' },
+                { code: 'memory<20', description: 'Find guests under 20% memory usage' },
+                { code: 'tags:prod', description: 'Filter by tag' },
+                { code: 'node:pve1', description: 'Show guests on a specific node' },
+              ],
+              footerHighlight: 'node:pve1 cpu>60',
+              footerText: 'Stack filters to get laser-focused results.',
+            }}
+          />
 
           {/* Reset Button - Only show when filters are active */}
           <Show when={
             props.search().trim() !== '' ||
             props.viewMode() !== 'all' ||
             props.statusMode() !== 'all' ||
-            props.groupingMode() !== 'grouped'
+            props.groupingMode() !== 'grouped' ||
+            (props.hostFilter ? props.hostFilter.value !== '' : false)
           }>
-            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
             <button
               onClick={() => {
                 props.setSearch('');
@@ -251,6 +240,9 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                 props.setViewMode('all');
                 props.setStatusMode('all');
                 props.setGroupingMode('grouped');
+                if (props.hostFilter) {
+                  props.hostFilter.onChange('');
+                }
               }}
               title="Reset all filters"
               class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 active:scale-95
@@ -272,7 +264,6 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               Reset
             </button>
           </Show>
-        </div>
       </div>
     </Card>
   );

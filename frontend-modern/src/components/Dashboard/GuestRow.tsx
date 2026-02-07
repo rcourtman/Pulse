@@ -12,12 +12,11 @@ import { StackedMemoryBar } from './StackedMemoryBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { buildMetricKey } from '@/utils/metricsKeys';
-import { getWorkloadMetricsKind, resolveWorkloadType } from '@/utils/workloads';
+import { getCanonicalWorkloadId, getWorkloadMetricsKind, resolveWorkloadType } from '@/utils/workloads';
+import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
-import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { useMetricsViewMode } from '@/stores/metricsViewMode';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useAnomalyForMetric } from '@/hooks/useAnomalies';
@@ -84,12 +83,9 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
 
 const GROUPED_FIRST_CELL_INDENT = 'pl-5 sm:pl-6 lg:pl-8';
 const DEFAULT_FIRST_CELL_INDENT = 'pl-4';
-const INFRASTRUCTURE_ROUTE = '/infrastructure';
 
 const buildGuestId = (guest: Guest) => {
-  if (guest.id) return guest.id;
-  // Canonical format: instance:node:vmid
-  return `${guest.instance}:${guest.node}:${guest.vmid}`;
+  return getCanonicalWorkloadId(guest);
 };
 
 // Type guard for VM vs Container
@@ -491,17 +487,17 @@ interface GuestRowProps {
   isExpanded?: boolean;
   /** Optional cross-row I/O emphasis stats for relative highlighting */
   ioEmphasis?: WorkloadIOEmphasis;
+  /** Called when this row is hovered/unhovered */
+  onHoverChange?: (guestId: string | null) => void;
 }
 
 export function GuestRow(props: GuestRowProps) {
   const navigate = useNavigate();
   const guestId = createMemo(() => buildGuestId(props.guest));
+  const infrastructureHref = createMemo(() => buildInfrastructureHrefForWorkload(props.guest));
 
   // Use breakpoint hook directly for responsive behavior
   const { isMobile } = useBreakpoint();
-
-  // Get current metrics view mode (bars vs sparklines)
-  const { viewMode } = useMetricsViewMode();
 
   // PERFORMANCE: Use memoized Set for O(1) column visibility lookups instead of O(n) array.includes()
   const visibleColumnIdSet = createMemo(() =>
@@ -518,13 +514,13 @@ export function GuestRow(props: GuestRowProps) {
 
   const workloadType = createMemo(() => resolveWorkloadType(props.guest));
 
-  // Create namespaced metrics key for sparklines
+  // Create a stable key for per-resource metric correlation.
   const metricsKey = createMemo(() => buildMetricKey(getWorkloadMetricsKind(props.guest), guestId()));
 
   // Get anomalies for this guest's metrics (deterministic, no LLM)
-  const cpuAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'cpu');
-  const memoryAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'memory');
-  const diskAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'disk');
+  const cpuAnomaly = useAnomalyForMetric(guestId, () => 'cpu');
+  const memoryAnomaly = useAnomalyForMetric(guestId, () => 'memory');
+  const diskAnomaly = useAnomalyForMetric(guestId, () => 'disk');
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
 
@@ -643,16 +639,6 @@ export function GuestRow(props: GuestRowProps) {
     getOutlierEmphasis(networkTotal(), ioEmphasis().network),
   );
 
-  const memPercent = createMemo(() => {
-    if (!props.guest.memory) return 0;
-    return props.guest.memory.usage || 0;
-  });
-  const memoryUsageLabel = createMemo(() => {
-    if (!props.guest.memory) return undefined;
-    const used = props.guest.memory.used ?? 0;
-    const total = props.guest.memory.total ?? 0;
-    return `${formatBytes(used)}/${formatBytes(total)}`;
-  });
   const memoryExtraLines = createMemo(() => {
     if (!props.guest.memory) return undefined;
     const lines: string[] = [];
@@ -671,6 +657,14 @@ export function GuestRow(props: GuestRowProps) {
     return lines.length > 0 ? lines : undefined;
   });
   const memoryTooltip = createMemo(() => memoryExtraLines()?.join('\n') ?? undefined);
+  const memoryPercentOnly = createMemo(() => {
+    const memory = props.guest.memory;
+    if (!memory) return undefined;
+    if ((memory.total ?? 0) > 0) return undefined;
+    const usage = memory.usage ?? 0;
+    if (!Number.isFinite(usage) || usage <= 0) return undefined;
+    return Math.max(0, Math.min(usage, 100));
+  });
 
 
 
@@ -774,6 +768,8 @@ export function GuestRow(props: GuestRowProps) {
         style={rowStyle()}
         data-guest-id={guestId()}
         onClick={props.onClick}
+        onMouseEnter={() => props.onHoverChange?.(guestId())}
+        onMouseLeave={() => props.onHoverChange?.(null)}
       >
         {/* Name - always visible */}
         <td
@@ -874,29 +870,16 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('memory')}>
           <td class="px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
             <div title={memoryTooltip() ?? undefined}>
-              <Show
-                when={viewMode() === 'sparklines'}
-                fallback={
-                  <StackedMemoryBar
-                    used={props.guest.memory?.used || 0}
-                    total={props.guest.memory?.total || 0}
-                    balloon={props.guest.memory?.balloon || 0}
-                    swapUsed={props.guest.memory?.swapUsed || 0}
-                    swapTotal={props.guest.memory?.swapTotal || 0}
-                    resourceId={metricsKey()}
-                    anomaly={memoryAnomaly()}
-                  />
-                }
-              >
-                <ResponsiveMetricCell
-                  value={memPercent()}
-                  type="memory"
-                  resourceId={metricsKey()}
-                  sublabel={memoryUsageLabel()}
-                  isRunning={isRunning()}
-                  showMobile={false}
-                />
-              </Show>
+              <StackedMemoryBar
+                used={props.guest.memory?.used || 0}
+                total={props.guest.memory?.total || 0}
+                percentOnly={memoryPercentOnly()}
+                balloon={props.guest.memory?.balloon || 0}
+                swapUsed={props.guest.memory?.swapUsed || 0}
+                swapTotal={props.guest.memory?.swapTotal || 0}
+                resourceId={metricsKey()}
+                anomaly={memoryAnomaly()}
+              />
             </div>
           </td>
         </Show>
@@ -914,24 +897,11 @@ export function GuestRow(props: GuestRowProps) {
                 </div>
               }
             >
-              <Show
-                when={viewMode() === 'sparklines'}
-                fallback={
-                  <StackedDiskBar
-                    disks={props.guest.disks}
-                    aggregateDisk={props.guest.disk}
-                    anomaly={diskAnomaly()}
-                  />
-                }
-              >
-                <ResponsiveMetricCell
-                  value={diskPercent()}
-                  type="disk"
-                  resourceId={metricsKey()}
-                  isRunning={isRunning()}
-                  showMobile={false}
-                />
-              </Show>
+              <StackedDiskBar
+                disks={props.guest.disks}
+                aggregateDisk={props.guest.disk}
+                anomaly={diskAnomaly()}
+              />
             </Show>
           </td>
         </Show>
@@ -973,10 +943,10 @@ export function GuestRow(props: GuestRowProps) {
                 <button
                   type="button"
                   class="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[80px]"
-                  title={`${props.guest.node} (Open Infrastructure)`}
+                  title={`${props.guest.node} (Open related infrastructure)`}
                   onClick={(event) => {
                     event.stopPropagation();
-                    navigate(INFRASTRUCTURE_ROUTE);
+                    navigate(infrastructureHref());
                   }}
                 >
                   {props.guest.node}
@@ -1155,7 +1125,24 @@ export function GuestRow(props: GuestRowProps) {
         {/* Link Column - at the end like NodeSummaryTable */}
         <Show when={isColVisible('link')}>
           <td class="px-0 py-1 align-middle text-center">
-            <Show when={customUrl() && customUrl() !== ''} fallback={<span class="text-xs text-gray-300 dark:text-gray-700">-</span>}>
+            <Show
+              when={customUrl() && customUrl() !== ''}
+              fallback={
+                <button
+                  type="button"
+                  class="inline-flex justify-center items-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                  title="Open related infrastructure"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    navigate(infrastructureHref());
+                  }}
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+                  </svg>
+                </button>
+              }
+            >
               <a
                 href={customUrl()}
                 target="_blank"

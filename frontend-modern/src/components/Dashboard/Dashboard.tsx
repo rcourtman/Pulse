@@ -11,13 +11,13 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
-import { buildMetricKey } from '@/utils/metricsKeys';
 import { DashboardFilter } from './DashboardFilter';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
+import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
 import { isNodeOnline, OFFLINE_HEALTH_STATUSES, DEGRADED_HEALTH_STATUSES } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
@@ -28,7 +28,22 @@ import { useV2Workloads } from '@/hooks/useV2Workloads';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { aiChatStore } from '@/stores/aiChat';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
-import { getWorkloadMetricsKind, resolveWorkloadType } from '@/utils/workloads';
+import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
+import {
+  WorkloadsSummary,
+  type WorkloadSummarySnapshot,
+} from '@/components/Workloads/WorkloadsSummary';
+import {
+  dismissMigrationNotice,
+  isMigrationNoticeDismissed,
+  resolveMigrationNotice,
+} from '@/routing/migrationNotices';
+import {
+  buildWorkloadsPath,
+  parseWorkloadsLinkSearch,
+  WORKLOADS_PATH,
+  WORKLOADS_QUERY_PARAMS,
+} from '@/routing/resourceLinks';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -95,6 +110,29 @@ const computeWorkloadIOEmphasis = (guests: WorkloadGuest[]): WorkloadIOEmphasis 
     network: buildIODistribution(networkValues),
     diskIO: buildIODistribution(diskIOValues),
   };
+};
+
+const workloadMetricPercent = (value: number | null | undefined): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  if (value <= 1) return Math.max(0, value * 100);
+  return Math.max(0, value);
+};
+
+const workloadSummaryGuestId = (guest: WorkloadGuest): string =>
+  getCanonicalWorkloadId(guest);
+
+const workloadNodeScopeId = (guest: WorkloadGuest): string =>
+  `${(guest.instance || '').trim()}-${(guest.node || '').trim()}`;
+
+const getKubernetesContextKey = (guest: WorkloadGuest): string => {
+  const candidates = [guest.contextLabel, guest.instance, guest.node, guest.namespace];
+  for (const value of candidates) {
+    const trimmed = (value || '').trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return '';
 };
 
 const readGuestMetadataCache = (): GuestMetadataRecord => {
@@ -258,6 +296,7 @@ interface DashboardProps {
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
 type WorkloadSortKey = keyof WorkloadGuest | 'diskIo' | 'netIo';
+const WORKLOADS_SUMMARY_RANGE = '1h' as const;
 export function Dashboard(props: DashboardProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -266,7 +305,7 @@ export function Dashboard(props: DashboardProps) {
   const { isMobile } = useBreakpoint();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
-  const isWorkloadsRoute = () => location.pathname === '/workloads';
+  const isWorkloadsRoute = () => location.pathname === WORKLOADS_PATH;
 
   // Kiosk mode - hide filter panel for clean dashboard display
   // Usage: Add ?kiosk=1 to URL or use the toggle button in the header
@@ -284,21 +323,45 @@ export function Dashboard(props: DashboardProps) {
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
+  const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(null);
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
+  const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [handledTypeParam, setHandledTypeParam] = createSignal<string | null>(null);
+  const [handledContextParam, setHandledContextParam] = createSignal('');
+  const [handledHostParam, setHandledHostParam] = createSignal('');
+  const [selectedHostHint, setSelectedHostHint] = createSignal<string | null>(null);
+  const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
+
+  const migrationNotice = createMemo(() => {
+    const notice = resolveMigrationNotice(location.search);
+    if (!notice || notice.target !== 'workloads') return null;
+    return notice;
+  });
 
   createEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const resourceId = params.get('resource');
+    const notice = migrationNotice();
+    if (!notice) {
+      setHideMigrationNotice(true);
+      return;
+    }
+    setHideMigrationNotice(isMigrationNoticeDismissed(notice.id));
+  });
+
+  const handleDismissMigrationNotice = () => {
+    const notice = migrationNotice();
+    if (!notice) return;
+    dismissMigrationNotice(notice.id);
+    setHideMigrationNotice(true);
+  };
+
+  createEffect(() => {
+    const { resource: resourceId } = parseWorkloadsLinkSearch(location.search);
     if (!resourceId || resourceId === handledResourceId()) return;
     setSelectedGuestId(resourceId);
     const [instance, node, vmid] = resourceId.split(':');
     if (instance && node && vmid) {
-      const knownNode = props.nodes.find((item) => item.id === instance || item.name === node);
-      if (knownNode) {
-        setSelectedNode(knownNode.id);
-      }
+      setSelectedNode(`${instance}-${node}`);
     }
     setHandledResourceId(resourceId);
   });
@@ -344,27 +407,82 @@ export function Dashboard(props: DashboardProps) {
 
   const v2Enabled = createMemo(() => props.useV2Workloads === true);
   const v2Workloads = useV2Workloads(v2Enabled);
-  const sortedNodes = createMemo(() =>
-    [...props.nodes].sort((a, b) => getNodeDisplayName(a).localeCompare(getNodeDisplayName(b))),
+
+  // Keep workload identities stable across v2 polling updates.
+  const dedupeGuests = (guests: WorkloadGuest[]): WorkloadGuest[] => {
+    const seen = new Set<string>();
+    const deduped: WorkloadGuest[] = [];
+    for (const guest of guests) {
+      const canonicalId = getCanonicalWorkloadId(guest);
+      if (seen.has(canonicalId)) continue;
+      seen.add(canonicalId);
+      deduped.push(guest);
+    }
+    return deduped;
+  };
+
+  const allGuests = createMemo<WorkloadGuest[]>(() =>
+    v2Enabled() ? dedupeGuests(v2Workloads.workloads()) : [],
   );
 
-  const legacyGuests = createMemo<WorkloadGuest[]>(() => [
-    ...props.vms.map((vm) => ({ ...vm, workloadType: 'vm' as const, displayId: String(vm.vmid) })),
-    ...props.containers.map((ct) => ({ ...ct, workloadType: 'lxc' as const, displayId: String(ct.vmid) })),
-  ]);
+  const workloadNodeOptions = createMemo(() => {
+    const labelsByScope = new Map<string, string>();
+    const nodeNameCounts = new Map<string, number>();
 
-  // Combine workloads into a single list for filtering, preferring v2 workloads when enabled.
-  // IMPORTANT: Once v2 data has loaded, always use it — even during refetch.
-  // createResource keeps the previous value while loading, so workloads() returns
-  // stale-but-valid data. Checking !loading() caused the table to switch between
-  // v2 and legacy data every 5-second poll cycle, causing the entire UI to glitch.
-  const allGuests = createMemo<WorkloadGuest[]>(() => {
-    if (v2Enabled()) {
-      const w = v2Workloads.workloads();
-      if (w.length > 0) return w;
-      return legacyGuests();
+    for (const guest of allGuests()) {
+      const type = resolveWorkloadType(guest);
+      if (type === 'k8s') continue;
+      const scope = workloadNodeScopeId(guest);
+      if (!scope || scope === '-') continue;
+      const nodeName = (guest.node || '').trim();
+      if (!nodeName) continue;
+      nodeNameCounts.set(nodeName, (nodeNameCounts.get(nodeName) || 0) + 1);
     }
-    return legacyGuests();
+
+    for (const guest of allGuests()) {
+      const type = resolveWorkloadType(guest);
+      if (type === 'k8s') continue;
+      const scope = workloadNodeScopeId(guest);
+      if (!scope || scope === '-' || labelsByScope.has(scope)) continue;
+      const nodeName = (guest.node || '').trim();
+      const instance = (guest.instance || '').trim();
+      if (!nodeName) continue;
+      const hasDuplicateNodeName = (nodeNameCounts.get(nodeName) || 0) > 1;
+      const label = hasDuplicateNodeName && instance ? `${nodeName} (${instance})` : nodeName;
+      labelsByScope.set(scope, label);
+    }
+
+    return Array.from(labelsByScope.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
+
+  createEffect(() => {
+    if (viewMode() === 'k8s') return;
+    const hostHint = selectedHostHint();
+    if (!hostHint || selectedNode() !== null) return;
+    const normalizedHint = hostHint.trim().toLowerCase();
+    if (!normalizedHint) return;
+    const option = workloadNodeOptions().find((candidate) => {
+      const label = candidate.label.toLowerCase();
+      const value = candidate.value.toLowerCase();
+      return label === normalizedHint || value === normalizedHint || label.includes(normalizedHint);
+    });
+    if (!option) return;
+    setSelectedNode(option.value);
+    setSelectedHostHint(null);
+  });
+
+  const kubernetesContextOptions = createMemo(() => {
+    const contexts = new Set<string>();
+    for (const guest of allGuests()) {
+      if (resolveWorkloadType(guest) !== 'k8s') continue;
+      const context = getKubernetesContextKey(guest);
+      if (context) {
+        contexts.add(context);
+      }
+    }
+    return Array.from(contexts).sort((a, b) => a.localeCompare(b));
   });
 
   // Initialize from localStorage with proper type checking
@@ -373,6 +491,22 @@ export function Dashboard(props: DashboardProps) {
       raw === 'all' || raw === 'vm' || raw === 'lxc' || raw === 'docker' || raw === 'k8s'
         ? raw
         : 'all',
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+    if (viewMode() === 'k8s') {
+      if (selectedNode() !== null) {
+        setSelectedNode(null);
+      }
+      if (selectedHostHint() !== null) {
+        setSelectedHostHint(null);
+      }
+      return;
+    }
+    if (selectedKubernetesContext() !== null) {
+      setSelectedKubernetesContext(null);
+    }
   });
 
   const normalizeTypeParam = (value: string): ViewMode | null => {
@@ -386,13 +520,78 @@ export function Dashboard(props: DashboardProps) {
   };
 
   createEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const typeParam = params.get('type');
+    const { type: typeParam } = parseWorkloadsLinkSearch(location.search);
     if (!typeParam || typeParam === handledTypeParam()) return;
     const nextMode = normalizeTypeParam(typeParam);
     if (!nextMode) return;
     setViewMode(nextMode);
     setHandledTypeParam(typeParam);
+  });
+
+  createEffect(() => {
+    const { context: contextParam } = parseWorkloadsLinkSearch(location.search);
+    if (contextParam === handledContextParam()) return;
+
+    if (contextParam) {
+      if (viewMode() !== 'k8s') {
+        setViewMode('k8s');
+      }
+      setSelectedKubernetesContext(contextParam);
+      if (!showFilters()) {
+        setShowFilters(true);
+      }
+      setHandledContextParam(contextParam);
+      return;
+    }
+
+    setSelectedKubernetesContext(null);
+    setHandledContextParam('');
+  });
+
+  createEffect(() => {
+    const { host: hostParam } = parseWorkloadsLinkSearch(location.search);
+    if (hostParam === handledHostParam()) return;
+
+    if (hostParam) {
+      setSelectedHostHint(hostParam);
+      if (!showFilters()) {
+        setShowFilters(true);
+      }
+      setHandledHostParam(hostParam);
+      return;
+    }
+
+    setSelectedHostHint(null);
+    setHandledHostParam('');
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+
+    const params = new URLSearchParams(location.search);
+    const nextType = viewMode() === 'all' ? '' : viewMode();
+    const nextContext = viewMode() === 'k8s' ? selectedKubernetesContext() ?? '' : '';
+    const nextHost = viewMode() === 'k8s' ? '' : selectedNode() ?? selectedHostHint() ?? '';
+
+    const managedPath = buildWorkloadsPath({
+      type: nextType || null,
+      context: nextContext || null,
+      host: nextHost || null,
+    });
+    const managedUrl = new URL(managedPath, 'http://pulse.local');
+    params.delete(WORKLOADS_QUERY_PARAMS.type);
+    params.delete(WORKLOADS_QUERY_PARAMS.context);
+    params.delete(WORKLOADS_QUERY_PARAMS.host);
+    managedUrl.searchParams.forEach((value, key) => {
+      params.set(key, value);
+    });
+
+    const nextSearch = params.toString();
+    const nextPath = nextSearch ? `${WORKLOADS_PATH}?${nextSearch}` : WORKLOADS_PATH;
+    const currentPath = `${location.pathname}${location.search || ''}`;
+    if (nextPath !== currentPath) {
+      navigate(nextPath, { replace: true });
+    }
   });
 
   const [statusMode, setStatusMode] = usePersistentSignal<StatusMode>('dashboardStatusMode', 'all', {
@@ -588,13 +787,14 @@ export function Dashboard(props: DashboardProps) {
     const mapping = new Map<string, Node>();
 
     allGuests().forEach((guest) => {
+      const canonicalGuestId = getCanonicalWorkloadId(guest);
       // Try guest.id-based lookup first
       if (guest.id) {
         const lastDash = guest.id.lastIndexOf('-');
         if (lastDash > 0) {
           const nodeId = guest.id.slice(0, lastDash);
           if (nodes[nodeId]) {
-            mapping.set(guest.id, nodes[nodeId]);
+            mapping.set(canonicalGuestId, nodes[nodeId]);
             return;
           }
         }
@@ -602,7 +802,7 @@ export function Dashboard(props: DashboardProps) {
       // Fallback to composite key
       const compositeKey = `${guest.instance}-${guest.node}`;
       if (nodes[compositeKey]) {
-        mapping.set(guest.id || `${guest.instance}-${guest.vmid}`, nodes[compositeKey]);
+        mapping.set(canonicalGuestId, nodes[compositeKey]);
       }
     });
 
@@ -740,6 +940,8 @@ export function Dashboard(props: DashboardProps) {
           sortKey() !== 'type' ||
           sortDirection() !== 'asc' ||
           selectedNode() !== null ||
+          selectedHostHint() !== null ||
+          selectedKubernetesContext() !== null ||
           viewMode() !== 'all' ||
           statusMode() !== 'all';
 
@@ -750,6 +952,8 @@ export function Dashboard(props: DashboardProps) {
           setSortKey('type');
           setSortDirection('asc');
           setSelectedNode(null);
+          setSelectedHostHint(null);
+          setSelectedKubernetesContext(null);
           setViewMode('all');
           setStatusMode('all');
 
@@ -772,20 +976,22 @@ export function Dashboard(props: DashboardProps) {
   const filteredGuests = createMemo(() => {
     let guests = allGuests();
 
-    // Filter by selected node using both instance and node name for uniqueness
-    const selectedNodeId = selectedNode();
-    if (selectedNodeId) {
-      // Find the node to get both instance and name for precise matching
-      const node = props.nodes.find((n) => n.id === selectedNodeId);
-      if (node) {
-        guests = guests.filter((g) => {
-          const type = resolveWorkloadType(g);
-          if (type !== 'vm' && type !== 'lxc') {
-            return true;
-          }
-          return g.instance === node.instance && g.node === node.name;
-        });
-      }
+    // Filter by selected non-kubernetes node scope.
+    const nodeScope = selectedNode();
+    if (nodeScope && viewMode() !== 'k8s') {
+      guests = guests.filter((g) => workloadNodeScopeId(g) === nodeScope);
+    }
+    const hostHint = (selectedHostHint() || '').trim().toLowerCase();
+    if (!nodeScope && hostHint && viewMode() !== 'k8s') {
+      guests = guests.filter((g) => {
+        if (resolveWorkloadType(g) === 'k8s') return false;
+        const candidates = [g.node, g.instance, g.contextLabel];
+        return candidates.some((candidate) => (candidate || '').toLowerCase().includes(hostHint));
+      });
+    }
+    const k8sContext = selectedKubernetesContext();
+    if (k8sContext && viewMode() === 'k8s') {
+      guests = guests.filter((g) => resolveWorkloadType(g) === 'k8s' && getKubernetesContextKey(g) === k8sContext);
     }
 
     // Filter by type
@@ -856,6 +1062,56 @@ export function Dashboard(props: DashboardProps) {
     // Don't filter by thresholds anymore - dimming is handled in GuestRow component
 
     return guests;
+  });
+
+  const workloadsSummaryVisibleIds = createMemo<string[]>(() =>
+    filteredGuests().map((guest) => workloadSummaryGuestId(guest)),
+  );
+
+  const workloadsSummaryFallbackCounts = createMemo(() => {
+    const guests = filteredGuests();
+    const running = guests.filter((guest) => guest.status === 'running' || guest.status === 'online').length;
+    return {
+      total: guests.length,
+      running,
+      stopped: Math.max(0, guests.length - running),
+    };
+  });
+
+  const workloadsSummaryFallbackSnapshots = createMemo<WorkloadSummarySnapshot[]>(() =>
+    filteredGuests().map((guest) => {
+      const guestId = workloadSummaryGuestId(guest);
+      const memoryUsage = workloadMetricPercent(guest.memory?.usage);
+      let diskUsage = workloadMetricPercent(guest.disk?.usage);
+      if (
+        (!diskUsage || diskUsage <= 0) &&
+        typeof guest.disk?.used === 'number' &&
+        typeof guest.disk?.total === 'number' &&
+        Number.isFinite(guest.disk.used) &&
+        Number.isFinite(guest.disk.total) &&
+        guest.disk.total > 0
+      ) {
+        diskUsage = (guest.disk.used / guest.disk.total) * 100;
+      }
+
+      return {
+        id: guestId,
+        name: guest.name || guestId,
+        cpu: workloadMetricPercent(guest.cpu),
+        memory: memoryUsage,
+        disk: Math.max(0, diskUsage),
+        network: Math.max(0, guest.networkIn || 0) + Math.max(0, guest.networkOut || 0),
+      };
+    }),
+  );
+
+  createEffect(() => {
+    const hoveredId = hoveredWorkloadId();
+    if (!hoveredId) return;
+    const exists = filteredGuests().some((guest) => workloadSummaryGuestId(guest) === hoveredId);
+    if (!exists) {
+      setHoveredWorkloadId(null);
+    }
   });
 
   const getGroupKey = (guest: WorkloadGuest): string => {
@@ -964,6 +1220,7 @@ export function Dashboard(props: DashboardProps) {
 
     // Track selected node for filtering (independent of search)
     if (nodeType === 'pve' || nodeType === null) {
+      setSelectedHostHint(null);
       setSelectedNode(nodeId);
       logger.debug('Set selected node', { nodeId });
       // Show filters if a node is selected
@@ -1026,32 +1283,25 @@ export function Dashboard(props: DashboardProps) {
   return (
     <div class="space-y-3">
       <Show when={isWorkloadsRoute()}>
-        <Card padding="sm">
-          <div class="flex flex-wrap items-center gap-2">
-            <label
-              for="workloads-node-filter"
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-              Host
-            </label>
-            <select
-              id="workloads-node-filter"
-              value={selectedNode() ?? ''}
-              onChange={(e) => {
-                const value = e.currentTarget.value;
-                handleNodeSelect(value || null, value ? 'pve' : null);
-              }}
-              class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            >
-              <option value="">All nodes</option>
-              <For each={sortedNodes()}>
-                {(node) => (
-                  <option value={node.id}>{getNodeDisplayName(node)}</option>
-                )}
-              </For>
-            </select>
-          </div>
-        </Card>
+        <div class="sticky top-0 z-20">
+          <WorkloadsSummary
+            timeRange={WORKLOADS_SUMMARY_RANGE}
+            selectedNodeId={selectedNode()}
+            fallbackGuestCounts={workloadsSummaryFallbackCounts()}
+            fallbackSnapshots={workloadsSummaryFallbackSnapshots()}
+            visibleWorkloadIds={workloadsSummaryVisibleIds()}
+            hoveredWorkloadId={hoveredWorkloadId()}
+          />
+        </div>
+      </Show>
+
+      <Show when={isWorkloadsRoute() && migrationNotice() && !hideMigrationNotice()}>
+        <MigrationNoticeBanner
+          title={migrationNotice()!.title}
+          message={migrationNotice()!.message}
+          learnMoreHref={migrationNotice()!.learnMoreHref}
+          onDismiss={handleDismissMigrationNotice}
+        />
       </Show>
 
       {/* Unified Node Selector - infrastructure summary (hidden on workloads) */}
@@ -1090,6 +1340,37 @@ export function Dashboard(props: DashboardProps) {
           isColumnHidden={columnVisibility.isHiddenByUser}
           onColumnToggle={columnVisibility.toggle}
           onColumnReset={columnVisibility.resetToDefaults}
+          hostFilter={(() => {
+            if (!isWorkloadsRoute()) return undefined;
+            if (viewMode() === 'k8s') {
+              return {
+                id: 'workloads-k8s-context-filter',
+                label: 'Cluster',
+                value: selectedKubernetesContext() ?? '',
+                options: [
+                  { value: '', label: 'All clusters' },
+                  ...kubernetesContextOptions().map((context) => ({
+                    value: context,
+                    label: context,
+                  })),
+                ],
+                onChange: (value: string) => setSelectedKubernetesContext(value || null),
+              };
+            }
+            return {
+              id: 'workloads-node-filter',
+              label: 'Host',
+              value: selectedNode() ?? '',
+              options: [
+                { value: '', label: 'All nodes' },
+                ...workloadNodeOptions(),
+              ],
+              onChange: (value: string) => {
+                setSelectedHostHint(null);
+                handleNodeSelect(value || null, value ? 'pve' : null);
+              },
+            };
+          })()}
         />
       </Show>
 
@@ -1300,7 +1581,7 @@ export function Dashboard(props: DashboardProps) {
                             {(guest) => {
                               const guestId = () => {
                                 const g = guest();
-                                return g.id || `${g.instance}:${g.node}:${g.vmid}`;
+                                return getCanonicalWorkloadId(g);
                               };
                               const getMetadata = () =>
                                 guestMetadata()[guestId()] ||
@@ -1326,6 +1607,7 @@ export function Dashboard(props: DashboardProps) {
                                     onClick={() => setSelectedGuestId(selectedGuestId() === guestId() ? null : guestId())}
                                     isExpanded={selectedGuestId() === guestId()}
                                     ioEmphasis={workloadIOEmphasis()}
+                                    onHoverChange={setHoveredWorkloadId}
                                   />
                                   <Show when={selectedGuestId() === guestId()}>
                                     <tr>
@@ -1333,7 +1615,6 @@ export function Dashboard(props: DashboardProps) {
                                         <div class="p-4" onClick={(e) => e.stopPropagation()}>
                                           <GuestDrawer
                                             guest={guest()}
-                                            metricsKey={buildMetricKey(getWorkloadMetricsKind(guest()), guestId())}
                                             onClose={() => setSelectedGuestId(null)}
                                             customUrl={getMetadata()?.customUrl}
                                             onCustomUrlChange={handleCustomUrlUpdate}

@@ -1,29 +1,29 @@
 import { Component, Show, For, Suspense, createSignal } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import type { WorkloadGuest } from '@/types/workloads';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { DiskList } from './DiskList';
-import { HistoryChart } from '../shared/HistoryChart';
-import { ResourceType, HistoryTimeRange } from '@/api/charts';
-import { isRangeLocked } from '@/stores/license';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import { resolveWorkloadType } from '@/utils/workloads';
+import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
 
 type Guest = WorkloadGuest;
 
 interface GuestDrawerProps {
     guest: Guest;
-    metricsKey: string;
     onClose: () => void;
     customUrl?: string;
     onCustomUrlChange?: (guestId: string, url: string) => void;
 }
 
 export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
+    const navigate = useNavigate();
     const guestId = () => {
         if (props.guest.id) return props.guest.id;
         return `${props.guest.instance}:${props.guest.node}:${props.guest.vmid}`;
     };
+    const infrastructureHref = () => buildInfrastructureHrefForWorkload(props.guest);
 
     const isVM = (guest: Guest): boolean => {
         return resolveWorkloadType(guest) === 'vm';
@@ -86,39 +86,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
         return networkInterfaces().length > 0;
     };
 
-    const fallbackGuestId = () => {
-        return props.guest.id || `${props.guest.instance}:${props.guest.node}:${props.guest.vmid}`;
-    };
-
-    const metricsResource = (): { type: ResourceType; id: string } => {
-        const key = props.metricsKey || '';
-        const separatorIndex = key.indexOf(':');
-        const fallbackType: ResourceType = (() => {
-            const type = resolveWorkloadType(props.guest);
-            if (type === 'vm') return 'vm';
-            if (type === 'docker') return 'docker';
-            if (type === 'k8s') return 'k8s';
-            return 'container';
-        })();
-
-        if (separatorIndex === -1) {
-            return { type: fallbackType, id: fallbackGuestId() };
-        }
-
-        const kind = key.slice(0, separatorIndex);
-        const id = key.slice(separatorIndex + 1) || fallbackGuestId();
-        const type: ResourceType =
-            kind === 'vm' || kind === 'container'
-                ? (kind as ResourceType)
-                : kind === 'dockerContainer'
-                    ? 'docker'
-                    : kind === 'k8s'
-                        ? 'k8s'
-                        : fallbackType;
-
-        return { type, id };
-    };
-
     const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
 
     // All tabs are always rendered (hidden via CSS) to avoid any DOM
@@ -128,9 +95,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     const switchTab = (tab: 'overview' | 'discovery') => {
         setActiveTab(tab);
     };
-
-    const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>('1h');
-    const isHistoryLocked = () => isRangeLocked(historyRange());
 
     // Get discovery resource type for the guest
     const discoveryResourceType = (): DiscoveryResourceType => {
@@ -167,6 +131,15 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                     {activeTab() === 'discovery' && (
                         <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
                     )}
+                </button>
+            </div>
+            <div class="flex justify-end">
+                <button
+                    type="button"
+                    onClick={() => navigate(infrastructureHref())}
+                    class="inline-flex items-center rounded border border-slate-300 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:border-slate-600 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:bg-slate-700"
+                >
+                    Open related infrastructure
                 </button>
             </div>
 
@@ -352,138 +325,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                     </Show>
                 </div>
 
-                {/* Performance History */}
-                <div class="mt-3 space-y-3">
-                    {/* Shared range selector */}
-                    <div class="flex items-center gap-2">
-                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10" />
-                            <path stroke-linecap="round" d="M12 6v6l4 2" />
-                        </svg>
-                        <select
-                            value={historyRange()}
-                            onChange={(e) => setHistoryRange(e.currentTarget.value as HistoryTimeRange)}
-                            class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none"
-                            style={{ "background-image": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", "background-repeat": "no-repeat", "background-position": "right 6px center" }}
-                        >
-                            <option value="1h">Last 1 hour</option>
-                            <option value="6h">Last 6 hours</option>
-                            <option value="12h">Last 12 hours</option>
-                            <option value="24h">Last 24 hours</option>
-                            <option value="7d">Last 7 days</option>
-                            <option value="30d">Last 30 days</option>
-                            <option value="90d">Last 90 days</option>
-                        </select>
-                    </div>
-
-                    <div class="relative">
-                        <div class="space-y-3">
-                            <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(33.333%-0.5rem)] [&>*]:min-w-[250px]">
-                                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                    <HistoryChart
-                                        resourceType={metricsResource().type}
-                                        resourceId={metricsResource().id}
-                                        metric="cpu"
-                                        height={120}
-                                        color="#8b5cf6"
-                                        label="CPU"
-                                        unit="%"
-                                        range={historyRange()}
-                                        hideSelector={true}
-                                        compact={true}
-                                        hideLock={true}
-                                    />
-                                </div>
-                                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                    <HistoryChart
-                                        resourceType={metricsResource().type}
-                                        resourceId={metricsResource().id}
-                                        metric="memory"
-                                        height={120}
-                                        color="#f59e0b"
-                                        label="Memory"
-                                        unit="%"
-                                        range={historyRange()}
-                                        hideSelector={true}
-                                        compact={true}
-                                        hideLock={true}
-                                    />
-                                </div>
-                                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                    <HistoryChart
-                                        resourceType={metricsResource().type}
-                                        resourceId={metricsResource().id}
-                                        metric="disk"
-                                        height={120}
-                                        color="#10b981"
-                                        label="Disk"
-                                        unit="%"
-                                        range={historyRange()}
-                                        hideSelector={true}
-                                        compact={true}
-                                        hideLock={true}
-                                    />
-                                </div>
-                            </div>
-
-                            <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[250px]">
-                                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                    <HistoryChart
-                                        resourceType={metricsResource().type}
-                                        resourceId={metricsResource().id}
-                                        metric="netin"
-                                        height={120}
-                                        color="#3b82f6"
-                                        label="Net In"
-                                        unit="B/s"
-                                        range={historyRange()}
-                                        hideSelector={true}
-                                        compact={true}
-                                        hideLock={true}
-                                    />
-                                </div>
-                                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                    <HistoryChart
-                                        resourceType={metricsResource().type}
-                                        resourceId={metricsResource().id}
-                                        metric="netout"
-                                        height={120}
-                                        color="#6366f1"
-                                        label="Net Out"
-                                        unit="B/s"
-                                        range={historyRange()}
-                                        hideSelector={true}
-                                        compact={true}
-                                        hideLock={true}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Single shared Pro lock overlay */}
-                        <Show when={isHistoryLocked()}>
-                            <div class="absolute inset-0 z-10 flex flex-col items-center justify-center backdrop-blur-sm bg-white/60 dark:bg-gray-900/60 rounded-lg">
-                                <div class="bg-indigo-500 rounded-full p-3 shadow-lg mb-3">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                                    </svg>
-                                </div>
-                                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">{historyRange() === '30d' ? '30' : '90'}-Day History</h3>
-                                <p class="text-sm text-gray-600 dark:text-gray-300 text-center max-w-[260px] mb-4">
-                                    Upgrade to Pulse Pro to unlock {historyRange() === '30d' ? '30' : '90'} days of historical data retention.
-                                </p>
-                                <a
-                                    href="https://pulserelay.pro/pricing"
-                                    target="_blank"
-                                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
-                                >
-                                    Unlock Pro Features
-                                </a>
-                            </div>
-                        </Show>
-                    </div>
-                </div>
             </div>
 
             {/* Always rendered, hidden via CSS. Wrapped in a local Suspense
