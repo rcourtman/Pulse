@@ -7,7 +7,7 @@ const navigateSpy = vi.fn();
 
 type BackupsFilterMock = {
   setSearch: (value: string) => void;
-  setViewMode: (value: 'all' | 'snapshot' | 'pve' | 'pbs') => void;
+  setViewMode: (value: string) => void;
   setGroupBy: (value: 'date' | 'guest') => void;
 };
 
@@ -127,6 +127,7 @@ describe('UnifiedBackups routing contract', () => {
 
     const [path, options] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
     const params = new URLSearchParams(path.split('?')[1] || '');
+    expect(params.get('source')).toBe('pbs');
     expect(params.get('backupType')).toBe('remote');
     expect(params.get('group')).toBe('guest');
     expect(params.get('q')).toBe('node:pve1');

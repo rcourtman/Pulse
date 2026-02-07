@@ -2,6 +2,7 @@ export type BackupType = 'snapshot' | 'local' | 'remote';
 export type GuestType = 'VM' | 'LXC' | 'Host' | 'Template' | 'ISO';
 
 export interface UnifiedBackup {
+  source: string;
   backupType: BackupType;
   vmid: number | string;
   name: string;

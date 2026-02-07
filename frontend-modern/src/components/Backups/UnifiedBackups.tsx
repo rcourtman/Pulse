@@ -17,6 +17,14 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility';
 import { logger } from '@/utils/logger';
 import { BACKUPS_QUERY_PARAMS, buildBackupsPath, parseBackupsLinkSearch } from '@/routing/resourceLinks';
+import { useResourcesAsLegacy } from '@/hooks/useResources';
+import {
+  buildBackupSourceOptions,
+  normalizeBackupSourceKey,
+  resolveLegacyBackupTypeForSource,
+  resolveSourceFromLegacyBackupType,
+  type BackupSourceOption,
+} from './backupSourceOptions';
 
 type BackupSortKey = keyof Pick<
   UnifiedBackup,
@@ -55,6 +63,10 @@ const UnifiedBackups: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, connected, initialDataReceived } = useWebSocket();
+  const legacyResources = useResourcesAsLegacy({ state });
+  const storageState = createMemo(() => legacyResources.asStorage());
+  const pbsInstancesState = createMemo(() => legacyResources.asPBS());
+  const pmgInstancesState = createMemo(() => legacyResources.asPMG());
   const pveBackupsState = createMemo(() => state.backups?.pve ?? state.pveBackups);
   const pbsBackupsState = createMemo(() => state.backups?.pbs ?? state.pbsBackups);
   const pmgBackupsState = createMemo(() => state.backups?.pmg ?? state.pmgBackups);
@@ -68,13 +80,13 @@ const UnifiedBackups: Component = () => {
 
   // Detect PBS storage accessed via PVE passthrough (storage.type === 'pbs')
   const hasPBSViaPassthrough = createMemo(() => {
-    const storageList = state.storage || [];
+    const storageList = storageState();
     return storageList.some((s) => s.type === 'pbs');
   });
 
   // Check if user has direct PBS instances configured
   const hasDirectPBS = createMemo(() => {
-    return (state.pbs || []).length > 0;
+    return pbsInstancesState().length > 0;
   });
 
   // Show banner if: PBS via passthrough exists, no direct PBS, and not dismissed
@@ -84,7 +96,7 @@ const UnifiedBackups: Component = () => {
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [selectedNodeType, setSelectedNodeType] = createSignal<'pve' | 'pbs' | null>(null);
   const [typeFilter, setTypeFilter] = createSignal<'all' | FilterableGuestType>('all');
-  const [backupTypeFilter, setBackupTypeFilter] = createSignal<'all' | BackupType>('all');
+  const [sourceFilter, setSourceFilter] = createSignal<string>('all');
   const [statusFilter, setStatusFilter] = createSignal<'all' | 'verified' | 'unverified'>('all');
   const [groupByMode, setGroupByMode] = createSignal<'date' | 'guest'>('date');
 
@@ -107,12 +119,11 @@ const UnifiedBackups: Component = () => {
       setTypeFilter(nextGuestType);
     }
 
-    const nextBackupType =
-      parsed.backupType === 'snapshot' || parsed.backupType === 'local' || parsed.backupType === 'remote'
-        ? parsed.backupType
-        : 'all';
-    if (nextBackupType !== untrack(backupTypeFilter)) {
-      setBackupTypeFilter(nextBackupType);
+    const nextSource =
+      normalizeBackupSourceKey(parsed.source) ||
+      resolveSourceFromLegacyBackupType(parsed.backupType);
+    if (nextSource !== untrack(sourceFilter)) {
+      setSourceFilter(nextSource);
     }
 
     const nextStatus =
@@ -139,7 +150,7 @@ const UnifiedBackups: Component = () => {
       if (untrack(selectedNodeType) !== 'pve') {
         setSelectedNodeType('pve');
       }
-    } else if (state.pbs?.some((pbs) => pbs.name === nextNode)) {
+    } else if (pbsInstancesState().some((pbs) => pbs.name === nextNode)) {
       if (untrack(selectedNodeType) !== 'pbs') {
         setSelectedNodeType('pbs');
       }
@@ -153,7 +164,8 @@ const UnifiedBackups: Component = () => {
 
     const nextGuestType =
       typeFilter() === 'VM' ? 'vm' : typeFilter() === 'LXC' ? 'lxc' : typeFilter() === 'Host' ? 'host' : '';
-    const nextBackupType = backupTypeFilter() === 'all' ? '' : backupTypeFilter();
+    const nextSource = sourceFilter() === 'all' ? '' : sourceFilter();
+    const nextBackupType = resolveLegacyBackupTypeForSource(nextSource);
     const nextStatus = statusFilter() === 'all' ? '' : statusFilter();
     const nextGroup = groupByMode() === 'date' ? '' : groupByMode();
     const nextNode = selectedNode() ?? '';
@@ -161,7 +173,8 @@ const UnifiedBackups: Component = () => {
 
     const managedPath = buildBackupsPath({
       guestType: nextGuestType || null,
-      backupType: nextBackupType || null,
+      source: nextSource || null,
+      backupType: nextBackupType,
       status: nextStatus || null,
       group: nextGroup || null,
       node: nextNode || null,
@@ -186,22 +199,6 @@ const UnifiedBackups: Component = () => {
     }
   });
 
-  // Convert between UI filter and internal filter for BackupsFilter component
-  const uiBackupTypeFilter = createMemo(() => {
-    const filter = backupTypeFilter();
-    if (filter === 'all') return 'all';
-    if (filter === 'snapshot') return 'snapshot';
-    if (filter === 'local') return 'pve';
-    if (filter === 'remote') return 'pbs';
-    return 'all';
-  });
-
-  const setUiBackupTypeFilter = (value: 'all' | 'snapshot' | 'pve' | 'pbs') => {
-    if (value === 'all') setBackupTypeFilter('all');
-    else if (value === 'snapshot') setBackupTypeFilter('snapshot');
-    else if (value === 'pve') setBackupTypeFilter('local');
-    else if (value === 'pbs') setBackupTypeFilter('remote');
-  };
   const [sortKey, setSortKey] = usePersistentSignal<BackupSortKey>('backupsSortKey', 'backupTime', {
     deserialize: (raw) =>
       BACKUP_SORT_KEY_VALUES.includes(raw as BackupSortKey) ? (raw as BackupSortKey) : 'backupTime',
@@ -224,7 +221,7 @@ const UnifiedBackups: Component = () => {
   const ITEMS_PER_PAGE = 100;
   const [currentPage, setCurrentPage] = createSignal(1);
   const availableBackupsTooltipText =
-    'Daily counts of backups still available for restore across snapshots, PVE storage, and PBS.';
+    'Daily counts of backups still available for restore across snapshots, local repositories, and remote targets.';
 
   const sortKeyOptions: { value: BackupSortKey; label: string }[] = [
     { value: 'backupTime', label: 'Time' },
@@ -243,19 +240,19 @@ const UnifiedBackups: Component = () => {
   const selectedPBSInstance = createMemo(() => {
     const search = searchTerm();
     const match = search.match(/node:(\S+)/);
-    if (match && state.pbs?.some((pbs) => pbs.name === match[1])) {
+    if (match && pbsInstancesState().some((pbs) => pbs.name === match[1])) {
       return match[1];
     }
     return null;
   });
 
-  // Auto-set backup type filter when PBS instance is selected
+  // Auto-set source filter when PBS instance is selected
   createEffect(() => {
     const pbsInstance = selectedPBSInstance();
     if (pbsInstance) {
-      setBackupTypeFilter('remote');
+      setSourceFilter('pbs');
     } else if (!isSearchLocked()) {
-      setBackupTypeFilter('all');
+      setSourceFilter('all');
     }
   });
 
@@ -474,6 +471,7 @@ const UnifiedBackups: Component = () => {
       }
 
       unified.push({
+        source: 'snapshot',
         backupType: 'snapshot',
         vmid: snapshot.vmid,
         name: guestName || `VM ${snapshot.vmid}`, // Use guest name if found, otherwise fallback to VMID
@@ -565,6 +563,7 @@ const UnifiedBackups: Component = () => {
       }
 
       unified.push({
+        source: 'pbs',
         backupType: 'remote',
         vmid: displayType === 'Host' ? backup.vmid : parseInt(backup.vmid) || 0,
         name: backup.comment || '',
@@ -598,6 +597,7 @@ const UnifiedBackups: Component = () => {
 
       const displayName = backup.node || backup.filename || 'PMG Host Backup';
       unified.push({
+        source: 'pmg',
         backupType: 'local',
         vmid: backup.node || backup.filename,
         name: displayName,
@@ -677,6 +677,7 @@ const UnifiedBackups: Component = () => {
       // For PBS backups through storage: show Proxmox node in Node column, PBS storage in Location
       // For regular backups: show Proxmox node in Node column, local storage in Location
       unified.push({
+        source: backupType === 'remote' ? 'pbs' : 'pve',
         backupType: backupType,
         vmid: displayType === 'Host' ? backup.vmid : backup.vmid || 0,
         name: backup.notes || backup.volid?.split('/').pop() || '',
@@ -707,12 +708,32 @@ const UnifiedBackups: Component = () => {
   });
 
   const hasAnyBackups = createMemo(() => normalizedData().length > 0);
+  const backupSourceOptions = createMemo<BackupSourceOption[]>(() =>
+    buildBackupSourceOptions(normalizedData()),
+  );
+
+  const selectedSourceOption = createMemo(() =>
+    backupSourceOptions().find((option) => option.key === sourceFilter()) || null,
+  );
+
+  const selectedBackupTypes = createMemo<Set<BackupType>>(() => {
+    const option = selectedSourceOption();
+    if (!option) return new Set<BackupType>(['snapshot', 'local', 'remote']);
+    return new Set(option.backupTypes);
+  });
+
+  const isSnapshotOnlySelection = createMemo(() => {
+    const types = selectedBackupTypes();
+    return types.size === 1 && types.has('snapshot');
+  });
+
+  const includesRemoteSelection = createMemo(() => selectedBackupTypes().has('remote'));
 
   // Apply filters
   const filteredData = createMemo(() => {
     let data = normalizedData();
     const type = typeFilter();
-    const backupType = backupTypeFilter();
+    const source = sourceFilter();
     const status = statusFilter();
     const dateRange = selectedDateRange();
     const nodeFilter = selectedNode();
@@ -747,9 +768,10 @@ const UnifiedBackups: Component = () => {
       data = data.filter((item) => item.type === type);
     }
 
-    // Backup type filter
-    if (backupType !== 'all') {
-      data = data.filter((item) => item.backupType === backupType);
+    // Source filter
+    if (source !== 'all') {
+      const normalizedSource = normalizeBackupSourceKey(source);
+      data = data.filter((item) => normalizeBackupSourceKey(item.source) === normalizedSource);
     }
 
     // Status filter
@@ -957,7 +979,7 @@ const UnifiedBackups: Component = () => {
     searchTerm();
     selectedNode();
     typeFilter();
-    backupTypeFilter();
+    sourceFilter();
     statusFilter();
     selectedDateRange();
     // Reset page
@@ -1029,7 +1051,7 @@ const UnifiedBackups: Component = () => {
     setSelectedNodeType(null);
     setIsSearchLocked(false);
     setTypeFilter('all');
-    setBackupTypeFilter('all');
+    setSourceFilter('all');
     setStatusFilter('all');
     setGroupByMode('date');
     setSortKey('backupTime');
@@ -1052,7 +1074,7 @@ const UnifiedBackups: Component = () => {
           searchTerm().trim() ||
           selectedNode() ||
           typeFilter() !== 'all' ||
-          backupTypeFilter() !== 'all' ||
+          sourceFilter() !== 'all' ||
           statusFilter() !== 'all' ||
           selectedDateRange() !== null ||
           sortKey() !== 'backupTime' ||
@@ -1099,11 +1121,11 @@ const UnifiedBackups: Component = () => {
   // Calculate deduplication factor for PBS backups
   const dedupFactor = createMemo(() => {
     // Get all PBS instances with datastores
-    if (!state.pbs || state.pbs.length === 0) return null;
+    if (pbsInstancesState().length === 0) return null;
 
     // Collect all deduplication factors from all datastores
     const dedupFactors: number[] = [];
-    state.pbs.forEach((instance) => {
+    pbsInstancesState().forEach((instance) => {
       if (instance.datastores) {
         instance.datastores.forEach((ds) => {
           if (ds.deduplicationFactor && ds.deduplicationFactor > 0) {
@@ -1140,7 +1162,7 @@ const UnifiedBackups: Component = () => {
 
     // Initialize data structure for each day
     const dailyData: {
-      [key: string]: { snapshots: number; pve: number; pbs: number; total: number };
+      [key: string]: { snapshots: number; local: number; remote: number; total: number };
     } = {};
 
     // Create entries for each day in the range, including today
@@ -1152,7 +1174,7 @@ const UnifiedBackups: Component = () => {
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       const dateKey = `${year}-${month}-${day}`;
-      dailyData[dateKey] = { snapshots: 0, pve: 0, pbs: 0, total: 0 };
+      dailyData[dateKey] = { snapshots: 0, local: 0, remote: 0, total: 0 };
     }
 
     // Calculate the actual start and end times for filtering
@@ -1169,7 +1191,7 @@ const UnifiedBackups: Component = () => {
     // The chart should show the time range, and filters should affect what's counted
     let dataForChart = normalizedData();
     const type = typeFilter();
-    const backupType = backupTypeFilter();
+    const source = sourceFilter();
 
     // PERFORMANCE: Use shared search filter helper (eliminates ~75 lines of duplicate code)
     dataForChart = applySearchFilters(dataForChart);
@@ -1179,9 +1201,12 @@ const UnifiedBackups: Component = () => {
       dataForChart = dataForChart.filter((item) => item.type === type);
     }
 
-    // Apply backup type filter
-    if (backupType !== 'all') {
-      dataForChart = dataForChart.filter((item) => item.backupType === backupType);
+    // Apply source filter
+    if (source !== 'all') {
+      const normalizedSource = normalizeBackupSourceKey(source);
+      dataForChart = dataForChart.filter(
+        (item) => normalizeBackupSourceKey(item.source) === normalizedSource,
+      );
     }
 
     // Count backups per day within the chart time range
@@ -1200,9 +1225,9 @@ const UnifiedBackups: Component = () => {
           if (backup.backupType === 'snapshot') {
             dailyData[dateKey].snapshots++;
           } else if (backup.backupType === 'local') {
-            dailyData[dateKey].pve++;
+            dailyData[dateKey].local++;
           } else if (backup.backupType === 'remote') {
-            dailyData[dateKey].pbs++;
+            dailyData[dateKey].remote++;
           }
         }
       }
@@ -1221,8 +1246,7 @@ const UnifiedBackups: Component = () => {
 
   // Sort PBS instances by status then by name
   const sortedPBSInstances = createMemo(() => {
-    if (!state.pbs) return [];
-    return [...state.pbs].sort((a, b) => {
+    return [...pbsInstancesState()].sort((a, b) => {
       // Online instances first
       const aOnline = a.status === 'healthy' || a.status === 'online';
       const bOnline = b.status === 'healthy' || b.status === 'online';
@@ -1232,12 +1256,21 @@ const UnifiedBackups: Component = () => {
     });
   });
 
+  const hasConfiguredBackupSources = createMemo(() => {
+    return (
+      (state.nodes || []).length > 0 ||
+      pbsInstancesState().length > 0 ||
+      pmgInstancesState().length > 0 ||
+      hasAnyBackups()
+    );
+  });
+
   return (
     <div class="space-y-4">
       {/* Empty State - No nodes at all configured */}
       <Show
         when={
-          !isLoading() && (state.nodes || []).length === 0 && (!state.pbs || state.pbs.length === 0)
+          !isLoading() && !hasConfiguredBackupSources()
         }
       >
         <Card padding="lg">
@@ -1258,7 +1291,7 @@ const UnifiedBackups: Component = () => {
               </svg>
             }
             title="No backup sources configured"
-            description="Install the Pulse agent for extra capabilities (temperature monitoring and Pulse Patrol automation), or add a node via API token in Settings → Proxmox."
+            description="Connect one or more monitored platforms in Settings to start collecting backup and retention data."
             actions={
               <button
                 type="button"
@@ -1536,8 +1569,8 @@ const UnifiedBackups: Component = () => {
         </Card>
       </Show>
 
-      {/* Main Content - show when any nodes or PBS are configured */}
-      <Show when={(state.nodes || []).length > 0 || (state.pbs && state.pbs.length > 0)}>
+      {/* Main Content - show when at least one backup-capable source is configured */}
+      <Show when={hasConfiguredBackupSources()}>
         {/* Available Backups chart - keep visible while backups exist or a date filter is active */}
         <Show when={hasAnyBackups() || selectedDateRange() !== null}>
           <Card padding="md">
@@ -1901,35 +1934,35 @@ const UnifiedBackups: Component = () => {
 
                           // Stacked segments
                           if (d.total > 0) {
-                            // PBS (bottom)
-                            if (d.pbs > 0) {
-                              const pbsHeight = (d.pbs / d.total) * barHeight;
+                            // Remote backups (bottom)
+                            if (d.remote > 0) {
+                              const remoteHeight = (d.remote / d.total) * barHeight;
                               const pbsRect = document.createElementNS(
                                 'http://www.w3.org/2000/svg',
                                 'rect',
                               );
                               pbsRect.setAttribute('x', x.toString());
-                              pbsRect.setAttribute('y', (y + barHeight - pbsHeight).toString());
+                              pbsRect.setAttribute('y', (y + barHeight - remoteHeight).toString());
                               pbsRect.setAttribute('width', barWidth.toString());
-                              pbsRect.setAttribute('height', pbsHeight.toString());
+                              pbsRect.setAttribute('height', remoteHeight.toString());
                               pbsRect.setAttribute('rx', '2');
                               pbsRect.setAttribute('fill', '#8b5cf6');
                               pbsRect.setAttribute('fill-opacity', '0.9');
                               barGroup.appendChild(pbsRect);
                             }
 
-                            // PVE (middle)
-                            if (d.pve > 0) {
-                              const pveHeight = (d.pve / d.total) * barHeight;
-                              const pveY = y + (d.snapshots / d.total) * barHeight;
+                            // Local backups (middle)
+                            if (d.local > 0) {
+                              const localHeight = (d.local / d.total) * barHeight;
+                              const localY = y + (d.snapshots / d.total) * barHeight;
                               const pveRect = document.createElementNS(
                                 'http://www.w3.org/2000/svg',
                                 'rect',
                               );
                               pveRect.setAttribute('x', x.toString());
-                              pveRect.setAttribute('y', pveY.toString());
+                              pveRect.setAttribute('y', localY.toString());
                               pveRect.setAttribute('width', barWidth.toString());
-                              pveRect.setAttribute('height', pveHeight.toString());
+                              pveRect.setAttribute('height', localHeight.toString());
                               pveRect.setAttribute('fill', '#f97316');
                               pveRect.setAttribute('fill-opacity', '0.9');
                               barGroup.appendChild(pveRect);
@@ -1974,8 +2007,8 @@ const UnifiedBackups: Component = () => {
 
                               const breakdown: string[] = [];
                               if (d.snapshots > 0) breakdown.push(`Snapshots: ${d.snapshots}`);
-                              if (d.pve > 0) breakdown.push(`PVE: ${d.pve}`);
-                              if (d.pbs > 0) breakdown.push(`PBS: ${d.pbs}`);
+                              if (d.local > 0) breakdown.push(`Local: ${d.local}`);
+                              if (d.remote > 0) breakdown.push(`Remote: ${d.remote}`);
 
                               if (breakdown.length > 0) {
                                 tooltipText += `\n${breakdown.join(' • ')}`;
@@ -2097,11 +2130,11 @@ const UnifiedBackups: Component = () => {
                 </span>
                 <span class="flex items-center gap-1">
                   <span class="inline-block w-3 h-3 rounded bg-orange-500"></span>
-                  <span class="text-gray-600 dark:text-gray-400">PVE</span>
+                  <span class="text-gray-600 dark:text-gray-400">Local</span>
                 </span>
                 <span class="flex items-center gap-1">
                   <span class="inline-block w-3 h-3 rounded bg-violet-500"></span>
-                  <span class="text-gray-600 dark:text-gray-400">PBS</span>
+                  <span class="text-gray-600 dark:text-gray-400">Remote</span>
                 </span>
               </div>
             </div>
@@ -2112,8 +2145,9 @@ const UnifiedBackups: Component = () => {
         <BackupsFilter
           search={searchTerm}
           setSearch={setSearchTerm}
-          viewMode={uiBackupTypeFilter}
-          setViewMode={setUiBackupTypeFilter}
+          viewMode={sourceFilter}
+          setViewMode={setSourceFilter}
+          viewModeOptions={backupSourceOptions()}
           groupBy={groupByMode}
           setGroupBy={setGroupByMode}
           searchInputRef={(el) => (searchInputRef = el)}
@@ -2230,7 +2264,7 @@ const UnifiedBackups: Component = () => {
                       >
                         Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
-                      <Show when={isColumnVisible('owner') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')}>
+                      <Show when={isColumnVisible('owner') && includesRemoteSelection()}>
                         <th
                           class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('owner')}
@@ -2244,7 +2278,7 @@ const UnifiedBackups: Component = () => {
                       >
                         Time {sortKey() === 'backupTime' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
-                      <Show when={isColumnVisible('size') && backupTypeFilter() !== 'snapshot'}>
+                      <Show when={isColumnVisible('size') && !isSnapshotOnlySelection()}>
                         <th
                           class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('size')}
@@ -2259,7 +2293,7 @@ const UnifiedBackups: Component = () => {
                         Backup{' '}
                         {sortKey() === 'backupType' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
-                      <Show when={isColumnVisible('storage') && backupTypeFilter() !== 'snapshot'}>
+                      <Show when={isColumnVisible('storage') && !isSnapshotOnlySelection()}>
                         <th
                           class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('storage')}
@@ -2268,7 +2302,7 @@ const UnifiedBackups: Component = () => {
                           {sortKey() === 'storage' && (sortDirection() === 'asc' ? '▲' : '▼')}
                         </th>
                       </Show>
-                      <Show when={isColumnVisible('verified') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')}>
+                      <Show when={isColumnVisible('verified') && includesRemoteSelection()}>
                         <th
                           class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('verified')}
@@ -2277,7 +2311,7 @@ const UnifiedBackups: Component = () => {
                           {sortKey() === 'verified' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
                         </th>
                       </Show>
-                      <Show when={isColumnVisible('comment') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')}>
+                      <Show when={isColumnVisible('comment') && includesRemoteSelection()}>
                         <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
                           Comment
                         </th>
@@ -2330,7 +2364,7 @@ const UnifiedBackups: Component = () => {
                                 <td class="p-0.5 px-1.5 text-sm align-middle">{item.node}</td>
                                 <Show
                                   when={
-                                    isColumnVisible('owner') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')
+                                    isColumnVisible('owner') && includesRemoteSelection()
                                   }
                                 >
                                   <td class="p-0.5 px-1.5 text-xs align-middle text-gray-500 dark:text-gray-400">
@@ -2342,7 +2376,7 @@ const UnifiedBackups: Component = () => {
                                 >
                                   {formatTime(item.backupTime * 1000)}
                                 </td>
-                                <Show when={isColumnVisible('size') && backupTypeFilter() !== 'snapshot'}>
+                                <Show when={isColumnVisible('size') && !isSnapshotOnlySelection()}>
                                   <td
                                     class={`p-0.5 px-1.5 align-middle ${getSizeColor(item.size)}`}
                                   >
@@ -2362,8 +2396,8 @@ const UnifiedBackups: Component = () => {
                                       {item.backupType === 'snapshot'
                                         ? 'Snapshot'
                                         : item.backupType === 'local'
-                                          ? 'PVE'
-                                          : 'PBS'}
+                                          ? 'Local'
+                                          : 'Remote'}
                                     </span>
                                     {/* Data source indicator for PBS via passthrough */}
                                     <Show when={item.backupType === 'remote' && item.storage && !item.datastore}>
@@ -2414,7 +2448,7 @@ const UnifiedBackups: Component = () => {
                                     </Show>
                                   </div>
                                 </td>
-                                <Show when={isColumnVisible('storage') && backupTypeFilter() !== 'snapshot'}>
+                                <Show when={isColumnVisible('storage') && !isSnapshotOnlySelection()}>
                                   <td class="p-0.5 px-1.5 text-sm align-middle">
                                     {item.storage ||
                                       (item.datastore &&
@@ -2426,7 +2460,7 @@ const UnifiedBackups: Component = () => {
                                 </Show>
                                 <Show
                                   when={
-                                    isColumnVisible('verified') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')
+                                    isColumnVisible('verified') && includesRemoteSelection()
                                   }
                                 >
                                   <td class="p-0.5 px-1.5 text-center align-middle">
@@ -2476,7 +2510,7 @@ const UnifiedBackups: Component = () => {
                                 </Show>
                                 <Show
                                   when={
-                                    isColumnVisible('comment') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')
+                                    isColumnVisible('comment') && includesRemoteSelection()
                                   }
                                 >
                                   <td class="p-0.5 px-1.5 text-xs align-middle text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title={item.comment || ''}>

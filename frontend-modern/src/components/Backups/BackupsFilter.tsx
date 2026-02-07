@@ -4,12 +4,14 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import type { BackupSourceOption } from './backupSourceOptions';
 
 interface BackupsFilterProps {
   search: () => string;
   setSearch: (value: string) => void;
-  viewMode: () => 'all' | 'snapshot' | 'pve' | 'pbs';
-  setViewMode: (value: 'all' | 'snapshot' | 'pve' | 'pbs') => void;
+  viewMode: () => string;
+  setViewMode: (value: string) => void;
+  viewModeOptions?: BackupSourceOption[];
   groupBy: () => 'date' | 'guest';
   setGroupBy: (value: 'date' | 'guest') => void;
   searchInputRef?: (el: HTMLInputElement) => void;
@@ -43,6 +45,34 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
     props.sortKey() !== 'backupTime' ||
     props.sortDirection() !== 'desc';
 
+  const viewModeOptions = (): BackupSourceOption[] =>
+    props.viewModeOptions ?? [
+      { key: 'all', label: 'All Sources', tone: 'slate', backupTypes: ['snapshot', 'local', 'remote'] },
+      { key: 'snapshot', label: 'Snapshots', tone: 'amber', backupTypes: ['snapshot'] },
+      { key: 'pve', label: 'PVE', tone: 'orange', backupTypes: ['local'] },
+      { key: 'pbs', label: 'PBS', tone: 'violet', backupTypes: ['remote'] },
+    ];
+
+  const viewModeToneClass = (tone: BackupSourceOption['tone'], active: boolean) => {
+    if (!active) {
+      return 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100';
+    }
+    switch (tone) {
+      case 'amber':
+        return 'bg-white dark:bg-gray-800 text-yellow-600 dark:text-yellow-400 shadow-sm';
+      case 'orange':
+        return 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-sm';
+      case 'violet':
+        return 'bg-white dark:bg-gray-800 text-violet-600 dark:text-violet-300 shadow-sm';
+      case 'blue':
+        return 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 shadow-sm';
+      case 'cyan':
+        return 'bg-white dark:bg-gray-800 text-cyan-600 dark:text-cyan-300 shadow-sm';
+      default:
+        return 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm';
+    }
+  };
+
   return (
     <Card class="backups-filter mb-3" padding="sm">
       <div class="flex flex-col gap-3">
@@ -75,46 +105,21 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
         <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
           {/* Source Filter */}
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-            <button
-              type="button"
-              onClick={() => props.setViewMode('all')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'all'
-                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setViewMode(props.viewMode() === 'snapshot' ? 'all' : 'snapshot')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'snapshot'
-                ? 'bg-white dark:bg-gray-800 text-yellow-600 dark:text-yellow-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-            >
-              Snapshots
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setViewMode(props.viewMode() === 'pve' ? 'all' : 'pve')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'pve'
-                ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-            >
-              PVE
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setViewMode(props.viewMode() === 'pbs' ? 'all' : 'pbs')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'pbs'
-                ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-            >
-              PBS
-            </button>
+            {viewModeOptions().map((option) => {
+              const isActive = () => props.viewMode() === option.key;
+              return (
+                <button
+                  type="button"
+                  onClick={() => props.setViewMode(option.key)}
+                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${viewModeToneClass(
+                    option.tone,
+                    isActive(),
+                  )}`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
           </div>
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
