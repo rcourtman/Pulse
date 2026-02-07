@@ -9,6 +9,7 @@ import { TagBadges } from '@/components/Dashboard/TagBadges';
 import { getHostStatusIndicator } from '@/utils/status';
 import { getPlatformBadge, getSourceBadge, getTypeBadge, getUnifiedSourceBadges } from './resourceBadges';
 import { buildWorkloadsHref } from './workloadsLink';
+import { buildServiceDetailLinks } from './serviceDetailLinks';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
 import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
@@ -93,6 +94,19 @@ type PMGPlatformData = {
   lastUpdated?: string;
 };
 
+type KubernetesMetricCapabilities = {
+  nodeCpuMemory?: boolean;
+  nodeTelemetry?: boolean;
+  podCpuMemory?: boolean;
+  podNetwork?: boolean;
+  podEphemeralDisk?: boolean;
+  podDiskIo?: boolean;
+};
+
+type KubernetesPlatformData = {
+  metricCapabilities?: KubernetesMetricCapabilities;
+};
+
 type PlatformData = {
   sources?: string[];
   proxmox?: ProxmoxPlatformData;
@@ -101,7 +115,7 @@ type PlatformData = {
   docker?: Record<string, unknown>;
   pbs?: PBSPlatformData;
   pmg?: PMGPlatformData;
-  kubernetes?: Record<string, unknown>;
+  kubernetes?: KubernetesPlatformData;
   metrics?: Record<string, unknown>;
   identityMatch?: unknown;
   matchResults?: unknown;
@@ -428,6 +442,21 @@ const formatInteger = (value?: number): string => {
   return new Intl.NumberFormat().format(Math.round(value));
 };
 
+const ALIAS_COLLAPSE_THRESHOLD = 4;
+
+const formatSourceType = (value: Resource['sourceType']): string => {
+  switch (value) {
+    case 'hybrid':
+      return 'Hybrid';
+    case 'agent':
+      return 'Agent';
+    case 'api':
+      return 'API';
+    default:
+      return value;
+  }
+};
+
 export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
   type DrawerTab = 'overview' | 'discovery' | 'debug';
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
@@ -448,12 +477,65 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
     return getUnifiedSourceBadges(platformData?.sources ?? []);
   });
   const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+  const platformData = createMemo(() => props.resource.platformData as PlatformData | undefined);
+  const kubernetesCapabilityBadges = createMemo(() => {
+    const capabilities = platformData()?.kubernetes?.metricCapabilities;
+    if (!capabilities) return [];
+
+    const supportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400';
+    const unsupportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300';
+    const badges: { label: string; classes: string; title: string }[] = [];
+
+    if (capabilities.nodeCpuMemory) {
+      badges.push({
+        label: 'K8s Node CPU/Memory',
+        classes: supportedBadge,
+        title: 'Node CPU and memory metrics are available.',
+      });
+    }
+    if (capabilities.nodeTelemetry) {
+      badges.push({
+        label: 'Node Telemetry (Agent)',
+        classes: supportedBadge,
+        title: 'Linked Pulse host agent provides node uptime, temperature, disk, network, and disk I/O.',
+      });
+    }
+    if (capabilities.podCpuMemory) {
+      badges.push({
+        label: 'Pod CPU/Memory',
+        classes: supportedBadge,
+        title: 'Pod CPU and memory metrics are available.',
+      });
+    }
+    if (capabilities.podNetwork) {
+      badges.push({
+        label: 'Pod Network',
+        classes: supportedBadge,
+        title: 'Pod network throughput is available.',
+      });
+    }
+    if (capabilities.podEphemeralDisk) {
+      badges.push({
+        label: 'Pod Ephemeral Disk',
+        classes: supportedBadge,
+        title: 'Pod ephemeral storage usage is available.',
+      });
+    }
+    if (!capabilities.podDiskIo) {
+      badges.push({
+        label: 'Pod Disk I/O Unsupported',
+        classes: unsupportedBadge,
+        title: 'Pod disk read/write throughput is not collected by the Kubernetes integration path today.',
+      });
+    }
+
+    return badges;
+  });
 
   const proxmoxNode = createMemo(() => toNodeFromProxmox(props.resource));
   const agentHost = createMemo(() => toHostFromAgent(props.resource));
   const temperatureRows = createMemo(() => buildTemperatureRows(agentHost()?.sensors));
 
-  const platformData = createMemo(() => props.resource.platformData as PlatformData | undefined);
   const pbsData = createMemo(() => platformData()?.pbs);
   const pmgData = createMemo(() => platformData()?.pmg);
   const pbsJobTotal = createMemo(() => {
@@ -479,11 +561,189 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
     if (!Number.isFinite(parsed)) return '';
     return formatRelativeTime(parsed);
   });
-  const sourceStatus = createMemo(() => platformData()?.sourceStatus ?? {});
+  const pbsJobBreakdown = createMemo(() => {
+    const pbs = pbsData();
+    if (!pbs) return [] as Array<{ label: string; value: number }>;
+    return [
+      { label: 'Backup', value: pbs.backupJobCount || 0 },
+      { label: 'Sync', value: pbs.syncJobCount || 0 },
+      { label: 'Verify', value: pbs.verifyJobCount || 0 },
+      { label: 'Prune', value: pbs.pruneJobCount || 0 },
+      { label: 'Garbage', value: pbs.garbageJobCount || 0 },
+    ];
+  });
+  const pbsVisibleJobBreakdown = createMemo(() => {
+    const all = pbsJobBreakdown();
+    const nonZero = all.filter((entry) => entry.value > 0);
+    return nonZero.length > 0 ? nonZero : all;
+  });
+  const pmgQueueBreakdown = createMemo(() => {
+    const pmg = pmgData();
+    if (!pmg) return [] as Array<{ label: string; value: number; warn?: boolean }>;
+    return [
+      { label: 'Active', value: pmg.queueActive || 0 },
+      { label: 'Deferred', value: pmg.queueDeferred || 0, warn: (pmg.queueDeferred || 0) > 0 },
+      { label: 'Hold', value: pmg.queueHold || 0, warn: (pmg.queueHold || 0) > 0 },
+      { label: 'Incoming', value: pmg.queueIncoming || 0 },
+    ];
+  });
+  const pmgVisibleQueueBreakdown = createMemo(() => {
+    const all = pmgQueueBreakdown();
+    const nonZero = all.filter((entry) => entry.value > 0);
+    return nonZero.length > 0 ? nonZero : all;
+  });
+  const pmgMailBreakdown = createMemo(() => {
+    const pmg = pmgData();
+    if (!pmg) return [] as Array<{ label: string; value: number }>;
+    return [
+      { label: 'Mail', value: pmg.mailCountTotal || 0 },
+      { label: 'Spam', value: pmg.spamIn || 0 },
+      { label: 'Virus', value: pmg.virusIn || 0 },
+    ];
+  });
+  const pmgVisibleMailBreakdown = createMemo(() => {
+    const all = pmgMailBreakdown();
+    const nonZero = all.filter((entry) => entry.value > 0);
+    return nonZero.length > 0 ? nonZero : all;
+  });
   const mergedSources = createMemo(() => platformData()?.sources ?? []);
+  const sourceStatus = createMemo(() => platformData()?.sourceStatus ?? {});
+  const sourceHealthSummary = createMemo(() => {
+    const entries = Object.entries(sourceStatus());
+    if (entries.length === 0) return null;
+
+    let healthy = 0;
+    let warning = 0;
+    let unhealthy = 0;
+    const parts: string[] = [];
+
+    for (const [source, status] of entries) {
+      const normalized = (status?.status || '').trim().toLowerCase();
+      parts.push(`${source}:${normalized || 'unknown'}`);
+      if (['online', 'running', 'healthy', 'connected', 'ok'].includes(normalized)) {
+        healthy += 1;
+      } else if (['degraded', 'warning', 'stale'].includes(normalized)) {
+        warning += 1;
+      } else {
+        unhealthy += 1;
+      }
+    }
+
+    const total = entries.length;
+    if (unhealthy > 0) {
+      return {
+        label: `${unhealthy}/${total} unhealthy`,
+        className: 'text-red-600 dark:text-red-400',
+        title: parts.join(' • '),
+      };
+    }
+    if (warning > 0) {
+      return {
+        label: `${warning}/${total} degraded`,
+        className: 'text-amber-600 dark:text-amber-400',
+        title: parts.join(' • '),
+      };
+    }
+    return {
+      label: `${healthy}/${total} healthy`,
+      className: 'text-emerald-600 dark:text-emerald-400',
+      title: parts.join(' • '),
+    };
+  });
+  const sourceSummary = createMemo(() => {
+    const health = sourceHealthSummary();
+    if (health) return health;
+    const sources = mergedSources();
+    if (sources.length === 0) return null;
+    return {
+      label: sources.length === 1 ? sources[0].toUpperCase() : `${sources.length} sources`,
+      className: 'text-gray-700 dark:text-gray-200',
+      title: sources.join(' • '),
+    };
+  });
+  const identityAliasValues = createMemo(() => {
+    const data = platformData();
+    const pbs = data?.pbs;
+    const pmg = data?.pmg;
+    const proxmox = data?.proxmox;
+    const agent = data?.agent;
+    const raw = [
+      props.resource.discoveryTarget?.hostId,
+      props.resource.discoveryTarget?.resourceId,
+      proxmox?.nodeName,
+      agent?.agentId,
+      agent?.hostname,
+      pbs?.instanceId,
+      pbs?.hostname,
+      pmg?.instanceId,
+      pmg?.hostname,
+      props.resource.identity?.hostname,
+      props.resource.identity?.machineId,
+    ];
+    const seen = new Set<string>();
+    const deduped: string[] = [];
+    for (const value of raw) {
+      if (!value) continue;
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      const normalized = trimmed.toLowerCase();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      deduped.push(trimmed);
+    }
+    return deduped;
+  });
+  const primaryIdentityRows = createMemo(() => {
+    const rows: Array<{ label: string; value: string }> = [];
+    if (props.resource.identity?.hostname) {
+      rows.push({ label: 'Hostname', value: props.resource.identity.hostname });
+    }
+    if (props.resource.identity?.machineId) {
+      rows.push({ label: 'Machine ID', value: props.resource.identity.machineId });
+    }
+    if (props.resource.clusterId) {
+      rows.push({ label: 'Cluster', value: props.resource.clusterId });
+    }
+    if (props.resource.parentId) {
+      rows.push({ label: 'Parent', value: props.resource.parentId });
+    }
+    if (props.resource.discoveryTarget?.resourceType) {
+      rows.push({
+        label: 'Discovery',
+        value: `${props.resource.discoveryTarget.resourceType}:${props.resource.discoveryTarget.resourceId}`,
+      });
+    }
+    return rows;
+  });
+  const identityCardHasRichData = createMemo(() =>
+    primaryIdentityRows().length > 0 ||
+    (props.resource.identity?.ips?.length || 0) > 0 ||
+    (props.resource.tags?.length || 0) > 0 ||
+    identityAliasValues().length > 0,
+  );
+  const aliasPreviewValues = createMemo(() => identityAliasValues().slice(0, ALIAS_COLLAPSE_THRESHOLD));
+  const hasAliasOverflow = createMemo(() => identityAliasValues().length > ALIAS_COLLAPSE_THRESHOLD);
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(props.resource));
   const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
+  const relatedLinks = createMemo(() => {
+    const links: Array<{ href: string; label: string; ariaLabel: string }> = [];
+    const workloads = workloadsHref();
+    if (workloads) {
+      links.push({
+        href: workloads,
+        label: 'Open in Workloads',
+        ariaLabel: `Open related workloads for ${displayName()}`,
+      });
+    }
+    links.push(...buildServiceDetailLinks(props.resource));
+    const seen = new Set<string>();
+    return links.filter((link) => {
+      if (seen.has(link.href)) return false;
+      seen.add(link.href);
+      return true;
+    });
+  });
   const sourceSections = createMemo(() => {
     const data = platformData();
     if (!data) return [];
@@ -629,6 +889,13 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
                 )}
               </For>
             </Show>
+            <For each={kubernetesCapabilityBadges()}>
+              {(badge) => (
+                <span class={badge.classes} title={badge.title}>
+                  {badge.label}
+                </span>
+              )}
+            </For>
           </div>
         </div>
 
@@ -643,17 +910,20 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
         </Show>
       </div>
 
-      <Show when={workloadsHref()}>
-        {(href) => (
-          <div class="flex items-center justify-end">
-            <a
-              href={href()}
-              class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700/60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
-            >
-              Open in Workloads
-            </a>
+      <Show when={relatedLinks().length > 0}>
+        <div class="flex items-center justify-end gap-2">
+          <For each={relatedLinks()}>
+            {(link) => (
+              <a
+                href={link.href}
+                aria-label={link.ariaLabel}
+                class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700/60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+              >
+                {link.label}
+              </a>
+            )}
+          </For>
           </div>
-        )}
       </Show>
 
       <div class="flex items-center gap-6 border-b border-gray-200 dark:border-gray-700 px-1 mb-1">
@@ -704,7 +974,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
 
         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
           <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Status</div>
+            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Runtime</div>
             <div class="space-y-1.5 text-[11px]">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-gray-500 dark:text-gray-400">State</span>
@@ -727,27 +997,31 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
                   </span>
                 </div>
               </Show>
+              <Show when={sourceSummary()}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-gray-400">Sources</span>
+                  <span class={`font-medium ${sourceSummary()!.className}`} title={sourceSummary()!.title}>
+                    {sourceSummary()!.label}
+                  </span>
+                </div>
+              </Show>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-gray-500 dark:text-gray-400">Mode</span>
+                <span class="font-medium text-gray-700 dark:text-gray-200">{formatSourceType(props.resource.sourceType)}</span>
+              </div>
+              <Show when={(props.resource.alerts?.length || 0) > 0}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-500 dark:text-gray-400">Alerts</span>
+                  <span class="font-medium text-amber-600 dark:text-amber-400">
+                    {formatInteger(props.resource.alerts?.length)}
+                  </span>
+                </div>
+              </Show>
               <Show when={props.resource.platformId}>
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-gray-500 dark:text-gray-400">Platform ID</span>
                   <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.platformId}>
                     {props.resource.platformId}
-                  </span>
-                </div>
-              </Show>
-              <Show when={props.resource.clusterId}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-gray-500 dark:text-gray-400">Cluster</span>
-                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.clusterId}>
-                    {props.resource.clusterId}
-                  </span>
-                </div>
-              </Show>
-              <Show when={props.resource.parentId}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-gray-500 dark:text-gray-400">Parent</span>
-                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.parentId}>
-                    {props.resource.parentId}
                   </span>
                 </div>
               </Show>
@@ -757,22 +1031,16 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
           <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
             <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Identity</div>
             <div class="space-y-1.5 text-[11px]">
-              <Show when={props.resource.identity?.hostname}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-gray-500 dark:text-gray-400">Hostname</span>
-                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.identity?.hostname}>
-                    {props.resource.identity?.hostname}
-                  </span>
-                </div>
-              </Show>
-              <Show when={props.resource.identity?.machineId}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-gray-500 dark:text-gray-400">Machine ID</span>
-                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={props.resource.identity?.machineId}>
-                    {props.resource.identity?.machineId}
-                  </span>
-                </div>
-              </Show>
+              <For each={primaryIdentityRows()}>
+                {(row) => (
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-gray-500 dark:text-gray-400">{row.label}</span>
+                    <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={row.value}>
+                      {row.value}
+                    </span>
+                  </div>
+                )}
+              </For>
               <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
                 <div class="flex flex-col gap-1">
                   <span class="text-gray-500 dark:text-gray-400">IP Addresses</span>
@@ -796,13 +1064,60 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
                   <TagBadges tags={props.resource.tags} maxVisible={6} />
                 </div>
               </Show>
+              <Show when={identityAliasValues().length > 0}>
+                <Show
+                  when={hasAliasOverflow()}
+                  fallback={
+                    <div class="flex flex-col gap-1">
+                      <span class="text-gray-500 dark:text-gray-400">Aliases</span>
+                      <div class="flex flex-wrap gap-1">
+                        <For each={aliasPreviewValues()}>
+                          {(value) => (
+                            <span class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700 dark:bg-gray-700/60 dark:text-gray-200" title={value}>
+                              {value}
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  }
+                >
+                  <details class="rounded border border-gray-200/80 bg-white/80 px-2 py-1.5 dark:border-gray-600/60 dark:bg-gray-900/30">
+                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-gray-600 dark:text-gray-300">
+                      <span>Aliases</span>
+                      <span class="text-gray-500 dark:text-gray-400">{identityAliasValues().length}</span>
+                    </summary>
+                    <div class="mt-2 flex flex-wrap gap-1 border-t border-gray-200/80 pt-2 dark:border-gray-600/50">
+                      <For each={identityAliasValues()}>
+                        {(value) => (
+                          <span class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700 dark:bg-gray-700/60 dark:text-gray-200" title={value}>
+                            {value}
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                  </details>
+                </Show>
+              </Show>
+              <Show when={!identityCardHasRichData()}>
+                <div class="rounded border border-dashed border-gray-300 bg-gray-50/70 px-2 py-1.5 text-[10px] text-gray-500 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-400">
+                  No enriched identity metadata yet.
+                </div>
+              </Show>
             </div>
           </div>
 
           <Show when={pbsData()}>
             {(pbs) => (
               <div class="rounded border border-indigo-200 bg-indigo-50/60 p-3 shadow-sm dark:border-indigo-700/60 dark:bg-indigo-900/20">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300 mb-2">PBS Service</div>
+                <div class="mb-2 flex items-center justify-between gap-2">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">PBS Service</div>
+                  <Show when={pbs().hostname}>
+                    <span class="max-w-[55%] truncate text-[10px] text-indigo-700/80 dark:text-indigo-300/80" title={pbs().hostname}>
+                      {pbs().hostname}
+                    </span>
+                  </Show>
+                </div>
                 <div class="space-y-1.5 text-[11px]">
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-gray-500 dark:text-gray-400">Connection</span>
@@ -824,21 +1139,32 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
                       </span>
                     </div>
                   </Show>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-gray-500 dark:text-gray-400">Datastores</span>
-                    <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().datastoreCount)}</span>
+                  <div class="grid grid-cols-2 gap-2 pt-1">
+                    <div class="rounded border border-indigo-200/70 bg-white/70 px-2 py-1.5 dark:border-indigo-700/50 dark:bg-gray-900/30">
+                      <div class="text-[10px] text-gray-500 dark:text-gray-400">Datastores</div>
+                      <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">{formatInteger(pbs().datastoreCount)}</div>
+                    </div>
+                    <div class="rounded border border-indigo-200/70 bg-white/70 px-2 py-1.5 dark:border-indigo-700/50 dark:bg-gray-900/30">
+                      <div class="text-[10px] text-gray-500 dark:text-gray-400">Total Jobs</div>
+                      <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">{formatInteger(pbsJobTotal())}</div>
+                    </div>
                   </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-gray-500 dark:text-gray-400">Total Jobs</span>
-                    <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbsJobTotal())}</span>
-                  </div>
-                  <div class="grid grid-cols-2 gap-x-3 gap-y-1 pt-1 text-[10px]">
-                    <span class="text-gray-500 dark:text-gray-400">Backup: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().backupJobCount)}</span></span>
-                    <span class="text-gray-500 dark:text-gray-400">Sync: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().syncJobCount)}</span></span>
-                    <span class="text-gray-500 dark:text-gray-400">Verify: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().verifyJobCount)}</span></span>
-                    <span class="text-gray-500 dark:text-gray-400">Prune: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().pruneJobCount)}</span></span>
-                    <span class="text-gray-500 dark:text-gray-400">Garbage: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pbs().garbageJobCount)}</span></span>
-                  </div>
+                  <details class="rounded border border-indigo-200/70 bg-white/70 px-2 py-1.5 dark:border-indigo-700/50 dark:bg-gray-900/30">
+                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-gray-600 dark:text-gray-300">
+                      <span>Job breakdown</span>
+                      <span class="text-gray-500 dark:text-gray-400">{pbsVisibleJobBreakdown().length} types</span>
+                    </summary>
+                    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200/60 pt-2 text-[10px] dark:border-indigo-700/40">
+                      <For each={pbsVisibleJobBreakdown()}>
+                        {(entry) => (
+                          <span class="text-gray-500 dark:text-gray-400">
+                            {entry.label}:{' '}
+                            <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(entry.value)}</span>
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                  </details>
                 </div>
               </div>
             )}
@@ -847,7 +1173,14 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
           <Show when={pmgData()}>
             {(pmg) => (
               <div class="rounded border border-rose-200 bg-rose-50/60 p-3 shadow-sm dark:border-rose-700/60 dark:bg-rose-900/20">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300 mb-2">Mail Gateway</div>
+                <div class="mb-2 flex items-center justify-between gap-2">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">Mail Gateway</div>
+                  <Show when={pmg().hostname}>
+                    <span class="max-w-[55%] truncate text-[10px] text-rose-700/80 dark:text-rose-300/80" title={pmg().hostname}>
+                      {pmg().hostname}
+                    </span>
+                  </Show>
+                </div>
                 <div class="space-y-1.5 text-[11px]">
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-gray-500 dark:text-gray-400">Connection</span>
@@ -869,33 +1202,64 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
                       </span>
                     </div>
                   </Show>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-gray-500 dark:text-gray-400">Nodes</span>
-                    <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().nodeCount)}</span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-gray-500 dark:text-gray-400">Queue Total</span>
-                    <span class={`font-medium ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200'}`}>
-                      {formatInteger(pmg().queueTotal)}
-                    </span>
-                  </div>
-                  <div class="grid grid-cols-2 gap-x-3 gap-y-1 pt-1 text-[10px]">
-                    <span class="text-gray-500 dark:text-gray-400">Active: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().queueActive)}</span></span>
-                    <span class="text-gray-500 dark:text-gray-400">Deferred: <span class={`font-medium ${((pmg().queueDeferred || 0) > 0) ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200'}`}>{formatInteger(pmg().queueDeferred)}</span></span>
-                    <span class="text-gray-500 dark:text-gray-400">Hold: <span class={`font-medium ${((pmg().queueHold || 0) > 0) ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200'}`}>{formatInteger(pmg().queueHold)}</span></span>
-                    <span class="text-gray-500 dark:text-gray-400">Incoming: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().queueIncoming)}</span></span>
-                  </div>
-                  <div class="grid grid-cols-3 gap-x-3 gap-y-1 pt-1 text-[10px]">
-                    <span class="text-gray-500 dark:text-gray-400">Mail: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().mailCountTotal)}</span></span>
-                    <span class="text-gray-500 dark:text-gray-400">Spam: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().spamIn)}</span></span>
-                    <span class="text-gray-500 dark:text-gray-400">Virus: <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(pmg().virusIn)}</span></span>
-                  </div>
-                  <Show when={pmgUpdatedRelative()}>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-gray-500 dark:text-gray-400">Updated</span>
-                      <span class="font-medium text-gray-700 dark:text-gray-200">{pmgUpdatedRelative()}</span>
+                  <div class="grid grid-cols-3 gap-2 pt-1">
+                    <div class="rounded border border-rose-200/70 bg-white/70 px-2 py-1.5 dark:border-rose-700/50 dark:bg-gray-900/30">
+                      <div class="text-[10px] text-gray-500 dark:text-gray-400">Nodes</div>
+                      <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">{formatInteger(pmg().nodeCount)}</div>
                     </div>
-                  </Show>
+                    <div class="rounded border border-rose-200/70 bg-white/70 px-2 py-1.5 dark:border-rose-700/50 dark:bg-gray-900/30">
+                      <div class="text-[10px] text-gray-500 dark:text-gray-400">Queue Total</div>
+                      <div class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200'}`}>
+                        {formatInteger(pmg().queueTotal)}
+                      </div>
+                    </div>
+                    <div class="rounded border border-rose-200/70 bg-white/70 px-2 py-1.5 dark:border-rose-700/50 dark:bg-gray-900/30">
+                      <div class="text-[10px] text-gray-500 dark:text-gray-400">Backlog</div>
+                      <div class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200'}`}>
+                        {formatInteger(pmgQueueBacklog())}
+                      </div>
+                    </div>
+                  </div>
+                  <details class="rounded border border-rose-200/70 bg-white/70 px-2 py-1.5 dark:border-rose-700/50 dark:bg-gray-900/30">
+                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-gray-600 dark:text-gray-300">
+                      <span>Queue breakdown</span>
+                      <span class="text-gray-500 dark:text-gray-400">{pmgVisibleQueueBreakdown().length} signals</span>
+                    </summary>
+                    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-rose-200/60 pt-2 text-[10px] dark:border-rose-700/40">
+                      <For each={pmgVisibleQueueBreakdown()}>
+                        {(entry) => (
+                          <span class="text-gray-500 dark:text-gray-400">
+                            {entry.label}:{' '}
+                            <span class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200'}`}>
+                              {formatInteger(entry.value)}
+                            </span>
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                  </details>
+                  <details class="rounded border border-rose-200/70 bg-white/70 px-2 py-1.5 dark:border-rose-700/50 dark:bg-gray-900/30">
+                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-gray-600 dark:text-gray-300">
+                      <span>Mail processing</span>
+                      <span class="text-gray-500 dark:text-gray-400">{pmgVisibleMailBreakdown().length} signals</span>
+                    </summary>
+                    <div class="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-rose-200/60 pt-2 text-[10px] dark:border-rose-700/40">
+                      <For each={pmgVisibleMailBreakdown()}>
+                        {(entry) => (
+                          <span class="text-gray-500 dark:text-gray-400">
+                            {entry.label}:{' '}
+                            <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(entry.value)}</span>
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                    <Show when={pmgUpdatedRelative()}>
+                      <div class="mt-2 flex items-center justify-between gap-2 border-t border-rose-200/60 pt-2 text-[10px] dark:border-rose-700/40">
+                        <span class="text-gray-500 dark:text-gray-400">Updated</span>
+                        <span class="font-medium text-gray-700 dark:text-gray-200">{pmgUpdatedRelative()}</span>
+                      </div>
+                    </Show>
+                  </details>
                 </div>
               </div>
             )}
