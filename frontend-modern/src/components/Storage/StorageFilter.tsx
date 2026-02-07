@@ -4,6 +4,7 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import type { StorageSourceOption } from './storageSourceOptions';
 
 interface StorageFilterProps {
   search: () => string;
@@ -18,8 +19,9 @@ interface StorageFilterProps {
   searchInputRef?: (el: HTMLInputElement) => void;
   statusFilter?: () => 'all' | 'available' | 'offline';
   setStatusFilter?: (value: 'all' | 'available' | 'offline') => void;
-  sourceFilter?: () => 'all' | 'proxmox' | 'pbs' | 'ceph';
-  setSourceFilter?: (value: 'all' | 'proxmox' | 'pbs' | 'ceph') => void;
+  sourceFilter?: () => string;
+  setSourceFilter?: (value: string) => void;
+  sourceOptions?: StorageSourceOption[];
   // Column visibility (optional)
   columnVisibility?: {
     availableToggles: () => ColumnDef[];
@@ -44,6 +46,32 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
     (props.groupBy && props.groupBy() !== 'node') ||
     (props.statusFilter && props.statusFilter() !== 'all') ||
     (props.sourceFilter && props.sourceFilter() !== 'all');
+
+  const sourceOptions = (): StorageSourceOption[] =>
+    props.sourceOptions ?? [
+      { key: 'all', label: 'All Sources', tone: 'slate' },
+      { key: 'proxmox', label: 'PVE', tone: 'blue' },
+      { key: 'pbs', label: 'PBS', tone: 'emerald' },
+      { key: 'ceph', label: 'Ceph', tone: 'violet' },
+    ];
+
+  const sourceToneClasses = (tone: StorageSourceOption['tone'], active: boolean) => {
+    if (!active) {
+      return 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100';
+    }
+    switch (tone) {
+      case 'blue':
+        return 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 shadow-sm';
+      case 'emerald':
+        return 'bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-300 shadow-sm';
+      case 'violet':
+        return 'bg-white dark:bg-gray-800 text-violet-600 dark:text-violet-300 shadow-sm';
+      case 'cyan':
+        return 'bg-white dark:bg-gray-800 text-cyan-600 dark:text-cyan-300 shadow-sm';
+      default:
+        return 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm';
+    }
+  };
 
   return (
     <Card class="storage-filter mb-3" padding="sm">
@@ -105,46 +133,21 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
           {/* Source Filter */}
           <Show when={props.sourceFilter && props.setSourceFilter}>
             <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <button
-                type="button"
-                onClick={() => props.setSourceFilter!('all')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.sourceFilter!() === 'all'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-              >
-                All Sources
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setSourceFilter!('proxmox')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.sourceFilter!() === 'proxmox'
-                  ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-              >
-                Proxmox
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setSourceFilter!('pbs')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.sourceFilter!() === 'pbs'
-                  ? 'bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-300 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-              >
-                PBS
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setSourceFilter!('ceph')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.sourceFilter!() === 'ceph'
-                  ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-300 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-              >
-                Ceph
-              </button>
+              {sourceOptions().map((option) => {
+                const active = () => props.sourceFilter!() === option.key;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => props.setSourceFilter!(option.key)}
+                    class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${sourceToneClasses(
+                      option.tone,
+                      active(),
+                    )}`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
           </Show>

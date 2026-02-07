@@ -22,14 +22,21 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { buildStoragePath, parseStorageLinkSearch, STORAGE_QUERY_PARAMS } from '@/routing/resourceLinks';
+import { useResourcesAsLegacy } from '@/hooks/useResources';
+import {
+  buildStorageSourceOptions,
+  normalizeStorageSourceKey,
+  resolveStorageSourceKey,
+} from './storageSourceOptions';
 
 type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
-type StorageSourceFilter = 'all' | 'proxmox' | 'pbs' | 'ceph';
 
 const Storage: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = useWebSocket();
+  const legacyResources = useResourcesAsLegacy({ state });
+  const storageState = createMemo(() => legacyResources.asStorage());
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const [viewMode, setViewMode] = usePersistentSignal<'node' | 'storage'>(
@@ -69,12 +76,11 @@ const Storage: Component = () => {
         raw === 'all' || raw === 'available' || raw === 'offline' ? raw : 'all',
     },
   );
-  const [sourceFilter, setSourceFilter] = usePersistentSignal<StorageSourceFilter>(
+  const [sourceFilter, setSourceFilter] = usePersistentSignal<string>(
     STORAGE_KEYS.STORAGE_SOURCE_FILTER,
     'all',
     {
-      deserialize: (raw) =>
-        raw === 'all' || raw === 'proxmox' || raw === 'pbs' || raw === 'ceph' ? raw : 'all',
+      deserialize: (raw) => normalizeStorageSourceKey(raw) || 'all',
     },
   );
 
@@ -84,7 +90,7 @@ const Storage: Component = () => {
   createEffect(() => {
     const { resource: resourceId } = parseStorageLinkSearch(location.search);
     if (!resourceId || resourceId === handledStorageId()) return;
-    const match = (state.storage || []).find(
+    const match = storageState().find(
       (storage) => getStorageRowId(storage) === resourceId || storage.name === resourceId,
     );
     if (!match) return;
@@ -109,10 +115,7 @@ const Storage: Component = () => {
       setViewMode(nextGroup);
     }
 
-    const nextSource =
-      parsed.source === 'proxmox' || parsed.source === 'pbs' || parsed.source === 'ceph'
-        ? parsed.source
-        : 'all';
+    const nextSource = normalizeStorageSourceKey(parsed.source) || 'all';
     if (nextSource !== untrack(sourceFilter)) {
       setSourceFilter(nextSource);
     }
@@ -208,11 +211,6 @@ const Storage: Component = () => {
     return value === 'rbd' || value === 'cephfs' || value === 'ceph';
   };
 
-  const isPBSStorage = (storage: StorageType) => storage.type === 'pbs';
-  const isCephStorage = (storage: StorageType) => isCephType(storage.type);
-  const isProxmoxStorage = (storage: StorageType) =>
-    !isPBSStorage(storage) && !isCephStorage(storage);
-
   const getCephHealthLabel = (health?: string) => {
     if (!health) return 'CEPH';
     const normalized = health.toUpperCase();
@@ -241,7 +239,7 @@ const Storage: Component = () => {
       return explicit;
     }
 
-    const storageList = state.storage || [];
+    const storageList = storageState();
     const summaryByInstance = new Map<
       string,
       {
@@ -341,44 +339,6 @@ const Storage: Component = () => {
     };
   });
 
-  const pbsDatastoreStorage = createMemo<StorageType[]>(() => {
-    const instances = state.pbs || [];
-    const datastores: StorageType[] = [];
-
-    instances.forEach((instance) => {
-      (instance.datastores || []).forEach((store) => {
-        const total = Number.isFinite(store.total) ? store.total : 0;
-        const used = Number.isFinite(store.used) ? store.used : 0;
-        const free = Number.isFinite(store.free) ? store.free : Math.max(total - used, 0);
-        const usage = total > 0 ? (used / total) * 100 : 0;
-        const instanceLabel = instance.name || instance.host || instance.id || 'PBS';
-        const datastoreName = store.name || 'PBS Datastore';
-
-        datastores.push({
-          id: `pbs-${instance.id || instanceLabel}-${datastoreName}`,
-          name: datastoreName,
-          node: instanceLabel,
-          instance: instance.id || instanceLabel,
-          type: 'pbs',
-          status: store.status || instance.status || 'unknown',
-          total,
-          used,
-          free,
-          usage,
-          content: 'backup',
-          shared: false,
-          enabled: true,
-          active: true,
-          nodes: [instanceLabel],
-          pbsNames: [datastoreName],
-        });
-      });
-    });
-
-    return datastores;
-  });
-
-
   const sortKeyOptions: { value: StorageSortKey; label: string }[] = [
     { value: 'name', label: 'Name' },
     { value: 'node', label: 'Node' },
@@ -391,7 +351,7 @@ const Storage: Component = () => {
 
   // Filter storage - in storage view, filter out 0 capacity and deduplicate
   const filteredStorage = createMemo(() => {
-    let storage = [...(state.storage || []), ...pbsDatastoreStorage()];
+    let storage = [...storageState()];
 
     // In storage view, deduplicate identical storage and filter out 0 capacity
     if (viewMode() === 'storage') {
@@ -505,6 +465,8 @@ const Storage: Component = () => {
     return storage;
   });
 
+  const sourceOptions = createMemo(() => buildStorageSourceOptions(filteredStorage()));
+
   // Sort and filter storage
   const sortedStorage = createMemo(() => {
     let storage = [...filteredStorage()];
@@ -525,11 +487,7 @@ const Storage: Component = () => {
 
     // Apply source filter
     if (sourceFilter() !== 'all') {
-      storage = storage.filter((s) => {
-        if (sourceFilter() === 'pbs') return isPBSStorage(s);
-        if (sourceFilter() === 'ceph') return isCephStorage(s);
-        return isProxmoxStorage(s);
-      });
+      storage = storage.filter((s) => resolveStorageSourceKey(s) === sourceFilter());
     }
 
     // Apply status filter
@@ -865,6 +823,7 @@ const Storage: Component = () => {
           setStatusFilter={setStatusFilter}
           sourceFilter={sourceFilter}
           setSourceFilter={setSourceFilter}
+          sourceOptions={sourceOptions()}
           searchInputRef={(el) => (searchInputRef = el)}
           columnVisibility={columnVisibility}
         />
@@ -999,7 +958,7 @@ const Storage: Component = () => {
               </svg>
             }
             title="No storage configured"
-            description="Install the Pulse agent for extra capabilities (temperature monitoring and Pulse Patrol automation), or add a node via API token in Settings → Proxmox."
+            description="Connect one or more monitored platforms in Settings to start collecting storage pools and disk metrics."
             actions={
               <button
                 type="button"
@@ -1170,7 +1129,7 @@ const Storage: Component = () => {
                                   () => cephClusterByInstance()[storage.instance],
                                 );
                                 const cephInstanceStorages = createMemo(() =>
-                                  (state.storage || []).filter(
+                                  storageState().filter(
                                     (item) =>
                                       item.instance === storage.instance && isCephType(item.type),
                                   ),
