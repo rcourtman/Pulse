@@ -11,6 +11,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getHostStatusIndicator } from '@/utils/status';
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
 import { buildWorkloadsHref } from './workloadsLink';
+import { buildServiceDetailLinks } from './serviceDetailLinks';
 import { getPlatformBadge, getSourceBadge, getUnifiedSourceBadges } from './resourceBadges';
 
 interface UnifiedResourceTableProps {
@@ -45,8 +46,19 @@ type PMGServiceData = {
 
 type ServiceSummaryTone = 'ok' | 'warning' | 'muted';
 
-type ServiceSummary = {
-  text: string;
+type PBSTableRow = {
+  datastores: number | null;
+  jobs: number | null;
+  health: string | null;
+  tone: ServiceSummaryTone;
+};
+
+type PMGTableRow = {
+  queue: number | null;
+  deferred: number | null;
+  hold: number | null;
+  nodes: number | null;
+  health: string | null;
   tone: ServiceSummaryTone;
 };
 
@@ -71,55 +83,44 @@ const summarizeServiceHealthTone = (value?: string): ServiceSummaryTone => {
   return 'muted';
 };
 
-const formatJobCount = (count: number): string => `${count} job${count === 1 ? '' : 's'}`;
-const formatDatastoreCount = (count: number): string => `${count} datastore${count === 1 ? '' : 's'}`;
-const formatNodeCount = (count: number): string => `${count} node${count === 1 ? '' : 's'}`;
+const isServiceInfrastructureResource = (resource: Resource) =>
+  resource.type === 'pbs' || resource.type === 'pmg';
 
-const getServiceSummary = (resource: Resource): ServiceSummary | null => {
+const getPBSTableRow = (resource: Resource): PBSTableRow | null => {
+  if (resource.type !== 'pbs') return null;
   const platformData = resource.platformData as { pbs?: PBSServiceData; pmg?: PMGServiceData } | undefined;
-  if (!platformData) return null;
+  const pbs = platformData?.pbs;
+  const totalJobs =
+    (pbs?.backupJobCount || 0) +
+    (pbs?.syncJobCount || 0) +
+    (pbs?.verifyJobCount || 0) +
+    (pbs?.pruneJobCount || 0) +
+    (pbs?.garbageJobCount || 0);
+  const health = pbs?.connectionHealth?.trim() || null;
 
-  if (resource.type === 'pbs' && platformData.pbs) {
-    const pbs = platformData.pbs;
-    const totalJobs =
-      (pbs.backupJobCount || 0) +
-      (pbs.syncJobCount || 0) +
-      (pbs.verifyJobCount || 0) +
-      (pbs.pruneJobCount || 0) +
-      (pbs.garbageJobCount || 0);
-    const parts: string[] = [];
-    if ((pbs.datastoreCount || 0) > 0) {
-      parts.push(formatDatastoreCount(pbs.datastoreCount || 0));
-    }
-    if (totalJobs > 0) {
-      parts.push(formatJobCount(totalJobs));
-    }
-    if (parts.length === 0 && pbs.connectionHealth) {
-      parts.push(pbs.connectionHealth);
-    }
-    if (parts.length === 0) return null;
-    return { text: parts.join(' · '), tone: summarizeServiceHealthTone(pbs.connectionHealth) };
-  }
+  return {
+    datastores: (pbs?.datastoreCount || 0) > 0 ? (pbs?.datastoreCount || 0) : null,
+    jobs: totalJobs > 0 ? totalJobs : null,
+    health,
+    tone: summarizeServiceHealthTone(health || undefined),
+  };
+};
 
-  if (resource.type === 'pmg' && platformData.pmg) {
-    const pmg = platformData.pmg;
-    const parts: string[] = [];
-    if ((pmg.queueTotal || 0) > 0) {
-      parts.push(`Queue ${pmg.queueTotal}`);
-    }
-    if ((pmg.nodeCount || 0) > 0) {
-      parts.push(formatNodeCount(pmg.nodeCount || 0));
-    }
-    if (parts.length === 0 && pmg.connectionHealth) {
-      parts.push(pmg.connectionHealth);
-    }
-    const backlog = (pmg.queueDeferred || 0) + (pmg.queueHold || 0);
-    const tone = backlog > 0 ? 'warning' : summarizeServiceHealthTone(pmg.connectionHealth);
-    if (parts.length === 0) return null;
-    return { text: parts.join(' · '), tone };
-  }
+const getPMGTableRow = (resource: Resource): PMGTableRow | null => {
+  if (resource.type !== 'pmg') return null;
+  const platformData = resource.platformData as { pbs?: PBSServiceData; pmg?: PMGServiceData } | undefined;
+  const pmg = platformData?.pmg;
+  const health = pmg?.connectionHealth?.trim() || null;
+  const backlog = (pmg?.queueDeferred || 0) + (pmg?.queueHold || 0);
 
-  return null;
+  return {
+    queue: (pmg?.queueTotal || 0) > 0 ? (pmg?.queueTotal || 0) : null,
+    deferred: (pmg?.queueDeferred || 0) > 0 ? (pmg?.queueDeferred || 0) : null,
+    hold: (pmg?.queueHold || 0) > 0 ? (pmg?.queueHold || 0) : null,
+    nodes: (pmg?.nodeCount || 0) > 0 ? (pmg?.nodeCount || 0) : null,
+    health,
+    tone: backlog > 0 ? 'warning' : summarizeServiceHealthTone(health || undefined),
+  };
 };
 
 interface IODistributionStats {
@@ -286,8 +287,15 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     return aStr < bStr ? -1 : 1;
   };
 
+  const hostResources = createMemo(() =>
+    props.resources.filter((resource) => !isServiceInfrastructureResource(resource)),
+  );
+  const serviceResources = createMemo(() =>
+    props.resources.filter((resource) => isServiceInfrastructureResource(resource)),
+  );
+
   const sortedResources = createMemo(() => {
-    const resources = [...props.resources];
+    const resources = [...hostResources()];
     const key = sortKey();
     const direction = sortDirection();
 
@@ -333,11 +341,18 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     return entries;
   });
 
+  const sortedPBSResources = createMemo(() =>
+    [...serviceResources().filter((resource) => resource.type === 'pbs')].sort(defaultComparison),
+  );
+  const sortedPMGResources = createMemo(() =>
+    [...serviceResources().filter((resource) => resource.type === 'pmg')].sort(defaultComparison),
+  );
+
   const ioScale = createMemo(() => {
     const networkValues: number[] = [];
     const diskIOValues: number[] = [];
 
-    for (const resource of props.resources) {
+    for (const resource of hostResources()) {
       const networkTotal = (resource.network?.rxBytes ?? 0) + (resource.network?.txBytes ?? 0);
       if (resource.network) {
         networkValues.push(networkTotal);
@@ -403,8 +418,38 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     return platformData?.sources ?? [];
   };
 
+  const showHostTable = createMemo(() =>
+    hostResources().length > 0 || serviceResources().length === 0,
+  );
+  const staticThClass = 'px-1.5 sm:px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center';
+  const serviceCountColumnStyle = createMemo(() =>
+    isMobile()
+      ? { width: '80px', 'min-width': '80px', 'max-width': '90px' }
+      : { width: '110px', 'min-width': '110px', 'max-width': '130px' }
+  );
+  const serviceQueueColumnStyle = createMemo(() =>
+    isMobile()
+      ? { width: '88px', 'min-width': '88px', 'max-width': '104px' }
+      : { width: '120px', 'min-width': '120px', 'max-width': '140px' }
+  );
+  const serviceHealthColumnStyle = createMemo(() =>
+    isMobile()
+      ? { width: '100px', 'min-width': '100px', 'max-width': '120px' }
+      : { width: '140px', 'min-width': '140px', 'max-width': '170px' }
+  );
+  const serviceActionColumnStyle = createMemo(() =>
+    isMobile()
+      ? { width: '82px', 'min-width': '82px', 'max-width': '96px' }
+      : { width: '120px', 'min-width': '120px', 'max-width': '140px' }
+  );
+
   return (
-    <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
+    <div class="space-y-4">
+      <Show when={showHostTable()}>
+        <Card padding="none" tone="glass" class="mb-0 overflow-hidden">
+          <div class="border-b border-gray-200/70 bg-gray-50/70 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-slate-300">
+            Host Infrastructure
+          </div>
       <div
         class="overflow-x-auto"
         style={{ '-webkit-overflow-scrolling': 'touch' }}
@@ -531,15 +576,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         getUnifiedSourceBadges(getUnifiedSources(resource)),
                       );
                       const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-                      const serviceSummary = createMemo(() => getServiceSummary(resource));
                       const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
-                      const serviceSummaryClass = createMemo(() => {
-                        const summary = serviceSummary();
-                        if (!summary) return '';
-                        if (summary.tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
-                        if (summary.tone === 'warning') return 'text-amber-600 dark:text-amber-400';
-                        return 'text-gray-500 dark:text-gray-400';
-                      });
 
                       return (
                         <>
@@ -560,7 +597,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <td class="pr-1.5 sm:pr-2 py-1 align-middle overflow-hidden pl-2 sm:pl-3">
                               <div class="flex items-center gap-1.5 min-w-0">
                                 <div
-                                  class={`transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
+                                  class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
                                 >
                                   <svg class="w-3.5 h-3.5 text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -572,38 +609,36 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   ariaLabel={statusIndicator().label}
                                   size="xs"
                                 />
-                                <span
-                                  class="font-medium text-[11px] text-gray-900 dark:text-gray-100 whitespace-nowrap select-text"
-                                  title={displayName()}
-                                >
-                                  {displayName()}
-                                </span>
+                                <div class="flex min-w-0 flex-1 items-baseline gap-1">
+                                  <span
+                                    class="block min-w-0 flex-1 truncate font-medium text-[11px] text-gray-900 dark:text-gray-100 select-text"
+                                    title={displayName()}
+                                  >
+                                    {displayName()}
+                                  </span>
                                 <Show when={hasAlternateName(resource)}>
-                                  <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                  <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-gray-500 dark:text-gray-400 lg:inline">
                                     ({resource.name})
                                   </span>
                                 </Show>
                               </div>
-                              <Show when={serviceSummary()}>
-                                {(summary) => (
-                                  <div class={`ml-5 mt-0.5 text-[10px] font-medium ${serviceSummaryClass()}`}>
-                                    {summary().text}
-                                  </div>
-                                )}
-                              </Show>
-                              <Show when={workloadsHref()}>
-                                {(href) => (
-                                  <div class="ml-5 mt-0.5">
+                                <Show when={workloadsHref()}>
+                                  {(href) => (
                                     <a
                                       href={href()}
-                                      class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700/60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                                      class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:text-blue-300 dark:hover:bg-blue-900/40 dark:hover:text-blue-200"
+                                      title="View related workloads"
+                                      aria-label={`View workloads for ${displayName()}`}
                                       onClick={(event) => event.stopPropagation()}
                                     >
-                                      View workloads
+                                      <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M14 5h5m0 0v5m0-5-8 8" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 10v9h9" />
+                                      </svg>
                                     </a>
-                                  </div>
-                                )}
-                              </Show>
+                                  )}
+                                </Show>
+                              </div>
                             </td>
 
                             <td class={tdClass}>
@@ -768,7 +803,478 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
           </tbody>
         </table>
       </div>
-    </Card>
+        </Card>
+      </Show>
+
+      <Show when={sortedPBSResources().length > 0 || sortedPMGResources().length > 0}>
+        <Card padding="none" tone="glass" class="mb-0 overflow-hidden">
+          <div class="border-b border-gray-200/70 bg-gray-50/70 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-slate-300">
+            Service Infrastructure
+          </div>
+
+          <Show when={sortedPBSResources().length > 0}>
+            <div class="border-b border-gray-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-gray-700 dark:text-slate-300">
+              PBS Services
+            </div>
+            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
+              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '760px' }}>
+                <thead>
+                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
+                      Resource
+                    </th>
+                    <th class={staticThClass} style={serviceCountColumnStyle()}>
+                      Datastores
+                    </th>
+                    <th class={staticThClass} style={serviceCountColumnStyle()}>
+                      Jobs
+                    </th>
+                    <th class={staticThClass} style={serviceHealthColumnStyle()}>
+                      Health
+                    </th>
+                    <th class={staticThClass} style={sourceColumnStyle()}>
+                      Source
+                    </th>
+                    <th class={staticThClass} style={uptimeColumnStyle()}>
+                      Uptime
+                    </th>
+                    <th class={staticThClass} style={serviceActionColumnStyle()}>
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800">
+                  <For each={sortedPBSResources()}>
+                    {(resource) => {
+                      const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
+                      const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
+                      const displayName = createMemo(() => getDisplayName(resource));
+                      const serviceLink = createMemo(() => buildServiceDetailLinks(resource)[0] ?? null);
+                      const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
+                      const pbsRow = createMemo(() => getPBSTableRow(resource));
+                      const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
+                      const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
+                      const unifiedSourceBadges = createMemo(() =>
+                        getUnifiedSourceBadges(getUnifiedSources(resource)),
+                      );
+                      const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+                      const healthClass = createMemo(() => {
+                        const tone = pbsRow()?.tone ?? 'muted';
+                        if (tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
+                        if (tone === 'warning') return 'text-amber-600 dark:text-amber-400';
+                        return 'text-gray-500 dark:text-gray-400';
+                      });
+
+                      const rowClass = createMemo(() => {
+                        const baseBorder = 'border-b border-gray-100 dark:border-gray-700/50';
+                        const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
+
+                        if (isExpanded()) {
+                          return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900/20 ${baseBorder}`;
+                        }
+
+                        let className = baseHover;
+                        if (isHighlighted()) {
+                          className += ' bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600';
+                        }
+                        if (props.hoveredResourceId === resource.id) {
+                          className += ' bg-blue-50/60 dark:bg-blue-900/30';
+                        }
+                        if (!isResourceOnline(resource)) {
+                          className += ' opacity-60';
+                        }
+
+                        return className;
+                      });
+
+                      return (
+                        <>
+                          <tr
+                            ref={(el) => {
+                              if (el) {
+                                rowRefs.set(resource.id, el);
+                              } else {
+                                rowRefs.delete(resource.id);
+                              }
+                            }}
+                            class={rowClass()}
+                            style={{ 'min-height': '36px' }}
+                            onClick={() => toggleExpand(resource.id)}
+                            onMouseEnter={() => props.onHoverChange?.(resource.id)}
+                            onMouseLeave={() => props.onHoverChange?.(null)}
+                          >
+                            <td class="pr-1.5 sm:pr-2 py-1 align-middle overflow-hidden pl-2 sm:pl-3">
+                              <div class="flex items-center gap-1.5 min-w-0">
+                                <div class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}>
+                                  <svg class="w-3.5 h-3.5 text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </div>
+                                <StatusDot
+                                  variant={statusIndicator().variant}
+                                  title={statusIndicator().label}
+                                  ariaLabel={statusIndicator().label}
+                                  size="xs"
+                                />
+                                <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-gray-900 dark:text-gray-100 select-text" title={displayName()}>
+                                  {displayName()}
+                                </span>
+                                <Show when={hasAlternateName(resource)}>
+                                  <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-gray-500 dark:text-gray-400 lg:inline">
+                                    ({resource.name})
+                                  </span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={pbsRow()?.datastores != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pbsRow()!.datastores}</span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={pbsRow()?.jobs != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pbsRow()!.jobs}</span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={pbsRow()?.health} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class={`text-xs font-medium ${healthClass()}`}>{pbsRow()!.health}</span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex flex-wrap items-center justify-center gap-1">
+                                <Show
+                                  when={hasUnifiedSources()}
+                                  fallback={
+                                    <>
+                                      <Show when={platformBadge()}>
+                                        {(badge) => (
+                                          <span class={badge().classes} title={badge().title}>
+                                            {badge().label}
+                                          </span>
+                                        )}
+                                      </Show>
+                                      <Show when={sourceBadge()}>
+                                        {(badge) => (
+                                          <span class={badge().classes} title={badge().title}>
+                                            {badge().label}
+                                          </span>
+                                        )}
+                                      </Show>
+                                    </>
+                                  }
+                                >
+                                  <For each={unifiedSourceBadges()}>
+                                    {(badge) => (
+                                      <span class={badge.classes} title={badge.title}>
+                                        {badge.label}
+                                      </span>
+                                    )}
+                                  </For>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                    {formatUptime(resource.uptime ?? 0)}
+                                  </span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={serviceLink()} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  {(link) => (
+                                    <a
+                                      href={link().href}
+                                      class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700/60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                                      title={link().label}
+                                      aria-label={link().ariaLabel}
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      {link().compactLabel}
+                                    </a>
+                                  )}
+                                </Show>
+                              </div>
+                            </td>
+                          </tr>
+                          <Show when={isExpanded()}>
+                            <tr>
+                              <td colspan={7} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
+                                <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
+                              </td>
+                            </tr>
+                          </Show>
+                        </>
+                      );
+                    }}
+                  </For>
+                </tbody>
+              </table>
+            </div>
+          </Show>
+
+          <Show when={sortedPMGResources().length > 0}>
+            <div class="border-b border-gray-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-gray-700 dark:text-slate-300">
+              PMG Services
+            </div>
+            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
+              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '880px' }}>
+                <thead>
+                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
+                      Resource
+                    </th>
+                    <th class={staticThClass} style={serviceQueueColumnStyle()}>
+                      Queue
+                    </th>
+                    <th class={staticThClass} style={serviceQueueColumnStyle()}>
+                      Deferred
+                    </th>
+                    <th class={staticThClass} style={serviceQueueColumnStyle()}>
+                      Hold
+                    </th>
+                    <th class={staticThClass} style={serviceCountColumnStyle()}>
+                      Nodes
+                    </th>
+                    <th class={staticThClass} style={serviceHealthColumnStyle()}>
+                      Health
+                    </th>
+                    <th class={staticThClass} style={sourceColumnStyle()}>
+                      Source
+                    </th>
+                    <th class={staticThClass} style={uptimeColumnStyle()}>
+                      Uptime
+                    </th>
+                    <th class={staticThClass} style={serviceActionColumnStyle()}>
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800">
+                  <For each={sortedPMGResources()}>
+                    {(resource) => {
+                      const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
+                      const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
+                      const displayName = createMemo(() => getDisplayName(resource));
+                      const serviceLink = createMemo(() => buildServiceDetailLinks(resource)[0] ?? null);
+                      const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
+                      const pmgRow = createMemo(() => getPMGTableRow(resource));
+                      const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
+                      const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
+                      const unifiedSourceBadges = createMemo(() =>
+                        getUnifiedSourceBadges(getUnifiedSources(resource)),
+                      );
+                      const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+                      const healthClass = createMemo(() => {
+                        const tone = pmgRow()?.tone ?? 'muted';
+                        if (tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
+                        if (tone === 'warning') return 'text-amber-600 dark:text-amber-400';
+                        return 'text-gray-500 dark:text-gray-400';
+                      });
+                      const queueClass = createMemo(() =>
+                        (pmgRow()?.deferred || 0) + (pmgRow()?.hold || 0) > 0
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-gray-700 dark:text-gray-300',
+                      );
+
+                      const rowClass = createMemo(() => {
+                        const baseBorder = 'border-b border-gray-100 dark:border-gray-700/50';
+                        const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
+
+                        if (isExpanded()) {
+                          return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900/20 ${baseBorder}`;
+                        }
+
+                        let className = baseHover;
+                        if (isHighlighted()) {
+                          className += ' bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600';
+                        }
+                        if (props.hoveredResourceId === resource.id) {
+                          className += ' bg-blue-50/60 dark:bg-blue-900/30';
+                        }
+                        if (!isResourceOnline(resource)) {
+                          className += ' opacity-60';
+                        }
+
+                        return className;
+                      });
+
+                      return (
+                        <>
+                          <tr
+                            ref={(el) => {
+                              if (el) {
+                                rowRefs.set(resource.id, el);
+                              } else {
+                                rowRefs.delete(resource.id);
+                              }
+                            }}
+                            class={rowClass()}
+                            style={{ 'min-height': '36px' }}
+                            onClick={() => toggleExpand(resource.id)}
+                            onMouseEnter={() => props.onHoverChange?.(resource.id)}
+                            onMouseLeave={() => props.onHoverChange?.(null)}
+                          >
+                            <td class="pr-1.5 sm:pr-2 py-1 align-middle overflow-hidden pl-2 sm:pl-3">
+                              <div class="flex items-center gap-1.5 min-w-0">
+                                <div class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}>
+                                  <svg class="w-3.5 h-3.5 text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </div>
+                                <StatusDot
+                                  variant={statusIndicator().variant}
+                                  title={statusIndicator().label}
+                                  ariaLabel={statusIndicator().label}
+                                  size="xs"
+                                />
+                                <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-gray-900 dark:text-gray-100 select-text" title={displayName()}>
+                                  {displayName()}
+                                </span>
+                                <Show when={hasAlternateName(resource)}>
+                                  <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-gray-500 dark:text-gray-400 lg:inline">
+                                    ({resource.name})
+                                  </span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={pmgRow()?.queue != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class={`text-xs font-medium ${queueClass()}`}>{pmgRow()!.queue}</span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={pmgRow()?.deferred != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.deferred}</span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={pmgRow()?.hold != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.hold}</span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={pmgRow()?.nodes != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.nodes}</span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={pmgRow()?.health} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class={`text-xs font-medium ${healthClass()}`}>{pmgRow()!.health}</span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex flex-wrap items-center justify-center gap-1">
+                                <Show
+                                  when={hasUnifiedSources()}
+                                  fallback={
+                                    <>
+                                      <Show when={platformBadge()}>
+                                        {(badge) => (
+                                          <span class={badge().classes} title={badge().title}>
+                                            {badge().label}
+                                          </span>
+                                        )}
+                                      </Show>
+                                      <Show when={sourceBadge()}>
+                                        {(badge) => (
+                                          <span class={badge().classes} title={badge().title}>
+                                            {badge().label}
+                                          </span>
+                                        )}
+                                      </Show>
+                                    </>
+                                  }
+                                >
+                                  <For each={unifiedSourceBadges()}>
+                                    {(badge) => (
+                                      <span class={badge.classes} title={badge.title}>
+                                        {badge.label}
+                                      </span>
+                                    )}
+                                  </For>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                    {formatUptime(resource.uptime ?? 0)}
+                                  </span>
+                                </Show>
+                              </div>
+                            </td>
+
+                            <td class={tdClass}>
+                              <div class="flex justify-center">
+                                <Show when={serviceLink()} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                  {(link) => (
+                                    <a
+                                      href={link().href}
+                                      class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700/60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                                      title={link().label}
+                                      aria-label={link().ariaLabel}
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      {link().compactLabel}
+                                    </a>
+                                  )}
+                                </Show>
+                              </div>
+                            </td>
+                          </tr>
+                          <Show when={isExpanded()}>
+                            <tr>
+                              <td colspan={9} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
+                                <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
+                              </td>
+                            </tr>
+                          </Show>
+                        </>
+                      );
+                    }}
+                  </For>
+                </tbody>
+              </table>
+            </div>
+          </Show>
+        </Card>
+      </Show>
+    </div>
   );
 };
 
