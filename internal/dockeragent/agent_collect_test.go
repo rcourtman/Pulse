@@ -33,6 +33,10 @@ func TestCollectContainer(t *testing.T) {
 				Limit: 4000000,
 				Stats: map[string]uint64{"cache": 200000},
 			},
+			Networks: map[string]containertypes.NetworkStats{
+				"eth0": {RxBytes: 2048, TxBytes: 1024},
+				"eth1": {RxBytes: 512, TxBytes: 256},
+			},
 			BlkioStats: containertypes.BlkioStats{
 				IoServiceBytesRecursive: []containertypes.BlkioStatEntry{
 					{Op: "Read", Value: 100},
@@ -116,6 +120,9 @@ func TestCollectContainer(t *testing.T) {
 		}
 		if len(container.Networks) == 0 {
 			t.Fatalf("expected networks to be populated")
+		}
+		if container.NetworkRXBytes != 2560 || container.NetworkTXBytes != 1280 {
+			t.Fatalf("unexpected network totals: rx=%d tx=%d", container.NetworkRXBytes, container.NetworkTXBytes)
 		}
 	})
 

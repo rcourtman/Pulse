@@ -249,13 +249,17 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 
 	c.logger.Info().Str("instance_id", c.instanceID).Msg("Registered with relay server")
 
-	// Start write pump with per-connection sendCh
-	writeCtx, writeCancel := context.WithCancel(ctx)
-	defer writeCancel()
-	go c.writePump(writeCtx, conn, sendCh)
+	// Per-connection context: cancelled when this connection ends (for any
+	// reason), which tears down the write pump and any in-flight stream
+	// goroutines spawned by handleData. Without this, stream goroutines
+	// would keep running against a stale sendCh until the whole client stops.
+	connCtx, connCancel := context.WithCancel(ctx)
+	defer connCancel()
 
-	// Read pump (blocking) — passes sendCh for responses
-	return c.readPump(ctx, conn, sendCh)
+	go c.writePump(connCtx, conn, sendCh)
+
+	// Read pump (blocking) — passes connCtx so handleData streams inherit it
+	return c.readPump(connCtx, conn, sendCh)
 }
 
 func (c *Client) register(conn *websocket.Conn) error {
@@ -355,7 +359,7 @@ func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan
 			c.handleKeyExchange(frame, sendCh)
 
 		case FrameData:
-			c.handleData(frame, sendCh)
+			c.handleData(ctx, frame, sendCh)
 
 		case FrameChannelClose:
 			c.handleChannelClose(frame)
@@ -449,7 +453,7 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 	}
 }
 
-func (c *Client) handleData(frame Frame, sendCh chan<- []byte) {
+func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- []byte) {
 	channelID := frame.Channel
 
 	// Snapshot channel state under lock so the goroutine below doesn't race
@@ -483,24 +487,26 @@ func (c *Client) handleData(frame Frame, sendCh chan<- []byte) {
 			payload = decrypted
 		}
 
-		respPayload, err := c.proxy.HandleRequest(payload, apiToken)
-		if err != nil {
-			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Proxy error")
-			return
-		}
+		// Derive from the connection context so streams are cancelled on disconnect.
+		// The 15-minute timeout is a safety net for runaway streams.
+		ctx, cancel := context.WithTimeout(connCtx, 15*time.Minute)
+		defer cancel()
 
-		// Encrypt response if encryption is active
-		if enc != nil {
-			encrypted, err := enc.Encrypt(respPayload)
-			if err != nil {
-				c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to encrypt DATA response")
-				return
+		err := c.proxy.HandleStreamRequest(ctx, payload, apiToken, func(respPayload []byte) {
+			if enc != nil {
+				encrypted, err := enc.Encrypt(respPayload)
+				if err != nil {
+					c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to encrypt DATA response")
+					return
+				}
+				respPayload = encrypted
 			}
-			respPayload = encrypted
+			respFrame := NewFrame(FrameData, channelID, respPayload)
+			queueFrame(sendCh, respFrame, c.logger)
+		})
+		if err != nil && connCtx.Err() == nil {
+			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Stream proxy error")
 		}
-
-		respFrame := NewFrame(FrameData, channelID, respPayload)
-		queueFrame(sendCh, respFrame, c.logger)
 	}()
 }
 

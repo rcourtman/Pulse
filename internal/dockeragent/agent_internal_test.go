@@ -547,6 +547,31 @@ func TestSummarizeBlockIO(t *testing.T) {
 	})
 }
 
+func TestSummarizeNetworkIO(t *testing.T) {
+	t.Run("aggregates all interfaces", func(t *testing.T) {
+		stats := containertypes.StatsResponse{
+			Networks: map[string]containertypes.NetworkStats{
+				"eth0": {RxBytes: 1200, TxBytes: 3400},
+				"eth1": {RxBytes: 800, TxBytes: 600},
+			},
+		}
+		rx, tx := summarizeNetworkIO(stats)
+		if rx != 2000 {
+			t.Fatalf("rx bytes = %d, want 2000", rx)
+		}
+		if tx != 4000 {
+			t.Fatalf("tx bytes = %d, want 4000", tx)
+		}
+	})
+
+	t.Run("empty stats returns zero", func(t *testing.T) {
+		rx, tx := summarizeNetworkIO(containertypes.StatsResponse{})
+		if rx != 0 || tx != 0 {
+			t.Fatalf("expected zero rx/tx, got %d/%d", rx, tx)
+		}
+	})
+}
+
 func TestExtractPodmanMetadata(t *testing.T) {
 	tests := []struct {
 		name   string

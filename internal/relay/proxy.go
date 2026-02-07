@@ -1,7 +1,9 @@
 package relay
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -34,17 +36,20 @@ type ProxyRequest struct {
 
 // ProxyResponse is the JSON payload inside a DATA frame from the instance to the app.
 type ProxyResponse struct {
-	ID      string            `json:"id"`
-	Status  int               `json:"status"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Body    string            `json:"body,omitempty"` // base64-encoded
+	ID         string            `json:"id"`
+	Status     int               `json:"status"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Body       string            `json:"body,omitempty"`        // base64-encoded
+	Stream     bool              `json:"stream,omitempty"`      // true for all streaming chunks
+	StreamDone bool              `json:"stream_done,omitempty"` // true for the final chunk
 }
 
 // HTTPProxy proxies DATA frame payloads to the local Pulse API.
 type HTTPProxy struct {
-	localAddr string
-	client    *http.Client
-	logger    zerolog.Logger
+	localAddr    string
+	client       *http.Client // for normal request/response proxying
+	streamClient *http.Client // for SSE streaming (no timeout)
+	logger       zerolog.Logger
 }
 
 // NewHTTPProxy creates a proxy that forwards requests to the given local address.
@@ -53,6 +58,13 @@ func NewHTTPProxy(localAddr string, logger zerolog.Logger) *HTTPProxy {
 		localAddr: localAddr,
 		client: &http.Client{
 			Timeout: proxyRequestTimeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
+		streamClient: &http.Client{
+			// No Timeout — streaming responses are long-lived.
+			// Cancellation is handled via context.
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
@@ -155,6 +167,204 @@ func (p *HTTPProxy) HandleRequest(payload []byte, apiToken string) ([]byte, erro
 		return p.errorResponse(req.ID, http.StatusInternalServerError, "failed to marshal response"), nil
 	}
 	return data, nil
+}
+
+// HandleStreamRequest processes a DATA frame payload as an HTTP request and streams
+// the response as multiple ProxyResponse frames via sendFrame. For non-SSE responses,
+// it falls back to single-response behavior identical to HandleRequest.
+func (p *HTTPProxy) HandleStreamRequest(ctx context.Context, payload []byte, apiToken string, sendFrame func([]byte)) error {
+	var req ProxyRequest
+	if err := json.Unmarshal(payload, &req); err != nil {
+		sendFrame(p.errorResponse("", http.StatusBadRequest, "invalid request payload"))
+		return nil
+	}
+
+	if req.ID == "" || req.Method == "" || req.Path == "" {
+		sendFrame(p.errorResponse(req.ID, http.StatusBadRequest, "missing required fields (id, method, path)"))
+		return nil
+	}
+
+	if !strings.HasPrefix(req.Path, "/") {
+		req.Path = "/" + req.Path
+	}
+
+	var bodyReader io.Reader
+	if req.Body != "" {
+		bodyBytes, err := base64.StdEncoding.DecodeString(req.Body)
+		if err != nil {
+			sendFrame(p.errorResponse(req.ID, http.StatusBadRequest, "invalid base64 body"))
+			return nil
+		}
+		if len(bodyBytes) > maxProxyBodySize {
+			sendFrame(p.errorResponse(req.ID, http.StatusRequestEntityTooLarge, "request body exceeds 47KB limit"))
+			return nil
+		}
+		bodyReader = bytes.NewReader(bodyBytes)
+	}
+
+	url := fmt.Sprintf("http://%s%s", p.localAddr, req.Path)
+	httpReq, err := http.NewRequestWithContext(ctx, req.Method, url, bodyReader)
+	if err != nil {
+		sendFrame(p.errorResponse(req.ID, http.StatusInternalServerError, "failed to create request"))
+		return nil
+	}
+
+	for k, v := range req.Headers {
+		if allowedProxyHeader(k) {
+			httpReq.Header.Set(k, v)
+		}
+	}
+	httpReq.Header.Set("X-API-Token", apiToken)
+
+	p.logger.Debug().
+		Str("request_id", req.ID).
+		Str("method", req.Method).
+		Str("path", req.Path).
+		Msg("Proxying relay request (stream-capable)")
+
+	resp, err := p.streamClient.Do(httpReq)
+	if err != nil {
+		p.logger.Warn().Err(err).Str("request_id", req.ID).Msg("Local API request failed")
+		sendFrame(p.errorResponse(req.ID, http.StatusBadGateway, "local API request failed"))
+		return nil
+	}
+	defer resp.Body.Close()
+
+	// Check if this is an SSE response
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/event-stream") {
+		// Non-streaming: read full body and send a single response (same as HandleRequest)
+		limitedReader := io.LimitReader(resp.Body, maxProxyBodySize+1)
+		respBody, err := io.ReadAll(limitedReader)
+		if err != nil {
+			sendFrame(p.errorResponse(req.ID, http.StatusBadGateway, "failed to read response body"))
+			return nil
+		}
+		if len(respBody) > maxProxyBodySize {
+			sendFrame(p.errorResponse(req.ID, http.StatusRequestEntityTooLarge, "response body exceeds 47KB limit"))
+			return nil
+		}
+
+		respHeaders := make(map[string]string)
+		for _, key := range []string{"Content-Type", "X-Request-Id", "Cache-Control"} {
+			if v := resp.Header.Get(key); v != "" {
+				respHeaders[key] = v
+			}
+		}
+
+		proxyResp := ProxyResponse{
+			ID:      req.ID,
+			Status:  resp.StatusCode,
+			Headers: respHeaders,
+		}
+		if len(respBody) > 0 {
+			proxyResp.Body = base64.StdEncoding.EncodeToString(respBody)
+		}
+		data, err := json.Marshal(proxyResp)
+		if err != nil {
+			sendFrame(p.errorResponse(req.ID, http.StatusInternalServerError, "failed to marshal response"))
+			return nil
+		}
+		sendFrame(data)
+		return nil
+	}
+
+	// SSE streaming mode: send an initial header frame
+	respHeaders := make(map[string]string)
+	respHeaders["Content-Type"] = "text/event-stream"
+	if v := resp.Header.Get("X-Request-Id"); v != "" {
+		respHeaders["X-Request-Id"] = v
+	}
+
+	initResp := ProxyResponse{
+		ID:      req.ID,
+		Status:  resp.StatusCode,
+		Headers: respHeaders,
+		Stream:  true,
+	}
+	initData, err := json.Marshal(initResp)
+	if err != nil {
+		sendFrame(p.errorResponse(req.ID, http.StatusInternalServerError, "failed to marshal stream init"))
+		return nil
+	}
+	sendFrame(initData)
+
+	// Read SSE events line-by-line and forward as individual frames
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, maxProxyBodySize), maxProxyBodySize)
+
+	var eventBuf strings.Builder
+
+	for scanner.Scan() {
+		// Check if context was cancelled (relay disconnected)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		line := scanner.Text()
+
+		if line == "" {
+			// Empty line = end of SSE event
+			if eventBuf.Len() > 0 {
+				eventText := eventBuf.String()
+				eventBuf.Reset()
+
+				chunk := ProxyResponse{
+					ID:     req.ID,
+					Status: resp.StatusCode,
+					Body:   base64.StdEncoding.EncodeToString([]byte(eventText)),
+					Stream: true,
+				}
+				chunkData, err := json.Marshal(chunk)
+				if err != nil {
+					p.logger.Warn().Err(err).Msg("Failed to marshal SSE chunk")
+					continue
+				}
+				sendFrame(chunkData)
+			}
+		} else {
+			if eventBuf.Len() > 0 {
+				eventBuf.WriteByte('\n')
+			}
+			eventBuf.WriteString(line)
+		}
+	}
+
+	// Check for scanner error before sending completion.
+	// If scanning failed (e.g. token too long, transport read error), send an
+	// error response instead of stream_done so the client knows it's incomplete.
+	if err := scanner.Err(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		p.logger.Warn().Err(err).Str("request_id", req.ID).Msg("SSE scanner error")
+		sendFrame(p.errorResponse(req.ID, http.StatusBadGateway, "stream read error"))
+		return nil
+	}
+
+	// Flush any remaining buffered event
+	if eventBuf.Len() > 0 {
+		eventText := eventBuf.String()
+		chunk := ProxyResponse{
+			ID:     req.ID,
+			Status: resp.StatusCode,
+			Body:   base64.StdEncoding.EncodeToString([]byte(eventText)),
+			Stream: true,
+		}
+		chunkData, _ := json.Marshal(chunk)
+		sendFrame(chunkData)
+	}
+
+	// Send stream-done frame (only on clean completion)
+	doneResp := ProxyResponse{
+		ID:         req.ID,
+		Status:     resp.StatusCode,
+		StreamDone: true,
+	}
+	doneData, _ := json.Marshal(doneResp)
+	sendFrame(doneData)
+
+	return nil
 }
 
 // allowedProxyHeaders is the set of headers that may be forwarded from relay

@@ -254,6 +254,8 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		memLimit   int64
 		memPercent float64
 		blockIO    *agentsdocker.ContainerBlockIO
+		networkRX  uint64
+		networkTX  uint64
 	)
 
 	if inspect.State.Running || inspect.State.Paused {
@@ -271,6 +273,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		cpuPercent = a.calculateContainerCPUPercent(summary.ID, stats)
 		memUsage, memLimit, memPercent = calculateMemoryUsage(stats)
 		blockIO = summarizeBlockIO(stats)
+		networkRX, networkTX = summarizeNetworkIO(stats)
 	} else {
 		a.cpuMu.Lock()
 		delete(a.prevContainerCPU, summary.ID)
@@ -380,6 +383,8 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		Labels:              labels,
 		Env:                 maskSensitiveEnvVars(inspect.Config.Env),
 		Networks:            networks,
+		NetworkRXBytes:      networkRX,
+		NetworkTXBytes:      networkTX,
 		WritableLayerBytes:  writableLayerBytes,
 		RootFilesystemBytes: rootFsBytes,
 		BlockIO:             blockIO,
@@ -840,6 +845,21 @@ func summarizeBlockIO(stats containertypes.StatsResponse) *agentsdocker.Containe
 		ReadBytes:  readBytes,
 		WriteBytes: writeBytes,
 	}
+}
+
+func summarizeNetworkIO(stats containertypes.StatsResponse) (uint64, uint64) {
+	if len(stats.Networks) == 0 {
+		return 0, 0
+	}
+
+	var rxBytes uint64
+	var txBytes uint64
+	for _, network := range stats.Networks {
+		rxBytes += network.RxBytes
+		txBytes += network.TxBytes
+	}
+
+	return rxBytes, txBytes
 }
 
 // sensitiveEnvPatterns are substrings that, when found in an env var name (case-insensitive),
