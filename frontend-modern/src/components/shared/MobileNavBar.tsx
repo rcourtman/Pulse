@@ -39,7 +39,14 @@ export function MobileNavBar(props: MobileNavBarProps) {
 
   const orderedPlatformTabs = createMemo(() => {
     const tabs = props.platformTabs();
-    const priority = ['infrastructure', 'workloads', 'storage', 'backups'];
+    const priority = [
+      'infrastructure',
+      'workloads',
+      'storage',
+      'storage-v2',
+      'backups',
+      'backups-v2',
+    ];
     const prioritySet = new Set(priority);
     const byId = new Map(tabs.map((tab) => [tab.id, tab]));
     const ordered: PlatformTab[] = [];

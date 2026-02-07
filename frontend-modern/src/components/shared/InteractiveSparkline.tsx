@@ -224,6 +224,9 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
         const inWindow = series.data.filter((point) =>
           point.timestamp >= windowStart && point.timestamp <= windowEnd
         );
+        // Need at least 2 real points to render a meaningful line.
+        // Single-point series create tiny artifacts at the chart edge.
+        if (inWindow.length < 2) return null;
         const renderable = ensureRenderablePoints(inWindow, windowStart);
         if (renderable.length === 0) return null;
         // Preserve full-fidelity line shape in normal SVG mode. Only downsample in heavy canvas mode.

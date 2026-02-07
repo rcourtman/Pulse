@@ -124,6 +124,10 @@
 }
 
 @layer components {
+  .app-scroll-shell {
+    scrollbar-gutter: stable;
+  }
+
   .pulse-shell {
     width: 100%;
     max-width: min(95vw, 1400px);
@@ -152,6 +156,17 @@
     .pulse-panel {
       padding: clamp(0.75rem, 5vw, 1.25rem);
     }
+  }
+
+
+  /* Upward box-shadow shield for sticky chart panels.
+     Fills the transparent space-y-3 margin above the element so
+     scrolling text doesn't peek through when the element is stuck. */
+  .sticky-shield {
+    box-shadow: 0 -0.75rem 0 0 white;
+  }
+  .dark .sticky-shield {
+    box-shadow: 0 -0.75rem 0 0 #1f2937;
   }
 
   /* Card styles */

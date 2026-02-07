@@ -76,11 +76,15 @@ import {
 } from './routing/navigation';
 import { LEGACY_REDIRECTS } from './routing/legacyRedirects';
 import {
+  BACKUPS_V2_PATH,
+  STORAGE_V2_PATH,
   buildBackupsPath,
   buildInfrastructurePath,
   buildStoragePath,
   buildWorkloadsPath,
 } from './routing/resourceLinks';
+import { buildStorageBackupsTabSpecs } from './routing/platformTabs';
+import { isStorageBackupsV2Enabled } from '@/utils/featureFlags';
 
 import { showToast } from '@/utils/toast';
 
@@ -89,7 +93,9 @@ const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
 );
 const StorageComponent = lazy(() => import('./components/Storage/Storage'));
+const StorageV2Component = lazy(() => import('./components/Storage/StorageV2'));
 const UnifiedBackups = lazy(() => import('./components/Backups/UnifiedBackups'));
+const BackupsV2Component = lazy(() => import('./components/Backups/BackupsV2'));
 const Replication = lazy(() => import('./components/Replication/Replication'));
 const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
@@ -872,6 +878,7 @@ function App() {
 
   // Pass through the store directly (only when initialized)
   const enhancedStore = () => wsStore();
+  const storageBackupsV2Enabled = createMemo(() => isStorageBackupsV2Enabled());
 
   // Workloads view - v2 resources only
   const WorkloadsView = () => {
@@ -883,6 +890,20 @@ function App() {
         useV2Workloads
       />
     );
+  };
+
+  const StorageRoute = () => {
+    if (storageBackupsV2Enabled()) {
+      return <StorageV2Component />;
+    }
+    return <StorageComponent />;
+  };
+
+  const BackupsRoute = () => {
+    if (storageBackupsV2Enabled()) {
+      return <BackupsV2Component />;
+    }
+    return <UnifiedBackups />;
   };
 
   const SettingsRoute = () => (
@@ -974,7 +995,9 @@ function App() {
                   {/* Main layout container - flexbox to allow AI panel to push content */}
                   <div class="flex h-screen overflow-hidden">
                     {/* Main content area - shrinks when AI panel is open, scrolls independently */}
-                    <div class={`flex-1 min-w-0 overflow-y-auto bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6 transition-all duration-300`}>
+                    <div
+                      class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6 transition-all duration-300`}
+                    >
                       <AppLayout
                         connected={connected}
                         reconnecting={reconnecting}
@@ -1020,8 +1043,10 @@ function App() {
     <Router root={RootLayout}>
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
-      <Route path={STORAGE_PATH} component={StorageComponent} />
-      <Route path={BACKUPS_PATH} component={UnifiedBackups} />
+      <Route path={STORAGE_PATH} component={StorageRoute} />
+      <Route path={STORAGE_V2_PATH} component={StorageV2Component} />
+      <Route path={BACKUPS_PATH} component={BackupsRoute} />
+      <Route path={BACKUPS_V2_PATH} component={BackupsV2Component} />
       <Route path="/ceph" component={CephPage} />
       <Route path="/replication" component={Replication} />
       <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />
@@ -1248,6 +1273,7 @@ function AppLayout(props: {
 
   // Determine active tab from current path
   const getActiveTab = () => getActiveTabForPath(location.pathname);
+  const storageBackupsV2Enabled = () => isStorageBackupsV2Enabled();
 
   type PlatformTab = {
     id: string;
@@ -1263,6 +1289,7 @@ function AppLayout(props: {
   };
 
   const platformTabs = createMemo(() => {
+    const showV2DefaultTabs = storageBackupsV2Enabled();
     const allPlatforms: PlatformTab[] = [
       {
         id: 'infrastructure' as const,
@@ -1290,32 +1317,17 @@ function AppLayout(props: {
         ),
         alwaysShow: true,
       },
-      {
-        id: 'storage' as const,
-        label: 'Storage',
-        route: STORAGE_PATH,
-        settingsRoute: '/settings/infrastructure/pbs',
-        tooltip: 'Storage pools, disks, and Ceph',
+      ...buildStorageBackupsTabSpecs(showV2DefaultTabs).map((tab) => ({
+        ...tab,
         enabled: true,
         live: true,
-        icon: (
+        icon: tab.id.startsWith('storage') ? (
           <HardDriveIcon class="w-4 h-4 shrink-0" />
-        ),
-        alwaysShow: true,
-      },
-      {
-        id: 'backups' as const,
-        label: 'Backups',
-        route: BACKUPS_PATH,
-        settingsRoute: '/settings/backups',
-        tooltip: 'Backup jobs, history, and replication',
-        enabled: true,
-        live: true,
-        icon: (
+        ) : (
           <ArchiveIcon class="w-4 h-4 shrink-0" />
         ),
         alwaysShow: true,
-      },
+      })),
     ];
 
     // Filter out platforms that should be hidden when not configured
