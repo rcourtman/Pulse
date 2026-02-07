@@ -426,6 +426,7 @@ type DockerHost struct {
 	Services          []DockerService          `json:"services,omitempty"`
 	Tasks             []DockerTask             `json:"tasks,omitempty"`
 	Swarm             *DockerSwarmInfo         `json:"swarm,omitempty"`
+	Temperature       *float64                 `json:"temperature,omitempty"` // Optional host temperature in Celsius
 	TokenID           string                   `json:"tokenId,omitempty"`
 	TokenName         string                   `json:"tokenName,omitempty"`
 	TokenHint         string                   `json:"tokenHint,omitempty"`
@@ -434,6 +435,12 @@ type DockerHost struct {
 	PendingUninstall  bool                     `json:"pendingUninstall"`
 	Command           *DockerHostCommandStatus `json:"command,omitempty"`
 	IsLegacy          bool                     `json:"isLegacy,omitempty"`
+
+	// Computed I/O rates (bytes/sec), populated by monitoring pipeline when available.
+	NetInRate     float64 `json:"netInRate,omitempty"`
+	NetOutRate    float64 `json:"netOutRate,omitempty"`
+	DiskReadRate  float64 `json:"diskReadRate,omitempty"`
+	DiskWriteRate float64 `json:"diskWriteRate,omitempty"`
 }
 
 // RemovedDockerHost tracks a docker host that was deliberately removed and blocked from reporting.
@@ -466,6 +473,10 @@ type DockerContainer struct {
 	Ports               []DockerContainerPort        `json:"ports,omitempty"`
 	Labels              map[string]string            `json:"labels,omitempty"`
 	Networks            []DockerContainerNetworkLink `json:"networks,omitempty"`
+	NetworkRXBytes      uint64                       `json:"networkRxBytes,omitempty"`
+	NetworkTXBytes      uint64                       `json:"networkTxBytes,omitempty"`
+	NetInRate           float64                      `json:"netInRate,omitempty"`
+	NetOutRate          float64                      `json:"netOutRate,omitempty"`
 	WritableLayerBytes  int64                        `json:"writableLayerBytes,omitempty"`
 	RootFilesystemBytes int64                        `json:"rootFilesystemBytes,omitempty"`
 	BlockIO             *DockerContainerBlockIO      `json:"blockIo,omitempty"`
@@ -585,25 +596,40 @@ type KubernetesNode struct {
 	AllocCPU                int64    `json:"allocatableCpuCores,omitempty"`
 	AllocMemoryBytes        int64    `json:"allocatableMemoryBytes,omitempty"`
 	AllocPods               int64    `json:"allocatablePods,omitempty"`
+	UsageCPUMilliCores      int64    `json:"usageCpuMilliCores,omitempty"`
+	UsageMemoryBytes        int64    `json:"usageMemoryBytes,omitempty"`
+	UsageCPUPercent         float64  `json:"usageCpuPercent,omitempty"`
+	UsageMemoryPercent      float64  `json:"usageMemoryPercent,omitempty"`
 	Roles                   []string `json:"roles,omitempty"`
 }
 
 type KubernetesPod struct {
-	UID        string                   `json:"uid"`
-	Name       string                   `json:"name"`
-	Namespace  string                   `json:"namespace"`
-	NodeName   string                   `json:"nodeName,omitempty"`
-	Phase      string                   `json:"phase,omitempty"`
-	Reason     string                   `json:"reason,omitempty"`
-	Message    string                   `json:"message,omitempty"`
-	QoSClass   string                   `json:"qosClass,omitempty"`
-	CreatedAt  time.Time                `json:"createdAt,omitempty"`
-	StartTime  *time.Time               `json:"startTime,omitempty"`
-	Restarts   int                      `json:"restarts,omitempty"`
-	Labels     map[string]string        `json:"labels,omitempty"`
-	OwnerKind  string                   `json:"ownerKind,omitempty"`
-	OwnerName  string                   `json:"ownerName,omitempty"`
-	Containers []KubernetesPodContainer `json:"containers,omitempty"`
+	UID                           string                   `json:"uid"`
+	Name                          string                   `json:"name"`
+	Namespace                     string                   `json:"namespace"`
+	NodeName                      string                   `json:"nodeName,omitempty"`
+	Phase                         string                   `json:"phase,omitempty"`
+	Reason                        string                   `json:"reason,omitempty"`
+	Message                       string                   `json:"message,omitempty"`
+	QoSClass                      string                   `json:"qosClass,omitempty"`
+	CreatedAt                     time.Time                `json:"createdAt,omitempty"`
+	StartTime                     *time.Time               `json:"startTime,omitempty"`
+	Restarts                      int                      `json:"restarts,omitempty"`
+	UsageCPUMilliCores            int                      `json:"usageCpuMilliCores,omitempty"`
+	UsageMemoryBytes              int64                    `json:"usageMemoryBytes,omitempty"`
+	UsageCPUPercent               float64                  `json:"usageCpuPercent,omitempty"`
+	UsageMemoryPercent            float64                  `json:"usageMemoryPercent,omitempty"`
+	NetworkRxBytes                int64                    `json:"networkRxBytes,omitempty"`
+	NetworkTxBytes                int64                    `json:"networkTxBytes,omitempty"`
+	NetInRate                     float64                  `json:"netInRate,omitempty"`
+	NetOutRate                    float64                  `json:"netOutRate,omitempty"`
+	EphemeralStorageUsedBytes     int64                    `json:"ephemeralStorageUsedBytes,omitempty"`
+	EphemeralStorageCapacityBytes int64                    `json:"ephemeralStorageCapacityBytes,omitempty"`
+	DiskUsagePercent              float64                  `json:"diskUsagePercent,omitempty"`
+	Labels                        map[string]string        `json:"labels,omitempty"`
+	OwnerKind                     string                   `json:"ownerKind,omitempty"`
+	OwnerName                     string                   `json:"ownerName,omitempty"`
+	Containers                    []KubernetesPodContainer `json:"containers,omitempty"`
 }
 
 type KubernetesPodContainer struct {

@@ -192,25 +192,40 @@ type KubernetesNodeFrontend struct {
 	AllocCPU                int64    `json:"allocatableCpuCores,omitempty"`
 	AllocMemoryBytes        int64    `json:"allocatableMemoryBytes,omitempty"`
 	AllocPods               int64    `json:"allocatablePods,omitempty"`
+	UsageCPUMilliCores      int64    `json:"usageCpuMilliCores,omitempty"`
+	UsageMemoryBytes        int64    `json:"usageMemoryBytes,omitempty"`
+	UsageCPUPercent         float64  `json:"usageCpuPercent,omitempty"`
+	UsageMemoryPercent      float64  `json:"usageMemoryPercent,omitempty"`
 	Roles                   []string `json:"roles,omitempty"`
 }
 
 type KubernetesPodFrontend struct {
-	UID        string                           `json:"uid"`
-	Name       string                           `json:"name"`
-	Namespace  string                           `json:"namespace"`
-	NodeName   string                           `json:"nodeName,omitempty"`
-	Phase      string                           `json:"phase,omitempty"`
-	Reason     string                           `json:"reason,omitempty"`
-	Message    string                           `json:"message,omitempty"`
-	QoSClass   string                           `json:"qosClass,omitempty"`
-	CreatedAt  int64                            `json:"createdAt,omitempty"`
-	StartTime  *int64                           `json:"startTime,omitempty"`
-	Restarts   int                              `json:"restarts,omitempty"`
-	Labels     map[string]string                `json:"labels,omitempty"`
-	OwnerKind  string                           `json:"ownerKind,omitempty"`
-	OwnerName  string                           `json:"ownerName,omitempty"`
-	Containers []KubernetesPodContainerFrontend `json:"containers,omitempty"`
+	UID                           string                           `json:"uid"`
+	Name                          string                           `json:"name"`
+	Namespace                     string                           `json:"namespace"`
+	NodeName                      string                           `json:"nodeName,omitempty"`
+	Phase                         string                           `json:"phase,omitempty"`
+	Reason                        string                           `json:"reason,omitempty"`
+	Message                       string                           `json:"message,omitempty"`
+	QoSClass                      string                           `json:"qosClass,omitempty"`
+	CreatedAt                     int64                            `json:"createdAt,omitempty"`
+	StartTime                     *int64                           `json:"startTime,omitempty"`
+	Restarts                      int                              `json:"restarts,omitempty"`
+	UsageCPUMilliCores            int                              `json:"usageCpuMilliCores,omitempty"`
+	UsageMemoryBytes              int64                            `json:"usageMemoryBytes,omitempty"`
+	UsageCPUPercent               float64                          `json:"usageCpuPercent,omitempty"`
+	UsageMemoryPercent            float64                          `json:"usageMemoryPercent,omitempty"`
+	NetworkRxBytes                int64                            `json:"networkRxBytes,omitempty"`
+	NetworkTxBytes                int64                            `json:"networkTxBytes,omitempty"`
+	NetInRate                     float64                          `json:"netInRate,omitempty"`
+	NetOutRate                    float64                          `json:"netOutRate,omitempty"`
+	EphemeralStorageUsedBytes     int64                            `json:"ephemeralStorageUsedBytes,omitempty"`
+	EphemeralStorageCapacityBytes int64                            `json:"ephemeralStorageCapacityBytes,omitempty"`
+	DiskUsagePercent              float64                          `json:"diskUsagePercent,omitempty"`
+	Labels                        map[string]string                `json:"labels,omitempty"`
+	OwnerKind                     string                           `json:"ownerKind,omitempty"`
+	OwnerName                     string                           `json:"ownerName,omitempty"`
+	Containers                    []KubernetesPodContainerFrontend `json:"containers,omitempty"`
 }
 
 type KubernetesPodContainerFrontend struct {
