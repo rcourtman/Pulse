@@ -39,11 +39,11 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
   const hiddenCount = () => props.columns.filter(c => props.isHidden(c.id)).length;
 
   return (
-    <div ref={containerRef} class="relative">
+    <div ref={containerRef} class="relative shrink-0">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen())}
-        class={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all
+        class={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all
           ${isOpen()
             ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
             : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -56,7 +56,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
         </svg>
         <span>Columns</span>
         <Show when={hiddenCount() > 0}>
-          <span class="ml-0.5 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">
+          <span class="ml-0.5 inline-flex items-center whitespace-nowrap rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700 dark:bg-gray-600 dark:text-gray-200">
             {hiddenCount()} hidden
           </span>
         </Show>

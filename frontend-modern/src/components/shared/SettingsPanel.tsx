@@ -33,10 +33,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
       border={false}
       {...rest}
     >
-      <div class="bg-blue-50 dark:bg-blue-900/20 px-3 py-3 sm:px-6 sm:py-4 border-b border-gray-200 dark:border-gray-700">
+      <div class="bg-gray-50 dark:bg-gray-800/60 px-3 py-3 sm:px-6 sm:py-4 border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center gap-3">
           <Show when={local.icon}>
-            <div class="p-1.5 sm:p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg text-blue-600 dark:text-blue-300">
+            <div class="p-1.5 sm:p-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-300">
               {local.icon}
             </div>
           </Show>

@@ -70,7 +70,7 @@ export function WhatsNewModal() {
                   Workloads
                 </div>
                 <p class="mt-1.5 sm:mt-2 text-xs text-purple-900/80 dark:text-purple-100/80">
-                  All VMs, containers, and Docker workloads now share a single list.
+                  All VMs, containers, Docker workloads, and Kubernetes workloads now share a single list.
                 </p>
               </div>
 
@@ -106,7 +106,7 @@ export function WhatsNewModal() {
                 </li>
                 <li class="flex items-start gap-2">
                   <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-purple-500"></span>
-                  <span>Workloads now shows every VM, container, and Docker container.</span>
+                  <span>Workloads now shows every VM, container, Docker container, and Kubernetes workload.</span>
                 </li>
                 <li class="flex items-start gap-2">
                   <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-500"></span>
@@ -134,6 +134,12 @@ export function WhatsNewModal() {
               >
                 Documentation
                 <ExternalLinkIcon class="h-4 w-4" />
+              </a>
+              <a
+                href="/migration-guide"
+                class="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Migration guide
               </a>
             </div>
           </div>

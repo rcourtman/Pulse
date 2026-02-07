@@ -5,7 +5,7 @@
  * Optimized for rendering many sparklines simultaneously in tables.
  */
 
-import { onCleanup, createEffect, createSignal, Component, Show, createMemo } from 'solid-js';
+import { onCleanup, createEffect, createSignal, Component, Show, createMemo, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { MetricPoint } from '@/api/charts';
 import { scheduleSparkline, setupCanvasDPR } from '@/utils/canvasRenderQueue';
@@ -37,8 +37,10 @@ interface SparklineProps {
 }
 
 export const Sparkline: Component<SparklineProps> = (props) => {
+  let containerRef: HTMLDivElement | undefined;
   let canvasRef: HTMLCanvasElement | undefined;
   let unregister: (() => void) | null = null;
+  const [measuredWidth, setMeasuredWidth] = createSignal(0);
 
   // Hover state for tooltip
   const [hoveredPoint, setHoveredPoint] = createSignal<{
@@ -50,12 +52,33 @@ export const Sparkline: Component<SparklineProps> = (props) => {
 
   // If width is 0, use container width; otherwise use provided width
   const width = () => {
-    if (props.width === 0 && canvasRef?.parentElement) {
-      return canvasRef.parentElement.clientWidth;
+    if (props.width === 0) {
+      const observed = measuredWidth();
+      if (observed > 0) return observed;
+      if (containerRef) return containerRef.clientWidth;
+      if (canvasRef?.parentElement) return canvasRef.parentElement.clientWidth;
+      return 0;
     }
     return props.width || 120;
   };
   const height = () => props.height || 16;
+
+  onMount(() => {
+    if (props.width !== 0 || !containerRef) return;
+
+    setMeasuredWidth(containerRef.clientWidth);
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const nextWidth = Math.max(0, Math.round(entry.contentRect.width));
+      if (nextWidth !== measuredWidth()) {
+        setMeasuredWidth(nextWidth);
+      }
+    });
+    observer.observe(containerRef);
+
+    onCleanup(() => observer.disconnect());
+  });
 
   // Downsample data using LTTB algorithm for optimal rendering
   // This reduces ~2880 points to ~60-80 points (1 per 1.5 pixels)
@@ -110,6 +133,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     const data = downsampledData();
     const w = width();
     const h = height();
+    if (w <= 1 || h <= 0) return;
 
     setupCanvasDPR(canvas, ctx, w, h);
 
@@ -197,6 +221,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     void props.metric;
     void width();
     void height();
+    void measuredWidth();
 
 
     // Unregister previous draw callback if it exists
@@ -222,6 +247,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     const rect = canvasRef.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const w = width();
+    if (w <= 1) return;
 
     const values = data.map(d => d.value);
     const xStep = w / Math.max(values.length - 1, 1);
@@ -255,7 +281,11 @@ export const Sparkline: Component<SparklineProps> = (props) => {
 
   return (
     <>
-      <div class="relative block w-full overflow-hidden" style={{ height: `${height()}px`, 'max-width': '100%' }}>
+      <div
+        ref={containerRef}
+        class="relative block w-full overflow-hidden"
+        style={{ height: `${height()}px`, 'max-width': '100%' }}
+      >
         <canvas
           ref={canvasRef}
           class="block cursor-crosshair"

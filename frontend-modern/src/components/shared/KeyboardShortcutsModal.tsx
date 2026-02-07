@@ -1,4 +1,4 @@
-import { Show, For } from 'solid-js';
+import { For } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 
 interface ShortcutGroup {

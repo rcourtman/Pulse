@@ -152,4 +152,156 @@ describe('InteractiveSparkline hover behavior', () => {
     expect(left).toBeGreaterThanOrEqual(100);
     expect(top).toBeGreaterThan(40);
   });
+
+  it('locks a hovered series on click and unlocks on second click', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    const now = Date.now();
+
+    const { container } = render(() => (
+      <InteractiveSparkline
+        timeRange="1h"
+        highlightNearestSeriesOnHover
+        series={[
+          {
+            name: 'High',
+            color: '#ff0000',
+            data: [
+              { timestamp: now - 30_000, value: 90 },
+              { timestamp: now - 10_000, value: 90 },
+            ],
+          },
+          {
+            name: 'Low',
+            color: '#00ff00',
+            data: [
+              { timestamp: now - 30_000, value: 10 },
+              { timestamp: now - 10_000, value: 10 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const svg = container.querySelector('svg');
+    expect(svg).not.toBeNull();
+    if (!svg) return;
+
+    (svg as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 100,
+        width: 200,
+        height: 100,
+        right: 200,
+        bottom: 200,
+        x: 0,
+        y: 100,
+        toJSON: () => ({}),
+      }) as unknown as DOMRect;
+
+    // Hover near the high series and lock it.
+    fireEvent.mouseMove(svg, { clientX: 150, clientY: 110 });
+    expect(await screen.findByText('High')).toBeInTheDocument();
+    expect(screen.queryByText('Low')).toBeNull();
+    fireEvent.click(svg);
+
+    // Scrub near the low series: lock should keep High selected.
+    fireEvent.mouseMove(svg, { clientX: 150, clientY: 190 });
+    expect(await screen.findByText('High')).toBeInTheDocument();
+    expect(screen.queryByText('Low')).toBeNull();
+
+    // Click again to unlock, then low should become selectable.
+    fireEvent.click(svg);
+    fireEvent.mouseMove(svg, { clientX: 150, clientY: 190 });
+    expect(await screen.findByText('Low')).toBeInTheDocument();
+    expect(screen.queryByText('High')).toBeNull();
+  });
+
+  it('breaks the rendered line when there is a large gap in data', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-02T00:00:00Z'));
+    const now = Date.now();
+
+    const { container } = render(() => (
+      <InteractiveSparkline
+        timeRange="24h"
+        series={[
+          {
+            name: 'CPU',
+            color: '#ff0000',
+            data: [
+              { timestamp: now - 23 * 60 * 60_000, value: 40 },
+              { timestamp: now - 22 * 60 * 60_000, value: 42 },
+              { timestamp: now - 5 * 60_000, value: 70 },
+              { timestamp: now - 2 * 60_000, value: 75 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    await Promise.resolve();
+
+    const paths = container.querySelectorAll('path[vector-effect="non-scaling-stroke"]');
+    expect(paths.length).toBeGreaterThan(1);
+  });
+
+  it('keeps evenly spaced sparse data connected as a single line', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-02T00:00:00Z'));
+    const now = Date.now();
+
+    const data = Array.from({ length: 30 }, (_, index) => ({
+      timestamp: now - (60 - index*2) * 60_000,
+      value: 50 + (index % 5),
+    }));
+
+    const { container } = render(() => (
+      <InteractiveSparkline
+        timeRange="1h"
+        series={[
+          {
+            name: 'CPU',
+            color: '#ff0000',
+            data,
+          },
+        ]}
+      />
+    ));
+
+    await Promise.resolve();
+
+    const paths = container.querySelectorAll('path[vector-effect="non-scaling-stroke"]');
+    expect(paths.length).toBe(1);
+  });
+
+  it('can bridge the leading window-start gap when requested', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-02T00:00:00Z'));
+    const now = Date.now();
+
+    const { container } = render(() => (
+      <InteractiveSparkline
+        timeRange="1h"
+        bridgeLeadingGap
+        series={[
+          {
+            name: 'CPU',
+            color: '#ff0000',
+            data: [
+              { timestamp: now - 60 * 60_000, value: 55 },
+              { timestamp: now - 5 * 60_000, value: 55 },
+              { timestamp: now - 4 * 60_000, value: 60 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    await Promise.resolve();
+
+    const paths = container.querySelectorAll('path[vector-effect="non-scaling-stroke"]');
+    expect(paths.length).toBe(1);
+  });
 });

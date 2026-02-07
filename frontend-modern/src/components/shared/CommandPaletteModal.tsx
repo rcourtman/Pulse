@@ -1,6 +1,12 @@
 import { Show, For, createMemo, createSignal, createEffect } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { Dialog } from '@/components/shared/Dialog';
+import {
+  buildBackupsPath,
+  buildInfrastructurePath,
+  buildStoragePath,
+  buildWorkloadsPath,
+} from '@/routing/resourceLinks';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -19,6 +25,11 @@ type Command = {
 export function CommandPaletteModal(props: CommandPaletteModalProps) {
   const navigate = useNavigate();
   const [query, setQuery] = createSignal('');
+  const infrastructurePath = buildInfrastructurePath();
+  const workloadsPath = buildWorkloadsPath();
+  const kubernetesWorkloadsPath = buildWorkloadsPath({ type: 'k8s' });
+  const storagePath = buildStoragePath();
+  const backupsPath = buildBackupsPath();
 
   let inputRef: HTMLInputElement | undefined;
 
@@ -26,34 +37,41 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
     {
       id: 'nav-infrastructure',
       label: 'Go to Infrastructure',
-      description: '/infrastructure',
+      description: infrastructurePath,
       shortcut: 'g i',
       keywords: ['infra', 'hosts', 'nodes'],
-      action: () => navigate('/infrastructure'),
+      action: () => navigate(infrastructurePath),
     },
     {
       id: 'nav-workloads',
       label: 'Go to Workloads',
-      description: '/workloads',
+      description: workloadsPath,
       shortcut: 'g w',
-      keywords: ['vm', 'lxc', 'docker'],
-      action: () => navigate('/workloads'),
+      keywords: ['vm', 'lxc', 'docker', 'k8s', 'kubernetes', 'pods'],
+      action: () => navigate(workloadsPath),
+    },
+    {
+      id: 'nav-workloads-k8s',
+      label: 'Go to Kubernetes Workloads',
+      description: kubernetesWorkloadsPath,
+      keywords: ['k8s', 'kubernetes', 'pods', 'deployments', 'clusters'],
+      action: () => navigate(kubernetesWorkloadsPath),
     },
     {
       id: 'nav-storage',
       label: 'Go to Storage',
-      description: '/storage',
+      description: storagePath,
       shortcut: 'g s',
       keywords: ['ceph', 'pbs'],
-      action: () => navigate('/storage'),
+      action: () => navigate(storagePath),
     },
     {
       id: 'nav-backups',
       label: 'Go to Backups',
-      description: '/backups',
+      description: backupsPath,
       shortcut: 'g b',
       keywords: ['replication'],
-      action: () => navigate('/backups'),
+      action: () => navigate(backupsPath),
     },
     {
       id: 'nav-alerts',
@@ -70,6 +88,13 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
       shortcut: 'g t',
       keywords: ['preferences', 'config'],
       action: () => navigate('/settings'),
+    },
+    {
+      id: 'nav-migration-guide',
+      label: 'Open Migration Guide',
+      description: '/migration-guide',
+      keywords: ['migration', 'legacy', 'routes', 'navigation', 'moved'],
+      action: () => navigate('/migration-guide'),
     },
   ]);
 

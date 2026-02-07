@@ -1,5 +1,5 @@
 import { Component, For, Show, createMemo, createSignal, lazy, Suspense } from 'solid-js';
-import type { Node, VM, Container, Storage, PBSInstance } from '@/types/api';
+import type { Host, Node, VM, Container, Storage, PBSInstance } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -16,7 +16,6 @@ import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { useMetricsViewMode } from '@/stores/metricsViewMode';
 
 // Lazy load NodeDrawer to avoid circular dependencies and reduce bundle size
 const NodeDrawer = lazy(() => import('./NodeDrawer').then(m => ({ default: m.NodeDrawer })));
@@ -39,7 +38,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const { isMobile } = useBreakpoint();
-  const { viewMode } = useMetricsViewMode();
 
   // Get user-configured temperature threshold for display coloring
   const temperatureThreshold = createMemo(() => alertsActivation.getTemperatureThreshold());
@@ -455,6 +453,18 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 const isSelected = () => props.selectedNode === nodeId;
                 const isExpanded = () => expandedNodeId() === nodeId;
                 const resourceId = isPVEItem ? node!.id || node!.name : pbs!.id || pbs!.name;
+                const linkedHostForDrawer = (): Host | undefined => {
+                  if (!isPVEItem || !node) return undefined;
+
+                  if (node.linkedHostAgentId) {
+                    const byId = state.hosts.find((host) => host.id === node.linkedHostAgentId);
+                    if (byId) return byId;
+                  }
+
+                  return state.hosts.find(
+                    (host) => host.linkedNodeId === node.id || host.hostname === node.name,
+                  );
+                };
                 const metricsKey = buildMetricKey('node', resourceId);
                 const alertStyles = createMemo(() =>
                   getAlertStyles(resourceId, activeAlerts, alertsEnabled()),
@@ -648,27 +658,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               showMobile={false}
                             />
                           }>
-                            <Show
-                              when={viewMode() === 'sparklines'}
-                              fallback={
-                                <StackedMemoryBar
-                                  used={node!.memory?.used || 0}
-                                  total={node!.memory?.total || 0}
-                                  balloon={node!.memory?.balloon || 0}
-                                  swapUsed={node!.memory?.swapUsed || 0}
-                                  swapTotal={node!.memory?.swapTotal || 0}
-                                  resourceId={metricsKey}
-                                />
-                              }
-                            >
-                              <ResponsiveMetricCell
-                                value={memoryPercentValue}
-                                type="memory"
-                                resourceId={metricsKey}
-                                isRunning={online}
-                                showMobile={false}
-                              />
-                            </Show>
+                            <StackedMemoryBar
+                              used={node!.memory?.used || 0}
+                              total={node!.memory?.total || 0}
+                              balloon={node!.memory?.balloon || 0}
+                              swapUsed={node!.memory?.swapUsed || 0}
+                              swapTotal={node!.memory?.swapTotal || 0}
+                              resourceId={metricsKey}
+                            />
                           </Show>
                         </div>
                       </td>
@@ -686,27 +683,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               showMobile={false}
                             />
                           }>
-                            <Show
-                              when={viewMode() === 'sparklines'}
-                              fallback={
-                                <StackedDiskBar
-                                  aggregateDisk={{
-                                    total: node!.disk?.total || 0,
-                                    used: node!.disk?.used || 0,
-                                    free: (node!.disk?.total || 0) - (node!.disk?.used || 0),
-                                    usage: node!.disk?.total ? (node!.disk.used / node!.disk.total) : 0
-                                  }}
-                                />
-                              }
-                            >
-                              <ResponsiveMetricCell
-                                value={diskPercentValue}
-                                type="disk"
-                                resourceId={metricsKey}
-                                isRunning={online}
-                                showMobile={false}
-                              />
-                            </Show>
+                            <StackedDiskBar
+                              aggregateDisk={{
+                                total: node!.disk?.total || 0,
+                                used: node!.disk?.used || 0,
+                                free: (node!.disk?.total || 0) - (node!.disk?.used || 0),
+                                usage: node!.disk?.total ? (node!.disk.used / node!.disk.total) : 0
+                              }}
+                            />
                           </Show>
                         </div>
                       </td>
@@ -846,7 +830,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       <tr>
                         <td colspan={totalColumnCount()} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
                           <Suspense fallback={<div class="flex justify-center p-4">Loading stats...</div>}>
-                            <NodeDrawer node={node!} />
+                            <NodeDrawer node={node!} host={linkedHostForDrawer()} />
                           </Suspense>
                         </td>
                       </tr>
