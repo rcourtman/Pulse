@@ -9036,6 +9036,12 @@ func (m *Manager) checkEscalations() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Respect global alert and activation controls before escalating.
+	// Escalations should never bypass a user disabling alerts.
+	if !m.config.Enabled || m.config.ActivationState != ActivationActive {
+		return
+	}
+
 	if !m.config.Schedule.Escalation.Enabled {
 		return
 	}

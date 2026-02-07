@@ -9919,6 +9919,7 @@ func TestCheckEscalations(t *testing.T) {
 
 		oldTime := time.Now().Add(-2 * time.Hour)
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = false
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"},
@@ -9941,12 +9942,100 @@ func TestCheckEscalations(t *testing.T) {
 		}
 	})
 
+	t.Run("does nothing when alerts are globally disabled", func(t *testing.T) {
+		m := newTestManager(t)
+
+		oldTime := time.Now().Add(-2 * time.Hour)
+		m.mu.Lock()
+		m.config.Enabled = false
+		m.config.ActivationState = ActivationActive
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},
+		}
+		m.activeAlerts["global-disabled-alert"] = &Alert{
+			ID:             "global-disabled-alert",
+			StartTime:      oldTime,
+			LastEscalation: 0,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["global-disabled-alert"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 0 {
+			t.Errorf("expected no escalation when alerts are globally disabled, got %d", alert.LastEscalation)
+		}
+	})
+
+	t.Run("does nothing when activation state is pending", func(t *testing.T) {
+		m := newTestManager(t)
+
+		oldTime := time.Now().Add(-2 * time.Hour)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.ActivationState = ActivationPending
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},
+		}
+		m.activeAlerts["pending-alert"] = &Alert{
+			ID:             "pending-alert",
+			StartTime:      oldTime,
+			LastEscalation: 0,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pending-alert"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 0 {
+			t.Errorf("expected no escalation when activation is pending, got %d", alert.LastEscalation)
+		}
+	})
+
+	t.Run("does nothing when activation state is snoozed", func(t *testing.T) {
+		m := newTestManager(t)
+
+		oldTime := time.Now().Add(-2 * time.Hour)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.ActivationState = ActivationSnoozed
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},
+		}
+		m.activeAlerts["snoozed-alert"] = &Alert{
+			ID:             "snoozed-alert",
+			StartTime:      oldTime,
+			LastEscalation: 0,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["snoozed-alert"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 0 {
+			t.Errorf("expected no escalation when activation is snoozed, got %d", alert.LastEscalation)
+		}
+	})
+
 	t.Run("skips acknowledged alerts", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-2 * time.Hour)
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = true
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"},
@@ -9976,6 +10065,7 @@ func TestCheckEscalations(t *testing.T) {
 
 		oldTime := time.Now().Add(-45 * time.Minute) // 45 minutes ago
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = true
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"},   // 30 minutes
@@ -10008,6 +10098,7 @@ func TestCheckEscalations(t *testing.T) {
 
 		oldTime := time.Now().Add(-90 * time.Minute) // 90 minutes ago
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = true
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"},   // 30 minutes
@@ -10040,6 +10131,7 @@ func TestCheckEscalations(t *testing.T) {
 
 		oldTime := time.Now().Add(-45 * time.Minute)
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = true
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"},
@@ -10072,6 +10164,7 @@ func TestCheckEscalations(t *testing.T) {
 
 		recentTime := time.Now().Add(-10 * time.Minute) // Only 10 minutes ago
 		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
 		m.config.Schedule.Escalation.Enabled = true
 		m.config.Schedule.Escalation.Levels = []EscalationLevel{
 			{After: 30, Notify: "email"}, // 30 minutes threshold
