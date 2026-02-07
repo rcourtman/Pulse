@@ -10,8 +10,10 @@ describe('navigation routing helpers', () => {
   it('maps paths to the correct primary tab', () => {
     expect(getActiveTabForPath('/infrastructure')).toBe('infrastructure');
     expect(getActiveTabForPath('/workloads?type=k8s')).toBe('workloads');
+    expect(getActiveTabForPath('/storage-v2')).toBe('storage-v2');
     expect(getActiveTabForPath('/storage')).toBe('storage');
     expect(getActiveTabForPath('/ceph')).toBe('storage');
+    expect(getActiveTabForPath('/backups-v2')).toBe('backups-v2');
     expect(getActiveTabForPath('/backups')).toBe('backups');
     expect(getActiveTabForPath('/replication')).toBe('backups');
     expect(getActiveTabForPath('/kubernetes')).toBe('workloads');

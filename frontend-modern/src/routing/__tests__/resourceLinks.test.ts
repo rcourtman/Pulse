@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BACKUPS_V2_PATH,
   BACKUPS_QUERY_PARAMS,
+  PMG_THRESHOLDS_PATH,
   buildBackupsPath,
+  buildBackupsV2Path,
   buildInfrastructurePath,
   buildStoragePath,
+  buildStorageV2Path,
   buildWorkloadsPath,
   parseBackupsLinkSearch,
   INFRASTRUCTURE_QUERY_PARAMS,
   parseStorageLinkSearch,
   parseInfrastructureLinkSearch,
+  STORAGE_V2_PATH,
   parseWorkloadsLinkSearch,
   STORAGE_QUERY_PARAMS,
   WORKLOADS_QUERY_PARAMS,
@@ -110,17 +115,19 @@ describe('resource link routing contract', () => {
   it('builds and parses backups query params', () => {
     const href = buildBackupsPath({
       guestType: 'vm',
+      source: 'pbs',
       backupType: 'remote',
       status: 'verified',
       group: 'guest',
       node: 'cluster-main-pve1',
       query: 'node:pve1',
     });
-    expect(href).toBe('/backups?type=vm&backupType=remote&status=verified&group=guest&node=cluster-main-pve1&q=node%3Apve1');
+    expect(href).toBe('/backups?type=vm&source=pbs&backupType=remote&status=verified&group=guest&node=cluster-main-pve1&q=node%3Apve1');
 
     const parsed = parseBackupsLinkSearch(href.slice('/backups'.length));
     expect(parsed).toEqual({
       guestType: 'vm',
+      source: 'pbs',
       backupType: 'remote',
       status: 'verified',
       group: 'guest',
@@ -129,18 +136,42 @@ describe('resource link routing contract', () => {
     });
 
     expect(BACKUPS_QUERY_PARAMS.guestType).toBe('type');
+    expect(BACKUPS_QUERY_PARAMS.source).toBe('source');
     expect(BACKUPS_QUERY_PARAMS.backupType).toBe('backupType');
     expect(BACKUPS_QUERY_PARAMS.query).toBe('q');
+    expect(PMG_THRESHOLDS_PATH).toBe('/alerts/thresholds/mail-gateway');
   });
 
   it('supports legacy backups search query param parsing', () => {
     expect(parseBackupsLinkSearch('?search=vm-101')).toEqual({
       guestType: '',
+      source: '',
       backupType: '',
       status: '',
       group: '',
       node: '',
       query: 'vm-101',
     });
+  });
+
+  it('builds v2 storage and backups paths with compatible query contracts', () => {
+    expect(
+      buildStorageV2Path({
+        source: 'kubernetes',
+        status: 'healthy',
+        query: 'pvc',
+      }),
+    ).toBe('/storage-v2?source=kubernetes&status=healthy&q=pvc');
+
+    expect(
+      buildBackupsV2Path({
+        source: 'proxmox-pbs',
+        status: 'success',
+        query: 'vmid:101',
+      }),
+    ).toBe('/backups-v2?source=proxmox-pbs&status=success&q=vmid%3A101');
+
+    expect(buildStorageV2Path()).toBe(STORAGE_V2_PATH);
+    expect(buildBackupsV2Path()).toBe(BACKUPS_V2_PATH);
   });
 });
