@@ -130,6 +130,8 @@ export const STORAGE_KEYS = {
   DASHBOARD_CARD_VIEW: 'dashboardCardView',
   DASHBOARD_AUTO_REFRESH: 'dashboardAutoRefresh',
   DASHBOARD_SEARCH_HISTORY: 'dashboardSearchHistory',
+  WORKLOADS_SUMMARY_RANGE: 'workloadsSummaryRange',
+  INFRASTRUCTURE_SUMMARY_RANGE: 'infrastructureSummaryRange',
 
   // Storage search
   STORAGE_SEARCH_HISTORY: 'storageSearchHistory',
@@ -152,6 +154,7 @@ export const STORAGE_KEYS = {
   DISMISSED_FEATURE_TIPS: 'pulse-dismissed-feature-tips',
   WHATS_NEW_NAV_V2_SHOWN: 'pulse_whats_new_v2_shown',
   DEBUG_MODE: 'pulse_debug_mode',
+  STORAGE_BACKUPS_V2_ENABLED: 'pulse-storage-backups-v2-enabled',
 
   // GitHub star prompt
   GITHUB_STAR_DISMISSED: 'pulse-github-star-dismissed',
