@@ -147,6 +147,49 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 	})
 
+	// TrueNAS connection management
+	r.mux.HandleFunc("/api/truenas/connections", func(w http.ResponseWriter, req *http.Request) {
+		if r.trueNASHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "truenas_unavailable", "TrueNAS service unavailable", nil)
+			return
+		}
+
+		switch req.Method {
+		case http.MethodGet:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.trueNASHandlers.HandleList))(w, req)
+		case http.MethodPost:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleAdd))(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	r.mux.HandleFunc("/api/truenas/connections/test", func(w http.ResponseWriter, req *http.Request) {
+		if r.trueNASHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "truenas_unavailable", "TrueNAS service unavailable", nil)
+			return
+		}
+
+		if req.Method == http.MethodPost {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleTestConnection))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	r.mux.HandleFunc("/api/truenas/connections/", func(w http.ResponseWriter, req *http.Request) {
+		if r.trueNASHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "truenas_unavailable", "TrueNAS service unavailable", nil)
+			return
+		}
+
+		if req.Method == http.MethodDelete {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleDelete))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Config Profile Routes - Protected by Admin Auth, Settings Scope, and Pro License
 	// SECURITY: Require settings:write scope to prevent low-privilege tokens from modifying agent profiles
 	// r.configProfileHandler.ServeHTTP implements http.Handler, so we wrap it

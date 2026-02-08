@@ -65,6 +65,7 @@ type Router struct {
 	mtMonitor                 *monitoring.MultiTenantMonitor // Multi-tenant manager
 	alertHandlers             *AlertHandlers
 	configHandlers            *ConfigHandlers
+	trueNASHandlers           *TrueNASHandlers
 	notificationHandlers      *NotificationHandlers
 	notificationQueueHandlers *NotificationQueueHandlers
 	dockerAgentHandlers       *DockerAgentHandlers
@@ -257,6 +258,11 @@ func (r *Router) setupRoutes() {
 	r.configHandlers = NewConfigHandlers(r.multiTenant, r.mtMonitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
 	if r.monitor != nil {
 		r.configHandlers.SetMonitor(r.monitor)
+	}
+	r.trueNASHandlers = &TrueNASHandlers{
+		getPersistence: r.configHandlers.getPersistence,
+		getConfig:      r.configHandlers.getConfig,
+		getMonitor:     r.configHandlers.getMonitor,
 	}
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
