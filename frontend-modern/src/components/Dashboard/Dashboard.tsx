@@ -3,13 +3,11 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { GuestRow, GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './GuestRow';
-import type { WorkloadIOEmphasis } from './GuestRow';
 import { GuestDrawer } from './GuestDrawer';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
-import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { DashboardFilter } from './DashboardFilter';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
@@ -18,7 +16,7 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
-import { isNodeOnline, OFFLINE_HEALTH_STATUSES, DEGRADED_HEALTH_STATUSES } from '@/utils/status';
+import { isNodeOnline } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
@@ -48,6 +46,21 @@ import {
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
+import {
+  workloadNodeScopeId,
+  getKubernetesContextKey,
+  filterWorkloads,
+  getDiskUsagePercent,
+  createWorkloadSortComparator,
+  getWorkloadGroupKey,
+  groupWorkloads,
+  computeWorkloadStats,
+  computeWorkloadIOEmphasis,
+  buildNodeByInstance,
+  buildGuestParentNodeMap,
+  type FilterWorkloadsParams,
+  type WorkloadStats,
+} from './workloadSelectors';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -65,57 +78,6 @@ let persistHandleType: 'idle' | 'timeout' | null = null;
 
 const instrumentationEnabled = import.meta.env.DEV && typeof performance !== 'undefined';
 
-const computeMedian = (values: number[]): number => {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-  return sorted[mid];
-};
-
-const computePercentile = (values: number[], percentile: number): number => {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const clamped = Math.max(0, Math.min(1, percentile));
-  const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(clamped * sorted.length) - 1));
-  return sorted[index];
-};
-
-const buildIODistribution = (values: number[]) => {
-  const valid = values.filter((value) => Number.isFinite(value) && value >= 0);
-  if (valid.length === 0) {
-    return { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 0 };
-  }
-  const median = computeMedian(valid);
-  const deviations = valid.map((value) => Math.abs(value - median));
-  const mad = computeMedian(deviations);
-  const max = Math.max(...valid, 0);
-  const p97 = computePercentile(valid, 0.97);
-  const p99 = computePercentile(valid, 0.99);
-  return { median, mad, max, p97, p99, count: valid.length };
-};
-
-const computeWorkloadIOEmphasis = (guests: WorkloadGuest[]): WorkloadIOEmphasis => {
-  const networkValues: number[] = [];
-  const diskIOValues: number[] = [];
-
-  for (const guest of guests) {
-    const networkIn = Math.max(0, guest.networkIn ?? 0);
-    const networkOut = Math.max(0, guest.networkOut ?? 0);
-    const diskRead = Math.max(0, guest.diskRead ?? 0);
-    const diskWrite = Math.max(0, guest.diskWrite ?? 0);
-    networkValues.push(networkIn + networkOut);
-    diskIOValues.push(diskRead + diskWrite);
-  }
-
-  return {
-    network: buildIODistribution(networkValues),
-    diskIO: buildIODistribution(diskIOValues),
-  };
-};
-
 const workloadMetricPercent = (value: number | null | undefined): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
   if (value <= 1) return Math.max(0, value * 100);
@@ -124,20 +86,6 @@ const workloadMetricPercent = (value: number | null | undefined): number => {
 
 const workloadSummaryGuestId = (guest: WorkloadGuest): string =>
   getCanonicalWorkloadId(guest);
-
-const workloadNodeScopeId = (guest: WorkloadGuest): string =>
-  `${(guest.instance || '').trim()}-${(guest.node || '').trim()}`;
-
-const getKubernetesContextKey = (guest: WorkloadGuest): string => {
-  const candidates = [guest.contextLabel, guest.instance, guest.node, guest.namespace];
-  for (const value of candidates) {
-    const trimmed = (value || '').trim();
-    if (trimmed.length > 0) {
-      return trimmed;
-    }
-  }
-  return '';
-};
 
 const readGuestMetadataCache = (): GuestMetadataRecord => {
   if (cachedGuestMetadata) {
@@ -776,48 +724,11 @@ export function Dashboard(props: DashboardProps) {
 
   // Create a mapping from node ID to node object
   // Also maps by instance-nodeName for guest grouping compatibility
-  const nodeByInstance = createMemo(() => {
-    const map: Record<string, Node> = {};
-    props.nodes.forEach((node) => {
-      // Map by node.id (may be clusterName-nodeName or instance-nodeName)
-      map[node.id] = node;
-      // Also map by instance-nodeName for guest grouping (guests use instance-node format)
-      const legacyKey = `${node.instance}-${node.name}`;
-      if (!map[legacyKey]) {
-        map[legacyKey] = node;
-      }
-    });
-    return map;
-  });
+  const nodeByInstance = createMemo(() => buildNodeByInstance(props.nodes));
 
   // PERFORMANCE: Pre-compute guest-to-parent-node mapping for faster lookups
   // This avoids repeated node lookups for each guest during render
-  const guestParentNodeMap = createMemo(() => {
-    const nodes = nodeByInstance();
-    const mapping = new Map<string, Node>();
-
-    allGuests().forEach((guest) => {
-      const canonicalGuestId = getCanonicalWorkloadId(guest);
-      // Try guest.id-based lookup first
-      if (guest.id) {
-        const lastDash = guest.id.lastIndexOf('-');
-        if (lastDash > 0) {
-          const nodeId = guest.id.slice(0, lastDash);
-          if (nodes[nodeId]) {
-            mapping.set(canonicalGuestId, nodes[nodeId]);
-            return;
-          }
-        }
-      }
-      // Fallback to composite key
-      const compositeKey = `${guest.instance}-${guest.node}`;
-      if (nodes[compositeKey]) {
-        mapping.set(canonicalGuestId, nodes[compositeKey]);
-      }
-    });
-
-    return mapping;
-  });
+  const guestParentNodeMap = createMemo(() => buildGuestParentNodeMap(allGuests(), nodeByInstance()));
 
   // Sort handler
   const handleSort = (key: WorkloadSortKey) => {
@@ -843,99 +754,11 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
-  const getDiskUsagePercent = (guest: WorkloadGuest): number | null => {
-    const disk = guest?.disk;
-    if (!disk) return null;
-
-    const clamp = (value: number) => Math.min(100, Math.max(0, value));
-
-    if (typeof disk.usage === 'number' && Number.isFinite(disk.usage)) {
-      // Some sources report usage as a ratio (0-1), others as a percentage (0-100)
-      const usageValue = disk.usage > 1 ? disk.usage : disk.usage * 100;
-      return clamp(usageValue);
-    }
-
-    if (
-      typeof disk.used === 'number' &&
-      Number.isFinite(disk.used) &&
-      typeof disk.total === 'number' &&
-      Number.isFinite(disk.total) &&
-      disk.total > 0
-    ) {
-      return clamp((disk.used / disk.total) * 100);
-    }
-
-    return null;
-  };
-
   // PERFORMANCE: Memoized sort comparator to avoid duplicating sorting logic
   // This comparator is reused by both flat and grouped modes in groupedGuests
-  const guestSortComparator = createMemo(() => {
-    const key = sortKey();
-    const dir = sortDirection();
-
-    if (!key) {
-      return null;
-    }
-
-    // Stable tiebreaker: when primary sort values are equal, compare by
-    // name then id so that row positions never shift between polls.
-    // Without this, <Index> position changes cause the drawer to glitch.
-    const tiebreak = (a: WorkloadGuest, b: WorkloadGuest): number => {
-      const nameA = (a.name || '').toLowerCase();
-      const nameB = (b.name || '').toLowerCase();
-      if (nameA !== nameB) return nameA < nameB ? -1 : 1;
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-    };
-
-    return (a: WorkloadGuest, b: WorkloadGuest): number => {
-      let aVal: string | number | boolean | null | undefined = null;
-      let bVal: string | number | boolean | null | undefined = null;
-
-      // Special handling for percentage-based columns
-      if (key === 'cpu') {
-        aVal = a.cpu * 100;
-        bVal = b.cpu * 100;
-      } else if (key === 'memory') {
-        aVal = a.memory ? a.memory.usage || 0 : 0;
-        bVal = b.memory ? b.memory.usage || 0 : 0;
-      } else if (key === 'disk') {
-        aVal = getDiskUsagePercent(a);
-        bVal = getDiskUsagePercent(b);
-      } else if (key === 'diskIo') {
-        aVal = Math.max(0, a.diskRead || 0) + Math.max(0, a.diskWrite || 0);
-        bVal = Math.max(0, b.diskRead || 0) + Math.max(0, b.diskWrite || 0);
-      } else if (key === 'netIo') {
-        aVal = Math.max(0, a.networkIn || 0) + Math.max(0, a.networkOut || 0);
-        bVal = Math.max(0, b.networkIn || 0) + Math.max(0, b.networkOut || 0);
-      } else {
-        aVal = a[key] as string | number | boolean | null | undefined;
-        bVal = b[key] as string | number | boolean | null | undefined;
-      }
-
-      // Handle null/undefined/empty values - put at end for both asc and desc
-      const aIsEmpty = aVal === null || aVal === undefined || aVal === '';
-      const bIsEmpty = bVal === null || bVal === undefined || bVal === '';
-
-      if (aIsEmpty && bIsEmpty) return tiebreak(a, b);
-      if (aIsEmpty) return 1;
-      if (bIsEmpty) return -1;
-
-      // Type-specific comparison
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        if (aVal === bVal) return tiebreak(a, b);
-        const comparison = aVal < bVal ? -1 : 1;
-        return dir === 'asc' ? comparison : -comparison;
-      } else {
-        const aStr = String(aVal).toLowerCase();
-        const bStr = String(bVal).toLowerCase();
-
-        if (aStr === bStr) return tiebreak(a, b);
-        const comparison = aStr < bStr ? -1 : 1;
-        return dir === 'asc' ? comparison : -comparison;
-      }
-    };
-  });
+  const guestSortComparator = createMemo(() =>
+    createWorkloadSortComparator(sortKey() || '', sortDirection()),
+  );
 
   // Handle keyboard shortcuts
   let searchInputRef: HTMLInputElement | undefined;
@@ -984,94 +807,16 @@ export function Dashboard(props: DashboardProps) {
 
   // Filter guests based on current settings
   const filteredGuests = createMemo(() => {
-    let guests = allGuests();
-
-    // Filter by selected non-kubernetes node scope.
-    const nodeScope = selectedNode();
-    if (nodeScope && viewMode() !== 'k8s') {
-      guests = guests.filter((g) => workloadNodeScopeId(g) === nodeScope);
-    }
-    const hostHint = (selectedHostHint() || '').trim().toLowerCase();
-    if (!nodeScope && hostHint && viewMode() !== 'k8s') {
-      guests = guests.filter((g) => {
-        if (resolveWorkloadType(g) === 'k8s') return false;
-        const candidates = [g.node, g.instance, g.contextLabel];
-        return candidates.some((candidate) => (candidate || '').toLowerCase().includes(hostHint));
-      });
-    }
-    const k8sContext = selectedKubernetesContext();
-    if (k8sContext && viewMode() === 'k8s') {
-      guests = guests.filter((g) => resolveWorkloadType(g) === 'k8s' && getKubernetesContextKey(g) === k8sContext);
-    }
-
-    // Filter by type
-    if (viewMode() !== 'all') {
-      guests = guests.filter((g) => resolveWorkloadType(g) === viewMode());
-    }
-
-    // Filter by status
-    if (statusMode() === 'running') {
-      guests = guests.filter((g) => g.status === 'running');
-    } else if (statusMode() === 'degraded') {
-      guests = guests.filter((g) => {
-        const status = (g.status || '').toLowerCase();
-        return (
-          DEGRADED_HEALTH_STATUSES.has(status) ||
-          (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status))
-        );
-      });
-    } else if (statusMode() === 'stopped') {
-      guests = guests.filter((g) => g.status !== 'running');
-    }
-
-    // Apply search/filter
-    const searchTerm = search().trim();
-    if (searchTerm) {
-      // Split by commas first
-      const searchParts = searchTerm
-        .split(',')
-        .map((t) => t.trim())
-        .filter((t) => t);
-
-      // Separate filters from text searches
-      const filters: string[] = [];
-      const textSearches: string[] = [];
-
-      searchParts.forEach((part) => {
-        if (part.includes('>') || part.includes('<') || part.includes(':')) {
-          filters.push(part);
-        } else {
-          textSearches.push(part.toLowerCase());
-        }
-      });
-
-      // Apply filters if any
-      if (filters.length > 0) {
-        // Join filters with AND operator
-        const filterString = filters.join(' AND ');
-        const stack = parseFilterStack(filterString);
-        if (stack.filters.length > 0) {
-          guests = guests.filter((g) => evaluateFilterStack(g, stack));
-        }
-      }
-
-      // Apply text search if any
-      if (textSearches.length > 0) {
-        guests = guests.filter((g) =>
-          textSearches.some(
-            (term) =>
-              g.name.toLowerCase().includes(term) ||
-              g.vmid.toString().includes(term) ||
-              g.node.toLowerCase().includes(term) ||
-              g.status.toLowerCase().includes(term),
-          ),
-        );
-      }
-    }
-
-    // Don't filter by thresholds anymore - dimming is handled in GuestRow component
-
-    return guests;
+    const params: FilterWorkloadsParams = {
+      guests: allGuests(),
+      viewMode: viewMode(),
+      statusMode: statusMode(),
+      searchTerm: search().trim(),
+      selectedNode: selectedNode(),
+      selectedHostHint: selectedHostHint(),
+      selectedKubernetesContext: selectedKubernetesContext(),
+    };
+    return filterWorkloads(params);
   });
 
   const workloadsSummaryVisibleIds = createMemo<string[]>(() =>
@@ -1101,7 +846,10 @@ export function Dashboard(props: DashboardProps) {
         Number.isFinite(guest.disk.total) &&
         guest.disk.total > 0
       ) {
-        diskUsage = (guest.disk.used / guest.disk.total) * 100;
+        const selectorDiskUsage = getDiskUsagePercent(guest);
+        const rawDiskUsage = (guest.disk.used / guest.disk.total) * 100;
+        // Preserve legacy fallback behavior for anomalous >100% values.
+        diskUsage = rawDiskUsage > 100 ? rawDiskUsage : (selectorDiskUsage ?? rawDiskUsage);
       }
 
       return {
@@ -1124,20 +872,12 @@ export function Dashboard(props: DashboardProps) {
     }
   });
 
-  const getGroupKey = (guest: WorkloadGuest): string => {
-    const type = resolveWorkloadType(guest);
-    if (type === 'vm' || type === 'lxc') {
-      return `${guest.instance}-${guest.node}`;
-    }
-    const context = guest.contextLabel || guest.node || guest.instance || guest.namespace || guest.id;
-    return `${type}:${context}`;
-  };
-
   const getGroupLabel = (groupKey: string, guests: WorkloadGuest[]): { type: string; name: string } => {
     const node = nodeByInstance()[groupKey];
     if (node) return { type: '', name: getNodeDisplayName(node) };
-    const [prefix, ...rest] = groupKey.split(':');
-    const context = rest.length > 0 ? rest.join(':') : groupKey;
+    const normalizedGroupKey = guests.length > 0 ? getWorkloadGroupKey(guests[0]) : groupKey;
+    const [prefix, ...rest] = normalizedGroupKey.split(':');
+    const context = rest.length > 0 ? rest.join(':') : normalizedGroupKey;
     if (prefix === 'docker') return { type: 'Docker', name: context };
     if (prefix === 'k8s') return { type: 'K8s', name: context };
     if (prefix === 'vm') return { type: 'VM', name: context };
@@ -1146,41 +886,7 @@ export function Dashboard(props: DashboardProps) {
   };
 
   // Group by node or return flat list based on grouping mode
-  const groupedGuests = createMemo(() => {
-    const guests = filteredGuests();
-
-    // If flat mode, return all guests in a single group
-    if (groupingMode() === 'flat') {
-      const groups: Record<string, WorkloadGuest[]> = { '': guests };
-      // PERFORMANCE: Use memoized sort comparator (eliminates ~50 lines of duplicate code)
-      const comparator = guestSortComparator();
-      if (comparator) {
-        groups[''] = groups[''].sort(comparator);
-      }
-      return groups;
-    }
-
-    // Group by node ID (instance + node name) to match Node.ID format
-    const groups: Record<string, WorkloadGuest[]> = {};
-    guests.forEach((guest) => {
-      const nodeId = getGroupKey(guest);
-
-      if (!groups[nodeId]) {
-        groups[nodeId] = [];
-      }
-      groups[nodeId].push(guest);
-    });
-
-    // PERFORMANCE: Use memoized sort comparator (eliminates ~50 lines of duplicate code)
-    const comparator = guestSortComparator();
-    if (comparator) {
-      Object.keys(groups).forEach((node) => {
-        groups[node] = groups[node].sort(comparator);
-      });
-    }
-
-    return groups;
-  });
+  const groupedGuests = createMemo(() => groupWorkloads(filteredGuests(), groupingMode(), guestSortComparator()));
 
   // Stable sorted group keys for <For> — strings compare by value so DOM stays stable across data updates
   const sortedGroupKeys = createMemo(() => {
@@ -1195,33 +901,7 @@ export function Dashboard(props: DashboardProps) {
     });
   });
 
-  const totalStats = createMemo(() => {
-    const guests = filteredGuests();
-    const running = guests.filter((g) => g.status === 'running').length;
-    const degraded = guests.filter((g) => {
-      const status = (g.status || '').toLowerCase();
-      // Count as degraded if explicitly in degraded list, or if not running and not offline/stopped
-      return (
-        DEGRADED_HEALTH_STATUSES.has(status) ||
-        (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status))
-      );
-    }).length;
-    const stopped = guests.length - running - degraded;
-    const vms = guests.filter((g) => resolveWorkloadType(g) === 'vm').length;
-    const containers = guests.filter((g) => resolveWorkloadType(g) === 'lxc').length;
-    const docker = guests.filter((g) => resolveWorkloadType(g) === 'docker').length;
-    const k8s = guests.filter((g) => resolveWorkloadType(g) === 'k8s').length;
-    return {
-      total: guests.length,
-      running,
-      degraded,
-      stopped,
-      vms,
-      containers,
-      docker,
-      k8s,
-    };
-  });
+  const totalStats = createMemo<WorkloadStats>(() => computeWorkloadStats(filteredGuests()));
 
   const workloadIOEmphasis = createMemo(() => computeWorkloadIOEmphasis(filteredGuests()));
 
@@ -1598,7 +1278,7 @@ export function Dashboard(props: DashboardProps) {
                               const getMetadata = () =>
                                 guestMetadata()[guestId()] ||
                                 guestMetadata()[`${guest().instance}:${guest().node}:${guest().vmid}`];
-                              const parentNode = () => node() ?? guestParentNodeMap().get(guestId());
+                              const parentNode = () => node() ?? guestParentNodeMap()[guestId()];
                               const parentNodeOnline = () => {
                                 const pn = parentNode();
                                 return pn ? isNodeOnline(pn) : true;

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@solidjs/testing-library';
 import { Dashboard } from '../Dashboard';
+import {
+  filterWorkloads,
+  createWorkloadSortComparator,
+  groupWorkloads,
+  computeWorkloadStats,
+} from '../workloadSelectors';
 
 let mockLocationSearch = '';
 let mockV2Workloads: Array<Record<string, unknown>> = [];
@@ -261,6 +267,59 @@ describe('Dashboard performance contract', () => {
     });
   });
 
-  describe.todo('Transform budget placeholder (IWP-02)');
+  describe('Workload derivation contracts', () => {
+    it('filterWorkloads returns all guests when no filters active', () => {
+      const guests = makeGuests(PROFILES.S);
+      const result = filterWorkloads({
+        guests: guests as any,
+        viewMode: 'all',
+        statusMode: 'all',
+        searchTerm: '',
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedKubernetesContext: null,
+      });
+      expect(result).toHaveLength(PROFILES.S);
+    });
+
+    it('filterWorkloads correctly filters by viewMode', () => {
+      const guests = makeGuests(PROFILES.S);
+      const vmCount = guests.filter((g) => g.type === 'vm').length;
+      const result = filterWorkloads({
+        guests: guests as any,
+        viewMode: 'vm',
+        statusMode: 'all',
+        searchTerm: '',
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedKubernetesContext: null,
+      });
+      expect(result).toHaveLength(vmCount);
+    });
+
+    it('createWorkloadSortComparator preserves array length', () => {
+      const guests = makeGuests(PROFILES.M);
+      const comparator = createWorkloadSortComparator('cpu', 'asc');
+      expect(comparator).not.toBeNull();
+      const sorted = [...(guests as any)].sort(comparator!);
+      expect(sorted).toHaveLength(PROFILES.M);
+    });
+
+    it('groupWorkloads produces correct total count in grouped mode', () => {
+      const guests = makeGuests(PROFILES.S);
+      const groups = groupWorkloads(guests as any, 'grouped', null);
+      const total = Object.values(groups).reduce((sum, g) => sum + g.length, 0);
+      expect(total).toBe(PROFILES.S);
+    });
+
+    it('computeWorkloadStats counts match total', () => {
+      const guests = makeGuests(PROFILES.S);
+      const stats = computeWorkloadStats(guests as any);
+      expect(stats.total).toBe(PROFILES.S);
+      expect(stats.vms + stats.containers + stats.docker + stats.k8s).toBe(PROFILES.S);
+      expect(stats.running + stats.degraded + stats.stopped).toBe(PROFILES.S);
+    });
+  });
+
   describe.todo('Windowing budget placeholder (IWP-04)');
 });

@@ -25,7 +25,7 @@ Date: 2026-02-08
 |---|---|---|---|---|---|---|
 | IWP-00 | Baseline + Perf Contract Scaffold | DONE | Codex | Claude | APPROVED | IWP-00 Review Evidence |
 | IWP-01 | Infrastructure Derivation Pipeline Extraction | DONE | Codex | Claude | APPROVED | IWP-01 Review Evidence |
-| IWP-02 | Workloads Derivation Pipeline Extraction | TODO | Codex | Claude | — | — |
+| IWP-02 | Workloads Derivation Pipeline Extraction | DONE | Codex | Claude | APPROVED | IWP-02 Review Evidence |
 | IWP-03 | Infrastructure Table Windowing and Render Containment | TODO | Codex | Claude | — | — |
 | IWP-04 | Workloads Table Windowing and Grouped Render Containment | TODO | Codex | Claude | — | — |
 | IWP-05 | Polling/Update Backpressure and Recompute Isolation | TODO | Codex | Claude | — | — |
@@ -127,7 +127,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- pending checkpoint commit
+- `6f9e2cc3` (refactor(IWP-01): extract Infrastructure derivation pipeline into pure selectors)
 
 Residual risk:
 - getOutlierEmphasis remains inline in UnifiedResourceTable.tsx (rendering-coupled); could be extracted in future if needed.
@@ -142,28 +142,55 @@ Rollback:
 
 ## IWP-02 Checklist: Workloads Derivation Pipeline Extraction
 
-- [ ] Dashboard filter/search/group/sort/stats derivations extracted to pure selectors.
-- [ ] Repeated full-list operations reduced with consolidated derivation pipeline.
-- [ ] Mode semantics preserved (`viewMode`, `statusMode`, node/context filters).
-- [ ] Selector tests cover semantic parity and edge cases.
-- [ ] Perf contract tests include deterministic workloads derivation assertions.
+- [x] Dashboard filter/search/group/sort/stats derivations extracted to pure selectors.
+- [x] Repeated full-list operations reduced with consolidated derivation pipeline.
+- [x] Mode semantics preserved (`viewMode`, `statusMode`, node/context filters).
+- [x] Selector tests cover semantic parity and edge cases.
+- [x] Perf contract tests include deterministic workloads derivation assertions.
 
 ### Required Tests
 
-- [ ] `cd frontend-modern && npx vitest run src/components/Dashboard/__tests__/workloadSelectors.test.ts src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx src/components/Dashboard/__tests__/Dashboard.k8s.test.tsx` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `cd frontend-modern && npx vitest run src/components/Dashboard/__tests__/workloadSelectors.test.ts src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx src/components/Dashboard/__tests__/Dashboard.k8s.test.tsx` -> exit 0
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### IWP-02 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `frontend-modern/src/components/Dashboard/workloadSelectors.ts` (new): 11 pure selector functions covering filter/sort/group/stats/IO pipelines
+- `frontend-modern/src/components/Dashboard/__tests__/workloadSelectors.test.ts` (new): 17 unit tests for selector semantic parity
+- `frontend-modern/src/components/Dashboard/Dashboard.tsx`: Rewired 7 derivation memos to selectors, removed inline helpers (computeMedian, computePercentile, buildIODistribution, computeWorkloadIOEmphasis, getDiskUsagePercent, getGroupKey, workloadNodeScopeId, getKubernetesContextKey)
+- `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`: Replaced IWP-02 todo placeholder with 5 derivation contract assertions
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run ...workloadSelectors.test.ts ...Dashboard.performance.contract.test.tsx ...Dashboard.k8s.test.tsx` -> exit 0 (40 tests passed)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+3. Global validation baseline (6 files, 36 tests) -> exit 0
+
+Gate checklist:
+- P0: PASS (all tests pass, typecheck clean, K8s integration test unchanged)
+- P1: PASS (selectors are pure functions, workloadMetricPercent/workloadSummaryGuestId kept for summary rendering)
+- P2: PASS (DRY: IO distribution stats imported from infrastructureSelectors where applicable)
+
+Verdict: APPROVED
+
+Commit:
+- pending checkpoint commit
+
+Residual risk:
+- workloadMetricPercent and workloadSummaryGuestId remain inline (used only by summary fallback memos)
+
+Rollback:
+- Revert Dashboard.tsx to pre-refactor state
+- Delete workloadSelectors.ts and its test file
+- Revert perf contract test derivation assertions
 ```
 
 ---
@@ -307,7 +334,7 @@ TODO
 ## Checkpoint Commits
 
 - IWP-00: `c28f1c4a`
-- IWP-01: TODO
+- IWP-01: `6f9e2cc3`
 - IWP-02: TODO
 - IWP-03: TODO
 - IWP-04: TODO
