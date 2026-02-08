@@ -28,7 +28,7 @@ Date: 2026-02-08
 | 05 | Extract Org + License + Audit Route Group | DONE | Codex | Claude | APPROVED | See Packet 05 Review Evidence |
 | 06 | ConfigHandlers Node Lifecycle Extraction | DONE | Codex | Claude | APPROVED | See Packet 06 Review Evidence |
 | 07 | ConfigHandlers Setup + Auto-Register Extraction | DONE | Codex | Claude | APPROVED | See Packet 07 Review Evidence |
-| 08 | ConfigHandlers System + Discovery + Import/Export Extraction | TODO | Unassigned | Unassigned | PENDING | |
+| 08 | ConfigHandlers System + Discovery + Import/Export Extraction | DONE | Codex | Claude | APPROVED | See Packet 08 Review Evidence |
 | 09 | Architecture Guardrails and Drift Tests | TODO | Unassigned | Unassigned | PENDING | |
 | 10 | Final Certification | TODO | Unassigned | Unassigned | PENDING | |
 
@@ -393,21 +393,47 @@ Rollback:
 ## Packet 08 Checklist: ConfigHandlers System + Discovery + Import/Export Extraction
 
 ### Implementation
-- [ ] System settings and SSH verification handlers extracted.
-- [ ] Discovery handlers extracted.
-- [ ] Export/import handlers extracted.
-- [ ] Side-effect ordering and persistence behavior preserved.
+- [x] System settings and SSH verification handlers extracted.
+- [x] Discovery handlers extracted.
+- [x] Export/import handlers extracted.
+- [x] Side-effect ordering and persistence behavior preserved.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "SystemSettings|Discovery|Export|Import|TemperatureSSH" -v` passed.
-- [ ] `go test ./internal/api/... -run "Scope|Authorization|RouteInventory" -v` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "SystemSettings|Discovery|Export|Import|TemperatureSSH" -v` passed.
+- [x] `go test ./internal/api/... -run "Scope|Authorization|RouteInventory" -v` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Review Evidence
+
+Files changed:
+- `internal/api/config_system_handlers.go` (new, 266 LOC): System settings, SSH verify, mock mode logic.
+- `internal/api/config_discovery_handlers.go` (new, 125 LOC): Discovery handler logic.
+- `internal/api/config_export_import_handlers.go` (new, 182 LOC): Export/import handler logic.
+- `internal/api/config_handlers.go` (1969 -> 1448 LOC): Remaining methods replaced with thin delegates.
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/api/... -run "SystemSettings|Discovery|Export|Import|TemperatureSSH" -v` -> exit 0
+3. `go test ./internal/api/... -run "Scope|Authorization|RouteInventory" -v` -> exit 0
+
+Gate checklist:
+- P0: PASS (files verified, commands rerun independently, exit codes 0)
+- P1: PASS (import side-effect ordering preserved; system/discovery/export tests pass)
+- P2: PASS (tracker updated, checklist complete)
+
+Verdict: APPROVED
+
+Residual risk:
+- None
+
+Rollback:
+- Delete the 3 new config domain files, restore method bodies in `internal/api/config_handlers.go`.
 
 ## Packet 09 Checklist: Architecture Guardrails and Drift Tests
 

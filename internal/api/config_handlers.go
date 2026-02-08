@@ -2,13 +2,11 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -16,13 +14,10 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	discoveryinternal "github.com/rcourtman/pulse-go-rewrite/internal/discovery"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
@@ -1394,155 +1389,12 @@ func (h *ConfigHandlers) getNodeStatus(ctx context.Context, nodeType, nodeName s
 
 // HandleGetSystemSettings returns current system settings
 func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
-	// Load settings from persistence to get all fields including theme
-	persistedSettings := config.DefaultSystemSettings()
-	if persistence := h.getPersistence(r.Context()); persistence != nil {
-		loadedSettings, err := persistence.LoadSystemSettings()
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to load persisted system settings")
-		} else if loadedSettings != nil {
-			persistedSettings = loadedSettings
-		}
-	} else {
-		log.Warn().Msg("Failed to load persisted system settings: persistence unavailable")
-	}
-	if persistedSettings == nil {
-		persistedSettings = config.DefaultSystemSettings()
-	}
-
-	// Get current values from running config
-	settings := *persistedSettings
-	cfg := h.getConfig(r.Context())
-	if cfg != nil {
-		settings.PVEPollingInterval = int(cfg.PVEPollingInterval.Seconds())
-		settings.PBSPollingInterval = int(cfg.PBSPollingInterval.Seconds())
-		settings.PMGPollingInterval = int(cfg.PMGPollingInterval.Seconds())
-		settings.BackupPollingInterval = int(cfg.BackupPollingInterval.Seconds())
-		settings.FrontendPort = cfg.FrontendPort
-		settings.AllowedOrigins = cfg.AllowedOrigins
-		settings.ConnectionTimeout = int(cfg.ConnectionTimeout.Seconds())
-		settings.UpdateChannel = cfg.UpdateChannel
-		settings.AutoUpdateEnabled = cfg.AutoUpdateEnabled
-		settings.AutoUpdateCheckInterval = int(cfg.AutoUpdateCheckInterval.Hours())
-		settings.AutoUpdateTime = cfg.AutoUpdateTime
-		settings.LogLevel = cfg.LogLevel
-		settings.DiscoveryEnabled = cfg.DiscoveryEnabled
-		settings.DiscoverySubnet = cfg.DiscoverySubnet
-		settings.DiscoveryConfig = config.CloneDiscoveryConfig(cfg.Discovery)
-		settings.TemperatureMonitoringEnabled = cfg.TemperatureMonitoringEnabled
-		settings.HideLocalLogin = cfg.HideLocalLogin
-		settings.PublicURL = cfg.PublicURL
-		settings.DisableDockerUpdateActions = cfg.DisableDockerUpdateActions
-		settings.DisableLegacyRouteRedirects = cfg.DisableLegacyRouteRedirects
-		backupEnabled := cfg.EnableBackupPolling
-		settings.BackupPollingEnabled = &backupEnabled
-	}
-
-	// Create response structure that includes environment overrides
-	response := struct {
-		config.SystemSettings
-		EnvOverrides map[string]bool `json:"envOverrides,omitempty"`
-	}{
-		SystemSettings: settings,
-		EnvOverrides:   make(map[string]bool),
-	}
-
-	if cfg != nil {
-		for key, val := range cfg.EnvOverrides {
-			response.EnvOverrides[key] = val
-		}
-	}
-
-	// Legacy fallback: preserve historic key when env var is set directly.
-	if os.Getenv("PULSE_AUTH_HIDE_LOCAL_LOGIN") != "" && !response.EnvOverrides["hideLocalLogin"] {
-		response.EnvOverrides["hideLocalLogin"] = true
-	}
-
-	if len(response.EnvOverrides) == 0 {
-		response.EnvOverrides = nil
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	h.handleGetSystemSettings(w, r)
 }
 
 // HandleVerifyTemperatureSSH tests SSH connectivity to nodes for temperature monitoring
 func (h *ConfigHandlers) HandleVerifyTemperatureSSH(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Limit request body to 8KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
-
-	var req struct {
-		Nodes string `json:"nodes"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("⚠️  Unable to parse verification request"))
-		return
-	}
-
-	// Parse node list
-	nodeList := strings.Fields(req.Nodes)
-	if len(nodeList) == 0 {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("✓ No nodes to verify"))
-		return
-	}
-
-	// Test SSH connectivity using temperature collector with the correct SSH key
-	homeDir := os.Getenv("HOME")
-	if homeDir == "" {
-		homeDir = "/home/pulse"
-	}
-	sshKeyPath := filepath.Join(homeDir, ".ssh/id_ed25519_sensors")
-	tempCollector := monitoring.NewTemperatureCollectorWithPort("root", sshKeyPath, h.getConfig(r.Context()).SSHPort)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	successNodes := []string{}
-	failedNodes := []string{}
-
-	for _, node := range nodeList {
-		// Try to SSH and run sensors command
-		temp, err := tempCollector.CollectTemperature(ctx, node, node)
-		if err == nil && temp != nil && temp.Available {
-			successNodes = append(successNodes, node)
-		} else {
-			failedNodes = append(failedNodes, node)
-		}
-	}
-
-	// Build response message
-	var response strings.Builder
-
-	if len(successNodes) > 0 {
-		response.WriteString("✓ SSH connectivity verified for:\n")
-		for _, node := range successNodes {
-			response.WriteString(fmt.Sprintf("  • %s\n", node))
-		}
-	}
-
-	if len(failedNodes) > 0 {
-		if len(successNodes) > 0 {
-			response.WriteString("\n")
-		}
-		response.WriteString("ℹ️  Temperature monitoring will be available once SSH connectivity is configured.\n")
-		response.WriteString("\n")
-		response.WriteString("Nodes pending configuration:\n")
-		for _, node := range failedNodes {
-			response.WriteString(fmt.Sprintf("  • %s\n", node))
-		}
-		response.WriteString("\n")
-		response.WriteString("See: https://github.com/rcourtman/Pulse/blob/main/SECURITY.md for detailed SSH configuration options.\n")
-	}
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(response.String()))
+	h.handleVerifyTemperatureSSH(w, r)
 }
 
 // generateNodeID creates a unique ID for a node
@@ -1550,302 +1402,19 @@ func generateNodeID(nodeType string, index int) string {
 	return fmt.Sprintf("%s-%d", nodeType, index)
 }
 
-// ExportConfigRequest represents a request to export configuration
-type ExportConfigRequest struct {
-	Passphrase string `json:"passphrase"`
-}
-
-// ImportConfigRequest represents a request to import configuration
-type ImportConfigRequest struct {
-	Data       string `json:"data"`
-	Passphrase string `json:"passphrase"`
-}
-
 // HandleExportConfig exports all configuration with encryption
 func (h *ConfigHandlers) HandleExportConfig(w http.ResponseWriter, r *http.Request) {
-	// Limit request body to 8KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
-
-	// SECURITY: Validating scope for config export
-	if !ensureScope(w, r, config.ScopeSettingsRead) {
-		return
-	}
-
-	var req ExportConfigRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Error().Err(err).Msg("Failed to decode export request")
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.Passphrase == "" {
-		log.Warn().Msg("Export rejected: passphrase is required")
-		http.Error(w, "Passphrase is required", http.StatusBadRequest)
-		return
-	}
-
-	// Require strong passphrase (at least 12 characters)
-	if len(req.Passphrase) < 12 {
-		log.Warn().Int("length", len(req.Passphrase)).Msg("Export rejected: passphrase too short (minimum 12 characters)")
-		http.Error(w, "Passphrase must be at least 12 characters long", http.StatusBadRequest)
-		return
-	}
-
-	// Export configuration
-	exportedData, err := h.getPersistence(r.Context()).ExportConfig(req.Passphrase)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to export configuration")
-		http.Error(w, "Failed to export configuration", http.StatusInternalServerError)
-		return
-	}
-
-	log.Info().Msg("Configuration exported successfully")
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "success",
-		"data":   exportedData,
-	})
+	h.handleExportConfig(w, r)
 }
 
 // HandleImportConfig imports configuration from encrypted export
 func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Request) {
-	// Limit request body to 1MB to prevent memory exhaustion (config imports can be large)
-	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
-
-	// SECURITY: Validating scope for config import
-	if !ensureScope(w, r, config.ScopeSettingsWrite) {
-		return
-	}
-
-	var req ImportConfigRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Error().Err(err).Msg("Failed to decode import request")
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.Passphrase == "" {
-		log.Warn().Msg("Import rejected: passphrase is required")
-		http.Error(w, "Passphrase is required", http.StatusBadRequest)
-		return
-	}
-
-	if req.Data == "" {
-		log.Warn().Msg("Import rejected: encrypted data is required (ensure backup file has 'data' field)")
-		http.Error(w, "Import data is required", http.StatusBadRequest)
-		return
-	}
-
-	// Import configuration
-	if err := h.getPersistence(r.Context()).ImportConfig(req.Data, req.Passphrase); err != nil {
-		log.Error().Err(err).Msg("Failed to import configuration")
-		http.Error(w, "Failed to import configuration: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Reload configuration from disk
-	newConfig, err := config.Load()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to reload configuration after import")
-		http.Error(w, "Configuration imported but failed to reload", http.StatusInternalServerError)
-		return
-	}
-
-	// Update the config reference
-	*h.getConfig(r.Context()) = *newConfig
-
-	// Reload monitor with new configuration
-	if h.reloadFunc != nil {
-		if err := h.reloadFunc(); err != nil {
-			log.Error().Err(err).Msg("Failed to reload monitor after import")
-			http.Error(w, "Configuration imported but failed to apply changes", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Also reload alert and notification configs explicitly
-	// (the monitor reload only reloads nodes unless it's a full reload)
-	if h.getMonitor(r.Context()) != nil {
-		// Reload alert configuration
-		if alertConfig, err := h.getPersistence(r.Context()).LoadAlertConfig(); err == nil {
-			h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(*alertConfig)
-			log.Info().Msg("Reloaded alert configuration after import")
-		} else {
-			log.Warn().Err(err).Msg("Failed to reload alert configuration after import")
-		}
-
-		// Reload webhook configuration
-		if webhooks, err := h.getPersistence(r.Context()).LoadWebhooks(); err == nil {
-			// Clear existing webhooks and add new ones
-			notificationMgr := h.getMonitor(r.Context()).GetNotificationManager()
-			// Get current webhooks to clear them
-			for _, webhook := range notificationMgr.GetWebhooks() {
-				if err := notificationMgr.DeleteWebhook(webhook.ID); err != nil {
-					log.Warn().Err(err).Str("webhook", webhook.ID).Msg("Failed to delete existing webhook during reload")
-				}
-			}
-			// Add imported webhooks
-			for _, webhook := range webhooks {
-				notificationMgr.AddWebhook(webhook)
-			}
-			log.Info().Int("count", len(webhooks)).Msg("Reloaded webhook configuration after import")
-		} else {
-			log.Warn().Err(err).Msg("Failed to reload webhook configuration after import")
-		}
-
-		// Reload email configuration
-		if emailConfig, err := h.getPersistence(r.Context()).LoadEmailConfig(); err == nil {
-			h.getMonitor(r.Context()).GetNotificationManager().SetEmailConfig(*emailConfig)
-			log.Info().Msg("Reloaded email configuration after import")
-		} else {
-			log.Warn().Err(err).Msg("Failed to reload email configuration after import")
-		}
-	}
-
-	// Reload guest metadata from disk
-	if h.guestMetadataHandler != nil {
-		if err := h.guestMetadataHandler.Reload(); err != nil {
-			log.Warn().Err(err).Msg("Failed to reload guest metadata after import")
-		} else {
-			log.Info().Msg("Reloaded guest metadata after import")
-		}
-	}
-
-	log.Info().Msg("Configuration imported successfully")
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "success",
-		"message": "Configuration imported successfully",
-	})
+	h.handleImportConfig(w, r)
 }
 
 // HandleDiscoverServers handles network discovery of Proxmox/PBS servers
 func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Request) {
-	// Support both GET (for cached results) and POST (for manual scan)
-	switch r.Method {
-	case http.MethodGet:
-		// Return cached results from background discovery service
-		if discoveryService := h.getMonitor(r.Context()).GetDiscoveryService(); discoveryService != nil {
-			result, updated := discoveryService.GetCachedResult()
-
-			var updatedUnix int64
-			var ageSeconds float64
-			if !updated.IsZero() {
-				updatedUnix = updated.Unix()
-				ageSeconds = time.Since(updated).Seconds()
-			}
-
-			response := map[string]interface{}{
-				"servers":     result.Servers,
-				"errors":      result.Errors,
-				"environment": result.Environment,
-				"cached":      true,
-				"updated":     updatedUnix,
-				"age":         ageSeconds,
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"servers":     []interface{}{},
-			"errors":      []string{},
-			"environment": nil,
-			"cached":      false,
-			"updated":     int64(0),
-			"age":         float64(0),
-		})
-		return
-
-	case http.MethodPost:
-		// Limit request body to 8KB to prevent memory exhaustion
-		r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
-
-		var req struct {
-			Subnet   string `json:"subnet"`
-			UseCache bool   `json:"use_cache"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		if req.UseCache {
-			if discoveryService := h.getMonitor(r.Context()).GetDiscoveryService(); discoveryService != nil {
-				result, updated := discoveryService.GetCachedResult()
-
-				var updatedUnix int64
-				var ageSeconds float64
-				if !updated.IsZero() {
-					updatedUnix = updated.Unix()
-					ageSeconds = time.Since(updated).Seconds()
-				}
-
-				response := map[string]interface{}{
-					"servers":     result.Servers,
-					"errors":      result.Errors,
-					"environment": result.Environment,
-					"cached":      true,
-					"updated":     updatedUnix,
-					"age":         ageSeconds,
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-		}
-
-		subnet := strings.TrimSpace(req.Subnet)
-		if subnet == "" {
-			subnet = "auto"
-		}
-
-		log.Info().Str("subnet", subnet).Msg("Starting manual discovery scan")
-
-		scanner, buildErr := discoveryinternal.BuildScanner(h.getConfig(r.Context()).Discovery)
-		if buildErr != nil {
-			log.Warn().Err(buildErr).Msg("Falling back to default scanner for manual discovery")
-			scanner = pkgdiscovery.NewScanner()
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-		defer cancel()
-
-		result, err := scanner.DiscoverServers(ctx, subnet)
-		if err != nil {
-			log.Error().Err(err).Msg("Discovery failed")
-			http.Error(w, fmt.Sprintf("Discovery failed: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		if result.Environment != nil {
-			log.Info().
-				Str("environment", result.Environment.Type).
-				Float64("confidence", result.Environment.Confidence).
-				Int("phases", len(result.Environment.Phases)).
-				Msg("Manual discovery environment summary")
-		}
-
-		response := map[string]interface{}{
-			"servers":     result.Servers,
-			"errors":      result.Errors,
-			"environment": result.Environment,
-			"cached":      false,
-			"scanning":    false,
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
+	h.handleDiscoverServers(w, r)
 }
 
 // HandleSetupScript serves the setup script for Proxmox/PBS nodes.
@@ -1860,102 +1429,12 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 
 // HandleGetMockMode returns the current mock mode state and configuration.
 func (h *ConfigHandlers) HandleGetMockMode(w http.ResponseWriter, r *http.Request) {
-	status := struct {
-		Enabled bool            `json:"enabled"`
-		Config  mock.MockConfig `json:"config"`
-	}{
-		Enabled: mock.IsMockEnabled(),
-		Config:  mock.GetConfig(),
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(status); err != nil {
-		log.Error().Err(err).Msg("Failed to encode mock mode status")
-	}
-}
-
-type mockModeRequest struct {
-	Enabled *bool `json:"enabled"`
-	Config  struct {
-		NodeCount      *int     `json:"nodeCount"`
-		VMsPerNode     *int     `json:"vmsPerNode"`
-		LXCsPerNode    *int     `json:"lxcsPerNode"`
-		RandomMetrics  *bool    `json:"randomMetrics"`
-		HighLoadNodes  []string `json:"highLoadNodes"`
-		StoppedPercent *float64 `json:"stoppedPercent"`
-	} `json:"config"`
+	h.handleGetMockMode(w, r)
 }
 
 // HandleUpdateMockMode updates mock mode and optionally its configuration.
 func (h *ConfigHandlers) HandleUpdateMockMode(w http.ResponseWriter, r *http.Request) {
-	// Limit request body to 16KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
-
-	var req mockModeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Error().Err(err).Msg("Failed to decode mock mode request")
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Update configuration first if provided.
-	currentCfg := mock.GetConfig()
-	if req.Config.NodeCount != nil {
-		if *req.Config.NodeCount <= 0 {
-			http.Error(w, "nodeCount must be greater than zero", http.StatusBadRequest)
-			return
-		}
-		currentCfg.NodeCount = *req.Config.NodeCount
-	}
-	if req.Config.VMsPerNode != nil {
-		if *req.Config.VMsPerNode < 0 {
-			http.Error(w, "vmsPerNode cannot be negative", http.StatusBadRequest)
-			return
-		}
-		currentCfg.VMsPerNode = *req.Config.VMsPerNode
-	}
-	if req.Config.LXCsPerNode != nil {
-		if *req.Config.LXCsPerNode < 0 {
-			http.Error(w, "lxcsPerNode cannot be negative", http.StatusBadRequest)
-			return
-		}
-		currentCfg.LXCsPerNode = *req.Config.LXCsPerNode
-	}
-	if req.Config.RandomMetrics != nil {
-		currentCfg.RandomMetrics = *req.Config.RandomMetrics
-	}
-	if req.Config.HighLoadNodes != nil {
-		currentCfg.HighLoadNodes = req.Config.HighLoadNodes
-	}
-	if req.Config.StoppedPercent != nil {
-		if *req.Config.StoppedPercent < 0 || *req.Config.StoppedPercent > 1 {
-			http.Error(w, "stoppedPercent must be between 0 and 1", http.StatusBadRequest)
-			return
-		}
-		currentCfg.StoppedPercent = *req.Config.StoppedPercent
-	}
-
-	mock.SetMockConfig(currentCfg)
-
-	if req.Enabled != nil {
-		if h.getMonitor(r.Context()) != nil {
-			h.getMonitor(r.Context()).SetMockMode(*req.Enabled)
-		} else {
-			mock.SetEnabled(*req.Enabled)
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	status := struct {
-		Enabled bool            `json:"enabled"`
-		Config  mock.MockConfig `json:"config"`
-	}{
-		Enabled: mock.IsMockEnabled(),
-		Config:  mock.GetConfig(),
-	}
-	if err := json.NewEncoder(w).Encode(status); err != nil {
-		log.Error().Err(err).Msg("Failed to encode mock mode response")
-	}
+	h.handleUpdateMockMode(w, r)
 }
 
 // HandleAutoRegister receives token details from the setup script and auto-configures the node.
