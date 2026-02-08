@@ -27,7 +27,7 @@ Date: 2026-02-08
 | 04 | System Settings State Slice Extraction | DONE | Codex | Claude | APPROVED | See Packet 04 evidence below |
 | 05 | Infrastructure and Node Workflow Extraction | DONE | Codex | Claude | APPROVED | See Packet 05 evidence below |
 | 06 | Backup Import/Export and Passphrase Flow Extraction | DONE | Codex | Claude | APPROVED | See Packet 06 evidence below |
-| 07 | Panel Registry and Render Dispatch Extraction | TODO | Unassigned | Unassigned | PENDING | |
+| 07 | Panel Registry and Render Dispatch Extraction | DONE | Codex | Claude | APPROVED | See Packet 07 evidence below |
 | 08 | Contract Test Hardening (Settings Routing + Gates) | TODO | Unassigned | Unassigned | PENDING | |
 | 09 | Architecture Guardrails for Settings Monolith Regression | TODO | Unassigned | Unassigned | PENDING | |
 | 10 | Final Certification | TODO | Unassigned | Unassigned | PENDING | |
@@ -366,7 +366,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- (pending)
+- `4854c251` (feat(settings): Packet 06 — extract backup import/export and passphrase flow)
 
 Residual risk:
 - SuggestProfileModal.test.tsx has pre-existing alias resolution issue
@@ -378,21 +378,49 @@ Rollback:
 ## Packet 07 Checklist: Panel Registry and Render Dispatch Extraction
 
 ### Implementation
-- [ ] Panel registry introduced and used for dispatch.
-- [ ] Inline render chain reduced substantially.
-- [ ] Panel prop contracts preserved.
-- [ ] Accessibility and nav behavior preserved.
+- [x] Panel registry introduced and used for dispatch.
+- [x] Inline render chain reduced substantially.
+- [x] Panel prop contracts preserved.
+- [x] Accessibility and nav behavior preserved.
 
 ### Required Tests
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Packet 07 Review Evidence
+
+```
+Files changed:
+- frontend-modern/src/components/Settings/settingsPanelRegistry.ts (new, 137 LOC): Typed registry mapping 22 dispatchable tabs to components with getProps factories; proxmox kept separate for section-nav behavior
+- frontend-modern/src/components/Settings/Settings.tsx (2274→2207 LOC, -67): Replaced Show chain with Dynamic dispatch via registry lookup
+
+Commands run + exit codes (reviewer-independent):
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+2. `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` -> exit 0 (7/7 passed)
+
+Gate checklist:
+- P0: PASS (registry file verified with all 22 tabs; Settings.tsx uses Dynamic dispatch; both commands pass)
+- P1: PASS (only active panel mounts via Dynamic; proxmox section-nav preserved separately; props factories maintain contracts)
+- P2: PASS (tracker updated)
+
+Verdict: APPROVED
+
+Commit:
+- (pending)
+
+Residual risk:
+- None
+
+Rollback:
+- Delete settingsPanelRegistry.ts, restore Show chain from 4854c251
+```
 
 ## Packet 08 Checklist: Contract Test Hardening (Settings Routing + Gates)
 
