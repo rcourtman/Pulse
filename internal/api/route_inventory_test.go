@@ -63,6 +63,7 @@ func parseRouterRoutes(t *testing.T) ([]string, []string, []string) {
 	routerFiles := []string{
 		"router.go",
 		"router_routes_registration.go",
+		"router_routes_auth_security.go",
 	}
 
 	fset := token.NewFileSet()
@@ -112,7 +113,7 @@ func parseRouterRoutes(t *testing.T) ([]string, []string, []string) {
 	}
 
 	if !found {
-		t.Fatalf("no routes found in router.go or router_routes_registration.go")
+		t.Fatalf("no routes found in parsed router files")
 	}
 
 	return literalRoutes, dynamicRoutes, bareLiteralRoutes
