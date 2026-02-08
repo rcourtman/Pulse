@@ -144,6 +144,10 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       type: storageType,
       status: resource.status,
       parentId: resource.parentId,
+      node: platformData.node,
+      content: platformData.content,
+      shared: platformData.shared,
+      zfsPool: platformData.zfsPool,
     },
   };
 };
@@ -177,6 +181,9 @@ const mapLegacyStorageRecord = (storage: Storage, adapterId: string): StorageRec
       content: storage.content,
       shared: storage.shared,
       nodes: storage.nodes || [],
+      node: storage.node,
+      status: storage.status,
+      zfsPool: storage.zfsPool,
     },
   };
 };
@@ -284,4 +291,3 @@ export const buildStorageRecordsV2 = (
 
   return Array.from(map.values());
 };
-
