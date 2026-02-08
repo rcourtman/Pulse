@@ -1,0 +1,200 @@
+name: Close Needs-Retest Timeouts
+
+on:
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+    inputs:
+      stale_days:
+        description: "Days to wait after retest request before auto-close"
+        required: false
+        default: "7"
+      dry_run:
+        description: "When true, do not close issues"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  close-timeouts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-close outdated retest issues
+        uses: actions/github-script@v7
+        env:
+          STALE_DAYS: ${{ github.event.inputs.stale_days || '7' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        with:
+          script: |
+            const RETEST_LABEL = "needs-retest-on-latest";
+            const OPT_OUT_LABEL = "no-auto-close";
+            const CLOSED_LABEL = "closed-needs-retest-timeout";
+            const RETEST_COMMENT_MARKER = "<!-- issue-version-triage:v1 -->";
+            const CLOSE_COMMENT_MARKER = "<!-- issue-timeout-close:v1 -->";
+
+            const staleDaysRaw = process.env.STALE_DAYS || "7";
+            const staleDays = Number.parseInt(staleDaysRaw, 10);
+            if (!Number.isFinite(staleDays) || staleDays < 1) {
+              core.setFailed(`Invalid stale_days input: ${staleDaysRaw}`);
+              return;
+            }
+
+            const dryRun = String(process.env.DRY_RUN || "false").toLowerCase() === "true";
+            const cutoffMs = Date.now() - staleDays * 24 * 60 * 60 * 1000;
+            const cutoffIso = new Date(cutoffMs).toISOString();
+
+            core.info(`Running timeout close job with stale_days=${staleDays}, dry_run=${dryRun}`);
+            core.info(`Cutoff timestamp: ${cutoffIso}`);
+
+            async function ensureLabel(name, color, description) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name,
+                  color,
+                  description,
+                });
+              }
+            }
+
+            await ensureLabel(
+              CLOSED_LABEL,
+              "6e7781",
+              "Auto-closed after retest request timeout without reporter follow-up"
+            );
+
+            const candidates = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: RETEST_LABEL,
+              per_page: 100,
+            });
+
+            core.info(`Found ${candidates.length} open issues with ${RETEST_LABEL}`);
+
+            let closedCount = 0;
+            let skippedCount = 0;
+            let dryRunCount = 0;
+
+            for (const issue of candidates) {
+              if (issue.pull_request) {
+                skippedCount += 1;
+                continue;
+              }
+
+              const labelSet = new Set((issue.labels || []).map((l) => l.name));
+              if (labelSet.has(OPT_OUT_LABEL)) {
+                core.info(`#${issue.number} skipped (${OPT_OUT_LABEL} present).`);
+                skippedCount += 1;
+                continue;
+              }
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                per_page: 100,
+              });
+
+              const triageComments = comments.filter((c) => (c.body || "").includes(RETEST_COMMENT_MARKER));
+              if (triageComments.length === 0) {
+                core.info(`#${issue.number} skipped (no retest-request marker comment found).`);
+                skippedCount += 1;
+                continue;
+              }
+
+              const latestTriage = triageComments.sort(
+                (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+              )[triageComments.length - 1];
+
+              const triageAt = new Date(latestTriage.created_at).getTime();
+              if (!Number.isFinite(triageAt) || triageAt > cutoffMs) {
+                core.info(`#${issue.number} skipped (retest request is not stale yet).`);
+                skippedCount += 1;
+                continue;
+              }
+
+              const authorLogin = issue.user?.login;
+              const reporterReplied = comments.some((c) => {
+                return c.user?.login === authorLogin && new Date(c.created_at).getTime() > triageAt;
+              });
+
+              if (reporterReplied) {
+                core.info(`#${issue.number} skipped (reporter followed up after retest request).`);
+                skippedCount += 1;
+                continue;
+              }
+
+              const communityActivityAfterTriage = comments.some((c) => {
+                const t = new Date(c.created_at).getTime();
+                const isAfter = Number.isFinite(t) && t > triageAt;
+                if (!isAfter) return false;
+                const assoc = String(c.author_association || "");
+                const isMaintainer = ["OWNER", "MEMBER", "COLLABORATOR"].includes(assoc);
+                return !isMaintainer;
+              });
+
+              if (communityActivityAfterTriage) {
+                core.info(`#${issue.number} skipped (community activity exists after retest request).`);
+                skippedCount += 1;
+                continue;
+              }
+
+              const closeCommentBody = [
+                CLOSE_COMMENT_MARKER,
+                `Closing due to missing reporter retest confirmation for ${staleDays} days.`,
+                "",
+                "If this still reproduces on the latest stable release, comment with updated version details and logs and I will reopen.",
+              ].join("\n");
+
+              if (dryRun) {
+                core.info(`[dry-run] Would close #${issue.number}`);
+                dryRunCount += 1;
+                continue;
+              }
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: closeCommentBody,
+              });
+
+              const newLabels = new Set([...labelSet]);
+              newLabels.delete(RETEST_LABEL);
+              newLabels.add(CLOSED_LABEL);
+
+              await github.rest.issues.setLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [...newLabels].sort(),
+              });
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed",
+                state_reason: "not_planned",
+              });
+
+              core.info(`#${issue.number} closed due to retest timeout.`);
+              closedCount += 1;
+            }
+
+            core.notice(
+              `Needs-retest timeout summary: closed=${closedCount}, dry_run=${dryRunCount}, skipped=${skippedCount}, total=${candidates.length}`
+            );
