@@ -5,6 +5,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/metering"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -15,6 +17,7 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("/api/license/activate", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleActivateLicense)))
 	r.mux.HandleFunc("/api/license/clear", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleClearLicense)))
 	r.mux.HandleFunc("GET /api/license/entitlements", RequireAuth(r.config, r.licenseHandlers.HandleEntitlements))
+	r.mux.HandleFunc("POST /api/conversion/events", RequireAuth(r.config, NewConversionHandlers(conversion.NewRecorder(metering.NewWindowedAggregator())).HandleRecordEvent))
 
 	// Organization routes (multi-tenant foundation)
 	r.mux.HandleFunc("GET /api/orgs", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, orgHandlers.HandleListOrgs)))
