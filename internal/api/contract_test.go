@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 )
 
@@ -341,6 +344,400 @@ func TestContract_AlertJSONSnapshot(t *testing.T) {
 	}`
 
 	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_AlertAllFieldsJSONSnapshot(t *testing.T) {
+	start := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
+	lastSeen := start.Add(3 * time.Minute)
+	ackTime := start.Add(5 * time.Minute)
+	lastNotified := start.Add(2 * time.Minute)
+	escalationTimes := []time.Time{start.Add(1 * time.Minute), start.Add(3 * time.Minute)}
+
+	payload := alerts.Alert{
+		ID:              "cluster/qemu/100-cpu",
+		Type:            "cpu",
+		Level:           alerts.AlertLevelWarning,
+		ResourceID:      "cluster/qemu/100",
+		ResourceName:    "test-vm",
+		Node:            "pve-1",
+		NodeDisplayName: "Proxmox Node 1",
+		Instance:        "cpu0",
+		Message:         "VM cpu at 95%",
+		Value:           95.0,
+		Threshold:       90.0,
+		StartTime:       start,
+		LastSeen:        lastSeen,
+		Acknowledged:    true,
+		AckTime:         &ackTime,
+		AckUser:         "admin",
+		Metadata: map[string]interface{}{
+			"resourceType":   "VM",
+			"clearThreshold": 70.0,
+			"unit":           "%",
+			"monitorOnly":    true,
+		},
+		LastNotified:    &lastNotified,
+		LastEscalation:  2,
+		EscalationTimes: escalationTimes,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal alert with all fields: %v", err)
+	}
+
+	const want = `{
+		"id":"cluster/qemu/100-cpu",
+		"type":"cpu",
+		"level":"warning",
+		"resourceId":"cluster/qemu/100",
+		"resourceName":"test-vm",
+		"node":"pve-1",
+		"nodeDisplayName":"Proxmox Node 1",
+		"instance":"cpu0",
+		"message":"VM cpu at 95%",
+		"value":95,
+		"threshold":90,
+		"startTime":"2026-02-08T13:14:15Z",
+		"lastSeen":"2026-02-08T13:17:15Z",
+		"acknowledged":true,
+		"ackTime":"2026-02-08T13:19:15Z",
+		"ackUser":"admin",
+		"metadata":{"clearThreshold":70,"monitorOnly":true,"resourceType":"VM","unit":"%"},
+		"lastNotified":"2026-02-08T13:16:15Z",
+		"lastEscalation":2,
+		"escalationTimes":["2026-02-08T13:15:15Z","2026-02-08T13:17:15Z"]
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_ModelAlertJSONSnapshot(t *testing.T) {
+	start := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
+	ackTime := start.Add(5 * time.Minute)
+	resolvedTime := start.Add(10 * time.Minute)
+
+	t.Run("alert", func(t *testing.T) {
+		payload := models.Alert{
+			ID:              "cluster/qemu/100-cpu",
+			Type:            "cpu",
+			Level:           "warning",
+			ResourceID:      "cluster/qemu/100",
+			ResourceName:    "test-vm",
+			Node:            "pve-1",
+			NodeDisplayName: "Proxmox Node 1",
+			Instance:        "cpu0",
+			Message:         "VM cpu at 95%",
+			Value:           95.0,
+			Threshold:       90.0,
+			StartTime:       start,
+			Acknowledged:    true,
+			AckTime:         &ackTime,
+			AckUser:         "admin",
+		}
+
+		got, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("marshal model alert: %v", err)
+		}
+
+		forbidden := []string{`"lastSeen"`, `"metadata"`, `"lastNotified"`, `"lastEscalation"`, `"escalationTimes"`}
+		for _, field := range forbidden {
+			if strings.Contains(string(got), field) {
+				t.Fatalf("model alert json unexpectedly contains %s: %s", field, string(got))
+			}
+		}
+
+		const want = `{
+			"id":"cluster/qemu/100-cpu",
+			"type":"cpu",
+			"level":"warning",
+			"resourceId":"cluster/qemu/100",
+			"resourceName":"test-vm",
+			"node":"pve-1",
+			"nodeDisplayName":"Proxmox Node 1",
+			"instance":"cpu0",
+			"message":"VM cpu at 95%",
+			"value":95,
+			"threshold":90,
+			"startTime":"2026-02-08T13:14:15Z",
+			"acknowledged":true,
+			"ackTime":"2026-02-08T13:19:15Z",
+			"ackUser":"admin"
+		}`
+
+		assertJSONSnapshot(t, got, want)
+	})
+
+	t.Run("resolved_alert", func(t *testing.T) {
+		payload := models.ResolvedAlert{
+			Alert: models.Alert{
+				ID:              "cluster/qemu/100-cpu",
+				Type:            "cpu",
+				Level:           "warning",
+				ResourceID:      "cluster/qemu/100",
+				ResourceName:    "test-vm",
+				Node:            "pve-1",
+				NodeDisplayName: "Proxmox Node 1",
+				Instance:        "cpu0",
+				Message:         "VM cpu at 95%",
+				Value:           95.0,
+				Threshold:       90.0,
+				StartTime:       start,
+				Acknowledged:    true,
+				AckTime:         &ackTime,
+				AckUser:         "admin",
+			},
+			ResolvedTime: resolvedTime,
+		}
+
+		got, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("marshal model resolved alert: %v", err)
+		}
+
+		forbidden := []string{`"lastSeen"`, `"metadata"`, `"lastNotified"`, `"lastEscalation"`, `"escalationTimes"`}
+		for _, field := range forbidden {
+			if strings.Contains(string(got), field) {
+				t.Fatalf("model resolved alert json unexpectedly contains %s: %s", field, string(got))
+			}
+		}
+
+		const want = `{
+			"id":"cluster/qemu/100-cpu",
+			"type":"cpu",
+			"level":"warning",
+			"resourceId":"cluster/qemu/100",
+			"resourceName":"test-vm",
+			"node":"pve-1",
+			"nodeDisplayName":"Proxmox Node 1",
+			"instance":"cpu0",
+			"message":"VM cpu at 95%",
+			"value":95,
+			"threshold":90,
+			"startTime":"2026-02-08T13:14:15Z",
+			"acknowledged":true,
+			"ackTime":"2026-02-08T13:19:15Z",
+			"ackUser":"admin",
+			"resolvedTime":"2026-02-08T13:24:15Z"
+		}`
+
+		assertJSONSnapshot(t, got, want)
+	})
+}
+
+func TestContract_IncidentJSONSnapshot(t *testing.T) {
+	start := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
+	ackTime := start.Add(5 * time.Minute)
+	closedAt := start.Add(10 * time.Minute)
+
+	t.Run("open", func(t *testing.T) {
+		payload := memory.Incident{
+			ID:           "incident-1",
+			AlertID:      "cluster/qemu/100-cpu",
+			AlertType:    "cpu",
+			Level:        "warning",
+			ResourceID:   "cluster/qemu/100",
+			ResourceName: "test-vm",
+			ResourceType: "guest",
+			Node:         "pve-1",
+			Instance:     "cpu0",
+			Message:      "VM cpu at 95%",
+			Status:       memory.IncidentStatusOpen,
+			OpenedAt:     start,
+			Acknowledged: true,
+			AckUser:      "admin",
+			AckTime:      &ackTime,
+			Events: []memory.IncidentEvent{
+				{
+					ID:        "evt-1",
+					Type:      memory.IncidentEventAlertFired,
+					Timestamp: start.Add(1 * time.Minute),
+					Summary:   "CPU alert fired",
+					Details: map[string]interface{}{
+						"type":      "cpu",
+						"level":     "warning",
+						"value":     95,
+						"threshold": 90,
+					},
+				},
+				{
+					ID:        "evt-2",
+					Type:      memory.IncidentEventAlertAcknowledged,
+					Timestamp: start.Add(5 * time.Minute),
+					Summary:   "Alert acknowledged",
+					Details: map[string]interface{}{
+						"user": "admin",
+					},
+				},
+			},
+		}
+
+		got, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("marshal open incident: %v", err)
+		}
+
+		const want = `{
+			"id":"incident-1",
+			"alertId":"cluster/qemu/100-cpu",
+			"alertType":"cpu",
+			"level":"warning",
+			"resourceId":"cluster/qemu/100",
+			"resourceName":"test-vm",
+			"resourceType":"guest",
+			"node":"pve-1",
+			"instance":"cpu0",
+			"message":"VM cpu at 95%",
+			"status":"open",
+			"openedAt":"2026-02-08T13:14:15Z",
+			"acknowledged":true,
+			"ackUser":"admin",
+			"ackTime":"2026-02-08T13:19:15Z",
+			"events":[
+				{"id":"evt-1","type":"alert_fired","timestamp":"2026-02-08T13:15:15Z","summary":"CPU alert fired","details":{"level":"warning","threshold":90,"type":"cpu","value":95}},
+				{"id":"evt-2","type":"alert_acknowledged","timestamp":"2026-02-08T13:19:15Z","summary":"Alert acknowledged","details":{"user":"admin"}}
+			]
+		}`
+
+		assertJSONSnapshot(t, got, want)
+	})
+
+	t.Run("resolved", func(t *testing.T) {
+		payload := memory.Incident{
+			ID:           "incident-1",
+			AlertID:      "cluster/qemu/100-cpu",
+			AlertType:    "cpu",
+			Level:        "warning",
+			ResourceID:   "cluster/qemu/100",
+			ResourceName: "test-vm",
+			ResourceType: "guest",
+			Node:         "pve-1",
+			Instance:     "cpu0",
+			Message:      "VM cpu at 95%",
+			Status:       memory.IncidentStatusResolved,
+			OpenedAt:     start,
+			ClosedAt:     &closedAt,
+			Acknowledged: true,
+			AckUser:      "admin",
+			AckTime:      &ackTime,
+			Events: []memory.IncidentEvent{
+				{
+					ID:        "evt-1",
+					Type:      memory.IncidentEventAlertFired,
+					Timestamp: start.Add(1 * time.Minute),
+					Summary:   "CPU alert fired",
+					Details: map[string]interface{}{
+						"type":      "cpu",
+						"level":     "warning",
+						"value":     95,
+						"threshold": 90,
+					},
+				},
+				{
+					ID:        "evt-2",
+					Type:      memory.IncidentEventAlertAcknowledged,
+					Timestamp: start.Add(5 * time.Minute),
+					Summary:   "Alert acknowledged",
+					Details: map[string]interface{}{
+						"user": "admin",
+					},
+				},
+			},
+		}
+
+		got, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("marshal resolved incident: %v", err)
+		}
+
+		const want = `{
+			"id":"incident-1",
+			"alertId":"cluster/qemu/100-cpu",
+			"alertType":"cpu",
+			"level":"warning",
+			"resourceId":"cluster/qemu/100",
+			"resourceName":"test-vm",
+			"resourceType":"guest",
+			"node":"pve-1",
+			"instance":"cpu0",
+			"message":"VM cpu at 95%",
+			"status":"resolved",
+			"openedAt":"2026-02-08T13:14:15Z",
+			"closedAt":"2026-02-08T13:24:15Z",
+			"acknowledged":true,
+			"ackUser":"admin",
+			"ackTime":"2026-02-08T13:19:15Z",
+			"events":[
+				{"id":"evt-1","type":"alert_fired","timestamp":"2026-02-08T13:15:15Z","summary":"CPU alert fired","details":{"level":"warning","threshold":90,"type":"cpu","value":95}},
+				{"id":"evt-2","type":"alert_acknowledged","timestamp":"2026-02-08T13:19:15Z","summary":"Alert acknowledged","details":{"user":"admin"}}
+			]
+		}`
+
+		assertJSONSnapshot(t, got, want)
+	})
+}
+
+func TestContract_IncidentEventTypeEnumSnapshot(t *testing.T) {
+	type envelope struct {
+		Type memory.IncidentEventType `json:"type"`
+	}
+
+	cases := []struct {
+		name string
+		typ  memory.IncidentEventType
+		want string
+	}{
+		{name: "alert_fired", typ: memory.IncidentEventAlertFired, want: `{"type":"alert_fired"}`},
+		{name: "alert_acknowledged", typ: memory.IncidentEventAlertAcknowledged, want: `{"type":"alert_acknowledged"}`},
+		{name: "alert_unacknowledged", typ: memory.IncidentEventAlertUnacknowledged, want: `{"type":"alert_unacknowledged"}`},
+		{name: "alert_resolved", typ: memory.IncidentEventAlertResolved, want: `{"type":"alert_resolved"}`},
+		{name: "ai_analysis", typ: memory.IncidentEventAnalysis, want: `{"type":"ai_analysis"}`},
+		{name: "command", typ: memory.IncidentEventCommand, want: `{"type":"command"}`},
+		{name: "runbook", typ: memory.IncidentEventRunbook, want: `{"type":"runbook"}`},
+		{name: "note", typ: memory.IncidentEventNote, want: `{"type":"note"}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := json.Marshal(envelope{Type: tc.typ})
+			if err != nil {
+				t.Fatalf("marshal incident event type %q: %v", tc.name, err)
+			}
+			assertJSONSnapshot(t, got, tc.want)
+		})
+	}
+}
+
+func TestContract_AlertFieldNamingConsistency(t *testing.T) {
+	cases := []struct {
+		name string
+		typ  reflect.Type
+	}{
+		{name: "alerts.Alert", typ: reflect.TypeOf(alerts.Alert{})},
+		{name: "memory.Incident", typ: reflect.TypeOf(memory.Incident{})},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for i := 0; i < tc.typ.NumField(); i++ {
+				field := tc.typ.Field(i)
+				if !field.IsExported() {
+					continue
+				}
+
+				jsonTag := field.Tag.Get("json")
+				if jsonTag == "" || jsonTag == "-" {
+					continue
+				}
+
+				tagName := strings.Split(jsonTag, ",")[0]
+				if strings.Contains(tagName, "_") {
+					t.Fatalf("field %s on %s uses snake_case json tag %q", field.Name, tc.name, tagName)
+				}
+			}
+		})
+	}
 }
 
 func TestContract_AlertResourceTypeConsistency(t *testing.T) {

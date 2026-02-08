@@ -27,7 +27,7 @@ Date: 2026-02-08
 | 04 | Monitor Integration Migration to Unified Evaluator | DONE | Codex | Orchestrator | APPROVED | Appendix D + parity tests |
 | 05 | Alerts Frontend Migration to Unified Resource Source | DONE | Codex | Orchestrator | APPROVED | getResourceType → unified lookup + 11 tests |
 | 06 | Threshold Overrides and ID Normalization Hardening | DONE | Codex | Orchestrator | APPROVED | Override normalization tests + key format doc |
-| 07 | API and Incident Timeline Contract Locking | TODO | Unassigned | Unassigned | PENDING | |
+| 07 | API and Incident Timeline Contract Locking | DONE | Codex | Orchestrator | APPROVED | 5 new contract snapshot tests in contract_test.go |
 | 08 | AI Alert Bridge and Enrichment Parity | TODO | Unassigned | Unassigned | PENDING | |
 | 09 | Operational Safety (Feature Flag, Rollout, Rollback) | TODO | Unassigned | Unassigned | PENDING | |
 | 10 | Final Certification | TODO | Unassigned | Unassigned | PENDING | |
@@ -406,7 +406,7 @@ Rollback:
 - [x] Verdict recorded: `APPROVED`
 
 ### Checkpoint Commit (Packet 06)
-`6dc371e9` — feat(alerts): unified-resource hardening Packet 06 checkpoint
+`4a2d94ad` — feat(alerts): unified-resource hardening Packet 06 checkpoint
 
 ### Review Evidence (Packet 06)
 
@@ -454,24 +454,72 @@ Rollback:
 ## Packet 07 Checklist: API and Incident Timeline Contract Locking
 
 ### Implementation
-- [ ] Active/history alert payload snapshots added or updated.
-- [ ] Incident timeline payload snapshots added or updated.
-- [ ] Error response schema consistency validated.
-- [ ] Client compatibility notes captured for changed fields.
+- [x] Active/history alert payload snapshots added or updated.
+- [x] Incident timeline payload snapshots added or updated.
+- [x] Error response schema consistency validated.
+- [x] Client compatibility notes captured for changed fields.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "AlertsEndpoints|Contract|Incident" -v` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "AlertsEndpoints|Contract|Incident" -v` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Evidence
-- [ ] Contract snapshot diffs attached.
-- [ ] Field-casing and naming consistency checklist attached.
+- [x] Contract snapshot diffs attached.
+- [x] Field-casing and naming consistency checklist attached.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Checkpoint Commit (Packet 07)
+`51258f8e` — feat(alerts): unified-resource hardening Packet 07 checkpoint
+
+### Review Evidence (Packet 07)
+
+```
+Files changed:
+- internal/api/contract_test.go: Added 5 new contract snapshot tests:
+  1. TestContract_AlertAllFieldsJSONSnapshot — locks ALL optional Alert fields (nodeDisplayName, ackTime, ackUser, lastNotified, lastEscalation, escalationTimes)
+  2. TestContract_ModelAlertJSONSnapshot — locks simplified models.Alert (confirms backend-only fields omitted) + models.ResolvedAlert (adds resolvedTime)
+  3. TestContract_IncidentJSONSnapshot — locks memory.Incident payloads for open and resolved states with timeline events
+  4. TestContract_IncidentEventTypeEnumSnapshot — locks all 8 IncidentEventType string values
+  5. TestContract_AlertFieldNamingConsistency — reflection-based guard: all exported json tags on alerts.Alert and memory.Incident must be camelCase (no underscores)
+
+Contract snapshot coverage:
+- alerts.Alert: basic (existing) + all-fields (new) = full field coverage
+- models.Alert: simplified frontend model locked, backend-only fields explicitly forbidden
+- models.ResolvedAlert: embedded Alert + resolvedTime locked
+- memory.Incident: open + resolved states, closedAt optional field, nested IncidentEvent array
+- memory.IncidentEventType: all 8 enum values locked
+- Field naming: alerts.Alert + memory.Incident validated as camelCase-only
+
+Client compatibility notes:
+- models.Alert intentionally omits lastSeen, metadata, lastNotified, lastEscalation, escalationTimes (by design for frontend state)
+- Incident uses camelCase consistently (alertId, resourceId, openedAt, closedAt, ackTime)
+- Query params use snake_case (alert_id, resource_id, started_at) — intentionally different from JSON response bodies
+- Error responses are plain text (http.Error), not structured JSON — documented as-is
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/api/... -run "Contract" -v` -> exit 0 (all contract tests pass)
+3. `go test ./internal/api/... -run "AlertsEndpoints|Incident" -v` -> exit 0 (all endpoint tests pass)
+
+Gate checklist:
+- P0: PASS (Alert payload shape locked with full-field snapshot; incident timeline payload locked for open/resolved; field naming consistency enforced via reflection)
+- P1: PASS (5 new test functions with 15+ subtests; existing contract tests unaffected; endpoint tests unaffected)
+- P2: PASS (No code changes to production handlers; tests only; no breaking changes)
+
+Verdict: APPROVED
+
+Residual risk:
+- Error responses remain plain text (http.Error) rather than structured JSON. Standardizing to JSON would require API versioning — out of scope.
+- Query param snake_case vs response body camelCase is intentional but undocumented in API docs.
+
+Rollback:
+- Remove the 5 new test functions from contract_test.go; remove memory and models imports.
+```
 
 ## Packet 08 Checklist: AI Alert Bridge and Enrichment Parity
 
