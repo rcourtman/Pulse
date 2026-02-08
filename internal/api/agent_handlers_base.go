@@ -54,7 +54,18 @@ func (b *baseAgentHandlers) getMonitor(ctx context.Context) *monitoring.Monitor 
 	return b.legacyMonitor
 }
 
-// broadcastState pushes the current monitor state to all WebSocket clients.
+// broadcastState pushes monitor state to tenant-scoped WebSocket clients when
+// context includes an org ID, falling back to global broadcast for legacy paths.
 func (b *baseAgentHandlers) broadcastState(ctx context.Context) {
-	go b.wsHub.BroadcastState(b.getMonitor(ctx).GetState().ToFrontend())
+	if b.wsHub == nil {
+		return
+	}
+
+	state := b.getMonitor(ctx).GetState().ToFrontend()
+	orgID := GetOrgID(ctx)
+	if orgID != "" {
+		go b.wsHub.BroadcastStateToTenant(orgID, state)
+		return
+	}
+	go b.wsHub.BroadcastState(state)
 }

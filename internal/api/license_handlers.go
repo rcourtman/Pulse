@@ -197,6 +197,8 @@ func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.R
 			license.FeatureRBAC:              service.HasFeature(license.FeatureRBAC),
 			license.FeatureAuditLogging:      service.HasFeature(license.FeatureAuditLogging),
 			license.FeatureAdvancedReporting: service.HasFeature(license.FeatureAdvancedReporting),
+			// Multi-tenant
+			license.FeatureMultiTenant: service.HasFeature(license.FeatureMultiTenant),
 		},
 		UpgradeURL: "https://pulserelay.pro/",
 	}
