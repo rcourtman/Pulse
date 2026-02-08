@@ -175,6 +175,7 @@ tmp_*.sh
 # Local agent directories
 scripts/agent/
 docs/internal/
+docs/architecture/
 .agent/
 
 # Pulse Pro landing page (private)
