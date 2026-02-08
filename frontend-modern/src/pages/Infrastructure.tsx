@@ -79,6 +79,7 @@ export function Infrastructure() {
     { key: 'pbs', label: 'PBS' },
     { key: 'pmg', label: 'PMG' },
     { key: 'kubernetes', label: 'K8s' },
+    { key: 'truenas', label: 'TrueNAS' },
   ];
 
   const migrationNotice = createMemo(() => {
@@ -206,6 +207,8 @@ export function Infrastructure() {
       case 'k8s':
       case 'kubernetes':
         return 'kubernetes';
+      case 'truenas':
+        return 'truenas';
       default:
         return null;
     }

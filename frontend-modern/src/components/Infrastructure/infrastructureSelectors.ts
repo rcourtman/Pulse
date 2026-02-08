@@ -96,6 +96,8 @@ function normalizeSource(value: string): string | null {
     case 'k8s':
     case 'kubernetes':
       return 'kubernetes';
+    case 'truenas':
+      return 'truenas';
     default:
       return null;
   }

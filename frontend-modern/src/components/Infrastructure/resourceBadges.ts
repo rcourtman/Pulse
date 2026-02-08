@@ -9,7 +9,7 @@ export interface ResourceBadge {
 
 const baseBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
 
-export type UnifiedSource = 'proxmox' | 'agent' | 'docker' | 'pbs' | 'pmg' | 'kubernetes';
+export type UnifiedSource = 'proxmox' | 'agent' | 'docker' | 'pbs' | 'pmg' | 'kubernetes' | 'truenas';
 
 const sourceLabels: Record<SourceType, string> = {
   agent: 'Agent',
@@ -30,6 +30,7 @@ const unifiedSourceLabels: Record<UnifiedSource, string> = {
   pbs: 'PBS',
   pmg: 'PMG',
   kubernetes: 'K8s',
+  truenas: 'TrueNAS',
 };
 
 const unifiedSourceClasses: Record<UnifiedSource, string> = {
@@ -39,6 +40,7 @@ const unifiedSourceClasses: Record<UnifiedSource, string> = {
   pbs: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
   pmg: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
   kubernetes: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+  truenas: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
 };
 
 const typeLabels: Partial<Record<ResourceType, string>> = {
@@ -88,7 +90,7 @@ export function getUnifiedSourceBadges(sources?: string[] | null): ResourceBadge
   const normalized = sources
     .map((source) => source.toLowerCase())
     .filter((source): source is UnifiedSource =>
-      ['proxmox', 'agent', 'docker', 'pbs', 'pmg', 'kubernetes'].includes(source),
+      ['proxmox', 'agent', 'docker', 'pbs', 'pmg', 'kubernetes', 'truenas'].includes(source),
     );
   const unique = Array.from(new Set(normalized));
   return unique.map((source) => ({
