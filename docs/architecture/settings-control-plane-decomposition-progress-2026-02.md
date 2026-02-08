@@ -24,7 +24,7 @@ Date: 2026-02-08
 | 01 | Tab Schema and Metadata Extraction | DONE | Codex | Claude | APPROVED | See Packet 01 evidence below |
 | 02 | Feature Gate Engine Extraction | DONE | Codex | Claude | APPROVED | See Packet 02 evidence below |
 | 03 | Navigation and Deep-Link Orchestration Extraction | DONE | Codex | Claude | APPROVED | See Packet 03 evidence below |
-| 04 | System Settings State Slice Extraction | TODO | Unassigned | Unassigned | PENDING | |
+| 04 | System Settings State Slice Extraction | DONE | Codex | Claude | APPROVED | See Packet 04 evidence below |
 | 05 | Infrastructure and Node Workflow Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 06 | Backup Import/Export and Passphrase Flow Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 07 | Panel Registry and Render Dispatch Extraction | TODO | Unassigned | Unassigned | PENDING | |
@@ -225,7 +225,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- (pending)
+- `791e027e` (feat(settings): Packet 03 — extract navigation and deep-link orchestration)
 
 Residual risk:
 - platformTabs.test.ts has a pre-existing alias resolution failure from parallel work
@@ -237,21 +237,49 @@ Rollback:
 ## Packet 04 Checklist: System Settings State Slice Extraction
 
 ### Implementation
-- [ ] System settings state extracted to dedicated hook(s).
-- [ ] Backup polling state and summaries extracted.
-- [ ] Save/load payload semantics preserved.
-- [ ] Error/notification behavior preserved.
+- [x] System settings state extracted to dedicated hook(s).
+- [x] Backup polling state and summaries extracted.
+- [x] Save/load payload semantics preserved.
+- [x] Error/notification behavior preserved.
 
 ### Required Tests
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Packet 04 Review Evidence
+
+```
+Files changed:
+- frontend-modern/src/components/Settings/useSystemSettingsState.ts (new, 629 LOC): All system settings signals, env override locks, polling/update/diagnostics state, saveSettings, checkForUpdates, handleInstallUpdate, handleConfirmUpdate, initializeSystemSettingsState
+- frontend-modern/src/components/Settings/Settings.tsx (3831→3339 LOC, -492): Removed inline system state, calls hook and destructures
+
+Commands run + exit codes (reviewer-independent):
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+2. `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` -> exit 0 (7/7 passed)
+
+Gate checklist:
+- P0: PASS (hook verified with complete state surface; Settings.tsx delegates; both commands pass)
+- P1: PASS (save/load semantics, notifications, env locks all preserved; discovery state left in Settings.tsx for Packet 05 coupling)
+- P2: PASS (tracker updated, checklist complete)
+
+Verdict: APPROVED
+
+Commit:
+- (pending)
+
+Residual risk:
+- None
+
+Rollback:
+- Delete useSystemSettingsState.ts, restore inline system state from 791e027e
+```
 
 ## Packet 05 Checklist: Infrastructure and Node Workflow Extraction
 
