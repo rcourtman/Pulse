@@ -4,7 +4,7 @@ Linked plan:
 - `docs/architecture/infrastructure-workloads-performance-hardening-plan-2026-02.md` (authoritative execution spec)
 - `docs/architecture/storage-backups-phase-5-legacy-deprecation-progress-2026-02.md` (parallel lane - non-overlapping)
 
-Status: Active
+Status: Certified
 Date: 2026-02-08
 
 ## Rules
@@ -30,7 +30,7 @@ Date: 2026-02-08
 | IWP-04 | Workloads Table Windowing and Grouped Render Containment | DONE | Codex | Claude | APPROVED | IWP-04 Review Evidence |
 | IWP-05 | Polling/Update Backpressure and Recompute Isolation | DONE | Codex | Claude | APPROVED | IWP-05 Review Evidence |
 | IWP-06 | Summary Path Hardening | DONE | Codex | Claude | APPROVED | IWP-06 Review Evidence |
-| IWP-07 | Final Performance Certification | TODO | Claude | Claude | — | — |
+| IWP-07 | Final Performance Certification | DONE | Claude | Claude | APPROVED | IWP-07 Review Evidence |
 
 ---
 
@@ -407,28 +407,67 @@ Rollback:
 
 ## IWP-07 Checklist: Final Performance Certification
 
-- [ ] Packets IWP-00 through IWP-06 are `DONE` and `APPROVED`.
-- [ ] Checkpoint commit hashes recorded for each approved packet.
-- [ ] Final budgets verified against perf contract tests.
-- [ ] Full frontend suite and typecheck rerun with explicit exit codes.
-- [ ] Residual risks and rollback paths documented.
+- [x] Packets IWP-00 through IWP-06 are `DONE` and `APPROVED`.
+- [x] Checkpoint commit hashes recorded for each approved packet.
+- [x] Final budgets verified against perf contract tests.
+- [x] Full frontend suite and typecheck rerun with explicit exit codes.
+- [x] Residual risks and rollback paths documented.
 
 ### Required Tests
 
-- [ ] `cd frontend-modern && npx vitest run` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `cd frontend-modern && npx vitest run` -> exit 0
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### IWP-07 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `docs/architecture/infrastructure-workloads-performance-hardening-progress-2026-02.md`: Final certification update
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run` -> exit 0 (74 test files, 695 tests passed, 10.27s)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+
+Final budget verification:
+- Infrastructure row windowing: Profile S renders all 250 rows, Profile M/L capped at <=140 mounted rows ✓
+- Workloads row windowing: Profile S renders all 400 rows, Profile M/L capped at <=140 mounted rows ✓
+- Infrastructure derivation selectors: 12 pure functions, 23 unit tests ✓
+- Workloads derivation selectors: 11 pure functions, 17 unit tests ✓
+- Polling reference stability: useV2Workloads areWorkloadsEqual gate, useUnifiedResources reconcile ✓
+- Summary path bounds: adaptive maxPoints, cache TTL, visible-series-only, fetch dedupe ✓
+
+Gate checklist:
+- P0: PASS (full suite 695/695 tests pass, typecheck clean)
+- P1: PASS (all 7 preceding packets APPROVED with checkpoint hashes)
+- P2: PASS (no regressions in any existing test, all perf contracts satisfied)
+
+Verdict: APPROVED
+
+Checkpoint commits:
+- IWP-00: c28f1c4a
+- IWP-01: 6f9e2cc3
+- IWP-02: 86cce391
+- IWP-03: bb4844a6
+- IWP-04: 6b8bccd8
+- IWP-05: b343fcb8
+- IWP-06: 67365fb4
+- IWP-07: (this commit)
+
+Residual risks:
+1. jsdom doesn't simulate real scrolling — windowing scroll behavior untested in unit tests; requires manual browser verification
+2. Profile L extended timeouts (15-20s) may need CI-runner adjustment
+3. Deep equality comparison in useV2Workloads adds O(n) per poll tick; negligible at realistic fleet sizes
+
+Rollback:
+- Each packet has file-level rollback guidance in its review evidence
+- Full rollback: revert to pre-IWP-00 commit (parent of c28f1c4a)
 ```
 
 ---
@@ -441,9 +480,9 @@ TODO
 - IWP-03: `bb4844a6`
 - IWP-04: `6b8bccd8`
 - IWP-05: `b343fcb8`
-- IWP-06: TODO
-- IWP-07: TODO
+- IWP-06: `67365fb4`
+- IWP-07: pending
 
 ## Current Recommended Next Packet
 
-- `IWP-01` (Infrastructure Derivation Pipeline Extraction)
+- Lane certified. All packets DONE and APPROVED.
