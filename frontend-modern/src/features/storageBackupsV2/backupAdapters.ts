@@ -522,20 +522,17 @@ const buildPmgRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
   }));
 };
 
-const ARTIFACT_COLLECTION_KEYS = new Set([
-  'backup',
+const ARTIFACT_COLLECTION_KEYS = [
+  'artifacts',
   'backups',
-  'backupData',
-  'backupInfo',
   'backupArtifacts',
   'backupEntries',
   'backupRecords',
-  'artifacts',
   'entries',
   'records',
   'snapshots',
   'items',
-]);
+];
 
 const looksLikeBackupArtifact = (record: Record<string, unknown>): boolean => {
   const artifactTimestamp = readDateAny(record, [
@@ -571,45 +568,43 @@ const looksLikeBackupArtifact = (record: Record<string, unknown>): boolean => {
   return hasBackupHints || (artifactTimestamp !== null && hasOperationalHints);
 };
 
-const collectArtifactCandidates = (...seeds: unknown[]): Record<string, unknown>[] => {
-  const queue: unknown[] = [...seeds];
-  const results: Record<string, unknown>[] = [];
+const artifactSignature = (record: Record<string, unknown>): string =>
+  [
+    readStringAny(record, ['id', 'uid', 'backupId', 'backupUid', 'runId']),
+    readStringAny(record, ['backupTime', 'completedAt', 'finishedAt', 'timestamp', 'time', 'createdAt']),
+    readStringAny(record, ['name', 'backupName', 'workloadName', 'containerName', 'volume']),
+  ].join('|');
+
+const dedupeArtifactCandidates = (records: Record<string, unknown>[]): Record<string, unknown>[] => {
   const seenSignatures = new Set<string>();
+  const deduped: Record<string, unknown>[] = [];
+  for (const record of records) {
+    const signature = artifactSignature(record);
+    if (seenSignatures.has(signature)) continue;
+    seenSignatures.add(signature);
+    deduped.push(record);
+  }
+  return deduped;
+};
 
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) continue;
+const collectArtifactCandidates = (seed: unknown, depth = 0): Record<string, unknown>[] => {
+  if (depth > 2 || seed == null) return [];
 
-    if (Array.isArray(current)) {
-      queue.push(...current);
-      continue;
-    }
+  if (Array.isArray(seed)) {
+    return seed.flatMap((value) => collectArtifactCandidates(value, depth + 1));
+  }
 
-    if (typeof current !== 'object') continue;
+  if (typeof seed !== 'object') return [];
+  const record = asRecord(seed);
+  const results: Record<string, unknown>[] = [];
 
-    const record = asRecord(current);
-    if (looksLikeBackupArtifact(record)) {
-      const signature = [
-        readStringAny(record, ['id', 'uid', 'backupId', 'backupUid', 'runId']),
-        readStringAny(record, ['backupTime', 'completedAt', 'finishedAt', 'timestamp', 'time', 'createdAt']),
-        readStringAny(record, ['name', 'backupName', 'workloadName', 'containerName', 'volume']),
-      ].join('|');
-      if (!seenSignatures.has(signature)) {
-        seenSignatures.add(signature);
-        results.push(record);
-      }
-    }
+  if (looksLikeBackupArtifact(record)) {
+    results.push(record);
+  }
 
-    for (const [key, value] of Object.entries(record)) {
-      if (!value) continue;
-      const keyLooksRelevant = ARTIFACT_COLLECTION_KEYS.has(key) || /backup|artifact|snapshot/i.test(key);
-      if (!keyLooksRelevant) continue;
-      if (Array.isArray(value)) {
-        queue.push(...value);
-      } else if (typeof value === 'object') {
-        queue.push(value);
-      }
-    }
+  for (const key of ARTIFACT_COLLECTION_KEYS) {
+    if (!(key in record)) continue;
+    results.push(...collectArtifactCandidates(record[key], depth + 1));
   }
 
   return results;
@@ -620,16 +615,19 @@ const extractKubernetesArtifactPayloads = (resource: Resource): Record<string, u
   const backupData = asRecord(platformData.backup);
   const kubernetesData = asRecord(platformData.kubernetes);
 
-  return collectArtifactCandidates(
-    platformData.backupArtifacts,
-    platformData.backups,
-    platformData.backup,
-    backupData,
-    backupData.kubernetes,
-    kubernetesData.backup,
-    kubernetesData.backups,
-    kubernetesData.backupArtifacts,
-  );
+  return dedupeArtifactCandidates([
+    ...collectArtifactCandidates(platformData.backupArtifacts),
+    ...collectArtifactCandidates(platformData.backups),
+    ...collectArtifactCandidates(platformData.backup),
+    ...collectArtifactCandidates(backupData.artifacts),
+    ...collectArtifactCandidates(backupData.backups),
+    ...collectArtifactCandidates(backupData.entries),
+    ...collectArtifactCandidates(backupData.records),
+    ...collectArtifactCandidates(backupData.kubernetes),
+    ...collectArtifactCandidates(kubernetesData.backup),
+    ...collectArtifactCandidates(kubernetesData.backups),
+    ...collectArtifactCandidates(kubernetesData.backupArtifacts),
+  ]);
 };
 
 const extractDockerArtifactPayloads = (resource: Resource): Record<string, unknown>[] => {
@@ -637,16 +635,19 @@ const extractDockerArtifactPayloads = (resource: Resource): Record<string, unkno
   const backupData = asRecord(platformData.backup);
   const dockerData = asRecord(platformData.docker);
 
-  return collectArtifactCandidates(
-    platformData.backupArtifacts,
-    platformData.backups,
-    platformData.backup,
-    backupData,
-    backupData.docker,
-    dockerData.backup,
-    dockerData.backups,
-    dockerData.backupArtifacts,
-  );
+  return dedupeArtifactCandidates([
+    ...collectArtifactCandidates(platformData.backupArtifacts),
+    ...collectArtifactCandidates(platformData.backups),
+    ...collectArtifactCandidates(platformData.backup),
+    ...collectArtifactCandidates(backupData.artifacts),
+    ...collectArtifactCandidates(backupData.backups),
+    ...collectArtifactCandidates(backupData.entries),
+    ...collectArtifactCandidates(backupData.records),
+    ...collectArtifactCandidates(backupData.docker),
+    ...collectArtifactCandidates(dockerData.backup),
+    ...collectArtifactCandidates(dockerData.backups),
+    ...collectArtifactCandidates(dockerData.backupArtifacts),
+  ]);
 };
 
 const categoryFromKubernetesArtifact = (resource: Resource, artifact: Record<string, unknown>): BackupCategory => {

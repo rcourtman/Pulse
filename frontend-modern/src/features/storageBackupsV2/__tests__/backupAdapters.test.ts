@@ -454,4 +454,39 @@ describe('backupAdapters', () => {
     expect(records[0].id.startsWith('resource:')).toBe(false);
     expect(records[0].source.adapterId).toBe('kubernetes-artifact-backups');
   });
+
+  it('keeps Kubernetes summary fallback when only lastBackup metadata exists', () => {
+    const state = baseState();
+    const resources: Resource[] = [
+      {
+        id: 'k8s-pod-billing',
+        type: 'pod',
+        name: 'billing',
+        displayName: 'billing',
+        platformId: 'cluster-a',
+        platformType: 'kubernetes',
+        sourceType: 'api',
+        status: 'running',
+        lastSeen: Date.now(),
+        platformData: {
+          lastBackup: '2024-05-03T08:30:00Z',
+          backup: {
+            lastBackup: '2024-05-03T08:30:00Z',
+            status: 'ok',
+            verified: true,
+          },
+          kubernetes: {
+            clusterId: 'cluster-a',
+            namespace: 'default',
+            nodeName: 'worker-1',
+          },
+        },
+      },
+    ];
+
+    const records = buildBackupRecordsV2({ state, resources });
+    expect(records).toHaveLength(1);
+    expect(records[0].id.startsWith('resource:')).toBe(true);
+    expect(records[0].source.adapterId).toBe('resource-backups');
+  });
 });
