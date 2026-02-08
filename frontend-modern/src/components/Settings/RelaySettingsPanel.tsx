@@ -8,7 +8,9 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import { hasFeature, loadLicenseStatus } from '@/stores/license';
 import { showSuccess, showError } from '@/utils/toast';
 import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
+import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
 import { logger } from '@/utils/logger';
+import QRCode from 'qrcode';
 
 export const RelaySettingsPanel: Component = () => {
   const [config, setConfig] = createSignal<RelayConfig | null>(null);
@@ -16,14 +18,28 @@ export const RelaySettingsPanel: Component = () => {
   const [loading, setLoading] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [serverUrl, setServerUrl] = createSignal('');
+  const [showPairing, setShowPairing] = createSignal(false);
+  const [pairingLoading, setPairingLoading] = createSignal(false);
+  const [pairingPayload, setPairingPayload] = createSignal<OnboardingQRResponse | null>(null);
+  const [pairingQRCode, setPairingQRCode] = createSignal<string | null>(null);
 
   let statusInterval: ReturnType<typeof setInterval> | undefined;
+
+  const resetPairingState = () => {
+    setShowPairing(false);
+    setPairingLoading(false);
+    setPairingPayload(null);
+    setPairingQRCode(null);
+  };
 
   const loadConfig = async () => {
     try {
       const cfg = await RelayAPI.getConfig();
       setConfig(cfg);
       setServerUrl(cfg.server_url);
+      if (!cfg.enabled) {
+        resetPairingState();
+      }
     } catch (err) {
       logger.error('[RelaySettings] Failed to load config', err);
     }
@@ -79,6 +95,7 @@ export const RelaySettingsPanel: Component = () => {
       } else {
         stopStatusPolling();
         setStatus(null);
+        resetPairingState();
         showSuccess('Remote access disabled');
       }
     } catch (err) {
@@ -102,6 +119,40 @@ export const RelaySettingsPanel: Component = () => {
       logger.error('[RelaySettings] Failed to save server URL', err);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePairNewDevice = async () => {
+    setShowPairing(true);
+    setPairingLoading(true);
+    try {
+      const payload = await OnboardingAPI.getQRPayload();
+      const qrCodeDataUrl = await QRCode.toDataURL(payload.deep_link, {
+        width: 256,
+        margin: 2,
+      });
+      setPairingPayload(payload);
+      setPairingQRCode(qrCodeDataUrl);
+    } catch (err) {
+      setPairingPayload(null);
+      setPairingQRCode(null);
+      showError('Failed to generate pairing QR code');
+      logger.error('[RelaySettings] Failed to generate onboarding QR', err);
+    } finally {
+      setPairingLoading(false);
+    }
+  };
+
+  const handleCopyPairingPayload = async () => {
+    const payload = pairingPayload();
+    if (!payload) return;
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      showSuccess('Pairing payload copied');
+    } catch (err) {
+      showError('Failed to copy pairing payload');
+      logger.error('[RelaySettings] Failed to copy pairing payload', err);
     }
   };
 
@@ -240,6 +291,91 @@ export const RelaySettingsPanel: Component = () => {
             <p class={formHelpText}>
               This fingerprint uniquely identifies your Pulse instance. The mobile app will verify this fingerprint to prevent man-in-the-middle attacks.
             </p>
+          </div>
+        </Show>
+
+        <Show when={config()?.enabled && status()?.connected}>
+          <div class={formField}>
+            <label class={labelClass()}>Pair Mobile Device</label>
+            <Card tone="muted" padding="md">
+              <div class="space-y-3">
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                    onClick={() => void handlePairNewDevice()}
+                    disabled={saving() || pairingLoading()}
+                  >
+                    {pairingLoading()
+                      ? 'Generating QR code...'
+                      : showPairing()
+                        ? 'Refresh QR Code'
+                        : 'Pair New Device'}
+                  </button>
+                  <Show when={showPairing() && pairingPayload()}>
+                    <button
+                      class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-50"
+                      onClick={() => void handleCopyPairingPayload()}
+                      disabled={pairingLoading()}
+                    >
+                      Copy Payload
+                    </button>
+                  </Show>
+                </div>
+
+                <p class={formHelpText}>
+                  Generate a QR code and scan it from the Pulse mobile app to pair a new device.
+                </p>
+
+                <Show when={showPairing()}>
+                  <div class="space-y-3">
+                    <Show when={pairingLoading()}>
+                      <p class="text-sm text-gray-600 dark:text-gray-300">
+                        Preparing pairing payload...
+                      </p>
+                    </Show>
+
+                    <Show when={!pairingLoading() && pairingQRCode()}>
+                      <img
+                        src={pairingQRCode()!}
+                        alt="Pulse mobile pairing QR code"
+                        width="256"
+                        height="256"
+                        class="rounded-md border border-gray-200 dark:border-gray-700 bg-white p-2"
+                      />
+                    </Show>
+
+                    <Show when={pairingPayload()?.deep_link}>
+                      <code class="block text-xs font-mono text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded px-3 py-2 select-all break-all">
+                        {pairingPayload()!.deep_link}
+                      </code>
+                    </Show>
+
+                    <Show when={(pairingPayload()?.diagnostics?.length ?? 0) > 0}>
+                      <div class="space-y-2">
+                        <p class="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                          Diagnostics
+                        </p>
+                        {(pairingPayload()?.diagnostics ?? []).map((diagnostic) => (
+                          <div
+                            class={`rounded px-2 py-1 text-xs ${
+                              diagnostic.severity === 'error'
+                                ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                                : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'
+                            }`}
+                          >
+                            <p class="font-medium">{diagnostic.message}</p>
+                            <p class="mt-0.5 font-mono">
+                              {diagnostic.code}
+                              <Show when={diagnostic.field}> | field: {diagnostic.field}</Show>
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
+              </div>
+            </Card>
           </div>
         </Show>
       </Show>
