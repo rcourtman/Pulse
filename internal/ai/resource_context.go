@@ -138,6 +138,7 @@ func (s *Service) buildUnifiedResourceContext() string {
 
 			proxmoxNodes := make([]unifiedresources.Resource, 0)
 			standaloneHosts := make([]unifiedresources.Resource, 0)
+			trueNASHosts := make([]unifiedresources.Resource, 0)
 			dockerHosts := make([]unifiedresources.Resource, 0)
 			k8sClusters := make([]unifiedresources.Resource, 0)
 			k8sNodes := make([]unifiedresources.Resource, 0)
@@ -152,6 +153,8 @@ func (s *Service) buildUnifiedResourceContext() string {
 					proxmoxNodes = append(proxmoxNodes, resource)
 				case resource.Docker != nil:
 					dockerHosts = append(dockerHosts, resource)
+				case hasResourceTag(resource, "truenas"):
+					trueNASHosts = append(trueNASHosts, resource)
 				case resource.Agent != nil:
 					standaloneHosts = append(standaloneHosts, resource)
 				default:
@@ -167,6 +170,7 @@ func (s *Service) buildUnifiedResourceContext() string {
 
 			sortResources(proxmoxNodes)
 			sortResources(standaloneHosts)
+			sortResources(trueNASHosts)
 			sortResources(dockerHosts)
 			sortResources(k8sClusters)
 			sortResources(k8sNodes)
@@ -221,6 +225,23 @@ func (s *Service) buildUnifiedResourceContext() string {
 
 					sections = append(sections, fmt.Sprintf("- **%s**%s%s [%s]",
 						unifiedResourceDisplayName(host), ips, metrics, host.Status))
+				}
+			}
+
+			if len(trueNASHosts) > 0 {
+				sections = append(sections, "\n**TrueNAS Systems:**")
+				for _, host := range trueNASHosts {
+					metrics := ""
+					diskPercent := 0.0
+					if host.Metrics != nil {
+						diskPercent = unifiedMetricPercent(host.Metrics.Disk)
+					}
+					if diskPercent > 0 {
+						metrics = fmt.Sprintf(", Disk: %.1f%%", diskPercent)
+					}
+
+					sections = append(sections, fmt.Sprintf("- **%s**%s [%s]",
+						unifiedResourceDisplayName(host), metrics, host.Status))
 				}
 			}
 
@@ -788,6 +809,15 @@ func unifiedMetricPercent(m *unifiedresources.MetricValue) float64 {
 		return (float64(*m.Used) / float64(*m.Total)) * 100
 	}
 	return 0
+}
+
+func hasResourceTag(resource unifiedresources.Resource, tag string) bool {
+	for _, t := range resource.Tags {
+		if strings.EqualFold(t, tag) {
+			return true
+		}
+	}
+	return false
 }
 
 // min returns the smaller of two integers

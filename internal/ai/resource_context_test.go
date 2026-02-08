@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -347,6 +348,36 @@ func TestBuildUnifiedResourceContext_UnifiedPath(t *testing.T) {
 	assertContains("Node not ready")
 	if strings.Contains(got, "Total resources: 999") {
 		t.Fatalf("expected unified provider to take precedence over legacy provider, got %q", got)
+	}
+}
+
+func TestBuildUnifiedResourceContextIncludesTrueNASResources(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+	records := truenas.NewDefaultProvider().Records()
+	if len(records) == 0 {
+		t.Fatal("expected truenas fixture records")
+	}
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+
+	adapter := unifiedresources.NewUnifiedAIAdapter(registry)
+	s := &Service{}
+	s.SetUnifiedResourceProvider(adapter)
+
+	got := s.buildUnifiedResourceContext()
+	if got == "" {
+		t.Fatal("expected non-empty context")
+	}
+	if !strings.Contains(got, "TrueNAS Systems") {
+		t.Fatalf("expected context to include TrueNAS section, got %q", got)
+	}
+	if !strings.Contains(got, "truenas-main") {
+		t.Fatalf("expected context to include truenas host, got %q", got)
 	}
 }
 
