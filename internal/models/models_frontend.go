@@ -594,6 +594,25 @@ type StateFrontend struct {
 	Resources []ResourceFrontend `json:"resources,omitempty"`
 }
 
+// StripLegacyArrays removes legacy per-type arrays from the state payload.
+// Use this when transitioning to unified Resources-only mode.
+func (s *StateFrontend) StripLegacyArrays() {
+	if s == nil {
+		return
+	}
+
+	s.Nodes = nil
+	s.VMs = nil
+	s.Containers = nil
+	s.DockerHosts = nil
+	s.RemovedDockerHosts = nil
+	s.Hosts = nil
+	s.Storage = nil
+	s.CephClusters = nil
+	s.PhysicalDisks = nil
+	// Keep PBS, PMG, and Backups fields while they are not fully migrated.
+}
+
 // ResourceFrontend is the frontend representation of a unified Resource.
 // This mirrors resources.Resource but with time.Time converted to Unix milliseconds.
 type ResourceFrontend struct {

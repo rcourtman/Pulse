@@ -482,6 +482,14 @@ export function createWebSocketStore(url: string) {
                 types: [...new Set(message.data.resources?.map((r: any) => r.type) || [])],
               });
               setState('resources', reconcile(message.data.resources, { key: 'id' }));
+
+              if (
+                (message.data.resources?.length || 0) > 0
+                && !message.data.nodes?.length
+                && !message.data.vms?.length
+              ) {
+                logger.debug('[WebSocket] Unified-only mode detected: legacy arrays absent');
+              }
             }
             // Sync active alerts from state
             if (message.data.activeAlerts !== undefined) {

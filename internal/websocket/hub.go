@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
@@ -352,20 +353,21 @@ type MultiTenantChecker interface {
 
 // Hub maintains active WebSocket clients and broadcasts messages
 type Hub struct {
-	clients            map[*Client]bool            // All clients (legacy support)
-	clientsByTenant    map[string]map[*Client]bool // Per-tenant client tracking
-	broadcast          chan []byte
-	broadcastSeq       chan Message         // Sequenced broadcast channel for ordering
-	tenantBroadcast    chan TenantBroadcast // Per-tenant broadcast channel
-	register           chan *Client
-	unregister         chan *Client
-	stopChan           chan struct{} // Signals shutdown
-	mu                 sync.RWMutex
-	getState           func() interface{}             // Function to get current state (legacy)
-	getStateByTenant   func(orgID string) interface{} // Function to get state for specific tenant
-	allowedOrigins     []string                       // Allowed origins for CORS
-	orgAuthChecker     OrgAuthChecker                 // Org authorization checker
-	multiTenantChecker MultiTenantChecker             // Multi-tenant feature flag and license checker
+	clients             map[*Client]bool            // All clients (legacy support)
+	clientsByTenant     map[string]map[*Client]bool // Per-tenant client tracking
+	broadcast           chan []byte
+	broadcastSeq        chan Message         // Sequenced broadcast channel for ordering
+	tenantBroadcast     chan TenantBroadcast // Per-tenant broadcast channel
+	register            chan *Client
+	unregister          chan *Client
+	stopChan            chan struct{} // Signals shutdown
+	mu                  sync.RWMutex
+	getState            func() interface{}             // Function to get current state (legacy)
+	getStateByTenant    func(orgID string) interface{} // Function to get state for specific tenant
+	allowedOrigins      []string                       // Allowed origins for CORS
+	orgAuthChecker      OrgAuthChecker                 // Org authorization checker
+	multiTenantChecker  MultiTenantChecker             // Multi-tenant feature flag and license checker
+	legacyPayloadCompat bool                           // when true, include legacy per-type arrays in state payloads
 	// Broadcast coalescing fields
 	coalesceWindow  time.Duration
 	coalescePending *Message
@@ -411,6 +413,20 @@ func (h *Hub) SetMultiTenantChecker(checker MultiTenantChecker) {
 	h.multiTenantChecker = checker
 }
 
+// SetLegacyPayloadCompat controls whether legacy per-type arrays are kept in websocket state payloads.
+// Default is true for backward compatibility.
+func (h *Hub) SetLegacyPayloadCompat(enabled bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.legacyPayloadCompat = enabled
+}
+
+func (h *Hub) legacyPayloadCompatEnabled() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.legacyPayloadCompat
+}
+
 // getStateForClient returns the state for a specific client based on their tenant
 func (h *Hub) getStateForClient(client *Client) interface{} {
 	h.mu.RLock()
@@ -444,6 +460,7 @@ func NewHub(getState func() interface{}) *Hub {
 		stopChan:              make(chan struct{}),
 		getState:              getState,
 		allowedOrigins:        []string{},             // Default to empty (will be set based on actual host)
+		legacyPayloadCompat:   true,                   // Keep legacy arrays by default
 		coalesceWindow:        100 * time.Millisecond, // Coalesce rapid updates within 100ms
 		tenantCoalescePending: make(map[string]*Message),
 		tenantCoalesceTimers:  make(map[string]*time.Timer),
@@ -454,6 +471,9 @@ func NewHub(getState func() interface{}) *Hub {
 func (h *Hub) Run() {
 	// Start broadcast sequencer goroutine
 	go h.runBroadcastSequencer()
+	log.Info().
+		Bool("legacy_payload_compat", h.legacyPayloadCompatEnabled()).
+		Msg("WebSocket state payload compatibility mode configured")
 
 	pingTicker := time.NewTicker(30 * time.Second)
 	defer pingTicker.Stop()
@@ -516,7 +536,7 @@ func (h *Hub) Run() {
 
 					initialMsg := Message{
 						Type: "initialState",
-						Data: sanitizeData(stateData),
+						Data: sanitizeData(h.prepareStateForBroadcast(stateData)),
 					}
 					if data, err := json.Marshal(initialMsg); err == nil {
 						// Check if client is still registered before sending (must hold lock)
@@ -863,10 +883,11 @@ func (h *Hub) BroadcastState(state interface{}) {
 		}
 	}
 	log.Debug().Int("dockerHostsCount", dockerHostsCount).Msg("Broadcasting state")
+	stateData := h.prepareStateForBroadcast(state)
 
 	msg := Message{
 		Type: "rawData",
-		Data: state,
+		Data: stateData,
 	}
 
 	// Send through sequencer for ordering and coalescing
@@ -880,10 +901,11 @@ func (h *Hub) BroadcastState(state interface{}) {
 // BroadcastStateToTenant broadcasts state update only to clients of a specific tenant.
 func (h *Hub) BroadcastStateToTenant(orgID string, state interface{}) {
 	log.Debug().Str("org_id", orgID).Msg("Broadcasting state to tenant")
+	stateData := h.prepareStateForBroadcast(state)
 
 	msg := Message{
 		Type: "rawData",
-		Data: state,
+		Data: stateData,
 	}
 
 	// Send through tenant broadcast channel
@@ -923,6 +945,29 @@ func (h *Hub) dispatchToTenantClients(orgID string, data []byte, dropLog string)
 			}
 			h.mu.Unlock()
 		}
+	}
+}
+
+// prepareStateForBroadcast applies websocket payload compatibility rules to state payloads.
+func (h *Hub) prepareStateForBroadcast(state interface{}) interface{} {
+	if h.legacyPayloadCompatEnabled() {
+		return state
+	}
+
+	switch s := state.(type) {
+	case models.StateFrontend:
+		stripped := s
+		stripped.StripLegacyArrays()
+		return stripped
+	case *models.StateFrontend:
+		if s == nil {
+			return state
+		}
+		stripped := *s
+		stripped.StripLegacyArrays()
+		return &stripped
+	default:
+		return state
 	}
 }
 
@@ -1101,7 +1146,7 @@ func (c *Client) readPump() {
 			if c.hub.getState != nil {
 				stateMsg := Message{
 					Type: "rawData",
-					Data: sanitizeData(c.hub.getState()),
+					Data: sanitizeData(c.hub.prepareStateForBroadcast(c.hub.getState())),
 				}
 				if data, err := json.Marshal(stateMsg); err == nil {
 					c.safeSend(data)
