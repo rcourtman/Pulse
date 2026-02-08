@@ -6,9 +6,13 @@ let mockLocationSearch = '';
 const navigateSpy = vi.fn();
 
 type StorageFilterMock = {
+  search: () => string;
+  groupBy: () => 'node' | 'storage';
+  sourceFilter: () => string;
+  statusFilter: () => 'all' | 'available' | 'offline';
   setSearch: (value: string) => void;
   setGroupBy: (value: 'node' | 'storage') => void;
-  setSourceFilter: (value: 'all' | 'proxmox' | 'pbs' | 'ceph') => void;
+  setSourceFilter: (value: string) => void;
   setStatusFilter: (value: 'all' | 'available' | 'offline') => void;
 };
 
@@ -108,8 +112,9 @@ describe('Storage routing contract', () => {
     lastStorageFilter = undefined;
   });
 
-  it('canonicalizes legacy search query params to q', async () => {
-    mockLocationSearch = '?search=local&migrated=1&from=proxmox-overview';
+  it('round-trips legacy storage query params and canonicalizes search alias to q', async () => {
+    mockLocationSearch =
+      '?tab=disks&group=storage&source=pbs&status=offline&node=cluster-main-pve1&search=local&migrated=1&from=proxmox-overview';
 
     render(() => <Storage />);
 
@@ -119,6 +124,11 @@ describe('Storage routing contract', () => {
 
     const [path, options] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
     const params = new URLSearchParams(path.split('?')[1] || '');
+    expect(params.get('tab')).toBe('disks');
+    expect(params.get('group')).toBe('storage');
+    expect(params.get('source')).toBe('pbs');
+    expect(params.get('status')).toBe('offline');
+    expect(params.get('node')).toBe('cluster-main-pve1');
     expect(params.get('q')).toBe('local');
     expect(params.get('search')).toBeNull();
     expect(params.get('migrated')).toBe('1');

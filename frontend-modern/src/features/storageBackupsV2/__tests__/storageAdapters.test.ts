@@ -115,16 +115,32 @@ describe('storageAdapters', () => {
     expect(records[0].capabilities).toContain('replication');
   });
 
-  it('merges mixed-origin records with different ids when canonical identity matches', () => {
+  it('collapses mixed-origin records by canonical identity and keeps resource-origin winner', () => {
     const state = baseState({
-      storage: [makeLegacyStorage({ id: 'legacy-storage-id' })],
+      storage: [makeLegacyStorage({ id: 'legacy-storage-id', status: 'degraded', used: 950, usage: 95, shared: true })],
     });
-    const resources: Resource[] = [makeResourceStorage({ id: 'resource-storage-id' })];
+    const resources: Resource[] = [
+      makeResourceStorage({
+        id: 'resource-storage-id',
+        status: 'online',
+        disk: { current: 40, total: 1000, used: 400, free: 600 },
+        platformData: {
+          type: 'zfspool',
+          node: 'pve1',
+          instance: 'cluster-a',
+          shared: false,
+        },
+      }),
+    ];
 
     const records = buildStorageRecordsV2({ state, resources });
 
     expect(records).toHaveLength(1);
     expect(records[0].id).toBe('resource-storage-id');
+    expect(records[0].source.origin).toBe('resource');
+    expect(records[0].health).toBe('healthy');
+    expect(records[0].capacity.usedBytes).toBe(400);
+    expect(records[0].details?.shared).toBe(false);
   });
 
   it('applies deterministic precedence where resource-origin data wins over legacy', () => {

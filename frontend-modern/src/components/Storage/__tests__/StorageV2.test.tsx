@@ -242,9 +242,10 @@ describe('StorageV2', () => {
     expect(screen.getByText('Status: online')).toBeInTheDocument();
   });
 
-  it('syncs URL query params for canonical and shareable view state', async () => {
+  it('round-trips managed storage query params through canonical URL state', async () => {
     hookResources = [buildStorageResource('storage-1', 'Ceph-Store', 'pve1', { storageType: 'cephfs' })];
-    mockLocationSearch = '?search=ceph&group=status&sort=usage&order=desc&status=warning';
+    mockLocationSearch =
+      '?tab=disks&search=ceph&group=status&source=proxmox-pve&status=warning&node=node-2&sort=usage&order=desc&from=proxmox-overview';
 
     render(() => <StorageV2 />);
 
@@ -254,13 +255,23 @@ describe('StorageV2', () => {
 
     const [initialPath, initialOptions] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
     const initialParams = new URLSearchParams(initialPath.split('?')[1] || '');
+    expect(initialParams.get('tab')).toBe('disks');
     expect(initialParams.get('q')).toBe('ceph');
     expect(initialParams.get('group')).toBe('status');
+    expect(initialParams.get('source')).toBe('proxmox-pve');
     expect(initialParams.get('sort')).toBe('usage');
     expect(initialParams.get('order')).toBe('desc');
     expect(initialParams.get('status')).toBe('warning');
+    expect(initialParams.get('node')).toBe('node-2');
+    expect(initialParams.get('from')).toBe('proxmox-overview');
     expect(initialParams.get('search')).toBeNull();
     expect(initialOptions?.replace).toBe(true);
+    expect((screen.getByLabelText('View') as HTMLSelectElement).value).toBe('disks');
+    expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
+    expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
+    expect((screen.getByLabelText('Health') as HTMLSelectElement).value).toBe('warning');
+    expect((screen.getByLabelText('Group By') as HTMLSelectElement).value).toBe('status');
+    expect((screen.getByLabelText('Sort By') as HTMLSelectElement).value).toBe('usage');
 
     fireEvent.change(screen.getByLabelText('Group By'), {
       target: { value: 'type' },
@@ -361,6 +372,22 @@ describe('StorageV2', () => {
     });
   });
 
+  it('marks acknowledged-only alert rows with parity state attributes', async () => {
+    hookResources = [buildStorageResource('storage-acked', 'Acknowledged-Store', 'pve1')];
+    wsActiveAlerts = {
+      'alert-1': buildAlert('alert-1', 'storage-acked', 'warning', true),
+    };
+
+    render(() => <StorageV2 />);
+
+    await waitFor(() => {
+      const row = screen.getByText('Acknowledged-Store').closest('tr');
+      expect(row).toHaveAttribute('data-alert-state', 'acknowledged');
+      expect(row).toHaveAttribute('data-alert-severity', 'none');
+      expect(row?.getAttribute('style')).toContain('156, 163, 175');
+    });
+  });
+
   it('supports resource deep-links by highlighting and auto-expanding ceph rows', async () => {
     hookResources = [
       buildStorageResource('storage-ceph-link', 'Ceph-Link-Store', 'pve1', {
@@ -375,6 +402,10 @@ describe('StorageV2', () => {
     await waitFor(() => {
       const row = document.querySelector('tr[data-row-id="storage-ceph-link"]');
       expect(row).toHaveAttribute('data-resource-highlighted', 'true');
+      expect(document.querySelector('tr[data-row-id="storage-other"]')).toHaveAttribute(
+        'data-resource-highlighted',
+        'false',
+      );
       expect(screen.getByRole('button', { name: 'Toggle Ceph details for Ceph-Link-Store' })).toHaveTextContent(
         'Hide',
       );
