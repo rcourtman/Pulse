@@ -15,9 +15,7 @@ import type { BackupOutcome, BackupRecordV2 } from '@/features/storageBackupsV2/
 import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
 import {
   BACKUPS_QUERY_PARAMS,
-  BACKUPS_V2_PATH,
   buildBackupsPath,
-  buildBackupsV2Path,
   parseBackupsLinkSearch,
 } from '@/routing/resourceLinks';
 
@@ -364,8 +362,7 @@ const BackupsV2: Component = () => {
   });
 
   const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
-  const isActiveBackupsRoute = () =>
-    location.pathname === BACKUPS_V2_PATH || location.pathname === buildBackupsPath();
+  const isActiveBackupsRoute = () => location.pathname === buildBackupsPath();
 
   createEffect(() => {
     if (!isActiveBackupsRoute()) return;
@@ -409,7 +406,7 @@ const BackupsV2: Component = () => {
     const nextStatus =
       verificationFilter() !== 'all' ? verificationFilter() : outcomeFilter() !== 'all' ? outcomeFilter() : '';
 
-    const managedPath = buildBackupsV2Path({
+    const managedPath = buildBackupsPath({
       source: sourceFilter() === 'all' ? null : toLegacySourceValue(sourceFilter()),
       backupType: modeFilter() === 'all' ? null : modeFilter(),
       status: nextStatus || null,

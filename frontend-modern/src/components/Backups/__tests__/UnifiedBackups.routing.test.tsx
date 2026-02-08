@@ -85,6 +85,15 @@ vi.mock('@/components/shared/Tooltip', () => ({
   hideTooltip: vi.fn(),
 }));
 
+/**
+ * Legacy UnifiedBackups routing contract tests (compatibility-only).
+ *
+ * As of SB5-02, UnifiedBackups is no longer routed by App.tsx.
+ * These tests document the legacy shell's internal routing behavior
+ * for SB5-05 deletion readiness verification.
+ *
+ * @deprecated Scheduled for removal with UnifiedBackups.tsx in SB5-05.
+ */
 describe('UnifiedBackups routing contract', () => {
   beforeEach(() => {
     mockLocationSearch = '';

@@ -27,7 +27,7 @@ Date: 2026-02-08
 | SB5-00 | Legacy Artifact Discovery and Removal Plan | DONE | Codex + Claude | Claude | APPROVED | See SB5-00 Review Evidence |
 | SB5-01 | Routing Mode Contract Hardening | DONE | Codex | Claude | APPROVED | See SB5-01 Review Evidence |
 | SB5-02 | App Router Integration Wiring | DONE | Codex | Claude | APPROVED | See SB5-02 Review Evidence |
-| SB5-03 | Backups Legacy Shell Decoupling | TODO | Codex | Claude | — | — |
+| SB5-03 | Backups Legacy Shell Decoupling | DONE | Codex | Claude | APPROVED | See SB5-03 Review Evidence |
 | SB5-04 | Storage Legacy Shell Decoupling | TODO | Codex | Claude | — | — |
 | SB5-05 | Legacy Route and Shell Deletion | TODO | Codex | Claude | — | — |
 | SB5-06 | Final Certification and DL-001 Closure | TODO | Claude | Claude | — | — |
@@ -381,7 +381,8 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- `2ef31e6d` (refactor(storage-phase5): SB5-02 — hard-wire V2 routes in App router)
+- `8a9836e9` (refactor(storage-phase5): SB5-02 — hard-wire V2 routes in App router)
+  - Note: `2ef31e6d` was superseded by amend that recorded the commit hash.
 
 Residual risk:
 - Storage.tsx and UnifiedBackups.tsx lazy imports removed from App.tsx but files still
@@ -398,20 +399,73 @@ Rollback:
 ## SB5-03 Checklist: Backups Legacy Shell Decoupling
 
 ### Implementation
-- [ ] `/backups` query canonicalization preserved on `BackupsV2`.
-- [ ] `UnifiedBackups` responsibilities narrowed to explicit compatibility behavior.
-- [ ] Residual fallback dependencies that block deletion captured.
+- [x] `/backups` query canonicalization preserved on `BackupsV2` — simplified `isActiveBackupsRoute()` to canonical-only; switched query sync from `buildBackupsV2Path` to `buildBackupsPath`; removed `BACKUPS_V2_PATH` and `buildBackupsV2Path` imports.
+- [x] `UnifiedBackups` responsibilities narrowed to explicit compatibility behavior — added file-level JSDoc deprecation comment documenting unrouted status (no App.tsx route since SB5-02) and SB5-05 deletion schedule.
+- [x] Residual fallback dependencies that block deletion captured — `useResourcesAsLegacy` is the shared dependency (Alerts.tsx, AI/Chat); hook itself is NOT removable in Phase 5. UnifiedBackups.tsx file itself has no shared consumers and is safe for SB5-05 deletion.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/components/Backups/__tests__/BackupsV2.test.tsx src/components/Backups/__tests__/UnifiedBackups.routing.test.tsx` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded.
+- [x] `cd frontend-modern && npx vitest run src/components/Backups/__tests__/BackupsV2.test.tsx src/components/Backups/__tests__/UnifiedBackups.routing.test.tsx` → exit 0 (2 files, 11 tests passed).
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` → exit 0 on committed tree; exit 2 with parallel in-flight untracked files (`Dashboard.performance.contract.test.tsx`) which are out-of-scope. SB5-03 changes introduce zero type errors.
+- [x] Exit codes recorded.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### SB5-03 Review Evidence
+
+```
+Files changed:
+- frontend-modern/src/components/Backups/BackupsV2.tsx: Removed BACKUPS_V2_PATH and
+  buildBackupsV2Path imports. Simplified isActiveBackupsRoute() to check only
+  buildBackupsPath() (canonical). Switched query-sync managed path from
+  buildBackupsV2Path() to buildBackupsPath(). No other changes.
+- frontend-modern/src/components/Backups/UnifiedBackups.tsx: Added file-level JSDoc
+  deprecation comment documenting unrouted status and SB5-05 deletion schedule.
+  No logic changes.
+- frontend-modern/src/components/Backups/__tests__/BackupsV2.test.tsx: Changed default
+  mockLocationPath from '/backups-v2' to '/backups'. Added GA contract canonical-path
+  test verifying BackupsV2 at /backups is the only canonical path.
+- frontend-modern/src/components/Backups/__tests__/UnifiedBackups.routing.test.tsx: Added
+  JSDoc deprecation comment above describe block documenting legacy compatibility status
+  and SB5-05 deletion schedule.
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run src/components/Backups/__tests__/BackupsV2.test.tsx
+   src/components/Backups/__tests__/UnifiedBackups.routing.test.tsx`
+   → exit 0 (2 files, 11 tests passed)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+   → exit 0 on committed tree (verified via git stash round-trip)
+   → exit 2 with untracked parallel-work files; errors are in
+   Dashboard.performance.contract.test.tsx (untracked, out-of-scope)
+
+Gate checklist:
+- P0: PASS (only 4 in-scope files changed; git diff verified no out-of-scope
+  modifications; both commands pass for in-scope code; parallel-work tsc failure
+  documented and isolated)
+- P1: PASS (/backups canonical query canonicalization preserved and tested;
+  BackupsV2 fully decoupled from /backups-v2 alias semantics; UnifiedBackups
+  logic untouched with deprecation annotation only; useResourcesAsLegacy not
+  modified; no storage-related files changed; GA contract test added)
+- P2: PASS (progress tracker updated; packet scope matches plan SB5-03 definition;
+  checklist items align to plan constraints)
+
+Verdict: APPROVED
+
+Commit:
+- `df487b03` (refactor(storage-phase5): SB5-03 — decouple BackupsV2 from V2 alias path)
+
+Residual risk:
+- Parallel in-flight tsc failure in Dashboard.performance.contract.test.tsx is
+  not caused by SB5 work and will resolve when that parallel session commits.
+- UnifiedBackups.tsx is dead code (no route) but file persists on disk until SB5-05.
+
+Rollback:
+- Revert checkpoint commit to restore BackupsV2 dual-path awareness and remove
+  deprecation annotations.
+```
 
 ---
 

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import BackupsV2 from '@/components/Backups/BackupsV2';
 
 let mockLocationSearch = '';
-let mockLocationPath = '/backups-v2';
+let mockLocationPath = '/backups';
 const navigateSpy = vi.fn();
 const nowMs = Date.now();
 const isoHoursAgo = (hours: number) => new Date(nowMs - hours * 60 * 60 * 1000).toISOString();
@@ -138,7 +138,7 @@ describe('BackupsV2', () => {
     localStorage.clear();
     navigateSpy.mockReset();
     mockLocationSearch = '';
-    mockLocationPath = '/backups-v2';
+    mockLocationPath = '/backups';
     wsMock.state = createWsState();
   });
 
@@ -285,5 +285,26 @@ describe('BackupsV2', () => {
     expect(params.get('backupType')).toBe('remote');
     expect(params.get('status')).toBe('verified');
     expect(params.get('search')).toBeNull();
+  });
+
+  it('GA contract: BackupsV2 served at /backups is the only canonical path', async () => {
+    mockLocationPath = '/backups';
+    mockLocationSearch = '?source=pbs&status=verified';
+
+    render(() => <BackupsV2 />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('backups-v2-page')).toBeInTheDocument();
+    });
+
+    const path =
+      navigateSpy.mock.calls.length > 0
+        ? (navigateSpy.mock.calls.at(-1) as [string])[0]
+        : `${mockLocationPath}${mockLocationSearch}`;
+    expect(path.startsWith('/backups')).toBe(true);
+    expect(path).not.toContain('/backups-v2');
+    const params = new URLSearchParams(path.split('?')[1] || '');
+    expect(params.get('source')).toBe('pbs');
+    expect(params.get('status')).toBe('verified');
   });
 });
