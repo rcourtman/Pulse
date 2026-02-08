@@ -31,6 +31,7 @@ type ConfigPersistence struct {
 	webhookFile              string
 	appriseFile              string
 	nodesFile                string
+	trueNASFile              string
 	systemFile               string
 	oidcFile                 string
 	ssoFile                  string
@@ -116,6 +117,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		webhookFile:              filepath.Join(configDir, "webhooks.enc"),
 		appriseFile:              filepath.Join(configDir, "apprise.enc"),
 		nodesFile:                filepath.Join(configDir, "nodes.enc"),
+		trueNASFile:              filepath.Join(configDir, "truenas.enc"),
 		systemFile:               filepath.Join(configDir, "system.json"),
 		oidcFile:                 filepath.Join(configDir, "oidc.enc"),
 		ssoFile:                  filepath.Join(configDir, "sso.enc"),
@@ -354,6 +356,16 @@ func (c *ConfigPersistence) LoadEnvTokenSuppressions() ([]string, error) {
 // SaveEnvTokenSuppressions persists the suppressed env token hashes to disk.
 func (c *ConfigPersistence) SaveEnvTokenSuppressions(hashes []string) error {
 	return saveJSON(c, c.envTokenSuppressionsFile, hashes, false)
+}
+
+// SaveTrueNASConfig persists TrueNAS instance configuration to encrypted storage.
+func (c *ConfigPersistence) SaveTrueNASConfig(instances []TrueNASInstance) error {
+	return saveJSON(c, c.trueNASFile, instances, true)
+}
+
+// LoadTrueNASConfig loads TrueNAS instance configuration from encrypted storage.
+func (c *ConfigPersistence) LoadTrueNASConfig() ([]TrueNASInstance, error) {
+	return loadSlice[TrueNASInstance](c, c.trueNASFile, true)
 }
 
 // SaveAPITokens persists API token metadata to disk.
