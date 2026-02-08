@@ -73,7 +73,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- `7ec019f4` (docs(closeout): Packet 00 — artifact freeze and closeout baseline APPROVED)
+- `f4427540` (docs(closeout): Packet 00 — artifact freeze and closeout baseline APPROVED)
 
 Residual risk:
 - Multi-Tenant Productization Packet 08 remains BLOCKED due to external import cycle. Classified as DRIFT_ACCEPTED — does not affect MT feature correctness.
