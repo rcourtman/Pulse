@@ -28,7 +28,7 @@ Date: 2026-02-08
 | SB5-01 | Routing Mode Contract Hardening | DONE | Codex | Claude | APPROVED | See SB5-01 Review Evidence |
 | SB5-02 | App Router Integration Wiring | DONE | Codex | Claude | APPROVED | See SB5-02 Review Evidence |
 | SB5-03 | Backups Legacy Shell Decoupling | DONE | Codex | Claude | APPROVED | See SB5-03 Review Evidence |
-| SB5-04 | Storage Legacy Shell Decoupling | TODO | Codex | Claude | — | — |
+| SB5-04 | Storage Legacy Shell Decoupling | DONE | Codex | Claude | APPROVED | See SB5-04 Review Evidence |
 | SB5-05 | Legacy Route and Shell Deletion | TODO | Codex | Claude | — | — |
 | SB5-06 | Final Certification and DL-001 Closure | TODO | Claude | Claude | — | — |
 
@@ -455,7 +455,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- `df487b03` (refactor(storage-phase5): SB5-03 — decouple BackupsV2 from V2 alias path)
+- `65d78e52` (refactor(storage-phase5): SB5-03 — decouple BackupsV2 from V2 alias path)
 
 Residual risk:
 - Parallel in-flight tsc failure in Dashboard.performance.contract.test.tsx is
@@ -472,20 +472,57 @@ Rollback:
 ## SB5-04 Checklist: Storage Legacy Shell Decoupling
 
 ### Implementation
-- [ ] `/storage` query canonicalization and filter semantics preserved.
-- [ ] `Storage.tsx` narrowed to compatibility behavior until deletion packet.
-- [ ] Residual blocking dependencies captured.
+- [x] `/storage` query canonicalization and filter semantics preserved — simplified `isActiveStorageRoute()` to canonical-only; switched `useStorageRouteState` buildPath from `buildStorageV2Path` to `buildStoragePath`; removed `STORAGE_V2_PATH` and `buildStorageV2Path` imports.
+- [x] `Storage.tsx` narrowed to compatibility behavior — added file-level JSDoc deprecation comment documenting unrouted status (no App.tsx route since SB5-02) and SB5-05 deletion schedule. No logic changes.
+- [x] Residual blocking dependencies captured — `useResourcesAsLegacy` is the shared dependency (Alerts.tsx, AI/Chat); hook itself NOT removable in Phase 5. Storage.tsx file has no shared consumers and is safe for SB5-05 deletion.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/components/Storage/__tests__/StorageV2.test.tsx src/components/Storage/__tests__/Storage.routing.test.tsx` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded.
+- [x] `cd frontend-modern && npx vitest run src/components/Storage/__tests__/StorageV2.test.tsx src/components/Storage/__tests__/Storage.routing.test.tsx` → exit 0 (2 files, 18 tests passed).
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` → exit 0 (Codex evidence).
+- [x] Exit codes recorded.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### SB5-04 Review Evidence
+
+```
+Files changed:
+- frontend-modern/src/components/Storage/StorageV2.tsx: Removed STORAGE_V2_PATH and
+  buildStorageV2Path imports, added buildStoragePath. Simplified isActiveStorageRoute()
+  to canonical /storage only. Updated useStorageRouteState buildPath to buildStoragePath.
+- frontend-modern/src/components/Storage/Storage.tsx: Added file-level JSDoc deprecation
+  comment. No logic changes.
+- frontend-modern/src/components/Storage/__tests__/StorageV2.test.tsx: Changed default
+  mockLocationPath from '/storage-v2' to '/storage'. Added GA contract canonical-path test.
+- frontend-modern/src/components/Storage/__tests__/Storage.routing.test.tsx: Added JSDoc
+  deprecation comment above describe block.
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run src/components/Storage/__tests__/StorageV2.test.tsx
+   src/components/Storage/__tests__/Storage.routing.test.tsx`
+   → exit 0 (2 files, 18 tests passed) — independently verified by reviewer
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+   → exit 0 (Codex evidence)
+
+Gate checklist:
+- P0: PASS (only 4 in-scope files changed; vitest exit 0 independently verified)
+- P1: PASS (/storage canonical query canonicalization preserved; StorageV2 decoupled
+  from /storage-v2 alias; Storage.tsx logic untouched; useResourcesAsLegacy not modified;
+  GA contract test added)
+- P2: PASS (progress tracker updated; scope matches plan SB5-04 definition)
+
+Verdict: APPROVED
+
+Commit:
+- PENDING
+
+Rollback:
+- Revert checkpoint commit to restore StorageV2 dual-path awareness.
+```
 
 ---
 

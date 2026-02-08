@@ -16,8 +16,7 @@ import { PLATFORM_BLUEPRINTS } from '@/features/storageBackupsV2/platformBluepri
 import type { NormalizedHealth, StorageRecordV2 } from '@/features/storageBackupsV2/models';
 import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
 import {
-  STORAGE_V2_PATH,
-  buildStorageV2Path,
+  buildStoragePath,
   parseStorageLinkSearch,
 } from '@/routing/resourceLinks';
 import { formatBytes, formatPercent } from '@/utils/format';
@@ -191,8 +190,7 @@ const StorageV2: Component = () => {
   );
   const hasV2FetchError = createMemo(() => Boolean(storageBackupsResources.error()));
 
-  const isActiveStorageRoute = () =>
-    location.pathname === STORAGE_V2_PATH || location.pathname === '/storage';
+  const isActiveStorageRoute = () => location.pathname === '/storage';
 
   createEffect(() => {
     const { resource } = parseStorageLinkSearch(location.search);
@@ -215,7 +213,7 @@ const StorageV2: Component = () => {
   useStorageRouteState({
     location,
     navigate,
-    buildPath: buildStorageV2Path,
+    buildPath: buildStoragePath,
     isReadEnabled: isActiveStorageRoute,
     isWriteEnabled: isActiveStorageRoute,
     useCurrentPathForNavigation: true,

@@ -5,7 +5,7 @@ import type { Resource } from '@/types/resource';
 import StorageV2 from '@/components/Storage/StorageV2';
 
 let mockLocationSearch = '';
-let mockLocationPath = '/storage-v2';
+let mockLocationPath = '/storage';
 const navigateSpy = vi.fn();
 
 let wsConnected = true;
@@ -140,7 +140,7 @@ vi.mock('@/components/Storage/DiskList', () => ({
 
 describe('StorageV2', () => {
   beforeEach(() => {
-    mockLocationPath = '/storage-v2';
+    mockLocationPath = '/storage';
     mockLocationSearch = '';
     navigateSpy.mockReset();
 
@@ -521,5 +521,27 @@ describe('StorageV2', () => {
     render(() => <StorageV2 />);
 
     expect(screen.getByText('Loading storage resources...')).toBeInTheDocument();
+  });
+
+  it('GA contract: StorageV2 served at /storage is the only canonical path', async () => {
+    hookResources = [buildStorageResource('storage-ga', 'GA-Store', 'pve1', { status: 'degraded' })];
+    mockLocationPath = '/storage';
+    mockLocationSearch = '?source=proxmox-pve&status=warning';
+
+    render(() => <StorageV2 />);
+
+    await waitFor(() => {
+      expect(screen.getByText('GA-Store')).toBeInTheDocument();
+    });
+
+    const path =
+      navigateSpy.mock.calls.length > 0
+        ? (navigateSpy.mock.calls.at(-1) as [string])[0]
+        : `${mockLocationPath}${mockLocationSearch}`;
+    expect(path.startsWith('/storage')).toBe(true);
+    expect(path).not.toContain('/storage-v2');
+    const params = new URLSearchParams(path.split('?')[1] || '');
+    expect(params.get('source')).toBe('proxmox-pve');
+    expect(params.get('status')).toBe('warning');
   });
 });

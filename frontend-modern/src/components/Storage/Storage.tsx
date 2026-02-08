@@ -1,3 +1,17 @@
+/**
+ * Legacy Storage page shell (compatibility-only).
+ *
+ * As of SB5-02, no App.tsx route points to this component — `/storage` serves
+ * StorageV2 directly and `/storage-v2` redirects to `/storage`.
+ *
+ * This file is retained only for SB5-05 deletion sequencing. It must NOT be
+ * imported by any route or lazy-loaded by App.tsx.
+ *
+ * Shared dependency note: `useResourcesAsLegacy` imported here is also consumed
+ * by Alerts.tsx and AI/Chat — that hook is NOT removable in Phase 5.
+ *
+ * @deprecated Scheduled for deletion in SB5-05.
+ */
 import { Component, For, Show, createSignal, createMemo, createEffect, onCleanup } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';

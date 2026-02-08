@@ -105,6 +105,15 @@ vi.mock('@/components/shared/NodeGroupHeader', () => ({
   NodeGroupHeader: () => <tr data-testid="node-group-header" />,
 }));
 
+/**
+ * Legacy Storage routing contract tests (compatibility-only).
+ *
+ * As of SB5-02, Storage is no longer routed by App.tsx.
+ * These tests document the legacy shell's internal routing behavior
+ * for SB5-05 deletion readiness verification.
+ *
+ * @deprecated Scheduled for removal with Storage.tsx in SB5-05.
+ */
 describe('Storage routing contract', () => {
   beforeEach(() => {
     mockLocationSearch = '';
