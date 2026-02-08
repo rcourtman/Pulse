@@ -258,7 +258,6 @@ const Settings: Component<SettingsProps> = (props) => {
     orgGuestUsage,
     isNodeModalVisible,
     resolveTemperatureMonitoringEnabled,
-    loadNodes,
     loadDiscoveredNodes,
     triggerDiscoveryScan,
     handleDiscoveryEnabledChange,
@@ -384,9 +383,6 @@ const Settings: Component<SettingsProps> = (props) => {
 
   onMount(() => {
     loadLicenseStatus();
-    loadNodes();
-    loadDiscoveredNodes();
-    loadSecurityStatus();
   });
 
   const loadSecurityStatus = async () => {

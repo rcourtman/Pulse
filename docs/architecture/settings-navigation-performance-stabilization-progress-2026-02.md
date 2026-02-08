@@ -22,7 +22,7 @@ Date: 2026-02-08
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | 00 | Repro Matrix and Baseline Instrumentation | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence |
-| 01 | Startup Orchestration De-duplication | TODO | Codex | Claude | PENDING | See Packet 01 Review Evidence |
+| 01 | Startup Orchestration De-duplication | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence |
 | 02 | Navigation State Machine Hardening | TODO | Codex | Claude | PENDING | See Packet 02 Review Evidence |
 | 03 | Polling Lifecycle Isolation and Interaction Priority | TODO | Codex | Claude | PENDING | See Packet 03 Review Evidence |
 | 04 | Panel Loading Strategy and Transition Performance | TODO | Codex | Claude | PENDING | See Packet 04 Review Evidence |
@@ -68,7 +68,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- `pending` (will be recorded after checkpoint commit)
+- `be709914` (fix(settings-nav): Packet 00 — repro matrix, baseline, and integration test scaffold)
 
 Residual risk:
 - none
@@ -81,46 +81,48 @@ Rollback:
 ## Packet 01 Checklist: Startup Orchestration De-duplication
 
 ### Implementation
-- [ ] Single bootstrap ownership established.
-- [ ] Redundant initial load calls removed.
-- [ ] Initial load completeness behavior preserved.
+- [x] Single bootstrap ownership established.
+- [x] Redundant initial load calls removed.
+- [x] Initial load completeness behavior preserved.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### Packet 01 Review Evidence
 
 ```
 Files changed:
-- <path>: <reason>
+- frontend-modern/src/components/Settings/Settings.tsx: Removed duplicate loadNodes(), loadDiscoveredNodes(), loadSecurityStatus() from onMount (now only loadLicenseStatus()). Removed unused loadNodes destructuring from useInfrastructureSettingsState return.
 
 Commands run + exit codes:
-1. `<command>` -> exit <code>
-2. `<command>` -> exit <code>
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+2. `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` -> exit 0 (13 passed, 1 todo)
+3. `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsArchitecture.test.ts` -> exit 0 (4 passed)
 
 Gate checklist:
-- P0: PASS | FAIL (<reason>)
-- P1: PASS | FAIL | N/A (<reason>)
-- P2: PASS | FAIL (<reason>)
+- P0: PASS (duplicate bootstrap calls removed, single owner established in useInfrastructureSettingsState)
+- P1: PASS (initialLoadComplete semantics preserved — useInfrastructureSettingsState still sequences all calls)
+- P2: PASS (minimal change, only Settings.tsx modified)
 
-Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+Verdict: APPROVED
 
 Commit:
-- `<hash>` (<message>)
+- `pending` (will be recorded after checkpoint commit)
 
 Residual risk:
-- <risk or none>
+- none
 
 Rollback:
-- <steps>
+- Restore loadNodes(), loadDiscoveredNodes(), loadSecurityStatus() calls to Settings.tsx onMount
+- Restore loadNodes destructuring from useInfrastructureSettingsState
 ```
 
 ## Packet 02 Checklist: Navigation State Machine Hardening
