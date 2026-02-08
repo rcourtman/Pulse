@@ -247,6 +247,36 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('keeps using v2 infrastructure resources when websocket legacy infra arrays are populated', async () => {
+    batch(() => {
+      setWsState('hosts', [
+        { id: 'legacy-host-1', hostname: 'legacy-host', status: 'online', lastSeen: 1738929600000 },
+      ]);
+      setWsState('dockerHosts', [
+        { id: 'legacy-docker-1', hostname: 'legacy-docker', status: 'online', lastSeen: 1738929600000 },
+      ]);
+      setWsState('pbs', [{ id: 'legacy-pbs-1', name: 'legacy-pbs' }]);
+      setWsState('pmg', [{ id: 'legacy-pmg-1', name: 'legacy-pmg' }]);
+      setWsState('lastUpdate', '2026-02-06T12:00:04Z');
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+
+    const resources = result!.resources();
+    expect(resources).toHaveLength(1);
+    expect(resources[0].id).toBe('node-1');
+    expect(resources[0].type).toBe('host');
+
+    dispose();
+  });
+
   it('reuses fresh cache on remount without an extra network fetch', async () => {
     let disposeFirst = () => {};
     let first: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;

@@ -32,7 +32,7 @@ Date: 2026-02-08
 | 02 | Alerts Consumer Migration to Unified Selectors | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence |
 | 03 | AI Chat UI Context Migration to Unified Selectors | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence |
 | 04 | WebSocket Legacy Payload Deprecation Gates | DONE | Codex | Claude | APPROVED | See Packet 04 Review Evidence |
-| 05 | Legacy Compatibility Narrowing | TODO | Codex | Claude | PENDING | See Packet 05 Review Evidence |
+| 05 | Legacy Compatibility Narrowing | DONE | Codex | Claude | APPROVED | See Packet 05 Review Evidence |
 | 06 | Contract Test Hardening and Regression Net | TODO | Codex | Claude | PENDING | See Packet 06 Review Evidence |
 | 07 | Final Certification and Release Recommendation | TODO | Claude | Claude | PENDING | See Packet 07 Review Evidence |
 
@@ -269,46 +269,49 @@ Rollback:
 ## Packet 05 Checklist: Legacy Compatibility Narrowing
 
 ### Implementation
-- [ ] Selector/adapter fallback matrix narrowed to documented transitional paths.
-- [ ] Hidden fallback branches removed.
-- [ ] Rollback path stays explicit.
+- [x] Selector/adapter fallback matrix narrowed to documented transitional paths.
+- [x] Hidden fallback branches removed.
+- [x] Rollback path stays explicit.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/hooks/__tests__/useUnifiedResources.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/hooks/__tests__/useUnifiedResources.test.ts` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### Packet 05 Review Evidence
 
 ```text
 Files changed:
-- <path>: <reason>
+- frontend-modern/src/hooks/useResources.ts: Removed opportunistic legacy.length > 0 fallback from 5 conversion memos. Removed unused has*Resources memos. Added fallback matrix documentation.
+- frontend-modern/src/stores/websocket.ts: Documented remaining legacy payload paths.
+- frontend-modern/src/hooks/__tests__/useResources.test.ts: Added narrowed-fallback tests (32 total, +3 new).
+- frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts: Added regression test (+1 new, 7 total).
 
 Commands run + exit codes:
-1. `<command>` -> exit <code>
-2. `<command>` -> exit <code>
+1. `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/hooks/__tests__/useUnifiedResources.test.ts` -> exit 0 (39 tests)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 Gate checklist:
-- P0: PASS | FAIL (<reason>)
-- P1: PASS | FAIL | N/A (<reason>)
-- P2: PASS | FAIL (<reason>)
+- P0: PASS (Rollback path preserved — unified empty → legacy. 5 opportunistic tiers removed cleanly. Tests pass.)
+- P1: PASS (PBS/PMG/storage bounded fallback preserved. Fallback matrix explicitly documented.)
+- P2: PASS (Clean diff — 88 lines. No new complexity.)
 
-Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+Verdict: APPROVED
 
 Commit:
-- `<hash>` (<message>)
+- (pending)
 
 Residual risk:
-- <risk or none>
+- The narrowing makes unified conversion the primary path when unified resources exist. Any conversion bugs will now surface (which is the intended behavior).
 
 Rollback:
-- <steps>
+- Restore legacy.length > 0 tiers in useResourcesAsLegacy conversion memos.
 ```
 
 ## Packet 06 Checklist: Contract Test Hardening and Regression Net

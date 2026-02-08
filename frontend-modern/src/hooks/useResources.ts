@@ -279,18 +279,15 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
     // Check if we have unified resources (populated after first broadcast)
     const hasUnifiedResources = createMemo(() => resources().length > 0);
 
-    // Prefer legacy arrays when they exist. The backend currently broadcasts both the
-    // legacy arrays and unified resources, and the legacy arrays are already reconciled
-    // by id in the WebSocket store (stable identities, fine-grained updates).
-    // Only synthesize legacy types from unified resources when it looks like the backend
-    // isn't providing that legacy field (e.g., resources include the type but legacy array is empty).
-    const hasVmResources = createMemo(() => (resources() || []).some((r) => r.type === 'vm'));
-    const hasNodeResources = createMemo(() => (resources() || []).some((r) => r.type === 'node'));
-    const hasContainerResources = createMemo(() =>
-        (resources() || []).some((r) => r.type === 'container' || r.type === 'oci-container'),
-    );
-    const hasHostResources = createMemo(() => (resources() || []).some((r) => r.type === 'host'));
-    const hasDockerHostResources = createMemo(() => (resources() || []).some((r) => r.type === 'docker-host'));
+    /**
+     * Fallback matrix (narrowed in URC2 Packet 05):
+     *
+     * | Condition | Behavior |
+     * |---|---|
+     * | unified resources empty | Use legacy arrays directly |
+     * | unified resources populated | Use unified conversion (primary path) |
+     * | unified populated but no type-specific resources (PBS/PMG only) | Use legacy for that type |
+     */
     const hasStorageResources = createMemo(() =>
         (resources() || []).some((r) => r.type === 'storage' || r.type === 'datastore'),
     );
@@ -304,10 +301,6 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
             // Spread to create new array reference for reactivity (see asHosts for details)
-            return [...legacy];
-        }
-        // If legacy data exists (or there are no VM resources), keep using it.
-        if (legacy.length > 0 || !hasVmResources()) {
             return [...legacy];
         }
 
@@ -366,10 +359,6 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
             // Spread to create new array reference for reactivity (see asHosts for details)
-            return [...legacy];
-        }
-        // If legacy data exists (or there are no container resources), keep using it.
-        if (legacy.length > 0 || !hasContainerResources()) {
             return [...legacy];
         }
 
@@ -440,11 +429,6 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
             // updated in-place by reconcile(), but createMemo only notifies dependents
             // when the returned value changes by reference. Without spreading, downstream
             // memos like sortedHosts() wouldn't re-run when host properties change.
-            return [...legacy];
-        }
-        // If legacy data exists (or there are no host resources), keep using it.
-        if (legacy.length > 0 || !hasHostResources()) {
-            // Same as above - spread to create new reference for reactivity
             return [...legacy];
         }
 
@@ -533,10 +517,6 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
             // Spread to create new array reference for reactivity (see asHosts for details)
             return [...legacy];
         }
-        // If legacy data exists (or there are no node resources), keep using it.
-        if (legacy.length > 0 || !hasNodeResources()) {
-            return [...legacy];
-        }
 
         return byType('node').map(r => {
             // Unwrap SolidJS Proxy objects into plain JS objects
@@ -600,10 +580,6 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
             // Spread to create new array reference for reactivity (see asHosts for details)
-            return [...legacy];
-        }
-        // If legacy data exists (or there are no docker-host resources), keep using it.
-        if (legacy.length > 0 || !hasDockerHostResources()) {
             return [...legacy];
         }
 

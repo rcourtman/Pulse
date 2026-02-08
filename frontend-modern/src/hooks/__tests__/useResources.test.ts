@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRoot } from 'solid-js';
 import type { Resource, ResourceStatus } from '@/types/resource';
-import { useAIChatResources, useAlertsResources } from '@/hooks/useResources';
+import { useAIChatResources, useAlertsResources, useResourcesAsLegacy } from '@/hooks/useResources';
 
 // Helper to create mock resources for testing conversion logic
 function createMockResource(overrides: Partial<Resource> = {}): Resource {
@@ -534,6 +534,151 @@ describe('Fallback Logic', () => {
 
             expect(result).toEqual(unifiedResources);
         });
+    });
+});
+
+describe('Narrowed fallback behavior', () => {
+    it('uses unified conversion when unified resources are populated, even if legacy arrays exist', () => {
+        const store = createMockLegacyStore({
+            resources: [
+                createMockResource({
+                    id: 'vm-unified-101',
+                    type: 'vm',
+                    name: 'Unified VM',
+                    platformData: {
+                        vmid: 101,
+                        node: 'pve-a',
+                        instance: 'pve-a/qemu/101',
+                    },
+                }),
+                createMockResource({
+                    id: 'ct-unified-201',
+                    type: 'container',
+                    name: 'Unified CT',
+                    platformData: {
+                        vmid: 201,
+                        node: 'pve-a',
+                        instance: 'pve-a/lxc/201',
+                    },
+                }),
+                createMockResource({
+                    id: 'host-unified-1',
+                    type: 'host',
+                    name: 'Unified Host',
+                    status: 'online',
+                    platformData: {
+                        platform: 'linux',
+                        interfaces: [{ name: 'eth0' }],
+                    },
+                }),
+                createMockResource({
+                    id: 'node-unified-1',
+                    type: 'node',
+                    name: 'Unified Node',
+                    platformData: {
+                        host: 'pve-a.local',
+                    },
+                }),
+                createMockResource({
+                    id: 'docker-host-unified-1',
+                    type: 'docker-host',
+                    name: 'Unified Docker Host',
+                    platformType: 'docker',
+                    platformData: {
+                        agentId: 'agent-u',
+                        runtime: 'docker',
+                    },
+                }),
+                createMockResource({
+                    id: 'docker-host-unified-1/container-unified-1',
+                    type: 'docker-container',
+                    parentId: 'docker-host-unified-1',
+                    name: 'Unified Container',
+                    platformType: 'docker',
+                    platformData: {
+                        image: 'nginx:latest',
+                    },
+                }),
+            ],
+            vms: [{ id: 'legacy-vm-1', name: 'Legacy VM' }],
+            containers: [{ id: 'legacy-ct-1', name: 'Legacy CT' }],
+            hosts: [{ id: 'legacy-host-1', hostname: 'legacy-host' }],
+            nodes: [{ id: 'legacy-node-1', name: 'legacy-node' }],
+            dockerHosts: [{ id: 'legacy-docker-host-1', hostname: 'legacy-docker' }],
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useResourcesAsLegacy(store as any);
+        });
+
+        expect(selectors.asVMs()[0].id).toBe('vm-unified-101');
+        expect(selectors.asContainers()[0].id).toBe('ct-unified-201');
+        expect(selectors.asHosts()[0].id).toBe('host-unified-1');
+        expect(selectors.asNodes()[0].id).toBe('node-unified-1');
+        expect(selectors.asDockerHosts()[0].id).toBe('docker-host-unified-1');
+        expect(selectors.asDockerHosts()[0].containers?.[0]?.id).toBe('container-unified-1');
+
+        dispose();
+    });
+
+    it('falls back to legacy arrays when unified resources are empty', () => {
+        const legacyVms = [{ id: 'legacy-vm-1', name: 'Legacy VM' }];
+        const legacyContainers = [{ id: 'legacy-ct-1', name: 'Legacy CT' }];
+        const legacyHosts = [{ id: 'legacy-host-1', hostname: 'legacy-host' }];
+        const legacyNodes = [{ id: 'legacy-node-1', name: 'legacy-node' }];
+        const legacyDockerHosts = [{ id: 'legacy-docker-host-1', hostname: 'legacy-docker' }];
+
+        const store = createMockLegacyStore({
+            resources: [],
+            vms: legacyVms,
+            containers: legacyContainers,
+            hosts: legacyHosts,
+            nodes: legacyNodes,
+            dockerHosts: legacyDockerHosts,
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useResourcesAsLegacy(store as any);
+        });
+
+        expect(selectors.asVMs()).toEqual(legacyVms);
+        expect(selectors.asContainers()).toEqual(legacyContainers);
+        expect(selectors.asHosts()).toEqual(legacyHosts);
+        expect(selectors.asNodes()).toEqual(legacyNodes);
+        expect(selectors.asDockerHosts()).toEqual(legacyDockerHosts);
+
+        dispose();
+    });
+
+    it('keeps type-specific PBS/PMG fallback when unified resources are populated without those types', () => {
+        const legacyPbs = [{ id: 'legacy-pbs-1', name: 'Legacy PBS' }];
+        const legacyPmg = [{ id: 'legacy-pmg-1', name: 'Legacy PMG' }];
+        const store = createMockLegacyStore({
+            resources: [
+                createMockResource({
+                    id: 'vm-unified-1',
+                    type: 'vm',
+                    name: 'Unified VM',
+                }),
+            ],
+            pbs: legacyPbs,
+            pmg: legacyPmg,
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useResourcesAsLegacy(store as any);
+        });
+
+        expect(selectors.asPBS()).toEqual(legacyPbs);
+        expect(selectors.asPMG()).toEqual(legacyPmg);
+
+        dispose();
     });
 });
 

@@ -354,6 +354,15 @@ export function createWebSocketStore(url: string) {
               setInitialDataReceived(true);
             }
 
+            // URC2 Packet 05 transitional contract:
+            // - `state.resources` is the canonical source once populated.
+            // - Legacy arrays remain hydrated only for explicit compatibility bridges:
+            //   1) rollback when unified resources are not yet populated,
+            //   2) bounded type-specific fallback for PBS/PMG/storage in useResourcesAsLegacy.
+            // - Do not add new legacy-only consumers.
+            //
+            // Keep legacy field updates explicit here so remaining rollback paths are
+            // visible and reviewable rather than hidden in downstream selectors.
             // Only update if we have actual data, don't overwrite with empty arrays
             if (message.data.nodes !== undefined) {
               logger.debug('[WebSocket] Updating nodes', {
