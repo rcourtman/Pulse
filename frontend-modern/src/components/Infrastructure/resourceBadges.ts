@@ -1,4 +1,5 @@
 import type { PlatformType, SourceType, ResourceType } from '@/types/resource';
+import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 
 export interface ResourceBadge {
   label: string;
@@ -9,26 +10,6 @@ export interface ResourceBadge {
 const baseBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
 
 export type UnifiedSource = 'proxmox' | 'agent' | 'docker' | 'pbs' | 'pmg' | 'kubernetes';
-
-const platformLabels: Record<PlatformType, string> = {
-  'proxmox-pve': 'PVE',
-  'proxmox-pbs': 'PBS',
-  'proxmox-pmg': 'PMG',
-  docker: 'Docker',
-  kubernetes: 'K8s',
-  truenas: 'TrueNAS',
-  'host-agent': 'Host',
-};
-
-const platformClasses: Record<PlatformType, string> = {
-  'proxmox-pve': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  'proxmox-pbs': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
-  'proxmox-pmg': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
-  docker: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
-  kubernetes: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
-  truenas: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  'host-agent': 'bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-200',
-};
 
 const sourceLabels: Record<SourceType, string> = {
   agent: 'Agent',
@@ -75,10 +56,12 @@ const typeClasses = 'bg-gray-100 text-gray-700 dark:bg-gray-700/60 dark:text-gra
 
 export function getPlatformBadge(platformType?: PlatformType): ResourceBadge | null {
   if (!platformType) return null;
+  const sharedBadge = getSourcePlatformBadge(platformType);
+  if (!sharedBadge) return null;
   return {
-    label: platformLabels[platformType] ?? platformType,
-    classes: `${baseBadge} ${platformClasses[platformType] ?? typeClasses}`,
-    title: platformType,
+    label: sharedBadge.label,
+    classes: sharedBadge.classes,
+    title: sharedBadge.title,
   };
 }
 

@@ -13,6 +13,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { getCanonicalWorkloadId, getWorkloadMetricsKind, resolveWorkloadType } from '@/utils/workloads';
+import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
@@ -581,40 +582,12 @@ export function GuestRow(props: GuestRowProps) {
   });
 
   const typeInfo = createMemo(() => {
-    const type = workloadType();
-    if (type === 'vm') {
-      return {
-        label: 'VM',
-        title: 'Virtual Machine',
-        className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
-      };
-    }
-    if (type === 'docker') {
-      return {
-        label: 'Docker',
-        title: 'Docker Container',
-        className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300',
-      };
-    }
-    if (type === 'k8s') {
-      return {
-        label: 'K8s',
-        title: 'Kubernetes Pod',
-        className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
-      };
-    }
     if (isOCIContainer()) {
-      return {
-        label: 'OCI',
+      return getWorkloadTypeBadge('oci', {
         title: `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`,
-        className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
-      };
+      });
     }
-    return {
-      label: 'LXC',
-      title: 'LXC Container',
-      className: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-    };
+    return getWorkloadTypeBadge(workloadType());
   });
 
   // Update custom URL when prop changes
