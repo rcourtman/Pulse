@@ -29,7 +29,7 @@ Date: 2026-02-08
 | 06 | ConfigHandlers Node Lifecycle Extraction | DONE | Codex | Claude | APPROVED | See Packet 06 Review Evidence |
 | 07 | ConfigHandlers Setup + Auto-Register Extraction | DONE | Codex | Claude | APPROVED | See Packet 07 Review Evidence |
 | 08 | ConfigHandlers System + Discovery + Import/Export Extraction | DONE | Codex | Claude | APPROVED | See Packet 08 Review Evidence |
-| 09 | Architecture Guardrails and Drift Tests | TODO | Unassigned | Unassigned | PENDING | |
+| 09 | Architecture Guardrails and Drift Tests | DONE | Codex | Claude | APPROVED | See Packet 09 Review Evidence |
 | 10 | Final Certification | TODO | Unassigned | Unassigned | PENDING | |
 
 ## Packet 00 Checklist: Surface Inventory and Cut-Map
@@ -438,21 +438,43 @@ Rollback:
 ## Packet 09 Checklist: Architecture Guardrails and Drift Tests
 
 ### Implementation
-- [ ] Decomposition guard tests added for router route registration boundaries.
-- [ ] Delegation boundary tests added for config handlers.
-- [ ] Route protection drift tests added/updated.
-- [ ] Guardrails tuned to avoid brittle false positives.
+- [x] Decomposition guard tests added for router route registration boundaries.
+- [x] Delegation boundary tests added for config handlers.
+- [x] Route protection drift tests added/updated.
+- [x] Guardrails tuned to avoid brittle false positives.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "CodeStandards|RouteInventory|Decomposition|Contract" -v` passed.
-- [ ] `go build ./...` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "CodeStandards|RouteInventory|Decomposition|Contract" -v` passed.
+- [x] `go build ./...` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Review Evidence
+
+Files changed:
+- `internal/api/router_decomposition_contract_test.go` (new): 4 decomposition guard tests — setupRoutes drift guard, route distribution guard, ConfigHandlers delegation guard, route inventory coverage guard.
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/api/... -run "CodeStandards|RouteInventory|Decomposition|Contract" -v` -> exit 0
+
+Gate checklist:
+- P0: PASS (files verified, commands rerun independently, exit codes 0)
+- P1: PASS (guards are practical and pass; avoid brittle false positives)
+- P2: PASS (tracker updated, checklist complete)
+
+Verdict: APPROVED
+
+Residual risk:
+- None
+
+Rollback:
+- Delete `internal/api/router_decomposition_contract_test.go`.
 
 ## Packet 10 Checklist: Final Certification
 
