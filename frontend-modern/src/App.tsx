@@ -461,6 +461,7 @@ function App() {
       setActiveOrgID(selected);
     } catch (error) {
       logger.warn('Failed to load organizations, falling back to default org', error);
+      showToast('error', 'Failed to load organizations. Using default.');
       const fallback = [{ id: 'default', displayName: 'Default Organization' }];
       setOrganizations(fallback);
       setSelectedOrgID('default');
@@ -476,8 +477,22 @@ function App() {
       return;
     }
 
+    if (target !== 'default' && !organizations().some((org) => org.id === target)) {
+      showToast('error', 'Organization no longer exists');
+      return;
+    }
+
     setSelectedOrgID(target);
     setActiveOrgID(target);
+
+    eventBus.emit('org_switched', target);
+
+    // Clear org-specific client-side caches
+    try {
+      localStorage.removeItem(STORAGE_KEYS.GUEST_METADATA);
+      localStorage.removeItem(STORAGE_KEYS.DOCKER_METADATA);
+      localStorage.removeItem(STORAGE_KEYS.DOCKER_METADATA + '_hosts');
+    } catch { /* ignore storage errors */ }
 
     try {
       const store = wsStore();

@@ -55,6 +55,10 @@ export function hasFeature(feature: string): boolean {
     return current.features.includes(feature);
 }
 
+export function isMultiTenantEnabled(): boolean {
+    return hasFeature('multi_tenant');
+}
+
 /**
  * Max free range in days — must match backend maxFreeDuration (7 * 24 * time.Hour).
  * Any range exceeding this requires the long_term_metrics feature.

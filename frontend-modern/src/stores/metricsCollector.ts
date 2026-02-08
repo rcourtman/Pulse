@@ -1,6 +1,7 @@
 import { getGlobalWebSocketStore } from './websocket-global';
 import { logger } from '@/utils/logger';
 import { recordDiskMetric } from './diskMetricsHistory';
+import { eventBus } from '@/stores/events';
 
 const SAMPLE_INTERVAL_MS = 2000;
 
@@ -83,3 +84,8 @@ export function stopMetricsCollector() {
         logger.info('[MetricsCollector] Stopped');
     }
 }
+
+// Clear stale disk counter state on org switch
+eventBus.on('org_switched', () => {
+    previousDiskCounters.clear();
+});

@@ -1,4 +1,5 @@
 import { ChartsAPI, type ChartData, type ChartsResponse, type InfrastructureChartsResponse, type TimeRange } from '@/api/charts';
+import { eventBus } from '@/stores/events';
 
 export const INFRA_SUMMARY_CACHE_PREFIX = 'pulse.infrastructureSummaryCharts.';
 export const INFRA_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
@@ -322,3 +323,18 @@ export function fetchInfrastructureSummaryAndCache(
 export function __resetInfrastructureSummaryFetchesForTests(): void {
   inFlightFetches.clear();
 }
+
+// Invalidate infrastructure summary cache on org switch
+eventBus.on('org_switched', () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith(INFRA_SUMMARY_CACHE_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+  } catch { /* ignore storage errors */ }
+});

@@ -1,5 +1,6 @@
 import { createSignal } from 'solid-js';
 import { logger } from '@/utils/logger';
+import { eventBus } from '@/stores/events';
 // NOTE: AIAPI import removed - session management is handled by Pulse AI's embedded UI
 import type { AIChatSessionSummary } from '@/types/ai';
 
@@ -453,3 +454,22 @@ export const aiChatStore = {
     await syncToServer();
   },
 };
+
+// Clear AI chat state on org switch to prevent cross-org data leakage
+eventBus.on('org_switched', () => {
+  // Clear all messages
+  setMessages([]);
+  saveMessagesToStorage([]);
+
+  // Generate a fresh session ID
+  const newId = generateSessionId();
+  setCurrentSessionId(newId);
+  try {
+    localStorage.setItem(SESSION_ID_KEY, newId);
+  } catch { /* ignore storage errors */ }
+
+  // Clear context
+  setContextItems([]);
+  setAIChatContext({});
+  setSessionTitle('');
+});
