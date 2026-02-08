@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsRouting';
-import { isTabLocked } from '../settingsFeatureGates';
+import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
   proxmox: '/settings/infrastructure',
@@ -82,6 +82,16 @@ describe('settingsNavigation integration scaffold', () => {
 
     it('keeps non-gated tabs unlocked', () => {
       expect(isTabLocked('proxmox', hasFeatures([]), () => true)).toBe(false);
+    });
+
+    it('getTabLockReason returns reason for locked tabs and null for unlocked', () => {
+      for (const [tab, requiredFeature] of gatedTabs) {
+        expect(getTabLockReason(tab, hasFeatures([]), () => true)).toBe(
+          'This settings section requires Pulse Pro.',
+        );
+        expect(getTabLockReason(tab, hasFeatures([requiredFeature]), () => true)).toBeNull();
+      }
+      expect(getTabLockReason('proxmox', hasFeatures([]), () => true)).toBeNull();
     });
   });
 

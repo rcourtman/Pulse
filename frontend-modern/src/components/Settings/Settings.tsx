@@ -46,7 +46,7 @@ import { eventBus } from '@/stores/events';
 import { hasFeature, isMultiTenantEnabled, licenseLoaded, loadLicenseStatus } from '@/stores/license';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
 import { baseTabGroups } from './settingsTabs';
-import { isFeatureLocked, isTabLocked } from './settingsFeatureGates';
+import { getTabLockReason, isFeatureLocked, isTabLocked } from './settingsFeatureGates';
 import type { SettingsNavGroup, SettingsTab } from './settingsTypes';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { useSystemSettingsState } from './useSystemSettingsState';
@@ -340,6 +340,16 @@ const Settings: Component<SettingsProps> = (props) => {
 
   const isTabLockedForLicense = (tab: SettingsTab): boolean =>
     isTabLocked(tab, hasFeature, licenseLoaded);
+
+  const handleTabSelect = (tab: SettingsTab) => {
+    const lockReason = getTabLockReason(tab, hasFeature, licenseLoaded);
+    if (lockReason) {
+      notificationStore.info(lockReason);
+      setActiveTab('system-pro');
+      return;
+    }
+    setActiveTab(tab);
+  };
 
   const tabGroups = createMemo<SettingsNavGroup[]>(() =>
     baseTabGroups
@@ -786,7 +796,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   }`}
                                 onClick={() => {
                                   if (item.disabled) return;
-                                  setActiveTab(item.id);
+                                  handleTabSelect(item.id as SettingsTab);
                                 }}
                                 title={
                                   sidebarCollapsed()
@@ -838,7 +848,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             }`}
                           onClick={() => {
                             if (disabled) return;
-                            setActiveTab(tab.id);
+                            handleTabSelect(tab.id as SettingsTab);
                           }}
                         >
                           {tab.label}

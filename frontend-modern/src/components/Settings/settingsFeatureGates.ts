@@ -28,3 +28,15 @@ export function isTabLocked(
   const requiredFeatures = tabFeatureRequirements[tab];
   return isFeatureLocked(requiredFeatures, hasFeature, licenseLoaded);
 }
+
+export function getTabLockReason(
+  tab: SettingsTab,
+  hasFeature: (feature: string) => boolean,
+  licenseLoaded: () => boolean,
+): string | null {
+  const requiredFeatures = tabFeatureRequirements[tab];
+  if (!requiredFeatures || requiredFeatures.length === 0) return null;
+  if (!licenseLoaded()) return null;
+  if (requiredFeatures.every((feature) => hasFeature(feature))) return null;
+  return 'This settings section requires Pulse Pro.';
+}

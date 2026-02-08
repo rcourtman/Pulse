@@ -26,7 +26,7 @@ Date: 2026-02-08
 | 02 | Navigation State Machine Hardening | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence |
 | 03 | Polling Lifecycle Isolation and Interaction Priority | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence |
 | 04 | Panel Loading Strategy and Transition Performance | DONE | Codex | Claude | APPROVED | See Packet 04 Review Evidence |
-| 05 | Locked Tab UX Clarity and Non-Loading Affordance Fix | TODO | Codex | Claude | PENDING | See Packet 05 Review Evidence |
+| 05 | Locked Tab UX Clarity and Non-Loading Affordance Fix | DONE | Codex | Claude | APPROVED | See Packet 05 Review Evidence |
 | 06 | Contract Test Hardening and Guardrails | TODO | Codex | Claude | PENDING | See Packet 06 Review Evidence |
 | 07 | Final Certification and Release Recommendation | TODO | Claude | Claude | PENDING | See Packet 07 Review Evidence |
 
@@ -257,7 +257,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- `pending`
+- `fc656295` (fix(settings-nav): Packet 04 — lazy panel loading with Suspense)
 
 Residual risk:
 - none
@@ -270,46 +270,49 @@ Rollback:
 ## Packet 05 Checklist: Locked Tab UX Clarity and Non-Loading Affordance Fix
 
 ### Implementation
-- [ ] Locked tab behavior is explicit and user-comprehensible.
-- [ ] No silent no-op transitions for gated tabs.
-- [ ] License gate contract remains intact.
+- [x] Locked tab behavior is explicit and user-comprehensible.
+- [x] No silent no-op transitions for gated tabs.
+- [x] License gate contract remains intact.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### Packet 05 Review Evidence
 
 ```
 Files changed:
-- <path>: <reason>
+- frontend-modern/src/components/Settings/settingsFeatureGates.ts: Added getTabLockReason() for click-time lock detection with reason string
+- frontend-modern/src/components/Settings/Settings.tsx: Added handleTabSelect() wrapper with lock check, routed both sidebar and mobile tab clicks through it
+- frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx: Added getTabLockReason test coverage
 
 Commands run + exit codes:
-1. `<command>` -> exit <code>
-2. `<command>` -> exit <code>
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+2. `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` -> exit 0 (15 passed, 1 todo)
 
 Gate checklist:
-- P0: PASS | FAIL (<reason>)
-- P1: PASS | FAIL | N/A (<reason>)
-- P2: PASS | FAIL (<reason>)
+- P0: PASS (locked tabs intercepted at click point, no silent transitions)
+- P1: PASS (createEffect safety net preserved for URL navigation, disabled styling intact)
+- P2: PASS (license gate contract unchanged)
 
-Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+Verdict: APPROVED
 
 Commit:
-- `<hash>` (<message>)
+- `pending`
 
 Residual risk:
-- <risk or none>
+- none
 
 Rollback:
-- <steps>
+- Remove getTabLockReason from settingsFeatureGates.ts
+- Revert handleTabSelect to direct setActiveTab calls
 ```
 
 ## Packet 06 Checklist: Contract Test Hardening and Guardrails
