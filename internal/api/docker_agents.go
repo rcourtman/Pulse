@@ -82,6 +82,9 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 	}
 
 	tokenRecord := getAPITokenRecordFromRequest(r)
+	if enforceNodeLimitForDockerReport(w, r.Context(), h.getMonitor(r.Context()), report, tokenRecord) {
+		return
+	}
 
 	host, err := h.getMonitor(r.Context()).ApplyDockerReport(report, tokenRecord)
 	if err != nil {

@@ -98,6 +98,58 @@ func TestHostAgentHandlers_HandleReport(t *testing.T) {
 	}
 }
 
+func TestHostAgentHandlers_HandleReport_EnforcesMaxNodesForNewHostsOnly(t *testing.T) {
+	setMaxNodesLicenseForTests(t, 1)
+
+	handler, monitor := newHostAgentHandlers(t, nil)
+	existingHostID := seedHostAgent(t, monitor)
+	if existingHostID == "" {
+		t.Fatalf("expected seeded host ID")
+	}
+
+	// Existing host should continue to report at the limit.
+	existingReport := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-1",
+			Version: "1.0.1",
+		},
+		Host: agentshost.HostInfo{
+			ID:       "machine-1",
+			Hostname: "host-1.local",
+			Platform: "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+	existingBody, _ := json.Marshal(existingReport)
+	existingReq := httptest.NewRequest(http.MethodPost, "/api/agents/host/report", bytes.NewReader(existingBody))
+	existingRec := httptest.NewRecorder()
+	handler.HandleReport(existingRec, existingReq)
+	if existingRec.Code != http.StatusOK {
+		t.Fatalf("existing host report should pass at limit, got %d: %s", existingRec.Code, existingRec.Body.String())
+	}
+
+	// New host should be blocked.
+	newReport := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-2",
+			Version: "1.0.0",
+		},
+		Host: agentshost.HostInfo{
+			ID:       "machine-2",
+			Hostname: "host-2.local",
+			Platform: "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+	newBody, _ := json.Marshal(newReport)
+	newReq := httptest.NewRequest(http.MethodPost, "/api/agents/host/report", bytes.NewReader(newBody))
+	newRec := httptest.NewRecorder()
+	handler.HandleReport(newRec, newReq)
+	if newRec.Code != http.StatusPaymentRequired {
+		t.Fatalf("new host should be blocked at limit, got %d: %s", newRec.Code, newRec.Body.String())
+	}
+}
+
 func TestHostAgentHandlers_HandleDeleteHost(t *testing.T) {
 	handler, monitor := newHostAgentHandlers(t, nil)
 	hostID := seedHostAgent(t, monitor)

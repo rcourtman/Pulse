@@ -112,6 +112,59 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 	}
 }
 
+func TestHandleAutoRegister_EnforcesMaxNodesLimit(t *testing.T) {
+	setMaxNodesLicenseForTests(t, 1)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:   "existing-node",
+				Host:   "https://pve-existing.local:8006",
+				Source: "manual",
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "LIMIT-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve-new.local:8006",
+		TokenID:    "pulse-monitor@pam!token",
+		TokenValue: "secret-token",
+		ServerName: "pve-new.local",
+		AuthToken:  tokenValue,
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected status 402, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected auto-register to be rejected at limit, got %d PVE instances", len(cfg.PVEInstances))
+	}
+}
+
 // TestDisambiguateNodeName verifies that duplicate hostnames get disambiguated
 // with their IP address appended. Issue #891.
 func TestDisambiguateNodeName(t *testing.T) {

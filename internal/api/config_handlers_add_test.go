@@ -174,3 +174,40 @@ func TestHandleAddNode(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleAddNode_EnforcesMaxNodesLimit(t *testing.T) {
+	setMaxNodesLicenseForTests(t, 1)
+
+	tempDir, err := os.MkdirTemp("", "pulse-add-node-limit-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cfg := &config.Config{
+		DataPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{Name: "existing", Host: "https://10.0.0.1:8006"},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body, _ := json.Marshal(map[string]any{
+		"name":     "new-node",
+		"type":     "pve",
+		"host":     "10.0.0.2",
+		"user":     "root@pam",
+		"password": "secret",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAddNode(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected status 402, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected node to be rejected at limit, got %d PVE instances", len(cfg.PVEInstances))
+	}
+}

@@ -61,6 +61,9 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 	}
 
 	tokenRecord := getAPITokenRecordFromRequest(r)
+	if enforceNodeLimitForHostReport(w, r.Context(), h.getMonitor(r.Context()), report, tokenRecord) {
+		return
+	}
 
 	host, err := h.getMonitor(r.Context()).ApplyHostReport(report, tokenRecord)
 	if err != nil {

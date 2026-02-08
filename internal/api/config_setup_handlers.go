@@ -1720,6 +1720,9 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 				ClusterEndpoints:  clusterEndpoints,
 				Source:            req.Source, // Track how this node was registered
 			}
+			if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+				return
+			}
 			h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, newInstance)
 
 			if isCluster {
@@ -1770,6 +1773,9 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 				MonitorPruneJobs:   monitorPruneJobs,
 				MonitorGarbageJobs: monitorGarbageJobs,
 				Source:             req.Source, // Track how this node was registered
+			}
+			if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+				return
 			}
 			h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, newInstance)
 		}
@@ -1999,6 +2005,9 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			MonitorStorage:    true,
 			MonitorBackups:    true,
 		}
+		if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+			return
+		}
 		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pveNode)
 	} else if req.Type == "pbs" {
 		pbsNode := config.PBSInstance{
@@ -2013,6 +2022,9 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			MonitorSyncJobs:   true,
 			MonitorVerifyJobs: true,
 			MonitorPruneJobs:  true,
+		}
+		if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+			return
 		}
 		h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbsNode)
 	}

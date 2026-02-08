@@ -116,6 +116,60 @@ func TestKubernetesAgentHandlers_HandleReport(t *testing.T) {
 	}
 }
 
+func TestKubernetesAgentHandlers_HandleReport_EnforcesMaxNodesForNewClustersOnly(t *testing.T) {
+	setMaxNodesLicenseForTests(t, 1)
+
+	handler, monitor := newKubernetesAgentHandlers(t, nil)
+	existingClusterID := seedKubernetesCluster(t, monitor)
+	if existingClusterID == "" {
+		t.Fatalf("expected seeded cluster ID")
+	}
+
+	// Existing cluster should continue to report at the limit.
+	existingReport := agentsk8s.Report{
+		Agent: agentsk8s.AgentInfo{
+			ID:              "agent-1",
+			Version:         "1.0.1",
+			IntervalSeconds: 30,
+		},
+		Cluster: agentsk8s.ClusterInfo{
+			ID:      "cluster-1",
+			Name:    "cluster-1",
+			Version: "1.28.0",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+	existingBody, _ := json.Marshal(existingReport)
+	existingReq := httptest.NewRequest(http.MethodPost, "/api/agents/kubernetes/report", bytes.NewReader(existingBody))
+	existingRec := httptest.NewRecorder()
+	handler.HandleReport(existingRec, existingReq)
+	if existingRec.Code != http.StatusOK {
+		t.Fatalf("existing cluster report should pass at limit, got %d: %s", existingRec.Code, existingRec.Body.String())
+	}
+
+	// New cluster should be blocked.
+	newReport := agentsk8s.Report{
+		Agent: agentsk8s.AgentInfo{
+			ID:              "agent-2",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Cluster: agentsk8s.ClusterInfo{
+			ID:      "cluster-2",
+			Name:    "cluster-2",
+			Version: "1.28.0",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+	newBody, _ := json.Marshal(newReport)
+	newReq := httptest.NewRequest(http.MethodPost, "/api/agents/kubernetes/report", bytes.NewReader(newBody))
+	newRec := httptest.NewRecorder()
+	handler.HandleReport(newRec, newReq)
+	if newRec.Code != http.StatusPaymentRequired {
+		t.Fatalf("new cluster should be blocked at limit, got %d: %s", newRec.Code, newRec.Body.String())
+	}
+}
+
 func TestKubernetesAgentHandlers_HandleClusterActions(t *testing.T) {
 	handler, _ := newKubernetesAgentHandlers(t, nil)
 
