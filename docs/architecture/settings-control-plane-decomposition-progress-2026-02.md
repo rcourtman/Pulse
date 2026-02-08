@@ -23,7 +23,7 @@ Date: 2026-02-08
 | 00 | Surface Inventory and Decomposition Cut-Map | DONE | Codex | Claude | APPROVED | See Packet 00 evidence below |
 | 01 | Tab Schema and Metadata Extraction | DONE | Codex | Claude | APPROVED | See Packet 01 evidence below |
 | 02 | Feature Gate Engine Extraction | DONE | Codex | Claude | APPROVED | See Packet 02 evidence below |
-| 03 | Navigation and Deep-Link Orchestration Extraction | TODO | Unassigned | Unassigned | PENDING | |
+| 03 | Navigation and Deep-Link Orchestration Extraction | DONE | Codex | Claude | APPROVED | See Packet 03 evidence below |
 | 04 | System Settings State Slice Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 05 | Infrastructure and Node Workflow Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 06 | Backup Import/Export and Passphrase Flow Extraction | TODO | Unassigned | Unassigned | PENDING | |
@@ -173,7 +173,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- (pending)
+- `1278841f` (feat(settings): Packet 02 — extract feature gate engine)
 
 Residual risk:
 - None
@@ -185,22 +185,54 @@ Rollback:
 ## Packet 03 Checklist: Navigation and Deep-Link Orchestration Extraction
 
 ### Implementation
-- [ ] URL sync/tab activation extracted to helper hook.
-- [ ] Legacy redirects extracted and preserved.
-- [ ] Canonical tab mapping behavior preserved.
-- [ ] `/settings` landing behavior remains no-flicker.
+- [x] URL sync/tab activation extracted to helper hook.
+- [x] Legacy redirects extracted and preserved.
+- [x] Canonical tab mapping behavior preserved.
+- [x] `/settings` landing behavior remains no-flicker.
 
 ### Required Tests
-- [ ] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` passed.
-- [ ] `npm --prefix frontend-modern exec -- vitest run src/routing/__tests__/legacyRedirects.test.ts src/routing/__tests__/legacyRouteContracts.test.ts src/routing/__tests__/platformTabs.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [x] `npm --prefix frontend-modern exec -- vitest run src/routing/__tests__/legacyRedirects.test.ts src/routing/__tests__/legacyRouteContracts.test.ts src/routing/__tests__/platformTabs.test.ts` — legacyRedirects 3/3 PASS, legacyRouteContracts 2/2 PASS; platformTabs FAIL (pre-existing: `@/routing/resourceLinks` alias issue, confirmed fails identically on Packet 02 commit).
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS (pre-existing platformTabs failure documented, not caused by this packet)
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Packet 03 Review Evidence
+
+```
+Files changed:
+- frontend-modern/src/components/Settings/useSettingsNavigation.ts (new): Hook encapsulating currentTab, activeTab, selectedAgent signals + agentPaths + handleSelectAgent + setActiveTab + URL sync effect with all legacy redirects
+- frontend-modern/src/components/Settings/Settings.tsx: Removed inline navigation state/effects, calls useSettingsNavigation() hook
+
+Commands run + exit codes (reviewer-independent):
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+2. `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` -> exit 0 (7/7 passed)
+3. `npm --prefix frontend-modern exec -- vitest run src/routing/__tests__/legacyRedirects.test.ts src/routing/__tests__/legacyRouteContracts.test.ts src/routing/__tests__/platformTabs.test.ts` -> exit 1
+   - legacyRedirects.test.ts: 3/3 PASS
+   - legacyRouteContracts.test.ts: 2/2 PASS
+   - platformTabs.test.ts: FAIL (pre-existing @/routing/resourceLinks alias issue, verified fails on Packet 02 commit too)
+
+Gate checklist:
+- P0: PASS (hook file verified with correct signals/effects/redirects; both tsc and routing tests pass; platformTabs failure is pre-existing)
+- P1: PASS (URL sync effect preserved verbatim; all legacy redirect shims intact; no-flicker landing behavior maintained)
+- P2: PASS (tracker updated, pre-existing failure documented)
+
+Verdict: APPROVED
+
+Commit:
+- (pending)
+
+Residual risk:
+- platformTabs.test.ts has a pre-existing alias resolution failure from parallel work
+
+Rollback:
+- Delete useSettingsNavigation.ts, restore inline navigation logic from 1278841f
+```
 
 ## Packet 04 Checklist: System Settings State Slice Extraction
 
