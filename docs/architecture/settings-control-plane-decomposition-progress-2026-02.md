@@ -29,7 +29,7 @@ Date: 2026-02-08
 | 06 | Backup Import/Export and Passphrase Flow Extraction | DONE | Codex | Claude | APPROVED | See Packet 06 evidence below |
 | 07 | Panel Registry and Render Dispatch Extraction | DONE | Codex | Claude | APPROVED | See Packet 07 evidence below |
 | 08 | Contract Test Hardening (Settings Routing + Gates) | DONE | Codex | Claude | APPROVED | See Packet 08 evidence below |
-| 09 | Architecture Guardrails for Settings Monolith Regression | TODO | Unassigned | Unassigned | PENDING | |
+| 09 | Architecture Guardrails for Settings Monolith Regression | DONE | Codex | Claude | APPROVED | See Packet 09 evidence below |
 | 10 | Final Certification | TODO | Unassigned | Unassigned | PENDING | |
 
 ## Packet 00 Checklist: Surface Inventory and Decomposition Cut-Map
@@ -460,7 +460,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- (pending)
+- `fd735965` (test(settings): Packet 08 — contract test hardening for routing and gates)
 
 Residual risk:
 - None
@@ -472,22 +472,50 @@ Rollback:
 ## Packet 09 Checklist: Architecture Guardrails for Settings Monolith Regression
 
 ### Implementation
-- [ ] Architecture guard tests added for externalized modules.
-- [ ] Guardrails are low-noise and not brittle.
-- [ ] Exceptions policy documented.
-- [ ] CI behavior validated.
+- [x] Architecture guard tests added for externalized modules.
+- [x] Guardrails are low-noise and not brittle.
+- [x] Exceptions policy documented.
+- [x] CI behavior validated.
 
 ### Required Tests
-- [ ] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsArchitecture.test.ts src/components/Settings/__tests__/settingsRouting.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] `go build ./...` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsArchitecture.test.ts src/components/Settings/__tests__/settingsRouting.test.ts` passed (12/12).
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] `go build ./...` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Packet 09 Review Evidence
+
+```
+Files changed:
+- frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts (new, 67 LOC): 4 architecture guardrail tests — module existence via glob, import relationship assertions, no-inline-redefinition checks, LOC ceiling (2500) with exceptions policy
+
+Commands run + exit codes (reviewer-independent):
+1. `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsArchitecture.test.ts src/components/Settings/__tests__/settingsRouting.test.ts` -> exit 0 (12/12 passed)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+3. `go build ./...` -> exit 0
+
+Gate checklist:
+- P0: PASS (test file verified, all 3 commands pass)
+- P1: PASS (guards enforce module boundaries without brittleness; exceptions policy documented in test)
+- P2: PASS (tracker updated)
+
+Verdict: APPROVED
+
+Commit:
+- (pending)
+
+Residual risk:
+- None
+
+Rollback:
+- Delete settingsArchitecture.test.ts
+```
 
 ## Packet 10 Checklist: Final Certification
 
