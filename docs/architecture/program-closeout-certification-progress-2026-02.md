@@ -21,7 +21,7 @@ Date: 2026-02-08
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | 00 | Artifact Freeze and Closeout Baseline | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence below |
-| 01 | Route, Contract, and Deep-Link Reconciliation | TODO | Unassigned | Unassigned | PENDING | |
+| 01 | Route, Contract, and Deep-Link Reconciliation | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence below |
 | 02 | Cross-Domain Integration Certification Matrix | TODO | Unassigned | Unassigned | PENDING | |
 | 03 | Security, Authorization, and Isolation Replay | TODO | Unassigned | Unassigned | PENDING | |
 | 04 | Data Integrity and Migration Safety Certification | TODO | Unassigned | Unassigned | PENDING | |
@@ -85,22 +85,55 @@ Rollback:
 ## Packet 01 Checklist: Route, Contract, and Deep-Link Reconciliation
 
 ### Implementation
-- [ ] Backend route allowlists and wrappers reconciled.
-- [ ] API payload contract tests reconciled.
-- [ ] Settings/routing deep-link contracts reconciled.
-- [ ] Contract drift classified and dispositioned.
+- [x] Backend route allowlists and wrappers reconciled.
+- [x] API payload contract tests reconciled.
+- [x] Settings/routing deep-link contracts reconciled.
+- [x] Contract drift classified and dispositioned.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "TestRouterRouteInventory|Contract" -v` passed.
-- [ ] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts src/routing/__tests__/legacyRouteContracts.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "TestRouterRouteInventory|Contract" -v` passed.
+- [x] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts src/routing/__tests__/legacyRouteContracts.test.ts` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Packet 01 Review Evidence
+
+Files changed:
+- `frontend-modern/src/routing/__tests__/legacyRouteContracts.test.ts`: Expanded legacy redirect contract coverage from 2 redirect cases (services, kubernetes) to all 7 legacy redirect definitions (proxmoxOverview, hosts, docker, proxmoxMail, mail, services, kubernetes) with full migration metadata and deep-link parameter verification. Classification: DRIFT_FIX_REQUIRED → resolved.
+
+Drift classifications:
+- `internal/api/route_inventory_test.go`: MATCHED
+- `internal/api/contract_test.go`: MATCHED
+- `frontend-modern/src/components/Settings/settingsRouting.ts`: MATCHED
+- `frontend-modern/src/components/Settings/__tests__/settingsRouting.test.ts`: MATCHED
+- `frontend-modern/src/routing/__tests__/legacyRouteContracts.test.ts`: DRIFT_FIX_REQUIRED (resolved — expanded coverage)
+
+Commands run + exit codes:
+1. `go test ./internal/api/... -run "TestRouterRouteInventory|Contract" -v` -> exit 0 (13 test functions, all PASS)
+2. `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts src/routing/__tests__/legacyRouteContracts.test.ts` -> exit 0 (2 files, 11 tests, all PASS)
+3. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+
+Gate checklist:
+- P0: PASS (changed file verified, all 3 commands rerun independently, all exit 0)
+- P1: PASS (legacy redirect contracts now cover all 7 redirect definitions with migration metadata and deep-link params)
+- P2: PASS (progress tracker updated, drift classifications documented)
+
+Verdict: APPROVED
+
+Commit:
+- See checkpoint commit hash below.
+
+Residual risk:
+- None. All contract surfaces reconciled.
+
+Rollback:
+- Revert checkpoint commit. Only test file expanded — no production code changed.
 
 ## Packet 02 Checklist: Cross-Domain Integration Certification Matrix
 
