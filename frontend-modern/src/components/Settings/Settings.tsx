@@ -4,6 +4,7 @@ import {
   onMount,
   For,
   Show,
+  Suspense,
   createEffect,
   createMemo,
 } from 'solid-js';
@@ -1767,7 +1768,11 @@ const Settings: Component<SettingsProps> = (props) => {
               <Show when={activePanelRender()}>
                 {(panel) => {
                   const resolved = panel();
-                  return <Dynamic component={resolved.component} {...resolved.props} />;
+                  return (
+                    <Suspense>
+                      <Dynamic component={resolved.component} {...resolved.props} />
+                    </Suspense>
+                  );
                 }}
               </Show>
             </div>

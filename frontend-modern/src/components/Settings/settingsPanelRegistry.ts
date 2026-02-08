@@ -1,25 +1,64 @@
+import { lazy } from 'solid-js';
 import type { Component } from 'solid-js';
-import { SystemLogsPanel } from './SystemLogsPanel';
-import { GeneralSettingsPanel } from './GeneralSettingsPanel';
-import { NetworkSettingsPanel } from './NetworkSettingsPanel';
-import { UpdatesSettingsPanel } from './UpdatesSettingsPanel';
-import { BackupsSettingsPanel } from './BackupsSettingsPanel';
-import { RelaySettingsPanel } from './RelaySettingsPanel';
-import { ProLicensePanel } from './ProLicensePanel';
-import OrganizationOverviewPanel from './OrganizationOverviewPanel';
-import OrganizationAccessPanel from './OrganizationAccessPanel';
-import OrganizationSharingPanel from './OrganizationSharingPanel';
-import OrganizationBillingPanel from './OrganizationBillingPanel';
-import { APIAccessPanel } from './APIAccessPanel';
-import { SecurityOverviewPanel } from './SecurityOverviewPanel';
-import { SecurityAuthPanel } from './SecurityAuthPanel';
-import RolesPanel from './RolesPanel';
-import UserAssignmentsPanel from './UserAssignmentsPanel';
-import AuditLogPanel from './AuditLogPanel';
-import { AuditWebhookPanel } from './AuditWebhookPanel';
-import { DiagnosticsPanel } from './DiagnosticsPanel';
-import { ReportingPanel } from './ReportingPanel';
+import type { GeneralSettingsPanel as GeneralSettingsPanelType } from './GeneralSettingsPanel';
+import type { NetworkSettingsPanel as NetworkSettingsPanelType } from './NetworkSettingsPanel';
+import type { UpdatesSettingsPanel as UpdatesSettingsPanelType } from './UpdatesSettingsPanel';
+import type { BackupsSettingsPanel as BackupsSettingsPanelType } from './BackupsSettingsPanel';
+import type OrganizationOverviewPanelType from './OrganizationOverviewPanel';
+import type OrganizationAccessPanelType from './OrganizationAccessPanel';
+import type OrganizationSharingPanelType from './OrganizationSharingPanel';
+import type OrganizationBillingPanelType from './OrganizationBillingPanel';
+import type { APIAccessPanel as APIAccessPanelType } from './APIAccessPanel';
+import type { SecurityOverviewPanel as SecurityOverviewPanelType } from './SecurityOverviewPanel';
+import type { SecurityAuthPanel as SecurityAuthPanelType } from './SecurityAuthPanel';
 import type { SettingsTab } from './settingsTypes';
+
+const SystemLogsPanel = lazy(() =>
+  import('./SystemLogsPanel').then((m) => ({ default: m.SystemLogsPanel })),
+);
+const GeneralSettingsPanel = lazy(() =>
+  import('./GeneralSettingsPanel').then((m) => ({ default: m.GeneralSettingsPanel })),
+);
+const NetworkSettingsPanel = lazy(() =>
+  import('./NetworkSettingsPanel').then((m) => ({ default: m.NetworkSettingsPanel })),
+);
+const UpdatesSettingsPanel = lazy(() =>
+  import('./UpdatesSettingsPanel').then((m) => ({ default: m.UpdatesSettingsPanel })),
+);
+const BackupsSettingsPanel = lazy(() =>
+  import('./BackupsSettingsPanel').then((m) => ({ default: m.BackupsSettingsPanel })),
+);
+const RelaySettingsPanel = lazy(() =>
+  import('./RelaySettingsPanel').then((m) => ({ default: m.RelaySettingsPanel })),
+);
+const ProLicensePanel = lazy(() =>
+  import('./ProLicensePanel').then((m) => ({ default: m.ProLicensePanel })),
+);
+const OrganizationOverviewPanel = lazy(() => import('./OrganizationOverviewPanel'));
+const OrganizationAccessPanel = lazy(() => import('./OrganizationAccessPanel'));
+const OrganizationSharingPanel = lazy(() => import('./OrganizationSharingPanel'));
+const OrganizationBillingPanel = lazy(() => import('./OrganizationBillingPanel'));
+const APIAccessPanel = lazy(() =>
+  import('./APIAccessPanel').then((m) => ({ default: m.APIAccessPanel })),
+);
+const SecurityOverviewPanel = lazy(() =>
+  import('./SecurityOverviewPanel').then((m) => ({ default: m.SecurityOverviewPanel })),
+);
+const SecurityAuthPanel = lazy(() =>
+  import('./SecurityAuthPanel').then((m) => ({ default: m.SecurityAuthPanel })),
+);
+const RolesPanel = lazy(() => import('./RolesPanel'));
+const UserAssignmentsPanel = lazy(() => import('./UserAssignmentsPanel'));
+const AuditLogPanel = lazy(() => import('./AuditLogPanel'));
+const AuditWebhookPanel = lazy(() =>
+  import('./AuditWebhookPanel').then((m) => ({ default: m.AuditWebhookPanel })),
+);
+const DiagnosticsPanel = lazy(() =>
+  import('./DiagnosticsPanel').then((m) => ({ default: m.DiagnosticsPanel })),
+);
+const ReportingPanel = lazy(() =>
+  import('./ReportingPanel').then((m) => ({ default: m.ReportingPanel })),
+);
 
 export interface SettingsPanelRegistryEntry {
   component: Component<any>;
@@ -35,17 +74,17 @@ export interface SettingsPanelRegistryContext {
   dockerPanel: Component;
   systemAiPanel: Component;
   securitySsoPanel: Component;
-  getGeneralPanelProps: () => Parameters<typeof GeneralSettingsPanel>[0];
-  getNetworkPanelProps: () => Parameters<typeof NetworkSettingsPanel>[0];
-  getUpdatesPanelProps: () => Parameters<typeof UpdatesSettingsPanel>[0];
-  getBackupsPanelProps: () => Parameters<typeof BackupsSettingsPanel>[0];
-  getOrganizationOverviewPanelProps: () => Parameters<typeof OrganizationOverviewPanel>[0];
-  getOrganizationAccessPanelProps: () => Parameters<typeof OrganizationAccessPanel>[0];
-  getOrganizationSharingPanelProps: () => Parameters<typeof OrganizationSharingPanel>[0];
-  getOrganizationBillingPanelProps: () => Parameters<typeof OrganizationBillingPanel>[0];
-  getApiAccessPanelProps: () => Parameters<typeof APIAccessPanel>[0];
-  getSecurityOverviewPanelProps: () => Parameters<typeof SecurityOverviewPanel>[0];
-  getSecurityAuthPanelProps: () => Parameters<typeof SecurityAuthPanel>[0];
+  getGeneralPanelProps: () => Parameters<typeof GeneralSettingsPanelType>[0];
+  getNetworkPanelProps: () => Parameters<typeof NetworkSettingsPanelType>[0];
+  getUpdatesPanelProps: () => Parameters<typeof UpdatesSettingsPanelType>[0];
+  getBackupsPanelProps: () => Parameters<typeof BackupsSettingsPanelType>[0];
+  getOrganizationOverviewPanelProps: () => Parameters<typeof OrganizationOverviewPanelType>[0];
+  getOrganizationAccessPanelProps: () => Parameters<typeof OrganizationAccessPanelType>[0];
+  getOrganizationSharingPanelProps: () => Parameters<typeof OrganizationSharingPanelType>[0];
+  getOrganizationBillingPanelProps: () => Parameters<typeof OrganizationBillingPanelType>[0];
+  getApiAccessPanelProps: () => Parameters<typeof APIAccessPanelType>[0];
+  getSecurityOverviewPanelProps: () => Parameters<typeof SecurityOverviewPanelType>[0];
+  getSecurityAuthPanelProps: () => Parameters<typeof SecurityAuthPanelType>[0];
 }
 
 export const createSettingsPanelRegistry = (
