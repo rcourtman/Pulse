@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 )
@@ -57,6 +58,114 @@ func TestEvaluatorHasCapability(t *testing.T) {
 			t.Fatal("expected capability to be absent")
 		}
 	})
+}
+
+func TestEvaluatorHasCapabilityWithAlias(t *testing.T) {
+	originalAlias, hadOriginalAlias := LegacyAliases["old_relay"]
+	LegacyAliases["old_relay"] = "relay"
+	t.Cleanup(func() {
+		if hadOriginalAlias {
+			LegacyAliases["old_relay"] = originalAlias
+			return
+		}
+		delete(LegacyAliases, "old_relay")
+	})
+
+	e := NewEvaluator(mockSource{capabilities: []string{"relay"}})
+
+	if !e.HasCapability("old_relay") {
+		t.Fatal("expected aliased capability to be found")
+	}
+
+	if !e.HasCapability("relay") {
+		t.Fatal("expected direct capability lookup to still work")
+	}
+}
+
+func TestEvaluatorHasCapabilityDeprecated(t *testing.T) {
+	originalDep, hadOriginalDep := DeprecatedCapabilities["relay"]
+	DeprecatedCapabilities["relay"] = DeprecatedCapability{
+		ReplacementKey: "remote_access",
+		SunsetAt:       time.Now().AddDate(1, 0, 0),
+	}
+	t.Cleanup(func() {
+		if hadOriginalDep {
+			DeprecatedCapabilities["relay"] = originalDep
+			return
+		}
+		delete(DeprecatedCapabilities, "relay")
+	})
+
+	e := NewEvaluator(mockSource{capabilities: []string{"relay"}})
+	if !e.HasCapability("relay") {
+		t.Fatal("expected deprecated capability to still be found")
+	}
+}
+
+func TestResolveAlias(t *testing.T) {
+	relayAlias, hadRelayAlias := LegacyAliases["relay"]
+	if hadRelayAlias {
+		delete(LegacyAliases, "relay")
+	}
+
+	oldRelayAlias, hadOldRelayAlias := LegacyAliases["old_relay"]
+	LegacyAliases["old_relay"] = "relay"
+
+	t.Cleanup(func() {
+		if hadRelayAlias {
+			LegacyAliases["relay"] = relayAlias
+		}
+		if hadOldRelayAlias {
+			LegacyAliases["old_relay"] = oldRelayAlias
+			return
+		}
+		delete(LegacyAliases, "old_relay")
+	})
+
+	if got := ResolveAlias("relay"); got != "relay" {
+		t.Fatalf("expected passthrough alias resolution, got %q", got)
+	}
+
+	if got := ResolveAlias("old_relay"); got != "relay" {
+		t.Fatalf("expected alias to resolve to relay, got %q", got)
+	}
+}
+
+func TestIsDeprecated(t *testing.T) {
+	originalDep, hadOriginalDep := DeprecatedCapabilities["relay"]
+	if hadOriginalDep {
+		delete(DeprecatedCapabilities, "relay")
+	}
+
+	expected := DeprecatedCapability{
+		ReplacementKey: "remote_access",
+		SunsetAt:       time.Now().AddDate(2, 0, 0),
+	}
+
+	t.Cleanup(func() {
+		if hadOriginalDep {
+			DeprecatedCapabilities["relay"] = originalDep
+			return
+		}
+		delete(DeprecatedCapabilities, "relay")
+	})
+
+	if _, ok := IsDeprecated("relay"); ok {
+		t.Fatal("expected relay to not be deprecated")
+	}
+
+	DeprecatedCapabilities["relay"] = expected
+
+	got, ok := IsDeprecated("relay")
+	if !ok {
+		t.Fatal("expected relay to be deprecated")
+	}
+	if got.ReplacementKey != expected.ReplacementKey {
+		t.Fatalf("expected replacement key %q, got %q", expected.ReplacementKey, got.ReplacementKey)
+	}
+	if !got.SunsetAt.Equal(expected.SunsetAt) {
+		t.Fatalf("expected sunset %s, got %s", expected.SunsetAt, got.SunsetAt)
+	}
 }
 
 func TestEvaluatorGetLimit(t *testing.T) {

@@ -1,6 +1,10 @@
 package entitlements
 
-import "github.com/rcourtman/pulse-go-rewrite/internal/license"
+import (
+	"log"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+)
 
 // Evaluator is the canonical entitlement evaluator used by all runtime surfaces.
 type Evaluator struct {
@@ -13,18 +17,37 @@ func NewEvaluator(source EntitlementSource) *Evaluator {
 }
 
 // HasCapability checks if the given capability key is granted.
-// In this initial implementation, does a simple linear search.
-// Alias resolution will be added in MON-03.
+// It first checks the key directly, then tries resolving a legacy alias.
 func (e *Evaluator) HasCapability(key string) bool {
 	if e == nil || e.source == nil {
 		return false
 	}
 
-	for _, capability := range e.source.Capabilities() {
-		if capability == key {
+	capabilities := e.source.Capabilities()
+
+	// Check the key directly first.
+	for _, cap := range capabilities {
+		if cap == key {
+			// Log deprecation warning if applicable.
+			if dep, ok := IsDeprecated(key); ok {
+				log.Printf("entitlements: deprecated capability %q used, replacement: %q (sunset: %s)",
+					key, dep.ReplacementKey, dep.SunsetAt.Format("2006-01-02"))
+			}
 			return true
 		}
 	}
+
+	// Check alias resolution.
+	resolved := ResolveAlias(key)
+	if resolved != key {
+		for _, cap := range capabilities {
+			if cap == resolved {
+				log.Printf("entitlements: alias %q resolved to %q", key, resolved)
+				return true
+			}
+		}
+	}
+
 	return false
 }
 
