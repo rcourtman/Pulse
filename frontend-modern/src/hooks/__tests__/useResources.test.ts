@@ -5,7 +5,9 @@
  * reactive behavior, which requires a full SolidJS testing environment.
  */
 import { describe, expect, it } from 'vitest';
+import { createRoot } from 'solid-js';
 import type { Resource, ResourceStatus } from '@/types/resource';
+import { useAIChatResources, useAlertsResources } from '@/hooks/useResources';
 
 // Helper to create mock resources for testing conversion logic
 function createMockResource(overrides: Partial<Resource> = {}): Resource {
@@ -23,6 +25,23 @@ function createMockResource(overrides: Partial<Resource> = {}): Resource {
         memory: { current: 50, total: 4294967296, used: 2147483648 },
         disk: { current: 30, total: 107374182400, used: 32212254720 },
         ...overrides,
+    };
+}
+
+function createMockLegacyStore(stateOverrides: Record<string, unknown> = {}) {
+    return {
+        state: {
+            resources: [],
+            nodes: [],
+            vms: [],
+            containers: [],
+            storage: [],
+            hosts: [],
+            dockerHosts: [],
+            pbs: [],
+            pmg: [],
+            ...stateOverrides,
+        },
     };
 }
 
@@ -515,5 +534,104 @@ describe('Fallback Logic', () => {
 
             expect(result).toEqual(unifiedResources);
         });
+    });
+});
+
+describe('useAlertsResources', () => {
+    it('exposes all resource types needed by alerts consumers', () => {
+        const store = createMockLegacyStore({
+            nodes: [{ id: 'node-1' }],
+            vms: [{ id: 'vm-1' }],
+            containers: [{ id: 'ct-1' }],
+            storage: [{ id: 'storage-1' }],
+            hosts: [{ id: 'host-1' }],
+            dockerHosts: [{ id: 'docker-host-1' }],
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAlertsResources(store as any);
+        });
+
+        expect(typeof selectors.nodes).toBe('function');
+        expect(typeof selectors.vms).toBe('function');
+        expect(typeof selectors.containers).toBe('function');
+        expect(typeof selectors.storage).toBe('function');
+        expect(typeof selectors.hosts).toBe('function');
+        expect(typeof selectors.dockerHosts).toBe('function');
+        expect(typeof selectors.ready).toBe('function');
+        expect(selectors.nodes()).toHaveLength(1);
+        expect(selectors.vms()).toHaveLength(1);
+        expect(selectors.containers()).toHaveLength(1);
+        expect(selectors.storage()).toHaveLength(1);
+        expect(selectors.hosts()).toHaveLength(1);
+        expect(selectors.dockerHosts()).toHaveLength(1);
+
+        dispose();
+    });
+
+    it('ready signal is true when nodes are available', () => {
+        const store = createMockLegacyStore({
+            nodes: [{ id: 'node-1' }],
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAlertsResources(store as any);
+        });
+
+        expect(selectors.ready()).toBe(true);
+
+        dispose();
+    });
+});
+
+describe('useAIChatResources', () => {
+    it('exposes all resource types needed by AI chat consumers', () => {
+        const store = createMockLegacyStore({
+            nodes: [{ id: 'node-1' }],
+            vms: [{ id: 'vm-1' }],
+            containers: [{ id: 'ct-1' }],
+            dockerHosts: [{ id: 'docker-host-1' }],
+            hosts: [{ id: 'host-1' }],
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAIChatResources(store as any);
+        });
+
+        expect(typeof selectors.nodes).toBe('function');
+        expect(typeof selectors.vms).toBe('function');
+        expect(typeof selectors.containers).toBe('function');
+        expect(typeof selectors.dockerHosts).toBe('function');
+        expect(typeof selectors.hosts).toBe('function');
+        expect(typeof selectors.isCluster).toBe('function');
+        expect(selectors.nodes()).toHaveLength(1);
+        expect(selectors.vms()).toHaveLength(1);
+        expect(selectors.containers()).toHaveLength(1);
+        expect(selectors.dockerHosts()).toHaveLength(1);
+        expect(selectors.hosts()).toHaveLength(1);
+
+        dispose();
+    });
+
+    it('isCluster is true when multiple nodes exist', () => {
+        const store = createMockLegacyStore({
+            nodes: [{ id: 'node-1' }, { id: 'node-2' }],
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAIChatResources(store as any);
+        });
+
+        expect(selectors.isCluster()).toBe(true);
+
+        dispose();
     });
 });

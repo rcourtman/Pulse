@@ -39,7 +39,17 @@ import {
     getMemoryPercent,
     getDiskPercent,
 } from '@/types/resource';
-import type { PMGInstance, PBSInstance, PBSDatastore, Storage } from '@/types/api';
+import type {
+    Container,
+    DockerHost,
+    Host,
+    Node,
+    PMGInstance,
+    PBSInstance,
+    PBSDatastore,
+    Storage,
+    VM,
+} from '@/types/api';
 
 type ResourceStoreLike = Pick<ReturnType<typeof getGlobalWebSocketStore>, 'state'>;
 type StorageMetaBridge = {
@@ -87,6 +97,25 @@ export interface UseResourcesReturn {
 
     /** Whether resources are available */
     hasResources: Accessor<boolean>;
+}
+
+export interface UseAlertsResourcesReturn {
+    nodes: Accessor<Node[]>;
+    vms: Accessor<VM[]>;
+    containers: Accessor<Container[]>;
+    storage: Accessor<Storage[]>;
+    hosts: Accessor<Host[]>;
+    dockerHosts: Accessor<DockerHost[]>;
+    ready: Accessor<boolean>;
+}
+
+export interface UseAIChatResourcesReturn {
+    nodes: Accessor<Node[]>;
+    vms: Accessor<VM[]>;
+    containers: Accessor<Container[]>;
+    dockerHosts: Accessor<DockerHost[]>;
+    hosts: Accessor<Host[]>;
+    isCluster: Accessor<boolean>;
 }
 
 /**
@@ -1215,6 +1244,58 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
         asStorage,
         asPBS,
         asPMG,
+    };
+}
+
+/**
+ * Alerts-focused legacy resource selectors used during convergence.
+ * Thin wrapper over useResourcesAsLegacy with no conversion logic.
+ */
+export function useAlertsResources(storeOverride?: ResourceStoreLike): UseAlertsResourcesReturn {
+    const {
+        asNodes,
+        asVMs,
+        asContainers,
+        asStorage,
+        asHosts,
+        asDockerHosts,
+    } = useResourcesAsLegacy(storeOverride);
+
+    const ready = createMemo(() => asNodes().length > 0);
+
+    return {
+        nodes: asNodes as Accessor<Node[]>,
+        vms: asVMs as Accessor<VM[]>,
+        containers: asContainers as Accessor<Container[]>,
+        storage: asStorage as Accessor<Storage[]>,
+        hosts: asHosts as Accessor<Host[]>,
+        dockerHosts: asDockerHosts as Accessor<DockerHost[]>,
+        ready,
+    };
+}
+
+/**
+ * AI-chat-focused legacy resource selectors used during convergence.
+ * Thin wrapper over useResourcesAsLegacy with no conversion logic.
+ */
+export function useAIChatResources(storeOverride?: ResourceStoreLike): UseAIChatResourcesReturn {
+    const {
+        asNodes,
+        asVMs,
+        asContainers,
+        asDockerHosts,
+        asHosts,
+    } = useResourcesAsLegacy(storeOverride);
+
+    const isCluster = createMemo(() => asNodes().length > 1);
+
+    return {
+        nodes: asNodes as Accessor<Node[]>,
+        vms: asVMs as Accessor<VM[]>,
+        containers: asContainers as Accessor<Container[]>,
+        dockerHosts: asDockerHosts as Accessor<DockerHost[]>,
+        hosts: asHosts as Accessor<Host[]>,
+        isCluster,
     };
 }
 

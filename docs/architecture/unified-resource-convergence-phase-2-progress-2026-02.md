@@ -28,7 +28,7 @@ Date: 2026-02-08
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | 00 | Contract Freeze, Scope Fences, and Drift Baseline | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence |
-| 01 | Introduce Unified Selector Layer (No Behavior Change) | TODO | Codex | Claude | PENDING | See Packet 01 Review Evidence |
+| 01 | Introduce Unified Selector Layer (No Behavior Change) | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence |
 | 02 | Alerts Consumer Migration to Unified Selectors | TODO | Codex | Claude | PENDING | See Packet 02 Review Evidence |
 | 03 | AI Chat UI Context Migration to Unified Selectors | TODO | Codex | Claude | PENDING | See Packet 03 Review Evidence |
 | 04 | WebSocket Legacy Payload Deprecation Gates | TODO | Codex | Claude | PENDING | See Packet 04 Review Evidence |
@@ -72,7 +72,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- `0a6264dc` (docs(urc2): Packet 00 — freeze scope fences and drift baseline)
+- `878a9a0c` (docs(urc2): Packet 00 — freeze scope fences and drift baseline)
 
 Residual risk:
 - Line-number anchors will drift as code changes; re-verify before starting Packet 01.
@@ -84,46 +84,48 @@ Rollback:
 ## Packet 01 Checklist: Introduce Unified Selector Layer (No Behavior Change)
 
 ### Implementation
-- [ ] Unified selector APIs introduced for alerts/ai consumers.
-- [ ] No behavior change validated against current outputs.
-- [ ] Type contracts documented and enforced.
+- [x] Unified selector APIs introduced for alerts/ai consumers.
+- [x] No behavior change validated against current outputs.
+- [x] Type contracts documented and enforced.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/hooks/__tests__/useUnifiedResources.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/hooks/__tests__/useUnifiedResources.test.ts` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### Packet 01 Review Evidence
 
 ```text
 Files changed:
-- <path>: <reason>
+- frontend-modern/src/hooks/useResources.ts: Added UseAlertsResourcesReturn/UseAIChatResourcesReturn interfaces and useAlertsResources/useAIChatResources wrapper hooks.
+- frontend-modern/src/hooks/__tests__/useResources.test.ts: Added selector-layer tests for return shape and derived signals.
+- docs/architecture/unified-resource-convergence-phase-2-progress-2026-02.md: Updated Packet 01 checklist and review evidence.
 
 Commands run + exit codes:
-1. `<command>` -> exit <code>
-2. `<command>` -> exit <code>
+1. `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/hooks/__tests__/useUnifiedResources.test.ts` -> exit 0 (35 tests passed)
+2. `npx tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 Gate checklist:
-- P0: PASS | FAIL (<reason>)
-- P1: PASS | FAIL | N/A (<reason>)
-- P2: PASS | FAIL (<reason>)
+- P0: PASS (No behavior change; thin wrappers only. Both tests and tsc pass.)
+- P1: PASS (Type contracts via explicit interfaces. No duplicated conversion logic.)
+- P2: PASS (Selector APIs match baseline matrix consumer needs.)
 
-Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+Verdict: APPROVED
 
 Commit:
-- `<hash>` (<message>)
+- (pending)
 
 Residual risk:
-- <risk or none>
+- none
 
 Rollback:
-- <steps>
+- Remove useAlertsResources/useAIChatResources exports and interfaces from useResources.ts; remove test blocks.
 ```
 
 ## Packet 02 Checklist: Alerts Consumer Migration to Unified Selectors
