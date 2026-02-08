@@ -294,17 +294,28 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 	if name == "" {
 		name = strings.TrimSpace(storage.ID)
 	}
+	storageType := strings.ToLower(strings.TrimSpace(storage.Type))
+	content := strings.TrimSpace(storage.Content)
+	now := time.Now().UTC()
 
 	resource := Resource{
 		Type:      ResourceTypeStorage,
 		Name:      name,
 		Status:    statusFromStorage(storage),
-		LastSeen:  time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
+		LastSeen:  now,
+		UpdatedAt: now,
 		Metrics:   metricsFromStorage(storage),
 		Proxmox: &ProxmoxData{
 			NodeName: storage.Node,
 			Instance: storage.Instance,
+		},
+		Storage: &StorageMeta{
+			Type:         storageType,
+			Content:      content,
+			ContentTypes: parseStorageContentTypes(content),
+			Shared:       storage.Shared,
+			IsCeph:       isCephStorageType(storageType),
+			IsZFS:        isZFSStorageType(storageType) || storage.ZFSPool != nil,
 		},
 	}
 
@@ -315,6 +326,47 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 		}),
 	}
 	return resource, identity
+}
+
+func parseStorageContentTypes(content string) []string {
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+
+	parts := strings.Split(content, ",")
+	seen := make(map[string]struct{}, len(parts))
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.ToLower(strings.TrimSpace(part))
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func isCephStorageType(storageType string) bool {
+	switch strings.ToLower(strings.TrimSpace(storageType)) {
+	case "rbd", "cephfs", "ceph":
+		return true
+	default:
+		return false
+	}
+}
+
+func isZFSStorageType(storageType string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(storageType))
+	switch normalized {
+	case "zfspool", "zfs", "local-zfs":
+		return true
+	default:
+		return strings.Contains(normalized, "zfs")
+	}
 }
 
 func resourceFromDockerContainer(ct models.DockerContainer) (Resource, ResourceIdentity) {

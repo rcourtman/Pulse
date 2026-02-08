@@ -563,3 +563,72 @@ func TestResourceV2ListIncludesPBSAndPMG(t *testing.T) {
 		t.Fatalf("expected both PBS and PMG resources, got %+v", resp.Data)
 	}
 }
+
+func TestResourceV2ListIncludesStorageMetadata(t *testing.T) {
+	snapshot := models.StateSnapshot{
+		Storage: []models.Storage{
+			{
+				ID:       "storage-1",
+				Name:     "ceph-rbd",
+				Node:     "pve-1",
+				Instance: "cluster-a",
+				Type:     "rbd",
+				Content:  "images,backup",
+				Shared:   true,
+				Status:   "available",
+				Enabled:  true,
+				Active:   true,
+				Total:    1000,
+				Used:     250,
+				Free:     750,
+				Usage:    25,
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceV2Handlers(cfg)
+	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=storage", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesV2Response
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 storage resource, got %d", len(resp.Data))
+	}
+
+	resource := resp.Data[0]
+	if resource.Storage == nil {
+		t.Fatalf("expected storage metadata payload")
+	}
+	if got, want := resource.Storage.Type, "rbd"; got != want {
+		t.Fatalf("storage.type = %q, want %q", got, want)
+	}
+	if got, want := resource.Storage.Content, "images,backup"; got != want {
+		t.Fatalf("storage.content = %q, want %q", got, want)
+	}
+	if got, want := resource.Storage.ContentTypes, []string{"images", "backup"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("storage.contentTypes = %v, want %v", got, want)
+	}
+	if !resource.Storage.Shared {
+		t.Fatalf("expected storage.shared=true")
+	}
+	if !resource.Storage.IsCeph {
+		t.Fatalf("expected storage.isCeph=true")
+	}
+	if resource.Storage.IsZFS {
+		t.Fatalf("expected storage.isZfs=false")
+	}
+	if resource.Proxmox == nil || resource.Proxmox.NodeName != "pve-1" || resource.Proxmox.Instance != "cluster-a" {
+		t.Fatalf("expected proxmox node/instance metadata to remain populated, got %+v", resource.Proxmox)
+	}
+}

@@ -28,6 +28,7 @@ type Resource struct {
 
 	// Source-specific payloads
 	Proxmox    *ProxmoxData `json:"proxmox,omitempty"`
+	Storage    *StorageMeta `json:"storage,omitempty"`
 	Agent      *AgentData   `json:"agent,omitempty"`
 	Docker     *DockerData  `json:"docker,omitempty"`
 	PBS        *PBSData     `json:"pbs,omitempty"`
@@ -155,6 +156,16 @@ type ProxmoxData struct {
 	CPUInfo       *CPUInfo  `json:"cpuInfo,omitempty"`
 	// Internal link hint to a host agent resource.
 	LinkedHostAgentID string `json:"-"`
+}
+
+// StorageMeta contains storage-specific metadata for storage resources.
+type StorageMeta struct {
+	Type         string   `json:"type,omitempty"`
+	Content      string   `json:"content,omitempty"`
+	ContentTypes []string `json:"contentTypes,omitempty"`
+	Shared       bool     `json:"shared"`
+	IsCeph       bool     `json:"isCeph"`
+	IsZFS        bool     `json:"isZfs"`
 }
 
 // AgentData contains host agent-specific data.

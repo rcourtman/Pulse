@@ -85,3 +85,87 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 		t.Fatalf("containerId = %q, want %q", got, want)
 	}
 }
+
+func TestResourceFromStorageIncludesStorageMetadata(t *testing.T) {
+	storage := models.Storage{
+		ID:       "storage-1",
+		Name:     "ceph-rbd-pool",
+		Node:     "pve-1",
+		Instance: "cluster-a",
+		Type:     "RBD",
+		Content:  "images, rootdir,images",
+		Shared:   true,
+		Status:   "available",
+		Enabled:  true,
+		Active:   true,
+		Total:    100,
+		Used:     20,
+		Free:     80,
+		Usage:    20,
+	}
+
+	resource, _ := resourceFromStorage(storage)
+	if resource.Storage == nil {
+		t.Fatal("expected storage metadata payload")
+	}
+	if got, want := resource.Storage.Type, "rbd"; got != want {
+		t.Fatalf("storage type = %q, want %q", got, want)
+	}
+	if got, want := resource.Storage.Content, "images, rootdir,images"; got != want {
+		t.Fatalf("storage content = %q, want %q", got, want)
+	}
+	wantContentTypes := []string{"images", "rootdir"}
+	if len(resource.Storage.ContentTypes) != len(wantContentTypes) {
+		t.Fatalf("contentTypes length = %d, want %d (%v)", len(resource.Storage.ContentTypes), len(wantContentTypes), resource.Storage.ContentTypes)
+	}
+	for i, want := range wantContentTypes {
+		if got := resource.Storage.ContentTypes[i]; got != want {
+			t.Fatalf("contentTypes[%d] = %q, want %q", i, got, want)
+		}
+	}
+	if !resource.Storage.Shared {
+		t.Fatalf("expected shared=true")
+	}
+	if !resource.Storage.IsCeph {
+		t.Fatalf("expected isCeph=true")
+	}
+	if resource.Storage.IsZFS {
+		t.Fatalf("expected isZfs=false")
+	}
+	if resource.Proxmox == nil || resource.Proxmox.NodeName != "pve-1" || resource.Proxmox.Instance != "cluster-a" {
+		t.Fatalf("expected existing proxmox mapping to remain populated, got %+v", resource.Proxmox)
+	}
+}
+
+func TestResourceFromStorageDetectsZFSMetadata(t *testing.T) {
+	storage := models.Storage{
+		ID:       "storage-zfs",
+		Name:     "local-zfs",
+		Node:     "pve-2",
+		Instance: "cluster-a",
+		Type:     "zfspool",
+		Content:  "images",
+		Shared:   false,
+		Status:   "available",
+		Enabled:  true,
+		Active:   true,
+		ZFSPool: &models.ZFSPool{
+			Name:  "rpool",
+			State: "ONLINE",
+		},
+	}
+
+	resource, _ := resourceFromStorage(storage)
+	if resource.Storage == nil {
+		t.Fatal("expected storage metadata payload")
+	}
+	if !resource.Storage.IsZFS {
+		t.Fatalf("expected isZfs=true")
+	}
+	if resource.Storage.IsCeph {
+		t.Fatalf("expected isCeph=false")
+	}
+	if resource.Storage.Shared {
+		t.Fatalf("expected shared=false")
+	}
+}
