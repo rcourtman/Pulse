@@ -277,6 +277,7 @@ const Settings: Component<SettingsProps> = (props) => {
   } = useInfrastructureSettingsState({
     state,
     eventBus,
+    currentTab,
     discoveryEnabled,
     setDiscoveryEnabled,
     discoverySubnet,

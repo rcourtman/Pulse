@@ -24,7 +24,7 @@ Date: 2026-02-08
 | 00 | Repro Matrix and Baseline Instrumentation | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence |
 | 01 | Startup Orchestration De-duplication | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence |
 | 02 | Navigation State Machine Hardening | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence |
-| 03 | Polling Lifecycle Isolation and Interaction Priority | TODO | Codex | Claude | PENDING | See Packet 03 Review Evidence |
+| 03 | Polling Lifecycle Isolation and Interaction Priority | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence |
 | 04 | Panel Loading Strategy and Transition Performance | TODO | Codex | Claude | PENDING | See Packet 04 Review Evidence |
 | 05 | Locked Tab UX Clarity and Non-Loading Affordance Fix | TODO | Codex | Claude | PENDING | See Packet 05 Review Evidence |
 | 06 | Contract Test Hardening and Guardrails | TODO | Codex | Claude | PENDING | See Packet 06 Review Evidence |
@@ -162,7 +162,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- `pending`
+- `29faeeb0` (fix(settings-nav): Packet 02 — navigation state machine hardening)
 
 Residual risk:
 - none
@@ -174,46 +174,50 @@ Rollback:
 ## Packet 03 Checklist: Polling Lifecycle Isolation and Interaction Priority
 
 ### Implementation
-- [ ] Polling lifecycles coordinated with tab/visibility state.
-- [ ] Overlapping intervals prevented under rapid state transitions.
-- [ ] Infrastructure freshness contract preserved.
+- [x] Polling lifecycles coordinated with tab/visibility state.
+- [x] Overlapping intervals prevented under rapid state transitions.
+- [x] Infrastructure freshness contract preserved.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### Packet 03 Review Evidence
 
 ```
 Files changed:
-- <path>: <reason>
+- frontend-modern/src/components/Settings/useSystemSettingsState.ts: Removed redundant onMount runDiagnostics() call and unused onMount import
+- frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts: Added currentTab param, gated discovery interval to only run when currentTab === 'proxmox'
+- frontend-modern/src/components/Settings/Settings.tsx: Passed currentTab to useInfrastructureSettingsState call site
 
 Commands run + exit codes:
-1. `<command>` -> exit <code>
-2. `<command>` -> exit <code>
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+2. `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx` -> exit 0 (6 passed, 1 todo)
 
 Gate checklist:
-- P0: PASS | FAIL (<reason>)
-- P1: PASS | FAIL | N/A (<reason>)
-- P2: PASS | FAIL (<reason>)
+- P0: PASS (polling gated by tab visibility, no unconditional background churn)
+- P1: PASS (infrastructure freshness preserved when proxmox tab is active)
+- P2: PASS (minimal changes, 3 files modified)
 
-Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+Verdict: APPROVED
 
 Commit:
-- `<hash>` (<message>)
+- `pending`
 
 Residual risk:
-- <risk or none>
+- none
 
 Rollback:
-- <steps>
+- Restore onMount runDiagnostics() in useSystemSettingsState.ts
+- Revert discovery interval to unconditional setInterval in useInfrastructureSettingsState.ts
+- Remove currentTab param from useInfrastructureSettingsState
 ```
 
 ## Packet 04 Checklist: Panel Loading Strategy and Transition Performance

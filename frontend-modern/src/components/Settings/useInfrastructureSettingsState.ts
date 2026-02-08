@@ -15,6 +15,7 @@ import { NodesAPI } from '@/api/nodes';
 import type { State } from '@/types/api';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { EventDataMap, EventType } from '@/stores/events';
+import type { SettingsTab } from './settingsTypes';
 
 interface DiscoveredServer {
   ip: string;
@@ -57,6 +58,7 @@ type InfrastructureEventBus = {
 interface UseInfrastructureSettingsStateParams {
   state: State;
   eventBus: InfrastructureEventBus;
+  currentTab: Accessor<SettingsTab>;
   discoveryEnabled: Accessor<boolean>;
   setDiscoveryEnabled: Setter<boolean>;
   discoverySubnet: Accessor<string>;
@@ -84,6 +86,7 @@ interface UseInfrastructureSettingsStateParams {
 export function useInfrastructureSettingsState({
   state,
   eventBus,
+  currentTab,
   discoveryEnabled,
   setDiscoveryEnabled,
   discoverySubnet,
@@ -831,9 +834,18 @@ export function useInfrastructureSettingsState({
       }
     });
 
-    const discoveryInterval = setInterval(() => {
-      void loadDiscoveredNodes();
-    }, 30000);
+    let discoveryInterval: ReturnType<typeof setInterval> | undefined;
+    createEffect(() => {
+      if (discoveryInterval) {
+        clearInterval(discoveryInterval);
+        discoveryInterval = undefined;
+      }
+      if (currentTab() === 'proxmox') {
+        discoveryInterval = setInterval(() => {
+          void loadDiscoveredNodes();
+        }, 30000);
+      }
+    });
 
     onCleanup(() => {
       unsubscribeAutoRegister();
@@ -843,7 +855,9 @@ export function useInfrastructureSettingsState({
       if (pollInterval) {
         clearInterval(pollInterval);
       }
-      clearInterval(discoveryInterval);
+      if (discoveryInterval) {
+        clearInterval(discoveryInterval);
+      }
     });
 
     try {

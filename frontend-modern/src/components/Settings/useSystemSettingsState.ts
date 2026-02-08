@@ -1,4 +1,4 @@
-import { Accessor, Setter, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { Accessor, Setter, createEffect, createSignal, onCleanup } from 'solid-js';
 import { SettingsAPI } from '@/api/settings';
 import { UpdatesAPI } from '@/api/updates';
 import type { UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
@@ -262,10 +262,6 @@ export function useSystemSettingsState({
       setRunningDiagnostics(false);
     }
   };
-
-  onMount(() => {
-    void runDiagnostics();
-  });
 
   createEffect(() => {
     if (typeof window === 'undefined') {
