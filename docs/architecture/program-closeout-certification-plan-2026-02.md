@@ -431,3 +431,31 @@ Evidence normalization notes:
 - Residual risks:
   - Full end-to-end verification of tenant-scoped alert creation -> API payload serialization -> websocket fan-out -> frontend route landing is not represented by one integrated unit test chain.
   - Legacy redirect correctness is unit-tested, but browser-history/back-button behavior after chained redirects is only verifiable in E2E/browser-level tests.
+
+## Appendix F: Data Integrity and Migration Safety Certification
+
+Certification date: 2026-02-08
+
+### Subsystem guarantees and evidence
+
+| Subsystem | Data safety guarantees | Test evidence summary | Status |
+| --- | --- | --- | --- |
+| Config persistence (nodes/alerts/system/email/webhooks/OIDC/API tokens) | Persisted config supports legacy and current formats; encrypted round-trip paths are validated; import is transactional with rollback; corruption/empty-file handling is explicit and non-panicking for startup-critical paths. | `internal/config/persistence_test.go` (`TestImportConfigTransactionalSuccess`, `TestImportConfigRollbackOnFailure`, `TestImportAcceptsVersion40Bundle`, `TestLoadEmailConfig_EncryptedRoundTrip`, `TestLoadWebhooksMigrationFromLegacyFile`, `TestLoadWebhooksMigrationFromUnencryptedEncFile`, `TestLoadNodesConfigCorruptedRecoversWithEmptyConfig`), `internal/config/persistence_migration_test.go`, `internal/config/persistence_webhooks_migration_test.go`, `internal/config/persistence_nodes_recovery_test.go`, `internal/config/persistence_fail_test.go`, `internal/config/export_import_coverage_test.go` | CERTIFIED |
+| Alert state and ID/resource migration | Legacy override IDs migrate to canonical guest IDs; override key behavior is stable across typed and unified paths; canonical resource-type mapping is normalized and tested; legacy active-alert IDs are migrated on load. | `internal/alerts/filter_evaluation_test.go` (`legacy ID migration for clustered VM`, `legacy ID migration for standalone VM`), `internal/alerts/override_normalization_test.go` (`TestOverrideKeyStabilityAcrossUnifiedPath`, `TestOverrideResolutionByResourceType`), `internal/alerts/utility_test.go` (`TestCanonicalResourceTypeKeys`), `internal/alerts/alerts_test.go` (`TestLoadActiveAlerts/migrates legacy guest alert IDs on load`) | CERTIFIED |
+| Settings/backup import-export API compatibility | `/api/config/export` and `/api/config/import` enforce request validation and execute persistence-layer import/export paths; API import accepts current and legacy payload versions through shared persistence compatibility logic. | `internal/api/config_handlers_admin_test.go` (`TestHandleExportConfig`, `TestHandleImportConfig`), `internal/api/config_export_import_compat_test.go` (`TestHandleImportConfigAcceptsLegacyVersion40Bundle`), plus persistence compatibility backing tests in `internal/config/persistence_test.go` (`TestImportAcceptsVersion40Bundle`) | CERTIFIED |
+
+### Known caveats and edge-case behavior
+
+| Area | Caveat | Impact | Classification |
+| --- | --- | --- | --- |
+| Webhook legacy migration backup | `MigrateWebhooksIfNeeded` treats legacy backup rename failure as warning-only after encrypted save succeeds. | Migration succeeds, but original `webhooks.json` may not be renamed to `.backup` in rename-failure scenarios. | DRIFT_ACCEPTED |
+| System settings `.env` sync | `SaveSystemSettings` does not fail when `.env` update fails after `system.json` write. | Canonical persisted settings remain valid; `.env` may lag until manually corrected. | DRIFT_ACCEPTED |
+| Unknown export versions | `ImportConfig` proceeds best-effort for unsupported version strings. | Import may succeed with partial semantic mismatch if future schema diverges. | DEFERRED |
+| Guest metadata import | `ImportConfig` logs warning and continues on guest metadata replace failure. | Core config import still commits; metadata subset may be stale. | DRIFT_ACCEPTED |
+
+### Deferred migration risks
+
+| Risk ID | Description | Owner | Target milestone | Classification |
+| --- | --- | --- | --- | --- |
+| PC-004-F1 | Unsupported future export version handling is permissive (best-effort) rather than fail-closed by schema version contract. | Control plane/config | Next import/export hardening cycle | DEFERRED |
+| PC-004-F2 | No cross-service E2E migration replay (cold-start + API import + alert reload + notification resend) in a single integrated test chain. | Program closeout | Post-closeout integration hardening | DEFERRED |

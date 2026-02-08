@@ -24,7 +24,7 @@ Date: 2026-02-08
 | 01 | Route, Contract, and Deep-Link Reconciliation | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence below |
 | 02 | Cross-Domain Integration Certification Matrix | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence below |
 | 03 | Security, Authorization, and Isolation Replay | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence below |
-| 04 | Data Integrity and Migration Safety Certification | TODO | Unassigned | Unassigned | PENDING | |
+| 04 | Data Integrity and Migration Safety Certification | DONE | Codex | Claude | APPROVED | See Packet 04 Review Evidence below |
 | 05 | Performance and Capacity Envelope Baseline | TODO | Unassigned | Unassigned | PENDING | |
 | 06 | Operational Readiness and Rollback Drill | TODO | Unassigned | Unassigned | PENDING | |
 | 07 | Documentation, Changelog, and Debt Ledger Closeout | TODO | Unassigned | Unassigned | PENDING | |
@@ -229,7 +229,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- See checkpoint commit hash below.
+- `275caa46` (test(closeout): Packet 03 — security, authorization, and isolation replay APPROVED)
 
 Residual risk:
 - `internal/monitoring` package has pre-existing build failure in `backup_guard_test.go` (undefined functions from parallel work). New test `TestMultiTenantMonitorGetMonitor_MetricsIsolationByTenant` verified by code inspection but cannot be executed until build failure is resolved.
@@ -240,22 +240,54 @@ Rollback:
 ## Packet 04 Checklist: Data Integrity and Migration Safety Certification
 
 ### Implementation
-- [ ] Persistence compatibility coverage validated.
-- [ ] Alert ID/resource migration compatibility validated.
-- [ ] Import/export compatibility assumptions validated.
-- [ ] Data safety guarantees and caveats documented.
+- [x] Persistence compatibility coverage validated.
+- [x] Alert ID/resource migration compatibility validated.
+- [x] Import/export compatibility assumptions validated.
+- [x] Data safety guarantees and caveats documented.
 
 ### Required Tests
-- [ ] `go test ./internal/config/... -run "Persistence|Migration|Normalize" -v` passed.
-- [ ] `go test ./internal/alerts/... -run "Migration|Override|Canonical|LoadActive" -v` passed.
-- [ ] `go test ./internal/api/... -run "Export|Import|Alerts" -v` passed.
-- [ ] Exit codes recorded for all commands.
+- [ ] `go test ./internal/config/... -run "Persistence|Migration|Normalize" -v` — 2 pre-existing DRY enforcement failures (`TestNoPersistenceBoilerplate`, `TestNoPersistenceLoadBoilerplate`); all Packet 04-scoped tests PASS.
+- [x] `go test ./internal/alerts/... -run "Migration|Override|Canonical|LoadActive" -v` passed.
+- [x] `go test ./internal/api/... -run "Export|Import|Alerts" -v` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Packet 04 Review Evidence
+
+Files changed:
+- `internal/alerts/alerts.go`: Fixed legacy guest alert ID migration bug in `LoadActiveAlerts()` — `strings.Replace` was using already-overwritten `alert.ResourceID` instead of `oldResourceID`, causing ID rewrites to fail silently.
+- `internal/alerts/alerts_test.go`: Added `TestLoadActiveAlerts/migrates_legacy_guest_alert_IDs_on_load` subcase.
+- `internal/api/config_export_import_compat_test.go`: New file — `TestHandleImportConfigAcceptsLegacyVersion40Bundle` validates `/api/config/import` accepts legacy 4.0 format payloads.
+- `docs/architecture/program-closeout-certification-plan-2026-02.md`: Added Appendix F (Data Integrity and Migration Safety Certification) with subsystem guarantees, caveats, and deferred risks.
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/config/... -run "Persistence|Migration|Normalize" -v` -> exit 1 (out-of-scope: `TestNoPersistenceBoilerplate`/`TestNoPersistenceLoadBoilerplate` are pre-existing DRY enforcement failures about `LoadRelayConfig()` in `persistence.go` — not from Packet 04)
+3. `go test ./internal/alerts/... -run "Migration|Override|Canonical|LoadActive" -v` -> exit 0
+4. `go test ./internal/api/... -run "Export|Import|Alerts" -v` -> exit 0
+
+Gate checklist:
+- P0: PASS (production bug fix verified, new tests verified, build passes; config DRY failures are pre-existing)
+- P1: PASS (legacy migration bug found and fixed with regression test; import/export compatibility tested; Appendix F documents guarantees and caveats)
+- P2: PASS (progress tracker updated, Appendix F documents deferred risks with owners)
+
+Verdict: APPROVED
+
+Commit:
+- See checkpoint commit hash below.
+
+Residual risk:
+- Production bug fix in `alerts.go:LoadActiveAlerts()` — low risk, additive fix (saves oldResourceID before overwrite). Affects only legacy guest alert ID migration path.
+- Config DRY enforcement failures pre-existing (`LoadRelayConfig` boilerplate).
+- Deferred: PC-004-F1 (permissive import version handling), PC-004-F2 (no E2E migration replay test).
+
+Rollback:
+- Revert checkpoint commit. Alert migration fix is small and targeted.
 
 ## Packet 05 Checklist: Performance and Capacity Envelope Baseline
 

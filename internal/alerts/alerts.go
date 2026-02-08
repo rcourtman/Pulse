@@ -9232,17 +9232,13 @@ func (m *Manager) LoadActiveAlerts() error {
 							Str("alertType", alert.Type).
 							Msg("Migrating active alert from legacy guest ID format")
 
-						oldAlertID := alert.ID
+						oldResourceID := alert.ResourceID
 
 						// Update resource ID
 						alert.ResourceID = newResourceID
 
 						// Update alert ID (usually contains resource ID)
-						alert.ID = strings.Replace(alert.ID, alert.ResourceID, newResourceID, 1)
-
-						// Update seen map to use new ID
-						seen[alert.ID] = true
-						delete(seen, oldAlertID)
+						alert.ID = strings.Replace(alert.ID, oldResourceID, newResourceID, 1)
 					}
 				}
 			}

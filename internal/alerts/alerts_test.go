@@ -16083,6 +16083,59 @@ func TestLoadActiveAlerts(t *testing.T) {
 		}
 	})
 
+	t.Run("migrates legacy guest alert IDs on load", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		now := time.Now()
+		alerts := []Alert{
+			{
+				ID:           "pve1-node1-100-cpu",
+				Type:         "cpu",
+				Level:        AlertLevelWarning,
+				ResourceID:   "pve1-node1-100",
+				ResourceName: "legacy-vm",
+				Node:         "node1",
+				Instance:     "pve1",
+				StartTime:    now.Add(-10 * time.Minute),
+				LastSeen:     now,
+			},
+		}
+
+		alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
+		if err := os.MkdirAll(alertsDir, 0755); err != nil {
+			t.Fatalf("failed to create alerts dir: %v", err)
+		}
+
+		data, err := json.Marshal(alerts)
+		if err != nil {
+			t.Fatalf("failed to marshal legacy alert: %v", err)
+		}
+		alertsFile := filepath.Join(alertsDir, "active-alerts.json")
+		if err := os.WriteFile(alertsFile, data, 0644); err != nil {
+			t.Fatalf("failed to write alerts json: %v", err)
+		}
+
+		if err := m.LoadActiveAlerts(); err != nil {
+			t.Fatalf("failed to load alerts: %v", err)
+		}
+
+		m.mu.RLock()
+		_, oldExists := m.activeAlerts["pve1-node1-100-cpu"]
+		migrated, migratedExists := m.activeAlerts["pve1-100-cpu"]
+		m.mu.RUnlock()
+
+		if oldExists {
+			t.Fatal("legacy alert key should be migrated to canonical format")
+		}
+		if !migratedExists {
+			t.Fatal("migrated alert key should exist")
+		}
+		if migrated.ResourceID != "pve1-100" {
+			t.Fatalf("expected migrated ResourceID pve1-100, got %q", migrated.ResourceID)
+		}
+	})
+
 	t.Run("skips old alerts", func(t *testing.T) {
 		m := newTestManager(t)
 
