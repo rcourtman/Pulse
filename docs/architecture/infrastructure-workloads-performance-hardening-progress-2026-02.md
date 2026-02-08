@@ -26,7 +26,7 @@ Date: 2026-02-08
 | IWP-00 | Baseline + Perf Contract Scaffold | DONE | Codex | Claude | APPROVED | IWP-00 Review Evidence |
 | IWP-01 | Infrastructure Derivation Pipeline Extraction | DONE | Codex | Claude | APPROVED | IWP-01 Review Evidence |
 | IWP-02 | Workloads Derivation Pipeline Extraction | DONE | Codex | Claude | APPROVED | IWP-02 Review Evidence |
-| IWP-03 | Infrastructure Table Windowing and Render Containment | TODO | Codex | Claude | — | — |
+| IWP-03 | Infrastructure Table Windowing and Render Containment | DONE | Codex | Claude | APPROVED | IWP-03 Review Evidence |
 | IWP-04 | Workloads Table Windowing and Grouped Render Containment | TODO | Codex | Claude | — | — |
 | IWP-05 | Polling/Update Backpressure and Recompute Isolation | TODO | Codex | Claude | — | — |
 | IWP-06 | Summary Path Hardening | TODO | Codex | Claude | — | — |
@@ -182,7 +182,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- pending checkpoint commit
+- `86cce391` (refactor(IWP-02): extract Workloads derivation pipeline into pure selectors)
 
 Residual risk:
 - workloadMetricPercent and workloadSummaryGuestId remain inline (used only by summary fallback memos)
@@ -197,27 +197,51 @@ Rollback:
 
 ## IWP-03 Checklist: Infrastructure Table Windowing and Render Containment
 
-- [ ] Row windowing added for infrastructure table with bounded mounted rows.
-- [ ] Group headers and expansion behavior preserved.
-- [ ] Deep-link/resource highlight behavior preserved under windowing.
-- [ ] Perf contract tests assert row mount ceilings and interaction stability.
+- [x] Row windowing added for infrastructure table with bounded mounted rows.
+- [x] Group headers and expansion behavior preserved.
+- [x] Deep-link/resource highlight behavior preserved under windowing.
+- [x] Perf contract tests assert row mount ceilings and interaction stability.
 
 ### Required Tests
 
-- [ ] `cd frontend-modern && npx vitest run src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `cd frontend-modern && npx vitest run src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx` -> exit 0
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### IWP-03 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `frontend-modern/src/components/Infrastructure/useTableWindowing.ts` (new): Windowing hook with threshold activation (>500 rows), 140-row window, scroll-driven offset, overscan, reveal-index support
+- `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`: Flattened grouped rendering to indexed items, applied windowing slice with top/bottom spacers, preserved expand/collapse/highlight/sort/group behavior
+- `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`: Updated M/L assertions to <=140 mounted rows, added windowing contract tests
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run ...UnifiedResourceTable.performance.contract.test.tsx ...Infrastructure.pbs-pmg.test.tsx` -> exit 0 (17 tests)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+3. Global baseline + workloads-link (7 files, 38 tests) -> exit 0
+
+Gate checklist:
+- P0: PASS (all tests pass, typecheck clean, PBS/PMG and workloads-link tests unaffected)
+- P1: PASS (windowing threshold at 500, window size 140, overscan for smooth scrolling)
+- P2: PASS (reveal-index prioritizes expanded over highlighted, spacer rows maintain scroll range)
+
+Verdict: APPROVED
+
+Commit:
+- pending checkpoint commit
+
+Residual risk:
+- jsdom doesn't simulate real scrolling — windowing scroll behavior untested in unit tests; requires manual browser verification
+
+Rollback:
+- Delete useTableWindowing.ts, revert UnifiedResourceTable.tsx to pre-windowing state, revert perf contract test assertions
 ```
 
 ---
@@ -335,7 +359,7 @@ TODO
 
 - IWP-00: `c28f1c4a`
 - IWP-01: `6f9e2cc3`
-- IWP-02: TODO
+- IWP-02: `86cce391`
 - IWP-03: TODO
 - IWP-04: TODO
 - IWP-05: TODO

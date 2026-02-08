@@ -118,8 +118,8 @@ describe('UnifiedResourceTable performance contract', () => {
     });
   });
 
-  describe('Profile M baseline', () => {
-    it('renders Profile M without crashing and keeps baseline row count', async () => {
+  describe('Row windowing contracts', () => {
+    it('Profile M: caps mounted rows when windowing is active', async () => {
       const resources = makeResources(PROFILES.M);
       const { container } = render(() => (
         <UnifiedResourceTable
@@ -134,13 +134,13 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(container.querySelector('table')).toBeInTheDocument();
       });
       await waitFor(() => {
-        expect(getBodyRowCount(container)).toBe(PROFILES.M);
+        const rowCount = getBodyRowCount(container);
+        expect(rowCount).toBeGreaterThan(0);
+        expect(rowCount).toBeLessThanOrEqual(140);
       });
     });
-  });
 
-  describe('Profile L baseline', () => {
-    it('renders Profile L without crashing as pre-windowing baseline', async () => {
+    it('Profile L: keeps mounted rows capped under large load', async () => {
       const resources = makeResources(PROFILES.L);
       const { container } = render(() => (
         <UnifiedResourceTable
@@ -156,7 +156,9 @@ describe('UnifiedResourceTable performance contract', () => {
       });
       await waitFor(
         () => {
-          expect(getBodyRowCount(container)).toBe(PROFILES.L);
+          const rowCount = getBodyRowCount(container);
+          expect(rowCount).toBeGreaterThan(0);
+          expect(rowCount).toBeLessThanOrEqual(140);
         },
         { timeout: 15000 },
       );
