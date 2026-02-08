@@ -79,8 +79,6 @@ import {
 } from './routing/navigation';
 import { LEGACY_REDIRECTS } from './routing/legacyRedirects';
 import {
-  BACKUPS_V2_PATH,
-  STORAGE_V2_PATH,
   buildBackupsPath,
   buildInfrastructurePath,
   buildStoragePath,
@@ -324,8 +322,6 @@ function App() {
     }
     hasPreloadedRoutes = true;
     const loaders: Array<() => Promise<unknown>> = [
-      () => import('./components/Storage/Storage'),
-      () => import('./components/Backups/UnifiedBackups'),
       () => import('./components/Replication/Replication'),
       () => import('./pages/Alerts'),
       () => import('./components/Settings/Settings'),
@@ -977,9 +973,6 @@ function App() {
   };
 
   // V2 is GA - always serve V2 at canonical routes.
-  // /storage-v2 and /backups-v2 alias routes always redirect to canonical paths.
-  const StorageV2Route = () => <Navigate href={STORAGE_PATH} />;
-  const BackupsV2Route = () => <Navigate href={BACKUPS_PATH} />;
 
   const SettingsRoute = () => (
     <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
@@ -1123,9 +1116,7 @@ function App() {
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
       <Route path={STORAGE_PATH} component={StorageV2Component} />
-      <Route path={STORAGE_V2_PATH} component={StorageV2Route} />
       <Route path={BACKUPS_PATH} component={BackupsV2Component} />
-      <Route path={BACKUPS_V2_PATH} component={BackupsV2Route} />
       <Route path="/ceph" component={CephPage} />
       <Route path="/replication" component={Replication} />
       <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />

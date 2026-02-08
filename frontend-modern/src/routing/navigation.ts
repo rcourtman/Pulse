@@ -4,9 +4,7 @@ export type AppTabId =
   | 'infrastructure'
   | 'workloads'
   | 'storage'
-  | 'storage-v2'
   | 'backups'
-  | 'backups-v2'
   | 'alerts'
   | 'ai'
   | 'settings';
@@ -25,10 +23,8 @@ export const LEGACY_MIGRATION_FROM_PARAM = 'from';
 export function getActiveTabForPath(path: string): AppTabId {
   if (path.startsWith(INFRASTRUCTURE_PATH)) return 'infrastructure';
   if (path.startsWith(WORKLOADS_PATH)) return 'workloads';
-  if (path.startsWith('/storage-v2')) return 'storage-v2';
   if (path.startsWith('/storage')) return 'storage';
   if (path.startsWith('/ceph')) return 'storage';
-  if (path.startsWith('/backups-v2')) return 'backups-v2';
   if (path.startsWith('/backups')) return 'backups';
   if (path.startsWith('/replication')) return 'backups';
   if (path.startsWith('/services')) return 'infrastructure';

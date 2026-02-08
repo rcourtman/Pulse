@@ -29,7 +29,7 @@ Date: 2026-02-08
 | SB5-02 | App Router Integration Wiring | DONE | Codex | Claude | APPROVED | See SB5-02 Review Evidence |
 | SB5-03 | Backups Legacy Shell Decoupling | DONE | Codex | Claude | APPROVED | See SB5-03 Review Evidence |
 | SB5-04 | Storage Legacy Shell Decoupling | DONE | Codex | Claude | APPROVED | See SB5-04 Review Evidence |
-| SB5-05 | Legacy Route and Shell Deletion | TODO | Codex | Claude | — | — |
+| SB5-05 | Legacy Route and Shell Deletion | DONE | Codex | Claude | APPROVED | See SB5-05 Review Evidence |
 | SB5-06 | Final Certification and DL-001 Closure | TODO | Claude | Claude | — | — |
 
 ---
@@ -518,7 +518,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- PENDING
+- `1992ff36` (refactor(storage-phase5): SB5-04 — decouple StorageV2 from V2 alias path)
 
 Rollback:
 - Revert checkpoint commit to restore StorageV2 dual-path awareness.
@@ -529,20 +529,67 @@ Rollback:
 ## SB5-05 Checklist: Legacy Route and Shell Deletion
 
 ### Implementation
-- [ ] Only code proven unused by SB5-02/03/04 evidence deleted.
-- [ ] Alerts/AI compatibility (`useResourcesAsLegacy`) untouched.
-- [ ] Tests updated/trimmed for removed routes/tabs/components.
+- [x] Only code proven unused by SB5-02/03/04 evidence deleted — Storage.tsx, UnifiedBackups.tsx, 3 legacy test files deleted; App.tsx preloads and V2 alias routes removed; platformTabs.ts simplified to v2-default only; navigation.ts alias tab IDs removed.
+- [x] Alerts/AI compatibility (`useResourcesAsLegacy`) untouched — verified not referenced in any diff.
+- [x] Tests updated/trimmed for removed routes/tabs/components — platformTabs.test.ts simplified to 2 tests; navigation.test.ts alias block removed; legacy routing tests deleted with their shells.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/routing/__tests__/storageBackupsMode.test.ts src/routing/__tests__/platformTabs.test.ts src/routing/__tests__/navigation.test.ts src/components/Storage/__tests__/StorageV2.test.tsx src/components/Backups/__tests__/BackupsV2.test.tsx` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded.
+- [x] `cd frontend-modern && npx vitest run src/routing/__tests__/storageBackupsMode.test.ts src/routing/__tests__/platformTabs.test.ts src/routing/__tests__/navigation.test.ts src/components/Storage/__tests__/StorageV2.test.tsx src/components/Backups/__tests__/BackupsV2.test.tsx` → exit 0 (5 files, 43 tests passed).
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` → exit 0 (Codex evidence after App.tsx cleanup).
+- [x] Exit codes recorded.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### SB5-05 Review Evidence
+
+```
+Files deleted:
+- frontend-modern/src/components/Storage/Storage.tsx (legacy shell, unrouted since SB5-02)
+- frontend-modern/src/components/Backups/UnifiedBackups.tsx (legacy shell, unrouted since SB5-02)
+- frontend-modern/src/components/Storage/__tests__/Storage.routing.test.tsx (legacy test)
+- frontend-modern/src/components/Backups/__tests__/UnifiedBackups.routing.test.tsx (legacy test)
+- frontend-modern/src/components/Backups/__tests__/PBSEnhancementBanner.test.ts (legacy test)
+
+Files modified:
+- frontend-modern/src/App.tsx: Removed preload entries for deleted shells; removed
+  STORAGE_V2_PATH/BACKUPS_V2_PATH imports; removed StorageV2Route/BackupsV2Route
+  redirect components and their Route registrations.
+- frontend-modern/src/routing/platformTabs.ts: Simplified to always return canonical
+  2-tab set (storage + backups). Removed all legacy/rollback branches, StorageBackupsRoutingPlan
+  import, and V2 alias tab IDs.
+- frontend-modern/src/routing/navigation.ts: Removed storage-v2 and backups-v2 from
+  AppTabId type and getActiveTabForPath cases.
+- frontend-modern/src/routing/__tests__/platformTabs.test.ts: Simplified to 2 tests
+  (canonical tabs + backward compat argument ignored).
+- frontend-modern/src/routing/__tests__/navigation.test.ts: Removed alias path tab
+  mapping describe block and storage-v2/backups-v2 assertions.
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run [5 test files]` → exit 0 (43 tests passed)
+   — independently verified by reviewer
+2. `tsc --noEmit` → exit 0 (Codex evidence after App.tsx sub-delegation)
+
+Gate checklist:
+- P0: PASS (10 files changed total; all in plan scope; both commands pass;
+  deletion targets proven unused by SB5-02/03/04 deprecation annotations)
+- P1: PASS (canonical /storage and /backups routes intact; 43 tests pass;
+  useResourcesAsLegacy not referenced in any diff; no active route depends
+  on deleted shells)
+- P2: PASS (progress tracker updated; scope matches plan SB5-05)
+
+Verdict: APPROVED
+
+Commit:
+- PENDING
+
+Rollback:
+- Revert checkpoint commit to restore deleted shells, alias routes, and
+  legacy tab/mode branches.
+```
 
 ---
 
