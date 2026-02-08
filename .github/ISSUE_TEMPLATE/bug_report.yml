@@ -1,0 +1,102 @@
+name: Bug report
+description: Report a reproducible bug with full version details
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. I need exact version metadata so I can triage quickly across rapid patch releases.
+
+        If your issue is connection- or data-related, include diagnostics from:
+        `Settings -> Diagnostics -> Export for GitHub (sanitized)`.
+
+  - type: textarea
+    id: bug_description
+    attributes:
+      label: Describe the bug
+      description: What is broken, and what is the impact?
+      placeholder: A clear and concise description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: To reproduce
+      description: Exact, minimal steps to reproduce the issue.
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: input
+    id: pulse_version
+    attributes:
+      label: Pulse version
+      description: Exact version shown in the UI or logs.
+      placeholder: v5.1.5
+    validations:
+      required: true
+
+  - type: input
+    id: agent_version
+    attributes:
+      label: Agent version
+      description: Exact agent version (or "none" if no agents are involved).
+      placeholder: v5.1.5
+    validations:
+      required: true
+
+  - type: input
+    id: image_ref
+    attributes:
+      label: Image tag or digest
+      description: Exact image reference used by the running container.
+      placeholder: rcourtman/pulse:5.1.5 or rcourtman/pulse@sha256:...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_type
+    attributes:
+      label: Installation type
+      options:
+        - Docker
+        - Docker Compose
+        - ProxmoxVE LXC
+        - Kubernetes / Helm
+        - Bare metal / systemd
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or diagnostics
+      description: Paste relevant logs, errors, or sanitized diagnostics export details.
+      render: shell
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmations
+      options:
+        - label: I verified the exact Pulse version and image reference from the running instance.
+          required: true
+        - label: I searched existing issues for duplicates.
+          required: true
