@@ -23,7 +23,7 @@ Date: 2026-02-08
 | 00 | Surface Inventory and Cut-Map | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence |
 | 01 | Router Registration Skeleton | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence |
 | 02 | Extract Auth + Security + Install Route Group | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence |
-| 03 | Extract Monitoring + Resource Route Group | TODO | Unassigned | Unassigned | PENDING | |
+| 03 | Extract Monitoring + Resource Route Group | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence |
 | 04 | Extract AI + Relay + Sessions Route Group | TODO | Unassigned | Unassigned | PENDING | |
 | 05 | Extract Org + License + Audit Route Group | TODO | Unassigned | Unassigned | PENDING | |
 | 06 | ConfigHandlers Node Lifecycle Extraction | TODO | Unassigned | Unassigned | PENDING | |
@@ -175,21 +175,46 @@ Rollback:
 ## Packet 03 Checklist: Extract Monitoring + Resource Route Group
 
 ### Implementation
-- [ ] Monitoring/resource route registrations moved to dedicated module.
-- [ ] Compatibility aliases preserved.
-- [ ] Scope and auth wrappers preserved.
-- [ ] Alerts/resources/charts route tests updated for parity.
+- [x] Monitoring/resource route registrations moved to dedicated module.
+- [x] Compatibility aliases preserved.
+- [x] Scope and auth wrappers preserved.
+- [x] Alerts/resources/charts route tests updated for parity.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "Charts|Resources|Backups|AlertsEndpoints" -v` passed.
-- [ ] `go test ./internal/api/... -run "TestRouterRouteInventory|RouteInventory" -v` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "Charts|Resources|Backups|AlertsEndpoints" -v` passed.
+- [x] `go test ./internal/api/... -run "TestRouterRouteInventory|RouteInventory" -v` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Review Evidence
+
+Files changed:
+- `internal/api/router_routes_monitoring.go` (new, 296 LOC): Monitoring/resource route registrations extracted.
+- `internal/api/router_routes_registration.go`: `registerMonitoringRoutes` reduced to thin delegate.
+- `internal/api/route_inventory_test.go`: Added `router_routes_monitoring.go` to parsed file list.
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/api/... -run "TestRouterRouteInventory|RouteInventory" -v` -> exit 0
+3. `go test ./internal/api/... -run "Charts|Resources|Backups|AlertsEndpoints" -v` -> exit 0
+
+Gate checklist:
+- P0: PASS (files verified, commands rerun independently, exit codes 0)
+- P1: PASS (route inventory parity; compatibility aliases preserved; monitoring tests pass)
+- P2: PASS (tracker updated, checklist complete)
+
+Verdict: APPROVED
+
+Residual risk:
+- None
+
+Rollback:
+- Delete `internal/api/router_routes_monitoring.go`, restore `registerMonitoringRoutes` body in `router_routes_registration.go`.
 
 ## Packet 04 Checklist: Extract AI + Relay + Sessions Route Group
 

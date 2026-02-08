@@ -63,6 +63,7 @@ func parseRouterRoutes(t *testing.T) ([]string, []string, []string) {
 	routerFiles := []string{
 		"router.go",
 		"router_routes_registration.go",
+		"router_routes_monitoring.go",
 		"router_routes_auth_security.go",
 	}
 
