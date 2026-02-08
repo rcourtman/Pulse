@@ -478,7 +478,7 @@ Verdict: APPROVED
 Final program verdict: **GO — with conditions** (see plan doc Final Certification Verdict section)
 
 Commit:
-- See checkpoint commit hash below.
+- `1e535213` (docs(closeout): Packet 08 — final certification GO verdict APPROVED)
 
 Residual risk:
 - 3 pre-release blockers (DL-002, DL-009, DL-010) must be resolved before release tag.
