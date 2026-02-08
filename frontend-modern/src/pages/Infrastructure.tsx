@@ -12,11 +12,17 @@ import type { TimeRange } from '@/api/charts';
 import ServerIcon from 'lucide-solid/icons/server';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
-import type { Resource } from '@/types/resource';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
   isSummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
+import {
+  tokenizeSearch,
+  filterResources,
+  collectAvailableSources,
+  collectAvailableStatuses,
+  buildStatusOptions,
+} from '@/components/Infrastructure/infrastructureSelectors';
 import {
   dismissMigrationNotice,
   isMigrationNoticeDismissed,
@@ -179,18 +185,6 @@ export function Infrastructure() {
     }
   });
 
-  const statusLabels: Record<string, string> = {
-    online: 'Online',
-    offline: 'Offline',
-    degraded: 'Degraded',
-    paused: 'Paused',
-    unknown: 'Unknown',
-    running: 'Running',
-    stopped: 'Stopped',
-  };
-
-  const statusOrder = ['online', 'degraded', 'paused', 'offline', 'stopped', 'unknown', 'running'];
-
   function normalizeSource(value: string): string | null {
     const normalized = value.toLowerCase();
     switch (normalized) {
@@ -217,46 +211,11 @@ export function Infrastructure() {
     }
   }
 
-  const getResourceSources = (resource: Resource): string[] => {
-    const platformData = resource.platformData as { sources?: string[] } | undefined;
-    const normalized = (platformData?.sources ?? [])
-      .map((source) => normalizeSource(source))
-      .filter((source): source is string => Boolean(source));
-    return Array.from(new Set(normalized));
-  };
+  const availableSources = createMemo(() => collectAvailableSources(resources()));
 
-  const availableSources = createMemo(() => {
-    const set = new Set<string>();
-    resources().forEach((resource) => {
-      getResourceSources(resource).forEach((source) => set.add(source));
-    });
-    return set;
-  });
+  const availableStatuses = createMemo(() => collectAvailableStatuses(resources()));
 
-  const availableStatuses = createMemo(() => {
-    const set = new Set<string>();
-    resources().forEach((resource) => {
-      const status = (resource.status || 'unknown').toLowerCase();
-      if (status) set.add(status);
-    });
-    return set;
-  });
-
-  const statusOptions = createMemo(() => {
-    const statuses = Array.from(availableStatuses());
-    statuses.sort((a, b) => {
-      const indexA = statusOrder.indexOf(a);
-      const indexB = statusOrder.indexOf(b);
-      if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    });
-    return statuses.map((status) => ({
-      key: status,
-      label: statusLabels[status] ?? status,
-    }));
-  });
+  const statusOptions = createMemo(() => buildStatusOptions(availableStatuses()));
 
   const hasActiveFilters = createMemo(
     () => selectedSources().size > 0 || selectedStatuses().size > 0 || searchQuery().trim().length > 0,
@@ -299,61 +258,11 @@ export function Infrastructure() {
     return `${base} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50`;
   };
 
-  const matchesSearch = (resource: Resource, term: string) => {
-    if (!term) return true;
-    const normalizedTerm = term.toLowerCase();
-    const candidates: string[] = [
-      resource.name,
-      resource.displayName,
-      resource.id,
-      resource.identity?.hostname ?? '',
-      ...(resource.identity?.ips ?? []),
-      ...(resource.tags ?? []),
-    ];
-    const haystack = candidates
-      .filter((value): value is string => typeof value === 'string' && value.length > 0)
-      .join(' ')
-      .toLowerCase();
-    return haystack.includes(normalizedTerm);
-  };
+  const searchTerms = createMemo(() => tokenizeSearch(searchQuery()));
 
-  const searchTerms = createMemo(() =>
-    searchQuery()
-      .trim()
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((term) => term.length > 0),
+  const filteredResources = createMemo(() =>
+    filterResources(resources(), selectedSources(), selectedStatuses(), searchTerms()),
   );
-
-  const filteredResources = createMemo(() => {
-    let filtered = resources();
-    const sources = selectedSources();
-    const statuses = selectedStatuses();
-    const terms = searchTerms();
-
-    if (sources.size > 0) {
-      filtered = filtered.filter((resource) => {
-        const resourceSources = getResourceSources(resource);
-        if (resourceSources.length === 0) return false;
-        return resourceSources.some((source) => sources.has(source));
-      });
-    }
-
-    if (statuses.size > 0) {
-      filtered = filtered.filter((resource) => {
-        const status = (resource.status || 'unknown').toLowerCase();
-        return statuses.has(status);
-      });
-    }
-
-    if (terms.length > 0) {
-      filtered = filtered.filter((resource) =>
-        terms.every((term) => matchesSearch(resource, term)),
-      );
-    }
-
-    return filtered;
-  });
 
   const hasFilteredResources = createMemo(() => filteredResources().length > 0);
 

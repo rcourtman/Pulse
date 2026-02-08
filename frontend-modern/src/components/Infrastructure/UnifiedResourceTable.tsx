@@ -9,6 +9,14 @@ import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getHostStatusIndicator } from '@/utils/status';
+import {
+  splitHostAndServiceResources,
+  sortResources,
+  groupResources,
+  computeIOScale,
+  type IODistributionStats,
+  type ResourceGroup,
+} from '@/components/Infrastructure/infrastructureSelectors';
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
 import { buildWorkloadsHref } from './workloadsLink';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
@@ -83,9 +91,6 @@ const summarizeServiceHealthTone = (value?: string): ServiceSummaryTone => {
   return 'muted';
 };
 
-const isServiceInfrastructureResource = (resource: Resource) =>
-  resource.type === 'pbs' || resource.type === 'pmg';
-
 const getPBSTableRow = (resource: Resource): PBSTableRow | null => {
   if (resource.type !== 'pbs') return null;
   const platformData = resource.platformData as { pbs?: PBSServiceData; pmg?: PMGServiceData } | undefined;
@@ -123,53 +128,10 @@ const getPMGTableRow = (resource: Resource): PMGTableRow | null => {
   };
 };
 
-interface IODistributionStats {
-  median: number;
-  mad: number;
-  max: number;
-  p97: number;
-  p99: number;
-  count: number;
-}
-
 interface IOEmphasis {
   className: string;
   showOutlierHint: boolean;
 }
-
-const computeMedian = (values: number[]): number => {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-  return sorted[mid];
-};
-
-const computePercentile = (values: number[], percentile: number): number => {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const clamped = Math.max(0, Math.min(1, percentile));
-  const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(clamped * sorted.length) - 1));
-  return sorted[index];
-};
-
-const buildIODistribution = (values: number[]): IODistributionStats => {
-  const valid = values.filter((value) => Number.isFinite(value) && value >= 0);
-  if (valid.length === 0) {
-    return { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 0 };
-  }
-
-  const median = computeMedian(valid);
-  const deviations = valid.map((value) => Math.abs(value - median));
-  const mad = computeMedian(deviations);
-  const max = Math.max(...valid, 0);
-  const p97 = computePercentile(valid, 0.97);
-  const p99 = computePercentile(valid, 0.99);
-
-  return { median, mad, max, p97, p99, count: valid.length };
-};
 
 const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphasis => {
   if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
@@ -235,140 +197,34 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     }
   };
 
-  const getSortValue = (resource: Resource, key: SortKey): number | string | null => {
-    switch (key) {
-      case 'name':
-        return getDisplayName(resource);
-      case 'uptime':
-        return resource.uptime ?? 0;
-      case 'cpu':
-        return resource.cpu ? getCpuPercent(resource) : null;
-      case 'memory':
-        return resource.memory ? getMemoryPercent(resource) : null;
-      case 'disk':
-        return resource.disk ? getDiskPercent(resource) : null;
-      case 'network':
-        return resource.network ? (resource.network.rxBytes + resource.network.txBytes) : null;
-      case 'diskio':
-        return resource.diskIO ? (resource.diskIO.readRate + resource.diskIO.writeRate) : null;
-      case 'source':
-        return `${resource.platformType ?? ''}-${resource.sourceType ?? ''}`;
-      case 'temp':
-        return resource.temperature ?? null;
-      default:
-        return null;
-    }
-  };
+  const split = createMemo(() => splitHostAndServiceResources(props.resources));
+  const hostResources = createMemo(() => split().hosts);
+  const serviceResources = createMemo(() => split().services);
 
-  const defaultComparison = (a: Resource, b: Resource) => {
-    const aOnline = isResourceOnline(a);
-    const bOnline = isResourceOnline(b);
-    if (aOnline !== bOnline) return aOnline ? -1 : 1;
-    return getDisplayName(a).localeCompare(getDisplayName(b));
-  };
-
-  const compareValues = (valueA: number | string | null, valueB: number | string | null) => {
-    const aEmpty = valueA === null || valueA === undefined || (typeof valueA === 'number' && Number.isNaN(valueA));
-    const bEmpty = valueB === null || valueB === undefined || (typeof valueB === 'number' && Number.isNaN(valueB));
-
-    if (aEmpty && bEmpty) return 0;
-    if (aEmpty) return 1;
-    if (bEmpty) return -1;
-
-    if (typeof valueA === 'number' && typeof valueB === 'number') {
-      if (valueA === valueB) return 0;
-      return valueA < valueB ? -1 : 1;
-    }
-
-    const aStr = String(valueA).toLowerCase();
-    const bStr = String(valueB).toLowerCase();
-
-    if (aStr === bStr) return 0;
-    return aStr < bStr ? -1 : 1;
-  };
-
-  const hostResources = createMemo(() =>
-    props.resources.filter((resource) => !isServiceInfrastructureResource(resource)),
-  );
-  const serviceResources = createMemo(() =>
-    props.resources.filter((resource) => isServiceInfrastructureResource(resource)),
+  const sortedResources = createMemo(() =>
+    sortResources(hostResources(), sortKey(), sortDirection()),
   );
 
-  const sortedResources = createMemo(() => {
-    const resources = [...hostResources()];
-    const key = sortKey();
-    const direction = sortDirection();
-
-    return resources.sort((a, b) => {
-      if (key === 'default') {
-        return defaultComparison(a, b);
-      }
-
-      const valueA = getSortValue(a, key);
-      const valueB = getSortValue(b, key);
-      const comparison = compareValues(valueA, valueB);
-
-      if (comparison !== 0) {
-        return direction === 'asc' ? comparison : -comparison;
-      }
-
-      return defaultComparison(a, b);
-    });
-  });
-
-  const groupedResources = createMemo(() => {
-    const sorted = sortedResources();
-    if (props.groupingMode !== 'grouped') {
-      return [{ cluster: '', resources: sorted }];
-    }
-    const groups = new Map<string, Resource[]>();
-    for (const resource of sorted) {
-      const cluster = resource.clusterId || '';
-      const list = groups.get(cluster);
-      if (list) {
-        list.push(resource);
-      } else {
-        groups.set(cluster, [resource]);
-      }
-    }
-    const entries = Array.from(groups.entries()).map(([cluster, resources]) => ({ cluster, resources }));
-    // Named clusters first (alphabetical), then standalone
-    entries.sort((a, b) => {
-      if (!a.cluster && b.cluster) return 1;
-      if (a.cluster && !b.cluster) return -1;
-      return a.cluster.localeCompare(b.cluster);
-    });
-    return entries;
-  });
+  const groupedResources = createMemo<ResourceGroup[]>(() =>
+    groupResources(sortedResources(), props.groupingMode ?? 'grouped'),
+  );
 
   const sortedPBSResources = createMemo(() =>
-    [...serviceResources().filter((resource) => resource.type === 'pbs')].sort(defaultComparison),
+    sortResources(
+      serviceResources().filter((resource) => resource.type === 'pbs'),
+      'default',
+      'asc',
+    ),
   );
   const sortedPMGResources = createMemo(() =>
-    [...serviceResources().filter((resource) => resource.type === 'pmg')].sort(defaultComparison),
+    sortResources(
+      serviceResources().filter((resource) => resource.type === 'pmg'),
+      'default',
+      'asc',
+    ),
   );
 
-  const ioScale = createMemo(() => {
-    const networkValues: number[] = [];
-    const diskIOValues: number[] = [];
-
-    for (const resource of hostResources()) {
-      const networkTotal = (resource.network?.rxBytes ?? 0) + (resource.network?.txBytes ?? 0);
-      if (resource.network) {
-        networkValues.push(networkTotal);
-      }
-
-      const diskIOTotal = (resource.diskIO?.readRate ?? 0) + (resource.diskIO?.writeRate ?? 0);
-      if (resource.diskIO) {
-        diskIOValues.push(diskIOTotal);
-      }
-    }
-
-    return {
-      network: buildIODistribution(networkValues),
-      diskIO: buildIODistribution(diskIOValues),
-    };
-  });
+  const ioScale = createMemo(() => computeIOScale(hostResources()));
 
   const renderSortIndicator = (key: SortKey) => {
     if (sortKey() !== key) return null;

@@ -24,7 +24,7 @@ Date: 2026-02-08
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | IWP-00 | Baseline + Perf Contract Scaffold | DONE | Codex | Claude | APPROVED | IWP-00 Review Evidence |
-| IWP-01 | Infrastructure Derivation Pipeline Extraction | TODO | Codex | Claude | — | — |
+| IWP-01 | Infrastructure Derivation Pipeline Extraction | DONE | Codex | Claude | APPROVED | IWP-01 Review Evidence |
 | IWP-02 | Workloads Derivation Pipeline Extraction | TODO | Codex | Claude | — | — |
 | IWP-03 | Infrastructure Table Windowing and Render Containment | TODO | Codex | Claude | — | — |
 | IWP-04 | Workloads Table Windowing and Grouped Render Containment | TODO | Codex | Claude | — | — |
@@ -86,28 +86,56 @@ Rollback:
 
 ## IWP-01 Checklist: Infrastructure Derivation Pipeline Extraction
 
-- [ ] Infrastructure filter/search/status/source derivations extracted to pure selectors.
-- [ ] Sort/group and IO distribution derivation paths simplified to reduce repeated full-list passes.
-- [ ] Existing Infrastructure behavior preserved (route/query sync, filter semantics, grouping semantics).
-- [ ] Selector tests include semantic parity assertions.
-- [ ] Perf contract tests include deterministic infrastructure derivation assertions.
+- [x] Infrastructure filter/search/status/source derivations extracted to pure selectors.
+- [x] Sort/group and IO distribution derivation paths simplified to reduce repeated full-list passes.
+- [x] Existing Infrastructure behavior preserved (route/query sync, filter semantics, grouping semantics).
+- [x] Selector tests include semantic parity assertions.
+- [x] Perf contract tests include deterministic infrastructure derivation assertions.
 
 ### Required Tests
 
-- [ ] `cd frontend-modern && npx vitest run src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `cd frontend-modern && npx vitest run src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx` -> exit 0
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### IWP-01 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` (new): 12 pure selector functions covering filter/sort/group/IO pipelines
+- `frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts` (new): 23 unit tests for selector semantic parity
+- `frontend-modern/src/pages/Infrastructure.tsx`: Rewired 5 derivation memos to use selector imports, removed inline filter/search/source/status logic
+- `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`: Rewired split/sort/group/IO memos to selectors, removed inline helpers (computeMedian, computePercentile, buildIODistribution, getSortValue, defaultComparison, compareValues, isServiceInfrastructureResource). Kept inline getOutlierEmphasis (rendering concern).
+- `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`: Replaced todo placeholder with 5 derivation contract assertions
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run ...infrastructureSelectors.test.ts ...UnifiedResourceTable.performance.contract.test.tsx ...Infrastructure.pbs-pmg.test.tsx` -> exit 0 (40 tests passed)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+3. Global validation baseline (6 files, 36 tests) -> exit 0
+
+Gate checklist:
+- P0: PASS (all tests pass, typecheck clean, no behavior changes, PBS/PMG test unchanged)
+- P1: PASS (selectors are pure functions with deterministic tests, no SolidJS reactivity in selectors)
+- P2: PASS (inline getOutlierEmphasis kept to minimize blast radius, isResourceOnline kept for per-row rendering)
+
+Verdict: APPROVED
+
+Commit:
+- pending checkpoint commit
+
+Residual risk:
+- getOutlierEmphasis remains inline in UnifiedResourceTable.tsx (rendering-coupled); could be extracted in future if needed.
+
+Rollback:
+- Revert Infrastructure.tsx and UnifiedResourceTable.tsx to pre-refactor state
+- Delete infrastructureSelectors.ts and its test file
+- Revert perf contract test to remove derivation assertions
 ```
 
 ---

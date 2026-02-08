@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
+import {
+  filterResources,
+  sortResources,
+  groupResources,
+  splitHostAndServiceResources,
+  computeIOScale,
+} from '@/components/Infrastructure/infrastructureSelectors';
 
 vi.mock('@/hooks/useBreakpoint', () => ({
   useBreakpoint: () => ({ isMobile: () => false }),
@@ -203,5 +210,46 @@ describe('UnifiedResourceTable performance contract', () => {
     });
   });
 
-  describe.todo('Transform budget placeholder');
+  describe('Infrastructure derivation contracts', () => {
+    it('filterResources returns correct count after source filter on Profile S', () => {
+      const resources = makeResources(PROFILES.S);
+      const proxmoxOnly = filterResources(resources, new Set(['proxmox']), new Set(), []);
+      expect(proxmoxOnly.length).toBe(PROFILES.S);
+    });
+
+    it('sortResources preserves array length for all sort keys', () => {
+      const resources = makeResources(PROFILES.M);
+      for (const key of ['default', 'name', 'cpu', 'memory', 'disk']) {
+        const sorted = sortResources(resources, key, 'asc');
+        expect(sorted).toHaveLength(PROFILES.M);
+      }
+    });
+
+    it('groupResources produces correct total resource count in grouped mode', () => {
+      const resources = makeResources(PROFILES.S, (i) => ({
+        clusterId: `cluster-${i % 3}`,
+      }));
+      const grouped = groupResources(resources, 'grouped');
+      const total = grouped.reduce((sum, group) => sum + group.resources.length, 0);
+      expect(total).toBe(PROFILES.S);
+      expect(grouped.length).toBe(3);
+    });
+
+    it('splitHostAndServiceResources partitions without losing resources', () => {
+      const resources = makeResources(PROFILES.S);
+      const { hosts, services } = splitHostAndServiceResources(resources);
+      expect(hosts.length + services.length).toBe(PROFILES.S);
+    });
+
+    it('computeIOScale produces valid stats for Profile M', () => {
+      const resources = makeResources(PROFILES.M, (i) => ({
+        network: { rxBytes: i * 100, txBytes: i * 50 },
+        diskIO: { readRate: i * 10, writeRate: i * 5 },
+      }));
+      const scale = computeIOScale(resources);
+      expect(scale.network.count).toBeGreaterThan(0);
+      expect(scale.diskIO.count).toBeGreaterThan(0);
+      expect(scale.network.median).toBeGreaterThan(0);
+    });
+  });
 });
