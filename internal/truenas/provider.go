@@ -147,6 +147,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			Tags: []string{
 				"truenas",
 				snapshot.System.Version,
+				"zfs",
 			},
 		},
 		Identity: unifiedresources.ResourceIdentity{
@@ -168,9 +169,15 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				Metrics: &unifiedresources.ResourceMetrics{
 					Disk: diskMetric(pool.TotalBytes, pool.UsedBytes),
 				},
+				Storage: &unifiedresources.StorageMeta{
+					Type:  "zfs-pool",
+					IsZFS: true,
+				},
 				Tags: []string{
 					"truenas",
 					"pool",
+					"zfs",
+					"health:" + strings.ToLower(strings.TrimSpace(pool.Status)),
 				},
 			},
 			Identity: unifiedresources.ResourceIdentity{
@@ -200,9 +207,15 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				Metrics: &unifiedresources.ResourceMetrics{
 					Disk: diskMetric(totalBytes, dataset.UsedBytes),
 				},
+				Storage: &unifiedresources.StorageMeta{
+					Type:  "zfs-dataset",
+					IsZFS: true,
+				},
 				Tags: []string{
 					"truenas",
 					"dataset",
+					"zfs",
+					datasetStateTag(dataset),
 				},
 			},
 			Identity: unifiedresources.ResourceIdentity{
@@ -225,12 +238,12 @@ func statusFromSystem(system SystemInfo) unifiedresources.ResourceStatus {
 }
 
 func statusFromPool(pool Pool) unifiedresources.ResourceStatus {
-	switch strings.ToLower(strings.TrimSpace(pool.Status)) {
-	case "online", "healthy":
+	switch strings.ToUpper(strings.TrimSpace(pool.Status)) {
+	case "ONLINE", "HEALTHY":
 		return unifiedresources.StatusOnline
-	case "degraded", "warn", "warning":
+	case "DEGRADED":
 		return unifiedresources.StatusWarning
-	case "faulted", "offline", "unavailable":
+	case "FAULTED", "OFFLINE", "REMOVED", "UNAVAIL":
 		return unifiedresources.StatusOffline
 	default:
 		return unifiedresources.StatusUnknown
@@ -245,6 +258,16 @@ func statusFromDataset(dataset Dataset) unifiedresources.ResourceStatus {
 		return unifiedresources.StatusWarning
 	}
 	return unifiedresources.StatusOnline
+}
+
+func datasetStateTag(dataset Dataset) string {
+	if !dataset.Mounted {
+		return "state:unmounted"
+	}
+	if dataset.ReadOnly {
+		return "state:readonly"
+	}
+	return "state:mounted"
 }
 
 func diskMetric(total, used int64) *unifiedresources.MetricValue {
