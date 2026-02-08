@@ -66,7 +66,7 @@ export const buildStorageBackupsTabSpecs = (
       id: 'backups',
       label: 'Backups',
       route: BACKUPS_PATH,
-      settingsRoute: '/settings/backups',
+      settingsRoute: '/settings/system-backups',
       tooltip: 'Source-agnostic backups',
     });
   } else {
@@ -74,14 +74,14 @@ export const buildStorageBackupsTabSpecs = (
       id: 'backups',
       label: 'Backups (Legacy)',
       route: BACKUPS_PATH,
-      settingsRoute: '/settings/backups',
+      settingsRoute: '/settings/system-backups',
       tooltip: 'Legacy backups page',
     });
     tabs.push({
       id: 'backups-v2',
       label: 'Backups V2',
       route: BACKUPS_V2_PATH,
-      settingsRoute: '/settings/backups',
+      settingsRoute: '/settings/system-backups',
       tooltip: 'Source-agnostic backups preview',
       badge: 'preview',
     });

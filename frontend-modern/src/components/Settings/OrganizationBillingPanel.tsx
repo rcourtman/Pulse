@@ -1,9 +1,10 @@
-import { Component, Show, createSignal, onMount } from 'solid-js';
+import { Component, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import { OrgsAPI } from '@/api/orgs';
 import { getOrgID } from '@/utils/apiClient';
 import { isMultiTenantEnabled } from '@/stores/license';
+import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import CreditCard from 'lucide-solid/icons/credit-card';
@@ -66,7 +67,14 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
       setMemberCount(members.length);
     } catch (error) {
       logger.error('Failed to load billing data', error);
-      notificationStore.error('Failed to load billing and plan details');
+      const msg = error instanceof Error ? error.message : '';
+      if (msg.includes('402')) {
+        notificationStore.error('Multi-tenant requires an Enterprise license');
+      } else if (msg.includes('501')) {
+        notificationStore.error('Multi-tenant is not enabled on this server');
+      } else {
+        notificationStore.error('Failed to load billing and plan details');
+      }
     } finally {
       setLoading(false);
     }
@@ -75,6 +83,11 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
   onMount(() => {
     if (!isMultiTenantEnabled()) return;
     void loadBillingData();
+
+    const unsubscribe = eventBus.on('org_switched', () => {
+      void loadBillingData();
+    });
+    onCleanup(unsubscribe);
   });
 
   return (

@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal, onMount } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   OrgsAPI,
@@ -10,6 +10,7 @@ import {
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { canManageOrg, formatOrgDate, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
 import { isMultiTenantEnabled } from '@/stores/license';
+import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import Share2 from 'lucide-solid/icons/share-2';
@@ -160,7 +161,14 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       setTargetOrgError(firstTarget === '' ? 'Target organization is required' : '');
     } catch (error) {
       logger.error('Failed to load organization sharing data', error);
-      notificationStore.error('Failed to load organization sharing details');
+      const msg = error instanceof Error ? error.message : '';
+      if (msg.includes('402')) {
+        notificationStore.error('Multi-tenant requires an Enterprise license');
+      } else if (msg.includes('501')) {
+        notificationStore.error('Multi-tenant is not enabled on this server');
+      } else {
+        notificationStore.error('Failed to load organization sharing details');
+      }
     } finally {
       setLoading(false);
     }
@@ -291,6 +299,11 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   onMount(() => {
     if (!isMultiTenantEnabled()) return;
     void loadSharingData();
+
+    const unsubscribe = eventBus.on('org_switched', () => {
+      void loadSharingData();
+    });
+    onCleanup(unsubscribe);
   });
 
   return (

@@ -2,6 +2,7 @@ import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-j
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formField, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
+import { isMultiTenantEnabled } from '@/stores/license';
 import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
@@ -106,7 +107,9 @@ export const ProLicensePanel: Component = () => {
   const formattedFeatures = createMemo(() => {
     const current = status();
     if (!current?.features?.length) return [];
-    return current.features.map((feature) => FEATURE_LABELS[feature] ?? formatTitleCase(feature));
+    return current.features
+      .filter((feature) => feature !== 'multi_tenant' || isMultiTenantEnabled())
+      .map((feature) => FEATURE_LABELS[feature] ?? formatTitleCase(feature));
   });
 
   const handleActivate = async () => {

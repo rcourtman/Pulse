@@ -17,6 +17,7 @@ export interface SettingsNavItem {
   icon: Component<{ class?: string; strokeWidth?: number }>;
   iconProps?: { strokeWidth?: number };
   disabled?: boolean;
+  locked?: boolean;
   badge?: string;
   features?: string[];
   permissions?: string[];

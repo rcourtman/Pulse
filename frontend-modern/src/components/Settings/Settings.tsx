@@ -360,7 +360,8 @@ const Settings: Component<SettingsProps> = (props) => {
             const lockedByFeature = isFeatureLockedForLicense(item.features);
             return {
               ...item,
-              disabled: item.disabled || lockedByFeature,
+              disabled: item.disabled ?? false,
+              locked: lockedByFeature,
               badge: lockedByFeature ? 'Pro' : item.badge,
             };
           });
@@ -782,25 +783,29 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={group.items}>
                           {(item) => {
                             const isActive = () => activeTab() === item.id;
+                            const isHardDisabled = () => Boolean(item.disabled);
+                            const isLocked = () => Boolean(item.locked);
+                            const isUnavailable = () => isHardDisabled() || isLocked();
                             return (
                               <button
                                 type="button"
                                 aria-current={isActive() ? 'page' : undefined}
-                                disabled={item.disabled}
+                                disabled={isHardDisabled()}
+                                aria-disabled={isUnavailable() ? 'true' : undefined}
                                 class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'
-                                  } text-sm font-medium transition-colors ${item.disabled
+                                  } text-sm font-medium transition-colors ${isUnavailable()
                                     ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
                                     : isActive()
                                       ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
                                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
                                   }`}
                                 onClick={() => {
-                                  if (item.disabled) return;
+                                  if (isHardDisabled()) return;
                                   handleTabSelect(item.id as SettingsTab);
                                 }}
                                 title={
                                   sidebarCollapsed()
-                                    ? `${item.label}${item.badge ? ` (${item.badge})` : ''}`
+                                    ? `${item.label}${item.badge ? ` (${item.badge})` : ''}${isLocked() ? ' - requires Pulse Pro' : ''}`
                                     : undefined
                                 }
                               >
@@ -835,19 +840,22 @@ const Settings: Component<SettingsProps> = (props) => {
                   <For each={flatTabs()}>
                     {(tab) => {
                       const isActive = () => activeTab() === tab.id;
-                      const disabled = tab.disabled;
+                      const isHardDisabled = () => Boolean(tab.disabled);
+                      const isLocked = () => Boolean(tab.locked);
+                      const disabled = () => isHardDisabled() || isLocked();
                       return (
                         <button
                           type="button"
-                          disabled={disabled}
-                          class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${disabled
+                          disabled={isHardDisabled()}
+                          aria-disabled={disabled() ? 'true' : undefined}
+                          class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${disabled()
                             ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600 border-transparent'
                             : isActive()
                               ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
                               : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
                             }`}
                           onClick={() => {
-                            if (disabled) return;
+                            if (isHardDisabled()) return;
                             handleTabSelect(tab.id as SettingsTab);
                           }}
                         >
@@ -1776,14 +1784,11 @@ const Settings: Component<SettingsProps> = (props) => {
                 </div>
               </Show>
               <Show when={activePanelRender()}>
-                {(panel) => {
-                  const resolved = panel();
-                  return (
-                    <Suspense>
-                      <Dynamic component={resolved.component} {...resolved.props} />
-                    </Suspense>
-                  );
-                }}
+                {(panel) => (
+                  <Suspense>
+                    <Dynamic component={panel().component} {...panel().props} />
+                  </Suspense>
+                )}
               </Show>
             </div>
           </div >

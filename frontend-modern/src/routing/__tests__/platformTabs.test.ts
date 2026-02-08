@@ -10,16 +10,20 @@ describe('buildStorageBackupsTabSpecs', () => {
     expect(specs.map((spec) => spec.id)).toEqual(['storage', 'backups']);
     expect(specs.map((spec) => spec.label)).toEqual(['Storage', 'Backups']);
     expect(specs.map((spec) => spec.route)).toEqual([buildStoragePath(), buildBackupsPath()]);
+    expect(specs.map((spec) => spec.settingsRoute)).toEqual([
+      '/settings/infrastructure/pbs',
+      '/settings/system-backups',
+    ]);
     expect(specs.every((spec) => spec.badge === undefined)).toBe(true);
   });
 
-  it('returns legacy + preview pairs when legacy default is active', () => {
+  it('returns legacy + dual-tab pairs when legacy default is active', () => {
     const specs = buildStorageBackupsTabSpecs(buildStorageBackupsRoutingPlan('legacy-default'));
 
     expect(specs.map((spec) => spec.id)).toEqual(['storage', 'storage-v2', 'backups', 'backups-v2']);
     expect(specs.map((spec) => spec.label)).toEqual([
       'Storage (Legacy)',
-      'Storage V2',
+      'Storage',
       'Backups (Legacy)',
       'Backups V2',
     ]);
@@ -29,19 +33,24 @@ describe('buildStorageBackupsTabSpecs', () => {
       buildBackupsPath(),
       BACKUPS_V2_PATH,
     ]);
+    expect(specs.map((spec) => spec.settingsRoute)).toEqual([
+      '/settings/infrastructure/pbs',
+      '/settings/infrastructure/pbs',
+      '/settings/system-backups',
+      '/settings/system-backups',
+    ]);
     expect(specs.filter((spec) => spec.badge === 'preview').map((spec) => spec.id)).toEqual([
-      'storage-v2',
       'backups-v2',
     ]);
   });
 
-  it('returns storage legacy + preview but backups as v2 default in backups-v2-default mode', () => {
+  it('returns storage legacy + dual-tab but backups as v2 default in backups-v2-default mode', () => {
     const specs = buildStorageBackupsTabSpecs(buildStorageBackupsRoutingPlan('backups-v2-default'));
 
     expect(specs.map((spec) => spec.id)).toEqual(['storage', 'storage-v2', 'backups']);
     expect(specs.map((spec) => spec.label)).toEqual([
       'Storage (Legacy)',
-      'Storage V2',
+      'Storage',
       'Backups',
     ]);
     expect(specs.map((spec) => spec.route)).toEqual([
@@ -49,10 +58,7 @@ describe('buildStorageBackupsTabSpecs', () => {
       STORAGE_V2_PATH,
       buildBackupsPath(),
     ]);
-    // Only storage-v2 has preview badge; backups has no badge
-    expect(specs.filter((spec) => spec.badge === 'preview').map((spec) => spec.id)).toEqual([
-      'storage-v2',
-    ]);
+    expect(specs.filter((spec) => spec.badge === 'preview').map((spec) => spec.id)).toEqual([]);
     expect(specs.find((spec) => spec.id === 'backups')?.badge).toBeUndefined();
   });
 

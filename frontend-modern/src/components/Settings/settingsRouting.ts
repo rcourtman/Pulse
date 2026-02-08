@@ -27,74 +27,120 @@ export type SettingsTab =
 
 export type AgentKey = 'pve' | 'pbs' | 'pmg';
 
-export function deriveTabFromPath(path: string): SettingsTab {
-  if (path.includes('/settings/workloads/docker')) return 'docker';
-  if (path.includes('/settings/infrastructure')) return 'proxmox';
-  if (path.includes('/settings/storage')) return 'proxmox';
-  if (path.includes('/settings/workloads')) return 'agents';
+const normalizeSettingsPath = (path: string): string => {
+  const trimmed = (path || '').trim();
+  if (!trimmed) return '/settings';
+  if (trimmed.length > 1 && trimmed.endsWith('/')) {
+    return trimmed.replace(/\/+$/, '');
+  }
+  return trimmed;
+};
 
-  if (path.includes('/settings/proxmox')) return 'proxmox';
-  if (path.includes('/settings/agent-hub')) return 'proxmox';
-  if (path.includes('/settings/docker')) return 'docker';
+const SETTINGS_PATH_ALIASES: Record<string, string> = {
+  '/settings/proxmox': '/settings/infrastructure',
+  '/settings/agent-hub': '/settings/infrastructure',
+  '/settings/servers': '/settings/infrastructure',
+  '/settings/pve': '/settings/infrastructure/pve',
+  '/settings/pbs': '/settings/infrastructure/pbs',
+  '/settings/pmg': '/settings/infrastructure/pmg',
+  '/settings/storage': '/settings/infrastructure/pbs',
+  '/settings/docker': '/settings/workloads/docker',
+  '/settings/containers': '/settings/workloads/docker',
+  '/settings/hosts': '/settings/workloads',
+  '/settings/host-agents': '/settings/workloads',
+  '/settings/linuxServers': '/settings/workloads',
+  '/settings/windowsServers': '/settings/workloads',
+  '/settings/macServers': '/settings/workloads',
+  '/settings/agents': '/settings/workloads',
+  '/settings/backups': '/settings/system-backups',
+  '/settings/updates': '/settings/system-updates',
+  '/settings/operations/updates': '/settings/system-updates',
+  '/settings/integrations/relay': '/settings/system-relay',
+  '/settings/system-logs': '/settings/operations/logs',
+  '/settings/diagnostics': '/settings/operations/diagnostics',
+  '/settings/reporting': '/settings/operations/reporting',
+  '/settings/security': '/settings/security-overview',
+  '/settings/api': '/settings/integrations/api',
+  '/settings/billing': '/settings/organization/billing',
+  '/settings/plan': '/settings/organization/billing',
+};
+
+export function resolveCanonicalSettingsPath(path: string): string | null {
+  const normalizedPath = normalizeSettingsPath(path);
+  if (!normalizedPath.startsWith('/settings')) return null;
+  return SETTINGS_PATH_ALIASES[normalizedPath] ?? normalizedPath;
+}
+
+export function deriveTabFromPath(path: string): SettingsTab {
+  const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
+
+  if (canonicalPath.includes('/settings/workloads/docker')) return 'docker';
+  if (canonicalPath.includes('/settings/infrastructure')) return 'proxmox';
+  if (canonicalPath.includes('/settings/storage')) return 'proxmox';
+  if (canonicalPath.includes('/settings/workloads')) return 'agents';
+
+  if (canonicalPath.includes('/settings/proxmox')) return 'proxmox';
+  if (canonicalPath.includes('/settings/agent-hub')) return 'proxmox';
+  if (canonicalPath.includes('/settings/docker')) return 'docker';
 
   if (
-    path.includes('/settings/hosts') ||
-    path.includes('/settings/host-agents') ||
-    path.includes('/settings/servers') ||
-    path.includes('/settings/linuxServers') ||
-    path.includes('/settings/windowsServers') ||
-    path.includes('/settings/macServers') ||
-    path.includes('/settings/agents')
+    canonicalPath.includes('/settings/hosts') ||
+    canonicalPath.includes('/settings/host-agents') ||
+    canonicalPath.includes('/settings/servers') ||
+    canonicalPath.includes('/settings/linuxServers') ||
+    canonicalPath.includes('/settings/windowsServers') ||
+    canonicalPath.includes('/settings/macServers') ||
+    canonicalPath.includes('/settings/agents')
   ) {
     return 'agents';
   }
 
-  if (path.includes('/settings/system-general')) return 'system-general';
-  if (path.includes('/settings/system-network')) return 'system-network';
-  if (path.includes('/settings/system-updates')) return 'system-updates';
-  if (path.includes('/settings/backups')) return 'system-backups';
-  if (path.includes('/settings/system-backups')) return 'system-backups';
-  if (path.includes('/settings/system-ai')) return 'system-ai';
-  if (path.includes('/settings/integrations/relay')) return 'system-relay';
-  if (path.includes('/settings/system-relay')) return 'system-relay';
-  if (path.includes('/settings/system-pro')) return 'system-pro';
-  if (path.includes('/settings/organization/access')) return 'organization-access';
-  if (path.includes('/settings/organization/sharing')) return 'organization-sharing';
-  if (path.includes('/settings/billing')) return 'organization-billing';
-  if (path.includes('/settings/plan')) return 'organization-billing';
-  if (path.includes('/settings/organization/billing')) return 'organization-billing';
-  if (path.includes('/settings/organization')) return 'organization-overview';
-  if (path.includes('/settings/operations/logs')) return 'system-logs';
-  if (path.includes('/settings/system-logs')) return 'system-logs';
+  if (canonicalPath.includes('/settings/system-general')) return 'system-general';
+  if (canonicalPath.includes('/settings/system-network')) return 'system-network';
+  if (canonicalPath.includes('/settings/system-updates')) return 'system-updates';
+  if (canonicalPath.includes('/settings/backups')) return 'system-backups';
+  if (canonicalPath.includes('/settings/system-backups')) return 'system-backups';
+  if (canonicalPath.includes('/settings/system-ai')) return 'system-ai';
+  if (canonicalPath.includes('/settings/integrations/relay')) return 'system-relay';
+  if (canonicalPath.includes('/settings/system-relay')) return 'system-relay';
+  if (canonicalPath.includes('/settings/system-pro')) return 'system-pro';
+  if (canonicalPath.includes('/settings/organization/access')) return 'organization-access';
+  if (canonicalPath.includes('/settings/organization/sharing')) return 'organization-sharing';
+  if (canonicalPath.includes('/settings/billing')) return 'organization-billing';
+  if (canonicalPath.includes('/settings/plan')) return 'organization-billing';
+  if (canonicalPath.includes('/settings/organization/billing')) return 'organization-billing';
+  if (canonicalPath.includes('/settings/organization')) return 'organization-overview';
+  if (canonicalPath.includes('/settings/operations/logs')) return 'system-logs';
+  if (canonicalPath.includes('/settings/system-logs')) return 'system-logs';
 
-  if (path.includes('/settings/integrations/api')) return 'api';
-  if (path.includes('/settings/api')) return 'api';
+  if (canonicalPath.includes('/settings/integrations/api')) return 'api';
+  if (canonicalPath.includes('/settings/api')) return 'api';
 
-  if (path.includes('/settings/security-overview')) return 'security-overview';
-  if (path.includes('/settings/security-auth')) return 'security-auth';
-  if (path.includes('/settings/security-sso')) return 'security-sso';
-  if (path.includes('/settings/security-roles')) return 'security-roles';
-  if (path.includes('/settings/security-users')) return 'security-users';
-  if (path.includes('/settings/security-audit')) return 'security-audit';
-  if (path.includes('/settings/security-webhooks')) return 'security-webhooks';
-  if (path.includes('/settings/security')) return 'security-overview';
+  if (canonicalPath.includes('/settings/security-overview')) return 'security-overview';
+  if (canonicalPath.includes('/settings/security-auth')) return 'security-auth';
+  if (canonicalPath.includes('/settings/security-sso')) return 'security-sso';
+  if (canonicalPath.includes('/settings/security-roles')) return 'security-roles';
+  if (canonicalPath.includes('/settings/security-users')) return 'security-users';
+  if (canonicalPath.includes('/settings/security-audit')) return 'security-audit';
+  if (canonicalPath.includes('/settings/security-webhooks')) return 'security-webhooks';
+  if (canonicalPath.includes('/settings/security')) return 'security-overview';
 
-  if (path.includes('/settings/operations/updates')) return 'system-updates';
-  if (path.includes('/settings/updates')) return 'system-updates';
-  if (path.includes('/settings/operations/diagnostics')) return 'diagnostics';
-  if (path.includes('/settings/diagnostics')) return 'diagnostics';
-  if (path.includes('/settings/operations/reporting')) return 'reporting';
-  if (path.includes('/settings/reporting')) return 'reporting';
+  if (canonicalPath.includes('/settings/operations/updates')) return 'system-updates';
+  if (canonicalPath.includes('/settings/updates')) return 'system-updates';
+  if (canonicalPath.includes('/settings/operations/diagnostics')) return 'diagnostics';
+  if (canonicalPath.includes('/settings/diagnostics')) return 'diagnostics';
+  if (canonicalPath.includes('/settings/operations/reporting')) return 'reporting';
+  if (canonicalPath.includes('/settings/reporting')) return 'reporting';
 
   // Legacy platform paths map to Proxmox connections.
   if (
-    path.includes('/settings/pve') ||
-    path.includes('/settings/pbs') ||
-    path.includes('/settings/pmg') ||
-    path.includes('/settings/containers') ||
-    path.includes('/settings/linuxServers') ||
-    path.includes('/settings/windowsServers') ||
-    path.includes('/settings/macServers')
+    canonicalPath.includes('/settings/pve') ||
+    canonicalPath.includes('/settings/pbs') ||
+    canonicalPath.includes('/settings/pmg') ||
+    canonicalPath.includes('/settings/containers') ||
+    canonicalPath.includes('/settings/linuxServers') ||
+    canonicalPath.includes('/settings/windowsServers') ||
+    canonicalPath.includes('/settings/macServers')
   ) {
     return 'proxmox';
   }
@@ -103,15 +149,17 @@ export function deriveTabFromPath(path: string): SettingsTab {
 }
 
 export function deriveAgentFromPath(path: string): AgentKey | null {
-  if (path.includes('/settings/infrastructure/pve')) return 'pve';
-  if (path.includes('/settings/infrastructure/pbs')) return 'pbs';
-  if (path.includes('/settings/infrastructure/pmg')) return 'pmg';
+  const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
 
-  if (path.includes('/settings/pve')) return 'pve';
-  if (path.includes('/settings/pbs')) return 'pbs';
-  if (path.includes('/settings/pmg')) return 'pmg';
+  if (canonicalPath.includes('/settings/infrastructure/pve')) return 'pve';
+  if (canonicalPath.includes('/settings/infrastructure/pbs')) return 'pbs';
+  if (canonicalPath.includes('/settings/infrastructure/pmg')) return 'pmg';
 
-  if (path.includes('/settings/storage')) return 'pbs';
+  if (canonicalPath.includes('/settings/pve')) return 'pve';
+  if (canonicalPath.includes('/settings/pbs')) return 'pbs';
+  if (canonicalPath.includes('/settings/pmg')) return 'pmg';
+
+  if (canonicalPath.includes('/settings/storage')) return 'pbs';
   return null;
 }
 
@@ -184,7 +232,7 @@ export function settingsTabPath(tab: SettingsTab): string {
     case 'docker':
       return '/settings/workloads/docker';
     case 'system-backups':
-      return '/settings/backups';
+      return '/settings/system-backups';
     case 'organization-overview':
       return '/settings/organization';
     case 'organization-access':
@@ -192,11 +240,11 @@ export function settingsTabPath(tab: SettingsTab): string {
     case 'organization-sharing':
       return '/settings/organization/sharing';
     case 'organization-billing':
-      return '/settings/billing';
+      return '/settings/organization/billing';
     case 'api':
       return '/settings/integrations/api';
     case 'system-relay':
-      return '/settings/integrations/relay';
+      return '/settings/system-relay';
     case 'diagnostics':
       return '/settings/operations/diagnostics';
     case 'reporting':

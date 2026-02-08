@@ -3,6 +3,7 @@ import {
   deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
+  resolveCanonicalSettingsPath,
   settingsTabPath,
   type AgentKey,
   type SettingsTab,
@@ -91,49 +92,23 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
           return;
         }
 
-        if (path.startsWith('/settings/agent-hub')) {
-          navigate(path.replace('/settings/agent-hub', '/settings/infrastructure'), {
+        const canonicalPath = resolveCanonicalSettingsPath(path);
+        if (canonicalPath && canonicalPath !== path) {
+          navigate(canonicalPath, {
             replace: true,
             scroll: false,
           });
           return;
         }
 
-        if (path.startsWith('/settings/servers')) {
-          navigate(path.replace('/settings/servers', '/settings/infrastructure'), {
-            replace: true,
-            scroll: false,
-          });
-          return;
-        }
-
-        if (path.startsWith('/settings/containers')) {
-          navigate(path.replace('/settings/containers', '/settings/workloads/docker'), {
-            replace: true,
-            scroll: false,
-          });
-          return;
-        }
-
-        if (
-          path.startsWith('/settings/linuxServers') ||
-          path.startsWith('/settings/windowsServers') ||
-          path.startsWith('/settings/macServers')
-        ) {
-          navigate('/settings/workloads', {
-            replace: true,
-            scroll: false,
-          });
-          return;
-        }
-
-        const resolved = deriveTabFromPath(path);
+        const effectivePath = canonicalPath ?? path;
+        const resolved = deriveTabFromPath(effectivePath);
         if (resolved !== currentTab()) {
           setCurrentTab(resolved);
         }
 
         if (resolved === 'proxmox') {
-          const agentFromPath = deriveAgentFromPath(path);
+          const agentFromPath = deriveAgentFromPath(effectivePath);
           setSelectedAgent(agentFromPath ?? 'pve');
         }
       },

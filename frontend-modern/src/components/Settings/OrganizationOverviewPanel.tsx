@@ -1,9 +1,10 @@
-import { Component, Show, createSignal, onMount } from 'solid-js';
+import { Component, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { OrgsAPI, type Organization, type OrganizationMember } from '@/api/orgs';
 import { getOrgID } from '@/utils/apiClient';
 import { canManageOrg, formatOrgDate, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
 import { isMultiTenantEnabled } from '@/stores/license';
+import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import Building2 from 'lucide-solid/icons/building-2';
@@ -31,7 +32,14 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
       setDisplayNameDraft(orgData.displayName || '');
     } catch (error) {
       logger.error('Failed to load organization overview', error);
-      notificationStore.error('Failed to load organization details');
+      const msg = error instanceof Error ? error.message : '';
+      if (msg.includes('402')) {
+        notificationStore.error('Multi-tenant requires an Enterprise license');
+      } else if (msg.includes('501')) {
+        notificationStore.error('Multi-tenant is not enabled on this server');
+      } else {
+        notificationStore.error('Failed to load organization details');
+      }
     } finally {
       setLoading(false);
     }
@@ -66,6 +74,11 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
   onMount(() => {
     if (!isMultiTenantEnabled()) return;
     void loadOrganization();
+
+    const unsubscribe = eventBus.on('org_switched', () => {
+      void loadOrganization();
+    });
+    onCleanup(unsubscribe);
   });
 
   return (
