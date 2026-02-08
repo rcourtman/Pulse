@@ -617,3 +617,28 @@ Runbook enhancement needed items (tracked here, not applied to runbook in this p
 - runbook enhancement needed: add release-day operator checklist (pre-deploy/deploy/post-deploy/rollback trigger matrix) to the runbook.
 - runbook enhancement needed: add observability checkpoints for `/api/health`, scheduler health, WebSocket connection trends, and alert latency verification workflow.
 - runbook enhancement needed: add non-multi-tenant kill-switch inventory (AI Patrol autonomy and per-resource alert disable toggles).
+
+## Appendix I: Debt Ledger
+
+| ID | Description | Severity | Owner | Target Milestone | Source |
+| --- | --- | --- | --- | --- | --- |
+| DL-001 | Storage + Backups V2 plan execution | HIGH | Storage team | Next milestone | Appendix D |
+| DL-002 | Multi-tenant final certification (import cycle) | MEDIUM | Alerts/MT team | Pre-release | Appendix D |
+| DL-003 | Unsupported import version handling is permissive | LOW | Config team | Next import hardening | Appendix F (PC-004-F1) |
+| DL-004 | No E2E migration replay test | LOW | QA/Platform | Post-closeout | Appendix F (PC-004-F2) |
+| DL-005 | Runbook: cross-track rollback view | LOW | Ops | Next ops cycle | Appendix H |
+| DL-006 | Runbook: release-day checklist integration | LOW | Ops | Next ops cycle | Appendix H |
+| DL-007 | Runbook: observability checkpoints | LOW | Ops | Next ops cycle | Appendix H |
+| DL-008 | Config DRY enforcement: `LoadRelayConfig` boilerplate | LOW | Config team | Next cleanup | Packet 04 evidence |
+| DL-009 | Monitoring package build failure: `backup_guard_test.go` | MEDIUM | Monitoring team | Pre-release | Packet 03 evidence |
+| DL-010 | Frontend vitest failures from parallel work | MEDIUM | Frontend team | Pre-release | Packet 02 evidence |
+| DL-011 | No single integrated E2E chain for tenant-scoped alert create -> API payload -> websocket fan-out -> frontend route landing | MEDIUM | QA/Platform | Next integration hardening | Appendix E |
+| DL-012 | Legacy redirect browser-history/back-button behavior is not covered by browser-level E2E replay | LOW | Frontend team | Pre-release browser E2E cycle | Appendix E |
+
+### Deferred and Residual Traceability
+
+- Appendix D `DEFERRED`: covered by `DL-001` and `DL-002`.
+- Appendix F `DEFERRED`: covered by `DL-003` and `DL-004`.
+- Appendix H runbook enhancement items: covered by `DL-005`, `DL-006`, and `DL-007`.
+- Packet evidence residual risks: covered by `DL-008`, `DL-009`, and `DL-010`.
+- Appendix E residual risks: covered by `DL-011` and `DL-012`.

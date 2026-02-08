@@ -29,8 +29,23 @@ Alternatively, delete the node in Pulse Settings and re-run the agent setup - it
 
 ## Program Closeout Tracks
 
-- Alerts: unified resource model hardening complete.
-- Control Plane: router decomposition and contract hardening complete.
-- Settings: control plane decomposition complete.
-- Multi-Tenant: productization complete; final certification pending import cycle resolution.
-- Storage + Backups V2: deferred to next milestone.
+### Architecture and Platform Changes
+
+- **Alerts**: Unified resource model hardening is complete. Alerts now work consistently across all resource types (VMs, containers, nodes, hosts, Docker, Kubernetes, PBS, PMG, and storage) using canonical resource type mapping.
+- **Control Plane**: API routing was decomposed from monolithic `router.go` into modular route groups (auth, monitoring, AI, org, config), improving maintainability and enabling more independent test coverage.
+- **Settings**: The Settings control plane was decomposed from a monolithic component into modular panels with registry-based dispatch. Feature gating, deep-linking, and navigation behavior were extracted into testable modules.
+- **Multi-Tenant**: Multi-tenant mode is now fully productized as an opt-in capability behind feature flag and license gate. Single-tenant users get zero multi-tenant UI/behavior. Tenant isolation coverage spans API, WebSocket, alerts, AI, and settings surfaces.
+- **Security**: Comprehensive tenant isolation replay was completed across API, WebSocket, and monitoring layers, including cross-org access prevention validation.
+- **Bug Fix**: Fixed legacy guest alert ID migration in `LoadActiveAlerts()`, ensuring old-format IDs migrate correctly on startup.
+
+### Operator Notes
+
+- **Multi-tenant controls**: Multi-tenant behavior is controlled by `PULSE_MULTI_TENANT_ENABLED` and enforced by license gate (`multi_tenant`).
+- **Alert migration behavior**: Legacy alert IDs migrate automatically during startup. Migration is transparent to operators.
+- **Settings routing compatibility**: Deep-link URLs are preserved. Legacy routes such as `/proxmox`, `/hosts`, and related aliases redirect to canonical settings paths.
+- **Migration requirements**: No manual data migration is required for the closeout tracks in this release.
+
+### Deferred/Follow-up (Tracked in Debt Ledger)
+
+- Multi-Tenant final certification remains pending external import-cycle resolution.
+- Storage + Backups V2 remains deferred to the next milestone.
