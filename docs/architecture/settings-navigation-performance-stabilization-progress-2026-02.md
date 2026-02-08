@@ -1,0 +1,394 @@
+# Settings Navigation and Performance Stabilization Progress Tracker
+
+Linked plan:
+- `docs/architecture/settings-navigation-performance-stabilization-plan-2026-02.md`
+
+Status: Active
+Date: 2026-02-08
+
+## Rules
+
+1. A packet can only move to `DONE` when every checkbox in that packet is checked.
+2. Reviewer must provide explicit command exit-code evidence.
+3. `DONE` is invalid if command output is timed out, missing, truncated without exit code, or summary-only.
+4. If review fails, set status to `CHANGES_REQUESTED`, add findings, and keep checkboxes open.
+5. Update this file first in each implementation session and last before session end.
+6. After every `APPROVED` packet, create a checkpoint commit and record the hash in packet evidence before next packet.
+7. Do not use `git checkout --`, `git restore --source`, `git reset --hard`, or `git clean -fd` on shared worktrees.
+8. Respect packet scope boundaries.
+
+## Packet Board
+
+| Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
+|---|---|---|---|---|---|---|
+| 00 | Repro Matrix and Baseline Instrumentation | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence |
+| 01 | Startup Orchestration De-duplication | TODO | Codex | Claude | PENDING | See Packet 01 Review Evidence |
+| 02 | Navigation State Machine Hardening | TODO | Codex | Claude | PENDING | See Packet 02 Review Evidence |
+| 03 | Polling Lifecycle Isolation and Interaction Priority | TODO | Codex | Claude | PENDING | See Packet 03 Review Evidence |
+| 04 | Panel Loading Strategy and Transition Performance | TODO | Codex | Claude | PENDING | See Packet 04 Review Evidence |
+| 05 | Locked Tab UX Clarity and Non-Loading Affordance Fix | TODO | Codex | Claude | PENDING | See Packet 05 Review Evidence |
+| 06 | Contract Test Hardening and Guardrails | TODO | Codex | Claude | PENDING | See Packet 06 Review Evidence |
+| 07 | Final Certification and Release Recommendation | TODO | Claude | Claude | PENDING | See Packet 07 Review Evidence |
+
+## Packet 00 Checklist: Repro Matrix and Baseline Instrumentation
+
+### Discovery
+- [x] Repro matrix documented for sidebar non-loading/performance symptoms.
+- [x] Baseline startup request/polling profile documented.
+- [x] Integration test scaffold created for click-to-panel reliability.
+
+### Required Tests
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsRouting.test.ts src/components/Settings/__tests__/settingsArchitecture.test.ts` passed.
+- [x] Exit codes recorded for all commands.
+
+### Review Gates
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Packet 00 Review Evidence
+
+```
+Files changed:
+- docs/architecture/settings-navigation-performance-stabilization-plan-2026-02.md: Added Appendix A (Repro Scenario Matrix RSM-01..05) and Appendix B (Startup Request Baseline documenting duplicate bootstrap calls)
+- frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx: New integration test scaffold (81 lines) — canonical path resolution, round-trip checks, locked-tab behavior, bootstrap de-dup placeholder
+
+Commands run + exit codes:
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+2. `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsRouting.test.ts src/components/Settings/__tests__/settingsArchitecture.test.ts` -> exit 0 (12 tests passed)
+3. `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx` -> exit 0 (5 passed, 1 todo)
+
+Gate checklist:
+- P0: PASS (all acceptance checks green, repro matrix complete)
+- P1: PASS (no production code modified)
+- P2: PASS (test scaffold under 150 lines, follows existing patterns)
+
+Verdict: APPROVED
+
+Commit:
+- `pending` (will be recorded after checkpoint commit)
+
+Residual risk:
+- none
+
+Rollback:
+- Delete `frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx`
+- Revert appendix additions in plan doc
+```
+
+## Packet 01 Checklist: Startup Orchestration De-duplication
+
+### Implementation
+- [ ] Single bootstrap ownership established.
+- [ ] Redundant initial load calls removed.
+- [ ] Initial load completeness behavior preserved.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 01 Review Evidence
+
+```
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 02 Checklist: Navigation State Machine Hardening
+
+### Implementation
+- [ ] Route-to-tab state transitions hardened.
+- [ ] Rapid click scenarios produce deterministic panel activation.
+- [ ] Legacy redirect compatibility preserved.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 02 Review Evidence
+
+```
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 03 Checklist: Polling Lifecycle Isolation and Interaction Priority
+
+### Implementation
+- [ ] Polling lifecycles coordinated with tab/visibility state.
+- [ ] Overlapping intervals prevented under rapid state transitions.
+- [ ] Infrastructure freshness contract preserved.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 03 Review Evidence
+
+```
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 04 Checklist: Panel Loading Strategy and Transition Performance
+
+### Implementation
+- [ ] Heavy panel load strategy improved (lazy/Suspense where appropriate).
+- [ ] Sidebar remains responsive during panel transitions.
+- [ ] Route and tab-to-panel mapping behavior preserved.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsArchitecture.test.ts` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 04 Review Evidence
+
+```
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 05 Checklist: Locked Tab UX Clarity and Non-Loading Affordance Fix
+
+### Implementation
+- [ ] Locked tab behavior is explicit and user-comprehensible.
+- [ ] No silent no-op transitions for gated tabs.
+- [ ] License gate contract remains intact.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 05 Review Evidence
+
+```
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 06 Checklist: Contract Test Hardening and Guardrails
+
+### Implementation
+- [ ] Sidebar click-to-panel integration tests added for representative tabs.
+- [ ] Startup de-dup invariants covered by tests/guardrails.
+- [ ] Routing helper contracts remain green.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsArchitecture.test.ts src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 06 Review Evidence
+
+```
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 07 Checklist: Final Certification and Release Recommendation
+
+### Certification
+- [ ] Packets 00-06 are DONE/APPROVED.
+- [ ] Checkpoint hashes recorded for each approved packet.
+- [ ] Residual risks reviewed.
+
+### Final Validation Gate
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] `cd frontend-modern && npx vitest run` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 07 Review Evidence
+
+```
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Final recommendation:
+- GO | GO_WITH_CONDITIONS | NO_GO
+
+Blocking items:
+- <id>: <description>
+
+Rollback:
+- <steps>
+```
