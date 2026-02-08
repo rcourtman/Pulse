@@ -32,9 +32,9 @@ type LegacyResource struct {
 	LastSeen time.Time         `json:"lastSeen"`
 	Alerts   []LegacyAlert     `json:"alerts,omitempty"`
 
-	PlatformData json.RawMessage   `json:"platformData,omitempty"`
-	Identity     *LegacyIdentity   `json:"identity,omitempty"`
-	SchemaVersion int              `json:"schemaVersion"`
+	PlatformData  json.RawMessage `json:"platformData,omitempty"`
+	Identity      *LegacyIdentity `json:"identity,omitempty"`
+	SchemaVersion int             `json:"schemaVersion"`
 }
 
 type LegacyResourceType string
@@ -178,13 +178,13 @@ func (r *LegacyResource) DiskPercent() float64 {
 }
 
 type LegacyStoreStats struct {
-	TotalResources      int                               `json:"totalResources"`
-	SuppressedResources int                               `json:"suppressedResources"`
-	ByType              map[LegacyResourceType]int        `json:"byType"`
-	ByPlatform          map[LegacyPlatformType]int        `json:"byPlatform"`
-	ByStatus            map[LegacyResourceStatus]int      `json:"byStatus"`
-	WithAlerts          int                               `json:"withAlerts"`
-	LastUpdated         string                            `json:"lastUpdated"`
+	TotalResources      int                          `json:"totalResources"`
+	SuppressedResources int                          `json:"suppressedResources"`
+	ByType              map[LegacyResourceType]int   `json:"byType"`
+	ByPlatform          map[LegacyPlatformType]int   `json:"byPlatform"`
+	ByStatus            map[LegacyResourceStatus]int `json:"byStatus"`
+	WithAlerts          int                          `json:"withAlerts"`
+	LastUpdated         string                       `json:"lastUpdated"`
 }
 
 type LegacyResourceSummary struct {
