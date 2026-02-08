@@ -42,6 +42,14 @@ import {
 import type { PMGInstance, PBSInstance, PBSDatastore, Storage } from '@/types/api';
 
 type ResourceStoreLike = Pick<ReturnType<typeof getGlobalWebSocketStore>, 'state'>;
+type StorageMetaBridge = {
+    type?: string;
+    content?: string;
+    contentTypes?: string[];
+    shared?: boolean;
+    isCeph?: boolean;
+    isZfs?: boolean;
+};
 
 export interface UseResourcesReturn {
     /** All unified resources */
@@ -680,6 +688,85 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
         }
     };
 
+    const normalizeStorageMeta = (value: unknown): StorageMetaBridge | undefined => {
+        if (!value || typeof value !== 'object') return undefined;
+        const candidate = value as Record<string, unknown>;
+        const contentTypes = Array.isArray(candidate.contentTypes)
+            ? candidate.contentTypes.filter(
+                (item): item is string => typeof item === 'string' && item.trim().length > 0,
+            )
+            : undefined;
+
+        return {
+            type: typeof candidate.type === 'string' ? candidate.type : undefined,
+            content: typeof candidate.content === 'string' ? candidate.content : undefined,
+            contentTypes,
+            shared: typeof candidate.shared === 'boolean' ? candidate.shared : undefined,
+            isCeph: typeof candidate.isCeph === 'boolean' ? candidate.isCeph : undefined,
+            isZfs: typeof candidate.isZfs === 'boolean' ? candidate.isZfs : undefined,
+        };
+    };
+
+    const readStorageMeta = (
+        resource: Resource,
+        platformData: Record<string, unknown> | undefined,
+    ): StorageMetaBridge | undefined => {
+        const directMeta = normalizeStorageMeta((resource as Resource & { storage?: unknown }).storage);
+        if (directMeta) return directMeta;
+        return normalizeStorageMeta(platformData?.storage);
+    };
+
+    const resolveStorageContent = (
+        storageMeta: StorageMetaBridge | undefined,
+        platformData: Record<string, unknown> | undefined,
+        fallback: string,
+    ): string => {
+        const directContent = (storageMeta?.content || '').trim();
+        if (directContent) return directContent;
+        if ((storageMeta?.contentTypes || []).length > 0) return (storageMeta?.contentTypes || []).join(',');
+        const legacyContent = (platformData?.content as string | undefined)?.trim();
+        return legacyContent || fallback;
+    };
+
+    const isStorageEnabledStatus = (status: string | undefined): boolean => {
+        const normalized = (status || '').toLowerCase();
+        return normalized !== 'offline' && normalized !== 'stopped';
+    };
+
+    const isStorageActiveStatus = (status: string | undefined): boolean => {
+        const normalized = (status || '').toLowerCase();
+        return normalized === 'online' || normalized === 'running' || normalized === 'available';
+    };
+
+    const buildStorageBridgeKey = (storage: Pick<Storage, 'id' | 'instance' | 'node' | 'name' | 'type'>): string => {
+        const instance = (storage.instance || '').trim().toLowerCase();
+        const node = (storage.node || '').trim().toLowerCase();
+        const name = (storage.name || '').trim().toLowerCase();
+        const type = (storage.type || '').trim().toLowerCase();
+        if (instance || node || name || type) {
+            return `identity:${instance}|${node}|${name}|${type}`;
+        }
+        return `id:${(storage.id || '').trim().toLowerCase()}`;
+    };
+
+    const mergeStorageBridgeRecord = (
+        current: Storage,
+        incoming: Storage,
+        preferIncoming: boolean,
+    ): Storage => {
+        const preferred = preferIncoming ? incoming : current;
+        const secondary = preferred === current ? incoming : current;
+        return {
+            ...secondary,
+            ...preferred,
+            nodes: preferred.nodes ?? secondary.nodes,
+            nodeIds: preferred.nodeIds ?? secondary.nodeIds,
+            nodeCount: preferred.nodeCount ?? secondary.nodeCount,
+            pbsNames: preferred.pbsNames ?? secondary.pbsNames,
+            zfsPool: preferred.zfsPool ?? secondary.zfsPool,
+        };
+    };
+
     const toLegacyPbsDatastoreStatus = (status: string | undefined): string => {
         switch ((status ?? '').toLowerCase()) {
             case 'online':
@@ -883,50 +970,47 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
                 const free = Number.isFinite(datastore.free) ? datastore.free : Math.max(total - used, 0);
                 const usage = total > 0 ? (used / total) * 100 : 0;
                 const instanceLabel = instance.name || instance.host || instance.id || 'PBS';
+                const status = datastore.status || instance.status;
+                const enabled = isStorageEnabledStatus(status);
+                const active = isStorageActiveStatus(status);
                 return {
                     id: `pbs-${instance.id || instanceLabel}-${datastore.name}`,
                     name: datastore.name || 'PBS Datastore',
                     node: instanceLabel,
                     instance: instance.id || instanceLabel,
                     type: 'pbs',
-                    status: toLegacyPbsDatastoreStatus(datastore.status || instance.status),
+                    status: toLegacyPbsDatastoreStatus(status),
                     total,
                     used,
                     free,
                     usage,
                     content: 'backup',
                     shared: false,
-                    enabled: true,
-                    active: true,
+                    enabled,
+                    active,
                     nodes: [instanceLabel],
                     pbsNames: [datastore.name],
                 } as Storage;
             }),
         );
 
-        if (!hasUnifiedResources()) {
-            const mergedLegacy = [...legacy];
-            const existingKeys = new Set<string>(
-                mergedLegacy.map((item) => item.id || `${item.instance}|${item.node}|${item.name}|${item.type}`),
-            );
-            pbsDatastoresFromPBS.forEach((item) => {
-                const key = item.id || `${item.instance}|${item.node}|${item.name}|${item.type}`;
-                if (existingKeys.has(key)) return;
-                existingKeys.add(key);
-                mergedLegacy.push(item);
-            });
-            return mergedLegacy;
-        }
-
-        const storageResources = resources().filter((r) => r.type === 'storage' || r.type === 'datastore');
+        const storageResources = resources().filter((resource) => resource.type === 'storage' || resource.type === 'datastore');
         const synthesized: Storage[] = storageResources.map((resource) => {
             const platformData = resource.platformData
                 ? (unwrap(resource.platformData) as Record<string, unknown>)
                 : undefined;
+            const storageMeta = readStorageMeta(resource, platformData);
+            const hasStorageMeta = Boolean(storageMeta);
             const total = resource.disk?.total ?? 0;
             const used = resource.disk?.used ?? 0;
             const free = resource.disk?.free ?? Math.max(total - used, 0);
             const usage = resource.disk?.current ?? (total > 0 ? (used / total) * 100 : 0);
+            const statusEnabled = isStorageEnabledStatus(resource.status);
+            const statusActive = isStorageActiveStatus(resource.status);
+            const legacyEnabledHint = platformData?.enabled as boolean | undefined;
+            const legacyActiveHint = platformData?.active as boolean | undefined;
+            const enabled = hasStorageMeta ? statusEnabled : (legacyEnabledHint ?? statusEnabled);
+            const active = hasStorageMeta ? statusActive : (legacyActiveHint ?? statusActive);
 
             if (resource.type === 'datastore') {
                 const instanceID =
@@ -941,16 +1025,19 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
                     name: resource.name,
                     node: instanceName,
                     instance: instanceID,
-                    type: 'pbs',
-                    status: toLegacyStorageStatus(resource.status, true, true),
+                    type: storageMeta?.type || 'pbs',
+                    status: toLegacyStorageStatus(resource.status, active, enabled),
                     total,
                     used,
                     free,
                     usage,
-                    content: (platformData?.content as string | undefined) || 'backup',
-                    shared: false,
-                    enabled: true,
-                    active: resource.status === 'online' || resource.status === 'running',
+                    content: resolveStorageContent(storageMeta, platformData, 'backup'),
+                    shared:
+                        hasStorageMeta
+                            ? storageMeta?.shared === true
+                            : Boolean(platformData?.shared),
+                    enabled,
+                    active,
                     nodes: [instanceName],
                     nodeIds: [`${instanceID}-${instanceName}`],
                     nodeCount: 1,
@@ -958,8 +1045,6 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
                 };
             }
 
-            const active = platformData?.active as boolean | undefined;
-            const enabled = platformData?.enabled as boolean | undefined;
             const node = (platformData?.node as string | undefined) || '';
             const instance = (platformData?.instance as string | undefined) || resource.platformId || '';
             const nodes = platformData?.nodes as string[] | undefined;
@@ -969,34 +1054,46 @@ export function useResourcesAsLegacy(storeOverride?: ResourceStoreLike) {
                 name: resource.name,
                 node,
                 instance,
-                type: (platformData?.type as string | undefined) || resource.type,
+                type: storageMeta?.type || (platformData?.type as string | undefined) || resource.type,
                 status: toLegacyStorageStatus(resource.status, active, enabled),
                 total,
                 used,
                 free,
                 usage,
-                content: (platformData?.content as string | undefined) || '',
-                shared: Boolean(platformData?.shared),
-                enabled: enabled ?? (resource.status !== 'offline' && resource.status !== 'stopped'),
-                active: active ?? (resource.status === 'online' || resource.status === 'running'),
+                content: resolveStorageContent(storageMeta, platformData, ''),
+                shared:
+                    hasStorageMeta
+                        ? storageMeta?.shared === true
+                        : Boolean(platformData?.shared),
+                enabled,
+                active,
                 nodes,
                 zfsPool: platformData?.zfsPool as Storage['zfsPool'],
             };
         });
 
-        const merged = [...legacy];
-        const existingKeys = new Set<string>(
-            merged.map((item) => item.id || `${item.instance}|${item.node}|${item.name}|${item.type}`),
-        );
+        const recordsByKey = new Map<string, Storage>();
+        const appendRecords = (items: Storage[], preferIncoming: boolean) => {
+            items.forEach((item) => {
+                const key = buildStorageBridgeKey(item);
+                const existing = recordsByKey.get(key);
+                if (!existing) {
+                    recordsByKey.set(key, item);
+                    return;
+                }
+                recordsByKey.set(key, mergeStorageBridgeRecord(existing, item, preferIncoming));
+            });
+        };
 
-        [...synthesized, ...pbsDatastoresFromPBS].forEach((item) => {
-            const key = item.id || `${item.instance}|${item.node}|${item.name}|${item.type}`;
-            if (existingKeys.has(key)) return;
-            existingKeys.add(key);
-            merged.push(item);
-        });
+        appendRecords(legacy, false);
+        appendRecords(pbsDatastoresFromPBS, false);
 
-        return merged;
+        if (!hasUnifiedResources()) {
+            return Array.from(recordsByKey.values());
+        }
+
+        appendRecords(synthesized, true);
+        return Array.from(recordsByKey.values());
     });
 
     // Convert resources to legacy PMG format.

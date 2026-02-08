@@ -25,6 +25,19 @@ const normalizeIdentityPart = (value: string | undefined | null): string =>
     .trim()
     .toLowerCase();
 
+type ResourceStorageMeta = {
+  type?: string;
+  content?: string;
+  contentTypes?: string[];
+  shared?: boolean;
+  isCeph?: boolean;
+  isZfs?: boolean;
+};
+
+type ResourceWithStorageMeta = Resource & {
+  storage?: unknown;
+};
+
 const canonicalStorageIdentityKey = (record: StorageRecordV2): string => {
   const platform = normalizeIdentityPart(String(record.source.platform || 'generic'));
   const location = normalizeIdentityPart(record.location?.label) || normalizeIdentityPart(record.refs?.platformEntityId);
@@ -103,16 +116,58 @@ const categoryFromStorageType = (type: string | undefined): StorageCategory => {
   return 'other';
 };
 
-const capabilitiesForStorageType = (type: string | undefined): StorageCapability[] => {
+const normalizeStorageMeta = (value: unknown): ResourceStorageMeta | null => {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Record<string, unknown>;
+  const contentTypes = Array.isArray(candidate.contentTypes)
+    ? candidate.contentTypes.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : undefined;
+
+  return {
+    type: typeof candidate.type === 'string' ? candidate.type : undefined,
+    content: typeof candidate.content === 'string' ? candidate.content : undefined,
+    contentTypes,
+    shared: typeof candidate.shared === 'boolean' ? candidate.shared : undefined,
+    isCeph: typeof candidate.isCeph === 'boolean' ? candidate.isCeph : undefined,
+    isZfs: typeof candidate.isZfs === 'boolean' ? candidate.isZfs : undefined,
+  };
+};
+
+const readResourceStorageMeta = (
+  resource: Resource,
+  platformData: Record<string, unknown>,
+): ResourceStorageMeta | undefined => {
+  const directMeta = normalizeStorageMeta((resource as ResourceWithStorageMeta).storage);
+  if (directMeta) return directMeta;
+  const nestedMeta = normalizeStorageMeta(platformData.storage);
+  return nestedMeta || undefined;
+};
+
+const resolveStorageContent = (
+  storageMeta: ResourceStorageMeta | undefined,
+  platformData: Record<string, unknown>,
+  fallback: string,
+): string => {
+  const directContent = (storageMeta?.content || '').trim();
+  if (directContent) return directContent;
+  if (storageMeta?.contentTypes?.length) return storageMeta.contentTypes.join(',');
+  const legacyContent = (platformData.content as string | undefined)?.trim();
+  return legacyContent || fallback;
+};
+
+const capabilitiesForStorage = (
+  type: string | undefined,
+  storageMeta?: ResourceStorageMeta,
+): StorageCapability[] => {
   const value = (type || '').toLowerCase();
   const caps: StorageCapability[] = ['capacity', 'health'];
   if (value.includes('pbs')) {
     caps.push('backup-repository', 'deduplication', 'namespaces');
   }
-  if (value.includes('zfs')) {
+  if (storageMeta?.isZfs || value.includes('zfs')) {
     caps.push('snapshots', 'compression');
   }
-  if (value.includes('ceph')) {
+  if (storageMeta?.isCeph || value.includes('ceph')) {
     caps.push('replication', 'multi-node');
   }
   return dedupe(caps);
@@ -120,10 +175,18 @@ const capabilitiesForStorageType = (type: string | undefined): StorageCapability
 
 const mapResourceStorageRecord = (resource: Resource, adapterId: string): StorageRecordV2 => {
   const platformData = (resource.platformData as Record<string, unknown> | undefined) || {};
+  const storageMeta = readResourceStorageMeta(resource, platformData);
   const resourceType = (resource.type || '').toLowerCase();
   const platform = (resource.platformType || 'generic') as StorageBackupPlatform;
   const isDatastore = resourceType === 'datastore';
-  const storageType = (platformData.type as string | undefined) || (isDatastore ? 'pbs' : resourceType);
+  const storageType = storageMeta?.type || (platformData.type as string | undefined) || (isDatastore ? 'pbs' : resourceType);
+  const content = resolveStorageContent(storageMeta, platformData, isDatastore ? 'backup' : '');
+  const shared =
+    typeof storageMeta?.shared === 'boolean'
+      ? storageMeta.shared
+      : typeof platformData.shared === 'boolean'
+        ? platformData.shared
+        : undefined;
   const locationLabel = isDatastore
     ? ((platformData.pbsInstanceName as string | undefined) || resource.parentId || resource.platformId || 'Unknown')
     : ((platformData.node as string | undefined) || resource.parentId || resource.platformId || 'Unknown');
@@ -135,7 +198,11 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   return {
     id: resource.id,
     name: resource.name,
-    category: isDatastore ? 'backup-repository' : categoryFromStorageType(storageType),
+    category: isDatastore
+      ? 'backup-repository'
+      : storageMeta?.isCeph || storageMeta?.isZfs
+        ? 'pool'
+        : categoryFromStorageType(storageType),
     health: normalizeResourceHealth(resource.status),
     location: {
       label: locationLabel,
@@ -144,7 +211,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     capacity: capacity(totalBytes, usedBytes, freeBytes, usagePercent),
     capabilities: isDatastore
       ? dedupe(['capacity', 'health', 'backup-repository', 'deduplication', 'namespaces'])
-      : capabilitiesForStorageType(storageType),
+      : capabilitiesForStorage(storageType, storageMeta),
     source: fromSource(platform, adapterId, 'resource'),
     observedAt:
       typeof resource.lastSeen === 'number' && Number.isFinite(resource.lastSeen)
@@ -159,8 +226,11 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       status: resource.status,
       parentId: resource.parentId,
       node: platformData.node,
-      content: platformData.content,
-      shared: platformData.shared,
+      content,
+      contentTypes: storageMeta?.contentTypes,
+      shared,
+      isCeph: storageMeta?.isCeph,
+      isZfs: storageMeta?.isZfs,
       zfsPool: platformData.zfsPool,
     },
   };
@@ -183,7 +253,7 @@ const mapLegacyStorageRecord = (storage: Storage, adapterId: string): StorageRec
       scope: storage.shared ? 'cluster' : 'node',
     },
     capacity: capacity(totalBytes, usedBytes, freeBytes, usagePercent),
-    capabilities: capabilitiesForStorageType(type),
+    capabilities: capabilitiesForStorage(type),
     source: fromSource('proxmox-pve', adapterId, 'legacy'),
     observedAt: Date.now(),
     refs: {

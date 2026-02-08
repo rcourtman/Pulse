@@ -83,6 +83,38 @@ const makeResourceStorage = (overrides: Partial<Resource> = {}): Resource =>
   }) as Resource;
 
 describe('storageAdapters', () => {
+  it('prefers enriched storage metadata over legacy platformData inference', () => {
+    const enriched = {
+      ...makeResourceStorage({
+        platformData: {
+          type: 'dir',
+          node: 'pve1',
+          instance: 'cluster-a',
+          content: 'images',
+          shared: true,
+        },
+      }),
+      storage: {
+        type: 'rbd',
+        content: '',
+        contentTypes: ['images', 'rootdir'],
+        shared: false,
+        isCeph: true,
+        isZfs: false,
+      },
+    } as Resource;
+
+    const records = buildStorageRecordsV2({ state: baseState(), resources: [enriched] });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].details?.type).toBe('rbd');
+    expect(records[0].details?.content).toBe('images,rootdir');
+    expect(records[0].details?.shared).toBe(false);
+    expect(records[0].details?.isCeph).toBe(true);
+    expect(records[0].category).toBe('pool');
+    expect(records[0].capabilities).toContain('replication');
+  });
+
   it('merges mixed-origin records with different ids when canonical identity matches', () => {
     const state = baseState({
       storage: [makeLegacyStorage({ id: 'legacy-storage-id' })],

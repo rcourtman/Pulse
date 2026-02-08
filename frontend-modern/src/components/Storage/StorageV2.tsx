@@ -13,7 +13,7 @@ import {
   getCephHealthStyles,
 } from '@/features/storageBackupsV2/storageDomain';
 import { PLATFORM_BLUEPRINTS } from '@/features/storageBackupsV2/platformBlueprint';
-import type { NormalizedHealth } from '@/features/storageBackupsV2/models';
+import type { NormalizedHealth, StorageRecordV2 } from '@/features/storageBackupsV2/models';
 import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
 import {
   STORAGE_V2_PATH,
@@ -85,6 +85,18 @@ const normalizeView = (value: string): StorageV2View => (value === 'disks' ? 'di
 
 const normalizeSortDirection = (value: string): 'asc' | 'desc' =>
   value === 'desc' ? 'desc' : 'asc';
+
+const getStorageMetaBoolean = (record: StorageRecordV2, key: 'isCeph' | 'isZfs'): boolean | null => {
+  const details = (record.details || {}) as Record<string, unknown>;
+  const value = details[key];
+  return typeof value === 'boolean' ? value : null;
+};
+
+const isRecordCeph = (record: StorageRecordV2): boolean => {
+  const isCephMeta = getStorageMetaBoolean(record, 'isCeph');
+  if (isCephMeta !== null) return isCephMeta;
+  return isCephRecord(record);
+};
 
 const StorageV2: Component = () => {
   const navigate = useNavigate();
@@ -189,7 +201,7 @@ const StorageV2: Component = () => {
     const match = records().find((record) => record.id === resource || record.name === resource);
     if (!match) return;
 
-    if (isCephRecord(match)) {
+    if (isRecordCeph(match)) {
       setExpandedCephRecordId(match.id);
     }
 
@@ -316,7 +328,7 @@ const StorageV2: Component = () => {
         when={
           view() === 'pools' &&
           cephSummaryStats().clusters.length > 0 &&
-          filteredRecords().some(isCephRecord)
+          filteredRecords().some(isRecordCeph)
         }
       >
         <Card padding="md" tone="glass">
@@ -582,7 +594,7 @@ const StorageV2: Component = () => {
                               {(record) => {
                                 const zfsPool = getRecordZfsPool(record);
                                 const cephCluster = resolveCephCluster(record);
-                                const isCeph = isCephRecord(record);
+                                const isCeph = isRecordCeph(record);
                                 const isExpanded = () => expandedCephRecordId() === record.id;
                                 const alertState = createMemo(() => getRecordAlertState(record.id));
                                 const status = getRecordStatus(record);
