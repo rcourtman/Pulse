@@ -488,3 +488,36 @@ Plan is complete only when:
 #### C.3 Legacy Compatibility
 
 During migration, heuristic derivation via `deriveResourceTypeFromAlert` (`internal/api/router.go`) is retained for test reference only. Runtime paths must use `Metadata["resourceType"]` as the primary source. If metadata is missing, the alert is classified as the default type for its metric family.
+
+### Appendix D: Monitor Integration Source Mapping and Exception Register
+
+#### Source Payload → Unified Resource → Alert Evaluation Path
+
+| Source Type | Poller File | Typed Method | Metrics Migrated to evaluateUnifiedMetrics | Remaining Typed Metrics | Exception Rationale |
+|---|---|---|---|---|---|
+| VM (Qemu) | monitor_polling_vm.go | CheckGuest | CPU, Memory, Disk, DiskRead, DiskWrite, NetworkIn, NetworkOut | Per-disk alerting (individual disk resource IDs) | Per-disk creates sub-resource IDs not supported by UnifiedResourceInput |
+| Container (LXC/OCI) | monitor_polling_containers.go | CheckGuest | CPU, Memory, Disk, DiskRead, DiskWrite, NetworkIn, NetworkOut | Per-disk alerting | Same as VM |
+| Node (PVE) | monitor_pve_storage.go, monitor_alerts.go | CheckNode | CPU, Memory, Disk | Temperature | Temperature not in UnifiedResourceInput; requires node.Temperature struct |
+| PBS | monitor_pbs_pmg.go, monitor_alerts.go | CheckPBS | CPU, Memory | Offline detection, Backup age | Discrete event logic; not threshold-based |
+| PMG | monitor_pbs_pmg.go, monitor_alerts.go | CheckPMG | — (no standard metrics) | Queue depth, Oldest message, Anomaly detection, Quarantine growth, Offline | All metrics are domain-specific queue/mail metrics, not standard CPU/memory/disk |
+| Storage | monitor_polling_storage.go | CheckStorage | — (not yet migrated) | Usage, Offline detection | Usage follows different threshold path (StorageDefault); offline is discrete event |
+| Host Agent | monitor_agents.go | CheckHost | — (not yet migrated) | CPU, Memory, Per-disk, RAID, SMART, Disk temperature | Rich per-metric metadata (hostId, hostname, platform, etc.) prevents clean migration |
+| Docker Host | monitor_agents.go | CheckDockerHost | — (not yet migrated) | Per-container/service evaluation | Entirely per-container delegation pattern; host-level metrics not checked |
+
+#### Documented Exceptions (Typed Paths Retained)
+
+1. **Per-disk alerting (CheckGuest)**: Creates per-disk resource IDs (`{guestID}-disk-{key}`) with per-disk metadata (mountpoint, device, type, total/used/free bytes). Not representable in UnifiedResourceInput which has a single Disk field.
+
+2. **Temperature (CheckNode)**: Requires `node.Temperature.CPUPackage` / `CPUMax` with availability check. Not in UnifiedResourceInput.
+
+3. **CheckPMG (all metrics)**: Uses queue-total, queue-deferred, queue-hold, oldest-message metrics. These are domain-specific mail gateway metrics, not standard infrastructure metrics.
+
+4. **CheckHost (all metrics)**: Attaches rich per-metric metadata (hostId, hostname, platform, osName, osVersion, agentVersion, architecture, tags, plus metric-specific fields like cpuCount, memoryTotalBytes). The evaluateUnifiedMetrics path passes a single opts to all metrics, which cannot carry per-metric metadata.
+
+5. **CheckDockerHost (all)**: Delegates to evaluateDockerContainer per container and evaluateDockerService per service. No host-level metric evaluation exists.
+
+6. **CheckStorage (usage)**: Currently uses individual StorageDefault threshold rather than ThresholdConfig. Could migrate in a future packet once storage threshold resolution is unified.
+
+7. **Offline/powered-off detection (all typed methods)**: Discrete event checks with confirmation tracking (e.g., consecutive offline counts). Fundamentally different from threshold-based metric evaluation.
+
+8. **Backup age (CheckPBS)**: Discrete event with custom age-based logic. Not a metric threshold.

@@ -77,6 +77,45 @@ func (m *Manager) unifiedDefaultThresholds(typeKey string) ThresholdConfig {
 	}
 }
 
+// evaluateUnifiedMetrics runs the common metric dispatch path for unified resources.
+func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds ThresholdConfig, opts *metricOptions) {
+	if input == nil {
+		return
+	}
+	resourceType := unifiedAlertType(input.Type)
+
+	if input.CPU != nil {
+		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "cpu", input.CPU.Percent, thresholds.CPU, opts)
+	}
+	if input.Memory != nil {
+		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "memory", input.Memory.Percent, thresholds.Memory, opts)
+	}
+	if input.Disk != nil {
+		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "disk", input.Disk.Percent, thresholds.Disk, opts)
+	}
+
+	// I/O metrics — only for guest resource types
+	if isUnifiedGuestType(input.Type) {
+		if input.DiskRead != nil {
+			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "diskRead", input.DiskRead.Value, thresholds.DiskRead, opts)
+		}
+		if input.DiskWrite != nil {
+			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "diskWrite", input.DiskWrite.Value, thresholds.DiskWrite, opts)
+		}
+		if input.NetworkIn != nil {
+			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "networkIn", input.NetworkIn.Value, thresholds.NetworkIn, opts)
+		}
+		if input.NetworkOut != nil {
+			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "networkOut", input.NetworkOut.Value, thresholds.NetworkOut, opts)
+		}
+	}
+
+	// Storage-specific: usage metric
+	if input.Type == "storage" && input.Disk != nil {
+		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "usage", input.Disk.Percent, thresholds.Usage, opts)
+	}
+}
+
 // CheckUnifiedResource evaluates threshold-based metric alerts for a unified resource.
 // It resolves thresholds (defaults + overrides) and calls checkMetric for each
 // available metric. Discrete event alerts (offline, RAID, backup age, etc.)
@@ -102,42 +141,11 @@ func (m *Manager) CheckUnifiedResource(input *UnifiedResourceInput) {
 		return
 	}
 
-	resourceType := unifiedAlertType(input.Type)
-
 	log.Debug().
 		Str("resourceID", input.ID).
 		Str("resourceName", input.Name).
-		Str("resourceType", resourceType).
+		Str("resourceType", unifiedAlertType(input.Type)).
 		Msg("Evaluating unified resource metrics")
 
-	if input.CPU != nil {
-		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "cpu", input.CPU.Percent, thresholds.CPU, nil)
-	}
-	if input.Memory != nil {
-		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "memory", input.Memory.Percent, thresholds.Memory, nil)
-	}
-	if input.Disk != nil {
-		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "disk", input.Disk.Percent, thresholds.Disk, nil)
-	}
-
-	// I/O metrics — only for guest resource types
-	if isUnifiedGuestType(input.Type) {
-		if input.DiskRead != nil {
-			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "diskRead", input.DiskRead.Value, thresholds.DiskRead, nil)
-		}
-		if input.DiskWrite != nil {
-			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "diskWrite", input.DiskWrite.Value, thresholds.DiskWrite, nil)
-		}
-		if input.NetworkIn != nil {
-			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "networkIn", input.NetworkIn.Value, thresholds.NetworkIn, nil)
-		}
-		if input.NetworkOut != nil {
-			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "networkOut", input.NetworkOut.Value, thresholds.NetworkOut, nil)
-		}
-	}
-
-	// Storage-specific: usage metric
-	if input.Type == "storage" && input.Disk != nil {
-		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "usage", input.Disk.Percent, thresholds.Usage, nil)
-	}
+	m.evaluateUnifiedMetrics(input, thresholds, nil)
 }

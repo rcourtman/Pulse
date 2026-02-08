@@ -2515,20 +2515,25 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		Interface("thresholds", thresholds).
 		Msg("Checking guest thresholds")
 
-	// Check thresholds (checkMetric will skip if threshold is nil or <= 0)
-	cpuOpts := &metricOptions{MonitorOnly: monitorOnly}
-	memOpts := &metricOptions{MonitorOnly: monitorOnly}
-	diskOpts := &metricOptions{MonitorOnly: monitorOnly}
-
-	if !monitorOnly {
-		cpuOpts = nil
-		memOpts = nil
-		diskOpts = nil
+	// Evaluate standard metrics through unified path
+	var evalOpts *metricOptions
+	if monitorOnly {
+		evalOpts = &metricOptions{MonitorOnly: true}
 	}
-
-	m.checkMetric(guestID, name, node, instanceName, guestType, "cpu", cpu, thresholds.CPU, cpuOpts)
-	m.checkMetric(guestID, name, node, instanceName, guestType, "memory", memUsage, thresholds.Memory, memOpts)
-	m.checkMetric(guestID, name, node, instanceName, guestType, "disk", diskUsage, thresholds.Disk, diskOpts)
+	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
+		ID:         guestID,
+		Type:       strings.ToLower(guestType),
+		Name:       name,
+		Node:       node,
+		Instance:   instanceName,
+		CPU:        &UnifiedResourceMetric{Percent: cpu},
+		Memory:     &UnifiedResourceMetric{Percent: memUsage},
+		Disk:       &UnifiedResourceMetric{Percent: diskUsage},
+		DiskRead:   &UnifiedResourceMetric{Value: float64(diskRead) / 1024 / 1024},
+		DiskWrite:  &UnifiedResourceMetric{Value: float64(diskWrite) / 1024 / 1024},
+		NetworkIn:  &UnifiedResourceMetric{Value: float64(netIn) / 1024 / 1024},
+		NetworkOut: &UnifiedResourceMetric{Value: float64(netOut) / 1024 / 1024},
+	}, thresholds, evalOpts)
 
 	if thresholds.Disk != nil && thresholds.Disk.Trigger > 0 && len(disks) > 0 {
 		seenDisks := make(map[string]struct{})
@@ -2591,42 +2596,6 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 				MonitorOnly: monitorOnly,
 			})
 		}
-	}
-
-	// Check I/O metrics (convert bytes/s to MB/s) - checkMetric will skip if threshold is nil or <= 0
-	// Check I/O metrics (convert bytes/s to MB/s)
-	// We call checkMetric unconditionally. If the threshold is nil or disabled (Trigger <= 0),
-	// checkMetric will automatically clear any existing alerts for that metric.
-	{
-		readOpts := &metricOptions{MonitorOnly: monitorOnly}
-		if !monitorOnly {
-			readOpts = nil
-		}
-		m.checkMetric(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead, readOpts)
-	}
-
-	{
-		writeOpts := &metricOptions{MonitorOnly: monitorOnly}
-		if !monitorOnly {
-			writeOpts = nil
-		}
-		m.checkMetric(guestID, name, node, instanceName, guestType, "diskWrite", float64(diskWrite)/1024/1024, thresholds.DiskWrite, writeOpts)
-	}
-
-	{
-		netInOpts := &metricOptions{MonitorOnly: monitorOnly}
-		if !monitorOnly {
-			netInOpts = nil
-		}
-		m.checkMetric(guestID, name, node, instanceName, guestType, "networkIn", float64(netIn)/1024/1024, thresholds.NetworkIn, netInOpts)
-	}
-
-	{
-		netOutOpts := &metricOptions{MonitorOnly: monitorOnly}
-		if !monitorOnly {
-			netOutOpts = nil
-		}
-		m.checkMetric(guestID, name, node, instanceName, guestType, "networkOut", float64(netOut)/1024/1024, thresholds.NetworkOut, netOutOpts)
 	}
 }
 
@@ -2706,9 +2675,16 @@ func (m *Manager) CheckNode(node models.Node) {
 					Str("node", node.Name).
 					Msg("Skipping node metric alerts - host agent is monitoring this machine")
 			} else {
-				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU, nil)
-				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory, nil)
-				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "disk", node.Disk.Usage, thresholds.Disk, nil)
+				m.evaluateUnifiedMetrics(&UnifiedResourceInput{
+					ID:       node.ID,
+					Type:     "node",
+					Name:     node.Name,
+					Node:     node.Name,
+					Instance: node.Instance,
+					CPU:      &UnifiedResourceMetric{Percent: node.CPU * 100},
+					Memory:   &UnifiedResourceMetric{Percent: node.Memory.Usage},
+					Disk:     &UnifiedResourceMetric{Percent: node.Disk.Usage},
+				}, thresholds, nil)
 
 				// Check temperature if available
 				// We pass the check unconditionally so that if the threshold triggers are disabled (set to 0),
@@ -3579,10 +3555,15 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 
 	// Check metrics only if PBS is online - checkMetric will skip if threshold is nil or <= 0
 	if pbs.Status != "offline" {
-		// PBS CPU is already a percentage
-		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "cpu", pbs.CPU, cpuThreshold, nil)
-		// PBS Memory is already a percentage
-		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "memory", pbs.Memory, memoryThreshold, nil)
+		m.evaluateUnifiedMetrics(&UnifiedResourceInput{
+			ID:       pbs.ID,
+			Type:     "pbs",
+			Name:     pbs.Name,
+			Node:     pbs.Host,
+			Instance: pbs.Name,
+			CPU:      &UnifiedResourceMetric{Percent: pbs.CPU},
+			Memory:   &UnifiedResourceMetric{Percent: pbs.Memory},
+		}, ThresholdConfig{CPU: cpuThreshold, Memory: memoryThreshold}, nil)
 	}
 }
 
