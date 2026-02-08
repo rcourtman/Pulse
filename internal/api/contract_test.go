@@ -1,0 +1,321 @@
+package api
+
+import (
+	"bytes"
+	"encoding/json"
+	"testing"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
+)
+
+func TestContract_FindingJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
+	lastSeen := now.Add(5 * time.Minute)
+	resolvedAt := now.Add(10 * time.Minute)
+	ackAt := now.Add(11 * time.Minute)
+	snoozedUntil := now.Add(12 * time.Minute)
+	lastInvestigated := now.Add(15 * time.Minute)
+	lastRegression := now.Add(30 * time.Minute)
+
+	payload := ai.Finding{
+		ID:                     "finding-1",
+		Key:                    "cpu-high",
+		Severity:               ai.FindingSeverityCritical,
+		Category:               ai.FindingCategoryPerformance,
+		ResourceID:             "vm-100",
+		ResourceName:           "web-server",
+		ResourceType:           "vm",
+		Node:                   "pve-1",
+		Title:                  "High CPU usage",
+		Description:            "CPU sustained above 95%",
+		Recommendation:         "Investigate processes and load",
+		Evidence:               "cpu=96%",
+		Source:                 "ai-analysis",
+		DetectedAt:             now,
+		LastSeenAt:             lastSeen,
+		ResolvedAt:             &resolvedAt,
+		AutoResolved:           true,
+		ResolveReason:          "No longer detected",
+		AcknowledgedAt:         &ackAt,
+		SnoozedUntil:           &snoozedUntil,
+		AlertID:                "alert-1",
+		DismissedReason:        "expected_behavior",
+		UserNote:               "Runs nightly batch",
+		TimesRaised:            4,
+		Suppressed:             true,
+		InvestigationSessionID: "inv-session-1",
+		InvestigationStatus:    "completed",
+		InvestigationOutcome:   "fix_queued",
+		LastInvestigatedAt:     &lastInvestigated,
+		InvestigationAttempts:  2,
+		LoopState:              "remediation_planned",
+		Lifecycle: []ai.FindingLifecycleEvent{
+			{
+				At:      now,
+				Type:    "state_change",
+				Message: "Moved to investigating",
+				From:    "detected",
+				To:      "investigating",
+				Metadata: map[string]string{
+					"from": "detected",
+					"to":   "investigating",
+				},
+			},
+		},
+		RegressionCount:  1,
+		LastRegressionAt: &lastRegression,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal finding: %v", err)
+	}
+
+	const want = `{
+		"id":"finding-1",
+		"key":"cpu-high",
+		"severity":"critical",
+		"category":"performance",
+		"resource_id":"vm-100",
+		"resource_name":"web-server",
+		"resource_type":"vm",
+		"node":"pve-1",
+		"title":"High CPU usage",
+		"description":"CPU sustained above 95%",
+		"recommendation":"Investigate processes and load",
+		"evidence":"cpu=96%",
+		"source":"ai-analysis",
+		"detected_at":"2026-02-08T13:14:15Z",
+		"last_seen_at":"2026-02-08T13:19:15Z",
+		"resolved_at":"2026-02-08T13:24:15Z",
+		"auto_resolved":true,
+		"resolve_reason":"No longer detected",
+		"acknowledged_at":"2026-02-08T13:25:15Z",
+		"snoozed_until":"2026-02-08T13:26:15Z",
+		"alert_id":"alert-1",
+		"dismissed_reason":"expected_behavior",
+		"user_note":"Runs nightly batch",
+		"times_raised":4,
+		"suppressed":true,
+		"investigation_session_id":"inv-session-1",
+		"investigation_status":"completed",
+		"investigation_outcome":"fix_queued",
+		"last_investigated_at":"2026-02-08T13:29:15Z",
+		"investigation_attempts":2,
+		"loop_state":"remediation_planned",
+		"lifecycle":[{"at":"2026-02-08T13:14:15Z","type":"state_change","message":"Moved to investigating","from":"detected","to":"investigating","metadata":{"from":"detected","to":"investigating"}}],
+		"regression_count":1,
+		"last_regression_at":"2026-02-08T13:44:15Z"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_ApprovalJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
+	expires := now.Add(5 * time.Minute)
+	decided := now.Add(2 * time.Minute)
+
+	payload := approval.ApprovalRequest{
+		ID:          "approval-1",
+		ExecutionID: "exec-1",
+		ToolID:      "tool-1",
+		Command:     "rm -rf /tmp/cache",
+		TargetType:  "host",
+		TargetID:    "host-1",
+		TargetName:  "alpha",
+		Context:     "Cleanup temporary cache",
+		RiskLevel:   approval.RiskHigh,
+		Status:      approval.StatusApproved,
+		RequestedAt: now,
+		ExpiresAt:   expires,
+		DecidedAt:   &decided,
+		DecidedBy:   "admin",
+		DenyReason:  "not needed",
+		CommandHash: "sha256:abc",
+		Consumed:    true,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal approval: %v", err)
+	}
+
+	const want = `{
+		"id":"approval-1",
+		"executionId":"exec-1",
+		"toolId":"tool-1",
+		"command":"rm -rf /tmp/cache",
+		"targetType":"host",
+		"targetId":"host-1",
+		"targetName":"alpha",
+		"context":"Cleanup temporary cache",
+		"riskLevel":"high",
+		"status":"approved",
+		"requestedAt":"2026-02-08T13:14:15Z",
+		"expiresAt":"2026-02-08T13:19:15Z",
+		"decidedAt":"2026-02-08T13:16:15Z",
+		"decidedBy":"admin",
+		"denyReason":"not needed",
+		"commandHash":"sha256:abc",
+		"consumed":true
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
+	cases := []struct {
+		name  string
+		event chat.StreamEvent
+		want  string
+	}{
+		{
+			name: "content",
+			event: mustStreamEvent(t, "content", chat.ContentData{
+				Text: "hello",
+			}),
+			want: `{"type":"content","data":{"text":"hello"}}`,
+		},
+		{
+			name: "tool_start",
+			event: mustStreamEvent(t, "tool_start", chat.ToolStartData{
+				ID:       "tool-1",
+				Name:     "pulse_read",
+				Input:    `{"path":"/tmp/x.log"}`,
+				RawInput: `{"path":"/tmp/x.log"}`,
+			}),
+			want: `{"type":"tool_start","data":{"id":"tool-1","name":"pulse_read","input":"{\"path\":\"/tmp/x.log\"}","raw_input":"{\"path\":\"/tmp/x.log\"}"}}`,
+		},
+		{
+			name: "tool_end",
+			event: mustStreamEvent(t, "tool_end", chat.ToolEndData{
+				ID:       "tool-1",
+				Name:     "pulse_read",
+				Input:    `{"path":"/tmp/x.log"}`,
+				RawInput: `{"path":"/tmp/x.log"}`,
+				Output:   "ok",
+				Success:  true,
+			}),
+			want: `{"type":"tool_end","data":{"id":"tool-1","name":"pulse_read","input":"{\"path\":\"/tmp/x.log\"}","raw_input":"{\"path\":\"/tmp/x.log\"}","output":"ok","success":true}}`,
+		},
+		{
+			name: "approval_needed",
+			event: mustStreamEvent(t, "approval_needed", chat.ApprovalNeededData{
+				ApprovalID:  "approval-1",
+				ToolID:      "tool-2",
+				ToolName:    "pulse_exec",
+				Command:     "systemctl restart nginx",
+				RunOnHost:   true,
+				TargetHost:  "node-1",
+				Risk:        "high",
+				Description: "Restart web service",
+			}),
+			want: `{"type":"approval_needed","data":{"approval_id":"approval-1","tool_id":"tool-2","tool_name":"pulse_exec","command":"systemctl restart nginx","run_on_host":true,"target_host":"node-1","risk":"high","description":"Restart web service"}}`,
+		},
+		{
+			name: "done",
+			event: mustStreamEvent(t, "done", chat.DoneData{
+				SessionID:    "session-1",
+				InputTokens:  120,
+				OutputTokens: 80,
+			}),
+			want: `{"type":"done","data":{"session_id":"session-1","input_tokens":120,"output_tokens":80}}`,
+		},
+		{
+			name: "error",
+			event: mustStreamEvent(t, "error", chat.ErrorData{
+				Message: "request failed",
+			}),
+			want: `{"type":"error","data":{"message":"request failed"}}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := json.Marshal(tc.event)
+			if err != nil {
+				t.Fatalf("marshal stream event: %v", err)
+			}
+			assertJSONSnapshot(t, got, tc.want)
+		})
+	}
+}
+
+func TestContract_PushNotificationJSONSnapshots(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload relay.PushNotificationPayload
+		want    string
+	}{
+		{
+			name:    "patrol_finding",
+			payload: relay.NewPatrolFindingNotification("finding-1", "warning", "capacity", "Disk pressure detected"),
+			want:    `{"type":"patrol_finding","priority":"normal","title":"Disk pressure detected","body":"New warning capacity finding detected","action_type":"view_finding","action_id":"finding-1","category":"capacity","severity":"warning"}`,
+		},
+		{
+			name:    "patrol_critical",
+			payload: relay.NewPatrolFindingNotification("finding-2", "critical", "performance", "CPU saturation detected"),
+			want:    `{"type":"patrol_critical","priority":"high","title":"CPU saturation detected","body":"New critical performance finding detected","action_type":"view_finding","action_id":"finding-2","category":"performance","severity":"critical"}`,
+		},
+		{
+			name:    "approval_request",
+			payload: relay.NewApprovalRequestNotification("approval-1", "Fix queued", "high"),
+			want:    `{"type":"approval_request","priority":"high","title":"Fix queued","body":"A high-risk fix requires your approval","action_type":"approve_fix","action_id":"approval-1"}`,
+		},
+		{
+			name:    "fix_completed_success",
+			payload: relay.NewFixCompletedNotification("finding-3", "CPU saturation detected", true),
+			want:    `{"type":"fix_completed","priority":"normal","title":"CPU saturation detected","body":"Fix applied successfully","action_type":"view_fix_result","action_id":"finding-3"}`,
+		},
+		{
+			name:    "fix_completed_failed",
+			payload: relay.NewFixCompletedNotification("finding-4", "Disk pressure detected", false),
+			want:    `{"type":"fix_completed","priority":"normal","title":"Disk pressure detected","body":"Fix attempt failed — review needed","action_type":"view_fix_result","action_id":"finding-4"}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := json.Marshal(tc.payload)
+			if err != nil {
+				t.Fatalf("marshal push payload: %v", err)
+			}
+			assertJSONSnapshot(t, got, tc.want)
+		})
+	}
+}
+
+func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.StreamEvent {
+	t.Helper()
+
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal stream data: %v", err)
+	}
+
+	return chat.StreamEvent{
+		Type: eventType,
+		Data: raw,
+	}
+}
+
+func assertJSONSnapshot(t *testing.T, got []byte, want string) {
+	t.Helper()
+
+	var gotCompact bytes.Buffer
+	var wantCompact bytes.Buffer
+	if err := json.Compact(&gotCompact, got); err != nil {
+		t.Fatalf("compact got json: %v", err)
+	}
+	if err := json.Compact(&wantCompact, []byte(want)); err != nil {
+		t.Fatalf("compact want json: %v", err)
+	}
+	if gotCompact.String() != wantCompact.String() {
+		t.Fatalf("json snapshot mismatch\nwant: %s\ngot:  %s", wantCompact.String(), gotCompact.String())
+	}
+}
