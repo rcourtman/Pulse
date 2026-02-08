@@ -25,7 +25,7 @@ Date: 2026-02-08
 | 02 | Extract Auth + Security + Install Route Group | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence |
 | 03 | Extract Monitoring + Resource Route Group | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence |
 | 04 | Extract AI + Relay + Sessions Route Group | DONE | Codex | Claude | APPROVED | See Packet 04 Review Evidence |
-| 05 | Extract Org + License + Audit Route Group | TODO | Unassigned | Unassigned | PENDING | |
+| 05 | Extract Org + License + Audit Route Group | DONE | Codex | Claude | APPROVED | See Packet 05 Review Evidence |
 | 06 | ConfigHandlers Node Lifecycle Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 07 | ConfigHandlers Setup + Auto-Register Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 08 | ConfigHandlers System + Discovery + Import/Export Extraction | TODO | Unassigned | Unassigned | PENDING | |
@@ -263,21 +263,46 @@ Rollback:
 ## Packet 05 Checklist: Extract Org + License + Audit Route Group
 
 ### Implementation
-- [ ] Org/license/audit/report registrations moved to dedicated module.
-- [ ] Feature-gate behavior preserved.
-- [ ] Scope/permission behavior preserved.
-- [ ] Deny-path and feature-disabled tests updated for parity.
+- [x] Org/license/audit/report registrations moved to dedicated module.
+- [x] Feature-gate behavior preserved.
+- [x] Scope/permission behavior preserved.
+- [x] Deny-path and feature-disabled tests updated for parity.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "OrgHandlers|License|Audit|Reporting|Scope" -v` passed.
-- [ ] `go test ./internal/api/... -run "TestRouterRouteInventory|RouteInventory" -v` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "OrgHandlers|License|Audit|Reporting|Scope" -v` passed.
+- [x] `go test ./internal/api/... -run "TestRouterRouteInventory|RouteInventory" -v` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Review Evidence
+
+Files changed:
+- `internal/api/router_routes_org_license.go` (new): Org/license/audit/RBAC/reporting route registrations extracted.
+- `internal/api/router_routes_registration.go`: `registerOrgLicenseRoutes` reduced to thin delegate.
+- `internal/api/route_inventory_test.go`: Added `router_routes_org_license.go` to parsed file list.
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/api/... -run "TestRouterRouteInventory|RouteInventory" -v` -> exit 0
+3. `go test ./internal/api/... -run "OrgHandlers|License|Audit|Reporting|Scope" -v` -> exit 0
+
+Gate checklist:
+- P0: PASS (files verified, commands rerun independently, exit codes 0)
+- P1: PASS (route inventory parity; feature gates and scope wrappers preserved; org/license/audit tests pass)
+- P2: PASS (tracker updated, checklist complete)
+
+Verdict: APPROVED
+
+Residual risk:
+- None
+
+Rollback:
+- Delete `internal/api/router_routes_org_license.go`, restore `registerOrgLicenseRoutes` body in `router_routes_registration.go`.
 
 ## Packet 06 Checklist: ConfigHandlers Node Lifecycle Extraction
 

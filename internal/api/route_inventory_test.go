@@ -66,6 +66,7 @@ func parseRouterRoutes(t *testing.T) ([]string, []string, []string) {
 		"router_routes_ai_relay.go",
 		"router_routes_monitoring.go",
 		"router_routes_auth_security.go",
+		"router_routes_org_license.go",
 	}
 
 	fset := token.NewFileSet()
