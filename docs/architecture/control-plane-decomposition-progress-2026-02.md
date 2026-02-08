@@ -27,7 +27,7 @@ Date: 2026-02-08
 | 04 | Extract AI + Relay + Sessions Route Group | DONE | Codex | Claude | APPROVED | See Packet 04 Review Evidence |
 | 05 | Extract Org + License + Audit Route Group | DONE | Codex | Claude | APPROVED | See Packet 05 Review Evidence |
 | 06 | ConfigHandlers Node Lifecycle Extraction | DONE | Codex | Claude | APPROVED | See Packet 06 Review Evidence |
-| 07 | ConfigHandlers Setup + Auto-Register Extraction | TODO | Unassigned | Unassigned | PENDING | |
+| 07 | ConfigHandlers Setup + Auto-Register Extraction | DONE | Codex | Claude | APPROVED | See Packet 07 Review Evidence |
 | 08 | ConfigHandlers System + Discovery + Import/Export Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 09 | Architecture Guardrails and Drift Tests | TODO | Unassigned | Unassigned | PENDING | |
 | 10 | Final Certification | TODO | Unassigned | Unassigned | PENDING | |
@@ -350,21 +350,45 @@ Rollback:
 ## Packet 07 Checklist: ConfigHandlers Setup + Auto-Register Extraction
 
 ### Implementation
-- [ ] Setup script and setup URL logic extracted.
-- [ ] Auto-register and secure auto-register logic extracted.
-- [ ] Security guardrails preserved.
-- [ ] Setup/auto-register contract tests updated for parity.
+- [x] Setup script and setup URL logic extracted.
+- [x] Auto-register and secure auto-register logic extracted.
+- [x] Security guardrails preserved.
+- [x] Setup/auto-register contract tests updated for parity.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "SetupScript|SetupURL|AutoRegister|SecureAutoRegister|TransportGuard" -v` passed.
-- [ ] `go test ./internal/api/... -run "Contract|RouteInventory" -v` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "SetupScript|SetupURL|AutoRegister|SecureAutoRegister|TransportGuard" -v` passed.
+- [x] `go test ./internal/api/... -run "Contract|RouteInventory" -v` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Review Evidence
+
+Files changed:
+- `internal/api/config_setup_handlers.go` (new, 2275 LOC): Setup/auto-register logic and private helpers extracted.
+- `internal/api/config_handlers.go` (4201 -> 1969 LOC): Setup handler methods replaced with thin delegates.
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/api/... -run "SetupScript|SetupURL|AutoRegister|SecureAutoRegister|TransportGuard" -v` -> exit 0
+3. `go test ./internal/api/... -run "Contract|RouteInventory" -v` -> exit 0
+
+Gate checklist:
+- P0: PASS (files verified, commands rerun independently, exit codes 0)
+- P1: PASS (security guardrails preserved; setup/auto-register tests pass)
+- P2: PASS (tracker updated, checklist complete)
+
+Verdict: APPROVED
+
+Residual risk:
+- None
+
+Rollback:
+- Delete `internal/api/config_setup_handlers.go`, restore method bodies in `internal/api/config_handlers.go`.
 
 ## Packet 08 Checklist: ConfigHandlers System + Discovery + Import/Export Extraction
 
