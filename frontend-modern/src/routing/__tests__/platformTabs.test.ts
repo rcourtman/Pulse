@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BACKUPS_V2_PATH, STORAGE_V2_PATH, buildBackupsPath, buildStoragePath } from '@/routing/resourceLinks';
 import { buildStorageBackupsTabSpecs } from '@/routing/platformTabs';
-import { buildStorageBackupsRoutingPlan } from '@/routing/storageBackupsMode';
+import { buildStorageBackupsRoutingPlan, resolveStorageBackupsRoutingPlan } from '@/routing/storageBackupsMode';
 
 describe('buildStorageBackupsTabSpecs', () => {
   it('returns only canonical storage/backups tabs when v2 default is enabled', () => {
@@ -90,5 +90,36 @@ describe('buildStorageBackupsTabSpecs', () => {
   it('backward compat: boolean false produces all-legacy tabs', () => {
     const specs = buildStorageBackupsTabSpecs(false);
     expect(specs.map((spec) => spec.id)).toEqual(['storage', 'storage-v2', 'backups', 'backups-v2']);
+  });
+});
+
+describe('GA contract regression gates', () => {
+  it('GA default: v2-default produces exactly 2 tabs with canonical routes', () => {
+    const specs = buildStorageBackupsTabSpecs(buildStorageBackupsRoutingPlan('v2-default'));
+
+    expect(specs).toHaveLength(2);
+    expect(specs.map((spec) => spec.id)).toEqual(['storage', 'backups']);
+    expect(specs.map((spec) => spec.route)).toEqual([buildStoragePath(), buildBackupsPath()]);
+    expect(specs.every((spec) => spec.badge === undefined)).toBe(true);
+  });
+
+  it('GA default: no legacy labels appear in v2-default mode', () => {
+    const specs = buildStorageBackupsTabSpecs(buildStorageBackupsRoutingPlan('v2-default'));
+
+    for (const spec of specs) {
+      expect(spec.label).not.toContain('(Legacy)');
+      expect(spec.label).not.toContain('V2');
+      expect(spec.label.toLowerCase()).not.toContain('preview');
+    }
+  });
+
+  it('tab identity contract: canonical tab IDs are storage and backups', () => {
+    const v2PlanTabs = buildStorageBackupsTabSpecs(buildStorageBackupsRoutingPlan('v2-default'));
+    const resolvedDefaultTabs = buildStorageBackupsTabSpecs(resolveStorageBackupsRoutingPlan(false, false, false));
+    const fullFlagTabs = buildStorageBackupsTabSpecs(resolveStorageBackupsRoutingPlan(true, true, true));
+
+    expect(v2PlanTabs.map((spec) => spec.id)).toEqual(['storage', 'backups']);
+    expect(resolvedDefaultTabs.map((spec) => spec.id)).toEqual(['storage', 'backups']);
+    expect(fullFlagTabs.map((spec) => spec.id)).toEqual(['storage', 'backups']);
   });
 });

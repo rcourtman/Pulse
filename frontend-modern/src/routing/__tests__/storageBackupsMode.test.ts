@@ -113,3 +113,33 @@ describe('storageBackupsMode routing plan', () => {
     expect(shouldRedirectBackupsV2Route(legacyDefaultPlan)).toBe(false);
   });
 });
+
+describe('GA contract regression gates', () => {
+  it('GA default: resolving with all-false inputs produces v2-default', () => {
+    expect(resolveStorageBackupsDefaultMode(false, false, false)).toBe('v2-default');
+  });
+
+  it('GA default: v2-default plan always selects v2 primary views', () => {
+    const plan = buildStorageBackupsRoutingPlan('v2-default');
+
+    expect(plan.primaryStorageView).toBe('v2');
+    expect(plan.primaryBackupsView).toBe('v2');
+  });
+
+  it('GA default: v2-default plan redirects both V2 alias routes', () => {
+    const plan = buildStorageBackupsRoutingPlan('v2-default');
+
+    expect(shouldRedirectStorageV2Route(plan)).toBe(true);
+    expect(shouldRedirectBackupsV2Route(plan)).toBe(true);
+  });
+
+  it('rollback isolation: rollback flags do not leak across views', () => {
+    const storageRolledBackPlan = resolveStorageBackupsRoutingPlan(false, true, false);
+    expect(storageRolledBackPlan.primaryStorageView).toBe('legacy');
+    expect(storageRolledBackPlan.primaryBackupsView).toBe('v2');
+
+    const backupsRolledBackPlan = resolveStorageBackupsRoutingPlan(false, false, true);
+    expect(backupsRolledBackPlan.primaryStorageView).toBe('v2');
+    expect(backupsRolledBackPlan.primaryBackupsView).toBe('legacy');
+  });
+});

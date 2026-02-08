@@ -10,7 +10,17 @@ const STORAGE_PATH = buildStoragePath();
 const BACKUPS_PATH = buildBackupsPath();
 
 export type StorageBackupsTabSpec = {
-  id: 'storage' | 'storage-v2' | 'backups' | 'backups-v2';
+  id:
+    | 'storage'
+    /**
+     * @deprecated Alias tab id used by rollback-mode tabsets; scheduled for removal in SB5-05.
+     */
+    | 'storage-v2'
+    | 'backups'
+    /**
+     * @deprecated Alias tab id used by rollback-mode tabsets; scheduled for removal in SB5-05.
+     */
+    | 'backups-v2';
   label: string;
   route: string;
   settingsRoute: string;
@@ -21,7 +31,8 @@ export type StorageBackupsTabSpec = {
 export const buildStorageBackupsTabSpecs = (
   planOrShowV2: StorageBackupsRoutingPlan | boolean,
 ): StorageBackupsTabSpec[] => {
-  // Normalize: accept boolean for backward compat (true → both v2, false → both legacy)
+  // Normalize: accept boolean for backward compat (true → both v2, false → both legacy).
+  // This boolean compatibility path is rollback-only and scheduled for removal in SB5-05.
   const plan: StorageBackupsRoutingPlan =
     typeof planOrShowV2 === 'boolean'
       ? {
@@ -44,6 +55,7 @@ export const buildStorageBackupsTabSpecs = (
       tooltip: 'Source-agnostic storage',
     });
   } else {
+    /** @deprecated Rollback-only legacy storage branch. Scheduled for removal in SB5-05. */
     tabs.push({
       id: 'storage',
       label: 'Storage (Legacy)',
@@ -70,6 +82,7 @@ export const buildStorageBackupsTabSpecs = (
       tooltip: 'Source-agnostic backups',
     });
   } else {
+    /** @deprecated Rollback-only legacy backups branch. Scheduled for removal in SB5-05. */
     tabs.push({
       id: 'backups',
       label: 'Backups (Legacy)',

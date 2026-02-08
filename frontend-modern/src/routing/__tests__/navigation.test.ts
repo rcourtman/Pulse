@@ -55,3 +55,18 @@ describe('navigation routing helpers', () => {
     ).toBe('/infrastructure?source=pmg&migrated=1&from=services&search=mail');
   });
 });
+
+describe('alias path tab mapping (scheduled for consolidation)', () => {
+  it('maps /storage-v2 to storage-v2 tab (alias, consolidates to storage in SB5-05)', () => {
+    expect(getActiveTabForPath('/storage-v2')).toBe('storage-v2');
+  });
+
+  it('maps /backups-v2 to backups-v2 tab (alias, consolidates to backups in SB5-05)', () => {
+    expect(getActiveTabForPath('/backups-v2')).toBe('backups-v2');
+  });
+
+  it('canonical paths /storage and /backups remain stable', () => {
+    expect(getActiveTabForPath('/storage')).toBe('storage');
+    expect(getActiveTabForPath('/backups')).toBe('backups');
+  });
+});

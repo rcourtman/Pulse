@@ -1,6 +1,22 @@
+/**
+ * Storage/Backups routing mode resolution.
+ *
+ * GA state: v2-default is the production mode. All other modes exist only
+ * for rollback compatibility via localStorage flags and are scheduled for
+ * removal in Phase 5 packet SB5-05.
+ */
 export type StorageBackupsDefaultMode =
+  /**
+   * @deprecated Rollback-only compatibility mode. Scheduled for removal in SB5-05.
+   */
   | 'legacy-default'
+  /**
+   * @deprecated Rollback-only compatibility mode. Scheduled for removal in SB5-05.
+   */
   | 'backups-v2-default'
+  /**
+   * @deprecated Rollback-only compatibility mode. Scheduled for removal in SB5-05.
+   */
   | 'storage-v2-default'
   | 'v2-default';
 
