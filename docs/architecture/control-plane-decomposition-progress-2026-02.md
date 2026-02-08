@@ -26,7 +26,7 @@ Date: 2026-02-08
 | 03 | Extract Monitoring + Resource Route Group | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence |
 | 04 | Extract AI + Relay + Sessions Route Group | DONE | Codex | Claude | APPROVED | See Packet 04 Review Evidence |
 | 05 | Extract Org + License + Audit Route Group | DONE | Codex | Claude | APPROVED | See Packet 05 Review Evidence |
-| 06 | ConfigHandlers Node Lifecycle Extraction | TODO | Unassigned | Unassigned | PENDING | |
+| 06 | ConfigHandlers Node Lifecycle Extraction | DONE | Codex | Claude | APPROVED | See Packet 06 Review Evidence |
 | 07 | ConfigHandlers Setup + Auto-Register Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 08 | ConfigHandlers System + Discovery + Import/Export Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 09 | Architecture Guardrails and Drift Tests | TODO | Unassigned | Unassigned | PENDING | |
@@ -307,21 +307,45 @@ Rollback:
 ## Packet 06 Checklist: ConfigHandlers Node Lifecycle Extraction
 
 ### Implementation
-- [ ] Node lifecycle logic extracted into dedicated module/component.
-- [ ] Existing exported handler methods retained as delegates.
-- [ ] Validation and side-effect parity preserved.
-- [ ] Node lifecycle tests updated for parity.
+- [x] Node lifecycle logic extracted into dedicated module/component.
+- [x] Existing exported handler methods retained as delegates.
+- [x] Validation and side-effect parity preserved.
+- [x] Node lifecycle tests updated for parity.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "ConfigHandlers(Add|Delete|Update|Connection|Cluster)" -v` passed.
-- [ ] `go test ./internal/api/... -run "Router|RouteInventory" -v` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "ConfigHandlers(Add|Delete|Update|Connection|Cluster)" -v` passed.
+- [x] `go test ./internal/api/... -run "Router|RouteInventory" -v` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Review Evidence
+
+Files changed:
+- `internal/api/config_node_handlers.go` (new, 1914 LOC): Node lifecycle handler logic extracted.
+- `internal/api/config_handlers.go` (6052 -> 4201 LOC): Node handler methods replaced with thin delegates.
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/api/... -run "ConfigHandlers|TestNode|AddNode|DeleteNode|UpdateNode|Connection|Cluster" -v` -> exit 0
+3. `go test ./internal/api/... -run "Router|RouteInventory" -v` -> exit 0
+
+Gate checklist:
+- P0: PASS (files verified, commands rerun independently, exit codes 0)
+- P1: PASS (side effects preserved; validation intact; node lifecycle tests pass)
+- P2: PASS (tracker updated, checklist complete)
+
+Verdict: APPROVED
+
+Residual risk:
+- None
+
+Rollback:
+- Delete `internal/api/config_node_handlers.go`, restore method bodies in `internal/api/config_handlers.go`.
 
 ## Packet 07 Checklist: ConfigHandlers Setup + Auto-Register Extraction
 
