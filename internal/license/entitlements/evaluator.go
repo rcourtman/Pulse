@@ -2,8 +2,6 @@ package entitlements
 
 import (
 	"log"
-
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 )
 
 // Evaluator is the canonical entitlement evaluator used by all runtime surfaces.
@@ -65,21 +63,21 @@ func (e *Evaluator) GetLimit(key string) (int64, bool) {
 // Returns LimitAllowed if no limit exists or observed is within limit.
 // Returns LimitSoftBlock if observed >= 90% of limit (but below limit).
 // Returns LimitHardBlock if observed >= limit.
-func (e *Evaluator) CheckLimit(key string, observed int64) license.LimitCheckResult {
+func (e *Evaluator) CheckLimit(key string, observed int64) LimitCheckResult {
 	limit, ok := e.GetLimit(key)
 	if !ok || limit <= 0 {
-		return license.LimitAllowed
+		return LimitAllowed
 	}
 
 	if observed >= limit {
-		return license.LimitHardBlock
+		return LimitHardBlock
 	}
 
 	if observed*10 >= limit*9 {
-		return license.LimitSoftBlock
+		return LimitSoftBlock
 	}
 
-	return license.LimitAllowed
+	return LimitAllowed
 }
 
 // MeterEnabled checks if the given meter key is enabled.
@@ -97,9 +95,9 @@ func (e *Evaluator) MeterEnabled(key string) bool {
 }
 
 // SubscriptionState returns the current subscription state from the source.
-func (e *Evaluator) SubscriptionState() license.SubscriptionState {
+func (e *Evaluator) SubscriptionState() SubscriptionState {
 	if e == nil || e.source == nil {
-		return license.SubStateActive
+		return SubStateActive
 	}
 	return e.source.SubscriptionState()
 }

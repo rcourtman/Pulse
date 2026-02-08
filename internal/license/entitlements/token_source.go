@@ -1,16 +1,24 @@
 package entitlements
 
-import "github.com/rcourtman/pulse-go-rewrite/internal/license"
-
 // TokenSource implements EntitlementSource from JWT Claims.
 // Uses Claims.EffectiveCapabilities() and Claims.EffectiveLimits()
 // for backward-compatible derivation when explicit B1 fields are absent.
 type TokenSource struct {
-	claims *license.Claims
+	claims TokenClaims
+}
+
+// TokenClaims is the minimal claim view TokenSource needs.
+// license.Claims satisfies this interface.
+type TokenClaims interface {
+	EffectiveCapabilities() []string
+	EffectiveLimits() map[string]int64
+	EntitlementMetersEnabled() []string
+	EntitlementPlanVersion() string
+	EntitlementSubscriptionState() SubscriptionState
 }
 
 // NewTokenSource creates a TokenSource from Claims.
-func NewTokenSource(claims *license.Claims) *TokenSource {
+func NewTokenSource(claims TokenClaims) *TokenSource {
 	return &TokenSource{claims: claims}
 }
 
@@ -35,7 +43,7 @@ func (t *TokenSource) MetersEnabled() []string {
 	if t == nil || t.claims == nil {
 		return nil
 	}
-	return t.claims.MetersEnabled
+	return t.claims.EntitlementMetersEnabled()
 }
 
 // PlanVersion returns the plan_version from claims.
@@ -43,17 +51,14 @@ func (t *TokenSource) PlanVersion() string {
 	if t == nil || t.claims == nil {
 		return ""
 	}
-	return t.claims.PlanVersion
+	return t.claims.EntitlementPlanVersion()
 }
 
 // SubscriptionState returns the subscription_state from claims.
 // Returns SubStateActive as default if not explicitly set.
-func (t *TokenSource) SubscriptionState() license.SubscriptionState {
+func (t *TokenSource) SubscriptionState() SubscriptionState {
 	if t == nil || t.claims == nil {
-		return license.SubStateActive
+		return SubStateActive
 	}
-	if t.claims.SubState == "" {
-		return license.SubStateActive
-	}
-	return t.claims.SubState
+	return t.claims.EntitlementSubscriptionState()
 }

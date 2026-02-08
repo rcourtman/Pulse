@@ -9,6 +9,8 @@ import (
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 )
 
 // init sets dev mode for tests so license validation works without a real public key
@@ -993,5 +995,200 @@ func TestLimitCheckResultConstants(t *testing.T) {
 			t.Fatalf("duplicate limit check result value %q", value)
 		}
 		seen[value] = struct{}{}
+	}
+}
+
+var allFeatures = []string{
+	FeatureAIPatrol, FeatureAIAlerts, FeatureAIAutoFix, FeatureKubernetesAI,
+	FeatureAgentProfiles, FeatureUpdateAlerts, FeatureRBAC, FeatureAuditLogging,
+	FeatureSSO, FeatureAdvancedSSO, FeatureAdvancedReporting, FeatureLongTermMetrics,
+	FeatureRelay, FeatureMultiUser, FeatureWhiteLabel, FeatureMultiTenant, FeatureUnlimited,
+}
+
+func setupTestServiceWithTier(t *testing.T, tier Tier) *Service {
+	t.Helper()
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+	t.Setenv("PULSE_DEV", "false")
+	t.Setenv("PULSE_MOCK_MODE", "false")
+
+	SetPublicKey(nil)
+	svc := NewService()
+	token, err := GenerateLicenseForTesting("test@example.com", tier, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Activate(token); err != nil {
+		t.Fatal(err)
+	}
+	return svc
+}
+
+func evaluatorForService(svc *Service) *entitlements.Evaluator {
+	lic := svc.Current()
+	if lic == nil {
+		return nil
+	}
+	source := entitlements.NewTokenSource(&lic.Claims)
+	return entitlements.NewEvaluator(source)
+}
+
+func captureFeatureResults(svc *Service, features []string) map[string]bool {
+	results := make(map[string]bool, len(features))
+	for _, feature := range features {
+		results[feature] = svc.HasFeature(feature)
+	}
+	return results
+}
+
+func asFeatureSet(features []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(features))
+	for _, feature := range features {
+		set[feature] = struct{}{}
+	}
+	return set
+}
+
+func TestServiceHasFeature_WithEvaluator(t *testing.T) {
+	svc := setupTestServiceWithTier(t, TierPro)
+	proSet := asFeatureSet(TierFeatures[TierPro])
+
+	withoutEvaluator := captureFeatureResults(svc, allFeatures)
+	for _, feature := range allFeatures {
+		_, inPro := proSet[feature]
+		if inPro && !withoutEvaluator[feature] {
+			t.Fatalf("without evaluator: expected Pro tier feature %q to be granted", feature)
+		}
+		if !inPro && withoutEvaluator[feature] {
+			t.Fatalf("without evaluator: expected non-Pro feature %q to be denied", feature)
+		}
+	}
+
+	svc.SetEvaluator(evaluatorForService(svc))
+	withEvaluator := captureFeatureResults(svc, allFeatures)
+	for _, feature := range allFeatures {
+		_, inPro := proSet[feature]
+		if inPro && !withEvaluator[feature] {
+			t.Fatalf("with evaluator: expected Pro tier feature %q to be granted", feature)
+		}
+		if !inPro && withEvaluator[feature] {
+			t.Fatalf("with evaluator: expected non-Pro feature %q to be denied", feature)
+		}
+		if withEvaluator[feature] != withoutEvaluator[feature] {
+			t.Fatalf("feature %q parity mismatch: without evaluator=%v with evaluator=%v",
+				feature, withoutEvaluator[feature], withEvaluator[feature])
+		}
+	}
+}
+
+func TestServiceHasFeature_WithEvaluator_FreeTier(t *testing.T) {
+	t.Setenv("PULSE_DEV", "false")
+	t.Setenv("PULSE_MOCK_MODE", "false")
+
+	svc := NewService()
+	freeSet := asFeatureSet(TierFeatures[TierFree])
+
+	withoutEvaluator := captureFeatureResults(svc, allFeatures)
+	for _, feature := range allFeatures {
+		_, inFree := freeSet[feature]
+		if inFree && !withoutEvaluator[feature] {
+			t.Fatalf("without evaluator: expected free feature %q to be granted", feature)
+		}
+		if !inFree && withoutEvaluator[feature] {
+			t.Fatalf("without evaluator: expected non-free feature %q to be denied", feature)
+		}
+	}
+
+	freeClaims := &Claims{Tier: TierFree}
+	svc.SetEvaluator(entitlements.NewEvaluator(entitlements.NewTokenSource(freeClaims)))
+
+	withEvaluator := captureFeatureResults(svc, allFeatures)
+	for _, feature := range allFeatures {
+		_, inFree := freeSet[feature]
+		if inFree && !withEvaluator[feature] {
+			t.Fatalf("with evaluator: expected free feature %q to be granted", feature)
+		}
+		if !inFree && withEvaluator[feature] {
+			t.Fatalf("with evaluator: expected non-free feature %q to be denied", feature)
+		}
+		if withEvaluator[feature] != withoutEvaluator[feature] {
+			t.Fatalf("feature %q parity mismatch: without evaluator=%v with evaluator=%v",
+				feature, withoutEvaluator[feature], withEvaluator[feature])
+		}
+	}
+}
+
+func TestServiceHasFeature_EvaluatorNilFallback(t *testing.T) {
+	t.Setenv("PULSE_DEV", "false")
+	t.Setenv("PULSE_MOCK_MODE", "false")
+
+	noLicenseSvc := NewService()
+	if noLicenseSvc.Evaluator() != nil {
+		t.Fatal("expected evaluator to be nil by default")
+	}
+	for _, feature := range allFeatures {
+		got := noLicenseSvc.HasFeature(feature)
+		want := TierHasFeature(TierFree, feature)
+		if got != want {
+			t.Fatalf("no-license fallback mismatch for feature %q: got %v want %v", feature, got, want)
+		}
+	}
+
+	proSvc := setupTestServiceWithTier(t, TierPro)
+	if proSvc.Evaluator() != nil {
+		t.Fatal("expected evaluator to remain nil when not set")
+	}
+	for _, feature := range allFeatures {
+		got := proSvc.HasFeature(feature)
+		want := TierHasFeature(TierPro, feature)
+		if got != want {
+			t.Fatalf("tier fallback mismatch for feature %q: got %v want %v", feature, got, want)
+		}
+	}
+}
+
+func TestServiceSetEvaluator(t *testing.T) {
+	svc := NewService()
+	if svc.Evaluator() != nil {
+		t.Fatal("expected default evaluator to be nil")
+	}
+
+	claims := &Claims{Tier: TierFree}
+	eval := entitlements.NewEvaluator(entitlements.NewTokenSource(claims))
+	svc.SetEvaluator(eval)
+	if svc.Evaluator() != eval {
+		t.Fatal("expected evaluator getter to return the evaluator set by SetEvaluator")
+	}
+
+	svc.SetEvaluator(nil)
+	if svc.Evaluator() != nil {
+		t.Fatal("expected evaluator to be nil after SetEvaluator(nil)")
+	}
+}
+
+func TestServiceHasFeature_ContractParity(t *testing.T) {
+	tiers := make([]Tier, 0, len(TierFeatures))
+	for tier := range TierFeatures {
+		tiers = append(tiers, tier)
+	}
+	sort.Slice(tiers, func(i, j int) bool {
+		return string(tiers[i]) < string(tiers[j])
+	})
+
+	for _, tier := range tiers {
+		tier := tier
+		t.Run(string(tier), func(t *testing.T) {
+			svc := setupTestServiceWithTier(t, tier)
+
+			withoutEvaluator := captureFeatureResults(svc, allFeatures)
+			svc.SetEvaluator(evaluatorForService(svc))
+			withEvaluator := captureFeatureResults(svc, allFeatures)
+
+			for _, feature := range allFeatures {
+				if withEvaluator[feature] != withoutEvaluator[feature] {
+					t.Fatalf("feature %q parity mismatch for tier %q: without evaluator=%v with evaluator=%v",
+						feature, tier, withoutEvaluator[feature], withEvaluator[feature])
+				}
+			}
+		})
 	}
 }

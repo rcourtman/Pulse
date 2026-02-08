@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 )
 
 // Public key for license validation (Ed25519).
@@ -35,23 +37,23 @@ var (
 )
 
 // SubscriptionState represents the subscription lifecycle state.
-type SubscriptionState string
+type SubscriptionState = entitlements.SubscriptionState
 
 const (
-	SubStateTrial     SubscriptionState = "trial"
-	SubStateActive    SubscriptionState = "active"
-	SubStateGrace     SubscriptionState = "grace"
-	SubStateExpired   SubscriptionState = "expired"
-	SubStateSuspended SubscriptionState = "suspended"
+	SubStateTrial     = entitlements.SubStateTrial
+	SubStateActive    = entitlements.SubStateActive
+	SubStateGrace     = entitlements.SubStateGrace
+	SubStateExpired   = entitlements.SubStateExpired
+	SubStateSuspended = entitlements.SubStateSuspended
 )
 
 // LimitCheckResult represents the result of evaluating a limit.
-type LimitCheckResult string
+type LimitCheckResult = entitlements.LimitCheckResult
 
 const (
-	LimitAllowed   LimitCheckResult = "allowed"
-	LimitSoftBlock LimitCheckResult = "soft_block"
-	LimitHardBlock LimitCheckResult = "hard_block"
+	LimitAllowed   = entitlements.LimitAllowed
+	LimitSoftBlock = entitlements.LimitSoftBlock
+	LimitHardBlock = entitlements.LimitHardBlock
 )
 
 // Claims represents the JWT claims in a Pulse Pro license.
@@ -111,6 +113,30 @@ func (c Claims) EffectiveLimits() map[string]int64 {
 		limits["max_guests"] = int64(c.MaxGuests)
 	}
 	return limits
+}
+
+// EntitlementMetersEnabled returns metering keys for evaluator sources.
+func (c *Claims) EntitlementMetersEnabled() []string {
+	if c == nil {
+		return nil
+	}
+	return c.MetersEnabled
+}
+
+// EntitlementPlanVersion returns plan metadata for evaluator sources.
+func (c *Claims) EntitlementPlanVersion() string {
+	if c == nil {
+		return ""
+	}
+	return c.PlanVersion
+}
+
+// EntitlementSubscriptionState returns normalized subscription state for evaluator sources.
+func (c *Claims) EntitlementSubscriptionState() SubscriptionState {
+	if c == nil || c.SubState == "" {
+		return SubStateActive
+	}
+	return c.SubState
 }
 
 // License represents a validated Pulse Pro license.
@@ -204,6 +230,11 @@ type Service struct {
 
 	// Callback when license changes
 	onLicenseChange func(*License)
+
+	// Optional canonical evaluator for B2 entitlement checks.
+	// When set, HasFeature delegates to evaluator.HasCapability.
+	// When nil, falls through to existing tier-based logic.
+	evaluator *entitlements.Evaluator
 }
 
 // DefaultGracePeriod is the duration after license expiration during which
@@ -231,6 +262,22 @@ func (s *Service) SetLicenseChangeCallback(cb func(*License)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onLicenseChange = cb
+}
+
+// SetEvaluator sets the canonical entitlement evaluator.
+// When set, HasFeature will delegate capability checks to the evaluator.
+// This is opt-in - if not set, existing tier-based logic is used.
+func (s *Service) SetEvaluator(eval *entitlements.Evaluator) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.evaluator = eval
+}
+
+// Evaluator returns the current evaluator, or nil if not set.
+func (s *Service) Evaluator() *entitlements.Evaluator {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.evaluator
 }
 
 // Activate validates and activates a license key.
@@ -299,6 +346,13 @@ func (s *Service) HasFeature(feature string) bool {
 	s.mu.Lock() // Need write lock since we may update grace period
 	defer s.mu.Unlock()
 
+	// If evaluator is set, delegate to it for capability checks.
+	// The evaluator already handles legacy derivation via TokenSource.
+	if s.evaluator != nil {
+		return s.evaluator.HasCapability(feature)
+	}
+
+	// Fallback to existing tier-based logic when no evaluator is set.
 	if s.license == nil {
 		// No license activated — still grant free tier features
 		return TierHasFeature(TierFree, feature)

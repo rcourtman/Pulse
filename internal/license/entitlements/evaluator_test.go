@@ -1,4 +1,4 @@
-package entitlements
+package entitlements_test
 
 import (
 	"reflect"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	. "github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 )
 
 type mockSource struct {
