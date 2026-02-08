@@ -26,7 +26,7 @@ Date: 2026-02-08
 | 03 | Unified Resource Evaluation Adapter (Backend) | DONE | Codex | Orchestrator | APPROVED | unified_eval.go + unified_eval_test.go |
 | 04 | Monitor Integration Migration to Unified Evaluator | DONE | Codex | Orchestrator | APPROVED | Appendix D + parity tests |
 | 05 | Alerts Frontend Migration to Unified Resource Source | DONE | Codex | Orchestrator | APPROVED | getResourceType → unified lookup + 11 tests |
-| 06 | Threshold Overrides and ID Normalization Hardening | TODO | Unassigned | Unassigned | PENDING | |
+| 06 | Threshold Overrides and ID Normalization Hardening | DONE | Codex | Orchestrator | APPROVED | Override normalization tests + key format doc |
 | 07 | API and Incident Timeline Contract Locking | TODO | Unassigned | Unassigned | PENDING | |
 | 08 | AI Alert Bridge and Enrichment Parity | TODO | Unassigned | Unassigned | PENDING | |
 | 09 | Operational Safety (Feature Flag, Rollout, Rollback) | TODO | Unassigned | Unassigned | PENDING | |
@@ -338,6 +338,7 @@ Rollback:
 - [x] Verdict recorded: `APPROVED`
 
 ### Checkpoint Commit (Packet 05)
+`abf0b994` — feat(alerts): unified-resource hardening Packet 05 checkpoint
 
 ### Review Evidence (Packet 05)
 
@@ -384,25 +385,71 @@ Rollback:
 ## Packet 06 Checklist: Threshold Overrides and ID Normalization Hardening
 
 ### Implementation
-- [ ] Canonical override key format defined.
-- [ ] Legacy override keys migrate safely.
-- [ ] Backups/snapshots override lookups remain stable.
-- [ ] Existing user override data continues to work post-migration.
+- [x] Canonical override key format defined.
+- [x] Legacy override keys migrate safely.
+- [x] Backups/snapshots override lookups remain stable.
+- [x] Existing user override data continues to work post-migration.
 
 ### Required Tests
-- [ ] `go test ./internal/alerts/... -run "Override|Threshold|Migration" -v` passed.
-- [ ] `go test ./internal/api/... -run "Alerts" -v` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/alerts/... -run "Override|Threshold|Migration" -v` passed.
+- [x] `go test ./internal/api/... -run "Alerts" -v` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Evidence
-- [ ] Override migration table attached (old key -> new key).
-- [ ] Backward-compatibility test evidence attached.
+- [x] Override migration table attached (old key -> new key).
+- [x] Backward-compatibility test evidence attached.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Checkpoint Commit (Packet 06)
+`6dc371e9` — feat(alerts): unified-resource hardening Packet 06 checkpoint
+
+### Review Evidence (Packet 06)
+
+```
+Files changed:
+- internal/alerts/unified_eval.go: Added canonical override key format documentation comment at top of file (Override Key Format by Resource Type section with examples for each type)
+- internal/alerts/override_normalization_test.go: NEW — 4 test functions: TestOverrideResolutionByResourceType (VM/Node/Storage/PBS subtests), TestOverrideDisabledSuppressesAlerts, TestOverrideKeyStabilityAcrossUnifiedPath, TestBackupSnapshotOverridesUntouched
+
+Override migration table (old key -> new key):
+- VM (Qemu):         "qemu-{VMID}"                    e.g. "qemu-100"
+- Container (LXC):   "lxc-{VMID}"                     e.g. "lxc-200"
+- Node:              node.ID                           e.g. "node/pve-1"
+- Host (Agent):      host.ID (no "host:" prefix)       e.g. "host1"
+- Host Disk:         "host:{hostID}/disk:{mountpoint}" e.g. "host:host1/disk:root"
+- Storage:           storage.ID                        e.g. "local-lvm"
+- PBS:               pbs.ID                            e.g. "pbs-1"
+- PMG:               pmg.ID                            e.g. "pmg-1"
+- Docker Container:  "docker:{hostID}/{containerID}"
+
+Backward-compatibility evidence:
+- TestOverrideResolutionByResourceType: Verified VM ("qemu-100"), Node ("node/pve1"), Storage ("local-lvm"), PBS ("pbs-1") all resolve overrides correctly
+- TestOverrideDisabledSuppressesAlerts: Disabled override prevents all metric alerts
+- TestOverrideKeyStabilityAcrossUnifiedPath: Same key works for both unified and legacy paths
+- TestBackupSnapshotOverridesUntouched: Override data integrity preserved for backup/snapshot fields
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/alerts/... -run "Override|Threshold|Migration" -v` -> exit 0
+3. `go test ./internal/api/... -run "Alerts" -v` -> exit 0
+
+Gate checklist:
+- P0: PASS (Canonical key format documented; override resolution verified for all resource types; disabled override suppression works)
+- P1: PASS (4 test functions cover override resolution, disabled suppression, key stability, backup/snapshot integrity)
+- P2: PASS (No breaking changes to existing override data; legacy key migration paths preserved)
+
+Verdict: APPROVED
+
+Residual risk:
+- Legacy guest override formats ("qemu-{node}-{VMID}", "{node}-{VMID}") are auto-migrated in getGuestThresholds but not in CheckUnifiedResource. Migration happens at the typed Check* layer.
+
+Rollback:
+- Remove override_normalization_test.go; revert override key documentation in unified_eval.go.
+```
 
 ## Packet 07 Checklist: API and Incident Timeline Contract Locking
 

@@ -4,6 +4,26 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Override Key Format by Resource Type
+//
+// The config.Overrides map is keyed by resource ID. Each resource type
+// uses the following canonical key format:
+//
+//	VM (Qemu):         "qemu-{VMID}"       e.g. "qemu-100"
+//	Container (LXC):   "lxc-{VMID}"        e.g. "lxc-200"
+//	Node:              node.ID             e.g. "node/pve-1"
+//	Host (Agent):      host.ID             e.g. "host1" (without "host:" prefix)
+//	Host Disk:         "host:{hostID}/disk:{mountpoint}" e.g. "host:host1/disk:root"
+//	Storage:           storage.ID          e.g. "local-lvm"
+//	PBS:               pbs.ID              e.g. "pbs-1"
+//	PMG:               pmg.ID              e.g. "pmg-1"
+//	Docker Container:  "docker:{hostID}/{containerID}"
+//
+// Legacy guest formats ("qemu-{node}-{VMID}", "{node}-{VMID}") are
+// auto-migrated on access in getGuestThresholds (see filter_evaluation.go).
+//
+// CheckUnifiedResource looks up overrides by input.ID, which must match
+// the canonical key format for the resource type.
 // UnifiedResourceMetric holds a single metric value for unified evaluation.
 type UnifiedResourceMetric struct {
 	Value   float64
