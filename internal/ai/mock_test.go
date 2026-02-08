@@ -144,6 +144,81 @@ func (m *mockResourceProvider) FindContainerHost(containerNameOrID string) strin
 	return ""
 }
 
+type mockUnifiedResourceProvider struct {
+	UnifiedResourceProvider
+	getAllFunc            func() []unifiedresources.Resource
+	getStatsFunc          func() unifiedresources.ResourceStats
+	getInfrastructureFunc func() []unifiedresources.Resource
+	getWorkloadsFunc      func() []unifiedresources.Resource
+	getByTypeFunc         func(t unifiedresources.ResourceType) []unifiedresources.Resource
+	getTopCPUFunc         func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource
+	getTopMemoryFunc      func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource
+	getTopDiskFunc        func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource
+	getRelatedFunc        func(resourceID string) map[string][]unifiedresources.Resource
+	findContainerHostFunc func(containerNameOrID string) string
+}
+
+func (m *mockUnifiedResourceProvider) GetAll() []unifiedresources.Resource {
+	if m.getAllFunc != nil {
+		return m.getAllFunc()
+	}
+	return nil
+}
+func (m *mockUnifiedResourceProvider) GetStats() unifiedresources.ResourceStats {
+	if m.getStatsFunc != nil {
+		return m.getStatsFunc()
+	}
+	return unifiedresources.ResourceStats{}
+}
+func (m *mockUnifiedResourceProvider) GetInfrastructure() []unifiedresources.Resource {
+	if m.getInfrastructureFunc != nil {
+		return m.getInfrastructureFunc()
+	}
+	return nil
+}
+func (m *mockUnifiedResourceProvider) GetWorkloads() []unifiedresources.Resource {
+	if m.getWorkloadsFunc != nil {
+		return m.getWorkloadsFunc()
+	}
+	return nil
+}
+func (m *mockUnifiedResourceProvider) GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource {
+	if m.getByTypeFunc != nil {
+		return m.getByTypeFunc(t)
+	}
+	return nil
+}
+func (m *mockUnifiedResourceProvider) GetTopByCPU(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+	if m.getTopCPUFunc != nil {
+		return m.getTopCPUFunc(limit, types)
+	}
+	return nil
+}
+func (m *mockUnifiedResourceProvider) GetTopByMemory(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+	if m.getTopMemoryFunc != nil {
+		return m.getTopMemoryFunc(limit, types)
+	}
+	return nil
+}
+func (m *mockUnifiedResourceProvider) GetTopByDisk(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+	if m.getTopDiskFunc != nil {
+		return m.getTopDiskFunc(limit, types)
+	}
+	return nil
+}
+func (m *mockUnifiedResourceProvider) GetRelated(resourceID string) map[string][]unifiedresources.Resource {
+	if m.getRelatedFunc != nil {
+		return m.getRelatedFunc(resourceID)
+	}
+	return nil
+}
+func (m *mockUnifiedResourceProvider) FindContainerHost(containerNameOrID string) string {
+	if m.findContainerHostFunc != nil {
+		return m.findContainerHostFunc(containerNameOrID)
+	}
+	return ""
+}
+
 type mockAgentServer struct {
 	agents      []agentexec.ConnectedAgent
 	executeFunc func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)

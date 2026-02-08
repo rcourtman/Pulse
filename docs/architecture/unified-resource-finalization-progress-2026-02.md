@@ -33,7 +33,7 @@ Date: 2026-02-08
 | URF-04 | SB5 Dependency Gate + Legacy Hook Deletion Readiness | DONE | Claude | Claude | APPROVED | URF-04 Review Evidence |
 | URF-05 | Remove Frontend Runtime `useResourcesAsLegacy` Path | DONE | Codex | Claude | APPROVED | URF-05 Review Evidence |
 | URF-06 | AI Backend Contract Scaffold (Legacy -> Unified) | DONE | Codex | Claude | APPROVED | URF-06 Review Evidence |
-| URF-07 | AI Backend Migration to Unified Provider | TODO | Codex | Claude | — | — |
+| URF-07 | AI Backend Migration to Unified Provider | DONE | Codex | Claude | APPROVED | URF-07 Review Evidence |
 | URF-08 | Final Certification + V2 Naming Convergence Readiness | TODO | Claude | Claude | — | — |
 
 ---
@@ -363,26 +363,49 @@ Rollback:
 
 ## URF-07 Checklist: AI Backend Migration to Unified Provider
 
-- [ ] AI unified context path uses unified provider by default.
-- [ ] Legacy contract dependency narrowed and documented.
-- [ ] Parity tests updated and passing.
+- [x] AI unified context path uses unified provider by default.
+- [x] Legacy contract dependency narrowed and documented.
+- [x] Parity tests updated and passing.
 
 ### Required Tests
 
-- [ ] `go test ./internal/ai/... -run "ResourceContext|Routing" -count=1` -> exit 0
-- [ ] `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` -> exit 0
+- [x] `go test ./internal/ai/... -run "ResourceContext|Routing" -count=1` -> exit 0
+- [x] `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### URF-07 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `internal/ai/resource_context.go`: Rewrote `buildUnifiedResourceContext()` to use `s.unifiedResourceProvider` as primary path (lines 69-508). Groups infrastructure by source-specific payloads (Proxmox, Agent, Docker, K8s). Workloads grouped by parent. Alert correlation via `s.alertProvider.GetActiveAlerts()`. Summary and top-N from unified types. Legacy `s.resourceProvider` kept as fallback (line 510+) when unified provider is nil. Added helpers: `unifiedResourceDisplayName()`, `unifiedMetricPercent()`.
+- `internal/ai/resource_context_test.go`: Updated `TestBuildUnifiedResourceContext_FullContext` to exercise unified path. Added `TestBuildUnifiedResourceContext_UnifiedPath` testing K8s sections and alert correlation. Existing nil-provider and legacy-fallback tests unchanged.
+- `internal/ai/mock_test.go`: Added `mockUnifiedResourceProvider` with func-based method overrides for all `UnifiedResourceProvider` interface methods.
+
+Commands run + exit codes (reviewer-rerun):
+1. `go test ./internal/ai -run "ResourceContext" -count=1 -v` -> exit 0 (11 tests passed: NilProvider, FullContext, UnifiedPath, TruncatesLargeContext, WithLegacyAdapterProvider, + 5 URF-06 parity tests, + BuildEnrichedResourceContext)
+2. `go test ./internal/ai/... -run "ResourceContext|Routing" -count=1` -> exit 0
+3. `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` -> exit 0
+4. `go build ./...` -> exit 0
+
+Gate checklist:
+- P0: PASS (buildUnifiedResourceContext uses unified provider as primary path at line 69, legacy fallback at line 510, all required commands rerun by reviewer with exit 0)
+- P1: PASS (infrastructure grouped by Proxmox/Agent/Docker/K8s, workloads grouped by parent, alerts correlated via AlertProvider, summary computed inline, top-N uses unified adapter, all 11 ResourceContext tests pass, existing tests unaffected)
+- P2: PASS (progress tracker updated, packet evidence recorded)
+
+Verdict: APPROVED
+
+Residual risk:
+- `buildEnrichedResourceContext()` still uses legacy `resourceProvider` — this is a targeted resource lookup used for chat deep-dives and is out of scope for this lane (it would need its own migration packet).
+- Legacy `ResourceProvider` interface and `AIAdapter` still exist for backward compatibility. Full removal deferred to a future cleanup phase.
+
+Rollback:
+- `git revert <URF-07-commit-hash>`
 ```
 
 ---
@@ -422,10 +445,10 @@ TODO
 - URF-03: `748007bf` feat(URF-03): AI chat runtime cutover off legacy conversion hook
 - URF-04: `097ed341` gate(URF-04): SB5 dependency gate GO — legacy hook deletion unblocked
 - URF-05: `d6f40b29` feat(URF-05): delete useResourcesAsLegacy — zero runtime callers remain
-- URF-06: TODO
+- URF-06: `7557ded8` feat(URF-06): scaffold unified-resource-native AI provider contract
 - URF-07: TODO
 - URF-08: TODO
 
 ## Current Recommended Next Packet
 
-- `URF-07` (AI Backend Migration to Unified Provider)
+- `URF-08` (Final Certification + V2 Naming Convergence Readiness)

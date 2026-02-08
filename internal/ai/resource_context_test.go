@@ -18,158 +18,189 @@ func TestBuildUnifiedResourceContext_NilProvider(t *testing.T) {
 }
 
 func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
-	nodeWithAgent := unifiedresources.LegacyResource{
-		ID:           "node-1",
-		Name:         "delly",
-		Type:         unifiedresources.LegacyResourceTypeNode,
-		PlatformType: unifiedresources.LegacyPlatformProxmoxPVE,
-		ClusterID:    "cluster-a",
-		Status:       unifiedresources.LegacyStatusOnline,
-		CPU:          metricValue(12.3),
-		Memory:       metricValue(45.6),
+	nodeWithAgent := unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "delly",
+		Type:   unifiedresources.ResourceTypeHost,
+		Status: unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			ClusterName: "cluster-a",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 12.3},
+			Memory: &unifiedresources.MetricValue{Percent: 45.6},
+		},
+		Proxmox: &unifiedresources.ProxmoxData{
+			NodeName:    "delly",
+			ClusterName: "cluster-a",
+		},
 	}
-	nodeNoAgent := unifiedresources.LegacyResource{
-		ID:           "node-2",
-		Name:         "minipc",
-		Type:         unifiedresources.LegacyResourceTypeNode,
-		PlatformType: unifiedresources.LegacyPlatformProxmoxPVE,
-		Status:       unifiedresources.LegacyStatusDegraded,
+	nodeNoAgent := unifiedresources.Resource{
+		ID:      "node-2",
+		Name:    "minipc",
+		Type:    unifiedresources.ResourceTypeHost,
+		Status:  unifiedresources.StatusWarning,
+		Proxmox: &unifiedresources.ProxmoxData{NodeName: "minipc"},
 	}
-	dockerNode := unifiedresources.LegacyResource{
-		ID:           "dock-node",
-		Name:         "dock-node",
-		Type:         unifiedresources.LegacyResourceTypeNode,
-		PlatformType: unifiedresources.LegacyPlatformDocker,
-		Status:       unifiedresources.LegacyStatusOnline,
+	dockerNode := unifiedresources.Resource{
+		ID:     "dock-node",
+		Name:   "dock-node",
+		Type:   unifiedresources.ResourceTypeHost,
+		Status: unifiedresources.StatusOnline,
+		Docker: &unifiedresources.DockerData{Hostname: "dock-node"},
 	}
-	host := unifiedresources.LegacyResource{
-		ID:           "host-1",
-		Name:         "barehost",
-		Type:         unifiedresources.LegacyResourceTypeHost,
-		PlatformType: unifiedresources.LegacyPlatformHostAgent,
-		Status:       unifiedresources.LegacyStatusOnline,
-		Identity:     &unifiedresources.LegacyIdentity{IPs: []string{"192.168.1.10"}},
-		CPU:          metricValue(5.0),
-		Memory:       metricValue(10.0),
+	host := unifiedresources.Resource{
+		ID:     "host-1",
+		Name:   "barehost",
+		Type:   unifiedresources.ResourceTypeHost,
+		Status: unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			IPAddresses: []string{"192.168.1.10"},
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 5},
+			Memory: &unifiedresources.MetricValue{Percent: 10},
+		},
+		Agent: &unifiedresources.AgentData{
+			Hostname: "barehost",
+		},
 	}
-	dockerHost := unifiedresources.LegacyResource{
-		ID:           "docker-1",
-		Name:         "dockhost",
-		Type:         unifiedresources.LegacyResourceTypeDockerHost,
-		PlatformType: unifiedresources.LegacyPlatformDocker,
-		Status:       unifiedresources.LegacyStatusRunning,
-	}
-
-	vm := unifiedresources.LegacyResource{
-		ID:         "vm-100",
-		Name:       "web-vm",
-		Type:       unifiedresources.LegacyResourceTypeVM,
-		ParentID:   "node-1",
-		PlatformID: "100",
-		Status:     unifiedresources.LegacyStatusRunning,
-		Identity:   &unifiedresources.LegacyIdentity{IPs: []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}},
-		CPU:        metricValue(65.4),
-		Memory:     metricValue(70.2),
-	}
-	vm.Alerts = []unifiedresources.LegacyAlert{
-		{ID: "alert-1", Message: "CPU high", Level: "critical"},
+	dockerHost := unifiedresources.Resource{
+		ID:     "docker-1",
+		Name:   "dockhost",
+		Type:   unifiedresources.ResourceTypeHost,
+		Status: unifiedresources.StatusOnline,
+		Docker: &unifiedresources.DockerData{Hostname: "dockhost"},
 	}
 
-	ct := unifiedresources.LegacyResource{
-		ID:         "ct-200",
-		Name:       "db-ct",
-		Type:       unifiedresources.LegacyResourceTypeContainer,
-		ParentID:   "node-1",
-		PlatformID: "200",
-		Status:     unifiedresources.LegacyStatusStopped,
+	nodeWithAgentID := nodeWithAgent.ID
+	dockerHostID := dockerHost.ID
+	unknownParentID := "unknown-parent"
+	vm := unifiedresources.Resource{
+		ID:       "vm-100",
+		Name:     "web-vm",
+		Type:     unifiedresources.ResourceTypeVM,
+		ParentID: &nodeWithAgentID,
+		Status:   unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			IPAddresses: []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"},
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 65.4},
+			Memory: &unifiedresources.MetricValue{Percent: 70.2},
+		},
+		Proxmox: &unifiedresources.ProxmoxData{
+			VMID: 100,
+		},
 	}
-	dockerContainer := unifiedresources.LegacyResource{
+	ct := unifiedresources.Resource{
+		ID:       "ct-200",
+		Name:     "db-ct",
+		Type:     unifiedresources.ResourceTypeLXC,
+		ParentID: &nodeWithAgentID,
+		Status:   unifiedresources.StatusOffline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			VMID: 200,
+		},
+	}
+	dockerContainer := unifiedresources.Resource{
 		ID:       "dock-300",
 		Name:     "redis",
-		Type:     unifiedresources.LegacyResourceTypeDockerContainer,
-		ParentID: "docker-1",
-		Status:   unifiedresources.LegacyStatusRunning,
-		Disk:     metricValue(70.0),
+		Type:     unifiedresources.ResourceTypeContainer,
+		ParentID: &dockerHostID,
+		Status:   unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			Disk: &unifiedresources.MetricValue{Percent: 70},
+		},
 	}
-	dockerStopped := unifiedresources.LegacyResource{
+	dockerStopped := unifiedresources.Resource{
 		ID:       "dock-301",
 		Name:     "cache",
-		Type:     unifiedresources.LegacyResourceTypeDockerContainer,
-		ParentID: "docker-1",
-		Status:   unifiedresources.LegacyStatusStopped,
+		Type:     unifiedresources.ResourceTypeContainer,
+		ParentID: &dockerHostID,
+		Status:   unifiedresources.StatusOffline,
 	}
-	unknownParent := unifiedresources.LegacyResource{
-		ID:         "vm-999",
-		Name:       "mystery",
-		Type:       unifiedresources.LegacyResourceTypeVM,
-		ParentID:   "unknown-parent",
-		PlatformID: "999",
-		Status:     unifiedresources.LegacyStatusRunning,
+	unknownParent := unifiedresources.Resource{
+		ID:       "vm-999",
+		Name:     "mystery",
+		Type:     unifiedresources.ResourceTypeVM,
+		ParentID: &unknownParentID,
+		Status:   unifiedresources.StatusOnline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			VMID: 999,
+		},
 	}
-	orphan := unifiedresources.LegacyResource{
-		ID:       "orphan-1",
-		Name:     "orphan",
-		Type:     unifiedresources.LegacyResourceTypeContainer,
-		Status:   unifiedresources.LegacyStatusRunning,
-		Identity: &unifiedresources.LegacyIdentity{IPs: []string{"172.16.0.5"}},
-	}
-
-	infrastructure := []unifiedresources.LegacyResource{nodeWithAgent, nodeNoAgent, host, dockerHost, dockerNode}
-	workloads := []unifiedresources.LegacyResource{vm, ct, dockerContainer, dockerStopped, unknownParent, orphan}
-	all := append(append([]unifiedresources.LegacyResource{}, infrastructure...), workloads...)
-
-	stats := unifiedresources.LegacyStoreStats{
-		TotalResources: len(all),
-		ByType: map[unifiedresources.LegacyResourceType]int{
-			unifiedresources.LegacyResourceTypeNode:            3,
-			unifiedresources.LegacyResourceTypeHost:            1,
-			unifiedresources.LegacyResourceTypeDockerHost:      1,
-			unifiedresources.LegacyResourceTypeVM:              2,
-			unifiedresources.LegacyResourceTypeContainer:       2,
-			unifiedresources.LegacyResourceTypeDockerContainer: 2,
+	orphan := unifiedresources.Resource{
+		ID:     "orphan-1",
+		Name:   "orphan",
+		Type:   unifiedresources.ResourceTypeLXC,
+		Status: unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			IPAddresses: []string{"172.16.0.5"},
 		},
 	}
 
-	summary := unifiedresources.LegacyResourceSummary{
-		TotalResources: len(all),
-		Healthy:        6,
-		Degraded:       1,
-		Offline:        4,
-		WithAlerts:     1,
-		ByType: map[unifiedresources.LegacyResourceType]unifiedresources.LegacyTypeSummary{
-			unifiedresources.LegacyResourceTypeVM:        {Count: 2, AvgCPUPercent: 40.0, AvgMemoryPercent: 55.0},
-			unifiedresources.LegacyResourceTypeContainer: {Count: 2},
+	infrastructure := []unifiedresources.Resource{nodeWithAgent, nodeNoAgent, host, dockerHost, dockerNode}
+	workloads := []unifiedresources.Resource{vm, ct, dockerContainer, dockerStopped, unknownParent, orphan}
+	all := append(append([]unifiedresources.Resource{}, infrastructure...), workloads...)
+
+	stats := unifiedresources.ResourceStats{
+		Total: len(all),
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypeHost:      5,
+			unifiedresources.ResourceTypeVM:        2,
+			unifiedresources.ResourceTypeLXC:       2,
+			unifiedresources.ResourceTypeContainer: 2,
+		},
+		ByStatus: map[unifiedresources.ResourceStatus]int{
+			unifiedresources.StatusOnline:  7,
+			unifiedresources.StatusWarning: 1,
+			unifiedresources.StatusOffline: 3,
+		},
+		BySource: map[unifiedresources.DataSource]int{
+			unifiedresources.SourceProxmox: 4,
+			unifiedresources.SourceAgent:   1,
+			unifiedresources.SourceDocker:  2,
 		},
 	}
 
-	mockRP := &mockResourceProvider{
-		getStatsFunc: func() unifiedresources.LegacyStoreStats {
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats {
 			return stats
 		},
-		getInfrastructureFunc: func() []unifiedresources.LegacyResource {
+		getInfrastructureFunc: func() []unifiedresources.Resource {
 			return infrastructure
 		},
-		getWorkloadsFunc: func() []unifiedresources.LegacyResource {
+		getWorkloadsFunc: func() []unifiedresources.Resource {
 			return workloads
 		},
-		getAllFunc: func() []unifiedresources.LegacyResource {
+		getAllFunc: func() []unifiedresources.Resource {
 			return all
 		},
-		getSummaryFunc: func() unifiedresources.LegacyResourceSummary {
-			return summary
+		getTopCPUFunc: func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+			return []unifiedresources.Resource{vm}
 		},
-		getTopCPUFunc: func(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
-			return []unifiedresources.LegacyResource{vm}
+		getTopMemoryFunc: func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+			return []unifiedresources.Resource{host}
 		},
-		getTopMemoryFunc: func(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
-			return []unifiedresources.LegacyResource{host}
-		},
-		getTopDiskFunc: func(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
-			return []unifiedresources.LegacyResource{dockerContainer}
+		getTopDiskFunc: func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+			return []unifiedresources.Resource{dockerContainer}
 		},
 	}
 
-	s := &Service{resourceProvider: mockRP}
+	s := &Service{
+		unifiedResourceProvider: mockURP,
+		alertProvider: &resourceContextAlertProvider{
+			active: []AlertInfo{
+				{
+					ResourceID:   vm.ID,
+					ResourceName: vm.Name,
+					Message:      "CPU high",
+					Level:        "critical",
+				},
+			},
+		},
+	}
 	s.agentServer = &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{
 			{AgentID: "agent-1", Hostname: "delly"},
@@ -211,6 +242,112 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	assertContains("Top CPU Consumers")
 	assertContains("Top Memory Consumers")
 	assertContains("Top Disk Usage")
+}
+
+func TestBuildUnifiedResourceContext_UnifiedPath(t *testing.T) {
+	clusterID := "k8s-cluster-1"
+	k8sCluster := unifiedresources.Resource{
+		ID:     clusterID,
+		Name:   "prod-cluster",
+		Type:   unifiedresources.ResourceTypeK8sCluster,
+		Status: unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			ClusterName: "prod-cluster",
+		},
+		Kubernetes: &unifiedresources.K8sData{
+			ClusterID:   "prod-cluster",
+			ClusterName: "prod-cluster",
+		},
+	}
+	k8sNode := unifiedresources.Resource{
+		ID:       "k8s-node-1",
+		Name:     "worker-1",
+		Type:     unifiedresources.ResourceTypeK8sNode,
+		Status:   unifiedresources.StatusWarning,
+		ParentID: &clusterID,
+		Identity: unifiedresources.ResourceIdentity{
+			ClusterName: "prod-cluster",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 91},
+			Memory: &unifiedresources.MetricValue{Percent: 77},
+		},
+		Kubernetes: &unifiedresources.K8sData{
+			ClusterID:   "prod-cluster",
+			ClusterName: "prod-cluster",
+		},
+	}
+
+	all := []unifiedresources.Resource{k8sCluster, k8sNode}
+	stats := unifiedresources.ResourceStats{
+		Total: len(all),
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypeK8sCluster: 1,
+			unifiedresources.ResourceTypeK8sNode:    1,
+		},
+		ByStatus: map[unifiedresources.ResourceStatus]int{
+			unifiedresources.StatusOnline:  1,
+			unifiedresources.StatusWarning: 1,
+		},
+		BySource: map[unifiedresources.DataSource]int{
+			unifiedresources.SourceK8s: 2,
+		},
+	}
+
+	unifiedProvider := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats { return stats },
+		getInfrastructureFunc: func() []unifiedresources.Resource {
+			return all
+		},
+		getAllFunc: func() []unifiedresources.Resource {
+			return all
+		},
+		getTopCPUFunc: func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+			return []unifiedresources.Resource{k8sNode}
+		},
+	}
+	legacyProvider := &mockResourceProvider{
+		getStatsFunc: func() unifiedresources.LegacyStoreStats {
+			return unifiedresources.LegacyStoreStats{TotalResources: 999}
+		},
+	}
+
+	s := &Service{
+		resourceProvider:        legacyProvider,
+		unifiedResourceProvider: unifiedProvider,
+		alertProvider: &resourceContextAlertProvider{
+			active: []AlertInfo{
+				{
+					ResourceID:   k8sNode.ID,
+					ResourceName: "wrong-fallback-name",
+					Message:      "Node not ready",
+					Level:        "warning",
+				},
+			},
+		},
+	}
+
+	got := s.buildUnifiedResourceContext()
+	if got == "" {
+		t.Fatal("expected non-empty unified context")
+	}
+
+	assertContains := func(substr string) {
+		t.Helper()
+		if !strings.Contains(got, substr) {
+			t.Fatalf("expected context to contain %q", substr)
+		}
+	}
+
+	assertContains("Total resources: 2 (Infrastructure: 2, Workloads: 0)")
+	assertContains("Kubernetes")
+	assertContains("prod-cluster")
+	assertContains("worker-1")
+	assertContains("Resources with Active Alerts")
+	assertContains("Node not ready")
+	if strings.Contains(got, "Total resources: 999") {
+		t.Fatalf("expected unified provider to take precedence over legacy provider, got %q", got)
+	}
 }
 
 func TestBuildUnifiedResourceContext_TruncatesLargeContext(t *testing.T) {
@@ -497,6 +634,42 @@ func resourceContextTestSnapshot() models.StateSnapshot {
 			},
 		},
 	}
+}
+
+type resourceContextAlertProvider struct {
+	active  []AlertInfo
+	history []ResolvedAlertInfo
+}
+
+func (m *resourceContextAlertProvider) GetActiveAlerts() []AlertInfo {
+	return m.active
+}
+
+func (m *resourceContextAlertProvider) GetRecentlyResolved(minutes int) []ResolvedAlertInfo {
+	return m.history
+}
+
+func (m *resourceContextAlertProvider) GetAlertsByResource(resourceID string) []AlertInfo {
+	out := make([]AlertInfo, 0)
+	for _, alert := range m.active {
+		if alert.ResourceID == resourceID {
+			out = append(out, alert)
+		}
+	}
+	return out
+}
+
+func (m *resourceContextAlertProvider) GetAlertHistory(resourceID string, limit int) []ResolvedAlertInfo {
+	out := make([]ResolvedAlertInfo, 0)
+	for _, alert := range m.history {
+		if alert.ResourceID == resourceID {
+			out = append(out, alert)
+		}
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out
 }
 
 func metricValue(current float64) *unifiedresources.LegacyMetricValue {
