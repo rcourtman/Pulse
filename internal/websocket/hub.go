@@ -956,6 +956,48 @@ func (h *Hub) BroadcastAlertResolved(alertID string) {
 	h.BroadcastMessage(msg)
 }
 
+// BroadcastAlertToTenant broadcasts alert to clients of a specific tenant only.
+// If orgID is empty, falls back to global broadcast for single-tenant/legacy mode.
+func (h *Hub) BroadcastAlertToTenant(orgID string, alert interface{}) {
+	if orgID == "" {
+		h.BroadcastAlert(alert)
+		return
+	}
+
+	log.Info().Str("org_id", orgID).Msg("Broadcasting alert to tenant WebSocket clients")
+	msg := Message{
+		Type: "alert",
+		Data: cloneAlertData(alert),
+	}
+
+	select {
+	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
+	default:
+		log.Warn().Str("org_id", orgID).Msg("Tenant broadcast channel full, dropping alert")
+	}
+}
+
+// BroadcastAlertResolvedToTenant broadcasts alert resolution to clients of a specific tenant only.
+// If orgID is empty, falls back to global broadcast for single-tenant/legacy mode.
+func (h *Hub) BroadcastAlertResolvedToTenant(orgID string, alertID string) {
+	if orgID == "" {
+		h.BroadcastAlertResolved(alertID)
+		return
+	}
+
+	log.Info().Str("org_id", orgID).Str("alertID", alertID).Msg("Broadcasting alert resolved to tenant WebSocket clients")
+	msg := Message{
+		Type: "alertResolved",
+		Data: map[string]string{"alertId": alertID},
+	}
+
+	select {
+	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
+	default:
+		log.Warn().Str("org_id", orgID).Msg("Tenant broadcast channel full, dropping alert resolved")
+	}
+}
+
 // GetClientCount returns the number of connected clients
 func (h *Hub) GetClientCount() int {
 	h.mu.RLock()

@@ -164,3 +164,51 @@ func TestAlertWrapper_NilAlert(t *testing.T) {
 		t.Fatalf("expected nil metadata")
 	}
 }
+
+func TestAlertAdapter_ResourceTypeFromMetadata(t *testing.T) {
+	cases := []struct {
+		name         string
+		resourceType string
+	}{
+		{name: "vm", resourceType: "VM"},
+		{name: "container", resourceType: "Container"},
+		{name: "node", resourceType: "Node"},
+		{name: "host", resourceType: "Host"},
+		{name: "docker_container", resourceType: "Docker Container"},
+		{name: "docker_host", resourceType: "DockerHost"},
+		{name: "docker_service", resourceType: "Docker Service"},
+		{name: "pbs", resourceType: "PBS"},
+		{name: "storage", resourceType: "Storage"},
+		{name: "pmg", resourceType: "PMG"},
+		{name: "k8s", resourceType: "K8s"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapper := &alertWrapper{
+				alert: &alerts.Alert{
+					ID:       "alert-1",
+					Type:     "cpu",
+					Metadata: map[string]interface{}{"resourceType": tc.resourceType},
+				},
+			}
+
+			metadata := wrapper.GetMetadata()
+			if metadata == nil {
+				t.Fatalf("expected metadata map")
+			}
+			gotType, ok := metadata["resourceType"].(string)
+			if !ok {
+				t.Fatalf("expected resourceType string in metadata")
+			}
+			if gotType != tc.resourceType {
+				t.Fatalf("metadata resourceType mismatch: got %q want %q", gotType, tc.resourceType)
+			}
+
+			determined := determineResourceType(wrapper.GetAlertType(), metadata)
+			if determined != tc.resourceType {
+				t.Fatalf("determineResourceType mismatch: got %q want %q", determined, tc.resourceType)
+			}
+		})
+	}
+}

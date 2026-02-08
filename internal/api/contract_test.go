@@ -3,12 +3,14 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 )
 
@@ -286,6 +288,89 @@ func TestContract_PushNotificationJSONSnapshots(t *testing.T) {
 				t.Fatalf("marshal push payload: %v", err)
 			}
 			assertJSONSnapshot(t, got, tc.want)
+		})
+	}
+}
+
+func TestContract_AlertJSONSnapshot(t *testing.T) {
+	start := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
+	lastSeen := start.Add(3 * time.Minute)
+
+	payload := alerts.Alert{
+		ID:           "cluster/qemu/100-cpu",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "cluster/qemu/100",
+		ResourceName: "test-vm",
+		Node:         "pve-1",
+		Instance:     "cpu0",
+		Message:      "VM cpu at 95%",
+		Value:        95.0,
+		Threshold:    90.0,
+		StartTime:    start,
+		LastSeen:     lastSeen,
+		Acknowledged: false,
+		Metadata: map[string]interface{}{
+			"resourceType":   "VM",
+			"clearThreshold": 70.0,
+			"unit":           "%",
+			"monitorOnly":    true,
+		},
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal alert: %v", err)
+	}
+
+	const want = `{
+		"id":"cluster/qemu/100-cpu",
+		"type":"cpu",
+		"level":"warning",
+		"resourceId":"cluster/qemu/100",
+		"resourceName":"test-vm",
+		"node":"pve-1",
+		"instance":"cpu0",
+		"message":"VM cpu at 95%",
+		"value":95,
+		"threshold":90,
+		"startTime":"2026-02-08T13:14:15Z",
+		"lastSeen":"2026-02-08T13:17:15Z",
+		"acknowledged":false,
+		"metadata":{"clearThreshold":70,"monitorOnly":true,"resourceType":"VM","unit":"%"}
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_AlertResourceTypeConsistency(t *testing.T) {
+	cases := []struct {
+		resourceType string
+		want         []string
+	}{
+		{resourceType: "VM", want: []string{"guest"}},
+		{resourceType: "Container", want: []string{"guest"}},
+		{resourceType: "Node", want: []string{"node"}},
+		{resourceType: "Host", want: []string{"host", "node"}},
+		{resourceType: "Host Disk", want: []string{"host-disk", "host", "storage"}},
+		{resourceType: "PBS", want: []string{"pbs", "node"}},
+		{resourceType: "Docker Container", want: []string{"docker", "guest"}},
+		{resourceType: "DockerHost", want: []string{"dockerhost", "docker", "node"}},
+		{resourceType: "Docker Service", want: []string{"docker-service", "docker", "guest"}},
+		{resourceType: "Storage", want: []string{"storage"}},
+		{resourceType: "PMG", want: []string{"pmg", "node"}},
+		{resourceType: "K8s", want: []string{"k8s", "guest"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.resourceType, func(t *testing.T) {
+			got := alerts.CanonicalResourceTypeKeys(tc.resourceType)
+			if len(got) == 0 {
+				t.Fatalf("resource type %q returned no canonical keys", tc.resourceType)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("canonical keys mismatch for %q: got %v want %v", tc.resourceType, got, tc.want)
+			}
 		})
 	}
 }

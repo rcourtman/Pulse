@@ -3854,7 +3854,12 @@ func (r *Router) WireAlertTriggeredAI() {
 	log.Info().Msg("Alert-triggered AI Watchdog wired to monitor")
 }
 
-// deriveResourceTypeFromAlert derives the resource type from an alert
+// Deprecated: deriveResourceTypeFromAlert uses heuristic string matching.
+// Use alert.Metadata["resourceType"] as the canonical source instead.
+// This function is retained for test backward compatibility only.
+// See: Appendix C of alerts-unified-resource-hardening-plan-2026-02.md.
+//
+// deriveResourceTypeFromAlert derives the resource type from an alert.
 func deriveResourceTypeFromAlert(alert *alerts.Alert) string {
 	if alert == nil {
 		return ""

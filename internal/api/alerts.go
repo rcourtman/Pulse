@@ -97,6 +97,20 @@ func (h *AlertHandlers) getMonitor(ctx context.Context) AlertMonitor {
 	return h.legacyMonitor
 }
 
+func (h *AlertHandlers) broadcastStateForContext(ctx context.Context) {
+	if h.wsHub == nil {
+		return
+	}
+
+	orgID := GetOrgID(ctx)
+	state := h.getMonitor(ctx).GetState()
+	if orgID != "" {
+		h.wsHub.BroadcastStateToTenant(orgID, state.ToFrontend())
+		return
+	}
+	h.wsHub.BroadcastState(state.ToFrontend())
+}
+
 // validateAlertID validates an alert ID for security.
 // Alert IDs may contain user-supplied data (e.g., Docker hostnames), so we allow
 // printable ASCII characters while blocking control characters and path traversal.
@@ -623,9 +637,9 @@ func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Reques
 	// Broadcast updated state to all WebSocket clients after response
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 			log.Debug().Msg("Broadcasted state after alert unacknowledgment")
 		}()
 	}
@@ -705,9 +719,9 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 	// Broadcast updated state to all WebSocket clients after response
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 			log.Debug().Msg("Broadcasted state after alert acknowledgment")
 		}()
 	}
@@ -763,9 +777,9 @@ func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Re
 	}
 
 	if h.wsHub != nil {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 		}()
 	}
 }
@@ -807,9 +821,9 @@ func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.
 	}
 
 	if h.wsHub != nil {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 		}()
 	}
 }
@@ -850,9 +864,9 @@ func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request)
 	}
 
 	if h.wsHub != nil {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 		}()
 	}
 }
@@ -905,9 +919,9 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 	// Broadcast updated state to all WebSocket clients after response
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 			log.Debug().Msg("Broadcasted state after alert clear")
 		}()
 	}
@@ -971,9 +985,9 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 	// Broadcast updated state to all WebSocket clients if any alerts were acknowledged
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil && anySuccess {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 			log.Debug().Msg("Broadcasted state after bulk alert acknowledgment")
 		}()
 	}
@@ -1030,9 +1044,9 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 	// Broadcast updated state to all WebSocket clients after response
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil && anySuccess {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 			log.Debug().Msg("Broadcasted state after bulk alert clear")
 		}()
 	}

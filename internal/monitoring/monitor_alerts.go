@@ -44,7 +44,7 @@ func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 	}
 
 	if m.wsHub != nil {
-		m.wsHub.BroadcastAlert(alert)
+		m.wsHub.BroadcastAlertToTenant(m.GetOrgID(), alert)
 	}
 
 	log.Debug().
@@ -77,7 +77,7 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 	var resolvedAlert *alerts.ResolvedAlert
 
 	if m.wsHub != nil {
-		m.wsHub.BroadcastAlertResolved(alertID)
+		m.wsHub.BroadcastAlertResolvedToTenant(m.GetOrgID(), alertID)
 	}
 
 	// Always record incident timeline, regardless of notification suppression.

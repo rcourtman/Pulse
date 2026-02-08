@@ -1518,7 +1518,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		}
 
 		// Update WebSocket with escalation
-		wsHub.BroadcastAlert(alert)
+		wsHub.BroadcastAlertToTenant(m.GetOrgID(), alert)
 	})
 
 	// Create separate tickers for polling and broadcasting using the configured cadence

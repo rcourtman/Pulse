@@ -6019,7 +6019,7 @@ func (m *Manager) getMetricTimeThreshold(resourceType, metricType string) (int, 
 		return 0, false
 	}
 
-	for _, typeKey := range canonicalResourceTypeKeys(resourceType) {
+	for _, typeKey := range CanonicalResourceTypeKeys(resourceType) {
 		perType, ok := m.config.MetricTimeThresholds[typeKey]
 		if !ok || len(perType) == 0 {
 			continue
@@ -6045,7 +6045,7 @@ func (m *Manager) getMetricTimeThreshold(resourceType, metricType string) (int, 
 // getBaseTimeThreshold returns the resource-type level delay.
 func (m *Manager) getBaseTimeThreshold(resourceType string) (int, bool) {
 	if m.config.TimeThresholds != nil {
-		for _, key := range canonicalResourceTypeKeys(resourceType) {
+		for _, key := range CanonicalResourceTypeKeys(resourceType) {
 			if delay, ok := m.config.TimeThresholds[key]; ok {
 				return delay, true
 			}
@@ -6089,7 +6089,8 @@ func (m *Manager) getGlobalMetricTimeThreshold(metricType string) (int, bool) {
 	return 0, false
 }
 
-func canonicalResourceTypeKeys(resourceType string) []string {
+// CanonicalResourceTypeKeys returns normalized resource-type keys for threshold lookup.
+func CanonicalResourceTypeKeys(resourceType string) []string {
 	typeKey := strings.ToLower(strings.TrimSpace(resourceType))
 
 	addUnique := func(slice []string, value string) []string {
@@ -6115,11 +6116,28 @@ func canonicalResourceTypeKeys(resourceType string) []string {
 		keys = addUnique(keys, "dockerhost")
 		keys = addUnique(keys, "docker")
 		keys = addUnique(keys, "node")
+	case "docker service", "dockerservice":
+		keys = addUnique(keys, "docker-service")
+		keys = addUnique(keys, "docker")
+		keys = addUnique(keys, "guest")
 	case "node":
 		keys = addUnique(keys, "node")
+	case "host", "host agent":
+		keys = addUnique(keys, "host")
+		keys = addUnique(keys, "node")
+	case "host disk", "hostdisk":
+		keys = addUnique(keys, "host-disk")
+		keys = addUnique(keys, "host")
+		keys = addUnique(keys, "storage")
 	case "pbs", "pbs server", "pbsserver":
 		keys = addUnique(keys, "pbs")
 		keys = addUnique(keys, "node")
+	case "pmg", "pmg server", "proxmox mail gateway":
+		keys = addUnique(keys, "pmg")
+		keys = addUnique(keys, "node")
+	case "k8s", "kubernetes", "k8s pod", "pod":
+		keys = addUnique(keys, "k8s")
+		keys = addUnique(keys, "guest")
 	case "storage":
 		keys = addUnique(keys, "storage")
 	default:

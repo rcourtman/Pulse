@@ -1374,7 +1374,7 @@ func TestQuietHoursCategoryForAlert(t *testing.T) {
 	}
 }
 
-// TestCanonicalResourceTypeKeys tests the canonicalResourceTypeKeys function
+// TestCanonicalResourceTypeKeys tests the CanonicalResourceTypeKeys function
 func TestCanonicalResourceTypeKeys(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -1441,12 +1441,42 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 			resourceType: "dockerhost",
 			want:         []string{"dockerhost", "docker", "node"},
 		},
+		{
+			name:         "docker service returns docker-service, docker, guest",
+			resourceType: "docker service",
+			want:         []string{"docker-service", "docker", "guest"},
+		},
+		{
+			name:         "dockerservice returns docker-service, docker, guest",
+			resourceType: "dockerservice",
+			want:         []string{"docker-service", "docker", "guest"},
+		},
 
 		// Node type
 		{
 			name:         "node returns node",
 			resourceType: "node",
 			want:         []string{"node"},
+		},
+		{
+			name:         "host returns host and node",
+			resourceType: "host",
+			want:         []string{"host", "node"},
+		},
+		{
+			name:         "host agent returns host and node",
+			resourceType: "host agent",
+			want:         []string{"host", "node"},
+		},
+		{
+			name:         "host disk returns host-disk, host, storage",
+			resourceType: "host disk",
+			want:         []string{"host-disk", "host", "storage"},
+		},
+		{
+			name:         "hostdisk returns host-disk, host, storage",
+			resourceType: "hostdisk",
+			want:         []string{"host-disk", "host", "storage"},
 		},
 
 		// PBS types
@@ -1514,9 +1544,34 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 			want:         []string{"custom"},
 		},
 		{
-			name:         "pmg returns itself as unknown",
+			name:         "pmg returns pmg and node",
 			resourceType: "pmg",
-			want:         []string{"pmg"},
+			want:         []string{"pmg", "node"},
+		},
+		{
+			name:         "pmg server returns pmg and node",
+			resourceType: "pmg server",
+			want:         []string{"pmg", "node"},
+		},
+		{
+			name:         "proxmox mail gateway returns pmg and node",
+			resourceType: "proxmox mail gateway",
+			want:         []string{"pmg", "node"},
+		},
+		{
+			name:         "k8s returns k8s and guest",
+			resourceType: "k8s",
+			want:         []string{"k8s", "guest"},
+		},
+		{
+			name:         "kubernetes returns k8s and guest",
+			resourceType: "kubernetes",
+			want:         []string{"k8s", "guest"},
+		},
+		{
+			name:         "pod returns k8s and guest",
+			resourceType: "pod",
+			want:         []string{"k8s", "guest"},
 		},
 
 		// Empty and whitespace-only
@@ -1534,11 +1589,11 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := canonicalResourceTypeKeys(tc.resourceType)
+			got := CanonicalResourceTypeKeys(tc.resourceType)
 
 			// Check length
 			if len(got) != len(tc.want) {
-				t.Errorf("canonicalResourceTypeKeys(%q) = %v (len %d), want %v (len %d)",
+				t.Errorf("CanonicalResourceTypeKeys(%q) = %v (len %d), want %v (len %d)",
 					tc.resourceType, got, len(got), tc.want, len(tc.want))
 				return
 			}
@@ -1546,7 +1601,7 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 			// Check each element
 			for i, v := range got {
 				if v != tc.want[i] {
-					t.Errorf("canonicalResourceTypeKeys(%q)[%d] = %q, want %q",
+					t.Errorf("CanonicalResourceTypeKeys(%q)[%d] = %q, want %q",
 						tc.resourceType, i, v, tc.want[i])
 				}
 			}
