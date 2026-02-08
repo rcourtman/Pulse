@@ -416,6 +416,10 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	if !updated {
+		// Enforce max_users limit only for new member additions.
+		if enforceUserLimitForMemberAdd(w, r.Context(), org) {
+			return
+		}
 		org.Members = append(org.Members, models.OrganizationMember{
 			UserID:  req.UserID,
 			Role:    req.Role,
