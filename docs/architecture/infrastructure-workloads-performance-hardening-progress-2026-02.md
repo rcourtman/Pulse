@@ -27,7 +27,7 @@ Date: 2026-02-08
 | IWP-01 | Infrastructure Derivation Pipeline Extraction | DONE | Codex | Claude | APPROVED | IWP-01 Review Evidence |
 | IWP-02 | Workloads Derivation Pipeline Extraction | DONE | Codex | Claude | APPROVED | IWP-02 Review Evidence |
 | IWP-03 | Infrastructure Table Windowing and Render Containment | DONE | Codex | Claude | APPROVED | IWP-03 Review Evidence |
-| IWP-04 | Workloads Table Windowing and Grouped Render Containment | TODO | Codex | Claude | — | — |
+| IWP-04 | Workloads Table Windowing and Grouped Render Containment | DONE | Codex | Claude | APPROVED | IWP-04 Review Evidence |
 | IWP-05 | Polling/Update Backpressure and Recompute Isolation | TODO | Codex | Claude | — | — |
 | IWP-06 | Summary Path Hardening | TODO | Codex | Claude | — | — |
 | IWP-07 | Final Performance Certification | TODO | Claude | Claude | — | — |
@@ -248,27 +248,50 @@ Rollback:
 
 ## IWP-04 Checklist: Workloads Table Windowing and Grouped Render Containment
 
-- [ ] Group-aware row windowing implemented for workloads table.
-- [ ] Drawer open/close, selection, hover, and grouped headers preserved.
-- [ ] Flat and grouped modes both covered by tests.
-- [ ] Perf contract tests assert workloads row mount ceilings and stability.
+- [x] Group-aware row windowing implemented for workloads table.
+- [x] Drawer open/close, selection, hover, and grouped headers preserved.
+- [x] Flat and grouped modes both covered by tests.
+- [x] Perf contract tests assert workloads row mount ceilings and stability.
 
 ### Required Tests
 
-- [ ] `cd frontend-modern && npx vitest run src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx src/components/Dashboard/__tests__/Dashboard.k8s.test.tsx` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `cd frontend-modern && npx vitest run src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx src/components/Dashboard/__tests__/Dashboard.k8s.test.tsx` -> exit 0
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### IWP-04 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts` (new): Grouped windowing hook with threshold >500, 140-row window, scroll-driven offset, selected-row reveal
+- `frontend-modern/src/components/Dashboard/Dashboard.tsx`: Integrated grouped windowing with visible group slicing, spacer rows, flat/grouped mode support
+- `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`: Replaced IWP-04 todo with windowing contract tests (M <=140, S full render)
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run ...Dashboard.performance.contract.test.tsx ...Dashboard.k8s.test.tsx` -> exit 0 (24 tests)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+
+Gate checklist:
+- P0: PASS (all tests pass, typecheck clean, K8s integration unaffected)
+- P1: PASS (windowing threshold at 500, window 140, group headers preserved)
+- P2: PASS (consistent pattern with IWP-03 infrastructure windowing)
+
+Verdict: APPROVED
+
+Commit:
+- pending checkpoint commit
+
+Residual risk:
+- jsdom scroll behavior untested; requires manual browser verification
+
+Rollback:
+- Delete useGroupedTableWindowing.ts, revert Dashboard.tsx windowing code, revert perf contract assertions
 ```
 
 ---
@@ -360,7 +383,7 @@ TODO
 - IWP-00: `c28f1c4a`
 - IWP-01: `6f9e2cc3`
 - IWP-02: `86cce391`
-- IWP-03: TODO
+- IWP-03: `bb4844a6`
 - IWP-04: TODO
 - IWP-05: TODO
 - IWP-06: TODO

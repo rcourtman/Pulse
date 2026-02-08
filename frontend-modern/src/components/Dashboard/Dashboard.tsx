@@ -1,4 +1,4 @@
-import { createSignal, createMemo, createEffect, For, Index, Show, onMount } from 'solid-js';
+import { createSignal, createMemo, createEffect, For, Index, Show, onMount, onCleanup } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
@@ -61,6 +61,7 @@ import {
   type FilterWorkloadsParams,
   type WorkloadStats,
 } from './workloadSelectors';
+import { useGroupedTableWindowing } from './useGroupedTableWindowing';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -77,6 +78,7 @@ let persistHandle: number | null = null;
 let persistHandleType: 'idle' | 'timeout' | null = null;
 
 const instrumentationEnabled = import.meta.env.DEV && typeof performance !== 'undefined';
+const DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT = 40;
 
 const workloadMetricPercent = (value: number | null | undefined): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
@@ -324,6 +326,7 @@ export function Dashboard(props: DashboardProps) {
   // which detaches/reattaches DOM and resets the scroll container's scrollTop.
   // We find the scroll container, save its position, and restore it after.
   let tableRef: HTMLDivElement | undefined;
+  const [tableBodyRef, setTableBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
   const setSelectedGuestId = (id: string | null) => {
     // Find the nearest ancestor scroll container from the table
     let scroller: HTMLElement | null = tableRef ?? null;
@@ -901,6 +904,116 @@ export function Dashboard(props: DashboardProps) {
     });
   });
 
+  const guestGlobalIndexById = createMemo(() => {
+    const indexById = new Map<string, number>();
+    const groups = groupedGuests();
+    let globalIndex = 0;
+
+    for (const groupKey of sortedGroupKeys()) {
+      const guests = groups[groupKey] || [];
+      for (const guest of guests) {
+        indexById.set(getCanonicalWorkloadId(guest), globalIndex);
+        globalIndex += 1;
+      }
+    }
+
+    return indexById;
+  });
+
+  const revealGuestIndex = createMemo<number | null>(() => {
+    const selectedId = selectedGuestId();
+    if (!selectedId) return null;
+    return guestGlobalIndexById().get(selectedId) ?? null;
+  });
+
+  const groupedWindowing = useGroupedTableWindowing({
+    totalRowCount: () => filteredGuests().length,
+    revealIndex: revealGuestIndex,
+  });
+
+  const groupStartIndexByKey = createMemo(() => {
+    const starts = new Map<string, number>();
+    const groups = groupedGuests();
+    let globalIndex = 0;
+
+    for (const groupKey of sortedGroupKeys()) {
+      starts.set(groupKey, globalIndex);
+      globalIndex += (groups[groupKey] || []).length;
+    }
+
+    return starts;
+  });
+
+  const windowedGroupedGuests = createMemo<Record<string, WorkloadGuest[]>>(() => {
+    const groups = groupedGuests();
+    if (!groupedWindowing.isWindowed()) {
+      return groups;
+    }
+
+    const starts = groupStartIndexByKey();
+    const result: Record<string, WorkloadGuest[]> = {};
+    for (const groupKey of sortedGroupKeys()) {
+      const guests = groups[groupKey] || [];
+      const groupStart = starts.get(groupKey) ?? 0;
+      const visible = groupedWindowing.getVisibleSlice(groupKey, guests, groupStart);
+      if (visible.length > 0) {
+        result[groupKey] = visible;
+      }
+    }
+
+    return result;
+  });
+
+  const visibleGroupKeys = createMemo(() => {
+    const keys = sortedGroupKeys();
+    if (!groupedWindowing.isWindowed()) return keys;
+    const groups = windowedGroupedGuests();
+    return keys.filter((groupKey) => (groups[groupKey] || []).length > 0);
+  });
+
+  const topSpacerHeight = createMemo(() =>
+    groupedWindowing.isWindowed()
+      ? groupedWindowing.startIndex() * DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT
+      : 0,
+  );
+
+  const bottomSpacerHeight = createMemo(() =>
+    groupedWindowing.isWindowed()
+      ? Math.max(
+          0,
+          (filteredGuests().length - groupedWindowing.endIndex()) * DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT,
+        )
+      : 0,
+  );
+
+  const syncGuestWindowToViewport = () => {
+    if (!groupedWindowing.isWindowed() || typeof window === 'undefined') return;
+    const body = tableBodyRef();
+    if (!body) return;
+    const rect = body.getBoundingClientRect();
+    const scrollTop = Math.max(0, -rect.top);
+    groupedWindowing.onScroll(scrollTop, window.innerHeight, DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT);
+  };
+
+  createEffect(() => {
+    if (typeof window === 'undefined') return;
+    filteredGuests().length;
+    if (!groupedWindowing.isWindowed()) return;
+    if (!tableBodyRef()) return;
+
+    const handleViewportChange = () => {
+      syncGuestWindowToViewport();
+    };
+
+    handleViewportChange();
+    window.addEventListener('scroll', handleViewportChange, { passive: true });
+    window.addEventListener('resize', handleViewportChange);
+    onCleanup(() => {
+      window.removeEventListener('scroll', handleViewportChange);
+      window.removeEventListener('resize', handleViewportChange);
+    });
+  });
+
   const totalStats = createMemo<WorkloadStats>(() => computeWorkloadStats(filteredGuests()));
 
   const workloadIOEmphasis = createMemo(() => computeWorkloadIOEmphasis(filteredGuests()));
@@ -1231,11 +1344,17 @@ export function Dashboard(props: DashboardProps) {
                     </For>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody ref={setTableBodyRef} class="divide-y divide-gray-200 dark:divide-gray-700">
+                  <Show when={groupedWindowing.isWindowed() && topSpacerHeight() > 0}>
+                    <tr aria-hidden="true">
+                      <td colspan={totalColumns()} style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }} />
+                    </tr>
+                  </Show>
                   {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
-                  <For each={sortedGroupKeys()} fallback={<></>}>
+                  <For each={visibleGroupKeys()} fallback={<></>}>
                     {(groupKey) => {
-                      const groupGuests = () => groupedGuests()[groupKey] || [];
+                      const groupGuests = () => windowedGroupedGuests()[groupKey] || [];
+                      const fullGroupGuests = () => groupedGuests()[groupKey] || [];
                       const node = () => nodeByInstance()[groupKey];
                       return (
                         <>
@@ -1249,7 +1368,7 @@ export function Dashboard(props: DashboardProps) {
                                     class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                                   >
                                     {(() => {
-                                      const label = getGroupLabel(groupKey, groupGuests());
+                                      const label = getGroupLabel(groupKey, fullGroupGuests());
                                       return (
                                         <div class="flex items-center gap-3">
                                           <span>{label.name}</span>
@@ -1323,6 +1442,11 @@ export function Dashboard(props: DashboardProps) {
                       );
                     }}
                   </For>
+                  <Show when={groupedWindowing.isWindowed() && bottomSpacerHeight() > 0}>
+                    <tr aria-hidden="true">
+                      <td colspan={totalColumns()} style={{ height: `${bottomSpacerHeight()}px`, padding: '0', border: '0' }} />
+                    </tr>
+                  </Show>
                 </tbody>
               </table>
             </div>

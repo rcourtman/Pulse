@@ -201,8 +201,8 @@ describe('Dashboard performance contract', () => {
     });
   });
 
-  describe('Profile M baseline', () => {
-    it('renders Profile M without crashing and keeps baseline row count', async () => {
+  describe('Workload windowing contracts', () => {
+    it('Profile M: caps mounted guest rows when windowing is active', async () => {
       mockLocationSearch = '?type=all';
       mockV2Workloads = makeGuests(PROFILES.M);
 
@@ -214,13 +214,13 @@ describe('Dashboard performance contract', () => {
         expect(container.querySelector('table')).toBeInTheDocument();
       });
       await waitFor(() => {
-        expect(getGuestRowCount(container)).toBe(PROFILES.M);
+        const rowCount = getGuestRowCount(container);
+        expect(rowCount).toBeGreaterThan(0);
+        expect(rowCount).toBeLessThanOrEqual(140);
       });
     });
-  });
 
-  describe('Profile L baseline', () => {
-    it('renders Profile L without crashing as pre-windowing baseline', async () => {
+    it('Profile L: keeps mounted guest rows capped under large load', async () => {
       mockLocationSearch = '?type=all';
       mockV2Workloads = makeGuests(PROFILES.L);
 
@@ -233,10 +233,25 @@ describe('Dashboard performance contract', () => {
       });
       await waitFor(
         () => {
-          expect(getGuestRowCount(container)).toBe(PROFILES.L);
+          const rowCount = getGuestRowCount(container);
+          expect(rowCount).toBeGreaterThan(0);
+          expect(rowCount).toBeLessThanOrEqual(140);
         },
         { timeout: 20000 },
       );
+    });
+
+    it('Profile S: renders all guest rows without windowing', async () => {
+      mockLocationSearch = '?type=all';
+      mockV2Workloads = makeGuests(PROFILES.S);
+
+      const { container } = render(() => (
+        <Dashboard vms={[]} containers={[]} nodes={[]} useV2Workloads />
+      ));
+
+      await waitFor(() => {
+        expect(getGuestRowCount(container)).toBe(PROFILES.S);
+      });
     });
   });
 
@@ -320,6 +335,4 @@ describe('Dashboard performance contract', () => {
       expect(stats.running + stats.degraded + stats.stopped).toBe(PROFILES.S);
     });
   });
-
-  describe.todo('Windowing budget placeholder (IWP-04)');
 });
