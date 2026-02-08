@@ -459,3 +459,40 @@ Certification date: 2026-02-08
 | --- | --- | --- | --- | --- |
 | PC-004-F1 | Unsupported future export version handling is permissive (best-effort) rather than fail-closed by schema version contract. | Control plane/config | Next import/export hardening cycle | DEFERRED |
 | PC-004-F2 | No cross-service E2E migration replay (cold-start + API import + alert reload + notification resend) in a single integrated test chain. | Program closeout | Post-closeout integration hardening | DEFERRED |
+
+## Appendix G: Performance Envelope Baseline
+
+### Baseline metric set
+
+| Metric | Surface | Measurement Method | Baseline Expectation | Regression Tolerance |
+| --- | --- | --- | --- | --- |
+| `go build ./...` time | Backend | Wall-clock | Document current measurement from this closeout session | +20% |
+| `go test ./internal/api/...` time | Backend | Wall-clock from test output | Document current measurement from this closeout session | +30% |
+| `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` time | Frontend | Wall-clock | Document current measurement from this closeout session | +20% |
+| `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` time | Frontend | Wall-clock from test output | Document current measurement from this closeout session | +30% |
+| Route registration count | Backend | `TestRouterRouteInventory` output | Document current route inventory count from this closeout session | Must not decrease without explicit removal |
+| Contract test count | Backend | `go test ./internal/api/... -run "Contract" -v` test count | Document current contract test count from this closeout session | Must not decrease |
+
+### Measurement methodology notes
+
+- Measurements are captured from build/test command output during this closeout session and recorded as certification evidence.
+- Environment baseline is a macOS development workstation; architecture is `arm64` (`uname -m`).
+- These numbers are development-time baselines for regression detection, not production performance benchmarks.
+- Production latency benchmarks are deferred to a dedicated performance cycle outside this packet.
+
+### Regression mitigation plan
+
+- Owner: the engineer who introduces the regression.
+- Action: investigate root cause and either fix the regression or explicitly accept it with documented justification.
+- Escalation: if unresolved in the current packet, carry it as an explicit risk and flag it in the next closeout cycle.
+
+### Current measurements (reviewer fill-in)
+
+| Metric | Value | Captured At | Environment |
+| --- | --- | --- | --- |
+| `go build ./...` time | 8.2s wall-clock (9.25s user, 2.43s sys) | 2026-02-08 14:56 UTC | macOS `arm64` |
+| `go test ./internal/api/... -run "Benchmark\|RouteInventory\|Contract"` time | 3.1s wall-clock (0.44s test runtime) | 2026-02-08 14:55 UTC | macOS `arm64` |
+| `tsc --noEmit` time | 4.9s wall-clock (7.21s user) | 2026-02-08 14:55 UTC | macOS `arm64` |
+| `vitest run settingsRouting.test.ts` time | 1.0s wall-clock (282ms vitest duration, 2ms tests) | 2026-02-08 14:56 UTC | macOS `arm64` |
+| Route registration count | ~296 routes in allowlist | 2026-02-08 14:56 UTC | macOS `arm64` |
+| Contract test count | 12 PASS (Contract-pattern tests) | 2026-02-08 14:56 UTC | macOS `arm64` |

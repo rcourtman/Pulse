@@ -25,7 +25,7 @@ Date: 2026-02-08
 | 02 | Cross-Domain Integration Certification Matrix | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence below |
 | 03 | Security, Authorization, and Isolation Replay | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence below |
 | 04 | Data Integrity and Migration Safety Certification | DONE | Codex | Claude | APPROVED | See Packet 04 Review Evidence below |
-| 05 | Performance and Capacity Envelope Baseline | TODO | Unassigned | Unassigned | PENDING | |
+| 05 | Performance and Capacity Envelope Baseline | DONE | Codex | Claude | APPROVED | See Packet 05 Review Evidence below |
 | 06 | Operational Readiness and Rollback Drill | TODO | Unassigned | Unassigned | PENDING | |
 | 07 | Documentation, Changelog, and Debt Ledger Closeout | TODO | Unassigned | Unassigned | PENDING | |
 | 08 | Final Certification and Go/No-Go Verdict | TODO | Unassigned | Unassigned | PENDING | |
@@ -279,7 +279,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- See checkpoint commit hash below.
+- `9e459912` (fix(closeout): Packet 04 — data integrity and migration safety APPROVED)
 
 Residual risk:
 - Production bug fix in `alerts.go:LoadActiveAlerts()` — low risk, additive fix (saves oldResourceID before overwrite). Affects only legacy guest alert ID migration path.
@@ -292,22 +292,53 @@ Rollback:
 ## Packet 05 Checklist: Performance and Capacity Envelope Baseline
 
 ### Implementation
-- [ ] Baseline performance metric set defined.
-- [ ] Current measurements captured with environment notes.
-- [ ] Regression tolerance bands documented.
-- [ ] Mitigation owners assigned for out-of-band regressions.
+- [x] Baseline performance metric set defined.
+- [x] Current measurements captured with environment notes.
+- [x] Regression tolerance bands documented.
+- [x] Mitigation owners assigned for out-of-band regressions.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "Benchmark|RouteInventory|Contract" -v` completed with evidence.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "Benchmark|RouteInventory|Contract" -v` completed with evidence.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Packet 05 Review Evidence
+
+Files changed:
+- `docs/architecture/program-closeout-certification-plan-2026-02.md`: Added Appendix G (Performance Envelope Baseline) with metric definitions, measurement methodology, regression tolerances, mitigation plan, and reviewer-captured measurements.
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0 (8.2s wall-clock)
+2. `go test ./internal/api/... -run "Benchmark|RouteInventory|Contract" -v` -> exit 0 (3.1s wall-clock, 13 tests PASS)
+3. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0 (4.9s wall-clock)
+4. `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` -> exit 0 (282ms, 8 tests)
+
+Performance measurements captured:
+- go build: 8.2s | API tests: 3.1s | tsc: 4.9s | vitest: 1.0s
+- Route count: ~296 | Contract tests: 12
+
+Gate checklist:
+- P0: PASS (all commands rerun with timing, all exit 0)
+- P1: N/A (docs-only, no behavioral changes)
+- P2: PASS (measurements captured, tolerances documented, mitigation plan in place)
+
+Verdict: APPROVED
+
+Commit:
+- See checkpoint commit hash below.
+
+Residual risk:
+- None. Performance envelope is a baseline reference; no regressions detected.
+
+Rollback:
+- Revert checkpoint commit. Docs-only changes.
 
 ## Packet 06 Checklist: Operational Readiness and Rollback Drill
 
