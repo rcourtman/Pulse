@@ -21,7 +21,7 @@ Date: 2026-02-08
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | 00 | Surface Inventory and Decomposition Cut-Map | DONE | Codex | Claude | APPROVED | See Packet 00 evidence below |
-| 01 | Tab Schema and Metadata Extraction | TODO | Unassigned | Unassigned | PENDING | |
+| 01 | Tab Schema and Metadata Extraction | DONE | Codex | Claude | APPROVED | See Packet 01 evidence below |
 | 02 | Feature Gate Engine Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 03 | Navigation and Deep-Link Orchestration Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 04 | System Settings State Slice Extraction | TODO | Unassigned | Unassigned | PENDING | |
@@ -75,7 +75,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- `6813db8c` (docs(settings): Packet 00 — surface inventory and decomposition cut-map)
+- `2418cfeb` (docs(settings): Packet 00 — surface inventory and decomposition cut-map)
 
 Residual risk:
 - None. Discovery-only packet with no source code changes.
@@ -88,21 +88,52 @@ Rollback:
 ## Packet 01 Checklist: Tab Schema and Metadata Extraction
 
 ### Implementation
-- [ ] Tab type/schema extracted to dedicated modules.
-- [ ] Header metadata extracted to dedicated module.
-- [ ] Nav ordering and labels preserved.
-- [ ] `Settings.tsx` no longer owns inline schema/meta constants.
+- [x] Tab type/schema extracted to dedicated modules.
+- [x] Header metadata extracted to dedicated module.
+- [x] Nav ordering and labels preserved.
+- [x] `Settings.tsx` no longer owns inline schema/meta constants.
 
 ### Required Tests
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Packet 01 Review Evidence
+
+```
+Files changed:
+- frontend-modern/src/components/Settings/settingsTypes.ts (new): SettingsTab re-export, SettingsNavItem, SettingsNavGroup, SettingsHeaderMeta types
+- frontend-modern/src/components/Settings/settingsTabs.ts (new): baseTabGroups array with all 6 groups, 23 tabs, same ordering/labels/icons/features
+- frontend-modern/src/components/Settings/settingsHeaderMeta.ts (new): SETTINGS_HEADER_META map with all 23 tab entries
+- frontend-modern/src/components/Settings/Settings.tsx: Removed inline definitions, now imports from new modules
+
+Commands run + exit codes (reviewer-independent):
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+2. `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts` -> exit 0 (7/7 passed)
+
+Gate checklist:
+- P0: PASS (all 4 files verified; both commands rerun by reviewer with exit 0)
+- P1: PASS (tab ordering, labels, icons, features all preserved; Settings.tsx imports only, no inline definitions remain)
+- P2: PASS (tracker updated, checklist complete)
+
+Verdict: APPROVED
+
+Commit:
+- (pending)
+
+Residual risk:
+- None
+
+Rollback:
+- Delete settingsTypes.ts, settingsTabs.ts, settingsHeaderMeta.ts
+- Restore inline definitions in Settings.tsx from checkpoint commit 2418cfeb
+```
 
 ## Packet 02 Checklist: Feature Gate Engine Extraction
 

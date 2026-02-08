@@ -42,7 +42,6 @@ import OrganizationAccessPanel from './OrganizationAccessPanel';
 import OrganizationBillingPanel from './OrganizationBillingPanel';
 import OrganizationSharingPanel from './OrganizationSharingPanel';
 import SettingsPanel from '@/components/shared/SettingsPanel';
-import RadioTower from 'lucide-solid/icons/radio-tower';
 import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
 import { SecurityOverviewPanel } from './SecurityOverviewPanel';
@@ -68,29 +67,8 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
-import Shield from 'lucide-solid/icons/shield';
-import ShieldCheck from 'lucide-solid/icons/shield-check';
-import Lock from 'lucide-solid/icons/lock';
-import Key from 'lucide-solid/icons/key';
-import Activity from 'lucide-solid/icons/activity';
 import Loader from 'lucide-solid/icons/loader';
-import Network from 'lucide-solid/icons/network';
-import Bot from 'lucide-solid/icons/bot';
-import Users from 'lucide-solid/icons/users';
-import Sliders from 'lucide-solid/icons/sliders-horizontal';
-import RefreshCw from 'lucide-solid/icons/refresh-cw';
-import Clock from 'lucide-solid/icons/clock';
-import Sparkles from 'lucide-solid/icons/sparkles';
-import FileText from 'lucide-solid/icons/file-text';
-import Globe from 'lucide-solid/icons/globe';
-import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
-import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
-import BadgeCheck from 'lucide-solid/icons/badge-check';
-import Terminal from 'lucide-solid/icons/terminal';
 import Container from 'lucide-solid/icons/container';
-import Building2 from 'lucide-solid/icons/building-2';
-import Share2 from 'lucide-solid/icons/share-2';
-import CreditCard from 'lucide-solid/icons/credit-card';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
@@ -98,15 +76,17 @@ import { eventBus } from '@/stores/events';
 import { updateDockerUpdateActionsSetting } from '@/stores/systemSettings';
 
 import { updateStore } from '@/stores/updates';
-import { hasFeature, licenseLoaded, loadLicenseStatus } from '@/stores/license';
+import { hasFeature, isMultiTenantEnabled, licenseLoaded, loadLicenseStatus } from '@/stores/license';
 import {
   deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
   settingsTabPath,
   type AgentKey,
-  type SettingsTab,
 } from './settingsRouting';
+import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
+import { baseTabGroups } from './settingsTabs';
+import type { SettingsNavGroup, SettingsTab } from './settingsTypes';
 
 // Type definitions
 interface DiscoveredServer {
@@ -264,113 +244,6 @@ interface DiscoveryScanStatus {
   lastResultAt?: number;
   errors?: string[];
 }
-
-const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
-  proxmox: {
-    title: 'Infrastructure',
-    description:
-      'Manage infrastructure integrations for Proxmox VE, Backup Server, and Mail Gateway.',
-  },
-  docker: {
-    title: 'Docker Workloads',
-    description:
-      'Configure Docker-specific workload controls and update behavior across monitored hosts.',
-  },
-  agents: {
-    title: 'Unified Agents',
-    description: 'Install and manage host, Docker, and Kubernetes agents from one workflow.',
-  },
-  'system-general': {
-    title: 'General Settings',
-    description: 'Configure appearance, layout, and default monitoring cadence.',
-  },
-  'system-network': {
-    title: 'Network Settings',
-    description: 'Configure discovery, CORS, embedding, and webhook network boundaries.',
-  },
-  'system-updates': {
-    title: 'Updates',
-    description: 'Manage version checks, update channels, and automatic update behavior.',
-  },
-  'system-backups': {
-    title: 'Backups',
-    description: 'Manage backup polling plus configuration export and import workflows.',
-  },
-  'system-ai': {
-    title: 'AI Settings',
-    description: 'Configure AI providers, model defaults, Pulse Assistant, and Patrol automation.',
-  },
-  'system-relay': {
-    title: 'Remote Access',
-    description: 'Configure Pulse relay connectivity for secure remote access.',
-  },
-  'system-pro': {
-    title: 'Pulse Pro',
-    description: 'Manage license activation and Pulse Pro feature access.',
-  },
-  'organization-overview': {
-    title: 'Organization Overview',
-    description: 'Review organization metadata, membership footprint, and ownership.',
-  },
-  'organization-access': {
-    title: 'Organization Access',
-    description: 'Manage organization members, roles, and ownership transfers.',
-  },
-  'organization-sharing': {
-    title: 'Organization Sharing',
-    description: 'Share resources between organizations with scoped access.',
-  },
-  'organization-billing': {
-    title: 'Organization Billing',
-    description: 'Track plan tier, usage, and upgrade options for multi-tenant deployments.',
-  },
-  api: {
-    title: 'API Access',
-    description:
-      'Generate and manage scoped tokens for agents, automation, and integrations.',
-  },
-  'security-overview': {
-    title: 'Security Overview',
-    description: 'View your security posture at a glance and monitor authentication status.',
-  },
-  'security-auth': {
-    title: 'Authentication',
-    description: 'Manage password-based authentication and credential rotation.',
-  },
-  'security-sso': {
-    title: 'Single Sign-On',
-    description: 'Configure OIDC providers for team authentication.',
-  },
-  'security-roles': {
-    title: 'Roles',
-    description: 'Define custom roles and manage granular permissions for users and tokens.',
-  },
-  'security-users': {
-    title: 'User Access',
-    description: 'Assign roles to users and view effective permissions across your infrastructure.',
-  },
-  'security-audit': {
-    title: 'Audit Log',
-    description: 'View security events, login attempts, and configuration changes.',
-  },
-  'security-webhooks': {
-    title: 'Audit Webhooks',
-    description: 'Configure real-time delivery of audit events to external systems.',
-  },
-  diagnostics: {
-    title: 'Diagnostics',
-    description:
-      'Inspect discovery scans, connection health, and runtime metrics for troubleshooting.',
-  },
-  reporting: {
-    title: 'Reporting',
-    description: 'Generate and export infrastructure reports in PDF and CSV formats.',
-  },
-  'system-logs': {
-    title: 'System Logs',
-    description: 'View real-time system logs and download support bundles.',
-  },
-};
 
 const BACKUP_INTERVAL_OPTIONS = [
   { label: 'Default (~90 seconds)', value: 0 },
@@ -860,29 +733,6 @@ const Settings: Component<SettingsProps> = (props) => {
     });
   });
 
-  type SettingsNavGroupId =
-    | 'resources'
-    | 'organization'
-    | 'integrations'
-    | 'operations'
-    | 'system'
-    | 'security';
-  type SettingsNavItem = {
-    id: SettingsTab;
-    label: string;
-    icon: Component<{ class?: string; strokeWidth?: number }>;
-    iconProps?: { strokeWidth?: number };
-    disabled?: boolean;
-    badge?: string;
-    features?: string[];
-    permissions?: string[];
-  };
-  type SettingsNavGroup = {
-    id: SettingsNavGroupId;
-    label: string;
-    items: SettingsNavItem[];
-  };
-
   const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
     'system-relay': ['relay'],
     reporting: ['advanced_reporting'],
@@ -904,191 +754,26 @@ const Settings: Component<SettingsProps> = (props) => {
     return isFeatureLocked(requiredFeatures);
   };
 
-  const baseTabGroups: SettingsNavGroup[] = [
-    {
-      id: 'resources',
-      label: 'Resources',
-      items: [
-        { id: 'proxmox', label: 'Infrastructure', icon: ProxmoxIcon },
-        { id: 'agents', label: 'Workloads', icon: Bot, iconProps: { strokeWidth: 2 } },
-        { id: 'docker', label: 'Docker', icon: Container, iconProps: { strokeWidth: 2 } },
-      ],
-    },
-    {
-      id: 'organization',
-      label: 'Organization',
-      items: [
-        {
-          id: 'organization-overview',
-          label: 'Overview',
-          icon: Building2,
-          iconProps: { strokeWidth: 2 },
-          features: ['multi_tenant'],
-        },
-        {
-          id: 'organization-access',
-          label: 'Access',
-          icon: Users,
-          iconProps: { strokeWidth: 2 },
-          features: ['multi_tenant'],
-        },
-        {
-          id: 'organization-sharing',
-          label: 'Sharing',
-          icon: Share2,
-          iconProps: { strokeWidth: 2 },
-          features: ['multi_tenant'],
-        },
-        {
-          id: 'organization-billing',
-          label: 'Billing',
-          icon: CreditCard,
-          iconProps: { strokeWidth: 2 },
-          features: ['multi_tenant'],
-        },
-      ],
-    },
-    {
-      id: 'integrations',
-      label: 'Integrations',
-      items: [{ id: 'api', label: 'API Access', icon: BadgeCheck }],
-    },
-    {
-      id: 'operations',
-      label: 'Operations',
-      items: [
-        {
-          id: 'diagnostics',
-          label: 'Diagnostics',
-          icon: Activity,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'reporting',
-          label: 'Reporting',
-          icon: FileText,
-          iconProps: { strokeWidth: 2 },
-          features: ['advanced_reporting'],
-        },
-        {
-          id: 'system-logs',
-          label: 'System Logs',
-          icon: Terminal,
-          iconProps: { strokeWidth: 2 },
-        },
-      ],
-    },
-    {
-      id: 'system',
-      label: 'System',
-      items: [
-        {
-          id: 'system-general',
-          label: 'General',
-          icon: Sliders,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'system-network',
-          label: 'Network',
-          icon: Network,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'system-updates',
-          label: 'Updates',
-          icon: RefreshCw,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'system-backups',
-          label: 'Backups',
-          icon: Clock,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'system-ai',
-          label: 'AI',
-          icon: Sparkles,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'system-relay',
-          label: 'Remote Access',
-          icon: RadioTower,
-          iconProps: { strokeWidth: 2 },
-          features: ['relay'],
-        },
-        {
-          id: 'system-pro',
-          label: 'Pulse Pro',
-          icon: PulseLogoIcon,
-        },
-      ],
-    },
-    {
-      id: 'security',
-      label: 'Security',
-      items: [
-        {
-          id: 'security-overview',
-          label: 'Overview',
-          icon: Shield,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'security-auth',
-          label: 'Authentication',
-          icon: Lock,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'security-sso',
-          label: 'Single Sign-On',
-          icon: Key,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'security-roles',
-          label: 'Roles',
-          icon: ShieldCheck,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'security-users',
-          label: 'Users',
-          icon: Users,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'security-audit',
-          label: 'Audit Log',
-          icon: Activity,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'security-webhooks',
-          label: 'Audit Webhooks',
-          icon: Globe,
-          iconProps: { strokeWidth: 2 },
-          features: ['audit_logging'],
-        },
-      ],
-    },
-  ];
-
   const tabGroups = createMemo<SettingsNavGroup[]>(() =>
-    baseTabGroups.map((group) => ({
-      ...group,
-      items: group.items.map((item) => {
-        const lockedByFeature = isFeatureLocked(item.features);
+    baseTabGroups
+      .map((group) => {
+        const items = group.items
+          .filter((item) => !(item.features?.includes('multi_tenant') && !isMultiTenantEnabled()))
+          .map((item) => {
+            const lockedByFeature = isFeatureLocked(item.features);
+            return {
+              ...item,
+              disabled: item.disabled || lockedByFeature,
+              badge: lockedByFeature ? 'Pro' : item.badge,
+            };
+          });
+
         return {
-          ...item,
-          disabled: item.disabled || lockedByFeature,
-          badge: lockedByFeature ? 'Pro' : item.badge,
+          ...group,
+          items,
         };
-      }),
-    })),
+      })
+      .filter((group) => group.items.length > 0),
   );
 
   const flatTabs = createMemo(() => tabGroups().flatMap((group) => group.items));
@@ -1098,6 +783,10 @@ const Settings: Component<SettingsProps> = (props) => {
       return;
     }
     const tab = activeTab();
+    if (tab.startsWith('organization-') && !isMultiTenantEnabled()) {
+      setActiveTab('proxmox');
+      return;
+    }
     if (!isTabLocked(tab)) {
       return;
     }
