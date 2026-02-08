@@ -75,6 +75,9 @@ Verdict: APPROVED
 Residual risk:
 - CP-011 (MEDIUM): Appendix B has no dedicated router module for config/system/settings routes; decision deferred to CP-01.
 
+Commit:
+- `2418cfeb` (docs(settings): Packet 00 — surface inventory and decomposition cut-map)
+
 Rollback:
 - Revert `docs/architecture/control-plane-decomposition-plan-2026-02.md` to pre-packet state (doc-only change, no code impact).
 
