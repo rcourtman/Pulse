@@ -253,4 +253,103 @@ describe('storageAdapters', () => {
     expect(records[0].capabilities.filter((capability) => capability === 'deduplication')).toHaveLength(1);
     expect(records[0].capabilities.filter((capability) => capability === 'backup-repository')).toHaveLength(1);
   });
+
+  it('maps a TrueNAS pool to StorageRecordV2 with zfs metadata and healthy health', () => {
+    const truenasPool = {
+      ...makeResourceStorage({
+        id: 'truenas-pool-1',
+        name: 'tank',
+        displayName: 'tank',
+        platformId: 'truenas-1',
+        platformType: 'truenas',
+        status: 'online',
+        tags: ['truenas', 'pool', 'zfs', 'health:online'],
+        disk: { current: 42, total: 2000, used: 840, free: 1160 },
+      }),
+      storage: {
+        type: 'zfs-pool',
+        isZfs: true,
+      },
+    } as Resource;
+
+    const records = buildStorageRecordsV2({ state: baseState(), resources: [truenasPool] });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].health).toBe('healthy');
+    expect(records[0].details?.type).toBe('zfs-pool');
+    expect(records[0].details?.isZfs).toBe(true);
+  });
+
+  it('maps a TrueNAS degraded pool to warning health', () => {
+    const truenasPoolDegraded = {
+      ...makeResourceStorage({
+        id: 'truenas-pool-2',
+        name: 'tank-degraded',
+        displayName: 'tank-degraded',
+        platformId: 'truenas-1',
+        platformType: 'truenas',
+        status: 'warning' as Resource['status'],
+        tags: ['truenas', 'pool', 'zfs', 'health:degraded'],
+      }),
+      storage: {
+        type: 'zfs-pool',
+        isZfs: true,
+      },
+    } as Resource;
+
+    const records = buildStorageRecordsV2({ state: baseState(), resources: [truenasPoolDegraded] });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].health).toBe('warning');
+    expect(records[0].details?.type).toBe('zfs-pool');
+    expect(records[0].details?.isZfs).toBe(true);
+  });
+
+  it('maps a TrueNAS faulted pool to critical or offline health', () => {
+    const truenasPoolFaulted = {
+      ...makeResourceStorage({
+        id: 'truenas-pool-3',
+        name: 'tank-faulted',
+        displayName: 'tank-faulted',
+        platformId: 'truenas-1',
+        platformType: 'truenas',
+        status: 'offline',
+        tags: ['truenas', 'pool', 'zfs', 'health:faulted'],
+      }),
+      storage: {
+        type: 'zfs-pool',
+        isZfs: true,
+      },
+    } as Resource;
+
+    const records = buildStorageRecordsV2({ state: baseState(), resources: [truenasPoolFaulted] });
+
+    expect(records).toHaveLength(1);
+    expect(['critical', 'offline']).toContain(records[0].health);
+    expect(records[0].details?.type).toBe('zfs-pool');
+    expect(records[0].details?.isZfs).toBe(true);
+  });
+
+  it('maps a TrueNAS dataset with mounted state and zfs metadata', () => {
+    const truenasDataset = {
+      ...makeResourceStorage({
+        id: 'truenas-dataset-1',
+        name: 'tank/ds1',
+        displayName: 'tank/ds1',
+        platformId: 'truenas-1',
+        platformType: 'truenas',
+        tags: ['truenas', 'dataset', 'zfs', 'state:mounted'],
+      }),
+      storage: {
+        type: 'zfs-dataset',
+        isZfs: true,
+      },
+    } as Resource;
+
+    const records = buildStorageRecordsV2({ state: baseState(), resources: [truenasDataset] });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].details?.type).toBe('zfs-dataset');
+    expect(records[0].details?.isZfs).toBe(true);
+  });
 });

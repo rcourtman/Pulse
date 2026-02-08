@@ -81,20 +81,81 @@ const capacity = (
   usagePercent,
 });
 
-const normalizeResourceHealth = (status: string | undefined): NormalizedHealth => {
-  switch ((status || '').toLowerCase()) {
-    case 'online':
-    case 'running':
-      return 'healthy';
-    case 'degraded':
-      return 'warning';
-    case 'offline':
-    case 'stopped':
-      return 'offline';
-    default:
-      return 'unknown';
-  }
+const extractHealthTag = (tags: string[] | undefined): string | undefined => {
+  if (!Array.isArray(tags)) return undefined;
+  const healthTag = tags
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.toLowerCase().startsWith('health:'))
+    .at(-1);
+  if (!healthTag) return undefined;
+  return healthTag.slice('health:'.length).trim();
 };
+
+const normalizeHealthValue = (value: string | undefined): NormalizedHealth | undefined => {
+  const normalized = (value || '').trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  if (
+    normalized === 'online' ||
+    normalized === 'running' ||
+    normalized === 'available' ||
+    normalized === 'healthy' ||
+    normalized === 'ok' ||
+    normalized === 'optimal'
+  ) {
+    return 'healthy';
+  }
+
+  if (normalized === 'warning' || normalized === 'warn' || normalized === 'degraded' || normalized === 'health_warn') {
+    return 'warning';
+  }
+
+  if (
+    normalized === 'critical' ||
+    normalized === 'faulted' ||
+    normalized === 'failed' ||
+    normalized === 'error' ||
+    normalized === 'unhealthy' ||
+    normalized === 'health_crit' ||
+    normalized === 'health_err'
+  ) {
+    return 'critical';
+  }
+
+  if (normalized === 'offline' || normalized === 'stopped' || normalized === 'down' || normalized === 'unavailable') {
+    return 'offline';
+  }
+
+  if (
+    normalized.includes('fault') ||
+    normalized.includes('fail') ||
+    normalized.includes('critical') ||
+    normalized.includes('error') ||
+    normalized.includes('health_err') ||
+    normalized.includes('health_crit') ||
+    normalized.includes('unhealthy')
+  ) {
+    return 'critical';
+  }
+
+  if (normalized.includes('degraded') || normalized.includes('warn')) {
+    return 'warning';
+  }
+
+  if (normalized.includes('offline') || normalized.includes('stopped') || normalized.includes('down')) {
+    return 'offline';
+  }
+
+  if (normalized.includes('healthy') || normalized.includes('online') || normalized.includes('available')) {
+    return 'healthy';
+  }
+
+  if (normalized === 'unknown') return 'unknown';
+  return undefined;
+};
+
+const normalizeResourceHealth = (status: string | undefined, tags: string[] | undefined): NormalizedHealth =>
+  normalizeHealthValue(extractHealthTag(tags)) || normalizeHealthValue(status) || 'unknown';
 
 const normalizeLegacyStorageHealth = (status: string | undefined): NormalizedHealth => {
   if ((status || '').toLowerCase() === 'available') return 'healthy';
@@ -203,7 +264,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       : storageMeta?.isCeph || storageMeta?.isZfs
         ? 'pool'
         : categoryFromStorageType(storageType),
-    health: normalizeResourceHealth(resource.status),
+    health: normalizeResourceHealth(resource.status, resource.tags),
     location: {
       label: locationLabel,
       scope: isDatastore ? 'cluster' : 'node',
