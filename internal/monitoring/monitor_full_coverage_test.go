@@ -15,7 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
@@ -406,7 +406,7 @@ func (m *mockResourceStore) ShouldSkipAPIPolling(hostname string) bool {
 	return hostname == "ignored-node"
 }
 func (m *mockResourceStore) GetPollingRecommendations() map[string]float64      { return nil }
-func (m *mockResourceStore) GetAll() []resources.Resource                       { return nil }
+func (m *mockResourceStore) GetAll() []unifiedresources.LegacyResource          { return nil }
 func (m *mockResourceStore) PopulateFromSnapshot(snapshot models.StateSnapshot) {}
 
 func TestMonitor_ShouldSkipNodeMetrics(t *testing.T) {

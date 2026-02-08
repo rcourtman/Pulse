@@ -12,7 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -488,10 +488,10 @@ func TestMonitor_BackupTimeout_Extra(t *testing.T) {
 
 type mockResourceStoreExtra struct {
 	ResourceStoreInterface
-	resources []resources.Resource
+	resources []unifiedresources.LegacyResource
 }
 
-func (m *mockResourceStoreExtra) GetAll() []resources.Resource {
+func (m *mockResourceStoreExtra) GetAll() []unifiedresources.LegacyResource {
 	return m.resources
 }
 
@@ -501,15 +501,54 @@ func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 		t.Error("Expected nil when store is nil")
 	}
 
+	now := time.Now().UTC()
+	total := int64(100)
+	used := int64(40)
+	free := int64(60)
+	uptime := int64(3600)
+
 	m.resourceStore = &mockResourceStoreExtra{
-		resources: []resources.Resource{
-			{ID: "r1", Type: "node", Name: "node1", PlatformID: "p1"},
+		resources: []unifiedresources.LegacyResource{
+			{
+				ID:           "node-1",
+				Type:         unifiedresources.LegacyResourceTypeNode,
+				Name:         "node1",
+				DisplayName:  "Node One",
+				PlatformID:   "p1",
+				PlatformType: unifiedresources.LegacyPlatformProxmoxPVE,
+				SourceType:   unifiedresources.LegacySourceAPI,
+				Status:       unifiedresources.LegacyStatusOnline,
+				CPU:          &unifiedresources.LegacyMetricValue{Current: 12.5},
+				Memory:       &unifiedresources.LegacyMetricValue{Current: 40, Total: &total, Used: &used, Free: &free},
+				Network:      &unifiedresources.LegacyNetworkMetric{RXBytes: 111, TXBytes: 222},
+				Uptime:       &uptime,
+				LastSeen:     now,
+				Alerts: []unifiedresources.LegacyAlert{
+					{ID: "alert-1", Type: "cpu", Level: "warning", Message: "high cpu", Value: 90, Threshold: 80, StartTime: now},
+				},
+				Identity: &unifiedresources.LegacyIdentity{Hostname: "node1", MachineID: "mid-1", IPs: []string{"10.0.0.10"}},
+			},
 		},
 	}
 
 	res := m.getResourcesForBroadcast()
 	if len(res) != 1 {
 		t.Errorf("Expected 1 resource, got %d", len(res))
+	}
+	if res[0].ID != "node-1" || res[0].Type != "node" || res[0].DisplayName != "Node One" {
+		t.Fatalf("unexpected resource identity payload: %#v", res[0])
+	}
+	if res[0].PlatformType != "proxmox-pve" || res[0].SourceType != "api" || res[0].Status != "online" {
+		t.Fatalf("unexpected platform/status payload: %#v", res[0])
+	}
+	if res[0].CPU == nil || res[0].Memory == nil || res[0].Network == nil {
+		t.Fatalf("expected cpu/memory/network payloads, got %#v", res[0])
+	}
+	if len(res[0].Alerts) != 1 || res[0].Alerts[0].ID != "alert-1" {
+		t.Fatalf("expected alert payload to be preserved, got %#v", res[0].Alerts)
+	}
+	if res[0].Identity == nil || res[0].Identity.Hostname != "node1" {
+		t.Fatalf("expected identity payload to be preserved, got %#v", res[0].Identity)
 	}
 }
 

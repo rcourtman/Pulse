@@ -23,8 +23,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -103,7 +103,7 @@ type ResourceStoreInterface interface {
 	// 0 = skip entirely, 0.5 = half frequency, 1 = normal
 	GetPollingRecommendations() map[string]float64
 	// GetAll returns all resources in the store (for WebSocket broadcasts)
-	GetAll() []resources.Resource
+	GetAll() []unifiedresources.LegacyResource
 	// PopulateFromSnapshot updates the store with data from a StateSnapshot
 	PopulateFromSnapshot(snapshot models.StateSnapshot)
 }
