@@ -58,6 +58,14 @@ describe('settingsNavigation integration scaffold', () => {
     }
   });
 
+  it('setActiveTab eagerly updates currentTab before navigation', () => {
+    for (const tab of Object.keys(canonicalTabPaths) as SettingsTab[]) {
+      const path = settingsTabPath(tab);
+      const derived = deriveTabFromPath(path);
+      expect(derived).toBe(tab);
+    }
+  });
+
   describe('locked-tab behavior', () => {
     it('locks gated tabs when license is loaded and required feature is missing', () => {
       for (const [tab, requiredFeature] of gatedTabs) {

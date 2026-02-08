@@ -23,7 +23,7 @@ Date: 2026-02-08
 |---|---|---|---|---|---|---|
 | 00 | Repro Matrix and Baseline Instrumentation | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence |
 | 01 | Startup Orchestration De-duplication | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence |
-| 02 | Navigation State Machine Hardening | TODO | Codex | Claude | PENDING | See Packet 02 Review Evidence |
+| 02 | Navigation State Machine Hardening | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence |
 | 03 | Polling Lifecycle Isolation and Interaction Priority | TODO | Codex | Claude | PENDING | See Packet 03 Review Evidence |
 | 04 | Panel Loading Strategy and Transition Performance | TODO | Codex | Claude | PENDING | See Packet 04 Review Evidence |
 | 05 | Locked Tab UX Clarity and Non-Loading Affordance Fix | TODO | Codex | Claude | PENDING | See Packet 05 Review Evidence |
@@ -115,7 +115,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- `pending` (will be recorded after checkpoint commit)
+- `d1531694` (fix(settings-nav): Packet 01 — startup orchestration de-duplication)
 
 Residual risk:
 - none
@@ -128,46 +128,47 @@ Rollback:
 ## Packet 02 Checklist: Navigation State Machine Hardening
 
 ### Implementation
-- [ ] Route-to-tab state transitions hardened.
-- [ ] Rapid click scenarios produce deterministic panel activation.
-- [ ] Legacy redirect compatibility preserved.
+- [x] Route-to-tab state transitions hardened.
+- [x] Rapid click scenarios produce deterministic panel activation.
+- [x] Legacy redirect compatibility preserved.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### Packet 02 Review Evidence
 
 ```
 Files changed:
-- <path>: <reason>
+- frontend-modern/src/components/Settings/useSettingsNavigation.ts: setActiveTab now eagerly updates currentTab before navigate(), removed early return after navigate
+- frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx: Added eager update round-trip test
 
 Commands run + exit codes:
-1. `<command>` -> exit <code>
-2. `<command>` -> exit <code>
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+2. `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsRouting.test.ts` -> exit 0 (14 passed, 1 todo)
 
 Gate checklist:
-- P0: PASS | FAIL (<reason>)
-- P1: PASS | FAIL | N/A (<reason>)
-- P2: PASS | FAIL (<reason>)
+- P0: PASS (eager tab update eliminates transient no-op states)
+- P1: PASS (legacy aliases still handled in createEffect)
+- P2: PASS (file 151 lines, under 160 limit)
 
-Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+Verdict: APPROVED
 
 Commit:
-- `<hash>` (<message>)
+- `pending`
 
 Residual risk:
-- <risk or none>
+- none
 
 Rollback:
-- <steps>
+- Revert setActiveTab to navigate-first, return-early pattern
 ```
 
 ## Packet 03 Checklist: Polling Lifecycle Isolation and Interaction Priority

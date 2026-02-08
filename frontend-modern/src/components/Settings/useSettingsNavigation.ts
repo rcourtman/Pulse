@@ -53,13 +53,14 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
     if (tab === 'proxmox' && deriveAgentFromPath(location.pathname) === null) {
       setSelectedAgent('pve');
     }
+    // Eagerly update tab state so UI reflects the click immediately,
+    // even before the URL change triggers the sync effect.
+    if (currentTab() !== tab) {
+      setCurrentTab(tab);
+    }
     const targetPath = settingsTabPath(tab);
     if (location.pathname !== targetPath) {
       navigate(targetPath, { scroll: false });
-      return;
-    }
-    if (currentTab() !== tab) {
-      setCurrentTab(tab);
     }
   };
 
