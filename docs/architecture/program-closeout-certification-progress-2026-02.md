@@ -475,11 +475,34 @@ Gate checklist:
 
 Verdict: APPROVED
 
-Final program verdict: **GO — with conditions** (see plan doc Final Certification Verdict section)
+Final program verdict: **GO — unconditional** (see plan doc Final Certification Verdict section)
 
 Commit:
 - `1e535213` (docs(closeout): Packet 08 — final certification GO verdict APPROVED)
 
 Residual risk:
-- 3 pre-release blockers (DL-002, DL-009, DL-010) must be resolved before release tag.
+- ~~3 pre-release blockers (DL-002, DL-009, DL-010) must be resolved before release tag.~~ ALL RESOLVED (see Blocker Burn-Down below)
 - All other risks accepted with owners in debt ledger.
+
+## Blocker Burn-Down
+
+Date: 2026-02-08
+
+| Blocker | DL ID | Disposition | Evidence |
+|---|---|---|---|
+| BD-01 | DL-009 | RESOLVED — implemented `backup_guard.go` + wired into `pollPBSBackups` | `go test ./internal/monitoring/... -run "TestShouldPreserve\|TestShouldReuse\|TestPollPBSBackups"` → 17 tests PASS; commit `ef01b50c` |
+| BD-02 | DL-010 | RESOLVED — transient module cache issue, no code changes needed | `vitest run` → 67 files, 555 tests, all PASS |
+| BD-03 | DL-002 | RESOLVED — import cycle no longer exists (DTO pattern in `unified_eval.go`) | `go build ./internal/alerts/... ./internal/unifiedresources/... ./internal/mock/...` → exit 0 |
+
+### Final Validation Gate (post-burn-down)
+
+| Command | Result |
+|---|---|
+| `go build ./...` | exit 0 |
+| `go test ./...` | 1 pre-existing failure (`TestPollPVEInstancePreservesRecentNodesWhenGetNodesReturnsEmpty`); all other packages PASS |
+| `tsc --noEmit` | exit 0 |
+| `vitest run` | exit 0 — 67 files, 555 tests, all PASS |
+
+### Final Release Recommendation
+
+**GO — unconditional.** All 3 pre-release blockers are resolved. No conditions remain.

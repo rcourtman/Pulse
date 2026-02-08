@@ -37,6 +37,7 @@ Alternatively, delete the node in Pulse Settings and re-run the agent setup - it
 - **Multi-Tenant**: Multi-tenant mode is now fully productized as an opt-in capability behind feature flag and license gate. Single-tenant users get zero multi-tenant UI/behavior. Tenant isolation coverage spans API, WebSocket, alerts, AI, and settings surfaces.
 - **Security**: Comprehensive tenant isolation replay was completed across API, WebSocket, and monitoring layers, including cross-org access prevention validation.
 - **Bug Fix**: Fixed legacy guest alert ID migration in `LoadActiveAlerts()`, ensuring old-format IDs migrate correctly on startup.
+- **PBS Backup Cache**: Terminal PBS datastore errors (404, 400) now correctly clear stale cached backups instead of preserving them indefinitely. Transient errors (500, timeout) still preserve cached data.
 
 ### Operator Notes
 
@@ -47,5 +48,4 @@ Alternatively, delete the node in Pulse Settings and re-run the agent setup - it
 
 ### Deferred/Follow-up (Tracked in Debt Ledger)
 
-- Multi-Tenant final certification remains pending external import-cycle resolution.
 - Storage + Backups V2 remains deferred to the next milestone.
