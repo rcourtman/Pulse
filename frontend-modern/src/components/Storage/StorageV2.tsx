@@ -1,11 +1,12 @@
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Component, For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { DiskList } from '@/components/Storage/DiskList';
 import { EnhancedStorageBar } from '@/components/Storage/EnhancedStorageBar';
 import { ZFSHealthMap } from '@/components/Storage/ZFSHealthMap';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildStorageRecordsV2 } from '@/features/storageBackupsV2/storageAdapters';
 import {
   getCephHealthLabel,
@@ -17,10 +18,12 @@ import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
 import {
   STORAGE_V2_PATH,
   buildStorageV2Path,
+  parseStorageLinkSearch,
 } from '@/routing/resourceLinks';
 import { formatBytes, formatPercent } from '@/utils/format';
 import { useStorageRouteState } from './useStorageRouteState';
 import { getCephClusterKeyFromRecord, isCephRecord, useStorageV2CephModel } from './useStorageV2CephModel';
+import { useStorageV2AlertState } from './useStorageV2AlertState';
 import {
   type StorageGroupKey,
   type StorageSortKey,
@@ -86,8 +89,10 @@ const normalizeSortDirection = (value: string): 'asc' | 'desc' =>
 const StorageV2: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { state, connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
+  const { state, activeAlerts, connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
   const storageBackupsResources = useStorageBackupsResources();
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
 
   const [search, setSearch] = createSignal('');
   const [sourceFilter, setSourceFilter] = createSignal('all');
@@ -98,6 +103,9 @@ const StorageV2: Component = () => {
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
   const [groupBy, setGroupBy] = createSignal<StorageGroupKey>('node');
   const [expandedCephRecordId, setExpandedCephRecordId] = createSignal<string | null>(null);
+  const [highlightedRecordId, setHighlightedRecordId] = createSignal<string | null>(null);
+  const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
+  let highlightTimer: number | undefined;
 
   const adapterResources = createMemo(() => {
     const unifiedResources = storageBackupsResources.resources();
@@ -105,10 +113,36 @@ const StorageV2: Component = () => {
   });
 
   const records = createMemo(() => buildStorageRecordsV2({ state, resources: adapterResources() }));
+  const activeAlertsAccessor = () => {
+    if (typeof activeAlerts === 'function') {
+      return (activeAlerts as () => unknown)();
+    }
+    return activeAlerts;
+  };
+  const { getRecordAlertState } = useStorageV2AlertState({
+    records,
+    activeAlerts: activeAlertsAccessor,
+    alertsEnabled,
+  });
 
   const nodeOptions = createMemo(() => {
     const nodes = state.nodes || [];
     return nodes.map((node) => ({ id: node.id, label: node.name, instance: node.instance }));
+  });
+
+  const nodeOnlineByLabel = createMemo(() => {
+    const map = new Map<string, boolean>();
+    (state.nodes || []).forEach((node) => {
+      const key = (node.name || '').trim().toLowerCase();
+      if (!key) return;
+      const hasNodeStatus = typeof node.status === 'string' && node.status.trim().length > 0;
+      const hasNodeUptime = typeof node.uptime === 'number';
+      if (!hasNodeStatus && !hasNodeUptime) {
+        return;
+      }
+      map.set(key, node.status === 'online' && (node.uptime || 0) > 0);
+    });
+    return map;
   });
 
   const { sourceOptions, selectedNode, filteredRecords, groupedRecords, summary } = useStorageV2Model({
@@ -147,6 +181,24 @@ const StorageV2: Component = () => {
 
   const isActiveStorageRoute = () =>
     location.pathname === STORAGE_V2_PATH || location.pathname === '/storage';
+
+  createEffect(() => {
+    const { resource } = parseStorageLinkSearch(location.search);
+    if (!resource || resource === handledResourceId()) return;
+
+    const match = records().find((record) => record.id === resource || record.name === resource);
+    if (!match) return;
+
+    if (isCephRecord(match)) {
+      setExpandedCephRecordId(match.id);
+    }
+
+    setHighlightedRecordId(match.id);
+    setHandledResourceId(resource);
+
+    if (highlightTimer) window.clearTimeout(highlightTimer);
+    highlightTimer = window.setTimeout(() => setHighlightedRecordId(null), 2000);
+  });
 
   useStorageRouteState({
     location,
@@ -211,6 +263,10 @@ const StorageV2: Component = () => {
     if (view() !== 'pools') {
       setExpandedCephRecordId(null);
     }
+  });
+
+  onCleanup(() => {
+    if (highlightTimer) window.clearTimeout(highlightTimer);
   });
 
   return (
@@ -528,7 +584,21 @@ const StorageV2: Component = () => {
                                 const cephCluster = resolveCephCluster(record);
                                 const isCeph = isCephRecord(record);
                                 const isExpanded = () => expandedCephRecordId() === record.id;
+                                const alertState = createMemo(() => getRecordAlertState(record.id));
                                 const status = getRecordStatus(record);
+                                const nodeLabel = getRecordNodeLabel(record).trim().toLowerCase();
+                                const parentNodeOnline = createMemo(() => {
+                                  if (!nodeLabel) return true;
+                                  const nodeStatus = nodeOnlineByLabel().get(nodeLabel);
+                                  return nodeStatus === undefined ? true : nodeStatus;
+                                });
+                                const showAlertHighlight = createMemo(
+                                  () => alertState().hasUnacknowledgedAlert && parentNodeOnline(),
+                                );
+                                const hasAcknowledgedOnlyAlert = createMemo(
+                                  () => alertState().hasAcknowledgedOnlyAlert && parentNodeOnline(),
+                                );
+                                const isResourceHighlighted = () => highlightedRecordId() === record.id;
                                 const totalBytes = record.capacity.totalBytes || 0;
                                 const usedBytes = record.capacity.usedBytes || 0;
                                 const freeBytes =
@@ -541,11 +611,68 @@ const StorageV2: Component = () => {
                                       zfsPool.writeErrors > 0 ||
                                       zfsPool.checksumErrors > 0),
                                 );
+                                const rowClass = createMemo(() => {
+                                  const classes = [
+                                    'transition-all duration-200',
+                                    'hover:bg-gray-50 dark:hover:bg-gray-800/30',
+                                  ];
+
+                                  if (showAlertHighlight()) {
+                                    classes.push(
+                                      alertState().severity === 'critical'
+                                        ? 'bg-red-50 dark:bg-red-950/30'
+                                        : 'bg-yellow-50 dark:bg-yellow-950/20',
+                                    );
+                                  } else if (isResourceHighlighted()) {
+                                    classes.push('bg-blue-50/60 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600');
+                                  } else if (hasAcknowledgedOnlyAlert()) {
+                                    classes.push('bg-gray-50/40 dark:bg-gray-800/40');
+                                  }
+
+                                  if (isCeph && isExpanded()) {
+                                    classes.push('bg-gray-50 dark:bg-gray-800/40');
+                                  }
+
+                                  return classes.join(' ');
+                                });
+
+                                const rowStyle = createMemo(() => {
+                                  if (showAlertHighlight()) {
+                                    return {
+                                      'box-shadow': `inset 4px 0 0 0 ${
+                                        alertState().severity === 'critical' ? '#ef4444' : '#eab308'
+                                      }`,
+                                    };
+                                  }
+                                  if (hasAcknowledgedOnlyAlert()) {
+                                    return {
+                                      'box-shadow': 'inset 4px 0 0 0 rgba(156, 163, 175, 0.8)',
+                                    };
+                                  }
+                                  return {} as Record<string, string>;
+                                });
 
                                 return (
                                   <>
-                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-                                      <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
+                                    <tr
+                                      class={rowClass()}
+                                      style={rowStyle()}
+                                      data-row-id={record.id}
+                                      data-alert-state={
+                                        showAlertHighlight()
+                                          ? 'unacknowledged'
+                                          : hasAcknowledgedOnlyAlert()
+                                            ? 'acknowledged'
+                                            : 'none'
+                                      }
+                                      data-alert-severity={alertState().severity || 'none'}
+                                      data-resource-highlighted={isResourceHighlighted() ? 'true' : 'false'}
+                                    >
+                                      <td
+                                        class={`${
+                                          showAlertHighlight() || hasAcknowledgedOnlyAlert() ? 'px-2' : 'px-3'
+                                        } py-2 text-gray-900 dark:text-gray-100`}
+                                      >
                                         <div class="flex items-center gap-1.5 min-w-0">
                                           <span class="truncate max-w-[220px]" title={record.name}>
                                             {record.name}

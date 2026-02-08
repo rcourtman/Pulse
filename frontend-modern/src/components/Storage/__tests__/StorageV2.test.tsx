@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import StorageV2 from '@/components/Storage/StorageV2';
 
@@ -10,6 +11,7 @@ const navigateSpy = vi.fn();
 let wsConnected = true;
 let wsInitialDataReceived = true;
 let wsReconnecting = false;
+let wsActiveAlerts: Record<string, Alert> = {};
 let wsState: any = {
   resources: [] as Resource[],
   nodes: [
@@ -26,6 +28,7 @@ const reconnectSpy = vi.fn();
 let hookResources: Resource[] = [];
 let hookLoading = false;
 let hookError: unknown = undefined;
+let alertsActivationState: 'active' | 'pending_review' | 'snoozed' | null = 'active';
 
 type StorageResourceOptions = {
   platformId?: string;
@@ -71,6 +74,26 @@ const buildStorageResource = (
   },
 });
 
+const buildAlert = (
+  id: string,
+  resourceId: string,
+  level: Alert['level'],
+  acknowledged = false,
+): Alert => ({
+  id,
+  type: 'storage-capacity',
+  level,
+  resourceId,
+  resourceName: resourceId,
+  node: 'pve1',
+  instance: 'cluster-main',
+  message: 'alert',
+  value: 95,
+  threshold: 90,
+  startTime: '2026-02-08T00:00:00Z',
+  acknowledged,
+});
+
 vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
   return {
@@ -83,10 +106,17 @@ vi.mock('@solidjs/router', async () => {
 vi.mock('@/App', () => ({
   useWebSocket: () => ({
     state: wsState,
+    activeAlerts: wsActiveAlerts,
     connected: () => wsConnected,
     initialDataReceived: () => wsInitialDataReceived,
     reconnecting: () => wsReconnecting,
     reconnect: reconnectSpy,
+  }),
+}));
+
+vi.mock('@/stores/alertsActivation', () => ({
+  useAlertsActivation: () => ({
+    activationState: () => alertsActivationState,
   }),
 }));
 
@@ -117,6 +147,8 @@ describe('StorageV2', () => {
     wsConnected = true;
     wsInitialDataReceived = true;
     wsReconnecting = false;
+    wsActiveAlerts = {};
+    alertsActivationState = 'active';
     reconnectSpy.mockReset();
     wsState = {
       resources: [],
@@ -311,6 +343,42 @@ describe('StorageV2', () => {
       expect(screen.getAllByText('Ceph Cluster').length).toBeGreaterThan(0);
     });
     expect(screen.getByText(/rbd:/i)).toBeInTheDocument();
+  });
+
+  it('applies alert highlight styling for rows with active unacknowledged alerts', async () => {
+    hookResources = [buildStorageResource('storage-alerted', 'Alerted-Store', 'pve1')];
+    wsActiveAlerts = {
+      'alert-1': buildAlert('alert-1', 'storage-alerted', 'critical'),
+    };
+
+    render(() => <StorageV2 />);
+
+    await waitFor(() => {
+      const row = screen.getByText('Alerted-Store').closest('tr');
+      expect(row).toHaveAttribute('data-alert-state', 'unacknowledged');
+      expect(row).toHaveAttribute('data-alert-severity', 'critical');
+      expect(row?.getAttribute('style')).toContain('#ef4444');
+    });
+  });
+
+  it('supports resource deep-links by highlighting and auto-expanding ceph rows', async () => {
+    hookResources = [
+      buildStorageResource('storage-ceph-link', 'Ceph-Link-Store', 'pve1', {
+        storageType: 'cephfs',
+      }),
+      buildStorageResource('storage-other', 'Other-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?resource=storage-ceph-link';
+
+    render(() => <StorageV2 />);
+
+    await waitFor(() => {
+      const row = document.querySelector('tr[data-row-id="storage-ceph-link"]');
+      expect(row).toHaveAttribute('data-resource-highlighted', 'true');
+      expect(screen.getByRole('button', { name: 'Toggle Ceph details for Ceph-Link-Store' })).toHaveTextContent(
+        'Hide',
+      );
+    });
   });
 
   it('shows zfs health indicators when legacy storage carries pool errors', async () => {
