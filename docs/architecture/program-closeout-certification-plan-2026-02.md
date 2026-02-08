@@ -496,3 +496,124 @@ Certification date: 2026-02-08
 | `vitest run settingsRouting.test.ts` time | 1.0s wall-clock (282ms vitest duration, 2ms tests) | 2026-02-08 14:56 UTC | macOS `arm64` |
 | Route registration count | ~296 routes in allowlist | 2026-02-08 14:56 UTC | macOS `arm64` |
 | Contract test count | 12 PASS (Contract-pattern tests) | 2026-02-08 14:56 UTC | macOS `arm64` |
+
+## Appendix H: Operational Readiness and Rollback Certification
+
+Certification date: 2026-02-08  
+Runbook reviewed: `docs/architecture/multi-tenant-operational-runbook.md` (Status: Active, Last Updated: 2026-02-08)
+
+### Release day operator checklist
+
+#### Pre-deploy gate
+
+1. Verify release artifact provenance:
+   - Build is from the approved release commit/tag.
+   - Artifact checksum/signature matches release metadata.
+2. Run release validation suite before deployment:
+   - Backend build and packet-required backend tests.
+   - Frontend typecheck and packet-required frontend tests.
+3. Backup current runtime state:
+   - Snapshot `data` directory (or equivalent persistent volume).
+   - Confirm backup includes alert state (`alerts/active-alerts.json`) and alert history (`alerts/alert-history.json`).
+4. Confirm rollback controls are available to operator:
+   - Multi-tenant flag override access.
+   - Binary rollback artifact available on target hosts.
+   - Runtime config/API access for AI Patrol autonomy and alert toggles.
+
+#### Deploy gate
+
+1. Execute standard deployment procedure for Pulse binaries/services.
+2. Verify service restart completed on all target instances.
+3. Confirm expected runtime config is loaded (feature flags, license, environment).
+
+#### Post-deploy gate
+
+1. Health checks:
+   - `GET /api/health` returns `200` and `status=healthy`.
+   - `GET /api/monitoring/scheduler/health` returns `200` (if scheduler health endpoint is in use).
+2. Observe real-time behavior:
+   - WebSocket clients can connect and receive state updates.
+   - No abnormal reconnect storm in logs.
+3. Monitor metrics and alerts:
+   - HTTP error and latency metrics remain within baseline bands.
+   - Alert creation/ack/clear flows work for representative resource types.
+4. Log review:
+   - No sustained `500` bursts.
+   - No tenant isolation or authorization anomalies.
+
+#### Rollback trigger criteria
+
+- Roll back immediately:
+  - Confirmed tenant isolation issue or cross-org data exposure.
+  - Service-wide outage where health checks fail and no quick corrective action exists.
+  - Corruption/regression that blocks core monitoring/alerting workflows.
+- Investigate first (short window), then roll back if unresolved:
+  - Elevated `5xx`/latency outside baseline for more than 10 minutes.
+  - Repeated WebSocket failure/reconnect patterns affecting operator visibility.
+  - Alert processing regressions that materially impact detection/notification.
+- Investigate without immediate rollback:
+  - Isolated client-side errors (`4xx`) without backend regression.
+  - Non-critical UI regressions with stable backend safety/health.
+
+### Rollback procedures by track
+
+#### Alerts track rollback
+
+1. Revert to previous known-good binary/version.
+2. Restart Pulse services.
+3. Verify persisted alert state reloads from disk (`alerts/active-alerts.json`, `alerts/alert-history.json`).
+4. Validate `/api/alerts/active` and `/api/alerts/history` return expected data.
+5. Confirm alert acknowledgements/history remain intact after rollback.
+
+#### Multi-tenant track rollback
+
+1. Set `PULSE_MULTI_TENANT_ENABLED=false`.
+2. Restart Pulse services.
+3. Verify non-default org endpoints return `501` and default org remains operational.
+4. Confirm org data remains on disk (`<dataDir>/orgs/<orgId>/`) and no migration/restore is required.
+
+#### Control plane track rollback
+
+1. Revert to previous known-good binary/version.
+2. Restart services and re-run post-deploy health checks.
+3. No schema/data migration rollback required (track is code refactor only).
+
+#### Settings track rollback
+
+1. Revert to previous known-good binary/version.
+2. Restart services and verify settings endpoints/load paths.
+3. No schema/data migration rollback required (track is code refactor only).
+
+### Kill-switch inventory
+
+| Control | Scope | How to operate | Verification |
+| --- | --- | --- | --- |
+| `PULSE_MULTI_TENANT_ENABLED` feature flag + license gate (`multi_tenant`) | Multi-tenant access for non-default orgs | Set `PULSE_MULTI_TENANT_ENABLED=false` and restart services | `/api/orgs/*` for non-default org returns `501`; default org remains available |
+| AI Patrol autonomy level (`monitor`/`approval`/`assisted`/`full`) | Patrol investigation/fix autonomy | Use `PUT /api/ai/patrol/autonomy` to set runtime level (safe fallback: `monitor`) | `GET /api/ai/patrol/autonomy` reflects effective level |
+| Alert evaluation toggles per resource type (`DisableAll*` flags in alert config) | Per-resource alert generation/evaluation | Use `PUT /api/alerts/config` to toggle specific resource families | Relevant active alerts clear/suppress per config and new evaluations stop for disabled scope |
+
+### Observability checkpoints
+
+| Checkpoint | Source | Pass criteria | Notes |
+| --- | --- | --- | --- |
+| Health endpoint | `GET /api/health` | `200` and `status=healthy` | Primary deploy/rollback health gate |
+| Scheduler health | `GET /api/monitoring/scheduler/health` | `200` with healthy queue/scheduler state | Optional but recommended for deeper readiness signal |
+| WebSocket connection count | WebSocket connect/disconnect logs; internal monitor stat (`WebSocketClients`) | Stable active connection behavior, no reconnect storm | Track trend during and after deploy/rollback |
+| Alert processing latency (if exposed) | HTTP/API metrics and alert workflow timings | No sustained latency regression outside baseline | Current baseline uses HTTP request latency; dedicated alert-eval latency metric is not explicitly exposed |
+| Error log patterns | Application logs | No repeated critical patterns | Watch for `feature_disabled`, `license_required`, unauthorized org access, `Failed to save active alerts`, and unexpected panic/recovery logs |
+
+### Runbook validation results
+
+| Validation item | Result | Evidence |
+| --- | --- | --- |
+| Multi-tenant enable/disable steps documented | PASS | Runbook sections `Kill Switch Operation` and `Restart Procedure` |
+| Multi-tenant rollback steps documented | PASS | Runbook section `Rollback Procedure` and expected post-rollback state |
+| Kill-switch and fallback controls for multi-tenant documented | PASS | Runbook sections `Kill Switch`, `Immediate System Behavior After Flip + Restart`, and operator checklist |
+| Operator-executable specificity for multi-tenant track | PASS | Concrete env var, restart, endpoint/UI verification steps provided |
+
+Runbook enhancement needed items (tracked here, not applied to runbook in this packet):
+
+- runbook enhancement needed: add explicit rollback procedures for Alerts, Control Plane, and Settings tracks in a single operational runbook view.
+- runbook enhancement needed: add release-day operator checklist (pre-deploy/deploy/post-deploy/rollback trigger matrix) to the runbook.
+- runbook enhancement needed: add observability checkpoints for `/api/health`, scheduler health, WebSocket connection trends, and alert latency verification workflow.
+- runbook enhancement needed: add non-multi-tenant kill-switch inventory (AI Patrol autonomy and per-resource alert disable toggles).
