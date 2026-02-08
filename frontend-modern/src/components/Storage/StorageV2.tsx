@@ -218,9 +218,9 @@ const StorageV2: Component = () => {
       <Card padding="md" tone="glass">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Storage V2 Preview</h2>
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Storage</h2>
             <p class="text-xs text-gray-600 dark:text-gray-400">
-              Source-agnostic storage view model with capability-first normalization.
+              Storage capacity and health across connected platforms.
             </p>
           </div>
           <div class="text-xs text-gray-500 dark:text-gray-400">
@@ -436,7 +436,7 @@ const StorageV2: Component = () => {
       <Show when={hasV2FetchError()}>
         <Card padding="sm" tone="warning">
           <div class="text-xs text-amber-800 dark:text-amber-200">
-            Unable to refresh v2 storage resources. Showing latest available data.
+            Unable to refresh storage resources. Showing latest available data.
           </div>
         </Card>
       </Show>

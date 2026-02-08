@@ -146,6 +146,8 @@ describe('StorageV2', () => {
 
     render(() => <StorageV2 />);
 
+    expect(screen.getByRole('heading', { name: 'Storage' })).toBeInTheDocument();
+    expect(screen.getByText('Storage capacity and health across connected platforms.')).toBeInTheDocument();
     expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
     expect(screen.getByText('Local-LVM-PVE2')).toBeInTheDocument();
 
@@ -237,6 +239,18 @@ describe('StorageV2', () => {
       const nextParams = new URLSearchParams(nextPath.split('?')[1] || '');
       expect(nextParams.get('group')).toBe('type');
     });
+  });
+
+  it('restores view and filters from URL params', () => {
+    hookResources = [buildStorageResource('storage-1', 'Node-Store', 'pve1')];
+    mockLocationSearch = '?tab=disks&node=node-2&q=ceph&source=proxmox-pve';
+
+    render(() => <StorageV2 />);
+
+    expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:node-2:ceph');
+    expect((screen.getByLabelText('View') as HTMLSelectElement).value).toBe('disks');
+    expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
+    expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
   });
 
   it('shows ceph summary and expandable ceph drawer details', async () => {
@@ -388,7 +402,7 @@ describe('StorageV2', () => {
     render(() => <StorageV2 />);
 
     expect(
-      screen.getByText('Unable to refresh v2 storage resources. Showing latest available data.'),
+      screen.getByText('Unable to refresh storage resources. Showing latest available data.'),
     ).toBeInTheDocument();
   });
 

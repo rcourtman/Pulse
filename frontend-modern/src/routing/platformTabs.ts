@@ -53,11 +53,10 @@ export const buildStorageBackupsTabSpecs = (
     });
     tabs.push({
       id: 'storage-v2',
-      label: 'Storage V2',
+      label: 'Storage',
       route: STORAGE_V2_PATH,
       settingsRoute: '/settings/infrastructure/pbs',
-      tooltip: 'Source-agnostic storage preview',
-      badge: 'preview',
+      tooltip: 'Source-agnostic storage',
     });
   }
 
