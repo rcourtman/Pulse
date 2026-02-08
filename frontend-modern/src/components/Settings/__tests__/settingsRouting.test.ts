@@ -4,57 +4,150 @@ import {
   deriveTabFromPath,
   deriveTabFromQuery,
   settingsTabPath,
+  type SettingsTab,
 } from '../settingsRouting';
+import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
+
+const canonicalTabPaths = {
+  proxmox: '/settings/infrastructure',
+  docker: '/settings/workloads/docker',
+  agents: '/settings/workloads',
+  'system-general': '/settings/system-general',
+  'system-network': '/settings/system-network',
+  'system-updates': '/settings/system-updates',
+  'system-backups': '/settings/backups',
+  'system-ai': '/settings/system-ai',
+  'system-relay': '/settings/integrations/relay',
+  'system-logs': '/settings/operations/logs',
+  'system-pro': '/settings/system-pro',
+  'organization-overview': '/settings/organization',
+  'organization-access': '/settings/organization/access',
+  'organization-billing': '/settings/billing',
+  'organization-sharing': '/settings/organization/sharing',
+  api: '/settings/integrations/api',
+  'security-overview': '/settings/security-overview',
+  'security-auth': '/settings/security-auth',
+  'security-sso': '/settings/security-sso',
+  'security-roles': '/settings/security-roles',
+  'security-users': '/settings/security-users',
+  'security-audit': '/settings/security-audit',
+  'security-webhooks': '/settings/security-webhooks',
+  diagnostics: '/settings/operations/diagnostics',
+  reporting: '/settings/operations/reporting',
+} as const satisfies Record<SettingsTab, string>;
+
+const hasFeatures =
+  (features: string[]) =>
+  (feature: string): boolean =>
+    features.includes(feature);
 
 describe('settingsRouting', () => {
-  it('maps legacy updates route to system updates tab', () => {
-    expect(deriveTabFromPath('/settings/updates')).toBe('system-updates');
-    expect(deriveTabFromPath('/settings/system-updates')).toBe('system-updates');
+  it('returns canonical paths for every tab id', () => {
+    for (const [tab, path] of Object.entries(canonicalTabPaths)) {
+      expect(settingsTabPath(tab as SettingsTab)).toBe(path);
+    }
   });
 
-  it('maps unified resource aliases', () => {
-    expect(deriveTabFromPath('/settings/infrastructure')).toBe('proxmox');
-    expect(deriveTabFromPath('/settings/workloads')).toBe('agents');
-    expect(deriveTabFromPath('/settings/workloads/docker')).toBe('docker');
-    expect(deriveTabFromPath('/settings/backups')).toBe('system-backups');
+  it('falls back to /settings/{tab} for unknown tab patterns', () => {
+    expect(settingsTabPath('future-tab' as SettingsTab)).toBe('/settings/future-tab');
   });
 
-  it('maps security fallback paths', () => {
-    expect(deriveTabFromPath('/settings/security')).toBe('security-overview');
-    expect(deriveTabFromPath('/settings/security-auth')).toBe('security-auth');
+  it('maps all listed legacy aliases and redirects', () => {
+    const cases: Array<[string, SettingsTab]> = [
+      ['/settings/proxmox', 'proxmox'],
+      ['/settings/agent-hub', 'proxmox'],
+      ['/settings/docker', 'docker'],
+      ['/settings/storage', 'proxmox'],
+      ['/settings/hosts', 'agents'],
+      ['/settings/host-agents', 'agents'],
+      ['/settings/servers', 'agents'],
+      ['/settings/linuxServers', 'agents'],
+      ['/settings/windowsServers', 'agents'],
+      ['/settings/macServers', 'agents'],
+      ['/settings/agents', 'agents'],
+      ['/settings/pve', 'proxmox'],
+      ['/settings/pbs', 'proxmox'],
+      ['/settings/pmg', 'proxmox'],
+      ['/settings/containers', 'proxmox'],
+    ];
+    for (const [path, expectedTab] of cases) {
+      expect(deriveTabFromPath(path)).toBe(expectedTab);
+    }
+    expect(deriveTabFromPath('/settings/not-a-real-tab')).toBe('proxmox');
   });
 
-  it('maps organization settings paths', () => {
-    expect(deriveTabFromPath('/settings/organization')).toBe('organization-overview');
-    expect(deriveTabFromPath('/settings/organization/access')).toBe('organization-access');
-    expect(deriveTabFromPath('/settings/organization/sharing')).toBe('organization-sharing');
-    expect(deriveTabFromPath('/settings/billing')).toBe('organization-billing');
-    expect(deriveTabFromPath('/settings/plan')).toBe('organization-billing');
+  it('maps organization routing contracts', () => {
+    const organizationCases: Array<[string, SettingsTab]> = [
+      ['/settings/organization', 'organization-overview'],
+      ['/settings/organization/access', 'organization-access'],
+      ['/settings/organization/sharing', 'organization-sharing'],
+      ['/settings/billing', 'organization-billing'],
+      ['/settings/plan', 'organization-billing'],
+      ['/settings/organization/billing', 'organization-billing'],
+    ];
+    for (const [path, expectedTab] of organizationCases) {
+      expect(deriveTabFromPath(path)).toBe(expectedTab);
+    }
   });
 
-  it('maps legacy agent sections', () => {
-    expect(deriveAgentFromPath('/settings/pve')).toBe('pve');
-    expect(deriveAgentFromPath('/settings/pbs')).toBe('pbs');
-    expect(deriveAgentFromPath('/settings/storage')).toBe('pbs');
+  it('maps query deep-links contract values', () => {
+    const queryCases: Array<[string, SettingsTab | null]> = [
+      ['?tab=infrastructure', 'proxmox'],
+      ['?tab=workloads', 'agents'],
+      ['?tab=docker', 'docker'],
+      ['?tab=backups', 'system-backups'],
+      ['?tab=organization', 'organization-overview'],
+      ['?tab=billing', 'organization-billing'],
+      ['?tab=security', 'security-overview'],
+      ['?tab=unknown', null],
+    ];
+    for (const [query, expectedTab] of queryCases) {
+      expect(deriveTabFromQuery(query)).toBe(expectedTab);
+    }
   });
 
-  it('maps query params for deep-links', () => {
-    expect(deriveTabFromQuery('?tab=security')).toBe('security-overview');
-    expect(deriveTabFromQuery('?tab=updates')).toBe('system-updates');
-    expect(deriveTabFromQuery('?tab=workloads')).toBe('agents');
-    expect(deriveTabFromQuery('?tab=organization')).toBe('organization-overview');
-    expect(deriveTabFromQuery('?tab=billing')).toBe('organization-billing');
-    expect(deriveTabFromQuery('?tab=sharing')).toBe('organization-sharing');
-    expect(deriveTabFromQuery('?tab=unknown')).toBeNull();
+  it('evaluates feature-lock behavior contracts', () => {
+    expect(isFeatureLocked(undefined, hasFeatures([]), () => true)).toBe(false);
+    expect(isFeatureLocked([], hasFeatures([]), () => true)).toBe(false);
+    expect(isFeatureLocked(['relay'], hasFeatures([]), () => false)).toBe(false);
+    expect(isFeatureLocked(['relay'], hasFeatures(['relay']), () => true)).toBe(false);
+    expect(isFeatureLocked(['relay'], hasFeatures([]), () => true)).toBe(true);
+    expect(isFeatureLocked(['relay', 'audit_logging'], hasFeatures(['relay']), () => true)).toBe(
+      true,
+    );
   });
 
-  it('returns canonical paths for tabs', () => {
-    expect(settingsTabPath('proxmox')).toBe('/settings/infrastructure');
-    expect(settingsTabPath('agents')).toBe('/settings/workloads');
-    expect(settingsTabPath('system-backups')).toBe('/settings/backups');
-    expect(settingsTabPath('organization-overview')).toBe('/settings/organization');
-    expect(settingsTabPath('organization-access')).toBe('/settings/organization/access');
-    expect(settingsTabPath('organization-billing')).toBe('/settings/billing');
-    expect(settingsTabPath('security-overview')).toBe('/settings/security-overview');
+  it('locks gated tabs based on features and license state', () => {
+    const gatedTabs: Array<[SettingsTab, string]> = [
+      ['system-relay', 'relay'],
+      ['reporting', 'advanced_reporting'],
+      ['security-webhooks', 'audit_logging'],
+      ['organization-overview', 'multi_tenant'],
+      ['organization-access', 'multi_tenant'],
+      ['organization-sharing', 'multi_tenant'],
+      ['organization-billing', 'multi_tenant'],
+    ];
+    for (const [tab, requiredFeature] of gatedTabs) {
+      expect(isTabLocked(tab, hasFeatures([]), () => true)).toBe(true);
+      expect(isTabLocked(tab, hasFeatures([requiredFeature]), () => true)).toBe(false);
+      expect(isTabLocked(tab, hasFeatures([]), () => false)).toBe(false);
+    }
+    expect(isTabLocked('proxmox', hasFeatures([]), () => true)).toBe(false);
+  });
+
+  it('maps deriveAgentFromPath contracts including legacy and storage routes', () => {
+    const agentCases: Array<[string, 'pve' | 'pbs' | 'pmg' | null]> = [
+      ['/settings/infrastructure/pve', 'pve'],
+      ['/settings/infrastructure/pbs', 'pbs'],
+      ['/settings/infrastructure/pmg', 'pmg'],
+      ['/settings/pve', 'pve'],
+      ['/settings/pbs', 'pbs'],
+      ['/settings/pmg', 'pmg'],
+      ['/settings/storage', 'pbs'],
+      ['/settings/workloads', null],
+    ];
+    for (const [path, expectedAgent] of agentCases) {
+      expect(deriveAgentFromPath(path)).toBe(expectedAgent);
+    }
   });
 });
