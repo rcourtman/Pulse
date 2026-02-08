@@ -38,6 +38,9 @@ func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 	if nodeLimit.Limit != 50 {
 		t.Fatalf("expected max_nodes limit 50, got %d", nodeLimit.Limit)
 	}
+	if len(payload.UpgradeReasons) != 0 {
+		t.Fatalf("expected no upgrade reasons for pro tier, got %d", len(payload.UpgradeReasons))
+	}
 }
 
 func TestBuildEntitlementPayload_FreeTier(t *testing.T) {
@@ -49,20 +52,52 @@ func TestBuildEntitlementPayload_FreeTier(t *testing.T) {
 
 	payload := buildEntitlementPayload(status, "")
 
-	if len(payload.UpgradeReasons) == 0 {
-		t.Fatalf("expected upgrade reasons for free tier")
+	if len(payload.UpgradeReasons) != 10 {
+		t.Fatalf("expected 10 upgrade reasons for free tier, got %d", len(payload.UpgradeReasons))
 	}
-
-	reasonsByKey := make(map[string]UpgradeReason, len(payload.UpgradeReasons))
 	for _, reason := range payload.UpgradeReasons {
-		reasonsByKey[reason.Key] = reason
+		if reason.ActionURL == "" {
+			t.Fatalf("expected action_url for reason %q", reason.Key)
+		}
+	}
+}
+
+func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
+	status := &license.LicenseStatus{
+		Valid:     true,
+		Tier:      license.TierPro,
+		Features:  append([]string(nil), license.TierFeatures[license.TierPro]...),
+		MaxNodes:  50,
+		MaxGuests: 100,
 	}
 
-	if _, ok := reasonsByKey["ai_autofix"]; !ok {
-		t.Fatalf("expected ai_autofix upgrade reason")
+	payload := buildEntitlementPayloadWithUsage(status, "", entitlementUsageSnapshot{
+		Nodes:  12,
+		Guests: 44,
+	})
+
+	var nodeLimit *LimitStatus
+	var guestLimit *LimitStatus
+	for i := range payload.Limits {
+		if payload.Limits[i].Key == "max_nodes" {
+			nodeLimit = &payload.Limits[i]
+		}
+		if payload.Limits[i].Key == "max_guests" {
+			guestLimit = &payload.Limits[i]
+		}
 	}
-	if _, ok := reasonsByKey["rbac"]; !ok {
-		t.Fatalf("expected rbac upgrade reason")
+
+	if nodeLimit == nil {
+		t.Fatalf("expected max_nodes limit")
+	}
+	if guestLimit == nil {
+		t.Fatalf("expected max_guests limit")
+	}
+	if nodeLimit.Current != 12 {
+		t.Fatalf("expected node current 12, got %d", nodeLimit.Current)
+	}
+	if guestLimit.Current != 44 {
+		t.Fatalf("expected guest current 44, got %d", guestLimit.Current)
 	}
 }
 

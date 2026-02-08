@@ -1,12 +1,14 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"net/http"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	evaluator "github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/subscription"
 )
@@ -86,15 +88,59 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 
 	// Build payload from current license status (evaluator wiring comes in MON-08)
 	status := svc.Status()
-	payload := buildEntitlementPayload(status, svc.SubscriptionState())
+	usage := h.entitlementUsageSnapshot(r.Context())
+	payload := buildEntitlementPayloadWithUsage(status, svc.SubscriptionState(), usage)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
 }
 
+type entitlementUsageSnapshot struct {
+	Nodes  int64
+	Guests int64
+}
+
+// entitlementUsageSnapshot returns best-effort runtime usage counts for limits.
+func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlementUsageSnapshot {
+	usage := entitlementUsageSnapshot{}
+	if h == nil || h.mtPersistence == nil {
+		return usage
+	}
+
+	orgID := GetOrgID(ctx)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	persistence, err := h.mtPersistence.GetPersistence(orgID)
+	if err != nil || persistence == nil {
+		return usage
+	}
+
+	if nodesConfig, err := persistence.LoadNodesConfig(); err == nil && nodesConfig != nil {
+		usage.Nodes = int64(len(nodesConfig.PVEInstances) + len(nodesConfig.PBSInstances) + len(nodesConfig.PMGInstances))
+	}
+
+	// Guest metadata is currently the most broadly available tenant-level guest index.
+	if guestStore := persistence.GetGuestMetadataStore(); guestStore != nil {
+		usage.Guests = int64(len(guestStore.GetAll()))
+	}
+
+	return usage
+}
+
 // buildEntitlementPayload constructs the normalized payload from LicenseStatus.
 // This provides backward compatibility before the evaluator is wired in.
 func buildEntitlementPayload(status *license.LicenseStatus, subscriptionState string) EntitlementPayload {
+	return buildEntitlementPayloadWithUsage(status, subscriptionState, entitlementUsageSnapshot{})
+}
+
+// buildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.
+func buildEntitlementPayloadWithUsage(
+	status *license.LicenseStatus,
+	subscriptionState string,
+	usage entitlementUsageSnapshot,
+) EntitlementPayload {
 	if status == nil {
 		return EntitlementPayload{
 			Capabilities:      []string{},
@@ -146,28 +192,26 @@ func buildEntitlementPayload(status *license.LicenseStatus, subscriptionState st
 		payload.Limits = append(payload.Limits, LimitStatus{
 			Key:     "max_nodes",
 			Limit:   int64(status.MaxNodes),
-			Current: 0, // Actual count will be wired when evaluator is integrated.
-			State:   limitState(0, int64(status.MaxNodes)),
+			Current: usage.Nodes,
+			State:   limitState(usage.Nodes, int64(status.MaxNodes)),
 		})
 	}
 	if status.MaxGuests > 0 {
 		payload.Limits = append(payload.Limits, LimitStatus{
 			Key:     "max_guests",
 			Limit:   int64(status.MaxGuests),
-			Current: 0,
-			State:   limitState(0, int64(status.MaxGuests)),
+			Current: usage.Guests,
+			State:   limitState(usage.Guests, int64(status.MaxGuests)),
 		})
 	}
 
-	// Generate upgrade reasons for free tier.
-	if status.Tier == license.TierFree {
+	reasons := conversion.GenerateUpgradeReasons(payload.Capabilities)
+	payload.UpgradeReasons = make([]UpgradeReason, 0, len(reasons))
+	for _, reason := range reasons {
 		payload.UpgradeReasons = append(payload.UpgradeReasons, UpgradeReason{
-			Key:    "ai_autofix",
-			Reason: "Upgrade to Pro to enable automatic remediation with Pulse Patrol.",
-		})
-		payload.UpgradeReasons = append(payload.UpgradeReasons, UpgradeReason{
-			Key:    "rbac",
-			Reason: "Upgrade to Pro to enable role-based access control.",
+			Key:       reason.Feature,
+			Reason:    reason.Reason,
+			ActionURL: reason.ActionURL,
 		})
 	}
 
