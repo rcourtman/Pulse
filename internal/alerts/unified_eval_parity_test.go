@@ -189,3 +189,113 @@ func TestParityCheckPBSUsesEvaluateUnifiedMetrics(t *testing.T) {
 		t.Fatalf("expected 1 alert (CPU), got %d", len(pbsAlerts))
 	}
 }
+
+func TestSmokeUnifiedEvaluatorActiveEndToEnd(t *testing.T) {
+	m := NewManager()
+
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 60}
+	m.UpdateConfig(cfg)
+	disableTestTimeThresholds(m)
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "qemu-100",
+		Type: "vm",
+		Name: "test-vm",
+		Node: "pve-1",
+		CPU:  &UnifiedResourceMetric{Percent: 95.0},
+	})
+
+	active := m.GetActiveAlerts()
+	if len(active) == 0 {
+		t.Fatal("expected at least 1 active alert from unified evaluation")
+	}
+
+	found := false
+	for _, a := range active {
+		if a.Type == "cpu" && a.ResourceID == "qemu-100" {
+			found = true
+			if a.Metadata == nil || a.Metadata["resourceType"] != "VM" {
+				t.Fatalf("expected metadata.resourceType=VM, got %v", a.Metadata)
+			}
+		}
+	}
+
+	if !found {
+		t.Fatal("expected cpu alert for qemu-100")
+	}
+}
+
+func TestSmokeAlertDisableGatesUnifiedEvaluation(t *testing.T) {
+	m := NewManager()
+
+	cfg := m.GetConfig()
+	cfg.Enabled = false
+	cfg.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 60}
+	m.UpdateConfig(cfg)
+	disableTestTimeThresholds(m)
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "qemu-100",
+		Type: "vm",
+		Name: "test-vm",
+		CPU:  &UnifiedResourceMetric{Percent: 95.0},
+	})
+
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("expected 0 alerts when config.Enabled=false")
+	}
+}
+
+func TestSmokeReenableProducesCorrectAlerts(t *testing.T) {
+	m := NewManager()
+
+	cfg := m.GetConfig()
+	cfg.Enabled = false
+	cfg.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 60}
+	m.UpdateConfig(cfg)
+	disableTestTimeThresholds(m)
+
+	// While disabled: no alerts should be produced.
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "qemu-100",
+		Type: "vm",
+		Name: "test-vm",
+		CPU:  &UnifiedResourceMetric{Percent: 95.0},
+	})
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("expected 0 alerts when disabled")
+	}
+
+	// Re-enable and verify evaluation resumes with the same thresholds.
+	cfg.Enabled = true
+	m.UpdateConfig(cfg)
+	disableTestTimeThresholds(m)
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "qemu-100",
+		Type: "vm",
+		Name: "test-vm",
+		CPU:  &UnifiedResourceMetric{Percent: 95.0},
+	})
+
+	active := m.GetActiveAlerts()
+	if len(active) == 0 {
+		t.Fatal("expected alerts after re-enabling")
+	}
+
+	foundCPU := false
+	for _, a := range active {
+		if a.Type == "cpu" && a.ResourceID == "qemu-100" {
+			foundCPU = true
+			if a.Threshold != 80 {
+				t.Fatalf("expected threshold 80 after re-enable, got %v", a.Threshold)
+			}
+		}
+	}
+
+	if !foundCPU {
+		t.Fatal("expected cpu alert after re-enabling")
+	}
+}
