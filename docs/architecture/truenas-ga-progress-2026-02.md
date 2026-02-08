@@ -32,7 +32,7 @@ Date: 2026-02-08
 | TN-02 | Configuration Model + Encrypted Persistence | DONE | Codex | Claude | APPROVED | TN-02 Review Evidence |
 | TN-03 | Setup API Endpoints (Add/Test/Remove) | DONE | Codex | Claude | APPROVED | TN-03 Review Evidence |
 | TN-04 | Live Provider Upgrade (Fixture -> API Client) | DONE | Codex | Claude | APPROVED | TN-04 Review Evidence |
-| TN-05 | Runtime Registration + Periodic Polling | TODO | Codex | Claude | — | — |
+| TN-05 | Runtime Registration + Periodic Polling | DONE | Codex | Claude | APPROVED | TN-05 Review Evidence |
 | TN-06 | Frontend Source Badge + Filter Integration | TODO | Codex | Claude | — | — |
 | TN-07 | Backend Health/Error State Enrichment | TODO | Codex | Claude | — | — |
 | TN-08 | Frontend Health/Error UX Display | TODO | Codex | Claude | — | — |
@@ -318,30 +318,52 @@ Rollback:
 
 ## TN-05 Checklist: Runtime Registration + Periodic Polling
 
-- [ ] `TrueNASPoller` struct managing per-connection providers.
-- [ ] Polling loop with configurable interval (default 60s).
-- [ ] Runtime connection add/remove handling.
-- [ ] Integration with unified resource registry via `IngestRecords`.
-- [ ] Staleness handling on fetch failure.
-- [ ] Wired into router/monitor lifecycle.
+- [x] `TrueNASPoller` struct managing per-connection providers.
+- [x] Polling loop with configurable interval (default 60s).
+- [x] Runtime connection add/remove handling.
+- [x] Integration with unified resource registry via `IngestRecords`.
+- [x] Staleness handling on fetch failure.
+- [x] Wired into router/monitor lifecycle.
 
 ### Required Tests
 
-- [ ] `go test ./internal/monitoring/... -run "TrueNAS" -count=1` -> exit 0
-- [ ] `go test ./internal/truenas/... -count=1` -> exit 0
-- [ ] `go build ./...` -> exit 0
+- [x] `go test ./internal/monitoring/... -run "TrueNAS" -count=1` -> exit 0
+- [x] `go test ./internal/truenas/... -count=1` -> exit 0
+- [x] `go build ./...` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### TN-05 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `internal/monitoring/truenas_poller.go` (new): TrueNASPoller struct with registry, persistence, providers map, cancel/stopped lifecycle. Start() feature-flag-gated, launches goroutine with syncConnections + pollAll on ticker. Stop() with 5s timeout. syncConnections() loads encrypted config, creates/removes providers dynamically. pollAll() refreshes each provider and ingests records via IngestRecords(SourceTrueNAS).
+- `internal/monitoring/truenas_poller_test.go` (new): 4 tests — polls configured connections (httptest mock, verifies registry ingestion), handles add/remove (dynamic config change detection), skips disabled (verifies 0 requests to disabled server), stops cleanly (channel close verification). Test helpers: trueNASMockServer with request counting, trueNASInstanceForServer, waitForCondition polling loop.
+- `internal/api/router.go` (modified): Added trueNASPoller field, initialized and started after trueNASHandlers in setupRoutes().
+
+Commands run + exit codes (reviewer-rerun):
+1. `go test ./internal/monitoring/... -run "TrueNAS" -count=1 -v` -> exit 0 (4 tests passed)
+2. `go test ./internal/truenas/... -count=1` -> exit 0 (15 tests passed)
+3. `go build ./...` -> exit 0
+
+Gate checklist:
+- P0: PASS (all files verified, all commands rerun by reviewer with exit 0)
+- P1: PASS (dynamic connection sync tested with add+remove, disabled connections verified skipped with request counter, feature flag gates startup, clean shutdown verified, IngestRecords called with correct source)
+- P2: PASS (progress tracker updated)
+
+Verdict: APPROVED
+
+Residual risk:
+- No explicit poller.Stop() call on router shutdown — process exit handles cleanup. Acceptable for now; can add router.Close() in future if needed.
+
+Rollback:
+- Delete `internal/monitoring/truenas_poller.go` and `internal/monitoring/truenas_poller_test.go`.
+- Revert router.go to remove trueNASPoller field and Start call.
 ```
 
 ---
@@ -521,7 +543,7 @@ TODO
 - TN-01: `100494a7` feat(TN-01): TrueNAS REST API client scaffold
 - TN-02: `1f2fe198` feat(TN-02): TrueNAS configuration model with encrypted persistence
 - TN-03: `f57007d8` feat(TN-03): TrueNAS setup API endpoints — add, list, delete, test connection
-- TN-04: TODO
+- TN-04: `d9ba2e84` feat(TN-04): live provider upgrade — Fetcher interface for API + fixture paths
 - TN-05: TODO
 - TN-06: TODO
 - TN-07: TODO
@@ -532,4 +554,4 @@ TODO
 
 ## Current Recommended Next Packet
 
-- `TN-05` (Runtime Registration + Periodic Polling)
+- `TN-06` (Frontend Source Badge + Filter Integration)

@@ -78,6 +78,7 @@ type Router struct {
 	resourceHandlers          *ResourceHandlers
 	resourceV2Handlers        *ResourceV2Handlers
 	resourceRegistry          *unifiedresources.ResourceRegistry
+	trueNASPoller             *monitoring.TrueNASPoller
 	monitorResourceAdapter    *unifiedresources.MonitorAdapter
 	aiResourceAdapter         *unifiedresources.AIAdapter
 	aiUnifiedAdapter          *unifiedresources.UnifiedAIAdapter
@@ -264,6 +265,8 @@ func (r *Router) setupRoutes() {
 		getConfig:      r.configHandlers.getConfig,
 		getMonitor:     r.configHandlers.getMonitor,
 	}
+	r.trueNASPoller = monitoring.NewTrueNASPoller(r.resourceRegistry, r.persistence, 0)
+	r.trueNASPoller.Start(context.Background())
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
