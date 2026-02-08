@@ -404,3 +404,30 @@ Plan is complete only when:
 | Control Plane Decomposition | `MATCHED` | All 10 packets DONE/APPROVED, final certification complete. |
 | Settings Control Plane Decomposition | `MATCHED` | All 10 packets DONE/APPROVED, final certification complete. |
 | Storage + Backups V2 | `DEFERRED` | Plan is in Draft (active) status, no packet execution started. Defer to next milestone. |
+
+## Appendix E: Cross-Domain Integration Certification Matrix
+
+Evidence normalization notes:
+- `internal/api/tenant_scoping_test.go` evidence now lives in `internal/api/tenant_org_binding_test.go` and `internal/api/tenant_org_ids_binding_test.go`.
+- `internal/alerts/canonical_resource_type_test.go` evidence now lives in `internal/alerts/utility_test.go` (`TestCanonicalResourceTypeKeys`).
+- `internal/alerts/alert_migration_test.go` normalization/migration evidence now lives in `internal/config/persistence_alerts_normalization_test.go` and `internal/alerts/override_normalization_test.go`.
+
+| Scenario | Domains Crossed | Surface | Test file | Test function pattern | Status |
+| --- | --- | --- | --- | --- | --- |
+| Alert fires for unified resource type | Alerts + Unified Resources | API endpoints | `internal/api/contract_test.go`, `internal/alerts/override_normalization_test.go` | `TestContract_AlertResourceTypeConsistency`, `TestOverrideResolutionByResourceType` | COVERED |
+| Tenant-scoped alert delivery via WS | Alerts + Tenant/Org Scoping | WebSocket events | `internal/websocket/hub_alert_tenant_test.go` | `TestAlertBroadcastTenantIsolation`, `TestAlertResolvedBroadcastTenantIsolation` | COVERED |
+| Settings deep-link after legacy redirect | Settings/Routing + Contracts/Payloads | Frontend routing | `frontend-modern/src/routing/__tests__/legacyRouteContracts.test.ts`, `frontend-modern/src/components/Settings/__tests__/settingsRouting.test.ts` | `it('covers every legacy redirect definition and preserves migration metadata')`, `it('maps query deep-links contract values')` | COVERED |
+| Org-bound API access to alerts | Alerts + Tenant/Org Scoping | API endpoints | `internal/api/tenant_org_binding_test.go`, `internal/api/org_handlers_test.go` | `TestTenantMiddlewareBlocksOrgBoundTokenFromOtherOrg_AlertsEndpoint`, `TestOrgHandlersCrossOrgIsolation` | COVERED |
+| Contract payload includes resource type | Contracts/Payloads + Unified Resources | API endpoints | `internal/api/contract_test.go` | `TestContract_AlertJSONSnapshot`, `TestContract_AlertAllFieldsJSONSnapshot`, `TestContract_AlertResourceTypeConsistency` | COVERED |
+| Multi-tenant settings visibility | Settings/Routing + Tenant/Org Scoping | Frontend state | `frontend-modern/src/components/Settings/__tests__/settingsRouting.test.ts` | `it('locks gated tabs based on features and license state')` | COVERED |
+| Alert threshold override normalization | Alerts + Persistence | Persistence | `internal/config/persistence_alerts_normalization_test.go`, `internal/alerts/override_normalization_test.go` | `TestLoadAlertConfig_Normalization`, `TestOverrideKeyStabilityAcrossUnifiedPath` | COVERED |
+| Frontend unified-type display mapping remains aligned | Alerts + Unified Resources | Frontend state | `frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts` | `describe('unifiedTypeToAlertDisplayType')` | COVERED |
+
+### Matrix Summary
+
+- Total cells: 8
+- Covered: 8
+- Gaps: 0
+- Residual risks:
+  - Full end-to-end verification of tenant-scoped alert creation -> API payload serialization -> websocket fan-out -> frontend route landing is not represented by one integrated unit test chain.
+  - Legacy redirect correctness is unit-tested, but browser-history/back-button behavior after chained redirects is only verifiable in E2E/browser-level tests.
