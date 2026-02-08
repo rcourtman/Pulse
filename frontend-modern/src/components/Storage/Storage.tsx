@@ -29,6 +29,11 @@ import {
   resolveStorageSourceKey,
 } from './storageSourceOptions';
 import { useStorageRouteState } from './useStorageRouteState';
+import {
+  getCephHealthLabel,
+  getCephHealthStyles,
+  isCephType,
+} from '@/features/storageBackupsV2/storageDomain';
 
 type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
 
@@ -182,31 +187,6 @@ const Storage: Component = () => {
     });
     return map;
   });
-
-  const isCephType = (type?: string) => {
-    const value = (type || '').toLowerCase();
-    return value === 'rbd' || value === 'cephfs' || value === 'ceph';
-  };
-
-  const getCephHealthLabel = (health?: string) => {
-    if (!health) return 'CEPH';
-    const normalized = health.toUpperCase();
-    return normalized.startsWith('HEALTH_') ? normalized.replace('HEALTH_', '') : normalized;
-  };
-
-  const getCephHealthStyles = (health?: string) => {
-    const normalized = (health || '').toUpperCase();
-    if (normalized === 'HEALTH_OK') {
-      return 'bg-green-100 text-green-700 dark:bg-green-900/60 dark:text-green-300 border border-green-200 dark:border-green-800';
-    }
-    if (normalized === 'HEALTH_WARN' || normalized === 'HEALTH_WARNING') {
-      return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/60 dark:text-yellow-200 border border-yellow-300 dark:border-yellow-800';
-    }
-    if (normalized === 'HEALTH_ERR' || normalized === 'HEALTH_ERROR' || normalized === 'HEALTH_CRIT') {
-      return 'bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-200 border border-red-300 dark:border-red-800';
-    }
-    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200 border border-blue-200 dark:border-blue-700';
-  };
 
   const cephClusters = createMemo(() => state.cephClusters || []);
 
