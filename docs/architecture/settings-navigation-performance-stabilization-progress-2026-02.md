@@ -27,7 +27,7 @@ Date: 2026-02-08
 | 03 | Polling Lifecycle Isolation and Interaction Priority | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence |
 | 04 | Panel Loading Strategy and Transition Performance | DONE | Codex | Claude | APPROVED | See Packet 04 Review Evidence |
 | 05 | Locked Tab UX Clarity and Non-Loading Affordance Fix | DONE | Codex | Claude | APPROVED | See Packet 05 Review Evidence |
-| 06 | Contract Test Hardening and Guardrails | TODO | Codex | Claude | PENDING | See Packet 06 Review Evidence |
+| 06 | Contract Test Hardening and Guardrails | DONE | Codex | Claude | APPROVED | See Packet 06 Review Evidence |
 | 07 | Final Certification and Release Recommendation | TODO | Claude | Claude | PENDING | See Packet 07 Review Evidence |
 
 ## Packet 00 Checklist: Repro Matrix and Baseline Instrumentation
@@ -305,7 +305,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- `pending`
+- `2dc5ea1d` (fix(settings-nav): Packet 05 — locked tab UX clarity)
 
 Residual risk:
 - none
@@ -318,46 +318,47 @@ Rollback:
 ## Packet 06 Checklist: Contract Test Hardening and Guardrails
 
 ### Implementation
-- [ ] Sidebar click-to-panel integration tests added for representative tabs.
-- [ ] Startup de-dup invariants covered by tests/guardrails.
-- [ ] Routing helper contracts remain green.
+- [x] Sidebar click-to-panel integration tests added for representative tabs.
+- [x] Startup de-dup invariants covered by tests/guardrails.
+- [x] Routing helper contracts remain green.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsArchitecture.test.ts src/components/Settings/__tests__/settingsRouting.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsArchitecture.test.ts src/components/Settings/__tests__/settingsRouting.test.ts` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### Packet 06 Review Evidence
 
 ```
 Files changed:
-- <path>: <reason>
+- frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx: Replaced todo with bootstrap de-dup invariant test, added unique path test, added panel registry coverage test
+- frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts: Added lazy() import guardrail for settingsPanelRegistry
 
 Commands run + exit codes:
-1. `<command>` -> exit <code>
-2. `<command>` -> exit <code>
+1. `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsNavigation.integration.test.tsx src/components/Settings/__tests__/settingsArchitecture.test.ts src/components/Settings/__tests__/settingsRouting.test.ts` -> exit 0 (23 passed)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 Gate checklist:
-- P0: PASS | FAIL (<reason>)
-- P1: PASS | FAIL | N/A (<reason>)
-- P2: PASS | FAIL (<reason>)
+- P0: PASS (bootstrap invariant, path uniqueness, registry coverage, lazy import guardrails all in place)
+- P1: PASS (no production code modified)
+- P2: PASS (deterministic assertions, no timing-dependent tests)
 
-Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+Verdict: APPROVED
 
 Commit:
-- `<hash>` (<message>)
+- `pending`
 
 Residual risk:
-- <risk or none>
+- none
 
 Rollback:
-- <steps>
+- Revert test files to previous versions
 ```
 
 ## Packet 07 Checklist: Final Certification and Release Recommendation

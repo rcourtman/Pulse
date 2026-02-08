@@ -58,6 +58,12 @@ describe('settingsNavigation integration scaffold', () => {
     }
   });
 
+  it('settingsTabPath returns unique paths for all tabs', () => {
+    const paths = Object.keys(canonicalTabPaths).map((tab) => settingsTabPath(tab as SettingsTab));
+    const uniquePaths = new Set(paths);
+    expect(uniquePaths.size).toBe(paths.length);
+  });
+
   it('setActiveTab eagerly updates currentTab before navigation', () => {
     for (const tab of Object.keys(canonicalTabPaths) as SettingsTab[]) {
       const path = settingsTabPath(tab);
@@ -95,5 +101,24 @@ describe('settingsNavigation integration scaffold', () => {
     });
   });
 
-  it.todo('tracks duplicate bootstrap de-duplication');
+  it('verifies Settings.tsx bootstrap calls only loadLicenseStatus', async () => {
+    const settingsSource = (await import('../Settings.tsx?raw')).default;
+    const onMountMatch = settingsSource.match(/onMount\(\(\)\s*=>\s*\{([^}]+)\}/);
+    expect(onMountMatch).toBeTruthy();
+    const onMountBody = onMountMatch![1];
+    expect(onMountBody).toContain('loadLicenseStatus');
+    expect(onMountBody).not.toContain('loadNodes');
+    expect(onMountBody).not.toContain('loadDiscoveredNodes');
+    expect(onMountBody).not.toContain('loadSecurityStatus');
+  });
+
+  it('panel registry covers all dispatchable tabs', async () => {
+    const registrySource = (await import('../settingsPanelRegistry.ts?raw')).default;
+    const allTabs = Object.keys(canonicalTabPaths) as SettingsTab[];
+    const dispatchableTabs = allTabs.filter((tab) => tab !== 'proxmox');
+    for (const tab of dispatchableTabs) {
+      const isCovered = registrySource.includes(`'${tab}'`) || registrySource.includes(`${tab}:`);
+      expect(isCovered, `panel registry should cover tab '${tab}'`).toBe(true);
+    }
+  });
 });

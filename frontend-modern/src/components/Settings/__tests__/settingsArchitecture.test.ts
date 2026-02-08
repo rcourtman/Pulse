@@ -63,4 +63,20 @@ describe('Settings architecture guardrails', () => {
 
     expect(settingsLineCount).toBeLessThanOrEqual(maxSettingsLines);
   });
+
+  it('uses lazy() imports for panel components in settingsPanelRegistry', () => {
+    const registrySource = import.meta.glob('../settingsPanelRegistry.ts', {
+      query: '?raw',
+      eager: true,
+      import: 'default',
+    });
+    const source = Object.values(registrySource)[0] as string;
+
+    expect(source).toContain('lazy(');
+
+    const staticImports = Array.from(
+      source.matchAll(/^import\s+(?!type\b)(?!{[^}]*}\s+from\s+'solid-js').*from\s+'\.\/\w+Panel'/gm),
+    );
+    expect(staticImports.length).toBe(0);
+  });
 });
