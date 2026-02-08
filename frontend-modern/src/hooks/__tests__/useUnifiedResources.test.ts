@@ -54,6 +54,7 @@ describe('useUnifiedResources', () => {
   let apiFetchMock: ReturnType<typeof vi.fn>;
   let setWsState: SetStoreFunction<TestWsState>;
   let useUnifiedResources: UseUnifiedResourcesModule['useUnifiedResources'];
+  let useStorageBackupsResources: UseUnifiedResourcesModule['useStorageBackupsResources'];
   let resetUnifiedResourcesCacheForTests: UseUnifiedResourcesModule['__resetUnifiedResourcesCacheForTests'];
 
   beforeEach(async () => {
@@ -88,7 +89,11 @@ describe('useUnifiedResources', () => {
       getGlobalWebSocketStore: () => wsStore,
     }));
 
-    ({ useUnifiedResources, __resetUnifiedResourcesCacheForTests: resetUnifiedResourcesCacheForTests } = await import('@/hooks/useUnifiedResources'));
+    ({
+      useUnifiedResources,
+      useStorageBackupsResources,
+      __resetUnifiedResourcesCacheForTests: resetUnifiedResourcesCacheForTests,
+    } = await import('@/hooks/useUnifiedResources'));
     resetUnifiedResourcesCacheForTests();
   });
 
@@ -111,7 +116,7 @@ describe('useUnifiedResources', () => {
     await waitForResourceCount(() => result!.resources().length);
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/v2/resources?type=host,pbs,pmg,k8s_cluster,k8s_node',
+      '/api/v2/resources?type=host%2Cpbs%2Cpmg%2Ck8s_cluster%2Ck8s_node&page=1&limit=100',
       { cache: 'no-store' },
     );
     const originalResourceRef = result!.resources()[0];
@@ -298,6 +303,26 @@ describe('useUnifiedResources', () => {
     vi.advanceTimersByTime(2_500);
     await flushAsync();
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
+
+    dispose();
+  });
+
+  it('uses the storage/backups query variant for storage-backups pages', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useStorageBackupsResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useStorageBackupsResources();
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v2/resources?type=storage%2Cpbs%2Cpmg%2Cvm%2Clxc%2Ccontainer%2Cpod%2Chost%2Ck8s_cluster%2Ck8s_node&page=1&limit=100',
+      { cache: 'no-store' },
+    );
+    expect(result!.resources().length).toBeGreaterThanOrEqual(0);
 
     dispose();
   });

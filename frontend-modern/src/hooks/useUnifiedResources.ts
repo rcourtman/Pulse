@@ -4,7 +4,12 @@ import { apiFetch } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
 
-const UNIFIED_RESOURCES_URL = '/api/v2/resources?type=host,pbs,pmg,k8s_cluster,k8s_node';
+const UNIFIED_RESOURCES_BASE_URL = '/api/v2/resources';
+const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=host,pbs,pmg,k8s_cluster,k8s_node';
+const STORAGE_BACKUPS_UNIFIED_RESOURCES_QUERY =
+  'type=storage,pbs,pmg,vm,lxc,container,pod,host,k8s_cluster,k8s_node';
+const UNIFIED_RESOURCES_PAGE_LIMIT = 100;
+const UNIFIED_RESOURCES_MAX_PAGES = 20;
 const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
 const UNIFIED_RESOURCES_WS_DEBOUNCE_MS = 800;
 const UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS = 2_500;
@@ -100,6 +105,9 @@ type V2Resource = {
 type V2ListResponse = {
   data?: V2Resource[];
   resources?: V2Resource[];
+  meta?: {
+    totalPages?: number;
+  };
 };
 
 type SourceFlags = {
@@ -111,10 +119,14 @@ type SourceFlags = {
   hasPmg: boolean;
 };
 
-let cachedUnifiedResources: Resource[] = [];
-let cachedUnifiedResourcesAt = 0;
-let lastUnifiedResourcesFetchAt = 0;
-let sharedFetchUnifiedResources: Promise<Resource[]> | null = null;
+type UnifiedResourcesCacheEntry = {
+  resources: Resource[];
+  cachedAt: number;
+  lastFetchAt: number;
+  sharedFetch: Promise<Resource[]> | null;
+};
+
+const unifiedResourcesCaches = new Map<string, UnifiedResourcesCacheEntry>();
 
 const readSourceFlags = (sources: string[] | undefined): SourceFlags => {
   const flags: SourceFlags = {
@@ -345,73 +357,141 @@ const toResource = (v2: V2Resource): Resource => {
   };
 };
 
-const hasFreshUnifiedResourcesCache = () =>
-  cachedUnifiedResources.length > 0 && Date.now() - cachedUnifiedResourcesAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
+const normalizeUnifiedResourcesQuery = (query?: string): string => (query || '').trim().replace(/^\?+/, '');
 
-const setUnifiedResourcesCache = (resources: Resource[], at = Date.now()) => {
-  cachedUnifiedResources = resources;
-  cachedUnifiedResourcesAt = at;
+const buildUnifiedResourcesUrl = (query: string, page: number): string => {
+  const params = new URLSearchParams(query);
+  params.set('page', String(page));
+  params.set('limit', String(UNIFIED_RESOURCES_PAGE_LIMIT));
+  return `${UNIFIED_RESOURCES_BASE_URL}?${params.toString()}`;
 };
 
-async function fetchUnifiedResources(): Promise<Resource[]> {
-  const response = await apiFetch(UNIFIED_RESOURCES_URL, { cache: 'no-store' });
-  if (!response.ok) {
-    throw new Error('Failed to fetch unified resources');
+const resolveV2ResourcesPayload = (payload: unknown): { data: V2Resource[]; totalPages: number } => {
+  if (Array.isArray(payload)) {
+    return { data: payload as V2Resource[], totalPages: 1 };
+  }
+  if (!payload || typeof payload !== 'object') {
+    return { data: [], totalPages: 1 };
+  }
+  const record = payload as V2ListResponse;
+  const data = Array.isArray(record.data)
+    ? record.data
+    : Array.isArray(record.resources)
+      ? record.resources
+      : [];
+  const totalPages = Number.isFinite(record.meta?.totalPages)
+    ? Math.max(1, Number(record.meta?.totalPages))
+    : 1;
+  return { data, totalPages };
+};
+
+const dedupeV2Resources = (resources: V2Resource[]): V2Resource[] => {
+  const ids = new Set<string>();
+  const deduped: V2Resource[] = [];
+  for (const resource of resources) {
+    if (!resource?.id || ids.has(resource.id)) continue;
+    ids.add(resource.id);
+    deduped.push(resource);
+  }
+  return deduped;
+};
+
+const getUnifiedResourcesCacheEntry = (cacheKey: string): UnifiedResourcesCacheEntry => {
+  const existing = unifiedResourcesCaches.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+  const created: UnifiedResourcesCacheEntry = {
+    resources: [],
+    cachedAt: 0,
+    lastFetchAt: 0,
+    sharedFetch: null,
+  };
+  unifiedResourcesCaches.set(cacheKey, created);
+  return created;
+};
+
+const hasFreshUnifiedResourcesCache = (entry: UnifiedResourcesCacheEntry) =>
+  entry.resources.length > 0 && Date.now() - entry.cachedAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
+
+const setUnifiedResourcesCache = (
+  entry: UnifiedResourcesCacheEntry,
+  resources: Resource[],
+  at = Date.now(),
+) => {
+  entry.resources = resources;
+  entry.cachedAt = at;
+};
+
+async function fetchUnifiedResources(query: string): Promise<Resource[]> {
+  const normalizedQuery = normalizeUnifiedResourcesQuery(query);
+  const allRawResources: V2Resource[] = [];
+  let totalPages = 1;
+
+  for (let page = 1; page <= totalPages && page <= UNIFIED_RESOURCES_MAX_PAGES; page += 1) {
+    const response = await apiFetch(buildUnifiedResourcesUrl(normalizedQuery, page), { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('Failed to fetch unified resources');
+    }
+
+    const payload = (await response.json()) as V2ListResponse | V2Resource[];
+    const resolved = resolveV2ResourcesPayload(payload);
+    allRawResources.push(...resolved.data);
+    totalPages = Math.max(totalPages, resolved.totalPages);
   }
 
-  const data = (await response.json()) as V2ListResponse | V2Resource[];
-
-  const rawResources = Array.isArray(data)
-    ? data
-    : data.data && Array.isArray(data.data)
-      ? data.data
-      : data.resources && Array.isArray(data.resources)
-        ? data.resources
-        : [];
-
-  return rawResources.map((resource) => toResource(resource as V2Resource));
+  return dedupeV2Resources(allRawResources).map((resource) => toResource(resource));
 }
 
-const fetchUnifiedResourcesShared = async (force = false): Promise<Resource[]> => {
-  if (!force && hasFreshUnifiedResourcesCache()) {
-    return cachedUnifiedResources;
+const fetchUnifiedResourcesShared = async (
+  entry: UnifiedResourcesCacheEntry,
+  query: string,
+  force = false,
+): Promise<Resource[]> => {
+  if (!force && hasFreshUnifiedResourcesCache(entry)) {
+    return entry.resources;
   }
 
-  if (sharedFetchUnifiedResources) {
-    return sharedFetchUnifiedResources;
+  if (entry.sharedFetch) {
+    return entry.sharedFetch;
   }
 
   const request = (async () => {
-    const fetched = await fetchUnifiedResources();
+    const fetched = await fetchUnifiedResources(query);
     const now = Date.now();
-    setUnifiedResourcesCache(fetched, now);
-    lastUnifiedResourcesFetchAt = now;
+    setUnifiedResourcesCache(entry, fetched, now);
+    entry.lastFetchAt = now;
     return fetched;
   })();
 
-  sharedFetchUnifiedResources = request;
+  entry.sharedFetch = request;
 
   try {
     return await request;
   } finally {
-    if (sharedFetchUnifiedResources === request) {
-      sharedFetchUnifiedResources = null;
+    if (entry.sharedFetch === request) {
+      entry.sharedFetch = null;
     }
   }
 };
 
-const shouldThrottleWsRefetch = () =>
-  Date.now() - lastUnifiedResourcesFetchAt < UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS;
+const shouldThrottleWsRefetch = (entry: UnifiedResourcesCacheEntry) =>
+  Date.now() - entry.lastFetchAt < UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS;
 
 export const __resetUnifiedResourcesCacheForTests = () => {
-  cachedUnifiedResources = [];
-  cachedUnifiedResourcesAt = 0;
-  lastUnifiedResourcesFetchAt = 0;
-  sharedFetchUnifiedResources = null;
+  unifiedResourcesCaches.clear();
 };
 
-export function useUnifiedResources() {
-  const initialResources = cachedUnifiedResources;
+type UseUnifiedResourcesOptions = {
+  query?: string;
+  cacheKey?: string;
+};
+
+export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
+  const query = normalizeUnifiedResourcesQuery(options?.query || DEFAULT_UNIFIED_RESOURCES_QUERY);
+  const cacheKey = (options?.cacheKey || query || 'all').trim();
+  const cacheEntry = getUnifiedResourcesCacheEntry(cacheKey);
+  const initialResources = cacheEntry.resources;
   const hasCachedResources = initialResources.length > 0;
 
   const [resources, setResources] = createStore<Resource[]>(initialResources);
@@ -424,7 +504,7 @@ export function useUnifiedResources() {
   let lastWsUpdateToken = '';
 
   const applyResources = (next: Resource[]) => {
-    setUnifiedResourcesCache(next);
+    setUnifiedResourcesCache(cacheEntry, next);
     setResources(reconcile(next, { key: 'id' }));
   };
 
@@ -436,7 +516,7 @@ export function useUnifiedResources() {
     const force = options?.force === true;
     const source = options?.source ?? 'manual';
 
-    if (!force && source === 'ws' && shouldThrottleWsRefetch()) {
+    if (!force && source === 'ws' && shouldThrottleWsRefetch(cacheEntry)) {
       return resources as unknown as Resource[];
     }
 
@@ -448,7 +528,7 @@ export function useUnifiedResources() {
 
     const request = (async () => {
       try {
-        const fetched = await fetchUnifiedResourcesShared(shouldForceNetwork);
+        const fetched = await fetchUnifiedResourcesShared(cacheEntry, query, shouldForceNetwork);
         batch(() => {
           applyResources(fetched);
           setError(undefined);
@@ -479,7 +559,7 @@ export function useUnifiedResources() {
   };
 
   // If cache is stale, refresh it in the background without blocking initial render.
-  if (!hasFreshUnifiedResourcesCache()) {
+  if (!hasFreshUnifiedResourcesCache(cacheEntry)) {
     void runRefetch({ source: 'initial' }).catch(() => undefined);
   }
 
@@ -488,7 +568,7 @@ export function useUnifiedResources() {
       clearTimeout(refreshHandle);
     }
 
-    const elapsedSinceFetch = Date.now() - lastUnifiedResourcesFetchAt;
+    const elapsedSinceFetch = Date.now() - cacheEntry.lastFetchAt;
     const minIntervalDelay = Math.max(0, UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS - elapsedSinceFetch);
     const delay = Math.max(UNIFIED_RESOURCES_WS_DEBOUNCE_MS, minIntervalDelay);
 
@@ -535,6 +615,13 @@ export function useUnifiedResources() {
     loading,
     error,
   };
+}
+
+export function useStorageBackupsResources() {
+  return useUnifiedResources({
+    query: STORAGE_BACKUPS_UNIFIED_RESOURCES_QUERY,
+    cacheKey: 'storage-backups',
+  });
 }
 
 export default useUnifiedResources;
