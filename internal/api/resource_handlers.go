@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // StateProvider allows ResourceHandlers to fetch current state on demand.
@@ -20,20 +20,20 @@ type TenantStateProvider interface {
 	GetStateForTenant(orgID string) models.StateSnapshot
 }
 
-// ResourceHandlers provides HTTP handlers for the unified resource API.
+// ResourceHandlers provides HTTP handlers for the legacy /api/resources API backed by V2 registry data.
 type ResourceHandlers struct {
-	store               *resources.Store            // Default store (legacy/default tenant)
-	storesByTenant      map[string]*resources.Store // Per-tenant stores
-	storeMu             sync.RWMutex                // Protects storesByTenant
-	stateProvider       StateProvider               // Legacy state provider
-	tenantStateProvider TenantStateProvider         // Tenant-aware state provider
+	store               *unifiedresources.LegacyAdapter
+	storesByTenant      map[string]*unifiedresources.LegacyAdapter
+	storeMu             sync.RWMutex
+	stateProvider       StateProvider
+	tenantStateProvider TenantStateProvider
 }
 
-// NewResourceHandlers creates resource handlers with a new store.
+// NewResourceHandlers creates resource handlers with a V2-backed legacy adapter.
 func NewResourceHandlers() *ResourceHandlers {
 	return &ResourceHandlers{
-		store:          resources.NewStore(),
-		storesByTenant: make(map[string]*resources.Store),
+		store:          unifiedresources.NewLegacyAdapter(nil),
+		storesByTenant: make(map[string]*unifiedresources.LegacyAdapter),
 	}
 }
 
@@ -47,14 +47,13 @@ func (h *ResourceHandlers) SetTenantStateProvider(provider TenantStateProvider) 
 	h.tenantStateProvider = provider
 }
 
-// Store returns the underlying resource store for populating from the monitor.
-func (h *ResourceHandlers) Store() *resources.Store {
+// Store returns the underlying adapter for monitor/AI injection.
+func (h *ResourceHandlers) Store() *unifiedresources.LegacyAdapter {
 	return h.store
 }
 
-// getStoreForTenant returns the resource store for a specific tenant.
-// Creates a new store lazily if one doesn't exist.
-func (h *ResourceHandlers) getStoreForTenant(orgID string) *resources.Store {
+// getStoreForTenant returns the resource adapter for a specific tenant.
+func (h *ResourceHandlers) getStoreForTenant(orgID string) *unifiedresources.LegacyAdapter {
 	if orgID == "" || orgID == "default" {
 		return h.store
 	}
@@ -62,118 +61,91 @@ func (h *ResourceHandlers) getStoreForTenant(orgID string) *resources.Store {
 	h.storeMu.RLock()
 	store, exists := h.storesByTenant[orgID]
 	h.storeMu.RUnlock()
-
 	if exists {
 		return store
 	}
 
-	// Create new store for tenant
 	h.storeMu.Lock()
 	defer h.storeMu.Unlock()
-
-	// Double-check after acquiring write lock
 	if store, exists = h.storesByTenant[orgID]; exists {
 		return store
 	}
 
-	store = resources.NewStore()
+	store = unifiedresources.NewLegacyAdapter(nil)
 	h.storesByTenant[orgID] = store
 	return store
 }
 
 // GetStoreStats returns stats for all tenant stores.
-func (h *ResourceHandlers) GetStoreStats() map[string]resources.StoreStats {
+func (h *ResourceHandlers) GetStoreStats() map[string]unifiedresources.LegacyStoreStats {
 	h.storeMu.RLock()
 	defer h.storeMu.RUnlock()
 
-	stats := make(map[string]resources.StoreStats)
+	stats := make(map[string]unifiedresources.LegacyStoreStats)
 	stats["default"] = h.store.GetStats()
-
 	for orgID, store := range h.storesByTenant {
 		stats[orgID] = store.GetStats()
 	}
-
 	return stats
 }
 
 // HandleGetResources returns all resources, optionally filtered by query params.
 // GET /api/resources
-// Query params:
-//   - type: filter by resource type (comma-separated)
-//   - platform: filter by platform type (comma-separated)
-//   - status: filter by status (comma-separated)
-//   - parent: filter by parent ID
-//   - infrastructure: if "true", only return infrastructure resources
-//   - workloads: if "true", only return workload resources
 func (h *ResourceHandlers) HandleGetResources(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get the tenant-specific store
 	orgID := GetOrgID(r.Context())
 	store := h.getStoreForTenant(orgID)
 
-	// Populate from current state if we have a state provider
-	// This ensures fresh data even if the store hasn't been populated yet
 	if h.tenantStateProvider != nil && orgID != "" && orgID != "default" {
-		// Use tenant-aware state provider
 		h.PopulateFromSnapshotForTenant(orgID, h.tenantStateProvider.GetStateForTenant(orgID))
 	} else if h.stateProvider != nil {
 		h.PopulateFromSnapshot(h.stateProvider.GetState())
 	}
 
-	query := store.Query()
-
-	// Parse type filter
-	if typeParam := r.URL.Query().Get("type"); typeParam != "" {
-		types := parseResourceTypes(typeParam)
-		if len(types) > 0 {
-			query = query.OfType(types...)
-		}
-	}
-
-	// Parse platform filter
-	if platformParam := r.URL.Query().Get("platform"); platformParam != "" {
-		platforms := parsePlatformTypes(platformParam)
-		if len(platforms) > 0 {
-			query = query.FromPlatform(platforms...)
-		}
-	}
-
-	// Parse status filter
-	if statusParam := r.URL.Query().Get("status"); statusParam != "" {
-		statuses := parseStatuses(statusParam)
-		if len(statuses) > 0 {
-			query = query.WithStatus(statuses...)
-		}
-	}
-
-	// Parse parent filter
-	if parentID := r.URL.Query().Get("parent"); parentID != "" {
-		query = query.WithParent(parentID)
-	}
-
-	// Parse alerts filter
-	if r.URL.Query().Get("alerts") == "true" {
-		query = query.WithAlerts()
-	}
-
-	// Execute query
-	var result []resources.Resource
-
-	// Handle infrastructure/workloads shortcut
+	var result []unifiedresources.LegacyResource
 	if r.URL.Query().Get("infrastructure") == "true" {
 		result = store.GetInfrastructure()
 	} else if r.URL.Query().Get("workloads") == "true" {
 		result = store.GetWorkloads()
 	} else {
-		result = query.Execute()
+		result = store.GetAll()
+	}
+
+	if typeParam := r.URL.Query().Get("type"); typeParam != "" {
+		types := parseResourceTypes(typeParam)
+		if len(types) > 0 {
+			result = filterByTypes(result, types)
+		}
+	}
+
+	if platformParam := r.URL.Query().Get("platform"); platformParam != "" {
+		platforms := parsePlatformTypes(platformParam)
+		if len(platforms) > 0 {
+			result = filterByPlatforms(result, platforms)
+		}
+	}
+
+	if statusParam := r.URL.Query().Get("status"); statusParam != "" {
+		statuses := parseStatuses(statusParam)
+		if len(statuses) > 0 {
+			result = filterByStatuses(result, statuses)
+		}
+	}
+
+	if parentID := r.URL.Query().Get("parent"); parentID != "" {
+		result = filterByParent(result, parentID)
+	}
+
+	if r.URL.Query().Get("alerts") == "true" {
+		result = filterByAlerts(result)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ResourcesResponse{
+	_ = json.NewEncoder(w).Encode(ResourcesResponse{
 		Resources: result,
 		Count:     len(result),
 		Stats:     store.GetStats(),
@@ -188,11 +160,9 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get the tenant-specific store
 	orgID := GetOrgID(r.Context())
 	store := h.getStoreForTenant(orgID)
 
-	// Extract ID from path: /api/resources/{id}
 	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	if path == "" || path == "/" {
 		http.Error(w, "Resource ID required", http.StatusBadRequest)
@@ -206,7 +176,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resource)
+	_ = json.NewEncoder(w).Encode(resource)
 }
 
 // HandleGetResourceStats returns statistics about the resource store.
@@ -217,187 +187,130 @@ func (h *ResourceHandlers) HandleGetResourceStats(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Get the tenant-specific store
 	orgID := GetOrgID(r.Context())
 	store := h.getStoreForTenant(orgID)
 
-	stats := store.GetStats()
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	_ = json.NewEncoder(w).Encode(store.GetStats())
 }
 
 // ResourcesResponse is the response for /api/resources.
 type ResourcesResponse struct {
-	Resources []resources.Resource `json:"resources"`
-	Count     int                  `json:"count"`
-	Stats     resources.StoreStats `json:"stats"`
+	Resources []unifiedresources.LegacyResource `json:"resources"`
+	Count     int                               `json:"count"`
+	Stats     unifiedresources.LegacyStoreStats `json:"stats"`
 }
 
-// PopulateFromState converts all resources from a StateSnapshot to the unified store.
-// This should be called whenever the state is updated.
+// PopulateFromSnapshot converts all resources from a StateSnapshot to the unified store.
 func (h *ResourceHandlers) PopulateFromSnapshot(snapshot models.StateSnapshot) {
-	// Convert nodes
-	for _, node := range snapshot.Nodes {
-		r := resources.FromNode(node)
-		h.store.Upsert(r)
-	}
-
-	// Convert VMs
-	for _, vm := range snapshot.VMs {
-		r := resources.FromVM(vm)
-		h.store.Upsert(r)
-	}
-
-	// Convert containers
-	for _, ct := range snapshot.Containers {
-		r := resources.FromContainer(ct)
-		h.store.Upsert(r)
-	}
-
-	// Convert hosts
-	for _, host := range snapshot.Hosts {
-		r := resources.FromHost(host)
-		h.store.Upsert(r)
-	}
-
-	// Convert docker hosts and their containers
-	for _, dh := range snapshot.DockerHosts {
-		r := resources.FromDockerHost(dh)
-		h.store.Upsert(r)
-
-		// Convert containers within the docker host
-		for _, dc := range dh.Containers {
-			r := resources.FromDockerContainer(dc, dh.ID, dh.Hostname)
-			h.store.Upsert(r)
-		}
-	}
-
-	// Convert PBS instances
-	for _, pbs := range snapshot.PBSInstances {
-		r := resources.FromPBSInstance(pbs)
-		h.store.Upsert(r)
-
-		for _, ds := range pbs.Datastores {
-			dsResource := resources.FromPBSDatastore(pbs, ds)
-			h.store.Upsert(dsResource)
-		}
-	}
-
-	// Convert PMG instances
-	for _, pmg := range snapshot.PMGInstances {
-		r := resources.FromPMGInstance(pmg)
-		h.store.Upsert(r)
-	}
-
-	// Convert storage
-	for _, storage := range snapshot.Storage {
-		r := resources.FromStorage(storage)
-		h.store.Upsert(r)
-	}
+	h.store.PopulateFromSnapshot(snapshot)
 }
 
 // PopulateFromSnapshotForTenant converts all resources from a StateSnapshot to a tenant-specific store.
 func (h *ResourceHandlers) PopulateFromSnapshotForTenant(orgID string, snapshot models.StateSnapshot) {
 	store := h.getStoreForTenant(orgID)
+	store.PopulateFromSnapshot(snapshot)
+}
 
-	// Convert nodes
-	for _, node := range snapshot.Nodes {
-		r := resources.FromNode(node)
-		store.Upsert(r)
+func filterByTypes(resources []unifiedresources.LegacyResource, allowed []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
+	allow := make(map[unifiedresources.LegacyResourceType]struct{}, len(allowed))
+	for _, t := range allowed {
+		allow[t] = struct{}{}
 	}
-
-	// Convert VMs
-	for _, vm := range snapshot.VMs {
-		r := resources.FromVM(vm)
-		store.Upsert(r)
-	}
-
-	// Convert containers
-	for _, ct := range snapshot.Containers {
-		r := resources.FromContainer(ct)
-		store.Upsert(r)
-	}
-
-	// Convert hosts
-	for _, host := range snapshot.Hosts {
-		r := resources.FromHost(host)
-		store.Upsert(r)
-	}
-
-	// Convert docker hosts and their containers
-	for _, dh := range snapshot.DockerHosts {
-		r := resources.FromDockerHost(dh)
-		store.Upsert(r)
-
-		// Convert containers within the docker host
-		for _, dc := range dh.Containers {
-			r := resources.FromDockerContainer(dc, dh.ID, dh.Hostname)
-			store.Upsert(r)
+	out := make([]unifiedresources.LegacyResource, 0, len(resources))
+	for _, r := range resources {
+		if _, ok := allow[r.Type]; ok {
+			out = append(out, r)
 		}
 	}
+	return out
+}
 
-	// Convert PBS instances
-	for _, pbs := range snapshot.PBSInstances {
-		r := resources.FromPBSInstance(pbs)
-		store.Upsert(r)
-
-		for _, ds := range pbs.Datastores {
-			dsResource := resources.FromPBSDatastore(pbs, ds)
-			store.Upsert(dsResource)
+func filterByPlatforms(resources []unifiedresources.LegacyResource, allowed []unifiedresources.LegacyPlatformType) []unifiedresources.LegacyResource {
+	allow := make(map[unifiedresources.LegacyPlatformType]struct{}, len(allowed))
+	for _, p := range allowed {
+		allow[p] = struct{}{}
+	}
+	out := make([]unifiedresources.LegacyResource, 0, len(resources))
+	for _, r := range resources {
+		if _, ok := allow[r.PlatformType]; ok {
+			out = append(out, r)
 		}
 	}
+	return out
+}
 
-	// Convert PMG instances
-	for _, pmg := range snapshot.PMGInstances {
-		r := resources.FromPMGInstance(pmg)
-		store.Upsert(r)
+func filterByStatuses(resources []unifiedresources.LegacyResource, allowed []unifiedresources.LegacyResourceStatus) []unifiedresources.LegacyResource {
+	allow := make(map[unifiedresources.LegacyResourceStatus]struct{}, len(allowed))
+	for _, s := range allowed {
+		allow[s] = struct{}{}
 	}
+	out := make([]unifiedresources.LegacyResource, 0, len(resources))
+	for _, r := range resources {
+		if _, ok := allow[r.Status]; ok {
+			out = append(out, r)
+		}
+	}
+	return out
+}
 
-	// Convert storage
-	for _, storage := range snapshot.Storage {
-		r := resources.FromStorage(storage)
-		store.Upsert(r)
+func filterByParent(resources []unifiedresources.LegacyResource, parentID string) []unifiedresources.LegacyResource {
+	out := make([]unifiedresources.LegacyResource, 0, len(resources))
+	for _, r := range resources {
+		if r.ParentID == parentID {
+			out = append(out, r)
+		}
 	}
+	return out
+}
+
+func filterByAlerts(resources []unifiedresources.LegacyResource) []unifiedresources.LegacyResource {
+	out := make([]unifiedresources.LegacyResource, 0, len(resources))
+	for _, r := range resources {
+		if len(r.Alerts) > 0 {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // Helper functions for parsing query parameters
 
-func parseResourceTypes(s string) []resources.ResourceType {
+func parseResourceTypes(s string) []unifiedresources.LegacyResourceType {
 	parts := strings.Split(s, ",")
-	var result []resources.ResourceType
+	result := make([]unifiedresources.LegacyResourceType, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
 		}
-		result = append(result, resources.ResourceType(p))
+		result = append(result, unifiedresources.LegacyResourceType(p))
 	}
 	return result
 }
 
-func parsePlatformTypes(s string) []resources.PlatformType {
+func parsePlatformTypes(s string) []unifiedresources.LegacyPlatformType {
 	parts := strings.Split(s, ",")
-	var result []resources.PlatformType
+	result := make([]unifiedresources.LegacyPlatformType, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
 		}
-		result = append(result, resources.PlatformType(p))
+		result = append(result, unifiedresources.LegacyPlatformType(p))
 	}
 	return result
 }
 
-func parseStatuses(s string) []resources.ResourceStatus {
+func parseStatuses(s string) []unifiedresources.LegacyResourceStatus {
 	parts := strings.Split(s, ",")
-	var result []resources.ResourceStatus
+	result := make([]unifiedresources.LegacyResourceStatus, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
 		}
-		result = append(result, resources.ResourceStatus(p))
+		result = append(result, unifiedresources.LegacyResourceStatus(p))
 	}
 	return result
 }

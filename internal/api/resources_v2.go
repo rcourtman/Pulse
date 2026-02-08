@@ -742,6 +742,8 @@ func parseSourcesV2(raw string) map[unified.DataSource]struct{} {
 			result[unified.SourcePMG] = struct{}{}
 		case "kubernetes":
 			result[unified.SourceK8s] = struct{}{}
+		case "truenas":
+			result[unified.SourceTrueNAS] = struct{}{}
 		}
 	}
 	return result

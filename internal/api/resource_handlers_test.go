@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,9 +15,9 @@ func TestHandleGetResource(t *testing.T) {
 	handlers := NewResourceHandlers()
 
 	// Add a dummy resource
-	res := resources.Resource{
+	res := unifiedresources.LegacyResource{
 		ID:   "test-node-1",
-		Type: resources.ResourceTypeNode,
+		Type: unifiedresources.LegacyResourceTypeNode,
 		Name: "Test Node",
 	}
 	handlers.Store().Upsert(res)
@@ -36,7 +36,7 @@ func TestHandleGetResource(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var returned resources.Resource
+	var returned unifiedresources.LegacyResource
 	err := json.NewDecoder(w.Body).Decode(&returned)
 	assert.NoError(t, err)
 	assert.Equal(t, "test-node-1", returned.ID)
@@ -52,8 +52,8 @@ func TestHandleGetResource(t *testing.T) {
 func TestHandleGetResources(t *testing.T) {
 	handlers := NewResourceHandlers()
 
-	handlers.Store().Upsert(resources.Resource{ID: "vm-1", Type: resources.ResourceTypeVM, Status: resources.StatusRunning})
-	handlers.Store().Upsert(resources.Resource{ID: "node-1", Type: resources.ResourceTypeNode, Status: resources.StatusOnline})
+	handlers.Store().Upsert(unifiedresources.LegacyResource{ID: "vm-1", Type: unifiedresources.LegacyResourceTypeVM, Status: unifiedresources.LegacyStatusRunning})
+	handlers.Store().Upsert(unifiedresources.LegacyResource{ID: "node-1", Type: unifiedresources.LegacyResourceTypeNode, Status: unifiedresources.LegacyStatusOnline})
 
 	// Case 1: List All
 	req := httptest.NewRequest("GET", "/api/resources", nil)
@@ -76,14 +76,14 @@ func TestHandleGetResources(t *testing.T) {
 
 func TestHandleGetResourceStats(t *testing.T) {
 	handlers := NewResourceHandlers()
-	handlers.Store().Upsert(resources.Resource{ID: "1", Type: resources.ResourceTypeVM})
+	handlers.Store().Upsert(unifiedresources.LegacyResource{ID: "1", Type: unifiedresources.LegacyResourceTypeVM})
 
 	req := httptest.NewRequest("GET", "/api/resources/stats", nil)
 	w := httptest.NewRecorder()
 	handlers.HandleGetResourceStats(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var stats resources.StoreStats
+	var stats unifiedresources.LegacyStoreStats
 	json.NewDecoder(w.Body).Decode(&stats)
 	assert.Equal(t, 1, stats.TotalResources)
 }

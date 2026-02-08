@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type stubResourceStateProvider struct {
@@ -39,8 +39,8 @@ func decodeResourcesResponse(t *testing.T, rec *httptest.ResponseRecorder) Resou
 
 func TestResourceHandlers_GetStoreStats(t *testing.T) {
 	handlers := NewResourceHandlers()
-	handlers.Store().Upsert(resources.Resource{ID: "vm-1", Type: resources.ResourceTypeVM})
-	handlers.getStoreForTenant("tenant-a").Upsert(resources.Resource{ID: "node-1", Type: resources.ResourceTypeNode})
+	handlers.Store().Upsert(unifiedresources.LegacyResource{ID: "vm-1", Type: unifiedresources.LegacyResourceTypeVM})
+	handlers.getStoreForTenant("tenant-a").Upsert(unifiedresources.LegacyResource{ID: "node-1", Type: unifiedresources.LegacyResourceTypeNode})
 
 	stats := handlers.GetStoreStats()
 	if stats["default"].TotalResources != 1 {
@@ -53,31 +53,31 @@ func TestResourceHandlers_GetStoreStats(t *testing.T) {
 
 func TestHandleGetResources_FiltersAndModes(t *testing.T) {
 	handlers := NewResourceHandlers()
-	handlers.Store().Upsert(resources.Resource{
+	handlers.Store().Upsert(unifiedresources.LegacyResource{
 		ID:           "vm-1",
-		Type:         resources.ResourceTypeVM,
-		Status:       resources.StatusRunning,
-		PlatformType: resources.PlatformProxmoxPVE,
+		Type:         unifiedresources.LegacyResourceTypeVM,
+		Status:       unifiedresources.LegacyStatusRunning,
+		PlatformType: unifiedresources.LegacyPlatformProxmoxPVE,
 		ParentID:     "node-1",
-		Alerts:       []resources.ResourceAlert{{ID: "alert-1"}},
+		Alerts:       []unifiedresources.LegacyAlert{{ID: "alert-1"}},
 	})
-	handlers.Store().Upsert(resources.Resource{
+	handlers.Store().Upsert(unifiedresources.LegacyResource{
 		ID:           "node-1",
-		Type:         resources.ResourceTypeNode,
-		Status:       resources.StatusOnline,
-		PlatformType: resources.PlatformProxmoxPVE,
+		Type:         unifiedresources.LegacyResourceTypeNode,
+		Status:       unifiedresources.LegacyStatusOnline,
+		PlatformType: unifiedresources.LegacyPlatformProxmoxPVE,
 	})
-	handlers.Store().Upsert(resources.Resource{
+	handlers.Store().Upsert(unifiedresources.LegacyResource{
 		ID:           "ct-1",
-		Type:         resources.ResourceTypeContainer,
-		Status:       resources.StatusStopped,
-		PlatformType: resources.PlatformProxmoxPVE,
+		Type:         unifiedresources.LegacyResourceTypeContainer,
+		Status:       unifiedresources.LegacyStatusStopped,
+		PlatformType: unifiedresources.LegacyPlatformProxmoxPVE,
 	})
-	handlers.Store().Upsert(resources.Resource{
+	handlers.Store().Upsert(unifiedresources.LegacyResource{
 		ID:           "dh-1",
-		Type:         resources.ResourceTypeDockerHost,
-		Status:       resources.StatusOnline,
-		PlatformType: resources.PlatformDocker,
+		Type:         unifiedresources.LegacyResourceTypeDockerHost,
+		Status:       unifiedresources.LegacyStatusOnline,
+		PlatformType: unifiedresources.LegacyPlatformDocker,
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/resources", nil)
@@ -221,6 +221,41 @@ func TestHandleGetResources_StateProviderAndTenantProvider(t *testing.T) {
 	}
 }
 
+func TestHandleGetResources_RespectsTenantContextIsolation(t *testing.T) {
+	handlers := NewResourceHandlers()
+
+	handlers.PopulateFromSnapshotForTenant("org-a", models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-a", Name: "node-a"}},
+	})
+	handlers.PopulateFromSnapshotForTenant("org-b", models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-b", Name: "node-b"}},
+	})
+
+	reqA := httptest.NewRequest(http.MethodGet, "/api/resources", nil)
+	reqA = reqA.WithContext(context.WithValue(reqA.Context(), OrgIDContextKey, "org-a"))
+	recA := httptest.NewRecorder()
+	handlers.HandleGetResources(recA, reqA)
+	if recA.Code != http.StatusOK {
+		t.Fatalf("expected 200 for org-a resources, got %d", recA.Code)
+	}
+	respA := decodeResourcesResponse(t, recA)
+	if respA.Count != 1 || respA.Resources[0].ID != "node-a" {
+		t.Fatalf("expected org-a resources only, got %#v", respA.Resources)
+	}
+
+	reqB := httptest.NewRequest(http.MethodGet, "/api/resources", nil)
+	reqB = reqB.WithContext(context.WithValue(reqB.Context(), OrgIDContextKey, "org-b"))
+	recB := httptest.NewRecorder()
+	handlers.HandleGetResources(recB, reqB)
+	if recB.Code != http.StatusOK {
+		t.Fatalf("expected 200 for org-b resources, got %d", recB.Code)
+	}
+	respB := decodeResourcesResponse(t, recB)
+	if respB.Count != 1 || respB.Resources[0].ID != "node-b" {
+		t.Fatalf("expected org-b resources only, got %#v", respB.Resources)
+	}
+}
+
 func TestPopulateFromSnapshotForTenant(t *testing.T) {
 	handlers := NewResourceHandlers()
 
@@ -318,7 +353,7 @@ func TestParsePlatformTypesAndStatuses(t *testing.T) {
 	if len(platforms) != 2 {
 		t.Fatalf("expected 2 platforms, got %d", len(platforms))
 	}
-	if platforms[0] != resources.PlatformDocker || platforms[1] != resources.PlatformProxmoxPVE {
+	if platforms[0] != unifiedresources.LegacyPlatformDocker || platforms[1] != unifiedresources.LegacyPlatformProxmoxPVE {
 		t.Fatalf("unexpected platforms: %#v", platforms)
 	}
 
@@ -326,7 +361,7 @@ func TestParsePlatformTypesAndStatuses(t *testing.T) {
 	if len(statuses) != 2 {
 		t.Fatalf("expected 2 statuses, got %d", len(statuses))
 	}
-	if statuses[0] != resources.StatusRunning || statuses[1] != resources.StatusStopped {
+	if statuses[0] != unifiedresources.LegacyStatusRunning || statuses[1] != unifiedresources.LegacyStatusStopped {
 		t.Fatalf("unexpected statuses: %#v", statuses)
 	}
 }

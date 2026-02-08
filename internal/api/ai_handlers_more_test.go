@@ -10,8 +10,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type stubMetadataProvider struct{}
@@ -47,29 +47,29 @@ func (stubMetricsHistoryProvider) GetAllStorageMetrics(string, time.Duration) ma
 
 type stubResourceProvider struct{}
 
-func (stubResourceProvider) GetAll() []resources.Resource            { return nil }
-func (stubResourceProvider) GetInfrastructure() []resources.Resource { return nil }
-func (stubResourceProvider) GetWorkloads() []resources.Resource      { return nil }
-func (stubResourceProvider) GetByType(resources.ResourceType) []resources.Resource {
+func (stubResourceProvider) GetAll() []unifiedresources.LegacyResource            { return nil }
+func (stubResourceProvider) GetInfrastructure() []unifiedresources.LegacyResource { return nil }
+func (stubResourceProvider) GetWorkloads() []unifiedresources.LegacyResource      { return nil }
+func (stubResourceProvider) GetByType(unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
 	return nil
 }
-func (stubResourceProvider) GetStats() resources.StoreStats {
-	return resources.StoreStats{}
+func (stubResourceProvider) GetStats() unifiedresources.LegacyStoreStats {
+	return unifiedresources.LegacyStoreStats{}
 }
-func (stubResourceProvider) GetTopByCPU(int, []resources.ResourceType) []resources.Resource {
+func (stubResourceProvider) GetTopByCPU(int, []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
 	return nil
 }
-func (stubResourceProvider) GetTopByMemory(int, []resources.ResourceType) []resources.Resource {
+func (stubResourceProvider) GetTopByMemory(int, []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
 	return nil
 }
-func (stubResourceProvider) GetTopByDisk(int, []resources.ResourceType) []resources.Resource {
+func (stubResourceProvider) GetTopByDisk(int, []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
 	return nil
 }
-func (stubResourceProvider) GetRelated(string) map[string][]resources.Resource {
-	return map[string][]resources.Resource{}
+func (stubResourceProvider) GetRelated(string) map[string][]unifiedresources.LegacyResource {
+	return map[string][]unifiedresources.LegacyResource{}
 }
-func (stubResourceProvider) GetResourceSummary() resources.ResourceSummary {
-	return resources.ResourceSummary{}
+func (stubResourceProvider) GetResourceSummary() unifiedresources.LegacyResourceSummary {
+	return unifiedresources.LegacyResourceSummary{}
 }
 func (stubResourceProvider) FindContainerHost(string) string { return "" }
 

@@ -2056,7 +2056,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	if err != nil {
 		log.Error().Err(err).Msg("AI streaming execution failed")
 		// Send error event — use generic message to avoid leaking internal details
-		errEvent := ai.StreamEvent{Type: "error", Data: "AI request failed. Please try again."}
+		errEvent := ai.StreamEvent{Type: "error", Data: map[string]string{"message": "AI request failed. Please try again."}}
 		data, _ := json.Marshal(errEvent)
 		safeWrite([]byte("data: " + string(data) + "\n\n"))
 		return
@@ -2640,7 +2640,7 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 
 	if err != nil {
 		log.Error().Err(err).Msg("AI alert investigation failed")
-		errEvent := ai.StreamEvent{Type: "error", Data: "Alert investigation failed. Please try again."}
+		errEvent := ai.StreamEvent{Type: "error", Data: map[string]string{"message": "Alert investigation failed. Please try again."}}
 		data, _ := json.Marshal(errEvent)
 		safeWrite([]byte("data: " + string(data) + "\n\n"))
 		return

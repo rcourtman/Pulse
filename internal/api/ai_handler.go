@@ -561,6 +561,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Stream from AI chat service
+	serviceSentDone := false
 	err := svc.ExecuteStream(ctx, chat.ExecuteRequest{
 		Prompt:    prompt,
 		SessionID: req.SessionID,
@@ -568,17 +569,22 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		Mentions:  chatMentions,
 		FindingID: req.FindingID,
 	}, func(event chat.StreamEvent) {
+		if event.Type == "done" {
+			serviceSentDone = true
+		}
 		writeEvent(event)
 	})
 
 	if err != nil {
 		log.Error().Err(err).Msg("Chat stream error")
-		errData, _ := json.Marshal(err.Error())
+		errData, _ := json.Marshal(chat.ErrorData{Message: err.Error()})
 		writeEvent(chat.StreamEvent{Type: "error", Data: errData})
 	}
 
 	// Send done
-	writeEvent(chat.StreamEvent{Type: "done", Data: nil})
+	if !serviceSentDone {
+		writeEvent(chat.StreamEvent{Type: "done", Data: nil})
+	}
 }
 
 // HandleSessions handles GET /api/ai/sessions - list sessions

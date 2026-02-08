@@ -50,6 +50,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -77,6 +78,9 @@ type Router struct {
 	discoveryHandlers         *DiscoveryHandlers
 	resourceHandlers          *ResourceHandlers
 	resourceV2Handlers        *ResourceV2Handlers
+	resourceRegistry          *unifiedresources.ResourceRegistry
+	monitorResourceAdapter    *unifiedresources.MonitorAdapter
+	aiResourceAdapter         *unifiedresources.AIAdapter
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
 	licenseHandlers           *LicenseHandlers
@@ -178,6 +182,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		projectRoot:     projectRoot,
 		checksumCache:   make(map[string]checksumCacheEntry),
 	}
+	r.resourceRegistry = unifiedresources.NewRegistry(nil)
+	r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(r.resourceRegistry)
+	r.aiResourceAdapter = unifiedresources.NewAIAdapter(r.resourceRegistry)
 
 	// Sync the configured admin user to the authorizer (if supported)
 	if cfg.AuthUser != "" {
@@ -259,6 +266,7 @@ func (r *Router) setupRoutes() {
 	r.resourceV2Handlers = NewResourceV2Handlers(r.config)
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant)
+	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor)
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
 	r.reportingHandlers = NewReportingHandlers(r.mtMonitor)
@@ -581,6 +589,20 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/license/features", RequireAuth(r.config, r.licenseHandlers.HandleLicenseFeatures))
 	r.mux.HandleFunc("/api/license/activate", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleActivateLicense)))
 	r.mux.HandleFunc("/api/license/clear", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleClearLicense)))
+
+	// Organization routes (multi-tenant foundation)
+	r.mux.HandleFunc("GET /api/orgs", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, orgHandlers.HandleListOrgs)))
+	r.mux.HandleFunc("POST /api/orgs", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, orgHandlers.HandleCreateOrg)))
+	r.mux.HandleFunc("GET /api/orgs/{id}", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, orgHandlers.HandleGetOrg)))
+	r.mux.HandleFunc("PUT /api/orgs/{id}", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, orgHandlers.HandleUpdateOrg)))
+	r.mux.HandleFunc("DELETE /api/orgs/{id}", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, orgHandlers.HandleDeleteOrg)))
+	r.mux.HandleFunc("GET /api/orgs/{id}/members", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, orgHandlers.HandleListMembers)))
+	r.mux.HandleFunc("POST /api/orgs/{id}/members", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, orgHandlers.HandleInviteMember)))
+	r.mux.HandleFunc("DELETE /api/orgs/{id}/members/{userId}", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, orgHandlers.HandleRemoveMember)))
+	r.mux.HandleFunc("GET /api/orgs/{id}/shares", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, orgHandlers.HandleListShares)))
+	r.mux.HandleFunc("GET /api/orgs/{id}/shares/incoming", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, orgHandlers.HandleListIncomingShares)))
+	r.mux.HandleFunc("POST /api/orgs/{id}/shares", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, orgHandlers.HandleCreateShare)))
+	r.mux.HandleFunc("DELETE /api/orgs/{id}/shares/{shareId}", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, orgHandlers.HandleDeleteShare)))
 
 	// Audit log routes (Enterprise feature)
 	auditHandlers := NewAuditHandlers()
@@ -1447,8 +1469,10 @@ func (r *Router) setupRoutes() {
 		}
 	}
 	// Inject unified resource provider for Phase 2 AI context (cleaner, deduplicated view)
-	if r.resourceHandlers != nil {
-		r.aiSettingsHandler.SetResourceProvider(r.resourceHandlers.Store())
+	if r.aiResourceAdapter != nil {
+		r.aiSettingsHandler.SetResourceProvider(r.aiResourceAdapter)
+	} else {
+		log.Warn().Msg("[Router] aiResourceAdapter is nil, cannot inject resource provider")
 	}
 	// Inject metadata provider for AI URL discovery feature
 	// This allows AI to set resource URLs when it discovers web services
@@ -1537,6 +1561,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("GET /api/settings/relay", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, RequireLicenseFeature(r.licenseHandlers, license.FeatureRelay, r.handleGetRelayConfig))))
 	r.mux.HandleFunc("PUT /api/settings/relay", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, RequireLicenseFeature(r.licenseHandlers, license.FeatureRelay, r.handleUpdateRelayConfig))))
 	r.mux.HandleFunc("GET /api/settings/relay/status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, RequireLicenseFeature(r.licenseHandlers, license.FeatureRelay, r.handleGetRelayStatus))))
+	r.mux.HandleFunc("GET /api/onboarding/qr", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.handleGetOnboardingQR)))
+	r.mux.HandleFunc("POST /api/onboarding/validate", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.handleValidateOnboardingConnection)))
+	r.mux.HandleFunc("GET /api/onboarding/deep-link", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.handleGetOnboardingDeepLink)))
 
 	// AI Patrol routes for background monitoring
 	// Note: Status remains accessible so UI can show license/upgrade state
@@ -2124,14 +2151,19 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 				mgr.SetPublicURL(url)
 			}
 		}
-		// Inject resource store for polling optimization
-		if r.resourceHandlers != nil {
-			log.Debug().Msg("[Router] Injecting resource store into monitor")
-			m.SetResourceStore(r.resourceHandlers.Store())
-			// Also set state provider for on-demand resource population
-			r.resourceHandlers.SetStateProvider(m)
+		// Inject unified resource adapter for polling optimization
+		if r.monitorResourceAdapter != nil {
+			log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
+			m.SetResourceStore(r.monitorResourceAdapter)
 		} else {
-			log.Warn().Msg("[Router] resourceHandlers is nil, cannot inject resource store")
+			log.Warn().Msg("[Router] monitorResourceAdapter is nil, cannot inject resource store")
+		}
+		// Legacy /api/resources handlers still hydrate from monitor state on-demand.
+		if r.resourceHandlers != nil {
+			r.resourceHandlers.SetStateProvider(m)
+		}
+		if r.aiResourceAdapter != nil {
+			r.aiResourceAdapter.PopulateFromSnapshot(m.GetState())
 		}
 		if r.resourceV2Handlers != nil {
 			r.resourceV2Handlers.SetStateProvider(m)
