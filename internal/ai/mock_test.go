@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // mockProvider implements providers.Provider for testing
@@ -61,75 +61,77 @@ func (m *mockThresholdProvider) GetStorageThreshold() float64     { return m.sto
 
 type mockResourceProvider struct {
 	ResourceProvider
-	getAllFunc            func() []resources.Resource
-	getStatsFunc          func() resources.StoreStats
-	getSummaryFunc        func() resources.ResourceSummary
-	getInfrastructureFunc func() []resources.Resource
-	getWorkloadsFunc      func() []resources.Resource
-	getByTypeFunc         func(t resources.ResourceType) []resources.Resource
-	getTopCPUFunc         func(limit int, types []resources.ResourceType) []resources.Resource
-	getTopMemoryFunc      func(limit int, types []resources.ResourceType) []resources.Resource
-	getTopDiskFunc        func(limit int, types []resources.ResourceType) []resources.Resource
-	getRelatedFunc        func(resourceID string) map[string][]resources.Resource
+	getAllFunc            func() []unifiedresources.LegacyResource
+	getStatsFunc          func() unifiedresources.LegacyStoreStats
+	getSummaryFunc        func() unifiedresources.LegacyResourceSummary
+	getInfrastructureFunc func() []unifiedresources.LegacyResource
+	getWorkloadsFunc      func() []unifiedresources.LegacyResource
+	getByTypeFunc         func(t unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource
+	getTopCPUFunc         func(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource
+	getTopMemoryFunc      func(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource
+	getTopDiskFunc        func(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource
+	getRelatedFunc        func(resourceID string) map[string][]unifiedresources.LegacyResource
 	findContainerHostFunc func(containerNameOrID string) string
 }
 
-func (m *mockResourceProvider) GetAll() []resources.Resource {
+func (m *mockResourceProvider) GetAll() []unifiedresources.LegacyResource {
 	if m.getAllFunc != nil {
 		return m.getAllFunc()
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetStats() resources.StoreStats {
+func (m *mockResourceProvider) GetStats() unifiedresources.LegacyStoreStats {
 	if m.getStatsFunc != nil {
 		return m.getStatsFunc()
 	}
-	return resources.StoreStats{}
+	return unifiedresources.LegacyStoreStats{}
 }
-func (m *mockResourceProvider) GetResourceSummary() resources.ResourceSummary {
+func (m *mockResourceProvider) GetResourceSummary() unifiedresources.LegacyResourceSummary {
 	if m.getSummaryFunc != nil {
 		return m.getSummaryFunc()
 	}
-	return resources.ResourceSummary{}
+	return unifiedresources.LegacyResourceSummary{}
 }
-func (m *mockResourceProvider) GetInfrastructure() []resources.Resource {
+func (m *mockResourceProvider) GetInfrastructure() []unifiedresources.LegacyResource {
 	if m.getInfrastructureFunc != nil {
 		return m.getInfrastructureFunc()
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetWorkloads() []resources.Resource {
+func (m *mockResourceProvider) GetWorkloads() []unifiedresources.LegacyResource {
 	if m.getWorkloadsFunc != nil {
 		return m.getWorkloadsFunc()
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetType(t resources.ResourceType) []resources.Resource { return nil }
-func (m *mockResourceProvider) GetByType(t resources.ResourceType) []resources.Resource {
+func (m *mockResourceProvider) GetType(t unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
+	return nil
+}
+func (m *mockResourceProvider) GetByType(t unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
 	if m.getByTypeFunc != nil {
 		return m.getByTypeFunc(t)
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetTopByCPU(limit int, types []resources.ResourceType) []resources.Resource {
+func (m *mockResourceProvider) GetTopByCPU(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
 	if m.getTopCPUFunc != nil {
 		return m.getTopCPUFunc(limit, types)
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetTopByMemory(limit int, types []resources.ResourceType) []resources.Resource {
+func (m *mockResourceProvider) GetTopByMemory(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
 	if m.getTopMemoryFunc != nil {
 		return m.getTopMemoryFunc(limit, types)
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetTopByDisk(limit int, types []resources.ResourceType) []resources.Resource {
+func (m *mockResourceProvider) GetTopByDisk(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
 	if m.getTopDiskFunc != nil {
 		return m.getTopDiskFunc(limit, types)
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetRelated(resourceID string) map[string][]resources.Resource {
+func (m *mockResourceProvider) GetRelated(resourceID string) map[string][]unifiedresources.LegacyResource {
 	if m.getRelatedFunc != nil {
 		return m.getRelatedFunc(resourceID)
 	}

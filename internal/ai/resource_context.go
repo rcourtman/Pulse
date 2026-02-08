@@ -4,24 +4,24 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
 // ResourceProvider provides access to the unified resource store.
 type ResourceProvider interface {
-	GetAll() []resources.Resource
-	GetInfrastructure() []resources.Resource
-	GetWorkloads() []resources.Resource
-	GetByType(t resources.ResourceType) []resources.Resource
-	GetStats() resources.StoreStats
+	GetAll() []unifiedresources.LegacyResource
+	GetInfrastructure() []unifiedresources.LegacyResource
+	GetWorkloads() []unifiedresources.LegacyResource
+	GetByType(t unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource
+	GetStats() unifiedresources.LegacyStoreStats
 
 	// Cross-platform query methods
-	GetTopByCPU(limit int, types []resources.ResourceType) []resources.Resource
-	GetTopByMemory(limit int, types []resources.ResourceType) []resources.Resource
-	GetTopByDisk(limit int, types []resources.ResourceType) []resources.Resource
-	GetRelated(resourceID string) map[string][]resources.Resource
-	GetResourceSummary() resources.ResourceSummary
+	GetTopByCPU(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource
+	GetTopByMemory(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource
+	GetTopByDisk(limit int, types []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource
+	GetRelated(resourceID string) map[string][]unifiedresources.LegacyResource
+	GetResourceSummary() unifiedresources.LegacyResourceSummary
 
 	// AI Routing support
 	FindContainerHost(containerNameOrID string) string
@@ -51,8 +51,8 @@ func (s *Service) buildUnifiedResourceContext() string {
 	// Header with summary
 	sections = append(sections, "## Unified Infrastructure View")
 	sections = append(sections, fmt.Sprintf("Total resources: %d (Infrastructure: %d, Workloads: %d)",
-		stats.TotalResources, stats.ByType[resources.ResourceTypeNode]+stats.ByType[resources.ResourceTypeHost]+stats.ByType[resources.ResourceTypeDockerHost],
-		stats.ByType[resources.ResourceTypeVM]+stats.ByType[resources.ResourceTypeContainer]+stats.ByType[resources.ResourceTypeDockerContainer]))
+		stats.TotalResources, stats.ByType[unifiedresources.LegacyResourceTypeNode]+stats.ByType[unifiedresources.LegacyResourceTypeHost]+stats.ByType[unifiedresources.LegacyResourceTypeDockerHost],
+		stats.ByType[unifiedresources.LegacyResourceTypeVM]+stats.ByType[unifiedresources.LegacyResourceTypeContainer]+stats.ByType[unifiedresources.LegacyResourceTypeDockerContainer]))
 
 	// Build agent lookup
 	agentsByHostname := make(map[string]bool)
@@ -69,13 +69,13 @@ func (s *Service) buildUnifiedResourceContext() string {
 		sections = append(sections, "These are the physical/virtual machines that host workloads.")
 
 		// Group by platform
-		byPlatform := make(map[resources.PlatformType][]resources.Resource)
+		byPlatform := make(map[unifiedresources.LegacyPlatformType][]unifiedresources.LegacyResource)
 		for _, r := range infrastructure {
 			byPlatform[r.PlatformType] = append(byPlatform[r.PlatformType], r)
 		}
 
 		// Proxmox nodes
-		if nodes, ok := byPlatform[resources.PlatformProxmoxPVE]; ok && len(nodes) > 0 {
+		if nodes, ok := byPlatform[unifiedresources.LegacyPlatformProxmoxPVE]; ok && len(nodes) > 0 {
 			sections = append(sections, "\n**Proxmox VE Nodes:**")
 			for _, node := range nodes {
 				hasAgent := agentsByHostname[strings.ToLower(node.Name)]
@@ -102,7 +102,7 @@ func (s *Service) buildUnifiedResourceContext() string {
 		}
 
 		// Standalone hosts
-		if hosts, ok := byPlatform[resources.PlatformHostAgent]; ok && len(hosts) > 0 {
+		if hosts, ok := byPlatform[unifiedresources.LegacyPlatformHostAgent]; ok && len(hosts) > 0 {
 			sections = append(sections, "\n**Standalone Hosts (via Host Agent):**")
 			for _, host := range hosts {
 				// Get IPs from identity
@@ -123,10 +123,10 @@ func (s *Service) buildUnifiedResourceContext() string {
 		}
 
 		// Docker hosts
-		if dhosts, ok := byPlatform[resources.PlatformDocker]; ok && len(dhosts) > 0 {
+		if dhosts, ok := byPlatform[unifiedresources.LegacyPlatformDocker]; ok && len(dhosts) > 0 {
 			sections = append(sections, "\n**Docker/Podman Hosts:**")
 			for _, dh := range dhosts {
-				if dh.Type != resources.ResourceTypeDockerHost {
+				if dh.Type != unifiedresources.LegacyResourceTypeDockerHost {
 					continue
 				}
 
@@ -137,7 +137,7 @@ func (s *Service) buildUnifiedResourceContext() string {
 				for _, w := range allWorkloads {
 					if w.ParentID == dh.ID {
 						containerCount++
-						if w.Status == resources.StatusRunning {
+						if w.Status == unifiedresources.LegacyStatusRunning {
 							runningCount++
 						}
 					}
@@ -155,8 +155,8 @@ func (s *Service) buildUnifiedResourceContext() string {
 		sections = append(sections, "\n### Workloads (VMs & Containers)")
 
 		// Group by parent for better organization
-		byParent := make(map[string][]resources.Resource)
-		noParent := []resources.Resource{}
+		byParent := make(map[string][]unifiedresources.LegacyResource)
+		noParent := []unifiedresources.LegacyResource{}
 		for _, w := range workloads {
 			if w.ParentID != "" {
 				byParent[w.ParentID] = append(byParent[w.ParentID], w)
@@ -166,7 +166,7 @@ func (s *Service) buildUnifiedResourceContext() string {
 		}
 
 		// Get all infrastructure to map parent IDs to names
-		infraMap := make(map[string]resources.Resource)
+		infraMap := make(map[string]unifiedresources.LegacyResource)
 		for _, r := range infrastructure {
 			infraMap[r.ID] = r
 		}
@@ -182,17 +182,17 @@ func (s *Service) buildUnifiedResourceContext() string {
 			for _, w := range children {
 				typeLabel := string(w.Type)
 				switch w.Type {
-				case resources.ResourceTypeVM:
+				case unifiedresources.LegacyResourceTypeVM:
 					typeLabel = "VM"
-				case resources.ResourceTypeContainer:
+				case unifiedresources.LegacyResourceTypeContainer:
 					typeLabel = "LXC"
-				case resources.ResourceTypeDockerContainer:
+				case unifiedresources.LegacyResourceTypeDockerContainer:
 					typeLabel = "Docker"
 				}
 
 				// Get VMID from platform data if available
 				vmidInfo := ""
-				if w.PlatformID != "" && w.Type != resources.ResourceTypeDockerContainer {
+				if w.PlatformID != "" && w.Type != unifiedresources.LegacyResourceTypeDockerContainer {
 					vmidInfo = fmt.Sprintf(" %s", w.PlatformID)
 				}
 
@@ -219,7 +219,7 @@ func (s *Service) buildUnifiedResourceContext() string {
 
 	// Resources with alerts
 	allResources := rp.GetAll()
-	var alertResources []resources.Resource
+	var alertResources []unifiedresources.LegacyResource
 	for _, r := range allResources {
 		if len(r.Alerts) > 0 {
 			alertResources = append(alertResources, r)

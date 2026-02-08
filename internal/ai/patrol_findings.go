@@ -1201,10 +1201,26 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 			if pushCb != nil {
 				switch latest.InvestigationOutcome {
 				case string(InvestigationOutcomeFixQueued):
+					approvalID := ""
+					riskLevel := ""
+					if orchestrator != nil {
+						if inv := orchestrator.GetInvestigationByFinding(latest.ID); inv != nil {
+							approvalID = inv.ApprovalID
+							if inv.ProposedFix != nil {
+								riskLevel = inv.ProposedFix.RiskLevel
+							}
+						}
+					}
+					if approvalID == "" {
+						log.Warn().
+							Str("finding_id", latest.ID).
+							Str("investigation_session_id", latest.InvestigationSessionID).
+							Msg("Investigation queued for approval but approval ID missing")
+					}
 					pushCb(relay.NewApprovalRequestNotification(
-						latest.InvestigationSessionID,
+						approvalID,
 						latest.Title,
-						"",
+						riskLevel,
 					))
 				case string(InvestigationOutcomeFixExecuted), string(InvestigationOutcomeFixVerified):
 					pushCb(relay.NewFixCompletedNotification(latest.ID, latest.Title, true))

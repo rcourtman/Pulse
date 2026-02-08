@@ -1801,7 +1801,7 @@ Always execute the commands rather than telling the user how to do it.`
 		}
 
 		if err := s.enforceBudget(req.UseCase); err != nil {
-			callback(StreamEvent{Type: "error", Data: err.Error()})
+			callback(StreamEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 			return nil, err
 		}
 
@@ -1814,7 +1814,7 @@ Always execute the commands rather than telling the user how to do it.`
 		})
 		if err != nil {
 			log.Error().Err(err).Int("iteration", iteration).Msg("AI provider call failed")
-			callback(StreamEvent{Type: "error", Data: err.Error()})
+			callback(StreamEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 			return nil, fmt.Errorf("Pulse Assistant request failed: %w", err)
 		}
 

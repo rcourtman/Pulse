@@ -10,7 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestNewService(t *testing.T) {
@@ -579,8 +579,8 @@ func TestService_Execute_SystemPrompt(t *testing.T) {
 	}
 
 	mockRP := &mockResourceProvider{
-		getStatsFunc: func() resources.StoreStats {
-			return resources.StoreStats{TotalResources: 1}
+		getStatsFunc: func() unifiedresources.LegacyStoreStats {
+			return unifiedresources.LegacyStoreStats{TotalResources: 1}
 		},
 	}
 	svc.SetResourceProvider(mockRP)
