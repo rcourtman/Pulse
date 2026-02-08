@@ -302,7 +302,79 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
           icon={<Share2 class="w-5 h-5" />}
           bodyClass="space-y-5"
         >
-        <Show when={!loading()} fallback={<p class="text-sm text-gray-500 dark:text-gray-400">Loading sharing settings...</p>}>
+        <Show
+          when={!loading()}
+          fallback={
+            <div class="space-y-5">
+              <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+                <div class="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+
+                <div class="grid gap-3 lg:grid-cols-2">
+                  <div class="space-y-2">
+                    <div class="h-3 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div class="h-10 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                  </div>
+                  <div class="space-y-2">
+                    <div class="h-3 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div class="h-10 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                  </div>
+                </div>
+
+                <div class="rounded-md border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                  <div class="h-3 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                  <div class="h-10 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                </div>
+
+                <div class="grid gap-3 lg:grid-cols-3">
+                  {Array.from({ length: 3 }).map(() => (
+                    <div class="space-y-2">
+                      <div class="h-3 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                      <div class="h-10 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    </div>
+                  ))}
+                </div>
+
+                <div class="flex justify-end">
+                  <div class="h-10 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <div class="h-4 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div class="h-10 w-full animate-pulse bg-gray-100 dark:bg-gray-800/70" />
+                  {Array.from({ length: 3 }).map(() => (
+                    <div class="border-t border-gray-100 dark:border-gray-800 px-3 py-3">
+                      <div class="flex items-center gap-3">
+                        <div class="h-4 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                        <div class="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                        <div class="h-4 w-14 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
+                        <div class="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <div class="h-4 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div class="h-10 w-full animate-pulse bg-gray-100 dark:bg-gray-800/70" />
+                  {Array.from({ length: 3 }).map(() => (
+                    <div class="border-t border-gray-100 dark:border-gray-800 px-3 py-3">
+                      <div class="flex items-center gap-3">
+                        <div class="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                        <div class="h-4 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                        <div class="h-4 w-14 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
+                        <div class="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          }
+        >
           <Show when={canManageOrg(org(), props.currentUser)}>
             <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
               <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Create Share</h4>

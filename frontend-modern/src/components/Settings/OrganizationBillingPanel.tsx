@@ -3,6 +3,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import { OrgsAPI } from '@/api/orgs';
 import { getOrgID } from '@/utils/apiClient';
+import { isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import CreditCard from 'lucide-solid/icons/credit-card';
@@ -72,18 +73,61 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
   };
 
   onMount(() => {
+    if (!isMultiTenantEnabled()) return;
     void loadBillingData();
   });
 
   return (
-    <div class="space-y-6">
-      <SettingsPanel
-        title="Billing & Plan"
-        description="Review your current plan tier, usage against limits, and available upgrade paths."
-        icon={<CreditCard class="w-5 h-5" />}
-        bodyClass="space-y-5"
-      >
-        <Show when={!loading()} fallback={<p class="text-sm text-gray-500 dark:text-gray-400">Loading billing details...</p>}>
+    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-gray-500">This feature is not available.</div>}>
+      <div class="space-y-6">
+        <SettingsPanel
+          title="Billing & Plan"
+          description="Review your current plan tier, usage against limits, and available upgrade paths."
+          icon={<CreditCard class="w-5 h-5" />}
+          bodyClass="space-y-5"
+        >
+          <Show
+            when={!loading()}
+            fallback={
+              <div class="space-y-5">
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {Array.from({ length: 4 }).map(() => (
+                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                      <div class="h-3 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                      <div class="h-5 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    </div>
+                  ))}
+                </div>
+
+                <div class="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                  <div class="h-4 w-36 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                  {Array.from({ length: 2 }).map(() => (
+                    <div class="space-y-2">
+                      <div class="flex items-center justify-between">
+                        <div class="h-3 w-14 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                        <div class="h-3 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                      </div>
+                      <div class="h-2 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    </div>
+                  ))}
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                  {Array.from({ length: 2 }).map(() => (
+                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                      <div class="h-3 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                      <div class="h-5 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    </div>
+                  ))}
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                  <div class="h-10 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                  <div class="h-10 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                </div>
+              </div>
+            }
+          >
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
               <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Plan Tier</p>
@@ -180,9 +224,10 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
               </a>
             </Show>
           </div>
-        </Show>
-      </SettingsPanel>
-    </div>
+          </Show>
+        </SettingsPanel>
+      </div>
+    </Show>
   );
 };
 

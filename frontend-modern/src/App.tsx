@@ -97,6 +97,7 @@ import {
   isBackupsV2RolledBack,
   isStorageV2RolledBack,
 } from '@/utils/featureFlags';
+import { isMultiTenantEnabled, licenseLoaded, loadLicenseStatus } from '@/stores/license';
 
 import { showToast } from '@/utils/toast';
 
@@ -434,6 +435,17 @@ function App() {
   const loadOrganizations = async () => {
     setOrgsLoading(true);
     try {
+      if (!licenseLoaded()) {
+        await loadLicenseStatus();
+      }
+
+      if (!isMultiTenantEnabled()) {
+        setOrganizations([{ id: 'default', displayName: 'Default Organization' }]);
+        setSelectedOrgID('default');
+        setActiveOrgID('default');
+        return;
+      }
+
       const fetched = await OrgsAPI.list();
       const orgList =
         fetched.length > 0 ? fetched : [{ id: 'default', displayName: 'Default Organization' }];
@@ -467,12 +479,18 @@ function App() {
     setSelectedOrgID(target);
     setActiveOrgID(target);
 
-    const store = wsStore();
-    if (store && typeof store.switchUrl === 'function') {
-      store.switchUrl(getPulseWebSocketUrl());
-      return;
+    try {
+      const store = wsStore();
+      if (store && typeof store.switchUrl === 'function') {
+        store.switchUrl(getPulseWebSocketUrl());
+      } else {
+        store?.reconnect();
+      }
+      showToast('success', 'Organization switched');
+    } catch (error) {
+      logger.error('Failed to switch organization', error);
+      showToast('error', 'Failed to switch organization');
     }
-    store?.reconnect();
   };
 
   const formatLastUpdate = (timestamp: string) => {
@@ -1564,12 +1582,14 @@ function AppLayout(props: {
         <div class={`header-controls flex items-center gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}>
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
-              <OrgSwitcher
-                orgs={props.organizations()}
-                selectedOrgId={props.activeOrgID()}
-                loading={props.orgsLoading()}
-                onChange={props.onSwitchOrg}
-              />
+              <Show when={isMultiTenantEnabled()}>
+                <OrgSwitcher
+                  orgs={props.organizations()}
+                  selectedOrgId={props.activeOrgID()}
+                  loading={props.orgsLoading()}
+                  onChange={props.onSwitchOrg}
+                />
+              </Show>
               {/* Kiosk Mode Toggle */}
               <button
                 type="button"

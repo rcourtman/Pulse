@@ -336,6 +336,64 @@ export async function apiRequest(page: Page, endpoint: string, options: any = {}
   return response;
 }
 
+export async function isMultiTenantEnabled(page: Page): Promise<boolean> {
+  const res = await apiRequest(page, '/api/license/status');
+  if (!res.ok()) return false;
+
+  const data = (await res.json()) as { features?: string[] };
+  if (!(data.features?.includes('multi_tenant') ?? false)) {
+    return false;
+  }
+
+  const orgsRes = await apiRequest(page, '/api/orgs');
+  return orgsRes.ok();
+}
+
+const toOrgID = (displayName: string) => {
+  const base = displayName
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 36) || 'org';
+  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  return `${base}-${suffix}`.slice(0, 64);
+};
+
+export async function createOrg(page: Page, displayName: string): Promise<{ id: string }> {
+  const res = await apiRequest(page, '/api/orgs', {
+    method: 'POST',
+    data: { id: toOrgID(displayName), displayName },
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok()) throw new Error(`Failed to create org: ${res.status()} ${await res.text()}`);
+
+  const payload = (await res.json()) as { id?: string };
+  if (!payload.id) {
+    throw new Error('Failed to create org: response missing org id');
+  }
+
+  return { id: payload.id };
+}
+
+export async function deleteOrg(page: Page, orgId: string): Promise<void> {
+  const res = await apiRequest(page, `/api/orgs/${encodeURIComponent(orgId)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok() && res.status() !== 404) {
+    throw new Error(`Failed to delete org: ${res.status()} ${await res.text()}`);
+  }
+}
+
+export async function switchOrg(page: Page, orgId: string): Promise<void> {
+  await page.evaluate((id) => {
+    window.sessionStorage.setItem('pulse_org_id', id);
+    window.localStorage.setItem('pulse_org_id', id);
+    document.cookie = `pulse_org_id=${encodeURIComponent(id)}; Path=/; SameSite=Lax`;
+  }, orgId);
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+}
+
 /**
  * Check for updates via API
  */
