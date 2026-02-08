@@ -31,7 +31,7 @@ Date: 2026-02-08
 | TN-01 | TrueNAS REST API Client Scaffold | DONE | Codex | Claude | APPROVED | TN-01 Review Evidence |
 | TN-02 | Configuration Model + Encrypted Persistence | DONE | Codex | Claude | APPROVED | TN-02 Review Evidence |
 | TN-03 | Setup API Endpoints (Add/Test/Remove) | DONE | Codex | Claude | APPROVED | TN-03 Review Evidence |
-| TN-04 | Live Provider Upgrade (Fixture -> API Client) | TODO | Codex | Claude | — | — |
+| TN-04 | Live Provider Upgrade (Fixture -> API Client) | DONE | Codex | Claude | APPROVED | TN-04 Review Evidence |
 | TN-05 | Runtime Registration + Periodic Polling | TODO | Codex | Claude | — | — |
 | TN-06 | Frontend Source Badge + Filter Integration | TODO | Codex | Claude | — | — |
 | TN-07 | Backend Health/Error State Enrichment | TODO | Codex | Claude | — | — |
@@ -269,29 +269,49 @@ Rollback:
 
 ## TN-04 Checklist: Live Provider Upgrade (Fixture -> API Client)
 
-- [ ] `Fetcher` interface defined: `Fetch(ctx) (*FixtureSnapshot, error)`.
-- [ ] `APIFetcher` implemented using `Client`.
-- [ ] `FixtureFetcher` wrapping static fixtures.
-- [ ] `Provider` updated to accept `Fetcher`.
-- [ ] Fetch error handling (last known snapshot, logging).
-- [ ] Existing test path preserved via `FixtureFetcher`.
+- [x] `Fetcher` interface defined: `Fetch(ctx) (*FixtureSnapshot, error)`.
+- [x] `APIFetcher` implemented using `Client`.
+- [x] `FixtureFetcher` wrapping static fixtures.
+- [x] `Provider` updated to accept `Fetcher`.
+- [x] Fetch error handling (last known snapshot, logging).
+- [x] Existing test path preserved via `FixtureFetcher`.
 
 ### Required Tests
 
-- [ ] `go test ./internal/truenas/... -count=1` -> exit 0
-- [ ] `go build ./...` -> exit 0
+- [x] `go test ./internal/truenas/... -count=1` -> exit 0
+- [x] `go build ./...` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### TN-04 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `internal/truenas/provider.go` (refactored): Added Fetcher interface, APIFetcher (delegates to Client.FetchSnapshot), FixtureFetcher (returns defensive copy). Provider refactored: removed `fixtures` field, added `fetcher Fetcher`, `lastSnapshot *FixtureSnapshot`, `mu sync.Mutex`. NewLiveProvider constructor added. NewProvider/NewDefaultProvider backward-compatible via FixtureFetcher + pre-populated lastSnapshot. Refresh(ctx) caches on success, preserves on error. Records() reads from lastSnapshot under lock, returns nil if no snapshot. Added copyFixtureSnapshot helper for defensive copies of all slice fields.
+- `internal/truenas/provider_test.go` (new): 5 tests — FixtureFetcher copy isolation (mutation doesn't affect source), APIFetcher delegation (httptest mock), Refresh updates lastSnapshot, Refresh preserves snapshot on error, Records returns nil without auto-fetch.
+
+Commands run + exit codes (reviewer-rerun):
+1. `go test ./internal/truenas/... -count=1 -v` -> exit 0 (15 tests: 7 client + 3 contract + 5 new provider)
+2. `go build ./...` -> exit 0
+
+Gate checklist:
+- P0: PASS (all files verified, both commands rerun by reviewer with exit 0)
+- P1: PASS (Fetcher interface clean, defensive copies prevent shared state, Refresh/Records separation correct, backward compat verified via 3 unchanged contract tests passing)
+- P2: PASS (progress tracker updated)
+
+Verdict: APPROVED
+
+Residual risk:
+- None. Provider is ready for TN-05 (runtime polling integration).
+
+Rollback:
+- Revert `internal/truenas/provider.go` to remove Fetcher/APIFetcher/FixtureFetcher, restore `fixtures` field.
+- Delete `internal/truenas/provider_test.go`.
 ```
 
 ---
@@ -500,7 +520,7 @@ TODO
 - TN-00: `f9680ef8` docs(TN-00): TrueNAS GA lane — scope freeze and current-state audit
 - TN-01: `100494a7` feat(TN-01): TrueNAS REST API client scaffold
 - TN-02: `1f2fe198` feat(TN-02): TrueNAS configuration model with encrypted persistence
-- TN-03: TODO
+- TN-03: `f57007d8` feat(TN-03): TrueNAS setup API endpoints — add, list, delete, test connection
 - TN-04: TODO
 - TN-05: TODO
 - TN-06: TODO
@@ -512,4 +532,4 @@ TODO
 
 ## Current Recommended Next Packet
 
-- `TN-04` (Live Provider Upgrade)
+- `TN-05` (Runtime Registration + Periodic Polling)

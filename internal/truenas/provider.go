@@ -1,8 +1,11 @@
 package truenas
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -25,10 +28,53 @@ func SetFeatureEnabled(enabled bool) {
 	featureTrueNASEnabled = enabled
 }
 
-// Provider converts TrueNAS fixture data into unified resources.
+// Fetcher loads a TrueNAS snapshot from a concrete source.
+type Fetcher interface {
+	Fetch(ctx context.Context) (*FixtureSnapshot, error)
+}
+
+// APIFetcher loads snapshots from the live TrueNAS API client.
+type APIFetcher struct {
+	Client *Client
+}
+
+// Fetch implements Fetcher.
+func (f *APIFetcher) Fetch(ctx context.Context) (*FixtureSnapshot, error) {
+	if f == nil || f.Client == nil {
+		return nil, fmt.Errorf("truenas api fetcher client is nil")
+	}
+	return f.Client.FetchSnapshot(ctx)
+}
+
+// FixtureFetcher loads snapshots from static fixture data.
+type FixtureFetcher struct {
+	Snapshot FixtureSnapshot
+}
+
+// Fetch implements Fetcher.
+func (f *FixtureFetcher) Fetch(context.Context) (*FixtureSnapshot, error) {
+	if f == nil {
+		return nil, nil
+	}
+	return copyFixtureSnapshot(&f.Snapshot), nil
+}
+
+// Provider converts TrueNAS snapshot data into unified resources.
 type Provider struct {
-	fixtures FixtureSnapshot
-	now      func() time.Time
+	fetcher      Fetcher
+	lastSnapshot *FixtureSnapshot
+	mu           sync.Mutex
+	now          func() time.Time
+}
+
+// NewLiveProvider returns a provider backed by any fetcher implementation.
+func NewLiveProvider(fetcher Fetcher) *Provider {
+	return &Provider{
+		fetcher: fetcher,
+		now: func() time.Time {
+			return time.Now().UTC()
+		},
+	}
 }
 
 // NewProvider returns a fixture-backed provider.
@@ -36,17 +82,34 @@ func NewProvider(fixtures FixtureSnapshot) *Provider {
 	if fixtures.CollectedAt.IsZero() {
 		fixtures.CollectedAt = time.Now().UTC()
 	}
-	return &Provider{
-		fixtures: fixtures,
-		now: func() time.Time {
-			return time.Now().UTC()
-		},
-	}
+	provider := NewLiveProvider(&FixtureFetcher{Snapshot: fixtures})
+	provider.lastSnapshot = copyFixtureSnapshot(&fixtures)
+	return provider
 }
 
 // NewDefaultProvider returns a provider loaded with the default fixtures.
 func NewDefaultProvider() *Provider {
 	return NewProvider(DefaultFixtures())
+}
+
+// Refresh fetches and caches the latest snapshot.
+func (p *Provider) Refresh(ctx context.Context) error {
+	if p == nil {
+		return fmt.Errorf("truenas provider is nil")
+	}
+	if p.fetcher == nil {
+		return fmt.Errorf("truenas provider fetcher is nil")
+	}
+
+	snapshot, err := p.fetcher.Fetch(ctx)
+	if err != nil {
+		return err
+	}
+
+	p.mu.Lock()
+	p.lastSnapshot = copyFixtureSnapshot(snapshot)
+	p.mu.Unlock()
+	return nil
 }
 
 // Records returns unified records if the feature flag is enabled.
@@ -55,20 +118,27 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 		return nil
 	}
 
-	collectedAt := p.fixtures.CollectedAt
+	p.mu.Lock()
+	snapshot := copyFixtureSnapshot(p.lastSnapshot)
+	p.mu.Unlock()
+	if snapshot == nil {
+		return nil
+	}
+
+	collectedAt := snapshot.CollectedAt
 	if collectedAt.IsZero() {
 		collectedAt = p.now()
 	}
-	systemSourceID := systemSourceID(p.fixtures.System.Hostname)
-	records := make([]unifiedresources.IngestRecord, 0, 1+len(p.fixtures.Pools)+len(p.fixtures.Datasets))
+	systemSourceID := systemSourceID(snapshot.System.Hostname)
+	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets))
 
-	totalCapacity, totalUsed := aggregatePoolUsage(p.fixtures.Pools)
+	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
 	records = append(records, unifiedresources.IngestRecord{
 		SourceID: systemSourceID,
 		Resource: unifiedresources.Resource{
 			Type:      unifiedresources.ResourceTypeHost,
-			Name:      strings.TrimSpace(p.fixtures.System.Hostname),
-			Status:    statusFromSystem(p.fixtures.System),
+			Name:      strings.TrimSpace(snapshot.System.Hostname),
+			Status:    statusFromSystem(snapshot.System),
 			LastSeen:  collectedAt,
 			UpdatedAt: collectedAt,
 			Metrics: &unifiedresources.ResourceMetrics{
@@ -76,16 +146,16 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			},
 			Tags: []string{
 				"truenas",
-				p.fixtures.System.Version,
+				snapshot.System.Version,
 			},
 		},
 		Identity: unifiedresources.ResourceIdentity{
-			MachineID: p.fixtures.System.MachineID,
-			Hostnames: []string{p.fixtures.System.Hostname},
+			MachineID: snapshot.System.MachineID,
+			Hostnames: []string{snapshot.System.Hostname},
 		},
 	})
 
-	for _, pool := range p.fixtures.Pools {
+	for _, pool := range snapshot.Pools {
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID:       poolSourceID(pool.Name),
 			ParentSourceID: systemSourceID,
@@ -105,14 +175,14 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			},
 			Identity: unifiedresources.ResourceIdentity{
 				Hostnames: []string{
-					p.fixtures.System.Hostname,
+					snapshot.System.Hostname,
 					pool.Name,
 				},
 			},
 		})
 	}
 
-	for _, dataset := range p.fixtures.Datasets {
+	for _, dataset := range snapshot.Datasets {
 		parentPool := strings.TrimSpace(dataset.Pool)
 		if parentPool == "" {
 			parentPool = parentPoolFromDataset(dataset.Name)
@@ -137,7 +207,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			},
 			Identity: unifiedresources.ResourceIdentity{
 				Hostnames: []string{
-					p.fixtures.System.Hostname,
+					snapshot.System.Hostname,
 					dataset.Name,
 				},
 			},
@@ -230,4 +300,17 @@ func parseBool(raw string) bool {
 	default:
 		return false
 	}
+}
+
+func copyFixtureSnapshot(snapshot *FixtureSnapshot) *FixtureSnapshot {
+	if snapshot == nil {
+		return nil
+	}
+
+	copied := *snapshot
+	copied.Pools = append([]Pool(nil), snapshot.Pools...)
+	copied.Datasets = append([]Dataset(nil), snapshot.Datasets...)
+	copied.Disks = append([]Disk(nil), snapshot.Disks...)
+	copied.Alerts = append([]Alert(nil), snapshot.Alerts...)
+	return &copied
 }
