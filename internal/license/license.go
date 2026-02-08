@@ -34,6 +34,26 @@ var (
 	ErrNoLicense          = errors.New("no license activated")
 )
 
+// SubscriptionState represents the subscription lifecycle state.
+type SubscriptionState string
+
+const (
+	SubStateTrial     SubscriptionState = "trial"
+	SubStateActive    SubscriptionState = "active"
+	SubStateGrace     SubscriptionState = "grace"
+	SubStateExpired   SubscriptionState = "expired"
+	SubStateSuspended SubscriptionState = "suspended"
+)
+
+// LimitCheckResult represents the result of evaluating a limit.
+type LimitCheckResult string
+
+const (
+	LimitAllowed   LimitCheckResult = "allowed"
+	LimitSoftBlock LimitCheckResult = "soft_block"
+	LimitHardBlock LimitCheckResult = "hard_block"
+)
+
 // Claims represents the JWT claims in a Pulse Pro license.
 type Claims struct {
 	// License ID (unique identifier)
@@ -59,6 +79,38 @@ type Claims struct {
 
 	// Max guests (0 = unlimited)
 	MaxGuests int `json:"max_guests,omitempty"`
+
+	// Entitlement primitives (B1) - when present, these override tier-based derivation.
+	// When absent (nil/empty), entitlements are derived from Tier + existing fields.
+	Capabilities  []string          `json:"capabilities,omitempty"`
+	Limits        map[string]int64  `json:"limits,omitempty"`
+	MetersEnabled []string          `json:"meters_enabled,omitempty"`
+	PlanVersion   string            `json:"plan_version,omitempty"`
+	SubState      SubscriptionState `json:"subscription_state,omitempty"`
+}
+
+// EffectiveCapabilities returns explicit capabilities when present; otherwise tier-derived capabilities.
+func (c Claims) EffectiveCapabilities() []string {
+	if c.Capabilities != nil && len(c.Capabilities) > 0 {
+		return c.Capabilities
+	}
+	return DeriveCapabilitiesFromTier(c.Tier, c.Features)
+}
+
+// EffectiveLimits returns explicit limits when present; otherwise limits derived from legacy fields.
+func (c Claims) EffectiveLimits() map[string]int64 {
+	if c.Limits != nil && len(c.Limits) > 0 {
+		return c.Limits
+	}
+
+	limits := make(map[string]int64)
+	if c.MaxNodes > 0 {
+		limits["max_nodes"] = int64(c.MaxNodes)
+	}
+	if c.MaxGuests > 0 {
+		limits["max_guests"] = int64(c.MaxGuests)
+	}
+	return limits
 }
 
 // License represents a validated Pulse Pro license.

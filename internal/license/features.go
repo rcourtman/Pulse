@@ -1,6 +1,8 @@
 // Package license handles Pulse Pro license validation and feature gating.
 package license
 
+import "sort"
+
 // Feature constants represent gated features in Pulse Pro.
 // These are embedded in license JWTs and checked at runtime.
 const (
@@ -136,6 +138,39 @@ var TierFeatures = map[Tier][]string{
 		FeatureAdvancedReporting,
 		FeatureLongTermMetrics,
 	},
+}
+
+// DeriveCapabilitiesFromTier derives effective capabilities from tier and explicit features.
+func DeriveCapabilitiesFromTier(tier Tier, explicitFeatures []string) []string {
+	featureSet := make(map[string]struct{})
+	for _, feature := range TierFeatures[tier] {
+		featureSet[feature] = struct{}{}
+	}
+	for _, feature := range explicitFeatures {
+		featureSet[feature] = struct{}{}
+	}
+
+	capabilities := make([]string, 0, len(featureSet))
+	for feature := range featureSet {
+		capabilities = append(capabilities, feature)
+	}
+	sort.Strings(capabilities)
+	return capabilities
+}
+
+// DeriveEntitlements derives capabilities and limits from tier and legacy claim fields.
+func DeriveEntitlements(tier Tier, features []string, maxNodes int, maxGuests int) (capabilities []string, limits map[string]int64) {
+	capabilities = DeriveCapabilitiesFromTier(tier, features)
+
+	limits = make(map[string]int64)
+	if maxNodes > 0 {
+		limits["max_nodes"] = int64(maxNodes)
+	}
+	if maxGuests > 0 {
+		limits["max_guests"] = int64(maxGuests)
+	}
+
+	return capabilities, limits
 }
 
 // TierHasFeature checks if a tier includes a specific feature.

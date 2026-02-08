@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"os"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 )
@@ -725,5 +727,271 @@ func TestValidateLicense_RealSignature(t *testing.T) {
 	_, err = ValidateLicense(badKey)
 	if err == nil {
 		t.Error("Expected error for invalid signature")
+	}
+}
+
+func TestClaimsEffectiveCapabilities(t *testing.T) {
+	t.Run("explicit capabilities", func(t *testing.T) {
+		claims := Claims{
+			Tier:         TierPro,
+			Capabilities: []string{"a", "b"},
+		}
+
+		got := claims.EffectiveCapabilities()
+		want := []string{"a", "b"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("EffectiveCapabilities() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("derived from tier", func(t *testing.T) {
+		claims := Claims{Tier: TierPro}
+
+		got := claims.EffectiveCapabilities()
+		want := append([]string(nil), TierFeatures[TierPro]...)
+		sort.Strings(want)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("EffectiveCapabilities() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("derived merges explicit features", func(t *testing.T) {
+		claims := Claims{
+			Tier:     TierFree,
+			Features: []string{"custom_feature"},
+		}
+
+		got := claims.EffectiveCapabilities()
+		featureSet := make(map[string]struct{})
+		for _, feature := range TierFeatures[TierFree] {
+			featureSet[feature] = struct{}{}
+		}
+		featureSet["custom_feature"] = struct{}{}
+
+		want := make([]string, 0, len(featureSet))
+		for feature := range featureSet {
+			want = append(want, feature)
+		}
+		sort.Strings(want)
+
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("EffectiveCapabilities() = %v, want %v", got, want)
+		}
+	})
+}
+
+func TestClaimsEffectiveLimits(t *testing.T) {
+	t.Run("explicit limits", func(t *testing.T) {
+		claims := Claims{
+			MaxNodes: 25,
+			Limits: map[string]int64{
+				"max_nodes": 50,
+			},
+		}
+
+		got := claims.EffectiveLimits()
+		want := map[string]int64{"max_nodes": 50}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("EffectiveLimits() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("derived from fields", func(t *testing.T) {
+		claims := Claims{
+			MaxNodes:  25,
+			MaxGuests: 100,
+		}
+
+		got := claims.EffectiveLimits()
+		want := map[string]int64{
+			"max_nodes":  25,
+			"max_guests": 100,
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("EffectiveLimits() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("zero fields omitted", func(t *testing.T) {
+		claims := Claims{
+			MaxNodes: 0,
+			Limits:   nil,
+		}
+
+		got := claims.EffectiveLimits()
+		if len(got) != 0 {
+			t.Fatalf("EffectiveLimits() = %v, want empty map", got)
+		}
+	})
+}
+
+func TestClaimsJSONRoundtrip(t *testing.T) {
+	t.Run("new fields set", func(t *testing.T) {
+		original := Claims{
+			LicenseID:    "license_roundtrip",
+			Email:        "roundtrip@example.com",
+			Tier:         TierPro,
+			IssuedAt:     1700000000,
+			ExpiresAt:    1800000000,
+			Features:     []string{"legacy_feature"},
+			MaxNodes:     10,
+			MaxGuests:    20,
+			Capabilities: []string{"cap_a", "cap_b"},
+			Limits: map[string]int64{
+				"max_nodes":  50,
+				"max_guests": 100,
+			},
+			MetersEnabled: []string{"meter_a"},
+			PlanVersion:   "v1",
+			SubState:      SubStateActive,
+		}
+
+		data, err := json.Marshal(original)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+
+		var decoded Claims
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("Unmarshal() error = %v", err)
+		}
+
+		if !reflect.DeepEqual(decoded, original) {
+			t.Fatalf("roundtrip mismatch: got %+v, want %+v", decoded, original)
+		}
+	})
+
+	t.Run("legacy compat without new fields", func(t *testing.T) {
+		legacy := Claims{
+			LicenseID: "license_legacy",
+			Email:     "legacy@example.com",
+			Tier:      TierFree,
+			IssuedAt:  1700000001,
+		}
+
+		data, err := json.Marshal(legacy)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+
+		var decoded Claims
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("Unmarshal() error = %v", err)
+		}
+
+		if decoded.Capabilities != nil {
+			t.Fatalf("Capabilities = %v, want nil", decoded.Capabilities)
+		}
+		if decoded.Limits != nil {
+			t.Fatalf("Limits = %v, want nil", decoded.Limits)
+		}
+		if decoded.MetersEnabled != nil {
+			t.Fatalf("MetersEnabled = %v, want nil", decoded.MetersEnabled)
+		}
+		if decoded.PlanVersion != "" {
+			t.Fatalf("PlanVersion = %q, want empty", decoded.PlanVersion)
+		}
+		if decoded.SubState != "" {
+			t.Fatalf("SubState = %q, want empty", decoded.SubState)
+		}
+	})
+}
+
+func TestDeriveEntitlements(t *testing.T) {
+	for tier := range TierFeatures {
+		tier := tier
+		t.Run(string(tier), func(t *testing.T) {
+			capabilities, limits := DeriveEntitlements(tier, nil, 0, 0)
+
+			wantCapabilities := append([]string(nil), TierFeatures[tier]...)
+			sort.Strings(wantCapabilities)
+
+			if !reflect.DeepEqual(capabilities, wantCapabilities) {
+				t.Fatalf("DeriveEntitlements() capabilities = %v, want %v", capabilities, wantCapabilities)
+			}
+			if len(limits) != 0 {
+				t.Fatalf("DeriveEntitlements() limits = %v, want empty", limits)
+			}
+		})
+	}
+
+	t.Run("limits derivation", func(t *testing.T) {
+		capabilities, limits := DeriveEntitlements(TierPro, []string{"custom_feature"}, 25, 100)
+
+		featureSet := make(map[string]struct{})
+		for _, feature := range TierFeatures[TierPro] {
+			featureSet[feature] = struct{}{}
+		}
+		featureSet["custom_feature"] = struct{}{}
+
+		wantCapabilities := make([]string, 0, len(featureSet))
+		for feature := range featureSet {
+			wantCapabilities = append(wantCapabilities, feature)
+		}
+		sort.Strings(wantCapabilities)
+
+		wantLimits := map[string]int64{
+			"max_nodes":  25,
+			"max_guests": 100,
+		}
+
+		if !reflect.DeepEqual(capabilities, wantCapabilities) {
+			t.Fatalf("DeriveEntitlements() capabilities = %v, want %v", capabilities, wantCapabilities)
+		}
+		if !reflect.DeepEqual(limits, wantLimits) {
+			t.Fatalf("DeriveEntitlements() limits = %v, want %v", limits, wantLimits)
+		}
+	})
+}
+
+func TestSubscriptionStateConstants(t *testing.T) {
+	states := []SubscriptionState{
+		SubStateTrial,
+		SubStateActive,
+		SubStateGrace,
+		SubStateExpired,
+		SubStateSuspended,
+	}
+
+	seen := make(map[string]struct{}, len(states))
+	for _, state := range states {
+		value := string(state)
+		if _, exists := seen[value]; exists {
+			t.Fatalf("duplicate subscription state value %q", value)
+		}
+		seen[value] = struct{}{}
+	}
+
+	if SubStateTrial != "trial" {
+		t.Fatalf("SubStateTrial = %q, want %q", SubStateTrial, "trial")
+	}
+	if SubStateActive != "active" {
+		t.Fatalf("SubStateActive = %q, want %q", SubStateActive, "active")
+	}
+	if SubStateGrace != "grace" {
+		t.Fatalf("SubStateGrace = %q, want %q", SubStateGrace, "grace")
+	}
+	if SubStateExpired != "expired" {
+		t.Fatalf("SubStateExpired = %q, want %q", SubStateExpired, "expired")
+	}
+	if SubStateSuspended != "suspended" {
+		t.Fatalf("SubStateSuspended = %q, want %q", SubStateSuspended, "suspended")
+	}
+}
+
+func TestLimitCheckResultConstants(t *testing.T) {
+	results := []LimitCheckResult{
+		LimitAllowed,
+		LimitSoftBlock,
+		LimitHardBlock,
+	}
+
+	seen := make(map[string]struct{}, len(results))
+	for _, result := range results {
+		value := string(result)
+		if _, exists := seen[value]; exists {
+			t.Fatalf("duplicate limit check result value %q", value)
+		}
+		seen[value] = struct{}{}
 	}
 }
