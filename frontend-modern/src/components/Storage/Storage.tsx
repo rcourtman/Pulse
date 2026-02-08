@@ -1,4 +1,4 @@
-import { Component, For, Show, createSignal, createMemo, createEffect, onCleanup, untrack } from 'solid-js';
+import { Component, For, Show, createSignal, createMemo, createEffect, onCleanup } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -21,13 +21,14 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import { buildStoragePath, parseStorageLinkSearch, STORAGE_QUERY_PARAMS } from '@/routing/resourceLinks';
+import { buildStoragePath, parseStorageLinkSearch } from '@/routing/resourceLinks';
 import { useResourcesAsLegacy } from '@/hooks/useResources';
 import {
   buildStorageSourceOptions,
   normalizeStorageSourceKey,
   resolveStorageSourceKey,
 } from './storageSourceOptions';
+import { useStorageRouteState } from './useStorageRouteState';
 
 type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
 
@@ -102,74 +103,50 @@ const Storage: Component = () => {
     highlightTimer = window.setTimeout(() => setHighlightedStorageId(null), 2000);
   });
 
-  createEffect(() => {
-    const parsed = parseStorageLinkSearch(location.search);
-
-    const nextTab = parsed.tab === 'disks' ? 'disks' : 'pools';
-    if (nextTab !== untrack(tabView)) {
-      setTabView(nextTab);
-    }
-
-    const nextGroup = parsed.group === 'storage' ? 'storage' : 'node';
-    if (nextGroup !== untrack(viewMode)) {
-      setViewMode(nextGroup);
-    }
-
-    const nextSource = normalizeStorageSourceKey(parsed.source) || 'all';
-    if (nextSource !== untrack(sourceFilter)) {
-      setSourceFilter(nextSource);
-    }
-
-    const nextStatus =
-      parsed.status === 'available' || parsed.status === 'offline' ? parsed.status : 'all';
-    if (nextStatus !== untrack(statusFilter)) {
-      setStatusFilter(nextStatus);
-    }
-
-    const nextNode = parsed.node || null;
-    if (nextNode !== untrack(selectedNode)) {
-      setSelectedNode(nextNode);
-    }
-
-    if (parsed.query !== untrack(searchTerm)) {
-      setSearchTerm(parsed.query);
-    }
-  });
-
-  createEffect(() => {
-    if (location.pathname !== '/storage') return;
-    const nextTab = tabView();
-    const nextGroup = viewMode();
-    const nextSource = sourceFilter();
-    const nextStatus = statusFilter();
-    const nextNode = selectedNode() ?? '';
-    const nextQuery = searchTerm().trim();
-
-    const managedPath = buildStoragePath({
-      tab: nextTab !== 'pools' ? nextTab : null,
-      group: nextGroup !== 'node' ? nextGroup : null,
-      source: nextSource !== 'all' ? nextSource : null,
-      status: nextStatus !== 'all' ? nextStatus : null,
-      node: nextNode || null,
-      query: nextQuery || null,
-    });
-    const [managedBasePath, managedSearch = ''] = managedPath.split('?');
-    const managedParams = new URLSearchParams(managedSearch);
-    const params = new URLSearchParams(location.search);
-
-    Object.values(STORAGE_QUERY_PARAMS).forEach((key) => {
-      params.delete(key);
-    });
-    managedParams.forEach((value, key) => {
-      params.set(key, value);
-    });
-
-    const nextSearch = params.toString();
-    const nextPath = nextSearch ? `${managedBasePath}?${nextSearch}` : managedBasePath;
-    const currentPath = `${location.pathname}${location.search || ''}`;
-    if (nextPath !== currentPath) {
-      navigate(nextPath, { replace: true });
-    }
+  useStorageRouteState({
+    location,
+    navigate,
+    buildPath: buildStoragePath,
+    isWriteEnabled: () => location.pathname === '/storage',
+    fields: {
+      tab: {
+        get: tabView,
+        set: setTabView,
+        read: (parsed) => (parsed.tab === 'disks' ? 'disks' : 'pools'),
+        write: (value) => (value !== 'pools' ? value : null),
+      },
+      group: {
+        get: viewMode,
+        set: setViewMode,
+        read: (parsed) => (parsed.group === 'storage' ? 'storage' : 'node'),
+        write: (value) => (value !== 'node' ? value : null),
+      },
+      source: {
+        get: sourceFilter,
+        set: setSourceFilter,
+        read: (parsed) => normalizeStorageSourceKey(parsed.source) || 'all',
+        write: (value) => (value !== 'all' ? value : null),
+      },
+      status: {
+        get: statusFilter,
+        set: setStatusFilter,
+        read: (parsed) =>
+          parsed.status === 'available' || parsed.status === 'offline' ? parsed.status : 'all',
+        write: (value) => (value !== 'all' ? value : null),
+      },
+      node: {
+        get: selectedNode,
+        set: setSelectedNode,
+        read: (parsed) => parsed.node || null,
+        write: (value) => value || null,
+      },
+      query: {
+        get: searchTerm,
+        set: setSearchTerm,
+        read: (parsed) => parsed.query,
+        write: (value) => value.trim() || null,
+      },
+    },
   });
 
   onCleanup(() => {

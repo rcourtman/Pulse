@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Component, For, Show, createEffect, createMemo, createSignal, untrack } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -11,13 +11,12 @@ import { PLATFORM_BLUEPRINTS } from '@/features/storageBackupsV2/platformBluepri
 import type { NormalizedHealth, StorageRecordV2 } from '@/features/storageBackupsV2/models';
 import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
 import {
-  STORAGE_QUERY_PARAMS,
   STORAGE_V2_PATH,
   buildStorageV2Path,
-  parseStorageLinkSearch,
 } from '@/routing/resourceLinks';
 import type { CephCluster, ZFSPool } from '@/types/api';
 import { formatBytes, formatPercent } from '@/utils/format';
+import { useStorageRouteState } from './useStorageRouteState';
 
 const HEALTH_CLASS: Record<NormalizedHealth, string> = {
   healthy: 'text-green-700 dark:text-green-300',
@@ -481,62 +480,63 @@ const StorageV2: Component = () => {
   const isActiveStorageRoute = () =>
     location.pathname === STORAGE_V2_PATH || location.pathname === '/storage';
 
-  createEffect(() => {
-    if (!isActiveStorageRoute()) return;
-
-    const parsed = parseStorageLinkSearch(location.search);
-
-    const nextView = normalizeView(parsed.tab);
-    if (nextView !== untrack(view)) setView(nextView);
-
-    const nextSource = parsed.source || 'all';
-    if (nextSource !== untrack(sourceFilter)) setSourceFilter(nextSource);
-
-    const nextHealth = normalizeHealthFilter(parsed.status);
-    if (nextHealth !== untrack(healthFilter)) setHealthFilter(nextHealth);
-
-    const nextNode = parsed.node || 'all';
-    if (nextNode !== untrack(selectedNodeId)) setSelectedNodeId(nextNode);
-
-    const nextGroup = normalizeGroupKey(parsed.group);
-    if (nextGroup !== untrack(groupBy)) setGroupBy(nextGroup);
-
-    const nextSort = normalizeSortKey(parsed.sort);
-    if (nextSort !== untrack(sortKey)) setSortKey(nextSort);
-
-    const nextOrder = normalizeSortDirection(parsed.order);
-    if (nextOrder !== untrack(sortDirection)) setSortDirection(nextOrder);
-
-    if (parsed.query !== untrack(search)) setSearch(parsed.query);
-  });
-
-  createEffect(() => {
-    if (!isActiveStorageRoute()) return;
-
-    const managedPath = buildStorageV2Path({
-      tab: view() !== 'pools' ? view() : null,
-      group: groupBy() !== 'node' ? groupBy() : null,
-      source: sourceFilter() !== 'all' ? sourceFilter() : null,
-      status: healthFilter() !== 'all' ? healthFilter() : null,
-      node: selectedNodeId() !== 'all' ? selectedNodeId() : null,
-      query: search().trim() || null,
-      sort: sortKey() !== 'name' ? sortKey() : null,
-      order: sortDirection() !== 'asc' ? sortDirection() : null,
-    });
-
-    const [, managedSearch = ''] = managedPath.split('?');
-    const managedParams = new URLSearchParams(managedSearch);
-    const params = new URLSearchParams(location.search);
-
-    Object.values(STORAGE_QUERY_PARAMS).forEach((key) => params.delete(key));
-    managedParams.forEach((value, key) => params.set(key, value));
-
-    const basePath = location.pathname;
-    const nextSearch = params.toString();
-    const nextPath = nextSearch ? `${basePath}?${nextSearch}` : basePath;
-    const currentPath = `${location.pathname}${location.search || ''}`;
-
-    if (nextPath !== currentPath) navigate(nextPath, { replace: true });
+  useStorageRouteState({
+    location,
+    navigate,
+    buildPath: buildStorageV2Path,
+    isReadEnabled: isActiveStorageRoute,
+    isWriteEnabled: isActiveStorageRoute,
+    useCurrentPathForNavigation: true,
+    fields: {
+      tab: {
+        get: view,
+        set: setView,
+        read: (parsed) => normalizeView(parsed.tab),
+        write: (value) => (value !== 'pools' ? value : null),
+      },
+      source: {
+        get: sourceFilter,
+        set: setSourceFilter,
+        read: (parsed) => parsed.source || 'all',
+        write: (value) => (value !== 'all' ? value : null),
+      },
+      status: {
+        get: healthFilter,
+        set: setHealthFilter,
+        read: (parsed) => normalizeHealthFilter(parsed.status),
+        write: (value) => (value !== 'all' ? value : null),
+      },
+      node: {
+        get: selectedNodeId,
+        set: setSelectedNodeId,
+        read: (parsed) => parsed.node || 'all',
+        write: (value) => (value !== 'all' ? value : null),
+      },
+      group: {
+        get: groupBy,
+        set: setGroupBy,
+        read: (parsed) => normalizeGroupKey(parsed.group),
+        write: (value) => (value !== 'node' ? value : null),
+      },
+      sort: {
+        get: sortKey,
+        set: setSortKey,
+        read: (parsed) => normalizeSortKey(parsed.sort),
+        write: (value) => (value !== 'name' ? value : null),
+      },
+      order: {
+        get: sortDirection,
+        set: setSortDirection,
+        read: (parsed) => normalizeSortDirection(parsed.order),
+        write: (value) => (value !== 'asc' ? value : null),
+      },
+      query: {
+        get: search,
+        set: setSearch,
+        read: (parsed) => parsed.query,
+        write: (value) => value.trim() || null,
+      },
+    },
   });
 
   createEffect(() => {
