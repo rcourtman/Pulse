@@ -14,3 +14,8 @@ export const isStorageBackupsV2Enabled = (): boolean => {
   return readLocalBoolean(STORAGE_KEYS.STORAGE_BACKUPS_V2_ENABLED);
 };
 
+export const isBackupsV2RolledBack = (): boolean =>
+  readLocalBoolean(STORAGE_KEYS.BACKUPS_V2_ROLLBACK);
+
+export const isStorageV2RolledBack = (): boolean =>
+  readLocalBoolean(STORAGE_KEYS.STORAGE_V2_ROLLBACK);
