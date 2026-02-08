@@ -280,7 +280,8 @@ func (r *Router) setupRoutes() {
 	SetLicenseServiceProvider(r.licenseHandlers)
 	r.reportingHandlers = NewReportingHandlers(r.mtMonitor)
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
-	rbacHandlers := NewRBACHandlers(r.config)
+	rbacProvider := NewTenantRBACProvider(r.config.DataPath)
+	rbacHandlers := NewRBACHandlers(r.config, rbacProvider)
 	infraUpdateHandlers := NewUpdateDetectionHandlers(r.monitor)
 	auditHandlers := NewAuditHandlers()
 

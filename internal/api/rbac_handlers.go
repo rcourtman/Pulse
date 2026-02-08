@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -19,17 +20,53 @@ var validUsername = regexp.MustCompile(`^[a-zA-Z0-9._@+-]{1,128}$`)
 
 // RBACHandlers provides HTTP handlers for RBAC management.
 type RBACHandlers struct {
-	config *config.Config
+	config       *config.Config
+	rbacProvider *TenantRBACProvider
 }
 
 // NewRBACHandlers creates a new RBACHandlers instance.
-func NewRBACHandlers(cfg *config.Config) *RBACHandlers {
-	return &RBACHandlers{config: cfg}
+func NewRBACHandlers(cfg *config.Config, rbacProvider ...*TenantRBACProvider) *RBACHandlers {
+	var provider *TenantRBACProvider
+	if len(rbacProvider) > 0 {
+		provider = rbacProvider[0]
+	}
+
+	return &RBACHandlers{
+		config:       cfg,
+		rbacProvider: provider,
+	}
+}
+
+// getManager returns the RBAC Manager for the org in the request context.
+// Falls back to global manager if no provider is set (backward compat).
+func (h *RBACHandlers) getManager(ctx context.Context) auth.Manager {
+	if h.rbacProvider != nil {
+		orgID := GetOrgID(ctx)
+		manager, err := h.rbacProvider.GetManager(orgID)
+		if err != nil {
+			return nil
+		}
+		return manager
+	}
+	return auth.GetManager()
+}
+
+// getExtendedManager returns the ExtendedManager for the org in the request context.
+func (h *RBACHandlers) getExtendedManager(ctx context.Context) auth.ExtendedManager {
+	if h.rbacProvider != nil {
+		orgID := GetOrgID(ctx)
+		manager, err := h.rbacProvider.GetManager(orgID)
+		if err != nil {
+			return nil
+		}
+		return manager
+	}
+	return auth.GetExtendedManager()
 }
 
 // HandleRoles handles list, create, update, and delete actions for roles.
 func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
-	manager := auth.GetManager()
+	manager := h.getManager(r.Context())
 	if manager == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC management is not available", nil)
 		return
@@ -151,7 +188,7 @@ func (h *RBACHandlers) HandleGetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manager := auth.GetManager()
+	manager := h.getManager(r.Context())
 	if manager == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC management is not available", nil)
 		return
@@ -164,7 +201,7 @@ func (h *RBACHandlers) HandleGetUsers(w http.ResponseWriter, r *http.Request) {
 
 // HandleUserRoleActions handles assigning/updating roles for a user.
 func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Request) {
-	manager := auth.GetManager()
+	manager := h.getManager(r.Context())
 	if manager == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC management is not available", nil)
 		return
@@ -245,7 +282,7 @@ func (h *RBACHandlers) HandleRBACChangelog(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	em := auth.GetExtendedManager()
+	em := h.getExtendedManager(r.Context())
 	if em == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC changelog is not available (requires Pro)", nil)
 		return
@@ -294,7 +331,7 @@ func (h *RBACHandlers) HandleRoleEffective(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	em := auth.GetExtendedManager()
+	em := h.getExtendedManager(r.Context())
 	if em == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "Role inheritance is not available (requires Pro)", nil)
 		return
@@ -336,7 +373,7 @@ func (h *RBACHandlers) HandleUserEffectivePermissions(w http.ResponseWriter, r *
 		return
 	}
 
-	manager := auth.GetManager()
+	manager := h.getManager(r.Context())
 	if manager == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC management is not available", nil)
 		return
@@ -353,7 +390,7 @@ func (h *RBACHandlers) HandleUserEffectivePermissions(w http.ResponseWriter, r *
 	}
 
 	// Check if we have extended manager for inheritance
-	em := auth.GetExtendedManager()
+	em := h.getExtendedManager(r.Context())
 	if em != nil {
 		roles := em.GetRolesWithInheritance(username)
 
