@@ -546,8 +546,33 @@ func (m *Monitor) preserveNodesWhenEmpty(instanceName string, modelNodes []model
 	m.state.SetConnectionHealth(instanceName, false)
 
 	preserved := make([]models.Node, 0, len(prevInstanceNodes))
+	now := time.Now()
 	for _, prevNode := range prevInstanceNodes {
 		nodeCopy := prevNode
+
+		// Keep recently seen nodes online during transient GetNodes gaps.
+		// This mirrors the node grace behavior used in regular node polling.
+		lastSeen := prevNode.LastSeen
+		if lastSeen.IsZero() {
+			m.mu.Lock()
+			if lastOnline, ok := m.nodeLastOnline[prevNode.ID]; ok {
+				lastSeen = lastOnline
+			}
+			m.mu.Unlock()
+		}
+
+		withinGrace := !lastSeen.IsZero() && now.Sub(lastSeen) < nodeOfflineGracePeriod
+		if withinGrace {
+			if strings.TrimSpace(nodeCopy.Status) == "" || strings.EqualFold(nodeCopy.Status, "offline") {
+				nodeCopy.Status = "online"
+			}
+			if nodeCopy.ConnectionHealth == "" || strings.EqualFold(nodeCopy.ConnectionHealth, "error") {
+				nodeCopy.ConnectionHealth = "degraded"
+			}
+			preserved = append(preserved, nodeCopy)
+			continue
+		}
+
 		nodeCopy.Status = "offline"
 		nodeCopy.ConnectionHealth = "error"
 		nodeCopy.Uptime = 0

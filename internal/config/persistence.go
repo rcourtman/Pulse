@@ -295,6 +295,28 @@ func loadSlice[T any](c *ConfigPersistence, filePath string, decrypt bool) ([]T,
 	return result, nil
 }
 
+// loadJSON is a generic helper that reads a JSON file, optionally decrypts,
+// and unmarshals into the provided target value. Caller must NOT already hold c.mu.
+func loadJSON[T any](c *ConfigPersistence, filePath string, decrypt bool, target *T) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := c.fs.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	if decrypt && c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			return err
+		}
+		data = decrypted
+	}
+
+	return json.Unmarshal(data, target)
+}
+
 // LoadAPITokens loads API token metadata from disk.
 func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 	c.mu.RLock()
@@ -2669,27 +2691,7 @@ func (c *ConfigPersistence) CleanupOldAIChatSessions(maxAge time.Duration) (int,
 
 // SaveRelayConfig stores relay settings, encrypting when a crypto manager is available.
 func (c *ConfigPersistence) SaveRelayConfig(cfg relay.Config) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	data, err := json.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return err
-		}
-		data = encrypted
-	}
-
-	if err := c.writeConfigFileLocked(c.relayFile, data, 0600); err != nil {
+	if err := saveJSON(c, c.relayFile, cfg, true); err != nil {
 		return err
 	}
 
@@ -2699,30 +2701,11 @@ func (c *ConfigPersistence) SaveRelayConfig(cfg relay.Config) error {
 
 // LoadRelayConfig retrieves the persisted relay settings. Returns default config if none exists.
 func (c *ConfigPersistence) LoadRelayConfig() (*relay.Config, error) {
-	c.mu.RLock()
-
-	data, err := c.fs.ReadFile(c.relayFile)
-	if err != nil {
-		c.mu.RUnlock()
+	cfg := relay.DefaultConfig()
+	if err := loadJSON(c, c.relayFile, true, cfg); err != nil {
 		if os.IsNotExist(err) {
 			return relay.DefaultConfig(), nil
 		}
-		return nil, err
-	}
-
-	if c.crypto != nil {
-		decrypted, err := c.crypto.Decrypt(data)
-		if err != nil {
-			c.mu.RUnlock()
-			return nil, err
-		}
-		data = decrypted
-	}
-
-	c.mu.RUnlock()
-
-	cfg := relay.DefaultConfig()
-	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
 

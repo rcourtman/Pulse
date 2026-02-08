@@ -82,7 +82,7 @@ func TestNoPersistenceBoilerplate(t *testing.T) {
 
 // TestNoPersistenceLoadBoilerplate does the same check for Load* methods.
 func TestNoPersistenceLoadBoilerplate(t *testing.T) {
-	// Methods with domain-specific logic that legitimately can't use loadSlice.
+	// Methods with domain-specific logic that legitimately can't use generic loaders.
 	allowedMethods := map[string]bool{
 		"LoadAlertConfig":      true, // complex validation
 		"LoadAPITokens":        true, // ensureScopes post-processing
@@ -150,10 +150,13 @@ func TestNoPersistenceLoadBoilerplate(t *testing.T) {
 			methodBody = rest
 		}
 
-		if !strings.Contains(methodBody, "loadSlice[") && !strings.Contains(methodBody, "loadSlice(") {
+		if !strings.Contains(methodBody, "loadSlice[") &&
+			!strings.Contains(methodBody, "loadSlice(") &&
+			!strings.Contains(methodBody, "loadJSON[") &&
+			!strings.Contains(methodBody, "loadJSON(") {
 			if strings.Contains(methodBody, "json.Unmarshal") {
 				line := 1 + strings.Count(content[:funcStart], "\n")
-				t.Errorf("persistence.go:%d: %s() contains JSON unmarshal boilerplate — use loadSlice() generic helper or add to allowlist in code_standards_test.go", line, methodName)
+				t.Errorf("persistence.go:%d: %s() contains JSON unmarshal boilerplate — use loadSlice()/loadJSON() generic helper or add to allowlist in code_standards_test.go", line, methodName)
 			}
 		}
 	}
