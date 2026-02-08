@@ -30,7 +30,7 @@ Date: 2026-02-08
 | 00 | Contract Freeze, Scope Fences, and Drift Baseline | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence |
 | 01 | Introduce Unified Selector Layer (No Behavior Change) | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence |
 | 02 | Alerts Consumer Migration to Unified Selectors | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence |
-| 03 | AI Chat UI Context Migration to Unified Selectors | TODO | Codex | Claude | PENDING | See Packet 03 Review Evidence |
+| 03 | AI Chat UI Context Migration to Unified Selectors | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence |
 | 04 | WebSocket Legacy Payload Deprecation Gates | TODO | Codex | Claude | PENDING | See Packet 04 Review Evidence |
 | 05 | Legacy Compatibility Narrowing | TODO | Codex | Claude | PENDING | See Packet 05 Review Evidence |
 | 06 | Contract Test Hardening and Regression Net | TODO | Codex | Claude | PENDING | See Packet 06 Review Evidence |
@@ -176,46 +176,46 @@ Rollback:
 ## Packet 03 Checklist: AI Chat UI Context Migration to Unified Selectors
 
 ### Implementation
-- [ ] AI chat context synthesis switched to unified selector outputs.
-- [ ] Legacy array loops removed from migrated scope.
-- [ ] Mention and context behavior remains stable.
+- [x] AI chat context synthesis switched to unified selector outputs.
+- [x] Legacy array loops removed from migrated scope.
+- [x] Mention and context behavior remains stable.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/components/AI/__tests__/aiChatUtils.test.ts src/stores/__tests__/aiChat.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `cd frontend-modern && npx vitest run src/components/AI/__tests__/aiChatUtils.test.ts src/stores/__tests__/aiChat.test.ts` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### Packet 03 Review Evidence
 
 ```text
 Files changed:
-- <path>: <reason>
+- frontend-modern/src/components/AI/Chat/index.tsx: Replaced MonitoringAPI.getState() onMount with reactive createEffect using useAIChatResources() selectors. Removed MonitoringAPI import and local isCluster signal. Mention ID formats and name resolution logic preserved.
 
 Commands run + exit codes:
-1. `<command>` -> exit <code>
-2. `<command>` -> exit <code>
+1. `cd frontend-modern && npx vitest run src/components/AI/__tests__/aiChatUtils.test.ts src/stores/__tests__/aiChat.test.ts` -> exit 0 (15 tests passed)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 Gate checklist:
-- P0: PASS | FAIL (<reason>)
-- P1: PASS | FAIL | N/A (<reason>)
-- P2: PASS | FAIL (<reason>)
+- P0: PASS (Mention IDs, types, name resolution all preserved. Tests + tsc pass.)
+- P1: PASS (One-shot API call replaced with reactive selectors — strictly better behavior. Fallback preserved via underlying useResourcesAsLegacy.)
+- P2: PASS (Clean migration, no new logic beyond reactive wiring.)
 
-Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+Verdict: APPROVED
 
 Commit:
-- `<hash>` (<message>)
+- (pending)
 
 Residual risk:
-- <risk or none>
+- none
 
 Rollback:
-- <steps>
+- Revert AI Chat/index.tsx to pre-Packet-03 state; restore MonitoringAPI.getState() onMount pattern.
 ```
 
 ## Packet 04 Checklist: WebSocket Legacy Payload Deprecation Gates
