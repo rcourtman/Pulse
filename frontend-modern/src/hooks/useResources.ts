@@ -1326,25 +1326,61 @@ export function useAlertsResources(storeOverride?: ResourceStoreLike): UseAlerts
 
 /**
  * AI-chat-focused legacy resource selectors used during convergence.
- * Thin wrapper over useResourcesAsLegacy with no conversion logic.
+ * Uses unified resources directly with local legacy conversion and fallback.
  */
 export function useAIChatResources(storeOverride?: ResourceStoreLike): UseAIChatResourcesReturn {
-    const {
-        asNodes,
-        asVMs,
-        asContainers,
-        asDockerHosts,
-        asHosts,
-    } = useResourcesAsLegacy(storeOverride);
+    const wsStore = storeOverride ?? getGlobalWebSocketStore();
+    const { resources, byType } = useResources(wsStore);
+    const hasUnifiedResources = createMemo(() => resources().length > 0);
 
-    const isCluster = createMemo(() => asNodes().length > 1);
+    const nodes = createMemo<Node[]>(() => {
+        const legacy = wsStore.state.nodes ?? [];
+        if (!hasUnifiedResources()) {
+            return [...legacy];
+        }
+        return byType('node').map(resourceToLegacyNode);
+    });
+
+    const vms = createMemo<VM[]>(() => {
+        const legacy = wsStore.state.vms ?? [];
+        if (!hasUnifiedResources()) {
+            return [...legacy];
+        }
+        return byType('vm').map(resourceToLegacyVM);
+    });
+
+    const containers = createMemo<Container[]>(() => {
+        const legacy = wsStore.state.containers ?? [];
+        if (!hasUnifiedResources()) {
+            return [...legacy];
+        }
+        return [...byType('container'), ...byType('oci-container')].map(resourceToLegacyContainer);
+    });
+
+    const dockerHosts = createMemo<DockerHost[]>(() => {
+        const legacy = wsStore.state.dockerHosts ?? [];
+        if (!hasUnifiedResources()) {
+            return [...legacy];
+        }
+        return dockerHostsFromResources(byType('docker-host'), byType('docker-container'));
+    });
+
+    const hosts = createMemo<Host[]>(() => {
+        const legacy = wsStore.state.hosts ?? [];
+        if (!hasUnifiedResources()) {
+            return [...legacy];
+        }
+        return byType('host').map(resourceToLegacyHost);
+    });
+
+    const isCluster = createMemo(() => nodes().length > 1);
 
     return {
-        nodes: asNodes as Accessor<Node[]>,
-        vms: asVMs as Accessor<VM[]>,
-        containers: asContainers as Accessor<Container[]>,
-        dockerHosts: asDockerHosts as Accessor<DockerHost[]>,
-        hosts: asHosts as Accessor<Host[]>,
+        nodes,
+        vms,
+        containers,
+        dockerHosts,
+        hosts,
         isCluster,
     };
 }

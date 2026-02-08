@@ -885,6 +885,88 @@ describe('Stale legacy-only consumer detection', () => {
         dispose();
     });
 
+    it('useAIChatResources selectors prefer unified conversion when unified resources are populated', () => {
+        const store = createMockLegacyStore({
+            resources: [
+                createMockResource({
+                    id: 'node-unified-1',
+                    type: 'node',
+                    name: 'Unified Node',
+                    platformData: { host: 'pve1.local' },
+                }),
+                createMockResource({
+                    id: 'vm-unified-101',
+                    type: 'vm',
+                    name: 'Unified VM',
+                    cpu: { current: 75 },
+                    platformData: {
+                        vmid: 101,
+                        node: 'pve1',
+                        instance: 'pve1/qemu/101',
+                    },
+                }),
+                createMockResource({
+                    id: 'ct-unified-201',
+                    type: 'container',
+                    name: 'Unified CT',
+                    platformData: {
+                        vmid: 201,
+                        node: 'pve1',
+                        instance: 'pve1/lxc/201',
+                    },
+                }),
+                createMockResource({
+                    id: 'docker-host-unified-1',
+                    type: 'docker-host',
+                    name: 'docker-host-1',
+                    status: 'online',
+                    platformData: { agentId: 'agent-1', runtime: 'docker' },
+                }),
+                createMockResource({
+                    id: 'docker/container-unified-1',
+                    type: 'docker-container',
+                    name: 'nginx',
+                    parentId: 'docker-host-unified-1',
+                    status: 'running',
+                    platformData: { image: 'nginx:latest' },
+                }),
+                createMockResource({
+                    id: 'host-unified-1',
+                    type: 'host',
+                    name: 'host-1',
+                    status: 'online',
+                }),
+            ],
+            nodes: [{ id: 'legacy-node-1' }],
+            vms: [{ id: 'legacy-vm-1', cpu: 0.01 }],
+            containers: [{ id: 'legacy-ct-1' }],
+            dockerHosts: [{ id: 'legacy-docker-host-1' }],
+            hosts: [{ id: 'legacy-host-1' }],
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAIChatResources(store as any);
+        });
+
+        expect(selectors.nodes()).toHaveLength(1);
+        expect(selectors.nodes()[0].id).toBe('node-unified-1');
+        expect(selectors.vms()).toHaveLength(1);
+        expect(selectors.vms()[0].id).toBe('vm-unified-101');
+        expect(selectors.vms()[0].cpu).toBe(0.75);
+        expect(selectors.containers()).toHaveLength(1);
+        expect(selectors.containers()[0].id).toBe('ct-unified-201');
+        expect(selectors.dockerHosts()).toHaveLength(1);
+        expect(selectors.dockerHosts()[0].id).toBe('docker-host-unified-1');
+        expect(selectors.dockerHosts()[0].containers).toHaveLength(1);
+        expect(selectors.dockerHosts()[0].containers[0].id).toBe('container-unified-1');
+        expect(selectors.hosts()).toHaveLength(1);
+        expect(selectors.hosts()[0].id).toBe('host-unified-1');
+
+        dispose();
+    });
+
     it('useAIChatResources isCluster is false for single node', () => {
         const store = createMockLegacyStore({
             resources: [
