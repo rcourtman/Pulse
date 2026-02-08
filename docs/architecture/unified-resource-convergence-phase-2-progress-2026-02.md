@@ -1,0 +1,404 @@
+# Unified Resource Convergence Phase 2 Progress Tracker
+
+Linked plan:
+- `docs/architecture/unified-resource-convergence-phase-2-plan-2026-02.md`
+
+Status: Active
+Date: 2026-02-08
+
+## Rules
+
+1. A packet can only move to `DONE` when every checkbox in that packet is checked.
+2. Reviewer must provide explicit command exit-code evidence.
+3. `DONE` is invalid if command output is timed out, missing, truncated without exit code, or summary-only.
+4. If review fails, set status to `CHANGES_REQUESTED`, add findings, and keep checkboxes open.
+5. Update this file first in each implementation session and last before session end.
+6. After every `APPROVED` packet, create a checkpoint commit and record the hash in packet evidence before next packet.
+7. Do not use `git checkout --`, `git restore --source`, `git reset --hard`, or `git clean -fd` on shared worktrees.
+8. Respect active parallel worker boundaries: do not edit storage/settings worker-owned files.
+
+## Active Worker Boundaries
+
+1. Storage GA lane active: avoid edits in packet-owned storage GA files.
+2. Settings stabilization lane active: avoid edits in packet-owned settings files.
+3. Deferred item: `frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx`.
+
+## Packet Board
+
+| Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
+|---|---|---|---|---|---|---|
+| 00 | Contract Freeze, Scope Fences, and Drift Baseline | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence |
+| 01 | Introduce Unified Selector Layer (No Behavior Change) | TODO | Codex | Claude | PENDING | See Packet 01 Review Evidence |
+| 02 | Alerts Consumer Migration to Unified Selectors | TODO | Codex | Claude | PENDING | See Packet 02 Review Evidence |
+| 03 | AI Chat UI Context Migration to Unified Selectors | TODO | Codex | Claude | PENDING | See Packet 03 Review Evidence |
+| 04 | WebSocket Legacy Payload Deprecation Gates | TODO | Codex | Claude | PENDING | See Packet 04 Review Evidence |
+| 05 | Legacy Compatibility Narrowing | TODO | Codex | Claude | PENDING | See Packet 05 Review Evidence |
+| 06 | Contract Test Hardening and Regression Net | TODO | Codex | Claude | PENDING | See Packet 06 Review Evidence |
+| 07 | Final Certification and Release Recommendation | TODO | Claude | Claude | PENDING | See Packet 07 Review Evidence |
+
+## Packet 00 Checklist: Contract Freeze, Scope Fences, and Drift Baseline
+
+### Discovery
+- [x] In-scope/out-of-scope boundaries documented and approved.
+- [x] Alerts/AI dependency baseline matrix captured with code anchors.
+- [x] Deferred settings-owned migration item captured with unblock condition.
+- [x] Existing scaffold coverage verified: `frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts` and `frontend-modern/src/hooks/__tests__/useResources.test.ts` already exist.
+
+### Required Tests
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
+
+### Review Gates
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Packet 00 Review Evidence
+
+```text
+Files changed:
+- docs/architecture/unified-resource-convergence-phase-2-plan-2026-02.md: Added frozen scope boundaries (in-scope/out-of-scope) and legacy dependency baseline matrix with verified code anchors.
+- docs/architecture/unified-resource-convergence-phase-2-progress-2026-02.md: Updated Packet 00 checklist and review evidence.
+
+Commands run + exit codes:
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+
+Gate checklist:
+- P0: PASS (No production code changes; docs-only packet. tsc passes.)
+- P1: PASS (Scope boundaries explicit. Worker-owned files untouched. Deferred item documented.)
+- P2: PASS (Baseline matrix anchors independently verified by reviewer and corrected for useResources.ts sub-conversion locations.)
+
+Verdict: APPROVED
+
+Commit:
+- `0a6264dc` (docs(urc2): Packet 00 — freeze scope fences and drift baseline)
+
+Residual risk:
+- Line-number anchors will drift as code changes; re-verify before starting Packet 01.
+
+Rollback:
+- Revert the two documentation files to their pre-Packet-00 state (git show HEAD:path).
+```
+
+## Packet 01 Checklist: Introduce Unified Selector Layer (No Behavior Change)
+
+### Implementation
+- [ ] Unified selector APIs introduced for alerts/ai consumers.
+- [ ] No behavior change validated against current outputs.
+- [ ] Type contracts documented and enforced.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/hooks/__tests__/useUnifiedResources.test.ts` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 01 Review Evidence
+
+```text
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 02 Checklist: Alerts Consumer Migration to Unified Selectors
+
+### Implementation
+- [ ] Core alerts read paths switched to unified selectors.
+- [ ] Direct legacy array reads removed from core decision points.
+- [ ] One-packet compatibility fallback retained for rollback safety.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/pages/__tests__/Alerts.helpers.test.ts` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 02 Review Evidence
+
+```text
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 03 Checklist: AI Chat UI Context Migration to Unified Selectors
+
+### Implementation
+- [ ] AI chat context synthesis switched to unified selector outputs.
+- [ ] Legacy array loops removed from migrated scope.
+- [ ] Mention and context behavior remains stable.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/components/AI/__tests__/aiChatUtils.test.ts src/stores/__tests__/aiChat.test.ts` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 03 Review Evidence
+
+```text
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 04 Checklist: WebSocket Legacy Payload Deprecation Gates
+
+### Implementation
+- [ ] Compatibility mode switch implemented for legacy payload fields.
+- [ ] Telemetry/logging added to detect remaining legacy consumers.
+- [ ] Default mode remains compatibility-safe.
+
+### Required Tests
+- [ ] `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 04 Review Evidence
+
+```text
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 05 Checklist: Legacy Compatibility Narrowing
+
+### Implementation
+- [ ] Selector/adapter fallback matrix narrowed to documented transitional paths.
+- [ ] Hidden fallback branches removed.
+- [ ] Rollback path stays explicit.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/hooks/__tests__/useUnifiedResources.test.ts` passed.
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 05 Review Evidence
+
+```text
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 06 Checklist: Contract Test Hardening and Regression Net
+
+### Implementation
+- [ ] Alerts parity tests expanded for unified-selector paths.
+- [ ] AI context parity tests expanded for unified-selector paths.
+- [ ] Websocket contract tests lock compatibility and deprecation modes.
+
+### Required Tests
+- [ ] `cd frontend-modern && npx vitest run src/pages/__tests__/Alerts.helpers.test.ts src/components/AI/__tests__/aiChatUtils.test.ts src/hooks/__tests__/useResources.test.ts` passed.
+- [ ] `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Review Gates
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded: `APPROVED`
+
+### Packet 06 Review Evidence
+
+```text
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Packet 07 Checklist: Final Certification and Release Recommendation
+
+### Final Validation
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [ ] `cd frontend-modern && npx vitest run src/pages/__tests__/Alerts.helpers.test.ts src/components/AI/__tests__/aiChatUtils.test.ts src/hooks/__tests__/useResources.test.ts src/hooks/__tests__/useUnifiedResources.test.ts` passed.
+- [ ] `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` passed.
+- [ ] `go test ./internal/ai/... -run "ResourceContext|Routing" -count=1` passed.
+- [ ] Exit codes recorded for all commands.
+
+### Certification
+- [ ] Residual risks documented.
+- [ ] Rollback strategy validated.
+- [ ] Verdict recorded (`APPROVED` or `BLOCKED`).
+
+### Packet 07 Review Evidence
+
+```text
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit <code>
+2. `<command>` -> exit <code>
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Deferred Follow-On (Blocked)
+
+Item:
+- Organization sharing migration in `frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx`
+
+Blocked by:
+- Active settings stabilization worker ownership
+
+Unblock condition:
+- Settings stabilization plan complete and file ownership released
