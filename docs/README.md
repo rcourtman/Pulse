@@ -50,6 +50,7 @@ Pulse Pro unlocks **Auto-Fix and advanced AI analysis** — **Pulse Patrol is av
 - **Technical highlights**: correlation across nodes/VMs/backups/containers, trend-based capacity predictions, and findings you can resolve/suppress.
 - **Scheduling**: 10 minutes to 7 days (default 6 hours).
 - **Agent Profiles (Pro)**: centralized agent configuration profiles. See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md).
+- **[Multi-Tenant Organizations (Enterprise)](MULTI_TENANT.md)** — Isolate infrastructure by organization for MSPs and multi-datacenter deployments.
 
 ## 📡 Monitoring & Agents
 

@@ -46,6 +46,7 @@ Scheduled background analysis that correlates live state + metrics history to pr
 - **Audit-triggered webhooks**: real-time delivery of security events to external systems.
 - **Advanced Reporting**: scheduled or on-demand PDF/CSV infrastructure health reports.
 - **Agent Profiles**: centralized configuration profiles for fleets of agents.
+- **Multi-Tenant Organizations (Enterprise)**: isolate infrastructure by organization with per-org state, config, and RBAC. Create organizations, manage members, share resources across orgs. See [MULTI_TENANT.md](MULTI_TENANT.md).
 
 ### Autonomy Levels
 
@@ -100,6 +101,7 @@ Pulse Pro licenses enable specific server-side features. These are enforced at t
 - `advanced_reporting`: infrastructure health report generation (PDF/CSV).
 - `audit_logging`: persistent audit trail and real-time webhook delivery.
 - `long_term_metrics`: 30-day and 90-day metrics history (7-day history is free).
+- `multi_tenant`: organization-based infrastructure isolation (Enterprise license required).
 
 ## Why It Matters (Technical Value)
 
@@ -134,7 +136,7 @@ You can inspect license feature gates via:
 
 - `GET /api/license/features` (authenticated)
 
-This returns a feature map like `ai_alerts`, `ai_autofix`, and `kubernetes_ai` so you can automate Pro-only workflows safely.
+This returns a feature map including `ai_alerts`, `ai_autofix`, `kubernetes_ai`, and `multi_tenant` so you can automate Pro-only and Enterprise workflows safely.
 
 ## Under The Hood (Technical)
 

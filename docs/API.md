@@ -646,6 +646,80 @@ Returns all users with their role assignments.
 
 ---
 
+## 🏢 Organizations (Enterprise)
+
+Multi-tenant organization management. Requires `PULSE_MULTI_TENANT_ENABLED=true` and an Enterprise license with the `multi_tenant` feature. All endpoints require authentication.
+
+See [MULTI_TENANT.md](MULTI_TENANT.md) for setup and architecture details.
+
+### List Organizations
+`GET /api/orgs` (requires `settings:read`)
+Returns organizations accessible to the authenticated user.
+
+### Create Organization
+`POST /api/orgs` (requires `settings:write`, session auth only)
+```json
+{ "id": "acme-corp", "displayName": "Acme Corporation" }
+```
+The creator becomes the owner and first member. Organization IDs must be lowercase alphanumeric with hyphens, 3-64 characters.
+
+### Get Organization
+`GET /api/orgs/{id}` (requires `settings:read`)
+Returns organization details. User must be a member.
+
+### Update Organization
+`PUT /api/orgs/{id}` (requires `settings:write`, session auth only)
+```json
+{ "displayName": "Updated Name" }
+```
+Admin or owner role required. The default organization cannot be updated.
+
+### Delete Organization
+`DELETE /api/orgs/{id}` (requires `settings:write`, session auth only)
+Admin or owner role required. The default organization cannot be deleted.
+
+### List Members
+`GET /api/orgs/{id}/members` (requires `settings:read`)
+Returns all members with their roles. User must be a member of the org.
+
+### Add or Update Member
+`POST /api/orgs/{id}/members` (requires `settings:write`, session auth only)
+```json
+{ "userId": "jane", "role": "editor" }
+```
+Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. Setting role to `owner` transfers ownership (only current owner can do this). Default org members cannot be managed.
+
+### Remove Member
+`DELETE /api/orgs/{id}/members/{userId}` (requires `settings:write`, session auth only)
+Admin or owner role required. The organization owner cannot be removed.
+
+### List Outgoing Shares
+`GET /api/orgs/{id}/shares` (requires `settings:read`)
+Returns resources shared outbound from this organization to others.
+
+### List Incoming Shares
+`GET /api/orgs/{id}/shares/incoming` (requires `settings:read`)
+Returns resources shared inbound to this organization from other organizations.
+
+### Create Share
+`POST /api/orgs/{id}/shares` (requires `settings:write`, session auth only)
+```json
+{
+  "targetOrgId": "partner-org",
+  "resourceType": "vm",
+  "resourceId": "vm-101",
+  "resourceName": "Web Server",
+  "accessRole": "viewer"
+}
+```
+Share a resource with another organization. Valid resource types: `vm`, `container`, `host`, `storage`, `pbs`, `pmg`. Access roles: `viewer`, `editor`, `admin`. Admin or owner role required on the source org.
+
+### Delete Share
+`DELETE /api/orgs/{id}/shares/{shareId}` (requires `settings:write`, session auth only)
+Revoke a resource share. Admin or owner role required.
+
+---
+
 ## 🤖 Pulse AI *(v5)*
 
 **Pro gating:** endpoints labeled "(Pro)" require a Pulse Pro license and return `402 Payment Required` if the feature is not licensed.
