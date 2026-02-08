@@ -86,6 +86,7 @@ import {
 } from './settingsRouting';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
 import { baseTabGroups } from './settingsTabs';
+import { isFeatureLocked, isTabLocked } from './settingsFeatureGates';
 import type { SettingsNavGroup, SettingsTab } from './settingsTypes';
 
 // Type definitions
@@ -733,26 +734,11 @@ const Settings: Component<SettingsProps> = (props) => {
     });
   });
 
-  const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
-    'system-relay': ['relay'],
-    reporting: ['advanced_reporting'],
-    'security-webhooks': ['audit_logging'],
-    'organization-overview': ['multi_tenant'],
-    'organization-access': ['multi_tenant'],
-    'organization-sharing': ['multi_tenant'],
-    'organization-billing': ['multi_tenant'],
-  };
+  const isFeatureLockedForLicense = (features?: string[]): boolean =>
+    isFeatureLocked(features, hasFeature, licenseLoaded);
 
-  const isFeatureLocked = (features?: string[]): boolean => {
-    if (!features || features.length === 0) return false;
-    if (!licenseLoaded()) return false;
-    return !features.every((feature) => hasFeature(feature));
-  };
-
-  const isTabLocked = (tab: SettingsTab): boolean => {
-    const requiredFeatures = tabFeatureRequirements[tab];
-    return isFeatureLocked(requiredFeatures);
-  };
+  const isTabLockedForLicense = (tab: SettingsTab): boolean =>
+    isTabLocked(tab, hasFeature, licenseLoaded);
 
   const tabGroups = createMemo<SettingsNavGroup[]>(() =>
     baseTabGroups
@@ -760,7 +746,7 @@ const Settings: Component<SettingsProps> = (props) => {
         const items = group.items
           .filter((item) => !(item.features?.includes('multi_tenant') && !isMultiTenantEnabled()))
           .map((item) => {
-            const lockedByFeature = isFeatureLocked(item.features);
+            const lockedByFeature = isFeatureLockedForLicense(item.features);
             return {
               ...item,
               disabled: item.disabled || lockedByFeature,
@@ -787,7 +773,7 @@ const Settings: Component<SettingsProps> = (props) => {
       setActiveTab('proxmox');
       return;
     }
-    if (!isTabLocked(tab)) {
+    if (!isTabLockedForLicense(tab)) {
       return;
     }
     if (tab !== 'system-pro') {
