@@ -74,6 +74,8 @@ export type BackupCapability =
   | 'cross-site'
   | 'application-aware';
 
+export type BackupMode = 'snapshot' | 'local' | 'remote';
+
 export interface SourceDescriptor {
   platform: StorageBackupPlatform;
   family: PlatformFamily;
@@ -117,11 +119,50 @@ export interface BackupScope {
   workloadType?: 'vm' | 'container' | 'pod' | 'host' | 'other';
 }
 
+export interface ProxmoxBackupDetails {
+  vmid?: string;
+  node?: string;
+  instance?: string;
+  storage?: string;
+  datastore?: string;
+  namespace?: string;
+  backupType?: string;
+  owner?: string;
+  comment?: string;
+  notes?: string;
+  filename?: string;
+}
+
+export interface KubernetesBackupDetails {
+  cluster?: string;
+  namespace?: string;
+  node?: string;
+  workloadKind?: string;
+  workloadName?: string;
+  policy?: string;
+  repository?: string;
+  snapshotClass?: string;
+  backupId?: string;
+  runId?: string;
+}
+
+export interface DockerBackupDetails {
+  host?: string;
+  containerId?: string;
+  containerName?: string;
+  image?: string;
+  volume?: string;
+  repository?: string;
+  policy?: string;
+  backupId?: string;
+}
+
 export interface BackupRecordV2 {
   id: string;
   name: string;
   category: BackupCategory;
   outcome: BackupOutcome;
+  mode: BackupMode;
   scope: BackupScope;
   location: StorageLocation;
   source: SourceDescriptor;
@@ -136,6 +177,9 @@ export interface BackupRecordV2 {
     legacyBackupId?: string;
     platformEntityId?: string;
   };
+  proxmox?: ProxmoxBackupDetails;
+  kubernetes?: KubernetesBackupDetails;
+  docker?: DockerBackupDetails;
   details?: Record<string, unknown>;
 }
 

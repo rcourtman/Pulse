@@ -188,7 +188,7 @@ describe('backupAdapters', () => {
     expect(records[0].scope.scope).toBe('workload');
     expect(records[0].category).toBe('container-backup');
     expect(records[0].completedAt).toBe(Date.parse('2024-02-01T01:00:00Z'));
-    expect(records[0].details?.mode).toBe('remote');
+    expect(records[0].mode).toBe('remote');
   });
 
   it('does not duplicate Proxmox fallback resource records when legacy backup artifacts are available', () => {
@@ -246,5 +246,212 @@ describe('backupAdapters', () => {
     const records = buildBackupRecordsV2({ state, resources });
     expect(records).toHaveLength(1);
     expect(records.every((record) => !record.id.startsWith('resource:'))).toBe(true);
+  });
+
+  it('prefers canonical PBS records when PVE remote backups overlap the same artifact', () => {
+    const state = baseState({
+      backups: {
+        pve: {
+          backupTasks: [],
+          guestSnapshots: [],
+          storageBackups: [
+            {
+              id: 'pve-remote-1',
+              storage: 'pbs-store',
+              node: 'pve1',
+              instance: 'pve-a',
+              type: 'qemu',
+              vmid: 101,
+              time: '2024-01-01T01:00:00Z',
+              ctime: 1_704_070_800,
+              size: 2048,
+              format: 'vma.zst',
+              protected: true,
+              volid: 'backup/vzdump-qemu-101.vma.zst',
+              isPBS: true,
+              verified: true,
+              verification: 'ok',
+              encryption: 'on',
+            },
+          ],
+        },
+        pbs: [
+          {
+            id: 'pbs-1',
+            instance: 'pbs-a',
+            datastore: 'primary',
+            namespace: '',
+            backupType: 'vm',
+            vmid: '101',
+            backupTime: '2024-01-01T01:00:00Z',
+            size: 2048,
+            protected: true,
+            verified: true,
+            comment: 'Daily VM101',
+            files: ['index.fidx', 'blob.enc'],
+            owner: 'root@pam',
+          },
+        ],
+        pmg: [],
+      },
+    });
+
+    const records = buildBackupRecordsV2({ state, resources: [] });
+    expect(records).toHaveLength(1);
+    expect(records[0].id).toBe('pbs-1');
+    expect(records[0].source.adapterId).toBe('legacy-pbs-backups');
+    expect(records[0].name).toBe('Daily VM101');
+  });
+
+  it('builds Kubernetes artifact-level records from backup payloads', () => {
+    const state = baseState();
+    const resources: Resource[] = [
+      {
+        id: 'k8s-pod-api',
+        type: 'pod',
+        name: 'api-pod',
+        displayName: 'api-pod',
+        platformId: 'cluster-a',
+        platformType: 'kubernetes',
+        sourceType: 'api',
+        status: 'running',
+        lastSeen: Date.now(),
+        platformData: {
+          kubernetes: {
+            clusterId: 'cluster-a',
+            namespace: 'apps',
+            nodeName: 'worker-1',
+          },
+          backup: {
+            artifacts: [
+              {
+                id: 'velero-1',
+                backupTime: '2024-03-01T01:30:00Z',
+                backupName: 'api-daily',
+                workloadKind: 'Deployment',
+                workloadName: 'api',
+                namespace: 'apps',
+                repository: 's3://k8s-backups',
+                policy: 'daily',
+                snapshotClass: 'csi',
+                mode: 'remote',
+                status: 'completed',
+                verified: true,
+                protected: true,
+                encrypted: true,
+                sizeBytes: 12345,
+              },
+            ],
+          },
+        },
+      },
+    ];
+
+    const records = buildBackupRecordsV2({ state, resources });
+    expect(records).toHaveLength(1);
+    const record = records[0];
+    expect(record.source.adapterId).toBe('kubernetes-artifact-backups');
+    expect(record.source.platform).toBe('kubernetes');
+    expect(record.mode).toBe('remote');
+    expect(record.name).toBe('api-daily');
+    expect(record.kubernetes?.namespace).toBe('apps');
+    expect(record.kubernetes?.workloadName).toBe('api');
+    expect(record.kubernetes?.snapshotClass).toBe('csi');
+    expect(record.capabilities).toEqual(
+      expect.arrayContaining(['retention', 'policy-driven', 'verification', 'encryption', 'immutability']),
+    );
+  });
+
+  it('builds Docker artifact-level records from backup payloads', () => {
+    const state = baseState();
+    const resources: Resource[] = [
+      {
+        id: 'docker-container-api',
+        type: 'docker-container',
+        name: 'api',
+        displayName: 'api',
+        platformId: 'docker-host-1',
+        platformType: 'docker',
+        sourceType: 'agent',
+        status: 'running',
+        lastSeen: Date.now(),
+        platformData: {
+          docker: {
+            hostname: 'docker-host-1',
+            containerId: 'cont-1',
+            image: 'ghcr.io/example/api:1.0.0',
+          },
+          backup: {
+            artifacts: [
+              {
+                backupId: 'docker-backup-1',
+                backupTime: '2024-04-01T03:00:00Z',
+                backupName: 'api-nightly',
+                containerId: 'cont-1',
+                containerName: 'api',
+                image: 'ghcr.io/example/api:1.0.0',
+                repository: 's3://docker-backups',
+                policy: 'nightly',
+                verified: true,
+                encrypted: true,
+                sizeBytes: 654321,
+                status: 'completed',
+              },
+            ],
+          },
+        },
+      },
+    ];
+
+    const records = buildBackupRecordsV2({ state, resources });
+    expect(records).toHaveLength(1);
+    const record = records[0];
+    expect(record.source.adapterId).toBe('docker-artifact-backups');
+    expect(record.source.platform).toBe('docker');
+    expect(record.mode).toBe('remote');
+    expect(record.name).toBe('api-nightly');
+    expect(record.docker?.host).toBe('docker-host-1');
+    expect(record.docker?.containerId).toBe('cont-1');
+    expect(record.docker?.repository).toBe('s3://docker-backups');
+  });
+
+  it('suppresses resource-summary fallback when Kubernetes artifacts are present', () => {
+    const state = baseState();
+    const resources: Resource[] = [
+      {
+        id: 'k8s-pod-reporting',
+        type: 'pod',
+        name: 'reporting',
+        displayName: 'reporting',
+        platformId: 'cluster-a',
+        platformType: 'kubernetes',
+        sourceType: 'api',
+        status: 'running',
+        lastSeen: Date.now(),
+        platformData: {
+          lastBackup: '2024-05-02T09:00:00Z',
+          kubernetes: {
+            clusterId: 'cluster-a',
+            namespace: 'default',
+          },
+          backup: {
+            artifacts: [
+              {
+                id: 'k8s-artifact-1',
+                backupTime: '2024-05-02T09:00:00Z',
+                workloadName: 'reporting',
+                namespace: 'default',
+                status: 'completed',
+              },
+            ],
+          },
+        },
+      },
+    ];
+
+    const records = buildBackupRecordsV2({ state, resources });
+    expect(records).toHaveLength(1);
+    expect(records[0].id.startsWith('resource:')).toBe(false);
+    expect(records[0].source.adapterId).toBe('kubernetes-artifact-backups');
   });
 });

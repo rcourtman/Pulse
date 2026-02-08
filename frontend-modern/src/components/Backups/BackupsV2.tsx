@@ -4,12 +4,15 @@ import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SearchInput } from '@/components/shared/SearchInput';
+import { getSourcePlatformBadge, getSourcePlatformLabel } from '@/components/shared/sourcePlatformBadges';
 import { hideTooltip, showTooltip } from '@/components/shared/Tooltip';
+import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 import { formatAbsoluteTime, formatBytes } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { buildBackupRecordsV2 } from '@/features/storageBackupsV2/backupAdapters';
 import { PLATFORM_BLUEPRINTS } from '@/features/storageBackupsV2/platformBlueprint';
 import type { BackupOutcome, BackupRecordV2 } from '@/features/storageBackupsV2/models';
+import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
 import {
   BACKUPS_QUERY_PARAMS,
   BACKUPS_V2_PATH,
@@ -32,21 +35,6 @@ const OUTCOME_BADGE_CLASS: Record<BackupOutcome, string> = {
   running: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
   offline: 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
   unknown: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-};
-
-const SOURCE_LABEL_OVERRIDES: Record<string, string> = {
-  'proxmox-pve': 'PVE',
-  'proxmox-pbs': 'PBS',
-  'proxmox-pmg': 'PMG',
-  kubernetes: 'K8s',
-  truenas: 'TrueNAS',
-  unraid: 'Unraid',
-  'synology-dsm': 'Synology',
-  docker: 'Docker',
-  'host-agent': 'Host Agent',
-  aws: 'AWS',
-  azure: 'Azure',
-  gcp: 'GCP',
 };
 
 const MODE_LABELS: Record<BackupMode, string> = {
@@ -74,7 +62,7 @@ const titleize = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-const sourceLabel = (value: string): string => SOURCE_LABEL_OVERRIDES[value] || titleize(value);
+const sourceLabel = (value: string): string => getSourcePlatformLabel(value);
 
 const dateKeyFromTimestamp = (timestamp: number): string => {
   const date = new Date(timestamp);
@@ -212,20 +200,48 @@ const detailString = (record: BackupRecordV2, key: string): string => {
 };
 
 const deriveMode = (record: BackupRecordV2): BackupMode => {
+  if (record.mode === 'snapshot' || record.mode === 'local' || record.mode === 'remote') return record.mode;
   const detailMode = detailString(record, 'mode');
   if (detailMode === 'snapshot' || detailMode === 'local' || detailMode === 'remote') return detailMode;
   if (record.category === 'snapshot') return 'snapshot';
   return 'local';
 };
 
-const deriveNodeLabel = (record: BackupRecordV2): string => {
-  const detailNode = detailString(record, 'node');
-  if (detailNode) return detailNode;
-  const nodeLike = record.location.label.split('/')[0]?.trim() || '';
-  return nodeLike || 'Unknown';
+const deriveClusterLabel = (record: BackupRecordV2): string => {
+  const kubernetesCluster = (record.kubernetes?.cluster || '').trim();
+  if (kubernetesCluster) return kubernetesCluster;
+  const proxmoxInstance = (record.proxmox?.instance || '').trim();
+  if (proxmoxInstance) return proxmoxInstance;
+  if (record.location.scope === 'cluster') return (record.location.label || '').trim() || 'n/a';
+  return 'n/a';
 };
 
-const deriveVmidLabel = (record: BackupRecordV2): string => {
+const deriveNodeLabel = (record: BackupRecordV2): string => {
+  const typedNode =
+    (record.proxmox?.node || '').trim() ||
+    (record.kubernetes?.node || '').trim() ||
+    (record.docker?.host || '').trim();
+  if (typedNode) return typedNode;
+  const detailNode = detailString(record, 'node');
+  if (detailNode) return detailNode;
+  if (record.location.scope === 'node') return (record.location.label || '').trim() || 'n/a';
+  return 'n/a';
+};
+
+const deriveNamespaceLabel = (record: BackupRecordV2): string => {
+  const namespace = (record.proxmox?.namespace || record.kubernetes?.namespace || detailString(record, 'namespace')).trim();
+  if (namespace) return namespace;
+  if (record.source.platform === 'proxmox-pbs') return 'root';
+  return 'n/a';
+};
+
+const deriveEntityIdLabel = (record: BackupRecordV2): string => {
+  const proxmoxId = (record.proxmox?.vmid || '').trim();
+  if (proxmoxId) return proxmoxId;
+  const dockerContainerId = (record.docker?.containerId || '').trim();
+  if (dockerContainerId) return dockerContainerId;
+  const kubernetesWorkload = firstNonEmpty(record.kubernetes?.workloadName, record.kubernetes?.backupId, record.kubernetes?.runId);
+  if (kubernetesWorkload) return kubernetesWorkload;
   const vmidFromDetails = detailString(record, 'vmid');
   if (vmidFromDetails) return vmidFromDetails;
   const match = record.scope.label.match(/VMID\s+(.+)/i);
@@ -236,20 +252,44 @@ const deriveVmidLabel = (record: BackupRecordV2): string => {
 const deriveGuestType = (record: BackupRecordV2): string => {
   const workload = record.scope.workloadType || 'other';
   if (workload === 'vm') return 'VM';
-  if (workload === 'container') return 'LXC';
+  if (workload === 'container') {
+    if (record.source.platform === 'docker') return 'Container';
+    return 'LXC';
+  }
   if (workload === 'host') return 'Host';
   if (workload === 'pod') return 'Pod';
   return titleize(workload);
 };
 
+const firstNonEmpty = (...values: Array<string | null | undefined>): string => {
+  for (const value of values) {
+    const normalized = (value || '').trim();
+    if (normalized) return normalized;
+  }
+  return '';
+};
+
+const deriveDetailsOwner = (record: BackupRecordV2): string =>
+  firstNonEmpty(record.proxmox?.owner, detailString(record, 'owner'));
+
 const summarizeDetails = (record: BackupRecordV2): string => {
   const pieces: string[] = [];
-  const datastore = detailString(record, 'datastore');
-  const namespace = detailString(record, 'namespace');
-  const notes = detailString(record, 'notes');
-  const comment = detailString(record, 'comment');
+  const datastore = firstNonEmpty(record.proxmox?.datastore, detailString(record, 'datastore'));
+  const namespace = firstNonEmpty(record.proxmox?.namespace, record.kubernetes?.namespace, detailString(record, 'namespace'));
+  const notes = firstNonEmpty(record.proxmox?.notes, detailString(record, 'notes'));
+  const comment = firstNonEmpty(record.proxmox?.comment, detailString(record, 'comment'));
+  const repository = firstNonEmpty(record.kubernetes?.repository, record.docker?.repository);
+  const policy = firstNonEmpty(record.kubernetes?.policy, record.docker?.policy);
+  const snapshotClass = firstNonEmpty(record.kubernetes?.snapshotClass);
+  const image = firstNonEmpty(record.docker?.image);
+  const volume = firstNonEmpty(record.docker?.volume);
   if (datastore) pieces.push(datastore);
   if (namespace) pieces.push(namespace || 'root');
+  if (repository) pieces.push(repository);
+  if (policy) pieces.push(policy);
+  if (snapshotClass) pieces.push(snapshotClass);
+  if (image) pieces.push(image);
+  if (volume) pieces.push(volume);
   if (notes) pieces.push(notes);
   if (comment) pieces.push(comment);
   return pieces.join(' | ');
@@ -273,6 +313,7 @@ const BackupsV2: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, connected, initialDataReceived } = useWebSocket();
+  const storageBackupsResources = useStorageBackupsResources();
 
   const [search, setSearch] = createSignal('');
   const [sourceFilter, setSourceFilter] = createSignal('all');
@@ -280,12 +321,17 @@ const BackupsV2: Component = () => {
   const [outcomeFilter, setOutcomeFilter] = createSignal<'all' | BackupOutcome>('all');
   const [scopeFilter, setScopeFilter] = createSignal('all');
   const [nodeFilter, setNodeFilter] = createSignal('all');
+  const [namespaceFilter, setNamespaceFilter] = createSignal('all');
   const [verificationFilter, setVerificationFilter] = createSignal<VerificationFilter>('all');
   const [chartRangeDays, setChartRangeDays] = createSignal<7 | 30 | 90 | 365>(30);
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
   const [currentPage, setCurrentPage] = createSignal(1);
+  const adapterResources = createMemo(() => {
+    const unifiedResources = storageBackupsResources.resources();
+    return unifiedResources.length > 0 ? unifiedResources : (state.resources || []);
+  });
   const records = createMemo<BackupRecordV2[]>(() =>
-    buildBackupRecordsV2({ state, resources: state.resources || [] }),
+    buildBackupRecordsV2({ state, resources: adapterResources() }),
   );
 
   const sourceOptions = createMemo(() => {
@@ -296,7 +342,24 @@ const BackupsV2: Component = () => {
   });
 
   const nodeOptions = createMemo(() => {
-    const values = Array.from(new Set(records().map((record) => deriveNodeLabel(record)))).sort();
+    const values = Array.from(
+      new Set(
+        records()
+          .map((record) => deriveNodeLabel(record))
+          .filter((value) => value !== 'n/a'),
+      ),
+    ).sort();
+    return ['all', ...values];
+  });
+
+  const namespaceOptions = createMemo(() => {
+    const values = Array.from(
+      new Set(
+        records()
+          .map((record) => deriveNamespaceLabel(record))
+          .filter((value) => value !== 'n/a'),
+      ),
+    ).sort();
     return ['all', ...values];
   });
 
@@ -322,6 +385,9 @@ const BackupsV2: Component = () => {
 
     const nodeFromQuery = parsed.node || 'all';
     if (nodeFromQuery !== untrack(nodeFilter)) setNodeFilter(nodeFromQuery);
+
+    const namespaceFromQuery = parsed.namespace || 'all';
+    if (namespaceFromQuery !== untrack(namespaceFilter)) setNamespaceFilter(namespaceFromQuery);
 
     if (parsed.status === 'verified' || parsed.status === 'unverified') {
       if (parsed.status !== untrack(verificationFilter)) setVerificationFilter(parsed.status);
@@ -349,6 +415,7 @@ const BackupsV2: Component = () => {
       status: nextStatus || null,
       group: scopeFilter() === 'workload' ? 'guest' : null,
       node: nodeFilter() === 'all' ? null : nodeFilter(),
+      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
       query: search().trim() || null,
     });
 
@@ -377,6 +444,7 @@ const BackupsV2: Component = () => {
       if (outcomeFilter() !== 'all' && record.outcome !== outcomeFilter()) return false;
       if (scopeFilter() !== 'all' && record.scope.scope !== scopeFilter()) return false;
       if (nodeFilter() !== 'all' && node !== nodeFilter()) return false;
+      if (namespaceFilter() !== 'all' && deriveNamespaceLabel(record) !== namespaceFilter()) return false;
 
       if (verificationFilter() === 'verified' && record.verified !== true) return false;
       if (verificationFilter() === 'unverified' && record.verified !== false) return false;
@@ -390,11 +458,25 @@ const BackupsV2: Component = () => {
         record.location.label,
         record.source.platform,
         mode,
+        deriveClusterLabel(record),
         deriveNodeLabel(record),
-        deriveVmidLabel(record),
-        detailString(record, 'owner'),
-        detailString(record, 'comment'),
-        detailString(record, 'notes'),
+        deriveNamespaceLabel(record),
+        deriveEntityIdLabel(record),
+        record.proxmox?.datastore,
+        record.proxmox?.owner,
+        record.proxmox?.comment,
+        record.proxmox?.notes,
+        record.kubernetes?.workloadKind,
+        record.kubernetes?.workloadName,
+        record.kubernetes?.repository,
+        record.kubernetes?.policy,
+        record.kubernetes?.snapshotClass,
+        record.docker?.containerId,
+        record.docker?.containerName,
+        record.docker?.image,
+        record.docker?.volume,
+        record.docker?.repository,
+        record.docker?.policy,
         ...(record.capabilities || []),
       ]
         .filter(Boolean)
@@ -512,6 +594,40 @@ const BackupsV2: Component = () => {
     return result;
   });
 
+  const showEntityColumn = createMemo(() => sortedRecords().some((record) => deriveEntityIdLabel(record) !== 'n/a'));
+  const showTypeColumn = createMemo(() =>
+    sortedRecords().some((record) => record.scope.workloadType && record.scope.workloadType !== 'other'),
+  );
+  const showClusterColumn = createMemo(() => sortedRecords().some((record) => deriveClusterLabel(record) !== 'n/a'));
+  const showNodeColumn = createMemo(() => sortedRecords().some((record) => deriveNodeLabel(record) !== 'n/a'));
+  const showNamespaceColumn = createMemo(() => sortedRecords().some((record) => deriveNamespaceLabel(record) !== 'n/a'));
+  const showSizeColumn = createMemo(() => sortedRecords().some((record) => Boolean(record.sizeBytes && record.sizeBytes > 0)));
+  const showVerificationColumn = createMemo(() => sortedRecords().some((record) => record.verified !== null));
+  const showDetailsColumn = createMemo(
+    () =>
+      sortedRecords().some((record) => {
+        const detailFlags: string[] = [];
+        if (record.protected === true) detailFlags.push('Protected');
+        if (record.encrypted === true) detailFlags.push('Encrypted');
+        return [detailFlags.join(' • '), summarizeDetails(record), deriveDetailsOwner(record)]
+          .filter((value) => value && value.trim().length > 0)
+          .join(' | ').length > 0;
+      }),
+  );
+  const tableColumnCount = createMemo(() => {
+    let count = 5; // Time, Name, Source, Mode, Outcome
+    if (showEntityColumn()) count += 1;
+    if (showTypeColumn()) count += 1;
+    if (showClusterColumn()) count += 1;
+    if (showNodeColumn()) count += 1;
+    if (showNamespaceColumn()) count += 1;
+    if (showSizeColumn()) count += 1;
+    if (showVerificationColumn()) count += 1;
+    if (showDetailsColumn()) count += 1;
+    return count;
+  });
+  const tableMinWidth = createMemo(() => `${Math.max(980, tableColumnCount() * 120)}px`);
+
   createEffect(() => {
     if (currentPage() > totalPages()) setCurrentPage(totalPages());
   });
@@ -605,6 +721,7 @@ const BackupsV2: Component = () => {
     const date = new Date(year, month - 1, day);
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   });
+  const activeNamespaceLabel = createMemo(() => (namespaceFilter() === 'all' ? '' : namespaceFilter()));
 
   const hasActiveFilters = createMemo(
     () =>
@@ -614,6 +731,7 @@ const BackupsV2: Component = () => {
       outcomeFilter() !== 'all' ||
       scopeFilter() !== 'all' ||
       nodeFilter() !== 'all' ||
+      namespaceFilter() !== 'all' ||
       verificationFilter() !== 'all' ||
       chartRangeDays() !== 30 ||
       selectedDateKey() !== null,
@@ -626,6 +744,7 @@ const BackupsV2: Component = () => {
     setOutcomeFilter('all');
     setScopeFilter('all');
     setNodeFilter('all');
+    setNamespaceFilter('all');
     setVerificationFilter('all');
     setChartRangeDays(30);
     setSelectedDateKey(null);
@@ -643,7 +762,7 @@ const BackupsV2: Component = () => {
                 setSearch(value);
                 setCurrentPage(1);
               }}
-              placeholder="Search backups, vmid, node, owner, notes..."
+              placeholder="Search backups, vmid, node, namespace, owner, notes..."
               class="w-full"
               autoFocus
               history={{
@@ -786,6 +905,29 @@ const BackupsV2: Component = () => {
             </div>
 
             <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+              <label
+                for="backups-v2-namespace-filter"
+                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              >
+                Namespace
+              </label>
+              <select
+                id="backups-v2-namespace-filter"
+                value={namespaceFilter()}
+                onChange={(event) => {
+                  setNamespaceFilter(event.currentTarget.value);
+                  setCurrentPage(1);
+                }}
+                class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+              >
+                <option value="all">All Namespaces</option>
+                <For each={namespaceOptions().filter((value) => value !== 'all')}>
+                  {(namespace) => <option value={namespace}>{namespace}</option>}
+                </For>
+              </select>
+            </div>
+
+            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
               <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">View</span>
               <button
                 type="button"
@@ -824,21 +966,44 @@ const BackupsV2: Component = () => {
 
       <div class="order-1">
       <Card padding="sm" class="h-full">
-          <Show when={selectedDateKey()}>
-            <div class="mb-1">
-              <div class="inline-flex max-w-full items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
-                <span class="font-medium uppercase tracking-wide">Day</span>
-                <span class="truncate font-mono text-[10px]" title={selectedDateLabel()}>
-                  {selectedDateLabel()}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedDateKey(null)}
-                  class="rounded px-1 py-0.5 text-[10px] hover:bg-blue-100 dark:hover:bg-blue-900/50"
+          <Show when={selectedDateKey() || activeNamespaceLabel()}>
+            <div class="mb-1 flex flex-wrap items-center gap-1.5">
+              <Show when={selectedDateKey()}>
+                <div class="inline-flex max-w-full items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+                  <span class="font-medium uppercase tracking-wide">Day</span>
+                  <span class="truncate font-mono text-[10px]" title={selectedDateLabel()}>
+                    {selectedDateLabel()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDateKey(null)}
+                    class="rounded px-1 py-0.5 text-[10px] hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </Show>
+              <Show when={activeNamespaceLabel()}>
+                <div
+                  data-testid="active-namespace-chip"
+                  class="inline-flex max-w-full items-center gap-1 rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-200"
                 >
-                  Clear
-                </button>
-              </div>
+                  <span class="font-medium uppercase tracking-wide">Namespace</span>
+                  <span class="truncate font-mono text-[10px]" title={activeNamespaceLabel()}>
+                    {activeNamespaceLabel()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNamespaceFilter('all');
+                      setCurrentPage(1);
+                    }}
+                    class="rounded px-1 py-0.5 text-[10px] hover:bg-violet-100 dark:hover:bg-violet-900/50"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </Show>
             </div>
           </Show>
 
@@ -1054,19 +1219,37 @@ const BackupsV2: Component = () => {
           }
         >
           <div class="overflow-x-auto">
-            <table class="w-full text-xs" style={{ 'min-width': '1280px' }}>
+            <table class="w-full text-xs" style={{ 'min-width': tableMinWidth() }}>
               <thead>
                 <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
                   <th class="px-2 py-1.5">Time</th>
                   <th class="px-2 py-1.5">Name</th>
-                  <th class="px-2 py-1.5">VMID/ID</th>
-                  <th class="px-2 py-1.5">Type</th>
-                  <th class="px-2 py-1.5">Node</th>
+                  <Show when={showEntityColumn()}>
+                    <th class="px-2 py-1.5">Entity</th>
+                  </Show>
+                  <Show when={showTypeColumn()}>
+                    <th class="px-2 py-1.5">Type</th>
+                  </Show>
+                  <Show when={showClusterColumn()}>
+                    <th class="px-2 py-1.5">Cluster</th>
+                  </Show>
+                  <Show when={showNodeColumn()}>
+                    <th class="px-2 py-1.5">Node/Host</th>
+                  </Show>
+                  <Show when={showNamespaceColumn()}>
+                    <th class="px-2 py-1.5">Namespace</th>
+                  </Show>
                   <th class="px-2 py-1.5">Source</th>
-                  <th class="px-2 py-1.5">Size</th>
+                  <Show when={showSizeColumn()}>
+                    <th class="px-2 py-1.5">Size</th>
+                  </Show>
                   <th class="px-2 py-1.5">Mode</th>
-                  <th class="px-2 py-1.5">Verified</th>
-                  <th class="px-2 py-1.5">Details</th>
+                  <Show when={showVerificationColumn()}>
+                    <th class="px-2 py-1.5">Verified</th>
+                  </Show>
+                  <Show when={showDetailsColumn()}>
+                    <th class="px-2 py-1.5">Details</th>
+                  </Show>
                   <th class="px-2 py-1.5">Outcome</th>
                 </tr>
               </thead>
@@ -1077,7 +1260,7 @@ const BackupsV2: Component = () => {
                       <tr
                         class={groupHeaderRowClass()}
                       >
-                        <td colSpan={11} class={groupHeaderTextClass()}>
+                        <td colSpan={tableColumnCount()} class={groupHeaderTextClass()}>
                           <div class="flex items-center gap-2">
                             <span>{group.label}</span>
                             <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500">
@@ -1089,8 +1272,15 @@ const BackupsV2: Component = () => {
                       <For each={group.items}>
                         {(record) => {
                           const mode = deriveMode(record);
+                          const guestType = deriveGuestType(record);
+                          const namespace = deriveNamespaceLabel(record);
+                          const guestTypeBadge = getWorkloadTypeBadge(record.scope.workloadType, {
+                            label: guestType,
+                            title: guestType,
+                          });
+                          const sourceBadge = getSourcePlatformBadge(record.source.platform);
                           const detailsText = summarizeDetails(record);
-                          const owner = detailString(record, 'owner');
+                          const owner = deriveDetailsOwner(record);
                           const rowNowMs = Date.now();
                           const issueTone = deriveIssueTone(record, rowNowMs);
                           const issueRailClass = issueTone === 'none' ? '' : ISSUE_RAIL_CLASS[issueTone];
@@ -1120,22 +1310,65 @@ const BackupsV2: Component = () => {
                               >
                                 {record.name}
                               </td>
-                              <td class="whitespace-nowrap pl-6 pr-2 py-1 font-mono text-gray-700 dark:text-gray-400">{deriveVmidLabel(record)}</td>
-                              <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">{deriveGuestType(record)}</td>
-                              <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">{deriveNodeLabel(record)}</td>
-                              <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">{sourceLabel(record.source.platform)}</td>
-                              <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-700 dark:text-gray-400">{record.sizeBytes && record.sizeBytes > 0 ? formatBytes(record.sizeBytes) : 'n/a'}</td>
+                              <Show when={showEntityColumn()}>
+                                <td class="whitespace-nowrap pl-6 pr-2 py-1 font-mono text-gray-700 dark:text-gray-400">{deriveEntityIdLabel(record)}</td>
+                              </Show>
+                              <Show when={showTypeColumn()}>
+                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">
+                                  <span
+                                    class={`inline-flex items-center whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium ${guestTypeBadge.className}`}
+                                    title={guestTypeBadge.title}
+                                  >
+                                    {guestTypeBadge.label}
+                                  </span>
+                                </td>
+                              </Show>
+                              <Show when={showClusterColumn()}>
+                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">{deriveClusterLabel(record)}</td>
+                              </Show>
+                              <Show when={showNodeColumn()}>
+                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">{deriveNodeLabel(record)}</td>
+                              </Show>
+                              <Show when={showNamespaceColumn()}>
+                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">
+                                  <Show
+                                    when={namespace !== 'n/a'}
+                                    fallback={<span class="text-xs text-gray-500 dark:text-gray-400">n/a</span>}
+                                  >
+                                    <span class="inline-flex items-center whitespace-nowrap rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                                      {namespace}
+                                    </span>
+                                  </Show>
+                                </td>
+                              </Show>
+                              <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">
+                                <Show
+                                  when={sourceBadge}
+                                  fallback={<span class="text-xs text-gray-500 dark:text-gray-400">{sourceLabel(record.source.platform)}</span>}
+                                >
+                                  <span class={sourceBadge!.classes} title={sourceBadge!.title}>
+                                    {sourceBadge!.label}
+                                  </span>
+                                </Show>
+                              </td>
+                              <Show when={showSizeColumn()}>
+                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-700 dark:text-gray-400">{record.sizeBytes && record.sizeBytes > 0 ? formatBytes(record.sizeBytes) : 'n/a'}</td>
+                              </Show>
                               <td class="whitespace-nowrap pl-6 pr-2 py-1">
                                 <span class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${MODE_BADGE_CLASS[mode]}`}>{MODE_LABELS[mode]}</span>
                               </td>
-                              <td class="whitespace-nowrap pl-6 pr-2 py-1 text-[11px]">
-                                <Show when={record.verified === true}><span class="text-emerald-700 dark:text-emerald-300">Yes</span></Show>
-                                <Show when={record.verified === false}><span class="text-rose-700 dark:text-rose-300">No</span></Show>
-                                <Show when={record.verified === null}><span class="text-gray-500 dark:text-gray-400">n/a</span></Show>
-                              </td>
-                              <td class="max-w-[360px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-[11px] leading-4 text-gray-600 dark:text-gray-400" title={detailInline}>
-                                {detailInline}
-                              </td>
+                              <Show when={showVerificationColumn()}>
+                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-[11px]">
+                                  <Show when={record.verified === true}><span class="text-emerald-700 dark:text-emerald-300">Yes</span></Show>
+                                  <Show when={record.verified === false}><span class="text-rose-700 dark:text-rose-300">No</span></Show>
+                                  <Show when={record.verified === null}><span class="text-gray-500 dark:text-gray-400">n/a</span></Show>
+                                </td>
+                              </Show>
+                              <Show when={showDetailsColumn()}>
+                                <td class="max-w-[360px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-[11px] leading-4 text-gray-600 dark:text-gray-400" title={detailInline}>
+                                  {detailInline}
+                                </td>
+                              </Show>
                               <td class="whitespace-nowrap pl-6 pr-2 py-1">
                                 <span class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[record.outcome]}`}>{titleize(record.outcome)}</span>
                               </td>

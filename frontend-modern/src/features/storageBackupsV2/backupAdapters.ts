@@ -3,6 +3,7 @@ import type { Resource, ResourceType } from '@/types/resource';
 import type {
   BackupCapability,
   BackupCategory,
+  BackupMode,
   BackupOutcome,
   BackupRecordV2,
   BackupScope,
@@ -66,6 +67,56 @@ const readString = (record: Record<string, unknown>, key: string): string => {
 const readBoolean = (record: Record<string, unknown>, key: string): boolean | null => {
   const value = record[key];
   if (typeof value === 'boolean') return value;
+  return null;
+};
+
+const readNumber = (record: Record<string, unknown>, key: string): number | null => {
+  const value = record[key];
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const firstNonEmpty = (...values: Array<string | null | undefined>): string => {
+  for (const value of values) {
+    const normalized = (value || '').trim();
+    if (normalized) return normalized;
+  }
+  return '';
+};
+
+const readStringAny = (record: Record<string, unknown>, keys: string[]): string => {
+  for (const key of keys) {
+    const value = readString(record, key).trim();
+    if (value) return value;
+  }
+  return '';
+};
+
+const readBooleanAny = (record: Record<string, unknown>, keys: string[]): boolean | null => {
+  for (const key of keys) {
+    const value = readBoolean(record, key);
+    if (value !== null) return value;
+  }
+  return null;
+};
+
+const readNumberAny = (record: Record<string, unknown>, keys: string[]): number | null => {
+  for (const key of keys) {
+    const value = readNumber(record, key);
+    if (value !== null) return value;
+  }
+  return null;
+};
+
+const readDateAny = (record: Record<string, unknown>, keys: string[]): number | null => {
+  for (const key of keys) {
+    const parsed = parseDateMillis(record[key] as string | number | null | undefined);
+    if (parsed) return parsed;
+  }
   return null;
 };
 
@@ -149,22 +200,24 @@ const parseResourceLastBackup = (resource: Resource): number | null => {
   return null;
 };
 
-const inferModeFromResource = (
-  platformData: Record<string, unknown>,
+const inferModeFromRecord = (
+  payload: Record<string, unknown>,
   family: SourceDescriptor['family'],
-): 'snapshot' | 'local' | 'remote' => {
-  const explicit = readString(platformData, 'mode').toLowerCase() || readString(platformData, 'backupMode').toLowerCase();
+  fallback: BackupMode = 'local',
+): BackupMode => {
+  const explicit =
+    readStringAny(payload, ['mode', 'backupMode', 'transport', 'strategy', 'type']).toLowerCase();
   if (explicit === 'snapshot' || explicit === 'local' || explicit === 'remote') return explicit;
 
-  if (readBoolean(platformData, 'snapshot') === true) return 'snapshot';
-  if (readBoolean(platformData, 'remote') === true) return 'remote';
+  if (readBooleanAny(payload, ['snapshot', 'isSnapshot']) === true) return 'snapshot';
+  if (readBooleanAny(payload, ['remote', 'offsite', 'crossSite']) === true) return 'remote';
   if (family === 'cloud') return 'remote';
-  return 'local';
+  return fallback;
 };
 
 const backupCapabilitiesForResource = (
   family: SourceDescriptor['family'],
-  mode: 'snapshot' | 'local' | 'remote',
+  mode: BackupMode,
   encrypted: boolean | null,
   protectedFlag: boolean | null,
 ): BackupCapability[] => {
@@ -178,16 +231,32 @@ const backupCapabilitiesForResource = (
   return dedupe(caps);
 };
 
+const backupCapabilitiesForArtifact = (
+  family: SourceDescriptor['family'],
+  mode: BackupMode,
+  encrypted: boolean | null,
+  protectedFlag: boolean | null,
+  verified: boolean | null,
+  appAware: boolean,
+): BackupCapability[] => {
+  const caps = backupCapabilitiesForResource(family, mode, encrypted, protectedFlag);
+  if (verified !== null) caps.push('verification');
+  if (appAware) caps.push('application-aware');
+  return dedupe(caps);
+};
+
 const locationFromResource = (resource: Resource): BackupRecordV2['location'] => {
   const platformData = asRecord(resource.platformData);
   const proxmoxData = asRecord(platformData.proxmox);
   const kubernetesData = asRecord(platformData.kubernetes);
+  const dockerData = asRecord(platformData.docker);
   const node =
     readString(platformData, 'node') ||
     readString(platformData, 'nodeName') ||
     readString(platformData, 'hostName') ||
     readString(proxmoxData, 'nodeName') ||
-    readString(kubernetesData, 'nodeName');
+    readString(kubernetesData, 'nodeName') ||
+    readString(dockerData, 'hostname');
   const cluster =
     readString(platformData, 'clusterId') ||
     readString(kubernetesData, 'clusterId') ||
@@ -222,10 +291,43 @@ const inferCategory = (type: string | undefined, vmid: number | string | null | 
   return 'other';
 };
 
+const workloadTypeFromCategory = (category: BackupCategory): BackupScope['workloadType'] => {
+  if (category === 'vm-backup') return 'vm';
+  if (category === 'container-backup') return 'container';
+  if (category === 'host-backup') return 'host';
+  return 'other';
+};
+
+const canonicalBackupIdentity = (
+  type: string | undefined,
+  vmid: number | string | null | undefined,
+  when: string | number | null | undefined,
+): string | null => {
+  const category = inferCategory(type, vmid);
+  if (category === 'snapshot' || category === 'other') return null;
+  const vmidLabel = vmid == null ? '' : String(vmid).trim();
+  if (!vmidLabel) return null;
+  const millis = parseDateMillis(when);
+  if (!millis) return null;
+  const seconds = Math.floor(millis / 1000);
+  return `${category}:${vmidLabel}:${seconds}`;
+};
+
+const buildPbsIdentitySet = (ctx: BackupV2AdapterContext): Set<string> => {
+  const backups = ctx.state.backups?.pbs ?? ctx.state.pbsBackups;
+  const identities = new Set<string>();
+  for (const backup of backups || []) {
+    const identity = canonicalBackupIdentity(backup.backupType, backup.vmid, backup.backupTime);
+    if (identity) identities.add(identity);
+  }
+  return identities;
+};
+
 const inferOutcome = (verified: boolean | null | undefined, status?: string): BackupOutcome => {
   const normalized = (status || '').toLowerCase();
   if (normalized.includes('running')) return 'running';
   if (normalized.includes('fail') || normalized.includes('error')) return 'failed';
+  if (normalized.includes('warn') || normalized.includes('degraded')) return 'warning';
   if (verified === true) return 'success';
   if (verified === false) return 'warning';
   return 'unknown';
@@ -261,6 +363,7 @@ const buildSnapshotRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => 
       name: snapshot.name || `Snapshot ${snapshot.vmid}`,
       category,
       outcome: 'success',
+      mode: 'snapshot',
       scope: scope(`VMID ${snapshot.vmid}`, 'workload', snapshot.type === 'qemu' ? 'vm' : 'container'),
       location: { label: snapshot.node || snapshot.instance || 'Unknown', scope: 'node' },
       source: source('proxmox-pve', 'legacy-pve-snapshots', 'legacy'),
@@ -273,12 +376,11 @@ const buildSnapshotRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => 
       refs: {
         platformEntityId: snapshot.instance,
       },
-      details: {
-        vmid: snapshot.vmid,
+      proxmox: {
+        vmid: String(snapshot.vmid),
         instance: snapshot.instance,
         node: snapshot.node,
-        snapshotType: snapshot.type,
-        mode: 'snapshot',
+        backupType: snapshot.type,
       },
     };
   });
@@ -286,9 +388,17 @@ const buildSnapshotRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => 
 
 const buildPveStorageBackupRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
   const pve = ctx.state.backups?.pve ?? ctx.state.pveBackups;
+  const pbsIdentitySet = buildPbsIdentitySet(ctx);
   const storageBackups = pve?.storageBackups || [];
   return storageBackups
-    .filter((backup) => backup.type !== 'vztmpl' && backup.type !== 'iso')
+    .filter((backup) => {
+      if (backup.type === 'vztmpl' || backup.type === 'iso') return false;
+      if (!backup.isPBS) return true;
+      const identity = canonicalBackupIdentity(backup.type, backup.vmid, backup.ctime || backup.time);
+      if (!identity) return true;
+      // Prefer canonical PBS records for overlapping remote backups; keep PVE-only entries as fallback.
+      return !pbsIdentitySet.has(identity);
+    })
     .map((backup: StorageBackup) => {
       const completedAt = parseDateMillis(backup.ctime);
       const category = inferCategory(backup.type, backup.vmid);
@@ -296,21 +406,17 @@ const buildPveStorageBackupRecords = (ctx: BackupV2AdapterContext): BackupRecord
       const encrypted = backup.encryption ? true : null;
       const backupName = backup.volid?.split('/').pop() || backup.notes || `Backup ${backup.vmid}`;
       const backupSource = backup.isPBS ? 'proxmox-pbs' : 'proxmox-pve';
+      const mode: BackupMode = backup.isPBS ? 'remote' : 'local';
       return {
         id: `pve:${backup.instance}:${backup.node}:${backup.vmid}:${backup.ctime}:${backup.volid || backupName}`,
         name: backupName,
         category,
         outcome: inferOutcome(verified, backup.verification),
+        mode,
         scope: scope(
           category === 'host-backup' ? (backup.node || 'Host') : `VMID ${backup.vmid}`,
           category === 'host-backup' ? 'host' : 'workload',
-          category === 'vm-backup'
-            ? 'vm'
-            : category === 'container-backup'
-              ? 'container'
-              : category === 'host-backup'
-                ? 'host'
-                : 'other',
+          workloadTypeFromCategory(category),
         ),
         location: { label: backup.storage || backup.node || 'Unknown', scope: 'node' },
         source: source(backupSource, 'legacy-pve-storage-backups', 'legacy'),
@@ -323,14 +429,13 @@ const buildPveStorageBackupRecords = (ctx: BackupV2AdapterContext): BackupRecord
         refs: {
           platformEntityId: backup.instance,
         },
-        details: {
-          vmid: backup.vmid,
+        proxmox: {
+          vmid: String(backup.vmid),
           node: backup.node,
           instance: backup.instance,
           storage: backup.storage,
           backupType: backup.type,
           notes: backup.notes,
-          mode: backup.isPBS ? 'remote' : 'local',
         },
       };
     });
@@ -341,6 +446,7 @@ const buildPbsRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
   return (backups || []).map((backup: PBSBackup) => {
     const category = inferCategory(backup.backupType, backup.vmid);
     const completedAt = parseDateMillis(backup.backupTime);
+    const normalizedNamespace = (backup.namespace || '').trim() || 'root';
     const encrypted =
       Array.isArray(backup.files) &&
       backup.files.some((entry) =>
@@ -349,20 +455,15 @@ const buildPbsRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
     return {
       id:
         backup.id ||
-        `pbs:${backup.instance}:${backup.datastore}:${backup.namespace}:${backup.backupType}:${backup.vmid}:${backup.backupTime}`,
+        `pbs:${backup.instance}:${backup.datastore}:${normalizedNamespace}:${backup.backupType}:${backup.vmid}:${backup.backupTime}`,
       name: backup.comment || `${backup.backupType}/${backup.vmid}`,
       category,
       outcome: inferOutcome(backup.verified, undefined),
+      mode: 'remote',
       scope: scope(
         category === 'host-backup' ? (backup.instance || 'Host') : `VMID ${backup.vmid}`,
         category === 'host-backup' ? 'host' : 'workload',
-        category === 'vm-backup'
-          ? 'vm'
-          : category === 'container-backup'
-            ? 'container'
-            : category === 'host-backup'
-              ? 'host'
-              : 'other',
+        workloadTypeFromCategory(category),
       ),
       location: {
         label: `${backup.instance || 'PBS'} / ${backup.datastore || 'datastore'}`,
@@ -379,12 +480,14 @@ const buildPbsRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
         legacyBackupId: backup.id,
         platformEntityId: backup.instance,
       },
-      details: {
+      proxmox: {
+        vmid: backup.vmid,
+        instance: backup.instance,
         datastore: backup.datastore,
-        namespace: backup.namespace,
+        namespace: normalizedNamespace,
         owner: backup.owner,
         comment: backup.comment,
-        mode: 'remote',
+        backupType: backup.backupType,
       },
     };
   });
@@ -397,6 +500,7 @@ const buildPmgRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
     name: backup.filename || `PMG backup ${backup.node}`,
     category: 'config-backup',
     outcome: 'success',
+    mode: 'local',
     scope: scope(backup.node || backup.instance || 'PMG host', 'host', 'host'),
     location: { label: backup.instance || 'PMG', scope: 'cluster' },
     source: source('proxmox-pmg', 'legacy-pmg-backups', 'legacy'),
@@ -410,12 +514,416 @@ const buildPmgRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
       legacyBackupId: backup.id,
       platformEntityId: backup.instance,
     },
-    details: {
+    proxmox: {
+      instance: backup.instance,
       node: backup.node,
       filename: backup.filename,
-      mode: 'local',
     },
   }));
+};
+
+const ARTIFACT_COLLECTION_KEYS = new Set([
+  'backup',
+  'backups',
+  'backupData',
+  'backupInfo',
+  'backupArtifacts',
+  'backupEntries',
+  'backupRecords',
+  'artifacts',
+  'entries',
+  'records',
+  'snapshots',
+  'items',
+]);
+
+const looksLikeBackupArtifact = (record: Record<string, unknown>): boolean => {
+  const artifactTimestamp = readDateAny(record, [
+    'backupTime',
+    'completedAt',
+    'finishedAt',
+    'timestamp',
+    'time',
+    'createdAt',
+  ]);
+
+  const hasBackupHints =
+    readStringAny(record, [
+      'backupId',
+      'backupUid',
+      'backupName',
+      'runId',
+      'snapshotClass',
+      'repository',
+      'datastore',
+      'backupType',
+      'vmid',
+      'containerId',
+      'volume',
+      'workloadName',
+      'policy',
+    ]) !== '' ||
+    readNumberAny(record, ['sizeBytes', 'size', 'bytes']) !== null;
+
+  const hasOperationalHints =
+    readStringAny(record, ['name', 'displayName', 'title', 'status', 'phase', 'result']) !== '';
+
+  return hasBackupHints || (artifactTimestamp !== null && hasOperationalHints);
+};
+
+const collectArtifactCandidates = (...seeds: unknown[]): Record<string, unknown>[] => {
+  const queue: unknown[] = [...seeds];
+  const results: Record<string, unknown>[] = [];
+  const seenSignatures = new Set<string>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    if (typeof current !== 'object') continue;
+
+    const record = asRecord(current);
+    if (looksLikeBackupArtifact(record)) {
+      const signature = [
+        readStringAny(record, ['id', 'uid', 'backupId', 'backupUid', 'runId']),
+        readStringAny(record, ['backupTime', 'completedAt', 'finishedAt', 'timestamp', 'time', 'createdAt']),
+        readStringAny(record, ['name', 'backupName', 'workloadName', 'containerName', 'volume']),
+      ].join('|');
+      if (!seenSignatures.has(signature)) {
+        seenSignatures.add(signature);
+        results.push(record);
+      }
+    }
+
+    for (const [key, value] of Object.entries(record)) {
+      if (!value) continue;
+      const keyLooksRelevant = ARTIFACT_COLLECTION_KEYS.has(key) || /backup|artifact|snapshot/i.test(key);
+      if (!keyLooksRelevant) continue;
+      if (Array.isArray(value)) {
+        queue.push(...value);
+      } else if (typeof value === 'object') {
+        queue.push(value);
+      }
+    }
+  }
+
+  return results;
+};
+
+const extractKubernetesArtifactPayloads = (resource: Resource): Record<string, unknown>[] => {
+  const platformData = asRecord(resource.platformData);
+  const backupData = asRecord(platformData.backup);
+  const kubernetesData = asRecord(platformData.kubernetes);
+
+  return collectArtifactCandidates(
+    platformData.backupArtifacts,
+    platformData.backups,
+    platformData.backup,
+    backupData,
+    backupData.kubernetes,
+    kubernetesData.backup,
+    kubernetesData.backups,
+    kubernetesData.backupArtifacts,
+  );
+};
+
+const extractDockerArtifactPayloads = (resource: Resource): Record<string, unknown>[] => {
+  const platformData = asRecord(resource.platformData);
+  const backupData = asRecord(platformData.backup);
+  const dockerData = asRecord(platformData.docker);
+
+  return collectArtifactCandidates(
+    platformData.backupArtifacts,
+    platformData.backups,
+    platformData.backup,
+    backupData,
+    backupData.docker,
+    dockerData.backup,
+    dockerData.backups,
+    dockerData.backupArtifacts,
+  );
+};
+
+const categoryFromKubernetesArtifact = (resource: Resource, artifact: Record<string, unknown>): BackupCategory => {
+  const workloadKind = readStringAny(artifact, ['workloadKind', 'kind', 'ownerKind']).toLowerCase();
+  if (workloadKind.includes('node')) return 'host-backup';
+  if (workloadKind.includes('cluster') || workloadKind.includes('namespace')) return 'config-backup';
+  if (resource.type === 'k8s-cluster') return 'config-backup';
+  if (resource.type === 'k8s-node') return 'host-backup';
+  return 'container-backup';
+};
+
+const scopeFromKubernetesArtifact = (
+  category: BackupCategory,
+  workloadName: string,
+  namespace: string,
+  cluster: string,
+): BackupScope => {
+  if (category === 'host-backup') {
+    return scope(workloadName || cluster || 'Node', 'host', 'host');
+  }
+  if (category === 'config-backup') {
+    if (namespace) return scope(`Namespace ${namespace}`, 'namespace', 'other');
+    return scope(cluster || 'Cluster', 'cluster', 'other');
+  }
+  return scope(workloadName || namespace || cluster || 'Workload', 'workload', 'pod');
+};
+
+const categoryFromDockerArtifact = (resource: Resource, artifact: Record<string, unknown>): BackupCategory => {
+  const volume = readStringAny(artifact, ['volume', 'volumeName', 'volumeId']);
+  if (volume) return 'volume-backup';
+  if (resource.type === 'docker-host') return 'host-backup';
+  if (resource.type === 'docker-container' || readStringAny(artifact, ['containerId', 'containerName']) !== '') {
+    return 'container-backup';
+  }
+  return 'other';
+};
+
+const scopeFromDockerArtifact = (
+  category: BackupCategory,
+  host: string,
+  containerName: string,
+  volume: string,
+): BackupScope => {
+  if (category === 'host-backup') return scope(host || 'Docker Host', 'host', 'host');
+  if (category === 'volume-backup') return scope(volume || host || 'Volume', 'workload', 'container');
+  return scope(containerName || host || 'Container', 'workload', 'container');
+};
+
+const buildKubernetesArtifactRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
+  const records: BackupRecordV2[] = [];
+
+  for (const resource of ctx.resources || []) {
+    const platform = String(resource.platformType || '');
+    const isKubernetesResource = platform === 'kubernetes' || resource.type.startsWith('k8s') || resource.type === 'pod';
+    if (!isKubernetesResource) continue;
+
+    const artifactPayloads = extractKubernetesArtifactPayloads(resource);
+    if (artifactPayloads.length === 0) continue;
+
+    const platformData = asRecord(resource.platformData);
+    const kubernetesData = asRecord(platformData.kubernetes);
+
+    for (const artifact of artifactPayloads) {
+      const completedAt =
+        readDateAny(artifact, ['backupTime', 'completedAt', 'finishedAt', 'timestamp', 'time', 'createdAt']) ||
+        parseResourceLastBackup(resource);
+
+      const namespace = firstNonEmpty(
+        readStringAny(artifact, ['namespace', 'ns']),
+        readString(kubernetesData, 'namespace'),
+        readString(platformData, 'namespace'),
+      );
+      const cluster = firstNonEmpty(
+        readStringAny(artifact, ['cluster', 'clusterId', 'clusterName']),
+        readString(kubernetesData, 'clusterId'),
+        readString(kubernetesData, 'clusterName'),
+        resource.clusterId,
+        resource.platformId,
+      );
+      const node = firstNonEmpty(
+        readStringAny(artifact, ['node', 'nodeName', 'host']),
+        readString(kubernetesData, 'nodeName'),
+        readString(platformData, 'nodeName'),
+      );
+      const workloadKind = firstNonEmpty(
+        readStringAny(artifact, ['workloadKind', 'kind', 'ownerKind']),
+        readString(kubernetesData, 'ownerKind'),
+      );
+      const workloadName = firstNonEmpty(
+        readStringAny(artifact, ['workloadName', 'ownerName', 'target']),
+        readString(kubernetesData, 'ownerName'),
+        resource.displayName,
+        resource.name,
+      );
+      const repository = firstNonEmpty(readStringAny(artifact, ['repository', 'repo', 'store']), readStringAny(asRecord(platformData.backup), ['repository', 'repo', 'store']));
+      const policy = firstNonEmpty(readStringAny(artifact, ['policy', 'schedule', 'policyName']));
+      const snapshotClass = firstNonEmpty(readStringAny(artifact, ['snapshotClass', 'volumeSnapshotClass']));
+      const backupId = firstNonEmpty(
+        readStringAny(artifact, ['backupId', 'backupUid', 'uid']),
+        readStringAny(artifact, ['id']),
+      );
+      const runId = firstNonEmpty(readStringAny(artifact, ['runId', 'jobId', 'executionId']));
+      const mode = inferModeFromRecord({ ...platformData, ...kubernetesData, ...artifact }, 'container', 'remote');
+
+      const verified = readBooleanAny(artifact, ['verified', 'isVerified', 'verificationPassed']);
+      const protectedFlag = readBooleanAny(artifact, ['protected', 'immutable', 'isImmutable']);
+      const encrypted = readBooleanAny(artifact, ['encrypted', 'isEncrypted']);
+      const appAware =
+        readBooleanAny(artifact, ['applicationAware', 'appAware']) === true ||
+        readStringAny(artifact, ['hook', 'quiesce', 'snapshotClass']) !== '';
+      const statusHint = readStringAny(artifact, ['status', 'phase', 'state', 'result']);
+      const inferredOutcome = inferOutcome(verified, statusHint);
+      const outcome = inferredOutcome === 'unknown' && completedAt ? 'success' : inferredOutcome;
+      const category = categoryFromKubernetesArtifact(resource, artifact);
+
+      const backupName = firstNonEmpty(
+        readStringAny(artifact, ['backupName', 'name', 'displayName', 'title']),
+        runId,
+        backupId,
+        `${workloadName || resource.name} backup`,
+      );
+      const scopeValue = scopeFromKubernetesArtifact(category, workloadName, namespace, cluster);
+
+      const id =
+        firstNonEmpty(backupId, runId) !== ''
+          ? `k8s:${resource.id}:${firstNonEmpty(backupId, runId)}`
+          : `k8s:${resource.id}:${completedAt || 'na'}:${workloadName || namespace || resource.name}`;
+
+      records.push({
+        id,
+        name: backupName,
+        category,
+        outcome,
+        mode,
+        scope: scopeValue,
+        location: node
+          ? { label: node, scope: 'node' }
+          : namespace
+            ? { label: namespace, scope: 'namespace' }
+            : cluster
+              ? { label: cluster, scope: 'cluster' }
+              : locationFromResource(resource),
+        source: source('kubernetes', 'kubernetes-artifact-backups', 'resource'),
+        completedAt,
+        sizeBytes: readNumberAny(artifact, ['sizeBytes', 'size', 'bytes']),
+        verified,
+        protected: protectedFlag,
+        encrypted,
+        capabilities: backupCapabilitiesForArtifact('container', mode, encrypted, protectedFlag, verified, appAware),
+        refs: {
+          resourceId: resource.id,
+          platformEntityId: resource.platformId,
+        },
+        kubernetes: {
+          cluster,
+          namespace,
+          node,
+          workloadKind,
+          workloadName,
+          policy,
+          repository,
+          snapshotClass,
+          backupId,
+          runId,
+        },
+      });
+    }
+  }
+
+  return records;
+};
+
+const buildDockerArtifactRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
+  const records: BackupRecordV2[] = [];
+
+  for (const resource of ctx.resources || []) {
+    const platform = String(resource.platformType || '');
+    const isDockerResource =
+      platform === 'docker' || resource.type === 'docker-host' || resource.type === 'docker-container' || resource.type === 'docker-service';
+    if (!isDockerResource) continue;
+
+    const artifactPayloads = extractDockerArtifactPayloads(resource);
+    if (artifactPayloads.length === 0) continue;
+
+    const platformData = asRecord(resource.platformData);
+    const dockerData = asRecord(platformData.docker);
+
+    for (const artifact of artifactPayloads) {
+      const completedAt =
+        readDateAny(artifact, ['backupTime', 'completedAt', 'finishedAt', 'timestamp', 'time', 'createdAt']) ||
+        parseResourceLastBackup(resource);
+
+      const host = firstNonEmpty(
+        readStringAny(artifact, ['host', 'hostName', 'node', 'nodeName']),
+        readString(dockerData, 'hostname'),
+        readString(platformData, 'hostName'),
+        resource.platformId,
+      );
+      const containerId = firstNonEmpty(
+        readStringAny(artifact, ['containerId', 'container', 'targetId']),
+        readString(dockerData, 'containerId'),
+      );
+      const containerName = firstNonEmpty(
+        readStringAny(artifact, ['containerName', 'target', 'workloadName']),
+        resource.displayName,
+        resource.name,
+      );
+      const image = firstNonEmpty(readStringAny(artifact, ['image', 'imageName']), readString(dockerData, 'image'));
+      const volume = firstNonEmpty(readStringAny(artifact, ['volume', 'volumeName', 'volumeId']));
+      const repository = firstNonEmpty(readStringAny(artifact, ['repository', 'repo', 'store']));
+      const policy = firstNonEmpty(readStringAny(artifact, ['policy', 'schedule', 'policyName']));
+      const backupId = firstNonEmpty(readStringAny(artifact, ['backupId', 'backupUid', 'id', 'uid']));
+      const mode = inferModeFromRecord({ ...platformData, ...dockerData, ...artifact }, 'container', 'remote');
+
+      const verified = readBooleanAny(artifact, ['verified', 'isVerified', 'verificationPassed']);
+      const protectedFlag = readBooleanAny(artifact, ['protected', 'immutable', 'isImmutable']);
+      const encrypted = readBooleanAny(artifact, ['encrypted', 'isEncrypted']);
+      const appAware = readBooleanAny(artifact, ['applicationAware', 'appAware']) === true;
+      const statusHint = readStringAny(artifact, ['status', 'phase', 'state', 'result']);
+      const inferredOutcome = inferOutcome(verified, statusHint);
+      const outcome = inferredOutcome === 'unknown' && completedAt ? 'success' : inferredOutcome;
+      const category = categoryFromDockerArtifact(resource, artifact);
+      const scopeValue = scopeFromDockerArtifact(category, host, containerName, volume);
+
+      const backupName = firstNonEmpty(
+        readStringAny(artifact, ['backupName', 'name', 'displayName', 'title']),
+        volume ? `Volume ${volume}` : containerName,
+        backupId,
+        `${resource.name} backup`,
+      );
+
+      const id =
+        backupId !== ''
+          ? `docker:${resource.id}:${backupId}`
+          : `docker:${resource.id}:${completedAt || 'na'}:${containerId || volume || containerName || host}`;
+
+      records.push({
+        id,
+        name: backupName,
+        category,
+        outcome,
+        mode,
+        scope: scopeValue,
+        location: host ? { label: host, scope: 'node' } : locationFromResource(resource),
+        source: source('docker', 'docker-artifact-backups', 'resource'),
+        completedAt,
+        sizeBytes: readNumberAny(artifact, ['sizeBytes', 'size', 'bytes']),
+        verified,
+        protected: protectedFlag,
+        encrypted,
+        capabilities: backupCapabilitiesForArtifact('container', mode, encrypted, protectedFlag, verified, appAware),
+        refs: {
+          resourceId: resource.id,
+          platformEntityId: resource.platformId,
+        },
+        docker: {
+          host,
+          containerId,
+          containerName,
+          image,
+          volume,
+          repository,
+          policy,
+          backupId,
+        },
+      });
+    }
+  }
+
+  return records;
+};
+
+const hasArtifactBackups = (resource: Resource): boolean => {
+  const platform = String(resource.platformType || '').toLowerCase();
+  if (platform === 'kubernetes') return extractKubernetesArtifactPayloads(resource).length > 0;
+  if (platform === 'docker') return extractDockerArtifactPayloads(resource).length > 0;
+  return false;
 };
 
 const buildResourceBackupRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
@@ -428,16 +936,16 @@ const buildResourceBackupRecords = (ctx: BackupV2AdapterContext): BackupRecordV2
 
     const platform = (resource.platformType || 'generic') as StorageBackupPlatform;
     if (legacyPresent && isProxmoxPlatform(platform)) continue;
+    if (hasArtifactBackups(resource)) continue;
 
     const platformData = asRecord(resource.platformData);
     const backupData = asRecord(platformData.backup);
-    const mergedDetails = { ...backupData, ...platformData };
+    const mode = inferModeFromRecord({ ...backupData, ...platformData }, resolveFamily(platform), 'local');
     const verified = readBoolean(platformData, 'verified') ?? readBoolean(backupData, 'verified');
     const protectedFlag = readBoolean(platformData, 'protected') ?? readBoolean(backupData, 'protected');
     const encrypted = readBoolean(platformData, 'encrypted') ?? readBoolean(backupData, 'encrypted');
 
     const sourceDescriptor = source(platform, 'resource-backups', 'resource');
-    const mode = inferModeFromResource(mergedDetails, sourceDescriptor.family);
     const statusHint =
       readString(platformData, 'backupStatus') ||
       readString(platformData, 'status') ||
@@ -461,6 +969,7 @@ const buildResourceBackupRecords = (ctx: BackupV2AdapterContext): BackupRecordV2
       name: resource.displayName || resource.name || 'Resource Backup',
       category,
       outcome,
+      mode,
       scope: scope(scopeLabel || 'Unknown', scopeValue, workloadType),
       location: locationFromResource(resource),
       source: sourceDescriptor,
@@ -475,13 +984,9 @@ const buildResourceBackupRecords = (ctx: BackupV2AdapterContext): BackupRecordV2
         platformEntityId: resource.platformId,
       },
       details: {
-        mode,
         resourceType: resource.type,
         resourceId: resource.id,
         platformId: resource.platformId,
-        node: readString(platformData, 'node') || readString(platformData, 'nodeName'),
-        namespace: readString(platformData, 'namespace'),
-        vmid: vmidHint,
       },
     });
   }
@@ -514,6 +1019,18 @@ const pmgBackupsAdapter: BackupV2Adapter = {
   build: buildPmgRecords,
 };
 
+const kubernetesArtifactBackupsAdapter: BackupV2Adapter = {
+  id: 'kubernetes-artifact-backups',
+  supports: (ctx) => (ctx.resources || []).some((resource) => extractKubernetesArtifactPayloads(resource).length > 0),
+  build: buildKubernetesArtifactRecords,
+};
+
+const dockerArtifactBackupsAdapter: BackupV2Adapter = {
+  id: 'docker-artifact-backups',
+  supports: (ctx) => (ctx.resources || []).some((resource) => extractDockerArtifactPayloads(resource).length > 0),
+  build: buildDockerArtifactRecords,
+};
+
 const resourceBackupsAdapter: BackupV2Adapter = {
   id: 'resource-backups',
   supports: (ctx) => (ctx.resources || []).some((resource) => parseResourceLastBackup(resource) !== null),
@@ -521,6 +1038,8 @@ const resourceBackupsAdapter: BackupV2Adapter = {
 };
 
 export const DEFAULT_BACKUP_V2_ADAPTERS: BackupV2Adapter[] = [
+  kubernetesArtifactBackupsAdapter,
+  dockerArtifactBackupsAdapter,
   resourceBackupsAdapter,
   pveSnapshotsAdapter,
   pveStorageBackupsAdapter,
@@ -531,6 +1050,19 @@ export const DEFAULT_BACKUP_V2_ADAPTERS: BackupV2Adapter[] = [
 const mergeBackupRecords = (current: BackupRecordV2, incoming: BackupRecordV2): BackupRecordV2 => ({
   ...current,
   ...(incoming.source.origin === 'resource' ? incoming : {}),
+  mode: incoming.mode || current.mode,
+  proxmox: {
+    ...(current.proxmox || {}),
+    ...(incoming.proxmox || {}),
+  },
+  kubernetes: {
+    ...(current.kubernetes || {}),
+    ...(incoming.kubernetes || {}),
+  },
+  docker: {
+    ...(current.docker || {}),
+    ...(incoming.docker || {}),
+  },
   capabilities: dedupe([...(current.capabilities || []), ...(incoming.capabilities || [])]),
   details: {
     ...(current.details || {}),
