@@ -21,7 +21,7 @@ Date: 2026-02-08
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | 00 | Surface Inventory and Cut-Map | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence |
-| 01 | Router Registration Skeleton | TODO | Unassigned | Unassigned | PENDING | |
+| 01 | Router Registration Skeleton | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence |
 | 02 | Extract Auth + Security + Install Route Group | TODO | Unassigned | Unassigned | PENDING | |
 | 03 | Extract Monitoring + Resource Route Group | TODO | Unassigned | Unassigned | PENDING | |
 | 04 | Extract AI + Relay + Sessions Route Group | TODO | Unassigned | Unassigned | PENDING | |
@@ -84,21 +84,46 @@ Rollback:
 ## Packet 01 Checklist: Router Registration Skeleton
 
 ### Implementation
-- [ ] `setupRoutes` converted to orchestration-only flow.
-- [ ] Domain registration methods introduced with no route contract drift.
-- [ ] Route ordering and middleware wrapping parity preserved.
-- [ ] Route inventory tests updated/passing.
+- [x] `setupRoutes` converted to orchestration-only flow.
+- [x] Domain registration methods introduced with no route contract drift.
+- [x] Route ordering and middleware wrapping parity preserved.
+- [x] Route inventory tests updated/passing.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "TestRouterRouteInventory|RouteInventory" -v` passed.
-- [ ] `go test ./internal/api/... -run "RouterRoutes|RouterGeneral" -v` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "TestRouterRouteInventory|RouteInventory" -v` passed.
+- [x] `go test ./internal/api/... -run "RouterRoutes|RouterGeneral" -v` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Review Evidence
+
+Files changed:
+- `internal/api/router.go`: `setupRoutes` body reduced to handler construction + 5 domain registration calls (lines 391-395).
+- `internal/api/router_routes_registration.go`: New file with 5 domain registration methods containing all route registrations moved from `setupRoutes`.
+- `internal/api/route_inventory_test.go`: `parseRouterRoutes` updated to scan both `router.go` and `router_routes_registration.go`.
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/api/... -run "TestRouterRouteInventory|RouteInventory" -v` -> exit 0
+3. `go test ./internal/api/... -run "RouterRoutes|RouterGeneral" -v` -> exit 0
+
+Gate checklist:
+- P0: PASS (files verified, commands rerun independently, exit codes 0)
+- P1: PASS (route inventory test confirms no route contract drift; middleware wrappers preserved)
+- P2: PASS (tracker updated, checklist complete)
+
+Verdict: APPROVED
+
+Residual risk:
+- None
+
+Rollback:
+- Delete `internal/api/router_routes_registration.go`, revert `internal/api/router.go` and `internal/api/route_inventory_test.go` to pre-packet state.
 
 ## Packet 02 Checklist: Extract Auth + Security + Install Route Group
 

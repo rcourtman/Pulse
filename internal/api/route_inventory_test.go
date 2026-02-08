@@ -60,52 +60,59 @@ func parseRouterRoutes(t *testing.T) ([]string, []string, []string) {
 	if !ok {
 		t.Fatalf("failed to locate test file path")
 	}
-	routerPath := filepath.Join(filepath.Dir(file), "router.go")
+	routerFiles := []string{
+		"router.go",
+		"router_routes_registration.go",
+	}
 
 	fset := token.NewFileSet()
-	fileAST, err := parser.ParseFile(fset, routerPath, nil, 0)
-	if err != nil {
-		t.Fatalf("parse router.go: %v", err)
-	}
 
 	var literalRoutes []string
 	var dynamicRoutes []string
 	var bareLiteralRoutes []string
 	var found bool
 
-	ast.Inspect(fileAST, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
+	for _, routerFile := range routerFiles {
+		routerPath := filepath.Join(filepath.Dir(file), routerFile)
+		fileAST, err := parser.ParseFile(fset, routerPath, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", routerFile, err)
 		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || selector.Sel == nil {
-			return true
-		}
-		if selector.Sel.Name != "Handle" && selector.Sel.Name != "HandleFunc" {
-			return true
-		}
-		if len(call.Args) < 2 {
-			return true
-		}
-		route, isDynamic := routeLiteral(call.Args[0])
-		if route == "" {
-			return true
-		}
-		found = true
-		if isDynamic {
-			dynamicRoutes = append(dynamicRoutes, route)
-		} else {
-			literalRoutes = append(literalRoutes, route)
-			if !isProtectedHandler(call.Args[1]) {
-				bareLiteralRoutes = append(bareLiteralRoutes, route)
+
+		ast.Inspect(fileAST, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
 			}
-		}
-		return true
-	})
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || selector.Sel == nil {
+				return true
+			}
+			if selector.Sel.Name != "Handle" && selector.Sel.Name != "HandleFunc" {
+				return true
+			}
+			if len(call.Args) < 2 {
+				return true
+			}
+			route, isDynamic := routeLiteral(call.Args[0])
+			if route == "" {
+				return true
+			}
+			found = true
+			if isDynamic {
+				dynamicRoutes = append(dynamicRoutes, route)
+			} else {
+				literalRoutes = append(literalRoutes, route)
+				if !isProtectedHandler(call.Args[1]) {
+					bareLiteralRoutes = append(bareLiteralRoutes, route)
+				}
+			}
+			return true
+		})
+	}
 
 	if !found {
-		t.Fatalf("no routes found in router.go")
+		t.Fatalf("no routes found in router.go or router_routes_registration.go")
 	}
 
 	return literalRoutes, dynamicRoutes, bareLiteralRoutes
