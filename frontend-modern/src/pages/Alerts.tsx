@@ -15,6 +15,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { useWebSocket } from '@/App';
+import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
@@ -23,6 +24,7 @@ import { LicenseAPI, type LicenseFeatureStatus } from '@/api/license';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, Incident, IncidentEvent, State, VM, Container, DockerHost, DockerContainer, Host } from '@/types/api';
+import type { ResourceType } from '@/types/resource';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
@@ -478,8 +480,42 @@ export const extractTriggerValues = (
 
 const DEFAULT_DELAY_SECONDS = 5;
 
+/**
+ * Maps a unified resource type to the display string used in alerts.
+ * Exported for testing.
+ */
+export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
+  switch (type) {
+    case 'vm':
+      return 'VM';
+    case 'container':
+    case 'oci-container':
+      return 'CT';
+    case 'docker-container':
+      return 'Container';
+    case 'node':
+      return 'Node';
+    case 'host':
+      return 'Host';
+    case 'docker-host':
+      return 'Container Host';
+    case 'storage':
+    case 'datastore':
+      return 'Storage';
+    case 'pbs':
+      return 'PBS';
+    case 'pmg':
+      return 'PMG';
+    case 'k8s-cluster':
+      return 'K8s';
+    default:
+      return type;
+  }
+}
+
 export function Alerts() {
   const { state, activeAlerts, updateAlert, removeAlerts } = useWebSocket();
+  const { get: getResource, resources: allResources } = useResources();
   const navigate = useNavigate();
   const location = useLocation();
   const alertsActivation = useAlertsActivation();
@@ -2283,6 +2319,8 @@ export function Alerts() {
                 <HistoryTab
                   hasAIAlertsFeature={hasAIAlertsFeature}
                   licenseLoading={licenseLoading}
+                  getResource={getResource}
+                  allResources={allResources}
                 />
               </Show>
             </div>
@@ -4397,8 +4435,10 @@ function ScheduleTab(props: ScheduleTabProps) {
 function HistoryTab(props: {
   hasAIAlertsFeature: () => boolean;
   licenseLoading: () => boolean;
+  getResource: ReturnType<typeof useResources>['get'];
+  allResources: ReturnType<typeof useResources>['resources'];
 }) {
-  const { state, activeAlerts } = useWebSocket();
+  const { activeAlerts } = useWebSocket();
 
   // Filter states with localStorage persistence
   const [timeFilter, setTimeFilter] = usePersistentSignal<'24h' | '7d' | '30d' | 'all'>(
@@ -4672,7 +4712,9 @@ function HistoryTab(props: {
   const getResourceType = (
     resourceName: string,
     metadata?: Record<string, unknown> | undefined,
+    resourceId?: string,
   ) => {
+    // 1. Canonical path: metadata.resourceType (set by checkMetric on the backend)
     const metadataType =
       typeof metadata?.resourceType === 'string'
         ? (metadata.resourceType as string)
@@ -4681,48 +4723,22 @@ function HistoryTab(props: {
       return metadataType;
     }
 
-    // Check VMs and containers
-    const vm = state.vms?.find((v) => v.name === resourceName);
-    if (vm) return 'VM';
+    // 2. Unified resource lookup by ID (preferred fallback)
+    if (resourceId) {
+      const resource = props.getResource(resourceId);
+      if (resource) {
+        return unifiedTypeToAlertDisplayType(resource.type);
+      }
+    }
 
-    const container = state.containers?.find((c) => c.name === resourceName);
-    if (container) return 'CT';
-
-    // Check nodes
-    const node = state.nodes?.find((n) => n.name === resourceName);
-    if (node) return 'Node';
-
-    // Check storage
-    const storage = state.storage?.find((s) => s.name === resourceName || s.id === resourceName);
-    if (storage) return 'Storage';
-
-    // Docker hosts
-    const dockerHost = state.dockerHosts?.find(
-      (host) =>
-        host.displayName === resourceName ||
-        host.hostname === resourceName ||
-        host.agentId === resourceName ||
-        host.id === resourceName,
+    // 3. Unified resource lookup by name (for old historical alerts without resourceId)
+    const resources = props.allResources();
+    const byName = resources.find(
+      (r) => r.name === resourceName || r.displayName === resourceName,
     );
-    if (dockerHost) return 'Container Host';
-
-    // Docker containers (via known hosts)
-    const dockerContainer = state.dockerHosts
-      ?.flatMap((host) => host.containers || [])
-      .find((c) => c.name === resourceName || c.id === resourceName);
-    if (dockerContainer) return 'Container';
-
-    // PBS instances
-    const pbsInstance = state.pbs?.find(
-      (pbs) => pbs.name === resourceName || pbs.host === resourceName || pbs.id === resourceName,
-    );
-    if (pbsInstance) return 'PBS';
-
-    // Ceph clusters
-    const cephCluster = state.cephClusters?.find(
-      (cluster) => cluster.name === resourceName || cluster.id === resourceName,
-    );
-    if (cephCluster) return 'Ceph';
+    if (byName) {
+      return unifiedTypeToAlertDisplayType(byName.type);
+    }
 
     return 'Unknown';
   };
@@ -4765,7 +4781,7 @@ function HistoryTab(props: {
         startTime: alert.startTime,
         duration: formatDuration(alert.startTime),
         resourceName: alert.resourceName,
-        resourceType: getResourceType(alert.resourceName, alert.metadata),
+        resourceType: getResourceType(alert.resourceName, alert.metadata, alert.resourceId),
         resourceId: alert.resourceId,
         node: alert.node,
         nodeDisplayName: alert.nodeDisplayName,
@@ -4794,7 +4810,7 @@ function HistoryTab(props: {
         endTime: alert.lastSeen,
         duration: formatDuration(alert.startTime, alert.lastSeen),
         resourceName: alert.resourceName,
-        resourceType: getResourceType(alert.resourceName, alert.metadata),
+        resourceType: getResourceType(alert.resourceName, alert.metadata, alert.resourceId),
         resourceId: alert.resourceId,
         node: alert.node,
         nodeDisplayName: alert.nodeDisplayName,

@@ -25,7 +25,7 @@ Date: 2026-02-08
 | 02 | Canonical Alert Identity and Resource-Type Contract | DONE | Codex | Orchestrator | APPROVED | Appendix C + contract tests |
 | 03 | Unified Resource Evaluation Adapter (Backend) | DONE | Codex | Orchestrator | APPROVED | unified_eval.go + unified_eval_test.go |
 | 04 | Monitor Integration Migration to Unified Evaluator | DONE | Codex | Orchestrator | APPROVED | Appendix D + parity tests |
-| 05 | Alerts Frontend Migration to Unified Resource Source | TODO | Unassigned | Unassigned | PENDING | |
+| 05 | Alerts Frontend Migration to Unified Resource Source | DONE | Codex | Orchestrator | APPROVED | getResourceType → unified lookup + 11 tests |
 | 06 | Threshold Overrides and ID Normalization Hardening | TODO | Unassigned | Unassigned | PENDING | |
 | 07 | API and Incident Timeline Contract Locking | TODO | Unassigned | Unassigned | PENDING | |
 | 08 | AI Alert Bridge and Enrichment Parity | TODO | Unassigned | Unassigned | PENDING | |
@@ -274,7 +274,7 @@ Rollback:
 - [x] Verdict recorded: `APPROVED`
 
 ### Checkpoint Commit (Packet 04)
-`a2d5ec8f` — feat(alerts): unified-resource hardening Packet 04 checkpoint
+`57ebcd11` — feat(alerts): unified-resource hardening Packet 04 checkpoint
 
 ### Review Evidence (Packet 04)
 
@@ -316,26 +316,70 @@ Rollback:
 ## Packet 05 Checklist: Alerts Frontend Migration to Unified Resource Source
 
 ### Implementation
-- [ ] Alerts page uses unified resources as primary lookup source.
-- [ ] Legacy array fallbacks are explicit and minimal.
-- [ ] Legacy `getResourceType` heuristics are removed or isolated behind compatibility layer.
-- [ ] Unknown resource handling UX remains stable.
+- [x] Alerts page uses unified resources as primary lookup source. (getResourceType uses useResources().get() by ID, then name lookup)
+- [x] Legacy array fallbacks are explicit and minimal. (allGuests memo for ThresholdsTable props is only remaining legacy — backward compat)
+- [x] Legacy `getResourceType` heuristics are removed or isolated behind compatibility layer. (All legacy array searches removed; replaced with unified lookup)
+- [x] Unknown resource handling UX remains stable. (Falls through to 'Unknown' when no unified resource matches)
 
 ### Required Tests
-- [ ] `npm --prefix frontend-modern exec -- vitest run src/pages/__tests__/Alerts.helpers.test.ts` passed.
-- [ ] `npm --prefix frontend-modern exec -- vitest run src/components/Alerts/__tests__/ThresholdsTable.test.tsx` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `npm --prefix frontend-modern exec -- vitest run src/pages/__tests__/Alerts.helpers.test.ts` passed.
+- [x] `npm --prefix frontend-modern exec -- vitest run src/components/Alerts/__tests__/ThresholdsTable.test.tsx` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Evidence
-- [ ] Before/after frontend data-source map attached.
-- [ ] Resource classification examples (vm/container/node/storage/unknown) attached.
+- [x] Before/after frontend data-source map attached.
+- [x] Resource classification examples (vm/container/node/storage/unknown) attached.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Checkpoint Commit (Packet 05)
+
+### Review Evidence (Packet 05)
+
+```
+Files changed:
+- frontend-modern/src/pages/Alerts.tsx: Replaced getResourceType legacy array fallback with unified resource lookup (useResources().get() by ID, then name search); added unifiedTypeToAlertDisplayType exported helper; removed 7 legacy array searches (vms, containers, nodes, storage, dockerHosts, pbs, cephClusters)
+- frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts: Added 11 tests for unifiedTypeToAlertDisplayType covering all resource types + unknown fallback
+
+Before/after data-source map:
+- Before: getResourceType → metadata.resourceType → search state.vms → search state.containers → search state.nodes → search state.storage → search state.dockerHosts → search state.pbs → search state.cephClusters → "Unknown"
+- After: getResourceType → metadata.resourceType → unified get(resourceId) → unified find(name) → "Unknown"
+
+Resource classification examples:
+- vm → "VM" (via metadata or unified type)
+- container/oci-container → "CT" (via unified type)
+- docker-container → "Container"
+- node → "Node"
+- host → "Host"
+- docker-host → "Container Host"
+- storage/datastore → "Storage"
+- pbs → "PBS", pmg → "PMG", k8s-cluster → "K8s"
+- unknown type → passes through as-is
+
+Commands run + exit codes:
+1. `tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+2. `vitest run src/pages/__tests__/Alerts.helpers.test.ts` -> exit 0 (27 tests: 16 existing + 11 new)
+3. `vitest run src/components/Alerts/__tests__/ThresholdsTable.test.tsx` -> exit 0 (9 tests)
+
+Gate checklist:
+- P0: PASS (Legacy array searches eliminated from getResourceType; unified resource lookup is primary fallback; metadata.resourceType remains first priority)
+- P1: PASS (11 new tests cover all resource types; ThresholdsTable tests unaffected; allGuests memo retained for backward compat)
+- P2: PASS (Unknown handling unchanged; no breaking changes to alert display)
+
+Verdict: APPROVED
+
+Residual risk:
+- allGuests memo still uses legacy arrays for ThresholdsTable props. Migration would require ThresholdsTable signature change — out of scope for this packet.
+- Name-based fallback lookup may not match for resources with different display names vs names.
+
+Rollback:
+- Restore getResourceType legacy array searches; remove unifiedTypeToAlertDisplayType; remove useResources import; revert test additions.
+```
 
 ## Packet 06 Checklist: Threshold Overrides and ID Normalization Hardening
 

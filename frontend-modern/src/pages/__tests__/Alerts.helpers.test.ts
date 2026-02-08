@@ -15,6 +15,7 @@ import {
   normalizeMetricDelayMap,
   pathForTab,
   tabFromPath,
+  unifiedTypeToAlertDisplayType,
 } from '../Alerts';
 import type { RawOverrideConfig } from '@/types/alerts';
 
@@ -192,5 +193,53 @@ describe('threshold helper utilities', () => {
     expect(getTriggerValue({ trigger: 90, clear: 80 })).toBe(90);
     expect(getTriggerValue(true)).toBe(0);
     expect(getTriggerValue(undefined)).toBe(0);
+  });
+});
+
+describe('unifiedTypeToAlertDisplayType', () => {
+  it('maps vm to VM', () => {
+    expect(unifiedTypeToAlertDisplayType('vm')).toBe('VM');
+  });
+
+  it('maps container and oci-container to CT', () => {
+    expect(unifiedTypeToAlertDisplayType('container')).toBe('CT');
+    expect(unifiedTypeToAlertDisplayType('oci-container')).toBe('CT');
+  });
+
+  it('maps docker-container to Container', () => {
+    expect(unifiedTypeToAlertDisplayType('docker-container')).toBe('Container');
+  });
+
+  it('maps node to Node', () => {
+    expect(unifiedTypeToAlertDisplayType('node')).toBe('Node');
+  });
+
+  it('maps host to Host', () => {
+    expect(unifiedTypeToAlertDisplayType('host')).toBe('Host');
+  });
+
+  it('maps docker-host to Container Host', () => {
+    expect(unifiedTypeToAlertDisplayType('docker-host')).toBe('Container Host');
+  });
+
+  it('maps storage and datastore to Storage', () => {
+    expect(unifiedTypeToAlertDisplayType('storage')).toBe('Storage');
+    expect(unifiedTypeToAlertDisplayType('datastore')).toBe('Storage');
+  });
+
+  it('maps pbs to PBS', () => {
+    expect(unifiedTypeToAlertDisplayType('pbs')).toBe('PBS');
+  });
+
+  it('maps pmg to PMG', () => {
+    expect(unifiedTypeToAlertDisplayType('pmg')).toBe('PMG');
+  });
+
+  it('maps k8s-cluster to K8s', () => {
+    expect(unifiedTypeToAlertDisplayType('k8s-cluster')).toBe('K8s');
+  });
+
+  it('passes through unknown types', () => {
+    expect(unifiedTypeToAlertDisplayType('other-type' as any)).toBe('other-type');
   });
 });
