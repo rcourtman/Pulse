@@ -18,6 +18,7 @@ import {
   unifiedTypeToAlertDisplayType,
 } from '../Alerts';
 import type { RawOverrideConfig } from '@/types/alerts';
+import type { ResourceType } from '@/types/resource';
 
 describe('normalizeMetricDelayMap', () => {
   it('returns empty object when input is nullish', () => {
@@ -241,5 +242,115 @@ describe('unifiedTypeToAlertDisplayType', () => {
 
   it('passes through unknown types', () => {
     expect(unifiedTypeToAlertDisplayType('other-type' as any)).toBe('other-type');
+  });
+});
+
+describe('Unified selector parity', () => {
+  it('maps all unified resource types to display types', () => {
+    const cases: Array<[ResourceType, string]> = [
+      ['node', 'Node'],
+      ['host', 'Host'],
+      ['docker-host', 'Container Host'],
+      ['k8s-cluster', 'K8s'],
+      ['k8s-node', 'k8s-node'],
+      ['truenas', 'truenas'],
+      ['vm', 'VM'],
+      ['container', 'CT'],
+      ['oci-container', 'CT'],
+      ['docker-container', 'Container'],
+      ['pod', 'pod'],
+      ['jail', 'jail'],
+      ['docker-service', 'docker-service'],
+      ['k8s-deployment', 'k8s-deployment'],
+      ['k8s-service', 'k8s-service'],
+      ['storage', 'Storage'],
+      ['datastore', 'Storage'],
+      ['pool', 'pool'],
+      ['dataset', 'dataset'],
+      ['pbs', 'PBS'],
+      ['pmg', 'PMG'],
+    ];
+
+    for (const [input, expected] of cases) {
+      expect(unifiedTypeToAlertDisplayType(input)).toBe(expected);
+    }
+  });
+
+  it('keeps guest override extraction shape aligned with legacy mapping', () => {
+    const thresholds: RawOverrideConfig = {
+      cpu: { trigger: 88, clear: 78 },
+      memory: { trigger: 82, clear: 72 },
+      disabled: true,
+      disableConnectivity: true,
+      poweredOffSeverity: 'critical',
+    };
+
+    const buildLegacyGuestOverride = (
+      guestType: 'qemu' | 'lxc',
+      id: string,
+      name: string,
+      vmid: number,
+      node: string,
+      instance: string,
+    ) => ({
+      id,
+      name,
+      type: 'guest' as const,
+      resourceType: guestType === 'qemu' ? 'VM' : 'CT',
+      vmid,
+      node,
+      instance,
+      disabled: thresholds.disabled || false,
+      disableConnectivity: thresholds.disableConnectivity || false,
+      poweredOffSeverity:
+        thresholds.poweredOffSeverity === 'critical'
+          ? 'critical'
+          : thresholds.poweredOffSeverity === 'warning'
+            ? 'warning'
+            : undefined,
+      thresholds: extractTriggerValues(thresholds),
+      backup: thresholds.backup,
+      snapshot: thresholds.snapshot,
+    });
+
+    const buildUnifiedGuestOverride = (
+      resourceType: 'vm' | 'container' | 'oci-container',
+      id: string,
+      name: string,
+      vmid: number,
+      node: string,
+      instance: string,
+    ) => ({
+      id,
+      name,
+      type: 'guest' as const,
+      resourceType: unifiedTypeToAlertDisplayType(resourceType),
+      vmid,
+      node,
+      instance,
+      disabled: thresholds.disabled || false,
+      disableConnectivity: thresholds.disableConnectivity || false,
+      poweredOffSeverity:
+        thresholds.poweredOffSeverity === 'critical'
+          ? 'critical'
+          : thresholds.poweredOffSeverity === 'warning'
+            ? 'warning'
+            : undefined,
+      thresholds: extractTriggerValues(thresholds),
+      backup: thresholds.backup,
+      snapshot: thresholds.snapshot,
+    });
+
+    expect(
+      buildUnifiedGuestOverride('vm', 'vm-pve1-100', 'app-100', 100, 'pve1', 'pve1/qemu/100'),
+    ).toEqual(
+      buildLegacyGuestOverride('qemu', 'vm-pve1-100', 'app-100', 100, 'pve1', 'pve1/qemu/100'),
+    );
+
+    expect(
+      buildUnifiedGuestOverride('container', 'ct-pve1-200', 'ct-200', 200, 'pve1', 'pve1/lxc/200'),
+    ).toEqual(
+      buildLegacyGuestOverride('lxc', 'ct-pve1-200', 'ct-200', 200, 'pve1', 'pve1/lxc/200'),
+    );
   });
 });

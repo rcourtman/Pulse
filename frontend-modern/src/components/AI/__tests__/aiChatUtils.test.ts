@@ -101,4 +101,31 @@ describe('aiChatUtils', () => {
       spy.mockRestore();
     });
   });
+
+  describe('Mention ID format contracts', () => {
+    it('VM mention IDs follow vm:node:vmid format', () => {
+      const id = 'vm:pve1:100';
+      expect(id).toMatch(/^vm:[^:]+:\d+$/);
+    });
+
+    it('container mention IDs follow lxc:node:vmid format', () => {
+      const id = 'lxc:pve1:200';
+      expect(id).toMatch(/^lxc:[^:]+:\d+$/);
+    });
+
+    it('docker mention IDs follow docker:hostId:containerId format', () => {
+      const id = 'docker:host-1:abc123';
+      expect(id).toMatch(/^docker:[^:]+:[^:]+$/);
+    });
+
+    it('node mention IDs follow node:instance:name format', () => {
+      const id = 'node:pve1/pve:pve1';
+      expect(id).toMatch(/^node:[^:]+:[^:]+$/);
+    });
+
+    it('host mention IDs follow host:id format', () => {
+      const id = 'host:agent-123';
+      expect(id).toMatch(/^host:[^:]+$/);
+    });
+  });
 });

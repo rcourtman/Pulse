@@ -760,6 +760,129 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	}
 }
 
+func TestWebsocketPayloadContractShape(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws"
+
+	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("websocket dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	readMsg := func() (string, map[string]any) {
+		t.Helper()
+		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatalf("set deadline: %v", err)
+		}
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read message: %v", err)
+		}
+		var msg map[string]any
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("decode message: %v", err)
+		}
+		typeVal, _ := msg["type"].(string)
+		payload := map[string]any{}
+		if raw, ok := msg["data"].(map[string]any); ok {
+			payload = raw
+		}
+		return typeVal, payload
+	}
+
+	readType := func(expected string) map[string]any {
+		t.Helper()
+		for i := 0; i < 6; i++ {
+			msgType, payload := readMsg()
+			if msgType == expected {
+				return payload
+			}
+		}
+		t.Fatalf("timed out waiting for %q websocket message", expected)
+		return nil
+	}
+
+	readType("welcome")
+	readType("initialState")
+
+	contractState := models.StateFrontend{
+		Nodes:              []models.NodeFrontend{{ID: "node-1", DisplayName: "Node 1"}},
+		VMs:                []models.VMFrontend{{ID: "vm-1", Name: "VM 1"}},
+		Containers:         []models.ContainerFrontend{{ID: "ct-1", Name: "CT 1"}},
+		DockerHosts:        []models.DockerHostFrontend{{ID: "docker-host-1"}},
+		RemovedDockerHosts: []models.RemovedDockerHostFrontend{{ID: "removed-docker-host-1"}},
+		Hosts:              []models.HostFrontend{{ID: "host-1", DisplayName: "Host 1"}},
+		Storage:            []models.StorageFrontend{{ID: "storage-1", Name: "local"}},
+		CephClusters:       []models.CephClusterFrontend{{ID: "ceph-1", Name: "ceph"}},
+		PhysicalDisks:      []models.PhysicalDisk{{ID: "disk-1"}},
+		PBS:                []models.PBSInstance{{ID: "pbs-1", Name: "pbs-1"}},
+		PMG:                []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
+		Backups: models.Backups{
+			PVE: models.PVEBackups{
+				BackupTasks: []models.BackupTask{{ID: "task-1"}},
+			},
+			PBS: []models.PBSBackup{{ID: "pbs-backup-1"}},
+			PMG: []models.PMGBackup{{ID: "pmg-backup-1"}},
+		},
+		Resources: []models.ResourceFrontend{
+			{
+				ID:           "resource-1",
+				Type:         "node",
+				Name:         "node-1",
+				DisplayName:  "Node 1",
+				PlatformID:   "platform-1",
+				PlatformType: "proxmox",
+				SourceType:   "pve",
+				Status:       "online",
+				LastSeen:     1,
+			},
+		},
+	}
+
+	srv.hub.BroadcastState(contractState)
+	payload := readType("rawData")
+
+	requiredArrayKeys := []string{
+		"nodes",
+		"vms",
+		"containers",
+		"dockerHosts",
+		"removedDockerHosts",
+		"hosts",
+		"storage",
+		"cephClusters",
+		"physicalDisks",
+		"resources",
+		"pbs",
+		"pmg",
+	}
+	for _, key := range requiredArrayKeys {
+		val, ok := payload[key]
+		if !ok {
+			t.Fatalf("websocket payload missing required %q key", key)
+		}
+		if values, ok := val.([]any); !ok || len(values) == 0 {
+			t.Fatalf("websocket payload key %q must be a non-empty array, got %T (%v)", key, val, val)
+		}
+	}
+
+	backups, ok := payload["backups"].(map[string]any)
+	if !ok {
+		t.Fatalf("websocket payload missing backups map: %v", payload["backups"])
+	}
+	if _, ok := backups["pve"].(map[string]any); !ok {
+		t.Fatalf("websocket payload backups.pve must be an object, got %T (%v)", backups["pve"], backups["pve"])
+	}
+	if pbsBackups, ok := backups["pbs"].([]any); !ok || len(pbsBackups) == 0 {
+		t.Fatalf("websocket payload backups.pbs must be a non-empty array, got %T (%v)", backups["pbs"], backups["pbs"])
+	}
+	if pmgBackups, ok := backups["pmg"].([]any); !ok || len(pmgBackups) == 0 {
+		t.Fatalf("websocket payload backups.pmg must be a non-empty array, got %T (%v)", backups["pmg"], backups["pmg"])
+	}
+}
+
 func TestWebsocketLegacyCompatMode(t *testing.T) {
 	srv := newIntegrationServer(t)
 

@@ -780,3 +780,91 @@ describe('useAIChatResources', () => {
         dispose();
     });
 });
+
+describe('Stale legacy-only consumer detection', () => {
+    it('unified selectors return unified conversion output, not raw legacy arrays', () => {
+        const legacyNodes = [{ id: 'legacy-node-1', name: 'Legacy Node' }];
+        const legacyVms = [{ id: 'legacy-vm-1', name: 'Legacy VM', cpu: 0.01 }];
+
+        const store = createMockLegacyStore({
+            resources: [
+                createMockResource({
+                    id: 'node-unified-1',
+                    type: 'node',
+                    name: 'Unified Node',
+                    platformData: { host: 'pve1.local' },
+                }),
+                createMockResource({
+                    id: 'vm-unified-101',
+                    type: 'vm',
+                    name: 'Unified VM',
+                    cpu: { current: 55 },
+                    platformData: {
+                        vmid: 101,
+                        node: 'pve1',
+                        instance: 'pve1/qemu/101',
+                    },
+                }),
+            ],
+            nodes: legacyNodes,
+            vms: legacyVms,
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAlertsResources(store as any);
+        });
+
+        expect(selectors.nodes()).not.toEqual(legacyNodes);
+        expect(selectors.nodes()[0].id).toBe('node-unified-1');
+        expect(selectors.vms()).not.toEqual(legacyVms);
+        expect(selectors.vms()[0].id).toBe('vm-unified-101');
+        expect(selectors.vms()[0].cpu).toBe(0.55);
+
+        dispose();
+    });
+
+    it('useAlertsResources ready signal is false when no nodes available', () => {
+        const store = createMockLegacyStore({
+            resources: [createMockResource({ id: 'vm-only-1', type: 'vm' })],
+            nodes: [],
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAlertsResources(store as any);
+        });
+
+        expect(selectors.ready()).toBe(false);
+
+        dispose();
+    });
+
+    it('useAIChatResources isCluster is false for single node', () => {
+        const store = createMockLegacyStore({
+            resources: [
+                createMockResource({
+                    id: 'node-unified-1',
+                    type: 'node',
+                    name: 'Unified Node',
+                    platformData: { host: 'single.local' },
+                }),
+            ],
+            nodes: [{ id: 'legacy-node-1' }, { id: 'legacy-node-2' }],
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAIChatResources(store as any);
+        });
+
+        expect(selectors.nodes()).toHaveLength(1);
+        expect(selectors.nodes()[0].id).toBe('node-unified-1');
+        expect(selectors.isCluster()).toBe(false);
+
+        dispose();
+    });
+});

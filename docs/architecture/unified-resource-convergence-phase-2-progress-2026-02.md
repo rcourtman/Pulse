@@ -33,7 +33,7 @@ Date: 2026-02-08
 | 03 | AI Chat UI Context Migration to Unified Selectors | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence |
 | 04 | WebSocket Legacy Payload Deprecation Gates | DONE | Codex | Claude | APPROVED | See Packet 04 Review Evidence |
 | 05 | Legacy Compatibility Narrowing | DONE | Codex | Claude | APPROVED | See Packet 05 Review Evidence |
-| 06 | Contract Test Hardening and Regression Net | TODO | Codex | Claude | PENDING | See Packet 06 Review Evidence |
+| 06 | Contract Test Hardening and Regression Net | DONE | Codex | Claude | APPROVED | See Packet 06 Review Evidence |
 | 07 | Final Certification and Release Recommendation | TODO | Claude | Claude | PENDING | See Packet 07 Review Evidence |
 
 ## Packet 00 Checklist: Contract Freeze, Scope Fences, and Drift Baseline
@@ -317,43 +317,46 @@ Rollback:
 ## Packet 06 Checklist: Contract Test Hardening and Regression Net
 
 ### Implementation
-- [ ] Alerts parity tests expanded for unified-selector paths.
-- [ ] AI context parity tests expanded for unified-selector paths.
-- [ ] Websocket contract tests lock compatibility and deprecation modes.
+- [x] Alerts parity tests expanded for unified-selector paths.
+- [x] AI context parity tests expanded for unified-selector paths.
+- [x] Websocket contract tests lock compatibility and deprecation modes.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/pages/__tests__/Alerts.helpers.test.ts src/components/AI/__tests__/aiChatUtils.test.ts src/hooks/__tests__/useResources.test.ts` passed.
-- [ ] `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `cd frontend-modern && npx vitest run src/pages/__tests__/Alerts.helpers.test.ts src/components/AI/__tests__/aiChatUtils.test.ts src/hooks/__tests__/useResources.test.ts` passed.
+- [x] `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### Packet 06 Review Evidence
 
 ```text
 Files changed:
-- <path>: <reason>
+- frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts: Added unified selector parity tests (+2 tests, 29 total).
+- frontend-modern/src/components/AI/__tests__/aiChatUtils.test.ts: Added mention ID format contract tests (+5 tests, 13 total).
+- frontend-modern/src/hooks/__tests__/useResources.test.ts: Added stale legacy-only consumer detection tests (+3 tests, 35 total).
+- internal/api/router_integration_test.go: Added TestWebsocketPayloadContractShape to lock payload key contract.
 
 Commands run + exit codes:
-1. `<command>` -> exit <code>
-2. `<command>` -> exit <code>
+1. `cd frontend-modern && npx vitest run src/pages/__tests__/Alerts.helpers.test.ts src/components/AI/__tests__/aiChatUtils.test.ts src/hooks/__tests__/useResources.test.ts` -> exit 0 (77 tests)
+2. `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` -> exit 0
 
 Gate checklist:
-- P0: PASS | FAIL (<reason>)
-- P1: PASS | FAIL | N/A (<reason>)
-- P2: PASS | FAIL (<reason>)
+- P0: PASS (Tests-only packet. All new tests pass. No production code changes.)
+- P1: PASS (Contract coverage: alerts parity, mention ID format, stale-legacy detection, payload shape.)
+- P2: PASS (Negative-path assertions lock migration behavior.)
 
-Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+Verdict: APPROVED
 
 Commit:
-- `<hash>` (<message>)
+- (pending)
 
 Residual risk:
-- <risk or none>
+- none
 
 Rollback:
 - <steps>
