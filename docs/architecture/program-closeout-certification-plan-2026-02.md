@@ -1,0 +1,406 @@
+# Program Closeout and Certification Plan (Detailed Execution Spec)
+
+Status: Draft
+Owner: Pulse
+Date: 2026-02-08
+
+Progress tracker:
+- `docs/architecture/program-closeout-certification-progress-2026-02.md`
+
+Upstream plans (inputs to certify):
+- `docs/architecture/alerts-unified-resource-hardening-plan-2026-02.md`
+- `docs/architecture/multi-tenant-productization-plan-2026-02.md`
+- `docs/architecture/control-plane-decomposition-plan-2026-02.md`
+- `docs/architecture/settings-control-plane-decomposition-plan-2026-02.md`
+- `docs/architecture/storage-backups-v2-plan.md`
+
+## Product Intent
+
+All major architecture tracks are complete. This plan certifies them as one coherent, releasable program.
+
+This plan has two top-level goals:
+1. Prove cross-track correctness under real platform contracts (routes, auth, tenant isolation, unified resources, settings UX flows).
+2. Produce a release-grade closeout package with explicit go/no-go evidence, rollback readiness, and deferred-work ledger.
+
+## Non-Negotiable Contracts
+
+1. No hidden drift contract:
+- Completed plan outputs must match current runtime behavior.
+- Any drift must be explicitly classified: accepted, fixed, or deferred.
+
+2. Security and isolation contract:
+- No cross-tenant data leakage across API, websocket, alert, AI, or settings surfaces.
+- No regression in scope/permission checks.
+
+3. Contract integrity contract:
+- Route, payload, and deep-link contracts are test-locked and reviewed.
+- Backward compatibility routes remain intact unless explicitly removed through approved migration.
+
+4. Operational safety contract:
+- Rollback and kill-switch paths are documented, executable, and evidence-backed.
+- Release notes include user-visible changes, risk notes, and operator actions.
+
+5. Evidence-first closeout contract:
+- No "APPROVED" without explicit command exit codes, changed-file verification, and gate outcomes.
+- Summary-only claims are invalid.
+
+## Orchestrator Operating Model
+
+Use fixed roles per packet:
+- Implementer: delegated coding agent.
+- Reviewer: orchestrator.
+
+A packet can be marked DONE only when:
+- all packet checkboxes are checked,
+- all listed commands are run with explicit exit codes,
+- reviewer gate checklist passes,
+- verdict is `APPROVED`.
+
+## Required Review Output (Every Packet)
+
+```markdown
+Files changed:
+- <path>: <reason>
+
+Commands run + exit codes:
+1. `<command>` -> exit 0
+2. `<command>` -> exit 0
+
+Gate checklist:
+- P0: PASS | FAIL (<reason>)
+- P1: PASS | FAIL | N/A (<reason>)
+- P2: PASS | FAIL (<reason>)
+
+Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+
+Commit:
+- `<short-hash>` (<message>)
+
+Residual risk:
+- <risk or none>
+
+Rollback:
+- <steps>
+```
+
+## Global Validation Baseline
+
+Run after every packet unless explicitly waived:
+
+1. `go build ./...`
+2. `go test ./internal/api/... -run "Contract|RouteInventory|Security|Tenant|Org|Alert|Resources|Settings" -v`
+3. `go test ./internal/alerts/... -v`
+4. `go test ./internal/monitoring/... -v`
+5. `go test ./internal/websocket/... -v`
+6. `go test ./internal/ai/... -run "Contract|Alert|Patrol|Stream|Approval|Push" -v`
+7. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+8. `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts src/pages/__tests__/Alerts.helpers.test.ts src/components/Alerts/__tests__/ThresholdsTable.test.tsx`
+9. `npm --prefix frontend-modern exec -- vitest run src/routing/__tests__/legacyRedirects.test.ts src/routing/__tests__/legacyRouteContracts.test.ts src/routing/__tests__/platformTabs.test.ts`
+
+Notes:
+- `go build` alone is never sufficient for approval.
+- Timeout, empty output, truncated output, or missing exit code evidence is a failed gate.
+- Out-of-scope pre-existing failures must be documented with explicit evidence and triage classification.
+
+## Execution Packets
+
+### Packet 00: Artifact Freeze and Closeout Baseline
+
+Objective:
+- Establish a frozen baseline and evidence index for all completed tracks.
+
+Scope:
+- `docs/architecture/program-closeout-certification-plan-2026-02.md` (appendix updates)
+- `docs/architecture/program-closeout-certification-progress-2026-02.md`
+- `CHANGELOG-DRAFT.md`
+
+Implementation checklist:
+1. Record upstream plan/progress statuses and checkpoint commit references.
+2. Build closeout artifact index: tests, docs, runbooks, contracts.
+3. Define drift taxonomy: `MATCHED`, `DRIFT_ACCEPTED`, `DRIFT_FIX_REQUIRED`, `DEFERRED`.
+4. Add baseline risk register and packet mapping.
+
+Required tests:
+1. `go build ./...`
+2. `go test ./internal/api/... -run "Contract|RouteInventory" -v`
+
+Exit criteria:
+- Closeout baseline and artifact index exist and are reviewable.
+
+### Packet 01: Route, Contract, and Deep-Link Reconciliation
+
+Objective:
+- Reconcile backend route contracts and frontend deep-link contracts across all completed plans.
+
+Scope:
+- `internal/api/route_inventory_test.go`
+- `internal/api/contract_test.go`
+- `frontend-modern/src/components/Settings/settingsRouting.ts`
+- `frontend-modern/src/components/Settings/__tests__/settingsRouting.test.ts`
+- `frontend-modern/src/routing/__tests__/legacyRouteContracts.test.ts`
+
+Implementation checklist:
+1. Verify route allowlists and auth wrappers align with current registration.
+2. Verify alert/settings/resource payload contract tests align with current serializers.
+3. Verify legacy aliases and canonical paths for settings and related routes.
+4. Classify and resolve any contract drift.
+
+Required tests:
+1. `go test ./internal/api/... -run "TestRouterRouteInventory|Contract" -v`
+2. `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts src/routing/__tests__/legacyRouteContracts.test.ts`
+3. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+
+Exit criteria:
+- Contract drift is resolved or explicitly triaged with disposition.
+
+### Packet 02: Cross-Domain Integration Certification Matrix
+
+Objective:
+- Certify end-to-end behavior across alerts, tenant scoping, settings flows, and unified resources.
+
+Scope:
+- `docs/architecture/program-closeout-certification-plan-2026-02.md` (matrix appendix)
+- `internal/api/*_test.go` (targeted additions if gaps exist)
+- `frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts`
+
+Implementation checklist:
+1. Create matrix dimensions: domain x surface x contract x test evidence.
+2. Validate mixed scenarios (single-tenant, multi-tenant, unified resource fallback, settings redirects).
+3. Add missing targeted tests where matrix cells are empty.
+4. Record pass/fail and residual risks.
+
+Required tests:
+1. `go test ./internal/api/... -run "Alert|Org|Tenant|Resources|Contract" -v`
+2. `go test ./internal/alerts/... -run "Alert|Threshold|Migration|Canonical" -v`
+3. `npm --prefix frontend-modern exec -- vitest run src/pages/__tests__/Alerts.helpers.test.ts src/components/Alerts/__tests__/ThresholdsTable.test.tsx`
+
+Exit criteria:
+- Integration matrix is complete and every high-risk cell has evidence.
+
+### Packet 03: Security, Authorization, and Isolation Replay
+
+Objective:
+- Replay high-risk authorization and isolation tests for final certification confidence.
+
+Scope:
+- `internal/api/*security*test.go`
+- `internal/api/*tenant*test.go`
+- `internal/websocket/*test.go`
+- `internal/monitoring/*test.go`
+
+Implementation checklist:
+1. Re-run spoofing, scope, token, org binding, and admin boundary suites.
+2. Re-run websocket and monitoring tenant-isolation coverage.
+3. Add explicit regression cases if any critical path is uncovered.
+4. Produce security replay summary tied to P0/P1 gates.
+
+Required tests:
+1. `go test ./internal/api/... -run "Security|Scope|Authorization|Spoof|Tenant|OrgHandlers" -v`
+2. `go test ./internal/websocket/... -run "Tenant|Isolation|Alert" -v`
+3. `go test ./internal/monitoring/... -run "Tenant|Alert|Isolation" -v`
+
+Exit criteria:
+- No unresolved critical security/isolation regressions remain.
+
+### Packet 04: Data Integrity and Migration Safety Certification
+
+Objective:
+- Validate persistence compatibility and migration safety for alert/state/settings/storage flows.
+
+Scope:
+- `internal/config/*persistence*test.go`
+- `internal/alerts/*migration*test.go`
+- `docs/architecture/program-closeout-certification-plan-2026-02.md` (migration appendix)
+
+Implementation checklist:
+1. Validate config persistence compatibility and normalization behavior.
+2. Validate alert ID/resource type migration compatibility.
+3. Validate backup/settings import/export compatibility assumptions.
+4. Document data safety guarantees and unresolved caveats.
+
+Required tests:
+1. `go test ./internal/config/... -run "Persistence|Migration|Normalize" -v`
+2. `go test ./internal/alerts/... -run "Migration|Override|Canonical|LoadActive" -v`
+3. `go test ./internal/api/... -run "Export|Import|Alerts" -v`
+
+Exit criteria:
+- Migration and persistence risks are either closed or explicitly accepted.
+
+### Packet 05: Performance and Capacity Envelope Baseline
+
+Objective:
+- Establish a measurable performance envelope and identify regressions introduced by completed tracks.
+
+Scope:
+- `docs/architecture/program-closeout-certification-plan-2026-02.md` (performance appendix)
+- existing perf scripts/tests (only add minimal targeted checks if required)
+
+Implementation checklist:
+1. Define baseline metrics: API response latency on hot paths, websocket fan-out overhead, frontend typecheck/test times.
+2. Capture and record current measurements with environment notes.
+3. Flag regressions relative to prior baselines if available.
+4. Add mitigation actions for any regression outside tolerance.
+
+Required tests:
+1. `go test ./internal/api/... -run "Benchmark|RouteInventory|Contract" -v` (where applicable)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+3. `npm --prefix frontend-modern exec -- vitest run src/components/Settings/__tests__/settingsRouting.test.ts`
+
+Exit criteria:
+- Performance envelope is documented and no critical regression is unowned.
+
+### Packet 06: Operational Readiness and Rollback Drill
+
+Objective:
+- Verify operational guides and rollback procedures are executable for post-release support.
+
+Scope:
+- `docs/architecture/multi-tenant-operational-runbook.md`
+- `docs/architecture/program-closeout-certification-plan-2026-02.md` (ops appendix)
+- relevant startup/feature-flag docs in repo root
+
+Implementation checklist:
+1. Validate runbook steps for enable/disable/rollback across major tracks.
+2. Validate kill-switch and fallback controls are documented and testable.
+3. Validate required observability checkpoints and alerting expectations.
+4. Produce operator checklist for release day.
+
+Required tests:
+1. `go test ./internal/api/... -run "Feature|License|OrgHandlers|Security" -v`
+2. `go build ./...`
+
+Exit criteria:
+- Operations and rollback runbooks are complete and execution-ready.
+
+### Packet 07: Documentation, Changelog, and Debt Ledger Closeout
+
+Objective:
+- Finalize release-facing docs and a precise debt ledger for deferred work.
+
+Scope:
+- `CHANGELOG-DRAFT.md`
+- `CHANGELOG.md`
+- `docs/architecture/program-closeout-certification-plan-2026-02.md` (debt ledger appendix)
+
+Implementation checklist:
+1. Consolidate user-visible changes across all finished plans.
+2. Document operator-impacting changes and migration notes.
+3. Create debt ledger with severity, owner, and target milestone.
+4. Ensure deferred items are explicit and not hidden in residual-risk notes.
+
+Required tests:
+1. `go build ./...`
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+
+Exit criteria:
+- Changelog and debt ledger are complete and internally consistent.
+
+### Packet 08: Final Certification and Go/No-Go Verdict
+
+Objective:
+- Produce final release certification verdict based on all packet evidence.
+
+Scope:
+- `docs/architecture/program-closeout-certification-progress-2026-02.md`
+- `docs/architecture/program-closeout-certification-plan-2026-02.md` (final verdict section)
+
+Implementation checklist:
+1. Re-run global validation baseline and collect exit codes.
+2. Confirm packet evidence completeness and checkpoint commit coverage.
+3. Produce final `GO` or `NO-GO` verdict with justification.
+4. Record residual risk acceptance decisions and signoff notes.
+
+Required tests:
+1. `go build ./...`
+2. `go test ./...`
+3. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+4. `npm --prefix frontend-modern exec -- vitest run`
+
+Exit criteria:
+- Final verdict is evidence-backed and auditable.
+
+## Acceptance Definition
+
+Plan is complete only when:
+1. Packet 00-08 are `DONE` in the progress tracker.
+2. Each packet has full reviewer evidence and verdict.
+3. Final verdict section includes explicit go/no-go decision.
+4. Debt ledger and residual risks are formally recorded with owners.
+
+## Appendix A: Baseline Risk Register
+
+| Risk ID | Surface | Description | Severity | Mapped Packet | Mitigation |
+| --- | --- | --- | --- | --- | --- |
+| PC-001 | Cross-track contract drift | Completed tracks may have silent incompatibilities in routes/payloads/deep links. | HIGH | 01, 02 | Reconciliation tests + explicit drift taxonomy. |
+| PC-002 | Security regression after parallel merges | Scope/tenant/isolation behavior may regress at merge boundaries. | HIGH | 03 | Security replay packet with focused high-risk test suites. |
+| PC-003 | Data migration edge-case gaps | Legacy IDs/settings/import paths may break on uncommon states. | HIGH | 04 | Migration/persistence certification and explicit caveat ledger. |
+| PC-004 | Ops rollback ambiguity | Runbooks may not fully reflect final architecture state. | MEDIUM | 06 | Rollback drill and operator checklist. |
+| PC-005 | Performance regressions unnoticed | Structural refactors may raise latency or resource usage. | MEDIUM | 05 | Capture and compare performance envelope. |
+| PC-006 | Incomplete release documentation | Changelog/deferred work may be under-specified, causing support risk. | MEDIUM | 07 | Consolidated changelog + debt ledger with ownership. |
+| PC-007 | Approval quality decay | Final signoff may rely on summaries instead of hard evidence. | HIGH | All packets, 08 | Fail-closed gates with mandatory reruns and exit codes. |
+
+## Appendix B: Upstream Track Status Index
+
+| Track | Plan File | Plan Status | Progress File | Progress Status | Final Checkpoint |
+| --- | --- | --- | --- | --- | --- |
+| Alerts Unified-Resource Hardening | `alerts-unified-resource-hardening-plan-2026-02.md` | Complete | `alerts-unified-resource-hardening-progress-2026-02.md` | Complete | `010be4b0` (Packet 10) |
+| Multi-Tenant Productization | `multi-tenant-productization-plan-2026-02.md` | Draft | `multi-tenant-productization-progress-2026-02.md` | Active (Packet 08 BLOCKED - import cycle from parallel work) | N/A (blocked) |
+| Control Plane Decomposition | `control-plane-decomposition-plan-2026-02.md` | Complete | `control-plane-decomposition-progress-2026-02.md` | Active (all 10 packets DONE/APPROVED) | `2418cfeb` (Packet 00), `312d24ad` (Packet 02) |
+| Settings Control Plane Decomposition | `settings-control-plane-decomposition-plan-2026-02.md` | Complete | `settings-control-plane-decomposition-progress-2026-02.md` | Complete | `63d39d75` (Packet 09) |
+| Storage + Backups V2 | `storage-backups-v2-plan.md` | Draft (active) | N/A | N/A | N/A |
+
+## Appendix C: Closeout Artifact Index
+
+### Tests
+
+- `internal/api/route_inventory_test.go` - Route allowlist contract
+- `internal/api/contract_test.go` - API payload contract snapshots
+- `internal/api/security_test.go` - Security/auth boundary tests
+- `internal/api/tenant_scoping_test.go` - Tenant isolation tests
+- `internal/api/org_handlers_test.go` - Org binding tests
+- `internal/api/code_standards_test.go` - DRY enforcement
+- `internal/alerts/alert_migration_test.go` - Alert ID migration
+- `internal/alerts/canonical_resource_type_test.go` - Canonical resource types
+- `internal/websocket/hub_alert_tenant_test.go` - WS tenant isolation
+- `internal/monitoring/tenant_isolation_test.go` - Monitoring tenant isolation
+- `frontend-modern/src/components/Settings/__tests__/settingsRouting.test.ts` - Settings routing
+- `frontend-modern/src/routing/__tests__/legacyRouteContracts.test.ts` - Legacy route contracts
+- `frontend-modern/src/routing/__tests__/legacyRedirects.test.ts` - Legacy redirects
+- `frontend-modern/src/routing/__tests__/platformTabs.test.ts` - Platform tabs
+- `frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts` - Alert helpers
+- `frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx` - Threshold table
+
+### Docs
+
+- `docs/API.md` - API reference
+- `docs/MULTI_TENANT.md` - Multi-tenant architecture
+- `docs/architecture/multi-tenant-operational-runbook.md` - MT operations runbook
+- `docs/architecture/multi-tenant-surface-inventory.md` - MT surface inventory
+
+### Runbooks
+
+- `docs/architecture/multi-tenant-operational-runbook.md`
+
+### Contracts
+
+- Route inventory allowlist in `internal/api/route_inventory_test.go`
+- Payload snapshot contracts in `internal/api/contract_test.go`
+- Settings routing contracts in `frontend-modern/src/components/Settings/__tests__/settingsRouting.test.ts`
+- Legacy route contracts in `frontend-modern/src/routing/__tests__/legacyRouteContracts.test.ts`
+
+## Appendix D: Drift Taxonomy and Initial Classification
+
+| Classification | Meaning | Required Action |
+| --- | --- | --- |
+| `MATCHED` | Plan output matches current runtime behavior exactly. | None - certified as-is. |
+| `DRIFT_ACCEPTED` | Minor deviation from plan exists but is intentional or benign. | Document reason and accept. |
+| `DRIFT_FIX_REQUIRED` | Deviation from plan requires correction before release. | Create fix ticket, block release until resolved. |
+| `DEFERRED` | Planned work not yet completed, explicitly deferred to future milestone. | Add to debt ledger with owner and target. |
+
+| Track | Classification | Notes |
+| --- | --- | --- |
+| Alerts Unified-Resource Hardening | `MATCHED` | All 10 packets DONE/APPROVED, final certification complete. |
+| Multi-Tenant Productization | `DRIFT_ACCEPTED` | Packet 08 blocked by external import cycle; all MT-specific work complete. Import cycle is owned by alerts track parallel merge and does not affect MT feature correctness. |
+| Control Plane Decomposition | `MATCHED` | All 10 packets DONE/APPROVED, final certification complete. |
+| Settings Control Plane Decomposition | `MATCHED` | All 10 packets DONE/APPROVED, final certification complete. |
+| Storage + Backups V2 | `DEFERRED` | Plan is in Draft (active) status, no packet execution started. Defer to next milestone. |
