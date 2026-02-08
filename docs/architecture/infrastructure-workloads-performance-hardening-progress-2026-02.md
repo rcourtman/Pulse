@@ -73,7 +73,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- pending checkpoint commit
+- `c28f1c4a` (perf(IWP-00): scaffold baseline performance contract tests for Infrastructure and Workloads)
 
 Residual risk:
 - Profile L tests use extended timeout (15–20s) for 3000/5000 element renders; may need adjustment on slow CI runners. Mitigated by structural assertions (row count) not timing.
@@ -278,7 +278,7 @@ TODO
 
 ## Checkpoint Commits
 
-- IWP-00: TODO
+- IWP-00: `c28f1c4a`
 - IWP-01: TODO
 - IWP-02: TODO
 - IWP-03: TODO
