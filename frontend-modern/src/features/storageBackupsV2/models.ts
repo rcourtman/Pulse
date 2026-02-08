@@ -24,6 +24,10 @@ export type StorageBackupPlatform = KnownStorageBackupPlatform | (string & {});
 
 export type PlatformFamily = 'onprem' | 'container' | 'virtualization' | 'cloud' | 'generic';
 export type DataOrigin = 'resource' | 'legacy';
+export const STORAGE_DATA_ORIGIN_PRECEDENCE: Record<DataOrigin, number> = {
+  legacy: 0,
+  resource: 1,
+};
 
 export type NormalizedHealth = 'healthy' | 'warning' | 'critical' | 'offline' | 'unknown';
 export type BackupOutcome = 'success' | 'warning' | 'failed' | 'running' | 'offline' | 'unknown';

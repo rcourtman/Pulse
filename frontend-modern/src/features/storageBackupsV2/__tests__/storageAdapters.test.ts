@@ -43,56 +43,106 @@ const baseState = (overrides: Partial<State> = {}): State =>
     ...overrides,
   }) as State;
 
-describe('storageAdapters', () => {
-  it('prefers resource-origin records over legacy duplicates by ID', () => {
-    const state = baseState({
-      storage: [
-        {
-          id: 'storage-1',
-          name: 'local-zfs',
-          node: 'pve1',
-          instance: 'cluster-a',
-          type: 'zfspool',
-          status: 'available',
-          total: 1000,
-          used: 900,
-          free: 100,
-          usage: 90,
-          content: 'images',
-          shared: false,
-          enabled: true,
-          active: true,
-        },
-      ],
-    });
+const makeLegacyStorage = (overrides: Record<string, unknown> = {}) => ({
+  id: 'legacy-storage-1',
+  name: 'local-zfs',
+  node: 'pve1',
+  instance: 'cluster-a',
+  type: 'zfspool',
+  status: 'available',
+  total: 1000,
+  used: 900,
+  free: 100,
+  usage: 90,
+  content: 'images',
+  shared: true,
+  enabled: true,
+  active: true,
+  ...overrides,
+});
 
+const makeResourceStorage = (overrides: Partial<Resource> = {}): Resource =>
+  ({
+    id: 'resource-storage-1',
+    type: 'storage',
+    name: 'local-zfs',
+    displayName: 'local-zfs',
+    platformId: 'cluster-a',
+    platformType: 'proxmox-pve',
+    sourceType: 'api',
+    status: 'online',
+    disk: { current: 40, total: 1000, used: 400, free: 600 },
+    lastSeen: 1731000000000,
+    platformData: {
+      type: 'zfspool',
+      node: 'pve1',
+      instance: 'cluster-a',
+      shared: false,
+    },
+    ...overrides,
+  }) as Resource;
+
+describe('storageAdapters', () => {
+  it('merges mixed-origin records with different ids when canonical identity matches', () => {
+    const state = baseState({
+      storage: [makeLegacyStorage({ id: 'legacy-storage-id' })],
+    });
+    const resources: Resource[] = [makeResourceStorage({ id: 'resource-storage-id' })];
+
+    const records = buildStorageRecordsV2({ state, resources });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].id).toBe('resource-storage-id');
+  });
+
+  it('applies deterministic precedence where resource-origin data wins over legacy', () => {
+    const state = baseState({
+      storage: [makeLegacyStorage({ status: 'degraded', used: 950, usage: 95, shared: true })],
+    });
     const resources: Resource[] = [
-      {
-        id: 'storage-1',
-        type: 'storage',
-        name: 'local-zfs',
-        displayName: 'local-zfs',
-        platformId: 'cluster-a',
-        platformType: 'proxmox-pve',
-        sourceType: 'api',
+      makeResourceStorage({
         status: 'online',
         disk: { current: 40, total: 1000, used: 400, free: 600 },
-        lastSeen: Date.now(),
         platformData: {
           type: 'zfspool',
           node: 'pve1',
           instance: 'cluster-a',
+          shared: false,
         },
-      },
+      }),
+    ];
+    const records = buildStorageRecordsV2({ state, resources });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].source.origin).toBe('resource');
+    expect(records[0].health).toBe('healthy');
+    expect(records[0].capacity.usedBytes).toBe(400);
+    expect(records[0].details?.shared).toBe(false);
+  });
+
+  it('keeps records separate when canonical identities differ', () => {
+    const state = baseState({
+      storage: [makeLegacyStorage({ id: 'legacy-storage-a', node: 'pve1' })],
+    });
+    const resources: Resource[] = [
+      makeResourceStorage({
+        id: 'resource-storage-b',
+        platformData: {
+          type: 'zfspool',
+          node: 'pve2',
+          instance: 'cluster-a',
+          shared: false,
+        },
+      }),
     ];
 
     const records = buildStorageRecordsV2({ state, resources });
-    expect(records).toHaveLength(1);
-    expect(records[0].source.origin).toBe('resource');
-    expect(records[0].capacity.usedBytes).toBe(400);
+
+    expect(records).toHaveLength(2);
+    expect(new Set(records.map((record) => record.location.label))).toEqual(new Set(['pve1', 'pve2']));
   });
 
-  it('adds legacy PBS datastore records when resource datastores are unavailable', () => {
+  it('deduplicates capabilities when mixed-origin records are merged', () => {
     const state = baseState({
       pbs: [
         {
@@ -130,11 +180,29 @@ describe('storageAdapters', () => {
       ],
     });
 
-    const records = buildStorageRecordsV2({ state, resources: [] });
+    const resources: Resource[] = [
+      {
+        id: 'resource-datastore-1',
+        type: 'datastore',
+        name: 'primary',
+        displayName: 'primary',
+        platformId: 'pbs-1',
+        platformType: 'proxmox-pbs',
+        sourceType: 'api',
+        status: 'online',
+        disk: { current: 25, total: 1000, used: 250, free: 750 },
+        lastSeen: 1731000005000,
+        parentId: 'pbs-1',
+        platformData: {
+          pbsInstanceName: 'pbs-main',
+          type: 'pbs',
+        },
+      },
+    ];
+
+    const records = buildStorageRecordsV2({ state, resources });
     expect(records).toHaveLength(1);
-    expect(records[0].category).toBe('backup-repository');
-    expect(records[0].source.platform).toBe('proxmox-pbs');
-    expect(records[0].capabilities).toContain('deduplication');
+    expect(records[0].capabilities.filter((capability) => capability === 'deduplication')).toHaveLength(1);
+    expect(records[0].capabilities.filter((capability) => capability === 'backup-repository')).toHaveLength(1);
   });
 });
-

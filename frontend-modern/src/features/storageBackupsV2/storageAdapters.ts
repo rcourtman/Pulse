@@ -1,5 +1,6 @@
 import type { PBSDatastore, Storage } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { STORAGE_DATA_ORIGIN_PRECEDENCE } from './models';
 import type {
   CapacitySnapshot,
   NormalizedHealth,
@@ -19,6 +20,19 @@ const asNumberOrNull = (value: unknown): number | null => {
 };
 
 const dedupe = <T>(values: T[]): T[] => Array.from(new Set(values));
+const normalizeIdentityPart = (value: string | undefined | null): string =>
+  (value || '')
+    .trim()
+    .toLowerCase();
+
+const canonicalStorageIdentityKey = (record: StorageRecordV2): string => {
+  const platform = normalizeIdentityPart(String(record.source.platform || 'generic'));
+  const location = normalizeIdentityPart(record.location?.label) || normalizeIdentityPart(record.refs?.platformEntityId);
+  const name = normalizeIdentityPart(record.name) || normalizeIdentityPart(record.id);
+  const category = normalizeIdentityPart(record.category || 'other');
+
+  return [platform, location || 'unknown-location', name || 'unknown-name', category].join('|');
+};
 
 const resolvePlatformFamily = (platform: StorageBackupPlatform): PlatformFamily => {
   const value = String(platform).toLowerCase();
@@ -260,15 +274,22 @@ export const DEFAULT_STORAGE_V2_ADAPTERS: StorageV2Adapter[] = [
   legacyPbsDatastoreAdapter,
 ];
 
-const mergeStorageRecords = (current: StorageRecordV2, incoming: StorageRecordV2): StorageRecordV2 => ({
-  ...current,
-  ...(incoming.source.origin === 'resource' ? incoming : {}),
-  capabilities: dedupe([...(current.capabilities || []), ...(incoming.capabilities || [])]),
-  details: {
-    ...(current.details || {}),
-    ...(incoming.details || {}),
-  },
-});
+const mergeStorageRecords = (current: StorageRecordV2, incoming: StorageRecordV2): StorageRecordV2 => {
+  const currentRank = STORAGE_DATA_ORIGIN_PRECEDENCE[current.source.origin];
+  const incomingRank = STORAGE_DATA_ORIGIN_PRECEDENCE[incoming.source.origin];
+  const preferred = incomingRank > currentRank ? incoming : current;
+  const secondary = preferred === current ? incoming : current;
+
+  return {
+    ...secondary,
+    ...preferred,
+    capabilities: dedupe([...(current.capabilities || []), ...(incoming.capabilities || [])]),
+    details: {
+      ...(secondary.details || {}),
+      ...(preferred.details || {}),
+    },
+  };
+};
 
 export const buildStorageRecordsV2 = (
   ctx: StorageV2AdapterContext,
@@ -280,12 +301,13 @@ export const buildStorageRecordsV2 = (
     if (!adapter.supports(ctx)) continue;
     const records = adapter.build(ctx);
     for (const record of records) {
-      const existing = map.get(record.id);
+      const key = canonicalStorageIdentityKey(record);
+      const existing = map.get(key);
       if (!existing) {
-        map.set(record.id, record);
+        map.set(key, record);
         continue;
       }
-      map.set(record.id, mergeStorageRecords(existing, record));
+      map.set(key, mergeStorageRecords(existing, record));
     }
   }
 
