@@ -80,8 +80,10 @@ describe('resource link routing contract', () => {
       node: 'cluster-main-pve1',
       query: 'local-lvm',
       resource: 'storage-1',
+      sort: 'usage',
+      order: 'desc',
     });
-    expect(href).toBe('/storage?tab=disks&group=storage&source=pbs&status=available&node=cluster-main-pve1&q=local-lvm&resource=storage-1');
+    expect(href).toBe('/storage?tab=disks&group=storage&source=pbs&status=available&node=cluster-main-pve1&q=local-lvm&resource=storage-1&sort=usage&order=desc');
 
     const parsed = parseStorageLinkSearch(href.slice('/storage'.length));
     expect(parsed).toEqual({
@@ -92,12 +94,16 @@ describe('resource link routing contract', () => {
       node: 'cluster-main-pve1',
       query: 'local-lvm',
       resource: 'storage-1',
+      sort: 'usage',
+      order: 'desc',
     });
 
     expect(STORAGE_QUERY_PARAMS.tab).toBe('tab');
     expect(STORAGE_QUERY_PARAMS.group).toBe('group');
     expect(STORAGE_QUERY_PARAMS.query).toBe('q');
     expect(STORAGE_QUERY_PARAMS.resource).toBe('resource');
+    expect(STORAGE_QUERY_PARAMS.sort).toBe('sort');
+    expect(STORAGE_QUERY_PARAMS.order).toBe('order');
   });
 
   it('supports legacy storage search query param parsing', () => {
@@ -109,6 +115,8 @@ describe('resource link routing contract', () => {
       node: '',
       query: 'ceph',
       resource: '',
+      sort: '',
+      order: '',
     });
   });
 
@@ -116,18 +124,20 @@ describe('resource link routing contract', () => {
     const href = buildBackupsPath({
       guestType: 'vm',
       source: 'pbs',
+      namespace: 'tenant-a',
       backupType: 'remote',
       status: 'verified',
       group: 'guest',
       node: 'cluster-main-pve1',
       query: 'node:pve1',
     });
-    expect(href).toBe('/backups?type=vm&source=pbs&backupType=remote&status=verified&group=guest&node=cluster-main-pve1&q=node%3Apve1');
+    expect(href).toBe('/backups?type=vm&source=pbs&namespace=tenant-a&backupType=remote&status=verified&group=guest&node=cluster-main-pve1&q=node%3Apve1');
 
     const parsed = parseBackupsLinkSearch(href.slice('/backups'.length));
     expect(parsed).toEqual({
       guestType: 'vm',
       source: 'pbs',
+      namespace: 'tenant-a',
       backupType: 'remote',
       status: 'verified',
       group: 'guest',
@@ -137,6 +147,7 @@ describe('resource link routing contract', () => {
 
     expect(BACKUPS_QUERY_PARAMS.guestType).toBe('type');
     expect(BACKUPS_QUERY_PARAMS.source).toBe('source');
+    expect(BACKUPS_QUERY_PARAMS.namespace).toBe('namespace');
     expect(BACKUPS_QUERY_PARAMS.backupType).toBe('backupType');
     expect(BACKUPS_QUERY_PARAMS.query).toBe('q');
     expect(PMG_THRESHOLDS_PATH).toBe('/alerts/thresholds/mail-gateway');
@@ -146,6 +157,7 @@ describe('resource link routing contract', () => {
     expect(parseBackupsLinkSearch('?search=vm-101')).toEqual({
       guestType: '',
       source: '',
+      namespace: '',
       backupType: '',
       status: '',
       group: '',
@@ -160,16 +172,19 @@ describe('resource link routing contract', () => {
         source: 'kubernetes',
         status: 'healthy',
         query: 'pvc',
+        sort: 'usage',
+        order: 'desc',
       }),
-    ).toBe('/storage-v2?source=kubernetes&status=healthy&q=pvc');
+    ).toBe('/storage-v2?source=kubernetes&status=healthy&q=pvc&sort=usage&order=desc');
 
     expect(
       buildBackupsV2Path({
         source: 'proxmox-pbs',
+        namespace: 'tenant-a',
         status: 'success',
         query: 'vmid:101',
       }),
-    ).toBe('/backups-v2?source=proxmox-pbs&status=success&q=vmid%3A101');
+    ).toBe('/backups-v2?source=proxmox-pbs&namespace=tenant-a&status=success&q=vmid%3A101');
 
     expect(buildStorageV2Path()).toBe(STORAGE_V2_PATH);
     expect(buildBackupsV2Path()).toBe(BACKUPS_V2_PATH);

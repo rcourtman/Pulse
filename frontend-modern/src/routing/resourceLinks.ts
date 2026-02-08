@@ -28,11 +28,14 @@ export const STORAGE_QUERY_PARAMS = {
   query: 'q',
   legacyQuery: 'search',
   resource: 'resource',
+  sort: 'sort',
+  order: 'order',
 } as const;
 
 export const BACKUPS_QUERY_PARAMS = {
   guestType: 'type',
   source: 'source',
+  namespace: 'namespace',
   backupType: 'backupType',
   status: 'status',
   group: 'group',
@@ -64,11 +67,14 @@ type StorageLinkOptions = {
   node?: string | null;
   query?: string | null;
   resource?: string | null;
+  sort?: string | null;
+  order?: string | null;
 };
 
 type BackupsLinkOptions = {
   guestType?: string | null;
   source?: string | null;
+  namespace?: string | null;
   backupType?: string | null;
   status?: string | null;
   group?: string | null;
@@ -137,6 +143,8 @@ export const parseStorageLinkSearch = (search: string) => {
     node: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.node)),
     query: queryValue,
     resource: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.resource)),
+    sort: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.sort)),
+    order: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.order)),
   };
 };
 
@@ -149,6 +157,8 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   const node = normalizeQueryValue(options.node);
   const query = normalizeQueryValue(options.query);
   const resource = normalizeQueryValue(options.resource);
+  const sort = normalizeQueryValue(options.sort);
+  const order = normalizeQueryValue(options.order);
 
   if (tab) params.set(STORAGE_QUERY_PARAMS.tab, tab);
   if (group) params.set(STORAGE_QUERY_PARAMS.group, group);
@@ -157,6 +167,8 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   if (node) params.set(STORAGE_QUERY_PARAMS.node, node);
   if (query) params.set(STORAGE_QUERY_PARAMS.query, query);
   if (resource) params.set(STORAGE_QUERY_PARAMS.resource, resource);
+  if (sort) params.set(STORAGE_QUERY_PARAMS.sort, sort);
+  if (order) params.set(STORAGE_QUERY_PARAMS.order, order);
 
   const serialized = params.toString();
   return serialized ? `/storage?${serialized}` : '/storage';
@@ -171,6 +183,8 @@ export const buildStorageV2Path = (options: StorageLinkOptions = {}): string => 
   const node = normalizeQueryValue(options.node);
   const query = normalizeQueryValue(options.query);
   const resource = normalizeQueryValue(options.resource);
+  const sort = normalizeQueryValue(options.sort);
+  const order = normalizeQueryValue(options.order);
 
   if (tab) params.set(STORAGE_QUERY_PARAMS.tab, tab);
   if (group) params.set(STORAGE_QUERY_PARAMS.group, group);
@@ -179,6 +193,8 @@ export const buildStorageV2Path = (options: StorageLinkOptions = {}): string => 
   if (node) params.set(STORAGE_QUERY_PARAMS.node, node);
   if (query) params.set(STORAGE_QUERY_PARAMS.query, query);
   if (resource) params.set(STORAGE_QUERY_PARAMS.resource, resource);
+  if (sort) params.set(STORAGE_QUERY_PARAMS.sort, sort);
+  if (order) params.set(STORAGE_QUERY_PARAMS.order, order);
 
   const serialized = params.toString();
   return serialized ? `${STORAGE_V2_PATH}?${serialized}` : STORAGE_V2_PATH;
@@ -192,6 +208,7 @@ export const parseBackupsLinkSearch = (search: string) => {
   return {
     guestType: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.guestType)),
     source: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.source)),
+    namespace: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.namespace)),
     backupType: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.backupType)),
     status: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.status)),
     group: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.group)),
@@ -204,6 +221,7 @@ export const buildBackupsPath = (options: BackupsLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const guestType = normalizeQueryValue(options.guestType);
   const source = normalizeQueryValue(options.source);
+  const namespace = normalizeQueryValue(options.namespace);
   const backupType = normalizeQueryValue(options.backupType);
   const status = normalizeQueryValue(options.status);
   const group = normalizeQueryValue(options.group);
@@ -212,6 +230,7 @@ export const buildBackupsPath = (options: BackupsLinkOptions = {}): string => {
 
   if (guestType) params.set(BACKUPS_QUERY_PARAMS.guestType, guestType);
   if (source) params.set(BACKUPS_QUERY_PARAMS.source, source);
+  if (namespace) params.set(BACKUPS_QUERY_PARAMS.namespace, namespace);
   if (backupType) params.set(BACKUPS_QUERY_PARAMS.backupType, backupType);
   if (status) params.set(BACKUPS_QUERY_PARAMS.status, status);
   if (group) params.set(BACKUPS_QUERY_PARAMS.group, group);
@@ -226,6 +245,7 @@ export const buildBackupsV2Path = (options: BackupsLinkOptions = {}): string => 
   const params = new URLSearchParams();
   const guestType = normalizeQueryValue(options.guestType);
   const source = normalizeQueryValue(options.source);
+  const namespace = normalizeQueryValue(options.namespace);
   const backupType = normalizeQueryValue(options.backupType);
   const status = normalizeQueryValue(options.status);
   const group = normalizeQueryValue(options.group);
@@ -234,6 +254,7 @@ export const buildBackupsV2Path = (options: BackupsLinkOptions = {}): string => 
 
   if (guestType) params.set(BACKUPS_QUERY_PARAMS.guestType, guestType);
   if (source) params.set(BACKUPS_QUERY_PARAMS.source, source);
+  if (namespace) params.set(BACKUPS_QUERY_PARAMS.namespace, namespace);
   if (backupType) params.set(BACKUPS_QUERY_PARAMS.backupType, backupType);
   if (status) params.set(BACKUPS_QUERY_PARAMS.status, status);
   if (group) params.set(BACKUPS_QUERY_PARAMS.group, group);
