@@ -24,7 +24,7 @@ Date: 2026-02-08
 | 01 | Router Registration Skeleton | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence |
 | 02 | Extract Auth + Security + Install Route Group | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence |
 | 03 | Extract Monitoring + Resource Route Group | DONE | Codex | Claude | APPROVED | See Packet 03 Review Evidence |
-| 04 | Extract AI + Relay + Sessions Route Group | TODO | Unassigned | Unassigned | PENDING | |
+| 04 | Extract AI + Relay + Sessions Route Group | DONE | Codex | Claude | APPROVED | See Packet 04 Review Evidence |
 | 05 | Extract Org + License + Audit Route Group | TODO | Unassigned | Unassigned | PENDING | |
 | 06 | ConfigHandlers Node Lifecycle Extraction | TODO | Unassigned | Unassigned | PENDING | |
 | 07 | ConfigHandlers Setup + Auto-Register Extraction | TODO | Unassigned | Unassigned | PENDING | |
@@ -219,21 +219,46 @@ Rollback:
 ## Packet 04 Checklist: Extract AI + Relay + Sessions Route Group
 
 ### Implementation
-- [ ] AI and relay registrations moved to dedicated module.
-- [ ] Legacy session/approval/question endpoint behavior preserved.
-- [ ] AI scope/permission wrappers preserved.
-- [ ] Stream/session contract tests updated for parity.
+- [x] AI and relay registrations moved to dedicated module.
+- [x] Legacy session/approval/question endpoint behavior preserved.
+- [x] AI scope/permission wrappers preserved.
+- [x] Stream/session contract tests updated for parity.
 
 ### Required Tests
-- [ ] `go test ./internal/api/... -run "AI|Patrol|Chat|Relay|Contract" -v` passed.
-- [ ] `go test ./internal/api/... -run "TestRouterRouteInventory|RouterHandlers" -v` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `go test ./internal/api/... -run "AI|Patrol|Chat|Relay|Contract" -v` passed.
+- [x] `go test ./internal/api/... -run "TestRouterRouteInventory|RouterHandlers" -v` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### Review Evidence
+
+Files changed:
+- `internal/api/router_routes_ai_relay.go` (new): AI/relay/patrol/chat/sessions route registrations extracted.
+- `internal/api/router_routes_registration.go`: `registerAIRelayRoutes` reduced to thin delegate.
+- `internal/api/route_inventory_test.go`: Added `router_routes_ai_relay.go` to parsed file list.
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/api/... -run "TestRouterRouteInventory|RouterHandlers" -v` -> exit 0
+3. `go test ./internal/api/... -run "AI|Patrol|Chat|Relay|Contract" -v` -> exit 0
+
+Gate checklist:
+- P0: PASS (files verified, commands rerun independently, exit codes 0)
+- P1: PASS (route inventory parity; AI/patrol/relay tests pass; legacy endpoints preserved)
+- P2: PASS (tracker updated, checklist complete)
+
+Verdict: APPROVED
+
+Residual risk:
+- None
+
+Rollback:
+- Delete `internal/api/router_routes_ai_relay.go`, restore `registerAIRelayRoutes` body in `router_routes_registration.go`.
 
 ## Packet 05 Checklist: Extract Org + License + Audit Route Group
 
