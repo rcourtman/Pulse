@@ -373,8 +373,8 @@ Remaining known test failure (not a blocker):
 - `TestPollPVEInstancePreservesRecentNodesWhenGetNodesReturnsEmpty` — pre-existing, unrelated to closeout work
 
 Accepted risks (no release block):
-- DL-001: Storage + Backups V2 deferred to next milestone (explicit deferral)
-- DL-003 through DL-008, DL-011, DL-012: LOW severity deferred items with owners
+- ~~DL-001~~: CLOSED — Storage + Backups V2 Phase 5 legacy deprecation completed (7 packets DONE/APPROVED)
+- DL-003 through DL-008, DL-011, DL-012: deferred items with owners
 
 ### Verdict
 
@@ -421,9 +421,9 @@ Justification:
 | --- | --- | --- | --- | --- | --- |
 | Alerts Unified-Resource Hardening | `alerts-unified-resource-hardening-plan-2026-02.md` | Complete | `alerts-unified-resource-hardening-progress-2026-02.md` | Complete | `010be4b0` (Packet 10) |
 | Multi-Tenant Productization | `multi-tenant-productization-plan-2026-02.md` | Draft | `multi-tenant-productization-progress-2026-02.md` | Active (Packet 08 BLOCKED - import cycle from parallel work) | N/A (blocked) |
-| Control Plane Decomposition | `control-plane-decomposition-plan-2026-02.md` | Complete | `control-plane-decomposition-progress-2026-02.md` | Active (all 10 packets DONE/APPROVED) | `2418cfeb` (Packet 00), `312d24ad` (Packet 02) |
+| Control Plane Decomposition | `control-plane-decomposition-plan-2026-02.md` | Complete | `control-plane-decomposition-progress-2026-02.md` | Complete | `2418cfeb` (Packet 00), `312d24ad` (Packet 02) |
 | Settings Control Plane Decomposition | `settings-control-plane-decomposition-plan-2026-02.md` | Complete | `settings-control-plane-decomposition-progress-2026-02.md` | Complete | `63d39d75` (Packet 09) |
-| Storage + Backups V2 | `storage-backups-v2-plan.md` | Draft (active) | N/A | N/A | N/A |
+| Storage + Backups V2 | `storage-backups-v2-plan.md` | Complete (all phases including Phase 5 legacy deprecation) | `storage-page-ga-hardening-progress-2026-02.md`, `storage-backups-phase-5-legacy-deprecation-progress-2026-02.md` | Complete (GA: 11 packets; Phase 5: 7 packets — all DONE/APPROVED) | GA: `e880edcc` (Packet 09), Phase 5: `095b1e82` (SB5-05) |
 
 ## Appendix C: Closeout Artifact Index
 
@@ -479,7 +479,7 @@ Justification:
 | Multi-Tenant Productization | `DRIFT_ACCEPTED` | Packet 08 blocked by external import cycle; all MT-specific work complete. Import cycle is owned by alerts track parallel merge and does not affect MT feature correctness. |
 | Control Plane Decomposition | `MATCHED` | All 10 packets DONE/APPROVED, final certification complete. |
 | Settings Control Plane Decomposition | `MATCHED` | All 10 packets DONE/APPROVED, final certification complete. |
-| Storage + Backups V2 | `DEFERRED` | Plan is in Draft (active) status, no packet execution started. Defer to next milestone. |
+| Storage + Backups V2 | `MATCHED` | Storage GA execution completed and certified; Phase 5 legacy deprecation completed (DL-001 CLOSED). All plan phases complete. |
 
 ## Appendix E: Cross-Domain Integration Certification Matrix
 
@@ -698,7 +698,7 @@ Runbook enhancement needed items (tracked here, not applied to runbook in this p
 
 | ID | Description | Severity | Owner | Target Milestone | Source |
 | --- | --- | --- | --- | --- | --- |
-| DL-001 | Storage + Backups V2 plan execution | HIGH | Storage team | Next milestone | Appendix D |
+| DL-001 | ~~Storage + Backups V2 Phase 5 legacy deprecation (route/page cleanup)~~ CLOSED — all 7 packets (SB5-00 through SB5-06) DONE/APPROVED. Legacy shells deleted, alias routes removed, platformTabs simplified. See `storage-backups-phase-5-legacy-deprecation-progress-2026-02.md`. | ~~MEDIUM~~ CLOSED | Storage team | ~~Next milestone~~ Done | Appendix D |
 | DL-002 | ~~Multi-tenant final certification (import cycle)~~ RESOLVED — import cycle no longer exists | ~~MEDIUM~~ CLOSED | Alerts/MT team | ~~Pre-release~~ Done | Appendix D |
 | DL-003 | Unsupported import version handling is permissive | LOW | Config team | Next import hardening | Appendix F (PC-004-F1) |
 | DL-004 | No E2E migration replay test | LOW | QA/Platform | Post-closeout | Appendix F (PC-004-F2) |
@@ -713,7 +713,7 @@ Runbook enhancement needed items (tracked here, not applied to runbook in this p
 
 ### Deferred and Residual Traceability
 
-- Appendix D `DEFERRED`: covered by `DL-001` and `DL-002`.
+- Appendix D follow-ons: covered by `DL-001` and `DL-002`.
 - Appendix F `DEFERRED`: covered by `DL-003` and `DL-004`.
 - Appendix H runbook enhancement items: covered by `DL-005`, `DL-006`, and `DL-007`.
 - Packet evidence residual risks: covered by `DL-008`, `DL-009`, and `DL-010`.

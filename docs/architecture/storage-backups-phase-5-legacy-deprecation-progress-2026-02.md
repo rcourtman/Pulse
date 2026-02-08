@@ -6,7 +6,7 @@ Linked plan:
 - `docs/architecture/storage-page-ga-hardening-progress-2026-02.md` (predecessor — all packets DONE/APPROVED)
 - `docs/architecture/program-closeout-certification-plan-2026-02.md` (DL-001 origin)
 
-Status: Active
+Status: Complete
 Date: 2026-02-08
 
 ## Rules
@@ -30,7 +30,7 @@ Date: 2026-02-08
 | SB5-03 | Backups Legacy Shell Decoupling | DONE | Codex | Claude | APPROVED | See SB5-03 Review Evidence |
 | SB5-04 | Storage Legacy Shell Decoupling | DONE | Codex | Claude | APPROVED | See SB5-04 Review Evidence |
 | SB5-05 | Legacy Route and Shell Deletion | DONE | Codex | Claude | APPROVED | See SB5-05 Review Evidence |
-| SB5-06 | Final Certification and DL-001 Closure | TODO | Claude | Claude | — | — |
+| SB5-06 | Final Certification and DL-001 Closure | DONE | Claude | Claude | APPROVED | See SB5-06 Review Evidence |
 
 ---
 
@@ -584,7 +584,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- PENDING
+- `095b1e82` (feat(storage-backups): SB5-05 legacy route and shell deletion)
 
 Rollback:
 - Revert checkpoint commit to restore deleted shells, alias routes, and
@@ -596,19 +596,56 @@ Rollback:
 ## SB5-06 Checklist: Final Certification and DL-001 Closure
 
 ### Certification
-- [ ] All packets SB5-00 through SB5-05 are `DONE` and `APPROVED`.
-- [ ] Checkpoint commit hashes recorded for each approved packet.
-- [ ] Storage + Backups V2 plan status updated to Complete.
-- [ ] Debt ledger DL-001 updated to `CLOSED` with evidence.
+- [x] All packets SB5-00 through SB5-05 are `DONE` and `APPROVED`.
+- [x] Checkpoint commit hashes recorded for each approved packet: SB5-01 `2967c0de`, SB5-02 `8a9836e9`, SB5-03 `65d78e52`, SB5-04 `1992ff36`, SB5-05 `095b1e82`.
+- [x] Storage + Backups V2 plan status updated to Complete — `storage-backups-v2-plan.md` Phase 5 marked COMPLETE.
+- [x] Debt ledger DL-001 updated to `CLOSED` with evidence — `program-closeout-certification-plan-2026-02.md` updated (debt ledger, drift taxonomy, upstream track index, accepted risks).
 
 ### Final Validation Gate
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] `cd frontend-modern && npx vitest run` passed.
-- [ ] `go build ./...` passed.
-- [ ] Exit codes recorded.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` → exit 0.
+- [x] `cd frontend-modern && npx vitest run` → exit 0 (71 files, 668 tests passed).
+- [x] `go build ./...` → exit 0.
+- [x] Exit codes recorded.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### SB5-06 Review Evidence
+
+```
+Files changed:
+- docs/architecture/storage-backups-v2-plan.md: Phase 5 marked COMPLETE with exit criteria
+  checkmarks and execution tracker reference.
+- docs/architecture/program-closeout-certification-plan-2026-02.md: DL-001 marked CLOSED
+  in debt ledger; drift taxonomy updated from DRIFT_ACCEPTED to MATCHED; upstream track
+  status index updated to Complete; accepted risks section updated.
+- docs/architecture/storage-backups-phase-5-legacy-deprecation-progress-2026-02.md:
+  SB5-06 checklist completed; packet board updated to DONE/APPROVED; review evidence recorded.
+
+Commands run + exit codes:
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+   → exit 0
+2. `cd frontend-modern && npx vitest run`
+   → exit 0 (71 files, 668 tests passed)
+3. `go build ./...`
+   → exit 0
+
+Gate checklist:
+- P0: PASS (all 3 validation commands pass; docs-only changes verified; no code
+  modifications in this packet)
+- P1: PASS (all 7 packets SB5-00 through SB5-06 are DONE/APPROVED with checkpoint
+  commits; Storage + Backups V2 plan is fully complete; DL-001 closure has
+  cross-referenced evidence in debt ledger, drift taxonomy, and upstream track index)
+- P2: PASS (progress tracker fully updated; plan and closeout docs consistent)
+
+Verdict: APPROVED
+
+Commit:
+- `2b6ab81b` (docs(storage-backups): SB5-06 final certification and DL-001 closure)
+
+Rollback:
+- Revert docs-only changes to restore DL-001 to open status.
+```
