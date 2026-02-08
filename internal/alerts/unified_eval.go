@@ -1,0 +1,143 @@
+package alerts
+
+import (
+	"github.com/rs/zerolog/log"
+)
+
+// UnifiedResourceMetric holds a single metric value for unified evaluation.
+type UnifiedResourceMetric struct {
+	Value   float64
+	Percent float64
+}
+
+// UnifiedResourceInput is the data needed to evaluate alerts for a unified resource.
+// This avoids importing unifiedresources (which would cause an import cycle).
+type UnifiedResourceInput struct {
+	ID         string
+	Type       string // lowercase: "vm", "lxc", "container", "host", "pbs", "storage", "pmg"
+	Name       string
+	Node       string
+	Instance   string
+	CPU        *UnifiedResourceMetric
+	Memory     *UnifiedResourceMetric
+	Disk       *UnifiedResourceMetric
+	DiskRead   *UnifiedResourceMetric
+	DiskWrite  *UnifiedResourceMetric
+	NetworkIn  *UnifiedResourceMetric
+	NetworkOut *UnifiedResourceMetric
+}
+
+// unifiedAlertType maps a resource type key to the alert system's display type.
+func unifiedAlertType(typeKey string) string {
+	switch typeKey {
+	case "vm":
+		return "VM"
+	case "lxc", "container":
+		return "Container"
+	case "host":
+		return "Host"
+	case "node":
+		return "Node"
+	case "pbs":
+		return "PBS"
+	case "storage":
+		return "Storage"
+	case "pmg":
+		return "PMG"
+	default:
+		return typeKey
+	}
+}
+
+// isUnifiedGuestType returns true for resource types that support I/O metrics.
+func isUnifiedGuestType(typeKey string) bool {
+	switch typeKey {
+	case "vm", "lxc", "container":
+		return true
+	default:
+		return false
+	}
+}
+
+// unifiedDefaultThresholds returns the default ThresholdConfig for a resource type key.
+func (m *Manager) unifiedDefaultThresholds(typeKey string) ThresholdConfig {
+	switch typeKey {
+	case "vm", "lxc", "container":
+		return cloneThresholdConfig(m.config.GuestDefaults)
+	case "host":
+		return cloneThresholdConfig(m.config.HostDefaults)
+	case "node":
+		return cloneThresholdConfig(m.config.NodeDefaults)
+	case "pbs":
+		return cloneThresholdConfig(m.config.PBSDefaults)
+	case "storage":
+		return ThresholdConfig{Usage: cloneThreshold(&m.config.StorageDefault)}
+	default:
+		return ThresholdConfig{}
+	}
+}
+
+// CheckUnifiedResource evaluates threshold-based metric alerts for a unified resource.
+// It resolves thresholds (defaults + overrides) and calls checkMetric for each
+// available metric. Discrete event alerts (offline, RAID, backup age, etc.)
+// are NOT evaluated here — they remain in the typed Check* methods.
+func (m *Manager) CheckUnifiedResource(input *UnifiedResourceInput) {
+	if input == nil {
+		return
+	}
+
+	m.mu.RLock()
+	if !m.config.Enabled {
+		m.mu.RUnlock()
+		return
+	}
+
+	thresholds := m.unifiedDefaultThresholds(input.Type)
+	if override, exists := m.config.Overrides[input.ID]; exists {
+		thresholds = m.applyThresholdOverride(thresholds, override)
+	}
+	m.mu.RUnlock()
+
+	if thresholds.Disabled {
+		return
+	}
+
+	resourceType := unifiedAlertType(input.Type)
+
+	log.Debug().
+		Str("resourceID", input.ID).
+		Str("resourceName", input.Name).
+		Str("resourceType", resourceType).
+		Msg("Evaluating unified resource metrics")
+
+	if input.CPU != nil {
+		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "cpu", input.CPU.Percent, thresholds.CPU, nil)
+	}
+	if input.Memory != nil {
+		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "memory", input.Memory.Percent, thresholds.Memory, nil)
+	}
+	if input.Disk != nil {
+		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "disk", input.Disk.Percent, thresholds.Disk, nil)
+	}
+
+	// I/O metrics — only for guest resource types
+	if isUnifiedGuestType(input.Type) {
+		if input.DiskRead != nil {
+			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "diskRead", input.DiskRead.Value, thresholds.DiskRead, nil)
+		}
+		if input.DiskWrite != nil {
+			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "diskWrite", input.DiskWrite.Value, thresholds.DiskWrite, nil)
+		}
+		if input.NetworkIn != nil {
+			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "networkIn", input.NetworkIn.Value, thresholds.NetworkIn, nil)
+		}
+		if input.NetworkOut != nil {
+			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "networkOut", input.NetworkOut.Value, thresholds.NetworkOut, nil)
+		}
+	}
+
+	// Storage-specific: usage metric
+	if input.Type == "storage" && input.Disk != nil {
+		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "usage", input.Disk.Percent, thresholds.Usage, nil)
+	}
+}
