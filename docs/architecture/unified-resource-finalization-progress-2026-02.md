@@ -31,7 +31,7 @@ Date: 2026-02-08
 | URF-02 | Alerts Runtime Cutover Off Legacy Conversion Hook | DONE | Codex | Claude | APPROVED | URF-02 Review Evidence |
 | URF-03 | AI Chat Runtime Cutover Off Legacy Conversion Hook | DONE | Codex | Claude | APPROVED | URF-03 Review Evidence |
 | URF-04 | SB5 Dependency Gate + Legacy Hook Deletion Readiness | DONE | Claude | Claude | APPROVED | URF-04 Review Evidence |
-| URF-05 | Remove Frontend Runtime `useResourcesAsLegacy` Path | TODO | Codex | Claude | — | — |
+| URF-05 | Remove Frontend Runtime `useResourcesAsLegacy` Path | DONE | Codex | Claude | APPROVED | URF-05 Review Evidence |
 | URF-06 | AI Backend Contract Scaffold (Legacy -> Unified) | TODO | Codex | Claude | — | — |
 | URF-07 | AI Backend Migration to Unified Provider | TODO | Codex | Claude | — | — |
 | URF-08 | Final Certification + V2 Naming Convergence Readiness | TODO | Claude | Claude | — | — |
@@ -262,27 +262,50 @@ Residual risk:
 
 ## URF-05 Checklist: Remove Frontend Runtime `useResourcesAsLegacy` Path
 
-- [ ] Runtime `useResourcesAsLegacy` usages removed.
-- [ ] Transitional wrapper exports removed/updated.
-- [ ] Alerts/AI imports cleaned up.
-- [ ] Tests updated for non-legacy runtime contract.
+- [x] Runtime `useResourcesAsLegacy` usages removed.
+- [x] Transitional wrapper exports removed/updated.
+- [x] Alerts/AI imports cleaned up.
+- [x] Tests updated for non-legacy runtime contract.
 
 ### Required Tests
 
-- [ ] `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/pages/__tests__/Alerts.helpers.test.ts src/components/AI/__tests__/aiChatUtils.test.ts` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/pages/__tests__/Alerts.helpers.test.ts src/components/AI/__tests__/aiChatUtils.test.ts` -> exit 0
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### URF-05 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `frontend-modern/src/hooks/useResources.ts`: Deleted `useResourcesAsLegacy` function (~430 lines) and 3 exclusively-owned helper functions (`toLegacyPbsDatastoreStatus`, `toLegacyPbsInstanceStatus`, `toLegacyPmgStatus`). All module-level converter functions used by `useAlertsResources`/`useAIChatResources` retained. Neither consumer function modified.
+- `frontend-modern/src/hooks/__tests__/useResources.test.ts`: Removed `useResourcesAsLegacy` import, deleted `describe('useResourcesAsLegacy - Legacy Format Conversion')` block and `describe('Narrowed fallback behavior')` block (~458 lines removed). Retained: `useResources - Resource Filtering Logic`, `Fallback Logic`, `useAlertsResources`, `useAIChatResources`, `Stale legacy-only consumer detection`.
+- `frontend-modern/src/stores/websocket.ts`: Updated transitional contract comment to reference `useAlertsResources/useAIChatResources` instead of deleted `useResourcesAsLegacy`.
+
+Commands run + exit codes (reviewer-rerun):
+1. `cd frontend-modern && npx vitest run src/hooks/__tests__/useResources.test.ts src/pages/__tests__/Alerts.helpers.test.ts src/components/AI/__tests__/aiChatUtils.test.ts` -> exit 0 (66 tests passed, 3 files)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+3. `rg -n "useResourcesAsLegacy" frontend-modern/src` -> 0 matches (fully removed)
+4. `cd frontend-modern && npx vitest run` -> exit 0 (671 tests passed, 74 files — full suite green)
+5. `grep -n "useAlertsResources\|useAIChatResources" frontend-modern/src/hooks/useResources.ts` -> both functions present (lines 756, 847)
+
+Gate checklist:
+- P0: PASS (useResourcesAsLegacy fully deleted, 0 references in source tree, all required commands rerun by reviewer with exit 0)
+- P1: PASS (useAlertsResources and useAIChatResources unchanged, full test suite green, module-level converters retained for active consumers)
+- P2: PASS (progress tracker updated, packet evidence recorded)
+
+Verdict: APPROVED
+
+Residual risk:
+- None. Legacy conversion infrastructure is now owned entirely by consumer-specific hooks. Module-level converters serve as shared utilities for those hooks.
+
+Rollback:
+- `git revert <URF-05-commit-hash>`
 ```
 
 ---
@@ -372,7 +395,7 @@ TODO
 - URF-01: `061f1ebd` feat(URF-01): cutover Organization Sharing from legacy /api/resources to unified useResources()
 - URF-02: `acc50cb2` feat(URF-02): alerts runtime cutover off legacy conversion hook
 - URF-03: `748007bf` feat(URF-03): AI chat runtime cutover off legacy conversion hook
-- URF-04: TODO
+- URF-04: `097ed341` gate(URF-04): SB5 dependency gate GO — legacy hook deletion unblocked
 - URF-05: TODO
 - URF-06: TODO
 - URF-07: TODO
@@ -380,4 +403,4 @@ TODO
 
 ## Current Recommended Next Packet
 
-- `URF-05` (Remove Frontend Runtime `useResourcesAsLegacy` Path)
+- `URF-06` (AI Backend Contract Scaffold — Legacy -> Unified)

@@ -358,7 +358,7 @@ export function createWebSocketStore(url: string) {
             // - `state.resources` is the canonical source once populated.
             // - Legacy arrays remain hydrated only for explicit compatibility bridges:
             //   1) rollback when unified resources are not yet populated,
-            //   2) bounded type-specific fallback for PBS/PMG/storage in useResourcesAsLegacy.
+            //   2) bounded type-specific fallback for PBS/PMG/storage in useAlertsResources/useAIChatResources.
             // - Do not add new legacy-only consumers.
             //
             // Keep legacy field updates explicit here so remaining rollback paths are
