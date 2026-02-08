@@ -1,7 +1,8 @@
 # Storage + Backups Phase 5: Legacy Deprecation Progress Tracker
 
 Linked plan:
-- `docs/architecture/storage-backups-v2-plan.md` (Phase 5: Route switch + deprecation)
+- `docs/architecture/storage-backups-phase-5-legacy-deprecation-plan-2026-02.md` (authoritative execution spec)
+- `docs/architecture/storage-backups-v2-plan.md` (Phase 5: Route switch + deprecation — strategic north star)
 - `docs/architecture/storage-page-ga-hardening-progress-2026-02.md` (predecessor — all packets DONE/APPROVED)
 - `docs/architecture/program-closeout-certification-plan-2026-02.md` (DL-001 origin)
 
@@ -57,7 +58,7 @@ Date: 2026-02-08
 
 ```
 Files changed:
-- docs/architecture/storage-backups-phase5-deprecation-progress-2026-02.md: Created progress tracker with inventory and removal plan
+- docs/architecture/storage-backups-phase-5-legacy-deprecation-progress-2026-02.md: Created progress tracker with inventory and removal plan
 
 Commands run + exit codes:
 1. `go build ./...` → exit 0 (Codex evidence, verified by reviewer)
@@ -166,98 +167,111 @@ These artifacts are consumed by non-storage/backups systems and must remain.
 
 ## Appendix B: Packetized Removal Sequence
 
-### SB5-01: Hard-Wire V2 Default and Remove Feature Flag Infrastructure
+> Note: This appendix mirrors the authoritative packet definitions in
+> `docs/architecture/storage-backups-phase-5-legacy-deprecation-plan-2026-02.md`.
+> If the two diverge, the plan file is authoritative.
 
-**Change shape:** scaffold/wiring
+### SB5-01: Routing Mode Contract Hardening (No Shell Changes) — DONE
+
+**Change shape:** test hardening + contract annotation
 **Subsystem boundary:** frontend routing
-**Target files (5):**
-1. `frontend-modern/src/utils/featureFlags.ts` — DELETE entire file
-2. `frontend-modern/src/routing/storageBackupsMode.ts` — DELETE entire file
-3. `frontend-modern/src/utils/localStorage.ts` — EDIT: remove 3 storage/backups V2 keys
-4. `frontend-modern/src/App.tsx` — EDIT: replace `StorageRoute`/`BackupsRoute`/`StorageV2Route`/`BackupsV2Route` wrappers with direct V2 component renders; remove `storageBackupsRoutingPlan` memo; remove `featureFlags` and `storageBackupsMode` imports
-5. `frontend-modern/src/routing/__tests__/storageBackupsMode.test.ts` — DELETE entire file
+**Status:** APPROVED (commit `2967c0de`)
+
+Simplified and test-locked routing-mode semantics. Added GA contract regression gates
+(10 new tests) and `@deprecated` annotations on rollback-only mode branches and alias
+tab IDs. No runtime behavior changes.
+
+### SB5-02: App Router Integration Wiring
+
+**Change shape:** integration/wiring
+**Subsystem boundary:** frontend routing + App shell
+**Target files (3-5):**
+1. `frontend-modern/src/App.tsx` — EDIT: integrate hardened routing decisions
+2. `frontend-modern/src/routing/storageBackupsMode.ts` — EDIT (if helper extraction needed)
+3. `frontend-modern/src/routing/__tests__/storageBackupsMode.test.ts` — EDIT (if test updates needed)
+4. `frontend-modern/src/routing/__tests__/platformTabs.test.ts` — EDIT (if test updates needed)
 
 **Constraints:**
-- V2 components must render at `/storage` and `/backups` unconditionally after this packet.
-- `/storage-v2` and `/backups-v2` routes remain temporarily (cleaned in SB5-04) — redirect to primary paths.
-- `platformTabs.ts` must still compile — pass `true` as the boolean shorthand to `buildStorageBackupsTabSpecs()` from App.tsx (since the `StorageBackupsRoutingPlan` type is removed).
-- Do NOT delete legacy page shell files in this packet (done in SB5-02/03).
+- Keep `/storage` and `/backups` canonical.
+- Keep `/storage-v2` and `/backups-v2` behavior explicit (redirect or serve) per mode contract.
+- Do NOT delete `Storage.tsx` or `UnifiedBackups.tsx` in this packet.
+- Do NOT remove `useResourcesAsLegacy` or feature-flag infrastructure.
 
 **Acceptance checks:**
-1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` → exit 0
-2. `cd frontend-modern && npx vitest run` → exit 0
+1. `cd frontend-modern && npx vitest run src/routing/__tests__/storageBackupsMode.test.ts src/routing/__tests__/platformTabs.test.ts src/routing/__tests__/resourceLinks.test.ts`
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
 
-### SB5-02: Delete Legacy Storage Page Shell and Tests
+### SB5-03: Backups Legacy Shell Decoupling
 
-**Change shape:** deletion
-**Subsystem boundary:** frontend components
-**Target files (3):**
-1. `frontend-modern/src/components/Storage/Storage.tsx` — DELETE entire file
-2. `frontend-modern/src/components/Storage/__tests__/Storage.routing.test.tsx` — DELETE entire file
-3. `frontend-modern/src/App.tsx` — EDIT: remove `StorageComponent` import (if still present)
-
-**Constraints:**
-- Must confirm no remaining imports of `Storage.tsx` exist before deletion.
-- V2 routing must be stable after SB5-01 makes legacy unreachable.
-
-**Acceptance checks:**
-1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` → exit 0
-2. `cd frontend-modern && npx vitest run` → exit 0
-
-### SB5-03: Delete Legacy Backups Page Shell and Tests
-
-**Change shape:** deletion
-**Subsystem boundary:** frontend components
+**Change shape:** integration/wiring
+**Subsystem boundary:** frontend components (Backups)
 **Target files (3-4):**
-1. `frontend-modern/src/components/Backups/UnifiedBackups.tsx` — DELETE entire file
-2. `frontend-modern/src/components/Backups/__tests__/UnifiedBackups.routing.test.tsx` — DELETE entire file
-3. `frontend-modern/src/components/Backups/__tests__/PBSEnhancementBanner.test.ts` — DELETE entire file
-4. `frontend-modern/src/App.tsx` — EDIT: remove `UnifiedBackups` import (if still present)
+1. `frontend-modern/src/components/Backups/BackupsV2.tsx`
+2. `frontend-modern/src/components/Backups/UnifiedBackups.tsx`
+3. `frontend-modern/src/components/Backups/__tests__/BackupsV2.test.tsx`
+4. `frontend-modern/src/components/Backups/__tests__/UnifiedBackups.routing.test.tsx`
 
 **Constraints:**
-- Must confirm no remaining imports of `UnifiedBackups.tsx` exist before deletion.
-- Must confirm `PBSEnhancementBanner` component is only used by `UnifiedBackups.tsx`.
+- Preserve `/backups` query canonicalization on BackupsV2.
+- Narrow UnifiedBackups responsibilities to explicit compatibility behavior.
+- Do NOT delete UnifiedBackups.tsx in this packet.
 
 **Acceptance checks:**
-1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` → exit 0
-2. `cd frontend-modern && npx vitest run` → exit 0
+1. `cd frontend-modern && npx vitest run src/components/Backups/__tests__/BackupsV2.test.tsx src/components/Backups/__tests__/UnifiedBackups.routing.test.tsx`
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
 
-### SB5-04: Collapse V2 Route Aliases Into Primary Paths
+### SB5-04: Storage Legacy Shell Decoupling
 
-**Change shape:** cleanup
-**Subsystem boundary:** frontend routing
-**Target files (5):**
-1. `frontend-modern/src/routing/resourceLinks.ts` — EDIT: remove `STORAGE_V2_PATH`, `BACKUPS_V2_PATH`, `buildStorageV2Path()`, `buildBackupsV2Path()`
-2. `frontend-modern/src/routing/platformTabs.ts` — EDIT: simplify to always produce single storage + single backups tab (remove legacy/V2 branching); remove `StorageBackupsRoutingPlan` import; simplify function signature
-3. `frontend-modern/src/components/Storage/StorageV2.tsx` — EDIT: remove `STORAGE_V2_PATH` from `isActiveStorageRoute()`
-4. `frontend-modern/src/components/Backups/BackupsV2.tsx` — EDIT: remove `BACKUPS_V2_PATH` from `isActiveBackupsRoute()`
-5. `frontend-modern/src/App.tsx` — EDIT: remove `/storage-v2` and `/backups-v2` route registrations
-
-Test file updates (not counted toward 5-file limit):
-- `frontend-modern/src/routing/__tests__/platformTabs.test.ts` — update assertions for simplified tabs
-- `frontend-modern/src/routing/__tests__/resourceLinks.test.ts` — remove V2 path builder tests
+**Change shape:** integration/wiring
+**Subsystem boundary:** frontend components (Storage)
+**Target files (3-4):**
+1. `frontend-modern/src/components/Storage/StorageV2.tsx`
+2. `frontend-modern/src/components/Storage/Storage.tsx`
+3. `frontend-modern/src/components/Storage/__tests__/StorageV2.test.tsx`
+4. `frontend-modern/src/components/Storage/__tests__/Storage.routing.test.tsx`
 
 **Constraints:**
-- `/storage` and `/backups` remain the canonical routes.
-- Must not break any deep-link or query-param contracts on the primary paths.
-- Legacy Proxmox alias redirects (`/proxmox/storage`, `/proxmox/backups`) remain — they redirect to primary paths.
+- Preserve `/storage` query canonicalization and filter semantics.
+- Narrow Storage.tsx to compatibility behavior.
+- Do NOT delete Storage.tsx in this packet.
 
 **Acceptance checks:**
-1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` → exit 0
-2. `cd frontend-modern && npx vitest run` → exit 0
+1. `cd frontend-modern && npx vitest run src/components/Storage/__tests__/StorageV2.test.tsx src/components/Storage/__tests__/Storage.routing.test.tsx`
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
 
-### SB5-05: Final Certification and Phase 5 Verdict
+### SB5-05: Legacy Route and Shell Deletion (Deletion Only)
+
+**Change shape:** deletion
+**Subsystem boundary:** frontend routing + components
+**Target files (5+):**
+1. `frontend-modern/src/App.tsx` — EDIT: remove legacy shell imports and route wrappers
+2. `frontend-modern/src/routing/platformTabs.ts` — EDIT: simplify tabs
+3. `frontend-modern/src/routing/navigation.ts` — EDIT: consolidate alias tab IDs
+4. `frontend-modern/src/components/Storage/Storage.tsx` — DELETE (or isolate)
+5. `frontend-modern/src/components/Backups/UnifiedBackups.tsx` — DELETE (or isolate)
+
+**Constraints:**
+- Delete only code proven unused by SB5-02/03/04 evidence.
+- Keep `useResourcesAsLegacy` untouched (Alerts/AI consumers).
+- Update/trim tests for removed routes/tabs/components.
+
+**Acceptance checks:**
+1. `cd frontend-modern && npx vitest run src/routing/__tests__/storageBackupsMode.test.ts src/routing/__tests__/platformTabs.test.ts src/routing/__tests__/navigation.test.ts src/components/Storage/__tests__/StorageV2.test.tsx src/components/Backups/__tests__/BackupsV2.test.tsx`
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+
+### SB5-06: Final Certification and DL-001 Closure
 
 **Change shape:** docs only
 **Subsystem boundary:** docs
-**Target files (2):**
-1. `docs/architecture/storage-backups-phase5-deprecation-progress-2026-02.md` — final verdict
+**Target files (2-3):**
+1. `docs/architecture/storage-backups-phase-5-legacy-deprecation-progress-2026-02.md` — final verdict
 2. `docs/architecture/storage-backups-v2-plan.md` — update status to Complete
+3. `docs/architecture/program-closeout-certification-plan-2026-02.md` — DL-001 update
 
 **Acceptance checks:**
-1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` → exit 0
-2. `cd frontend-modern && npx vitest run` → exit 0
-3. `go build ./...` → exit 0
+1. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+2. `cd frontend-modern && npx vitest run`
+3. `go build ./...`
 
 ---
 
@@ -303,7 +317,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- (pending checkpoint commit)
+- `2967c0de` (refactor(storage-phase5): SB5-01 — routing mode contract hardening)
 
 Residual risk:
 - None. All changes are annotation + test-only. No runtime behavior was modified.
