@@ -6,8 +6,6 @@ import {
   Show,
   createEffect,
   createMemo,
-  onCleanup,
-  on,
 } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
@@ -55,8 +53,6 @@ import {
   PmgNodesTable
 } from './ConfiguredNodeTables';
 import { SettingsSectionNav } from './SettingsSectionNav';
-import { SettingsAPI } from '@/api/settings';
-import { NodesAPI } from '@/api/nodes';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
@@ -67,7 +63,7 @@ import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
 import Loader from 'lucide-solid/icons/loader';
 import Container from 'lucide-solid/icons/container';
-import type { NodeConfig } from '@/types/nodes';
+import type { NodeConfigWithStatus } from '@/types/nodes';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { hasFeature, isMultiTenantEnabled, licenseLoaded, loadLicenseStatus } from '@/stores/license';
@@ -77,46 +73,7 @@ import { isFeatureLocked, isTabLocked } from './settingsFeatureGates';
 import type { SettingsNavGroup, SettingsTab } from './settingsTypes';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { useSystemSettingsState } from './useSystemSettingsState';
-
-// Type definitions
-interface DiscoveredServer {
-  ip: string;
-  port: number;
-  type: 'pve' | 'pbs' | 'pmg';
-  version: string;
-  hostname?: string;
-  release?: string;
-}
-
-type RawDiscoveredServer = {
-  ip?: string;
-  port?: number;
-  type?: string;
-  version?: string;
-  hostname?: string;
-  name?: string;
-  release?: string;
-};
-
-interface ClusterEndpoint {
-  Host?: string;
-  IP?: string;
-}
-
-interface DiscoveryScanStatus {
-  scanning: boolean;
-  subnet?: string;
-  lastScanStartedAt?: number;
-  lastResultAt?: number;
-  errors?: string[];
-}
-
-// Node with UI-specific fields
-type NodeConfigWithStatus = NodeConfig & {
-  hasPassword?: boolean;
-  hasToken?: boolean;
-  status: 'connected' | 'disconnected' | 'offline' | 'error' | 'pending';
-};
+import { useInfrastructureSettingsState } from './useInfrastructureSettingsState';
 
 interface SettingsProps {
   darkMode: () => boolean;
@@ -140,36 +97,7 @@ const Settings: Component<SettingsProps> = (props) => {
   // Sidebar always starts expanded for discoverability (issue #764)
   // Users can collapse during session but it resets on page reload
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
-  const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
-  const [discoveredNodes, setDiscoveredNodes] = createSignal<DiscoveredServer[]>([]);
-  const [showNodeModal, setShowNodeModal] = createSignal(false);
-  const [editingNode, setEditingNode] = createSignal<NodeConfigWithStatus | null>(null);
-  const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs' | 'pmg'>('pve');
-  const [modalResetKey, setModalResetKey] = createSignal(0);
   const [showPasswordModal, setShowPasswordModal] = createSignal(false);
-  const [showDeleteNodeModal, setShowDeleteNodeModal] = createSignal(false);
-  const [nodePendingDelete, setNodePendingDelete] = createSignal<NodeConfigWithStatus | null>(null);
-  const [deleteNodeLoading, setDeleteNodeLoading] = createSignal(false);
-  const isNodeModalVisible = (type: 'pve' | 'pbs' | 'pmg') =>
-    Boolean(showNodeModal() && currentNodeType() === type);
-  const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
-  const [discoveryScanStatus, setDiscoveryScanStatus] = createSignal<DiscoveryScanStatus>({
-    scanning: false,
-  });
-
-  const pveNodes = createMemo(() => nodes().filter((n) => n.type === 'pve'));
-  const pbsNodes = createMemo(() => nodes().filter((n) => n.type === 'pbs'));
-  const pmgNodes = createMemo(() => nodes().filter((n) => n.type === 'pmg'));
-  const orgNodeUsage = createMemo(
-    () =>
-      (state.nodes?.length ?? 0) +
-      (state.hosts?.length ?? 0) +
-      (state.dockerHosts?.length ?? 0) +
-      (state.kubernetesClusters?.length ?? 0) +
-      (state.pbs?.length ?? 0) +
-      (state.pmg?.length ?? 0),
-  );
-  const orgGuestUsage = createMemo(() => (state.vms?.length ?? 0) + (state.containers?.length ?? 0));
 
   // Discovery is infrastructure-coupled and remains in Settings.tsx for Packet 05.
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal(false);
@@ -330,12 +258,68 @@ const Settings: Component<SettingsProps> = (props) => {
     applySavedDiscoverySubnet,
   });
 
-  const resolveTemperatureMonitoringEnabled = (node?: NodeConfigWithStatus | null) => {
-    if (node && typeof node.temperatureMonitoringEnabled === 'boolean') {
-      return node.temperatureMonitoringEnabled;
-    }
-    return temperatureMonitoringEnabled();
-  };
+  const {
+    discoveredNodes,
+    setShowNodeModal,
+    editingNode,
+    setEditingNode,
+    setCurrentNodeType,
+    modalResetKey,
+    setModalResetKey,
+    initialLoadComplete,
+    discoveryScanStatus,
+    showDeleteNodeModal,
+    deleteNodeLoading,
+    pveNodes,
+    pbsNodes,
+    pmgNodes,
+    orgNodeUsage,
+    orgGuestUsage,
+    isNodeModalVisible,
+    resolveTemperatureMonitoringEnabled,
+    loadNodes,
+    loadDiscoveredNodes,
+    triggerDiscoveryScan,
+    handleDiscoveryEnabledChange,
+    commitDiscoverySubnet,
+    handleDiscoveryModeChange,
+    handleNodeTemperatureMonitoringChange,
+    requestDeleteNode,
+    cancelDeleteNode,
+    deleteNode,
+    testNodeConnection,
+    refreshClusterNodes,
+    nodePendingDeleteLabel,
+    nodePendingDeleteHost,
+    nodePendingDeleteType,
+    nodePendingDeleteTypeLabel,
+    saveNode,
+  } = useInfrastructureSettingsState({
+    state,
+    eventBus,
+    discoveryEnabled,
+    setDiscoveryEnabled,
+    discoverySubnet,
+    discoveryMode,
+    setDiscoveryMode,
+    discoverySubnetDraft,
+    setDiscoverySubnetDraft,
+    lastCustomSubnet,
+    setLastCustomSubnet,
+    setDiscoverySubnetError,
+    savingDiscoverySettings,
+    setSavingDiscoverySettings,
+    envOverrides,
+    normalizeSubnetList,
+    isValidCIDR,
+    applySavedDiscoverySubnet,
+    getDiscoverySubnetInputRef: () => discoverySubnetInputRef,
+    temperatureMonitoringEnabled,
+    savingTemperatureSetting,
+    setSavingTemperatureSetting,
+    loadSecurityStatus: () => loadSecurityStatus(),
+    initializeSystemSettingsState,
+  });
 
   // Security
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatusInfo | null>(null);
@@ -412,57 +396,6 @@ const Settings: Component<SettingsProps> = (props) => {
     loadSecurityStatus();
   });
 
-  const loadNodes = async () => {
-    try {
-      const nodesList = await NodesAPI.getNodes();
-      // Merge temperature data from WebSocket state (if available)
-      // state is a store object, not a function
-      const stateNodes = state.nodes;
-      const nodesWithStatus = nodesList.map((node) => {
-        // Find matching node in state to get temperature data
-        // State uses a unified 'nodes' array for all node types
-        // Match nodes by ID or by name (handling .lan suffix variations)
-        const stateNode = stateNodes?.find((n) => {
-          // Try exact ID match first
-          if (n.id === node.id) return true;
-          // Try exact name match
-          if (n.name === node.name) return true;
-          // Try name with/without .lan suffix
-          const nodeNameBase = node.name.replace(/\.lan$/, '');
-          const stateNameBase = n.name.replace(/\.lan$/, '');
-          if (nodeNameBase === stateNameBase) return true;
-          // Also check if state node ID contains the config node name
-          if (n.id.includes(node.name) || node.name.includes(n.name)) return true;
-          return false;
-        });
-
-        const mergedNode = {
-          ...node,
-          // Use the hasPassword/hasToken from the API if available, otherwise check local fields
-          hasPassword: node.hasPassword ?? !!node.password,
-          hasToken: node.hasToken ?? !!node.tokenValue,
-          status: node.status || ('pending' as const),
-          // Merge temperature data from state
-          temperature: stateNode?.temperature || node.temperature,
-        };
-
-        return mergedNode;
-      });
-      setNodes(nodesWithStatus);
-    } catch (error) {
-      logger.error('Failed to load nodes', error);
-      // If we get a 429 or network error, retry after a delay
-      if (
-        error instanceof Error &&
-        (error.message.includes('429') || error.message.includes('fetch'))
-      ) {
-        logger.info('Retrying node load after delay');
-        setTimeout(() => loadNodes(), 3000);
-      }
-    }
-  };
-
-  // Function to load discovered nodes
   const loadSecurityStatus = async () => {
     setSecurityStatusLoading(true);
     try {
@@ -487,696 +420,6 @@ const Settings: Component<SettingsProps> = (props) => {
       setShowQuickSecuritySetup(false);
     }
   });
-
-  const updateDiscoveredNodesFromServers = (
-    servers: RawDiscoveredServer[] | undefined | null,
-    options: { merge?: boolean } = {},
-  ) => {
-    const { merge = false } = options;
-
-    if (!servers || servers.length === 0) {
-      if (!merge) {
-        setDiscoveredNodes([]);
-      }
-      return;
-    }
-
-    // Prepare sets of configured hosts and cluster member IPs to filter duplicates
-    const configuredHosts = new Set<string>();
-    const clusterMemberIPs = new Set<string>();
-
-    nodes().forEach((n) => {
-      const cleanedHost = n.host.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
-      configuredHosts.add(cleanedHost.toLowerCase());
-
-      if (
-        n.type === 'pve' &&
-        'isCluster' in n &&
-        n.isCluster &&
-        'clusterEndpoints' in n &&
-        n.clusterEndpoints
-      ) {
-        n.clusterEndpoints.forEach((endpoint: ClusterEndpoint) => {
-          if (endpoint.IP) {
-            clusterMemberIPs.add(endpoint.IP.toLowerCase());
-          }
-          if (endpoint.Host) {
-            clusterMemberIPs.add(endpoint.Host.toLowerCase());
-          }
-        });
-      }
-    });
-
-    const recognizedTypes = ['pve', 'pbs', 'pmg'] as const;
-    type RecognizedType = (typeof recognizedTypes)[number];
-    const isRecognizedType = (value: string): value is RecognizedType =>
-      (recognizedTypes as readonly string[]).includes(value);
-
-    const normalized = servers
-      .map((server): DiscoveredServer | null => {
-        const ip = (server.ip || '').trim();
-        let type = (server.type || '').toLowerCase();
-        const hostname = (server.hostname || server.name || '').trim();
-        const version = (server.version || '').trim();
-        const release = (server.release || '').trim();
-
-        if (!isRecognizedType(type)) {
-          const metadata = `${hostname} ${version} ${release}`.toLowerCase();
-          if (metadata.includes('pmg') || metadata.includes('mail gateway')) {
-            type = 'pmg';
-          } else if (metadata.includes('pbs') || metadata.includes('backup server')) {
-            type = 'pbs';
-          } else if (metadata.includes('pve') || metadata.includes('virtual environment')) {
-            type = 'pve';
-          }
-        }
-
-        if (!ip || !isRecognizedType(type)) {
-          return null;
-        }
-
-        const port = typeof server.port === 'number' ? server.port : type === 'pbs' ? 8007 : 8006;
-
-        return {
-          ip,
-          port,
-          type,
-          version: version || 'Unknown',
-          hostname: hostname || undefined,
-          release: release || undefined,
-        };
-      })
-      .filter((server): server is DiscoveredServer => server !== null);
-
-    const filtered = normalized.filter((server) => {
-      const serverIP = server.ip.toLowerCase();
-      const serverHostname = server.hostname?.toLowerCase();
-
-      if (
-        configuredHosts.has(serverIP) ||
-        (serverHostname && configuredHosts.has(serverHostname))
-      ) {
-        return false;
-      }
-
-      if (
-        clusterMemberIPs.has(serverIP) ||
-        (serverHostname && clusterMemberIPs.has(serverHostname))
-      ) {
-        return false;
-      }
-
-      return true;
-    });
-
-    if (merge) {
-      setDiscoveredNodes((prev) => {
-        const existingMap = new Map(prev.map((item) => [`${item.ip}:${item.port}`, item]));
-        filtered.forEach((server) => {
-          existingMap.set(`${server.ip}:${server.port}`, server);
-        });
-        return Array.from(existingMap.values());
-      });
-    } else {
-      setDiscoveredNodes(filtered);
-    }
-
-    setDiscoveryScanStatus((prev) => ({
-      ...prev,
-      lastResultAt: Date.now(),
-    }));
-  };
-
-  const loadDiscoveredNodes = async () => {
-    try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch('/api/discover');
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data.servers)) {
-          updateDiscoveredNodesFromServers(data.servers as RawDiscoveredServer[]);
-          setDiscoveryScanStatus((prev) => ({
-            ...prev,
-            lastResultAt: typeof data.timestamp === 'number' ? data.timestamp : Date.now(),
-            errors: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors : undefined,
-          }));
-        } else {
-          updateDiscoveredNodesFromServers([]);
-          setDiscoveryScanStatus((prev) => ({
-            ...prev,
-            lastResultAt: typeof data?.timestamp === 'number' ? data.timestamp : prev.lastResultAt,
-            errors: Array.isArray(data?.errors) && data.errors.length > 0 ? data.errors : undefined,
-          }));
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to load discovered nodes', error);
-    }
-  };
-
-  const triggerDiscoveryScan = async (options: { quiet?: boolean } = {}) => {
-    const { quiet = false } = options;
-
-    setDiscoveryScanStatus((prev) => ({
-      ...prev,
-      scanning: true,
-      subnet: discoverySubnet() || prev.subnet,
-      lastScanStartedAt: Date.now(),
-      errors: undefined,
-    }));
-
-    try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch('/api/discover', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ subnet: discoverySubnet() || 'auto' }),
-      });
-
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || 'Discovery request failed');
-      }
-
-      if (!quiet) {
-        notificationStore.info('Discovery scan started', 2000);
-      }
-    } catch (error) {
-      logger.error('Failed to start discovery scan', error);
-      notificationStore.error('Failed to start discovery scan');
-      setDiscoveryScanStatus((prev) => ({
-        ...prev,
-        scanning: false,
-      }));
-    }
-  };
-
-  const handleDiscoveryEnabledChange = async (enabled: boolean): Promise<boolean> => {
-    if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
-      return false;
-    }
-
-    const previousEnabled = discoveryEnabled();
-    const previousSubnet = discoverySubnet();
-    let subnetToSend = discoverySubnet();
-
-    if (enabled) {
-      if (discoveryMode() === 'custom') {
-        const trimmedDraft = discoverySubnetDraft().trim();
-        if (!trimmedDraft) {
-          setDiscoverySubnetError('Enter at least one subnet before enabling discovery');
-          notificationStore.error('Enter at least one subnet before enabling discovery');
-          return false;
-        }
-        if (!isValidCIDR(trimmedDraft)) {
-          setDiscoverySubnetError(
-            'Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)',
-          );
-          notificationStore.error('Enter valid CIDR subnet values before enabling discovery');
-          return false;
-        }
-        const normalizedDraft = normalizeSubnetList(trimmedDraft);
-        setDiscoverySubnetDraft(normalizedDraft);
-        setDiscoverySubnetError(undefined);
-        subnetToSend = normalizedDraft;
-      } else {
-        subnetToSend = 'auto';
-        setDiscoverySubnetError(undefined);
-      }
-    }
-
-    setDiscoveryEnabled(enabled);
-    setSavingDiscoverySettings(true);
-
-    try {
-      await SettingsAPI.updateSystemSettings({
-        discoveryEnabled: enabled,
-        discoverySubnet: subnetToSend,
-      });
-      applySavedDiscoverySubnet(subnetToSend);
-      if (enabled && subnetToSend !== 'auto') {
-        setLastCustomSubnet(subnetToSend);
-      }
-
-      if (enabled) {
-        await triggerDiscoveryScan({ quiet: true });
-        notificationStore.success('Discovery enabled — scanning network...', 2000);
-      } else {
-        notificationStore.info('Discovery disabled', 2000);
-        setDiscoveryScanStatus((prev) => ({
-          ...prev,
-          scanning: false,
-        }));
-      }
-
-      return true;
-    } catch (error) {
-      logger.error('Failed to update discovery setting', error);
-      notificationStore.error('Failed to update discovery setting');
-      setDiscoveryEnabled(previousEnabled);
-      applySavedDiscoverySubnet(previousSubnet);
-      return false;
-    } finally {
-      setSavingDiscoverySettings(false);
-      await loadDiscoveredNodes();
-    }
-  };
-
-  const commitDiscoverySubnet = async (rawValue: string): Promise<boolean> => {
-    if (envOverrides().discoverySubnet) {
-      return false;
-    }
-
-    const value = rawValue.trim();
-    if (!value) {
-      setDiscoverySubnetError('Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)');
-      return false;
-    }
-    if (!isValidCIDR(value)) {
-      setDiscoverySubnetError(
-        'Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)',
-      );
-      return false;
-    }
-
-    const normalizedValue = normalizeSubnetList(value);
-    if (!normalizedValue) {
-      setDiscoverySubnetError('Enter at least one valid subnet in CIDR format');
-      return false;
-    }
-
-    const previousSubnet = discoverySubnet();
-    const previousNormalized =
-      previousSubnet.toLowerCase() === 'auto' ? '' : normalizeSubnetList(previousSubnet);
-
-    if (normalizedValue === previousNormalized) {
-      setDiscoverySubnetDraft(normalizedValue);
-      setDiscoverySubnetError(undefined);
-      setLastCustomSubnet(normalizedValue);
-      return true;
-    }
-
-    setSavingDiscoverySettings(true);
-
-    try {
-      setDiscoverySubnetError(undefined);
-      await SettingsAPI.updateSystemSettings({
-        discoveryEnabled: discoveryEnabled(),
-        discoverySubnet: normalizedValue,
-      });
-      setLastCustomSubnet(normalizedValue);
-      applySavedDiscoverySubnet(normalizedValue);
-      if (discoveryEnabled()) {
-        await triggerDiscoveryScan({ quiet: true });
-        notificationStore.success('Discovery subnet updated — scanning network...', 2000);
-      } else {
-        notificationStore.success('Discovery subnet saved', 2000);
-      }
-      return true;
-    } catch (error) {
-      logger.error('Failed to update discovery subnet', error);
-      notificationStore.error('Failed to update discovery subnet');
-      applySavedDiscoverySubnet(previousSubnet);
-      setDiscoverySubnetDraft(previousSubnet === 'auto' ? '' : normalizeSubnetList(previousSubnet));
-      return false;
-    } finally {
-      setDiscoverySubnetError(undefined);
-      setSavingDiscoverySettings(false);
-      await loadDiscoveredNodes();
-    }
-  };
-
-  const handleNodeTemperatureMonitoringChange = async (nodeId: string, enabled: boolean | null): Promise<void> => {
-    if (savingTemperatureSetting()) {
-      return;
-    }
-
-    const node = nodes().find((n) => n.id === nodeId);
-    if (!node) {
-      return;
-    }
-
-    const previous = node.temperatureMonitoringEnabled;
-    setSavingTemperatureSetting(true);
-
-    // Update local state optimistically
-    setNodes(
-      nodes().map((n) => (n.id === nodeId ? { ...n, temperatureMonitoringEnabled: enabled } : n)),
-    );
-
-    // Also update editingNode if this is the node being edited
-    if (editingNode()?.id === nodeId) {
-      setEditingNode({ ...editingNode()!, temperatureMonitoringEnabled: enabled });
-    }
-
-    try {
-      await NodesAPI.updateNode(nodeId, { temperatureMonitoringEnabled: enabled } as any);
-      if (enabled === true) {
-        notificationStore.success('Temperature monitoring enabled for this node', 2000);
-      } else if (enabled === false) {
-        notificationStore.info('Temperature monitoring disabled for this node', 2000);
-      } else {
-        notificationStore.info('Using global temperature monitoring setting', 2000);
-      }
-    } catch (error) {
-      logger.error('Failed to update node temperature monitoring setting', error);
-      notificationStore.error(
-        error instanceof Error
-          ? error.message
-          : 'Failed to update temperature monitoring setting',
-      );
-      // Revert on error
-      setNodes(
-        nodes().map((n) => (n.id === nodeId ? { ...n, temperatureMonitoringEnabled: previous } : n)),
-      );
-      // Also revert editingNode
-      if (editingNode()?.id === nodeId) {
-        setEditingNode({ ...editingNode()!, temperatureMonitoringEnabled: previous });
-      }
-    } finally {
-      setSavingTemperatureSetting(false);
-    }
-  };
-
-  const handleDiscoveryModeChange = async (mode: 'auto' | 'custom') => {
-    if (envOverrides().discoverySubnet || savingDiscoverySettings()) {
-      return;
-    }
-    if (mode === discoveryMode()) {
-      return;
-    }
-
-    if (mode === 'auto') {
-      const previousSubnet = discoverySubnet();
-      setDiscoveryMode('auto');
-      setDiscoverySubnetDraft('');
-      setDiscoverySubnetError(undefined);
-      setSavingDiscoverySettings(true);
-      try {
-        await SettingsAPI.updateSystemSettings({
-          discoveryEnabled: discoveryEnabled(),
-          discoverySubnet: 'auto',
-        });
-        applySavedDiscoverySubnet('auto');
-        if (discoveryEnabled()) {
-          await triggerDiscoveryScan({ quiet: true });
-        }
-        notificationStore.info(
-          'Auto discovery scans each network phase. Large networks may take longer.',
-          4000,
-        );
-      } catch (error) {
-        logger.error('Failed to update discovery subnet', error);
-        notificationStore.error('Failed to update discovery subnet');
-        applySavedDiscoverySubnet(previousSubnet);
-      } finally {
-        setSavingDiscoverySettings(false);
-        await loadDiscoveredNodes();
-      }
-      return;
-    }
-
-    setDiscoveryMode('custom');
-    const rawDraft = discoverySubnet() !== 'auto' ? discoverySubnet() : lastCustomSubnet() || '';
-    const normalizedDraft = normalizeSubnetList(rawDraft);
-    setDiscoverySubnetDraft(normalizedDraft);
-    setDiscoverySubnetError(undefined);
-    queueMicrotask(() => {
-      discoverySubnetInputRef?.focus();
-      discoverySubnetInputRef?.select();
-    });
-  };
-
-  // Load nodes and system settings on mount
-  onMount(async () => {
-    // Subscribe to events
-    const unsubscribeAutoRegister = eventBus.on('node_auto_registered', () => {
-      // Close any open modals
-      setShowNodeModal(false);
-      setEditingNode(null);
-      // Reload nodes
-      loadNodes();
-      loadDiscoveredNodes();
-    });
-
-    const unsubscribeRefresh = eventBus.on('refresh_nodes', () => {
-      loadNodes();
-    });
-
-    const unsubscribeDiscovery = eventBus.on('discovery_updated', (data) => {
-      if (!data) {
-        updateDiscoveredNodesFromServers([]);
-        setDiscoveryScanStatus((prev) => ({
-          ...prev,
-          scanning: false,
-        }));
-        return;
-      }
-
-      if (Array.isArray(data.servers)) {
-        updateDiscoveredNodesFromServers(data.servers as RawDiscoveredServer[], {
-          merge: !!data.immediate,
-        });
-        setDiscoveryScanStatus((prev) => ({
-          ...prev,
-          scanning: data.scanning ?? prev.scanning,
-          lastResultAt: data.timestamp ?? Date.now(),
-          errors: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors : undefined,
-        }));
-      } else if (!data.immediate) {
-        // Ensure we clear stale results when the update explicitly reports no servers
-        updateDiscoveredNodesFromServers([]);
-        setDiscoveryScanStatus((prev) => ({
-          ...prev,
-          scanning: data.scanning ?? prev.scanning,
-          lastResultAt: data.timestamp ?? prev.lastResultAt,
-          errors: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors : undefined,
-        }));
-      } else {
-        setDiscoveryScanStatus((prev) => ({
-          ...prev,
-          scanning: data.scanning ?? prev.scanning,
-          errors: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors : undefined,
-        }));
-      }
-    });
-
-    const unsubscribeDiscoveryStatus = eventBus.on('discovery_status', (data) => {
-      if (!data) {
-        setDiscoveryScanStatus((prev) => ({
-          ...prev,
-          scanning: false,
-        }));
-        return;
-      }
-
-      setDiscoveryScanStatus((prev) => ({
-        ...prev,
-        scanning: !!data.scanning,
-        subnet: data.subnet || prev.subnet,
-        lastScanStartedAt: data.scanning ? (data.timestamp ?? Date.now()) : prev.lastScanStartedAt,
-        lastResultAt: !data.scanning && data.timestamp ? data.timestamp : prev.lastResultAt,
-      }));
-
-      if (typeof data.subnet === 'string' && data.subnet !== discoverySubnet()) {
-        applySavedDiscoverySubnet(data.subnet);
-      }
-    });
-
-    // Poll for node updates when modal is open
-    let pollInterval: ReturnType<typeof setInterval> | undefined;
-    createEffect(() => {
-      // Clear any existing interval first
-      if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = undefined;
-      }
-
-      if (showNodeModal()) {
-        // Start polling every 3 seconds when modal is open
-        pollInterval = setInterval(() => {
-          loadNodes();
-          loadDiscoveredNodes();
-        }, 3000);
-      }
-    });
-
-    // Poll for discovered nodes every 30 seconds
-    const discoveryInterval = setInterval(() => {
-      loadDiscoveredNodes();
-    }, 30000);
-
-    // Clean up on unmount
-    onCleanup(() => {
-      unsubscribeAutoRegister();
-      unsubscribeRefresh();
-      unsubscribeDiscovery();
-      unsubscribeDiscoveryStatus();
-      if (pollInterval) {
-        clearInterval(pollInterval);
-      }
-      clearInterval(discoveryInterval);
-    });
-
-    try {
-      // Load data with small delays to prevent rate limit bursts
-      // Load security status first as it's lightweight
-      await loadSecurityStatus();
-
-      // Small delay to prevent burst
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      // Load nodes
-      await loadNodes();
-
-      // Another small delay
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      // Load discovered nodes
-      await loadDiscoveredNodes();
-
-      await initializeSystemSettingsState();
-    } catch (error) {
-      logger.error('Failed to load configuration', error);
-    } finally {
-      // Mark initial load as complete even if there were errors
-      setInitialLoadComplete(true);
-    }
-  });
-
-  // Re-merge temperature data from WebSocket state when it updates
-  createEffect(
-    on(
-      () => state.nodes,
-      (stateNodes) => {
-        const currentNodes = nodes();
-
-        // Only run if we have nodes loaded and state has data
-        if (stateNodes && stateNodes.length > 0 && currentNodes.length > 0) {
-          const updatedNodes = currentNodes.map((node) => {
-            // Match nodes by ID or by name (handling .lan suffix variations)
-            const stateNode = stateNodes.find((n) => {
-              // Try exact ID match first
-              if (n.id === node.id) return true;
-              // Try exact name match
-              if (n.name === node.name) return true;
-              // Try name with/without .lan suffix
-              const nodeNameBase = node.name.replace(/\.lan$/, '');
-              const stateNameBase = n.name.replace(/\.lan$/, '');
-              if (nodeNameBase === stateNameBase) return true;
-              // Also check if state node ID contains the config node name
-              if (n.id.includes(node.name) || node.name.includes(n.name)) return true;
-              return false;
-            });
-
-            // Merge temperature data from state if available
-            if (stateNode?.temperature) {
-              return { ...node, temperature: stateNode.temperature };
-            }
-            return node;
-          });
-          setNodes(updatedNodes);
-        }
-      },
-    ),
-  );
-
-  const nodePendingDeleteLabel = () => {
-    const node = nodePendingDelete();
-    if (!node) return '';
-    return node.displayName || node.name || node.host || node.id;
-  };
-
-  const nodePendingDeleteHost = () => nodePendingDelete()?.host || '';
-  const nodePendingDeleteType = () => nodePendingDelete()?.type || '';
-  const nodePendingDeleteTypeLabel = () => {
-    switch (nodePendingDeleteType()) {
-      case 'pve':
-        return 'Proxmox VE node';
-      case 'pbs':
-        return 'Proxmox Backup Server';
-      case 'pmg':
-        return 'Proxmox Mail Gateway';
-      default:
-        return 'Pulse node';
-    }
-  };
-
-  const requestDeleteNode = (node: NodeConfigWithStatus) => {
-    setNodePendingDelete(node);
-    setShowDeleteNodeModal(true);
-  };
-
-  const cancelDeleteNode = () => {
-    if (deleteNodeLoading()) return;
-    setShowDeleteNodeModal(false);
-    setNodePendingDelete(null);
-  };
-
-  const deleteNode = async () => {
-    const pending = nodePendingDelete();
-    if (!pending) return;
-    setDeleteNodeLoading(true);
-    try {
-      await NodesAPI.deleteNode(pending.id);
-      setNodes(nodes().filter((n) => n.id !== pending.id));
-      const label = pending.displayName || pending.name || pending.host || pending.id;
-      notificationStore.success(`${label} removed successfully`);
-    } catch (error) {
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to delete node');
-    } finally {
-      setDeleteNodeLoading(false);
-      setShowDeleteNodeModal(false);
-      setNodePendingDelete(null);
-    }
-  };
-
-  const testNodeConnection = async (nodeId: string) => {
-    try {
-      const node = nodes().find((n) => n.id === nodeId);
-      if (!node) {
-        throw new Error('Node not found');
-      }
-
-      // Use the existing node test endpoint which uses stored credentials
-      const result = await NodesAPI.testExistingNode(nodeId);
-      if (result.status === 'success') {
-        // Check for warnings in the response
-        if (result.warnings && Array.isArray(result.warnings) && result.warnings.length > 0) {
-          const warningMessage = result.message + '\n\nWarnings:\n' + result.warnings.map((w: string) => '• ' + w).join('\n');
-          notificationStore.warning(warningMessage);
-        } else {
-          notificationStore.success(result.message || 'Connection successful');
-        }
-      } else {
-        throw new Error(result.message || 'Connection failed');
-      }
-    } catch (error) {
-      notificationStore.error(error instanceof Error ? error.message : 'Connection test failed');
-    }
-  };
-
-  const refreshClusterNodes = async (nodeId: string) => {
-    try {
-      notificationStore.info('Refreshing cluster membership...', 2000);
-      const result = await NodesAPI.refreshClusterNodes(nodeId);
-      if (result.status === 'success') {
-        if (result.nodesAdded && result.nodesAdded > 0) {
-          notificationStore.success(`Found ${result.nodesAdded} new node(s) in cluster "${result.clusterName}"`);
-        } else {
-          notificationStore.success(`Cluster "${result.clusterName}" membership verified (${result.newNodeCount} nodes)`);
-        }
-        // Refresh nodes list to show updated cluster info
-        await loadNodes();
-      } else {
-        throw new Error('Failed to refresh cluster');
-      }
-    } catch (error) {
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to refresh cluster membership');
-    }
-  };
 
   const handleExport = async () => {
     if (!exportPassphrase()) {
@@ -2850,51 +2093,7 @@ const Settings: Component<SettingsProps> = (props) => {
               ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
               : handleTemperatureMonitoringChange
           }
-          onSave={async (nodeData) => {
-            try {
-              if (editingNode() && editingNode()!.id) {
-                // Update existing node (only if it has a valid ID)
-                await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
-
-                // Update local state
-                setNodes(
-                  nodes().map((n) =>
-                    n.id === editingNode()!.id
-                      ? {
-                        ...n,
-                        ...nodeData,
-                        // Update hasPassword/hasToken based on whether credentials were provided
-                        hasPassword: nodeData.password ? true : n.hasPassword,
-                        hasToken: nodeData.tokenValue ? true : n.hasToken,
-                        status: 'pending',
-                      }
-                      : n,
-                  ),
-                );
-                notificationStore.success('Node updated successfully');
-              } else {
-                // Add new node
-                await NodesAPI.addNode(nodeData as NodeConfig);
-
-                // Reload nodes to get the new ID
-                const nodesList = await NodesAPI.getNodes();
-                const nodesWithStatus = nodesList.map((node) => ({
-                  ...node,
-                  // Use the hasPassword/hasToken from the API if available, otherwise check local fields
-                  hasPassword: node.hasPassword ?? !!node.password,
-                  hasToken: node.hasToken ?? !!node.tokenValue,
-                  status: node.status || ('pending' as const),
-                }));
-                setNodes(nodesWithStatus);
-                notificationStore.success('Node added successfully');
-              }
-
-              setShowNodeModal(false);
-              setEditingNode(null);
-            } catch (error) {
-              notificationStore.error(error instanceof Error ? error.message : 'Operation failed');
-            }
-          }}
+          onSave={saveNode}
         />
       </Show >
 
@@ -2922,50 +2121,7 @@ const Settings: Component<SettingsProps> = (props) => {
               ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
               : handleTemperatureMonitoringChange
           }
-          onSave={async (nodeData) => {
-            try {
-              if (editingNode() && editingNode()!.id) {
-                // Update existing node (only if it has a valid ID)
-                await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
-
-                // Update local state
-                setNodes(
-                  nodes().map((n) =>
-                    n.id === editingNode()!.id
-                      ? {
-                        ...n,
-                        ...nodeData,
-                        hasPassword: nodeData.password ? true : n.hasPassword,
-                        hasToken: nodeData.tokenValue ? true : n.hasToken,
-                        status: 'pending',
-                      }
-                      : n,
-                  ),
-                );
-                notificationStore.success('Node updated successfully');
-              } else {
-                // Add new node
-                await NodesAPI.addNode(nodeData as NodeConfig);
-
-                // Reload the nodes list to get the latest state
-                const nodesList = await NodesAPI.getNodes();
-                const nodesWithStatus = nodesList.map((node) => ({
-                  ...node,
-                  // Use the hasPassword/hasToken from the API if available, otherwise check local fields
-                  hasPassword: node.hasPassword ?? !!node.password,
-                  hasToken: node.hasToken ?? !!node.tokenValue,
-                  status: node.status || ('pending' as const),
-                }));
-                setNodes(nodesWithStatus);
-                notificationStore.success('Node added successfully');
-              }
-
-              setShowNodeModal(false);
-              setEditingNode(null);
-            } catch (error) {
-              notificationStore.error(error instanceof Error ? error.message : 'Operation failed');
-            }
-          }}
+          onSave={saveNode}
         />
       </Show >
 
@@ -2992,43 +2148,7 @@ const Settings: Component<SettingsProps> = (props) => {
               ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
               : handleTemperatureMonitoringChange
           }
-          onSave={async (nodeData) => {
-            try {
-              if (editingNode() && editingNode()!.id) {
-                await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
-                setNodes(
-                  nodes().map((n) =>
-                    n.id === editingNode()!.id
-                      ? {
-                        ...n,
-                        ...nodeData,
-                        hasPassword: nodeData.password ? true : n.hasPassword,
-                        hasToken: nodeData.tokenValue ? true : n.hasToken,
-                        status: 'pending',
-                      }
-                      : n,
-                  ),
-                );
-                notificationStore.success('Node updated successfully');
-              } else {
-                await NodesAPI.addNode(nodeData as NodeConfig);
-                const nodesList = await NodesAPI.getNodes();
-                const nodesWithStatus = nodesList.map((node) => ({
-                  ...node,
-                  hasPassword: node.hasPassword ?? !!node.password,
-                  hasToken: node.hasToken ?? !!node.tokenValue,
-                  status: node.status || ('pending' as const),
-                }));
-                setNodes(nodesWithStatus);
-                notificationStore.success('Node added successfully');
-              }
-
-              setShowNodeModal(false);
-              setEditingNode(null);
-            } catch (error) {
-              notificationStore.error(error instanceof Error ? error.message : 'Operation failed');
-            }
-          }}
+          onSave={saveNode}
         />
       </Show >
 
