@@ -140,21 +140,22 @@ type PatrolStreamResponse struct {
 
 // Service orchestrates AI interactions
 type Service struct {
-	mu               sync.RWMutex
-	persistence      *config.ConfigPersistence
-	provider         providers.Provider
-	cfg              *config.AIConfig
-	agentServer      AgentServer
-	policy           CommandPolicy
-	stateProvider    StateProvider
-	alertProvider    AlertProvider
-	knowledgeStore   *knowledge.Store
-	costStore        *cost.Store
-	resourceProvider ResourceProvider      // Unified resource model provider (Phase 2)
-	patrolService    *PatrolService        // Background AI monitoring service
-	metadataProvider MetadataProvider      // Enables AI to update resource URLs
-	incidentStore    *memory.IncidentStore // Incident timelines for alert memory
-	chatService      ChatServiceProvider   // Chat service for investigation orchestrator
+	mu                      sync.RWMutex
+	persistence             *config.ConfigPersistence
+	provider                providers.Provider
+	cfg                     *config.AIConfig
+	agentServer             AgentServer
+	policy                  CommandPolicy
+	stateProvider           StateProvider
+	alertProvider           AlertProvider
+	knowledgeStore          *knowledge.Store
+	costStore               *cost.Store
+	resourceProvider        ResourceProvider // Unified resource model provider (Phase 2)
+	unifiedResourceProvider UnifiedResourceProvider
+	patrolService           *PatrolService        // Background AI monitoring service
+	metadataProvider        MetadataProvider      // Enables AI to update resource URLs
+	incidentStore           *memory.IncidentStore // Incident timelines for alert memory
+	chatService             ChatServiceProvider   // Chat service for investigation orchestrator
 
 	// Infrastructure discovery service - detects apps running on hosts
 	infraDiscoveryService *infradiscovery.Service

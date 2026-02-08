@@ -27,11 +27,32 @@ type ResourceProvider interface {
 	FindContainerHost(containerNameOrID string) string
 }
 
+// UnifiedResourceProvider exposes unified-resource-native context APIs.
+type UnifiedResourceProvider interface {
+	GetAll() []unifiedresources.Resource
+	GetInfrastructure() []unifiedresources.Resource
+	GetWorkloads() []unifiedresources.Resource
+	GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource
+	GetStats() unifiedresources.ResourceStats
+	GetTopByCPU(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource
+	GetTopByMemory(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource
+	GetTopByDisk(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource
+	GetRelated(resourceID string) map[string][]unifiedresources.Resource
+	FindContainerHost(containerNameOrID string) string
+}
+
 // SetResourceProvider sets the resource provider for unified infrastructure context.
 func (s *Service) SetResourceProvider(rp ResourceProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.resourceProvider = rp
+}
+
+// SetUnifiedResourceProvider sets the unified-resource-native provider.
+func (s *Service) SetUnifiedResourceProvider(urp UnifiedResourceProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.unifiedResourceProvider = urp
 }
 
 // buildUnifiedResourceContext creates AI context from the unified resource model.

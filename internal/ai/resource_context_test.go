@@ -3,6 +3,7 @@ package ai
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -280,6 +281,221 @@ func TestBuildUnifiedResourceContext_WithLegacyAdapterProvider(t *testing.T) {
 	}
 	if !strings.Contains(got, "vm-1") {
 		t.Fatalf("expected context to include vm from adapter, got %q", got)
+	}
+}
+
+func TestResourceContextUnifiedProvider_NilRegistry(t *testing.T) {
+	adapter := unifiedresources.NewUnifiedAIAdapter(nil)
+
+	if got := adapter.GetAll(); len(got) != 0 {
+		t.Fatalf("GetAll() len = %d, want 0", len(got))
+	}
+	if got := adapter.GetInfrastructure(); len(got) != 0 {
+		t.Fatalf("GetInfrastructure() len = %d, want 0", len(got))
+	}
+	if got := adapter.GetWorkloads(); len(got) != 0 {
+		t.Fatalf("GetWorkloads() len = %d, want 0", len(got))
+	}
+	if got := adapter.GetByType(unifiedresources.ResourceTypeHost); len(got) != 0 {
+		t.Fatalf("GetByType(host) len = %d, want 0", len(got))
+	}
+	if got := adapter.GetTopByCPU(3, nil); len(got) != 0 {
+		t.Fatalf("GetTopByCPU() len = %d, want 0", len(got))
+	}
+	if got := adapter.GetRelated("missing"); len(got) != 0 {
+		t.Fatalf("GetRelated(missing) len = %d, want 0", len(got))
+	}
+	if got := adapter.FindContainerHost("missing"); got != "" {
+		t.Fatalf("FindContainerHost(missing) = %q, want empty", got)
+	}
+	if stats := adapter.GetStats(); stats.Total != 0 {
+		t.Fatalf("GetStats().Total = %d, want 0", stats.Total)
+	}
+}
+
+func TestResourceContextUnifiedProvider_ResourceCounts(t *testing.T) {
+	legacy, unified := resourceContextTestAdaptersFromSnapshot(resourceContextTestSnapshot())
+
+	if got, want := len(unified.GetAll()), len(legacy.GetAll()); got != want {
+		t.Fatalf("GetAll() count mismatch: unified=%d legacy=%d", got, want)
+	}
+}
+
+func TestResourceContextUnifiedProvider_InfrastructureWorkloadSplit(t *testing.T) {
+	legacy, unified := resourceContextTestAdaptersFromSnapshot(resourceContextTestSnapshot())
+
+	if got, want := len(unified.GetInfrastructure()), len(legacy.GetInfrastructure()); got != want {
+		t.Fatalf("GetInfrastructure() count mismatch: unified=%d legacy=%d", got, want)
+	}
+	if got, want := len(unified.GetWorkloads()), len(legacy.GetWorkloads()); got != want {
+		t.Fatalf("GetWorkloads() count mismatch: unified=%d legacy=%d", got, want)
+	}
+}
+
+func TestResourceContextUnifiedProvider_TopCPU(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	now := time.Now().UTC()
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-low",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeHost,
+				Name:     "host-low",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Metrics: &unifiedresources.ResourceMetrics{
+					CPU: &unifiedresources.MetricValue{Percent: 25},
+				},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{
+		{
+			SourceID: "vm-high",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeVM,
+				Name:     "vm-high",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Metrics: &unifiedresources.ResourceMetrics{
+					CPU: &unifiedresources.MetricValue{Percent: 92},
+				},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceDocker, []unifiedresources.IngestRecord{
+		{
+			SourceID: "ct-mid",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeContainer,
+				Name:     "ct-mid",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Metrics: &unifiedresources.ResourceMetrics{
+					CPU: &unifiedresources.MetricValue{Percent: 61},
+				},
+			},
+		},
+	})
+
+	unified := unifiedresources.NewUnifiedAIAdapter(registry)
+	top := unified.GetTopByCPU(2, []unifiedresources.ResourceType{
+		unifiedresources.ResourceTypeHost,
+		unifiedresources.ResourceTypeVM,
+		unifiedresources.ResourceTypeContainer,
+	})
+	if len(top) != 2 {
+		t.Fatalf("GetTopByCPU() len = %d, want 2", len(top))
+	}
+	if top[0].Name != "vm-high" || top[1].Name != "ct-mid" {
+		t.Fatalf("unexpected top CPU ordering: got [%s, %s]", top[0].Name, top[1].Name)
+	}
+}
+
+func TestResourceContextUnifiedProvider_FindContainerHost(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	now := time.Now().UTC()
+	registry.IngestRecords(unifiedresources.SourceDocker, []unifiedresources.IngestRecord{
+		{
+			SourceID: "docker-host-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeHost,
+				Name:     "docker-node-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+		{
+			SourceID:       "container-1",
+			ParentSourceID: "docker-host-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeContainer,
+				Name:     "web",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Docker:   &unifiedresources.DockerData{ContainerID: "abc123"},
+			},
+		},
+	})
+
+	unified := unifiedresources.NewUnifiedAIAdapter(registry)
+	if got := unified.FindContainerHost("web"); got != "docker-node-1" {
+		t.Fatalf("FindContainerHost(web) = %q, want docker-node-1", got)
+	}
+	if got := unified.FindContainerHost("abc123"); got != "docker-node-1" {
+		t.Fatalf("FindContainerHost(abc123) = %q, want docker-node-1", got)
+	}
+}
+
+func resourceContextTestAdaptersFromSnapshot(snapshot models.StateSnapshot) (*unifiedresources.AIAdapter, *unifiedresources.UnifiedAIAdapter) {
+	registry := unifiedresources.NewRegistry(nil)
+	legacy := unifiedresources.NewAIAdapter(registry)
+	unified := unifiedresources.NewUnifiedAIAdapter(registry)
+	legacy.PopulateFromSnapshot(snapshot)
+	return legacy, unified
+}
+
+func resourceContextTestSnapshot() models.StateSnapshot {
+	now := time.Now().UTC()
+	return models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:       "node-1",
+				Name:     "node-1",
+				Instance: "pve-a",
+				Status:   "online",
+				CPU:      0.35,
+				Memory:   models.Memory{Total: 100, Used: 35, Usage: 0.35},
+				LastSeen: now,
+			},
+		},
+		VMs: []models.VM{
+			{
+				ID:       "vm-101",
+				VMID:     101,
+				Name:     "vm-101",
+				Node:     "node-1",
+				Instance: "pve-a",
+				Status:   "running",
+				CPU:      0.75,
+				Memory:   models.Memory{Total: 100, Used: 70, Usage: 0.70},
+				LastSeen: now,
+			},
+		},
+		Containers: []models.Container{
+			{
+				ID:       "ct-201",
+				VMID:     201,
+				Name:     "ct-201",
+				Node:     "node-1",
+				Instance: "pve-a",
+				Status:   "running",
+				CPU:      0.40,
+				Memory:   models.Memory{Total: 100, Used: 45, Usage: 0.45},
+				LastSeen: now,
+			},
+		},
+		DockerHosts: []models.DockerHost{
+			{
+				ID:       "docker-host-1",
+				Hostname: "docker-host-1",
+				Status:   "online",
+				CPUUsage: 0.20,
+				Memory:   models.Memory{Total: 100, Used: 30, Usage: 0.30},
+				LastSeen: now,
+				Containers: []models.DockerContainer{
+					{
+						ID:            "docker-ctr-1",
+						Name:          "docker-ctr-1",
+						State:         "running",
+						CPUPercent:    0.50,
+						MemoryLimit:   100,
+						MemoryUsage:   20,
+						MemoryPercent: 0.20,
+					},
+				},
+			},
+		},
 	}
 }
 

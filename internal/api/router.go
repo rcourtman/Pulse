@@ -79,6 +79,7 @@ type Router struct {
 	resourceRegistry          *unifiedresources.ResourceRegistry
 	monitorResourceAdapter    *unifiedresources.MonitorAdapter
 	aiResourceAdapter         *unifiedresources.AIAdapter
+	aiUnifiedAdapter          *unifiedresources.UnifiedAIAdapter
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
 	licenseHandlers           *LicenseHandlers
@@ -183,6 +184,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	r.resourceRegistry = unifiedresources.NewRegistry(nil)
 	r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(r.resourceRegistry)
 	r.aiResourceAdapter = unifiedresources.NewAIAdapter(r.resourceRegistry)
+	r.aiUnifiedAdapter = unifiedresources.NewUnifiedAIAdapter(r.resourceRegistry)
 
 	// Sync the configured admin user to the authorizer (if supported)
 	if cfg.AuthUser != "" {
@@ -334,6 +336,11 @@ func (r *Router) setupRoutes() {
 		r.aiSettingsHandler.SetResourceProvider(r.aiResourceAdapter)
 	} else {
 		log.Warn().Msg("[Router] aiResourceAdapter is nil, cannot inject resource provider")
+	}
+	if r.aiUnifiedAdapter != nil {
+		r.aiSettingsHandler.SetUnifiedResourceProvider(r.aiUnifiedAdapter)
+	} else {
+		log.Warn().Msg("[Router] aiUnifiedAdapter is nil, cannot inject unified resource provider")
 	}
 	// Inject metadata provider for AI URL discovery feature
 	// This allows AI to set resource URLs when it discovers web services
@@ -749,6 +756,24 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 			m.SetDockerChecker(checker)
 			log.Info().Msg("[Router] Docker detector configured for automatic LXC Docker detection")
 		}
+	}
+}
+
+// SetUnifiedResourceProvider forwards the unified-resource-native provider to active AI services.
+// URF-06 keeps buildUnifiedResourceContext on the legacy provider, so this is scaffold wiring only.
+func (h *AISettingsHandler) SetUnifiedResourceProvider(urp ai.UnifiedResourceProvider) {
+	if h == nil {
+		return
+	}
+
+	if h.legacyAIService != nil {
+		h.legacyAIService.SetUnifiedResourceProvider(urp)
+	}
+
+	h.aiServicesMu.Lock()
+	defer h.aiServicesMu.Unlock()
+	for _, svc := range h.aiServices {
+		svc.SetUnifiedResourceProvider(urp)
 	}
 }
 

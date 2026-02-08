@@ -32,7 +32,7 @@ Date: 2026-02-08
 | URF-03 | AI Chat Runtime Cutover Off Legacy Conversion Hook | DONE | Codex | Claude | APPROVED | URF-03 Review Evidence |
 | URF-04 | SB5 Dependency Gate + Legacy Hook Deletion Readiness | DONE | Claude | Claude | APPROVED | URF-04 Review Evidence |
 | URF-05 | Remove Frontend Runtime `useResourcesAsLegacy` Path | DONE | Codex | Claude | APPROVED | URF-05 Review Evidence |
-| URF-06 | AI Backend Contract Scaffold (Legacy -> Unified) | TODO | Codex | Claude | — | — |
+| URF-06 | AI Backend Contract Scaffold (Legacy -> Unified) | DONE | Codex | Claude | APPROVED | URF-06 Review Evidence |
 | URF-07 | AI Backend Migration to Unified Provider | TODO | Codex | Claude | — | — |
 | URF-08 | Final Certification + V2 Naming Convergence Readiness | TODO | Claude | Claude | — | — |
 
@@ -312,26 +312,51 @@ Rollback:
 
 ## URF-06 Checklist: AI Backend Contract Scaffold (Legacy -> Unified)
 
-- [ ] Unified-resource-native AI provider contract introduced.
-- [ ] Legacy bridge retained for one packet compatibility window.
-- [ ] Parity tests added for old/new contract behavior.
+- [x] Unified-resource-native AI provider contract introduced.
+- [x] Legacy bridge retained for one packet compatibility window.
+- [x] Parity tests added for old/new contract behavior.
 
 ### Required Tests
 
-- [ ] `go test ./internal/ai/... -run "ResourceContext|Routing" -count=1` -> exit 0
-- [ ] `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` -> exit 0
+- [x] `go test ./internal/ai/... -run "ResourceContext|Routing" -count=1` -> exit 0
+- [x] `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### URF-06 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `internal/ai/resource_context.go`: Added `UnifiedResourceProvider` interface (typed on `unifiedresources.Resource`) and `SetUnifiedResourceProvider()` setter on Service. Legacy `ResourceProvider` and `buildUnifiedResourceContext()` unchanged.
+- `internal/ai/service.go`: Added `unifiedResourceProvider UnifiedResourceProvider` field to Service struct.
+- `internal/unifiedresources/unified_ai_adapter.go` (NEW): `UnifiedAIAdapter` wrapping `*ResourceRegistry` with: GetAll, GetInfrastructure, GetWorkloads, GetByType, GetStats, GetTopByCPU/Memory/Disk, GetRelated (parent/children/siblings), FindContainerHost. Uses `metricPercent()` for metric extraction, `isUnifiedInfrastructure()`/`isUnifiedWorkload()` for type classification.
+- `internal/ai/resource_context_test.go`: Added 5 parity tests: NilRegistry, ResourceCounts, InfrastructureWorkloadSplit, TopCPU, FindContainerHost. All tests compare unified adapter output against legacy adapter output from the same snapshot.
+- `internal/api/router.go`: Added `aiUnifiedAdapter` field, initialization via `NewUnifiedAIAdapter(r.resourceRegistry)`, and wiring via `SetUnifiedResourceProvider()` forwarding to all AI services.
+
+Commands run + exit codes (reviewer-rerun):
+1. `go test ./internal/ai -run "ResourceContext" -count=1 -v` -> exit 0 (10 tests passed including 5 new parity tests)
+2. `go test ./internal/ai/... -run "ResourceContext|Routing" -count=1` -> exit 0
+3. `go test ./internal/api/... -run "ResourcesV2|ResourceHandlers|Websocket" -count=1` -> exit 0
+4. `go build ./...` -> exit 0
+
+Gate checklist:
+- P0: PASS (UnifiedResourceProvider interface defined, UnifiedAIAdapter concrete implementation created, Service wired with setter, all required commands rerun by reviewer with exit 0)
+- P1: PASS (5 parity tests prove unified adapter produces equivalent counts/splits/ordering/routing as legacy adapter from same snapshot; buildUnifiedResourceContext unchanged; existing tests unaffected)
+- P2: PASS (progress tracker updated, packet evidence recorded)
+
+Verdict: APPROVED
+
+Residual risk:
+- UnifiedAIAdapter classifies "host" and "k8s-node"/"k8s-cluster" as infrastructure but not Proxmox nodes specifically (unified types don't have a "node" type separate from "host"). The legacy adapter maps Proxmox nodes via LegacyResourceTypeNode. This semantic difference will need attention in URF-07 when buildUnifiedResourceContext switches to the unified provider.
+- buildUnifiedResourceContext() still uses legacy provider — flip deferred to URF-07.
+
+Rollback:
+- `git revert <URF-06-commit-hash>`
 ```
 
 ---
@@ -396,11 +421,11 @@ TODO
 - URF-02: `acc50cb2` feat(URF-02): alerts runtime cutover off legacy conversion hook
 - URF-03: `748007bf` feat(URF-03): AI chat runtime cutover off legacy conversion hook
 - URF-04: `097ed341` gate(URF-04): SB5 dependency gate GO — legacy hook deletion unblocked
-- URF-05: TODO
+- URF-05: `d6f40b29` feat(URF-05): delete useResourcesAsLegacy — zero runtime callers remain
 - URF-06: TODO
 - URF-07: TODO
 - URF-08: TODO
 
 ## Current Recommended Next Packet
 
-- `URF-06` (AI Backend Contract Scaffold — Legacy -> Unified)
+- `URF-07` (AI Backend Migration to Unified Provider)
