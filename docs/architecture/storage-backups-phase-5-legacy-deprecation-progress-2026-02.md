@@ -26,7 +26,7 @@ Date: 2026-02-08
 |---|---|---|---|---|---|---|
 | SB5-00 | Legacy Artifact Discovery and Removal Plan | DONE | Codex + Claude | Claude | APPROVED | See SB5-00 Review Evidence |
 | SB5-01 | Routing Mode Contract Hardening | DONE | Codex | Claude | APPROVED | See SB5-01 Review Evidence |
-| SB5-02 | App Router Integration Wiring | TODO | Codex | Claude | — | — |
+| SB5-02 | App Router Integration Wiring | DONE | Codex | Claude | APPROVED | See SB5-02 Review Evidence |
 | SB5-03 | Backups Legacy Shell Decoupling | TODO | Codex | Claude | — | — |
 | SB5-04 | Storage Legacy Shell Decoupling | TODO | Codex | Claude | — | — |
 | SB5-05 | Legacy Route and Shell Deletion | TODO | Codex | Claude | — | — |
@@ -331,21 +331,67 @@ Rollback:
 ## SB5-02 Checklist: App Router Integration Wiring
 
 ### Implementation
-- [ ] SB5-01 routing decisions integrated into App route handlers.
-- [ ] `/storage` and `/backups` canonical routes preserved.
-- [ ] `/storage-v2` and `/backups-v2` behavior explicit (redirect or serve) per mode contract.
-- [ ] No deletion of `Storage.tsx` or `UnifiedBackups.tsx` in this packet.
+- [x] SB5-01 routing decisions integrated into App route handlers — removed `storageBackupsRoutingPlan` memo, `StorageRoute`/`BackupsRoute` wrappers, feature-flag imports; hard-wired V2 components directly on canonical routes.
+- [x] `/storage` and `/backups` canonical routes preserved — `/storage` → `StorageV2Component`, `/backups` → `BackupsV2Component`.
+- [x] `/storage-v2` and `/backups-v2` always redirect to canonical paths — `StorageV2Route` and `BackupsV2Route` simplified to unconditional `<Navigate>`.
+- [x] No deletion of `Storage.tsx` or `UnifiedBackups.tsx` in this packet — confirmed via grep: both files untouched.
+- [x] Platform tabs simplified: `buildStorageBackupsTabSpecs(true)` (boolean compat path → v2-default tabs).
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/routing/__tests__/storageBackupsMode.test.ts src/routing/__tests__/platformTabs.test.ts src/routing/__tests__/resourceLinks.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded.
+- [x] `cd frontend-modern && npx vitest run src/routing/__tests__/storageBackupsMode.test.ts src/routing/__tests__/platformTabs.test.ts src/routing/__tests__/resourceLinks.test.ts` → exit 0 (3 files, 29 tests passed).
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` → exit 0.
+- [x] Exit codes recorded.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### SB5-02 Review Evidence
+
+```
+Files changed:
+- frontend-modern/src/App.tsx: Removed imports for resolveStorageBackupsRoutingPlan,
+  shouldRedirectStorageV2Route, shouldRedirectBackupsV2Route (from storageBackupsMode),
+  isStorageBackupsV2Enabled, isStorageV2RolledBack, isBackupsV2RolledBack (from featureFlags),
+  and lazy imports for StorageComponent and UnifiedBackups. Removed storageBackupsRoutingPlan
+  memo (App body and RootLayout). Removed StorageRoute/BackupsRoute conditional wrapper
+  components. Simplified StorageV2Route/BackupsV2Route to unconditional <Navigate> redirects.
+  Hard-wired /storage → StorageV2Component and /backups → BackupsV2Component directly.
+  Platform tabs: buildStorageBackupsTabSpecs(true) instead of routing plan memo.
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run src/routing/__tests__/storageBackupsMode.test.ts
+   src/routing/__tests__/platformTabs.test.ts src/routing/__tests__/resourceLinks.test.ts`
+   → exit 0 (3 files, 29 tests passed)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
+   → exit 0
+
+Gate checklist:
+- P0: PASS (only App.tsx modified; no out-of-scope files changed; both commands rerun by
+  reviewer with exit 0; git diff confirms no stray changes)
+- P1: PASS (canonical routes /storage and /backups serve V2 directly; alias routes
+  /storage-v2 and /backups-v2 always redirect; all 29 routing tests pass; Storage.tsx
+  and UnifiedBackups.tsx confirmed untouched; useResourcesAsLegacy not referenced in diff;
+  feature-flag infrastructure files not modified)
+- P2: PASS (progress tracker updated; packet scope matches plan SB5-02 definition;
+  checklist items align to plan constraints)
+
+Verdict: APPROVED
+
+Commit:
+- `2ef31e6d` (refactor(storage-phase5): SB5-02 — hard-wire V2 routes in App router)
+
+Residual risk:
+- Storage.tsx and UnifiedBackups.tsx lazy imports removed from App.tsx but files still
+  exist on disk. They are now unreachable dead code. Deletion is deferred to SB5-05
+  per plan sequencing.
+
+Rollback:
+- Revert checkpoint commit to restore App.tsx with conditional routing wrappers and
+  feature-flag-driven mode resolution.
+```
 
 ---
 

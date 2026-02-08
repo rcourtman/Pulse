@@ -87,16 +87,6 @@ import {
   buildWorkloadsPath,
 } from './routing/resourceLinks';
 import { buildStorageBackupsTabSpecs } from './routing/platformTabs';
-import {
-  resolveStorageBackupsRoutingPlan,
-  shouldRedirectBackupsV2Route,
-  shouldRedirectStorageV2Route,
-} from './routing/storageBackupsMode';
-import {
-  isStorageBackupsV2Enabled,
-  isBackupsV2RolledBack,
-  isStorageV2RolledBack,
-} from '@/utils/featureFlags';
 import { isMultiTenantEnabled, licenseLoaded, loadLicenseStatus } from '@/stores/license';
 
 import { showToast } from '@/utils/toast';
@@ -105,9 +95,7 @@ import { showToast } from '@/utils/toast';
 const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
 );
-const StorageComponent = lazy(() => import('./components/Storage/Storage'));
 const StorageV2Component = lazy(() => import('./components/Storage/StorageV2'));
-const UnifiedBackups = lazy(() => import('./components/Backups/UnifiedBackups'));
 const BackupsV2Component = lazy(() => import('./components/Backups/BackupsV2'));
 const Replication = lazy(() => import('./components/Replication/Replication'));
 const CephPage = lazy(() => import('./pages/Ceph'));
@@ -975,13 +963,6 @@ function App() {
 
   // Pass through the store directly (only when initialized)
   const enhancedStore = () => wsStore();
-  const storageBackupsRoutingPlan = createMemo(() =>
-    resolveStorageBackupsRoutingPlan(
-      isStorageBackupsV2Enabled(),
-      isStorageV2RolledBack(),
-      isBackupsV2RolledBack(),
-    ),
-  );
 
   // Workloads view - v2 resources only
   const WorkloadsView = () => {
@@ -995,33 +976,10 @@ function App() {
     );
   };
 
-  const StorageRoute = () => {
-    if (storageBackupsRoutingPlan().primaryStorageView === 'v2') {
-      return <StorageV2Component />;
-    }
-    return <StorageComponent />;
-  };
-
-  const BackupsRoute = () => {
-    if (storageBackupsRoutingPlan().primaryBackupsView === 'v2') {
-      return <BackupsV2Component />;
-    }
-    return <UnifiedBackups />;
-  };
-
-  const StorageV2Route = () => {
-    if (shouldRedirectStorageV2Route(storageBackupsRoutingPlan())) {
-      return <Navigate href={STORAGE_PATH} />;
-    }
-    return <StorageV2Component />;
-  };
-
-  const BackupsV2Route = () => {
-    if (shouldRedirectBackupsV2Route(storageBackupsRoutingPlan())) {
-      return <Navigate href={BACKUPS_PATH} />;
-    }
-    return <BackupsV2Component />;
-  };
+  // V2 is GA - always serve V2 at canonical routes.
+  // /storage-v2 and /backups-v2 alias routes always redirect to canonical paths.
+  const StorageV2Route = () => <Navigate href={STORAGE_PATH} />;
+  const BackupsV2Route = () => <Navigate href={BACKUPS_PATH} />;
 
   const SettingsRoute = () => (
     <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
@@ -1164,9 +1122,9 @@ function App() {
     <Router root={RootLayout}>
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
-      <Route path={STORAGE_PATH} component={StorageRoute} />
+      <Route path={STORAGE_PATH} component={StorageV2Component} />
       <Route path={STORAGE_V2_PATH} component={StorageV2Route} />
-      <Route path={BACKUPS_PATH} component={BackupsRoute} />
+      <Route path={BACKUPS_PATH} component={BackupsV2Component} />
       <Route path={BACKUPS_V2_PATH} component={BackupsV2Route} />
       <Route path="/ceph" component={CephPage} />
       <Route path="/replication" component={Replication} />
@@ -1398,13 +1356,6 @@ function AppLayout(props: {
 
   // Determine active tab from current path
   const getActiveTab = () => getActiveTabForPath(location.pathname);
-  const storageBackupsRoutingPlan = createMemo(() =>
-    resolveStorageBackupsRoutingPlan(
-      isStorageBackupsV2Enabled(),
-      isStorageV2RolledBack(),
-      isBackupsV2RolledBack(),
-    ),
-  );
 
   type PlatformTab = {
     id: string;
@@ -1447,7 +1398,7 @@ function AppLayout(props: {
         ),
         alwaysShow: true,
       },
-      ...buildStorageBackupsTabSpecs(storageBackupsRoutingPlan()).map((tab) => ({
+      ...buildStorageBackupsTabSpecs(true).map((tab) => ({
         ...tab,
         enabled: true,
         live: true,
