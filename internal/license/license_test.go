@@ -1165,6 +1165,71 @@ func TestServiceSetEvaluator(t *testing.T) {
 	}
 }
 
+func TestServiceSubscriptionState_NoStateMachine(t *testing.T) {
+	t.Run("valid license => active", func(t *testing.T) {
+		svc := setupTestServiceWithTier(t, TierPro)
+		if got := svc.SubscriptionState(); got != string(SubStateActive) {
+			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateActive)
+		}
+	})
+
+	t.Run("expired license => expired", func(t *testing.T) {
+		svc := setupTestServiceWithTier(t, TierPro)
+		svc.mu.Lock()
+		svc.license.Claims.ExpiresAt = time.Now().Add(-10 * 24 * time.Hour).Unix()
+		svc.license.GracePeriodEnd = nil
+		svc.mu.Unlock()
+
+		if got := svc.SubscriptionState(); got != string(SubStateExpired) {
+			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateExpired)
+		}
+	})
+
+	t.Run("expired in grace => grace", func(t *testing.T) {
+		svc := setupTestServiceWithTier(t, TierPro)
+		graceEnd := time.Now().Add(24 * time.Hour)
+		svc.mu.Lock()
+		svc.license.Claims.ExpiresAt = time.Now().Add(-48 * time.Hour).Unix()
+		svc.license.GracePeriodEnd = &graceEnd
+		svc.mu.Unlock()
+
+		if got := svc.SubscriptionState(); got != string(SubStateGrace) {
+			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateGrace)
+		}
+	})
+}
+
+func TestServiceSubscriptionState_WithStateMachine(t *testing.T) {
+	svc := setupTestServiceWithTier(t, TierPro)
+	svc.mu.Lock()
+	svc.license.Claims.SubState = SubStateTrial
+	svc.mu.Unlock()
+
+	svc.SetStateMachine(struct{}{})
+	if got := svc.SubscriptionState(); got != string(SubStateTrial) {
+		t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateTrial)
+	}
+}
+
+func TestServiceSetStateMachine(t *testing.T) {
+	svc := setupTestServiceWithTier(t, TierPro)
+	features := []string{FeatureAIPatrol, FeatureMultiUser, FeatureAIAutoFix}
+
+	before := captureFeatureResults(svc, features)
+
+	svc.SetStateMachine(struct{}{})
+	afterSet := captureFeatureResults(svc, features)
+	if !reflect.DeepEqual(before, afterSet) {
+		t.Fatalf("HasFeature changed after SetStateMachine(non-nil): before=%v after=%v", before, afterSet)
+	}
+
+	svc.SetStateMachine(nil)
+	afterClear := captureFeatureResults(svc, features)
+	if !reflect.DeepEqual(before, afterClear) {
+		t.Fatalf("HasFeature changed after SetStateMachine(nil): before=%v after=%v", before, afterClear)
+	}
+}
+
 func TestServiceHasFeature_ContractParity(t *testing.T) {
 	tiers := make([]Tier, 0, len(TierFeatures))
 	for tier := range TierFeatures {

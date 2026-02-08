@@ -235,6 +235,10 @@ type Service struct {
 	// When set, HasFeature delegates to evaluator.HasCapability.
 	// When nil, falls through to existing tier-based logic.
 	evaluator *entitlements.Evaluator
+
+	// Optional subscription state machine hook.
+	// Stored for lifecycle integration; current derivation remains claim/license based.
+	stateMachine any
 }
 
 // DefaultGracePeriod is the duration after license expiration during which
@@ -271,6 +275,14 @@ func (s *Service) SetEvaluator(eval *entitlements.Evaluator) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.evaluator = eval
+}
+
+// SetStateMachine sets the optional subscription state machine hook.
+// This is nil-safe and does not alter feature entitlement behavior.
+func (s *Service) SetStateMachine(sm any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stateMachine = sm
 }
 
 // Evaluator returns the current evaluator, or nil if not set.
@@ -424,6 +436,27 @@ func (s *Service) RequireFeature(feature string) error {
 		return fmt.Errorf("%w: %s requires Pulse Pro", ErrFeatureNotIncluded, GetFeatureDisplayName(feature))
 	}
 	return nil
+}
+
+// SubscriptionState returns the current normalized subscription state.
+func (s *Service) SubscriptionState() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.stateMachine != nil && s.license != nil && s.license.Claims.SubState != "" {
+		return string(s.license.Claims.SubState)
+	}
+	if s.license == nil {
+		return string(SubStateExpired)
+	}
+	if s.license.IsExpired() {
+		s.ensureGracePeriodEnd()
+		if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
+			return string(SubStateGrace)
+		}
+		return string(SubStateExpired)
+	}
+	return string(SubStateActive)
 }
 
 // Status returns a summary of the current license status.

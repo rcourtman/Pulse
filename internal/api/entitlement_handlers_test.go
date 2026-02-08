@@ -3,6 +3,7 @@ package api
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 )
@@ -15,7 +16,7 @@ func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 		MaxNodes: 50,
 	}
 
-	payload := buildEntitlementPayload(status)
+	payload := buildEntitlementPayload(status, "")
 
 	if payload.SubscriptionState != string(license.SubStateActive) {
 		t.Fatalf("expected subscription_state %q, got %q", license.SubStateActive, payload.SubscriptionState)
@@ -46,7 +47,7 @@ func TestBuildEntitlementPayload_FreeTier(t *testing.T) {
 		Features: append([]string(nil), license.TierFeatures[license.TierFree]...),
 	}
 
-	payload := buildEntitlementPayload(status)
+	payload := buildEntitlementPayload(status, "")
 
 	if len(payload.UpgradeReasons) == 0 {
 		t.Fatalf("expected upgrade reasons for free tier")
@@ -71,7 +72,7 @@ func TestBuildEntitlementPayload_Expired(t *testing.T) {
 		InGracePeriod: false,
 	}
 
-	payload := buildEntitlementPayload(status)
+	payload := buildEntitlementPayload(status, "")
 	if payload.SubscriptionState != string(license.SubStateExpired) {
 		t.Fatalf("expected subscription_state %q, got %q", license.SubStateExpired, payload.SubscriptionState)
 	}
@@ -83,7 +84,7 @@ func TestBuildEntitlementPayload_GracePeriod(t *testing.T) {
 		InGracePeriod: true,
 	}
 
-	payload := buildEntitlementPayload(status)
+	payload := buildEntitlementPayload(status, "")
 	if payload.SubscriptionState != string(license.SubStateGrace) {
 		t.Fatalf("expected subscription_state %q, got %q", license.SubStateGrace, payload.SubscriptionState)
 	}
@@ -94,7 +95,7 @@ func TestBuildEntitlementPayload_NilCapabilities(t *testing.T) {
 		Features: nil,
 	}
 
-	payload := buildEntitlementPayload(status)
+	payload := buildEntitlementPayload(status, "")
 	if payload.Capabilities == nil {
 		t.Fatalf("expected capabilities to be an empty slice, got nil")
 	}
@@ -125,5 +126,30 @@ func TestLimitState(t *testing.T) {
 				t.Fatalf("limitState(%d, %d) = %q, want %q", tc.current, tc.limit, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestBuildEntitlementPayload_TrialState(t *testing.T) {
+	expiresAt := time.Now().Add(36 * time.Hour).UTC().Format(time.RFC3339)
+	status := &license.LicenseStatus{
+		Valid:     true,
+		Tier:      license.TierPro,
+		Features:  append([]string(nil), license.TierFeatures[license.TierPro]...),
+		ExpiresAt: &expiresAt,
+	}
+
+	payload := buildEntitlementPayload(status, string(license.SubStateTrial))
+
+	if payload.SubscriptionState != string(license.SubStateTrial) {
+		t.Fatalf("expected subscription_state %q, got %q", license.SubStateTrial, payload.SubscriptionState)
+	}
+	if payload.TrialExpiresAt == nil {
+		t.Fatalf("expected trial_expires_at to be populated for trial state")
+	}
+	if payload.TrialDaysRemaining == nil {
+		t.Fatalf("expected trial_days_remaining to be populated for trial state")
+	}
+	if *payload.TrialDaysRemaining != 2 {
+		t.Fatalf("expected trial_days_remaining 2, got %d", *payload.TrialDaysRemaining)
 	}
 }

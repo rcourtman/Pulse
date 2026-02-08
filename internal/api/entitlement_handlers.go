@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	evaluator "github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
@@ -32,6 +34,12 @@ type EntitlementPayload struct {
 
 	// Tier is the marketing tier name (for display only, never gate on this).
 	Tier string `json:"tier"`
+
+	// TrialExpiresAt is the trial expiration Unix timestamp when in trial state.
+	TrialExpiresAt *int64 `json:"trial_expires_at,omitempty"`
+
+	// TrialDaysRemaining is the number of whole or partial days remaining in trial.
+	TrialDaysRemaining *int `json:"trial_days_remaining,omitempty"`
 }
 
 // LimitStatus represents a quantitative limit with current usage state.
@@ -78,7 +86,7 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 
 	// Build payload from current license status (evaluator wiring comes in MON-08)
 	status := svc.Status()
-	payload := buildEntitlementPayload(status)
+	payload := buildEntitlementPayload(status, svc.SubscriptionState())
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
@@ -86,7 +94,7 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 
 // buildEntitlementPayload constructs the normalized payload from LicenseStatus.
 // This provides backward compatibility before the evaluator is wired in.
-func buildEntitlementPayload(status *license.LicenseStatus) EntitlementPayload {
+func buildEntitlementPayload(status *license.LicenseStatus, subscriptionState string) EntitlementPayload {
 	if status == nil {
 		return EntitlementPayload{
 			Capabilities:      []string{},
@@ -108,14 +116,30 @@ func buildEntitlementPayload(status *license.LicenseStatus) EntitlementPayload {
 		payload.Capabilities = []string{}
 	}
 
-	// Derive subscription state from license status.
-	subState := license.SubStateActive
-	if !status.Valid {
-		subState = license.SubStateExpired
-	} else if status.InGracePeriod {
-		subState = license.SubStateGrace
+	// Use provided subscription state when present; otherwise derive from status.
+	if subscriptionState == "" {
+		subState := license.SubStateActive
+		if !status.Valid {
+			subState = license.SubStateExpired
+		} else if status.InGracePeriod {
+			subState = license.SubStateGrace
+		}
+		subscriptionState = string(subState)
 	}
-	payload.SubscriptionState = string(subscription.GetBehavior(subState).State)
+	payload.SubscriptionState = string(subscription.GetBehavior(license.SubscriptionState(subscriptionState)).State)
+
+	if payload.SubscriptionState == string(license.SubStateTrial) && status.ExpiresAt != nil {
+		if expiresAt, err := time.Parse(time.RFC3339, *status.ExpiresAt); err == nil {
+			expiresAtUnix := expiresAt.Unix()
+			payload.TrialExpiresAt = &expiresAtUnix
+
+			daysRemaining := int(math.Ceil(float64(expiresAtUnix-time.Now().Unix()) / 86400.0))
+			if daysRemaining < 0 {
+				daysRemaining = 0
+			}
+			payload.TrialDaysRemaining = &daysRemaining
+		}
+	}
 
 	// Build limits.
 	if status.MaxNodes > 0 {
