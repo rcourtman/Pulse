@@ -28,9 +28,11 @@ import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
 import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
 import type { TimeRange } from './api/charts';
-import { apiFetch } from './utils/apiClient';
+import { apiFetch, getOrgID as getSelectedOrgID, setOrgID as setSelectedOrgID } from './utils/apiClient';
 import type { SecurityStatus } from '@/types/config';
 import { SettingsAPI } from './api/settings';
+import { OrgsAPI } from '@/api/orgs';
+import type { Organization } from '@/api/orgs';
 import { eventBus } from './stores/events';
 import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
@@ -41,6 +43,7 @@ import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsMod
 import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
 import { MobileNavBar } from './components/shared/MobileNavBar';
 import { createTooltipSystem } from './components/shared/Tooltip';
+import { OrgSwitcher } from './components/OrgSwitcher';
 import type { State, Alert } from '@/types/api';
 import { startMetricsCollector } from './stores/metricsCollector';
 import BoxesIcon from 'lucide-solid/icons/boxes';
@@ -68,7 +71,7 @@ import {
   fetchInfrastructureSummaryAndCache,
   hasFreshInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
-import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode, getKioskModePreference } from './utils/url';
+import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode, getKioskModePreference, getPulseWebSocketUrl } from './utils/url';
 import {
   buildLegacyRedirectTarget,
   getActiveTabForPath,
@@ -84,7 +87,16 @@ import {
   buildWorkloadsPath,
 } from './routing/resourceLinks';
 import { buildStorageBackupsTabSpecs } from './routing/platformTabs';
-import { isStorageBackupsV2Enabled } from '@/utils/featureFlags';
+import {
+  resolveStorageBackupsRoutingPlan,
+  shouldRedirectBackupsV2Route,
+  shouldRedirectStorageV2Route,
+} from './routing/storageBackupsMode';
+import {
+  isStorageBackupsV2Enabled,
+  isBackupsV2RolledBack,
+  isStorageV2RolledBack,
+} from '@/utils/featureFlags';
 
 import { showToast } from '@/utils/toast';
 
@@ -393,6 +405,11 @@ function App() {
   const [isLoading, setIsLoading] = createSignal(true);
   const [needsAuth, setNeedsAuth] = createSignal(false);
   const [hasAuth, setHasAuth] = createSignal(false);
+  const [organizations, setOrganizations] = createSignal<Organization[]>([
+    { id: 'default', displayName: 'Default Organization' },
+  ]);
+  const [activeOrgID, setActiveOrgID] = createSignal(getSelectedOrgID() || 'default');
+  const [orgsLoading, setOrgsLoading] = createSignal(false);
   // Store full security status for Login component (hideLocalLogin, oidcEnabled, etc.)
   // Store full security status for Login component (hideLocalLogin, oidcEnabled, etc.)
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
@@ -413,6 +430,50 @@ function App() {
 
   // Last update time formatting
   const [lastUpdateText, setLastUpdateText] = createSignal('');
+
+  const loadOrganizations = async () => {
+    setOrgsLoading(true);
+    try {
+      const fetched = await OrgsAPI.list();
+      const orgList =
+        fetched.length > 0 ? fetched : [{ id: 'default', displayName: 'Default Organization' }];
+      setOrganizations(orgList);
+
+      const storedOrgID = getSelectedOrgID();
+      const selected =
+        (storedOrgID && orgList.some((org) => org.id === storedOrgID) ? storedOrgID : null) ||
+        orgList[0]?.id ||
+        'default';
+
+      setSelectedOrgID(selected);
+      setActiveOrgID(selected);
+    } catch (error) {
+      logger.warn('Failed to load organizations, falling back to default org', error);
+      const fallback = [{ id: 'default', displayName: 'Default Organization' }];
+      setOrganizations(fallback);
+      setSelectedOrgID('default');
+      setActiveOrgID('default');
+    } finally {
+      setOrgsLoading(false);
+    }
+  };
+
+  const handleOrgSwitch = (nextOrgID: string) => {
+    const target = nextOrgID?.trim() || 'default';
+    if (target === activeOrgID()) {
+      return;
+    }
+
+    setSelectedOrgID(target);
+    setActiveOrgID(target);
+
+    const store = wsStore();
+    if (store && typeof store.switchUrl === 'function') {
+      store.switchUrl(getPulseWebSocketUrl());
+      return;
+    }
+    store?.reconnect();
+  };
 
   const formatLastUpdate = (timestamp: string) => {
     if (!timestamp) return '';
@@ -668,6 +729,7 @@ function App() {
           logoutURL: securityData.proxyAuthLogoutURL,
         });
         setNeedsAuth(false);
+        await loadOrganizations();
         // Initialize WebSocket for proxy auth users
         setWsStore(acquireWsStore());
 
@@ -718,6 +780,7 @@ function App() {
           logoutURL: securityData.oidcLogoutURL, // OIDC logout URL from IdP
         });
         setNeedsAuth(false);
+        await loadOrganizations();
         // Initialize WebSocket for OIDC users
         setWsStore(acquireWsStore());
 
@@ -779,6 +842,7 @@ function App() {
         setNeedsAuth(true);
       } else {
         setNeedsAuth(false);
+        await loadOrganizations();
         // Only initialize WebSocket after successful auth check
         setWsStore(acquireWsStore());
 
@@ -878,7 +942,13 @@ function App() {
 
   // Pass through the store directly (only when initialized)
   const enhancedStore = () => wsStore();
-  const storageBackupsV2Enabled = createMemo(() => isStorageBackupsV2Enabled());
+  const storageBackupsRoutingPlan = createMemo(() =>
+    resolveStorageBackupsRoutingPlan(
+      isStorageBackupsV2Enabled(),
+      isStorageV2RolledBack(),
+      isBackupsV2RolledBack(),
+    ),
+  );
 
   // Workloads view - v2 resources only
   const WorkloadsView = () => {
@@ -893,17 +963,31 @@ function App() {
   };
 
   const StorageRoute = () => {
-    if (storageBackupsV2Enabled()) {
+    if (storageBackupsRoutingPlan().primaryStorageView === 'v2') {
       return <StorageV2Component />;
     }
     return <StorageComponent />;
   };
 
   const BackupsRoute = () => {
-    if (storageBackupsV2Enabled()) {
+    if (storageBackupsRoutingPlan().primaryBackupsView === 'v2') {
       return <BackupsV2Component />;
     }
     return <UnifiedBackups />;
+  };
+
+  const StorageV2Route = () => {
+    if (shouldRedirectStorageV2Route(storageBackupsRoutingPlan())) {
+      return <Navigate href={STORAGE_PATH} />;
+    }
+    return <StorageV2Component />;
+  };
+
+  const BackupsV2Route = () => {
+    if (shouldRedirectBackupsV2Route(storageBackupsRoutingPlan())) {
+      return <Navigate href={BACKUPS_PATH} />;
+    }
+    return <BackupsV2Component />;
   };
 
   const SettingsRoute = () => (
@@ -1010,6 +1094,10 @@ function App() {
                         handleLogout={handleLogout}
                         state={state}
                         tokenScopes={() => securityStatus()?.tokenScopes}
+                        organizations={organizations}
+                        activeOrgID={activeOrgID}
+                        orgsLoading={orgsLoading}
+                        onSwitchOrg={handleOrgSwitch}
                       >
                         {props.children}
                       </AppLayout>
@@ -1044,9 +1132,9 @@ function App() {
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
       <Route path={STORAGE_PATH} component={StorageRoute} />
-      <Route path={STORAGE_V2_PATH} component={StorageV2Component} />
+      <Route path={STORAGE_V2_PATH} component={StorageV2Route} />
       <Route path={BACKUPS_PATH} component={BackupsRoute} />
-      <Route path={BACKUPS_V2_PATH} component={BackupsV2Component} />
+      <Route path={BACKUPS_V2_PATH} component={BackupsV2Route} />
       <Route path="/ceph" component={CephPage} />
       <Route path="/replication" component={Replication} />
       <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />
@@ -1235,6 +1323,10 @@ function AppLayout(props: {
   handleLogout: () => void;
   state: () => State;
   tokenScopes: () => string[] | undefined;
+  organizations: () => Organization[];
+  activeOrgID: () => string;
+  orgsLoading: () => boolean;
+  onSwitchOrg: (orgID: string) => void;
   children?: JSX.Element;
 }) {
   const navigate = useNavigate();
@@ -1273,7 +1365,13 @@ function AppLayout(props: {
 
   // Determine active tab from current path
   const getActiveTab = () => getActiveTabForPath(location.pathname);
-  const storageBackupsV2Enabled = () => isStorageBackupsV2Enabled();
+  const storageBackupsRoutingPlan = createMemo(() =>
+    resolveStorageBackupsRoutingPlan(
+      isStorageBackupsV2Enabled(),
+      isStorageV2RolledBack(),
+      isBackupsV2RolledBack(),
+    ),
+  );
 
   type PlatformTab = {
     id: string;
@@ -1289,7 +1387,6 @@ function AppLayout(props: {
   };
 
   const platformTabs = createMemo(() => {
-    const showV2DefaultTabs = storageBackupsV2Enabled();
     const allPlatforms: PlatformTab[] = [
       {
         id: 'infrastructure' as const,
@@ -1317,7 +1414,7 @@ function AppLayout(props: {
         ),
         alwaysShow: true,
       },
-      ...buildStorageBackupsTabSpecs(showV2DefaultTabs).map((tab) => ({
+      ...buildStorageBackupsTabSpecs(storageBackupsRoutingPlan()).map((tab) => ({
         ...tab,
         enabled: true,
         live: true,
@@ -1467,6 +1564,12 @@ function AppLayout(props: {
         <div class={`header-controls flex items-center gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}>
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
+              <OrgSwitcher
+                orgs={props.organizations()}
+                selectedOrgId={props.activeOrgID()}
+                loading={props.orgsLoading()}
+                onChange={props.onSwitchOrg}
+              />
               {/* Kiosk Mode Toggle */}
               <button
                 type="button"

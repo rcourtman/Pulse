@@ -92,10 +92,11 @@ function shouldApplyPayload<T extends Staleable>(
 
 // Type-safe WebSocket store
 export function createWebSocketStore(url: string) {
+  let wsUrl = url;
   const [connected, setConnected] = createSignal(false);
   const [reconnecting, setReconnecting] = createSignal(false);
   const [initialDataReceived, setInitialDataReceived] = createSignal(false);
-  const [state, setState] = createStore<State>({
+  const createInitialState = (): State => ({
     nodes: [],
     vms: [],
     containers: [],
@@ -150,6 +151,7 @@ export function createWebSocketStore(url: string) {
     // Unified resources for cross-platform monitoring
     resources: [],
   });
+  const [state, setState] = createStore<State>(createInitialState());
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
   const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
   const [updateProgress, setUpdateProgress] = createSignal<unknown>(null);
@@ -252,13 +254,13 @@ export function createWebSocketStore(url: string) {
       if (reconnectAttempt > 0) {
         const delay = Math.min(100 * reconnectAttempt, 1000);
         setTimeout(() => {
-          ws = new WebSocket(url);
+          ws = new WebSocket(wsUrl);
           setupWebSocket();
         }, delay);
         return;
       }
 
-      ws = new WebSocket(url);
+      ws = new WebSocket(wsUrl);
       setupWebSocket();
     } catch (err) {
       logger.error('Failed to create WebSocket', err);
@@ -689,6 +691,28 @@ export function createWebSocketStore(url: string) {
       ws?.close();
       window.clearTimeout(reconnectTimeout);
       reconnectAttempt = 0; // Reset attempts for manual reconnect
+      connect();
+    },
+    switchUrl: (nextUrl: string) => {
+      if (!nextUrl || nextUrl === wsUrl) {
+        return;
+      }
+
+      wsUrl = nextUrl;
+      batch(() => {
+        setConnected(false);
+        setReconnecting(false);
+        setInitialDataReceived(false);
+        setUpdateProgress(null);
+        setState(reconcile(createInitialState()));
+        setActiveAlerts(reconcile({}));
+        setRecentlyResolved(reconcile({}));
+      });
+
+      window.clearTimeout(reconnectTimeout);
+      reconnectAttempt = 0;
+      isReconnecting = false;
+      ws?.close(1000, 'Reconnecting');
       connect();
     },
     markDockerHostsTokenRevoked: (tokenId: string, hostIds: string[]) =>
