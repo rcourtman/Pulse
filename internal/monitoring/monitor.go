@@ -7032,10 +7032,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								allocatedDiskGB := float64(res.MaxDisk) / 1073741824
 								reportedDiskGB := float64(totalBytes) / 1073741824
 
-								// If reported disk is more than 2x the allocated disk, log a warning
-								// This could indicate we're getting host disk or network shares
+								// If reported disk is more than 2x the allocated disk, log for debugging
+								// This is expected for VMs with pass-through disks, NFS mounts, or ZFS datasets
 								if allocatedDiskGB > 0 && reportedDiskGB > allocatedDiskGB*2 {
-									log.Warn().
+									log.Debug().
 										Str("instance", instanceName).
 										Str("vm", res.Name).
 										Int("vmid", res.VMID).

@@ -1807,6 +1807,11 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 		resolvedAt = time.Now()
 	}
 
+	// ntfy needs plain-text body + headers, not JSON
+	if webhook.Service == "ntfy" {
+		return n.sendResolvedWebhookNtfy(webhook, alertList, resolvedAt)
+	}
+
 	payload := map[string]interface{}{
 		"event":         string(eventResolved),
 		"alerts":        alertList,
@@ -1835,6 +1840,97 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	}
 
 	return n.sendWebhookRequest(webhook, jsonData, "resolved")
+}
+
+// sendResolvedWebhookNtfy sends a resolved webhook formatted for ntfy (plain text + headers)
+func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, alertList []*alerts.Alert, resolvedAt time.Time) error {
+	// Re-validate webhook URL
+	if err := n.ValidateWebhookURL(webhook.URL); err != nil {
+		return fmt.Errorf("webhook URL validation failed: %w", err)
+	}
+
+	if !n.checkWebhookRateLimit(webhook.URL) {
+		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
+	}
+
+	// Build plain-text body
+	var body strings.Builder
+	if len(alertList) == 1 && alertList[0] != nil {
+		a := alertList[0]
+		fmt.Fprintf(&body, "Resolved: %s on %s is now healthy", a.ResourceName, a.Node)
+	} else {
+		fmt.Fprintf(&body, "%d alerts resolved at %s:\n", len(alertList), resolvedAt.Format(time.RFC822))
+		for _, a := range alertList {
+			if a != nil {
+				fmt.Fprintf(&body, "- %s on %s\n", a.ResourceName, a.Node)
+			}
+		}
+	}
+
+	// Build title
+	title := "RESOLVED"
+	if len(alertList) == 1 && alertList[0] != nil {
+		title = fmt.Sprintf("RESOLVED: %s", alertList[0].ResourceName)
+	} else {
+		title = fmt.Sprintf("RESOLVED: %d alerts", len(alertList))
+	}
+
+	method := webhook.Method
+	if method == "" {
+		method = "POST"
+	}
+
+	req, err := http.NewRequest(method, webhook.URL, bytes.NewBufferString(body.String()))
+	if err != nil {
+		return fmt.Errorf("failed to create ntfy request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Title", title)
+	req.Header.Set("Priority", "default")
+	req.Header.Set("Tags", "white_check_mark,pulse,resolved")
+	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0")
+
+	// Apply any custom headers from webhook config
+	for key, value := range webhook.Headers {
+		if !strings.Contains(value, "{{") {
+			req.Header.Set(key, value)
+		}
+	}
+
+	resp, err := n.webhookClient.Do(req)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("webhook", webhook.Name).
+			Msg("Failed to send resolved ntfy webhook")
+		return fmt.Errorf("failed to send ntfy webhook: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response with size limit
+	limitedReader := io.LimitReader(resp.Body, WebhookMaxResponseSize)
+	var respBody bytes.Buffer
+	respBody.ReadFrom(limitedReader)
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		log.Info().
+			Str("webhook", webhook.Name).
+			Str("service", "ntfy").
+			Str("type", "resolved").
+			Int("status", resp.StatusCode).
+			Int("alertCount", len(alertList)).
+			Msg("Resolved ntfy webhook sent successfully")
+		return nil
+	}
+
+	log.Warn().
+		Str("webhook", webhook.Name).
+		Str("service", "ntfy").
+		Int("status", resp.StatusCode).
+		Str("response", respBody.String()).
+		Msg("Resolved ntfy webhook returned non-success status")
+	return fmt.Errorf("ntfy webhook returned HTTP %d: %s", resp.StatusCode, respBody.String())
 }
 
 // checkWebhookRateLimit checks if a webhook can be sent based on rate limits

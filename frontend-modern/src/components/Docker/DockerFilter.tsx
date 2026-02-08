@@ -4,6 +4,7 @@ import { SearchTipsPopover } from '@/components/shared/SearchTipsPopover';
 import { MetricsViewToggle } from '@/components/shared/MetricsViewToggle';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
+import { shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 
 export type DockerViewMode = 'grouped' | 'flat' | 'cluster';
 
@@ -510,7 +511,7 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
           {/* Metrics View Toggle */}
           <MetricsViewToggle />
 
-          <Show when={props.updateAvailableCount && props.updateAvailableCount > 1}>
+          <Show when={props.updateAvailableCount && props.updateAvailableCount > 1 && !shouldHideDockerUpdateActions()}>
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" aria-hidden="true"></div>
             <UpdateAllButton
               count={props.updateAvailableCount!}
