@@ -419,15 +419,16 @@ const BackupsV2: Component = () => {
       query: search().trim() || null,
     });
 
-    const [managedBasePath, managedSearch = ''] = managedPath.split('?');
+    const [, managedSearch = ''] = managedPath.split('?');
     const managedParams = new URLSearchParams(managedSearch);
     const params = new URLSearchParams(location.search);
 
     Object.values(BACKUPS_QUERY_PARAMS).forEach((key) => params.delete(key));
     managedParams.forEach((value, key) => params.set(key, value));
 
+    const basePath = location.pathname;
     const nextSearch = params.toString();
-    const nextPath = nextSearch ? `${managedBasePath}?${nextSearch}` : managedBasePath;
+    const nextPath = nextSearch ? `${basePath}?${nextSearch}` : basePath;
     const currentPath = `${location.pathname}${location.search || ''}`;
 
     if (nextPath !== currentPath) navigate(nextPath, { replace: true });
