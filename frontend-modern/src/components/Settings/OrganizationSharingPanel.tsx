@@ -4,11 +4,12 @@ import {
   OrgsAPI,
   type IncomingOrganizationShare,
   type Organization,
-  type OrganizationMember,
   type OrganizationRole,
   type OrganizationShare,
 } from '@/api/orgs';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
+import { canManageOrg, formatOrgDate, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
+import { isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import Share2 from 'lucide-solid/icons/share-2';
@@ -35,45 +36,22 @@ type ResourcesResponse = {
   }>;
 };
 
-const shareRoleClass: Record<ShareAccessRole, string> = {
-  admin: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
-  editor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
-  viewer: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-};
-
 const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [
   { value: 'viewer', label: 'Viewer' },
   { value: 'editor', label: 'Editor' },
   { value: 'admin', label: 'Admin' },
 ];
 
-const normalizeRole = (role: OrganizationRole): Exclude<OrganizationRole, 'member'> => {
-  if (role === 'member') return 'viewer';
-  return role;
-};
+const VALID_RESOURCE_TYPES = ['vm', 'container', 'host', 'storage', 'pbs', 'pmg'] as const;
+const INVALID_RESOURCE_TYPE_ERROR = `Invalid resource type. Valid types: ${VALID_RESOURCE_TYPES.join(', ')}`;
+
+const isValidResourceType = (value: string): value is (typeof VALID_RESOURCE_TYPES)[number] =>
+  (VALID_RESOURCE_TYPES as readonly string[]).includes(value);
 
 const normalizeShareRole = (role: OrganizationRole): ShareAccessRole => {
   const normalized = normalizeRole(role);
   if (normalized === 'admin' || normalized === 'editor') return normalized;
   return 'viewer';
-};
-
-const formatDate = (value?: string) => {
-  if (!value) return 'Unknown';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString();
-};
-
-const canManageOrg = (
-  org: Organization | null,
-  members: OrganizationMember[],
-  currentUser?: string,
-) => {
-  if (!org || !currentUser) return false;
-  if (org.ownerUserId === currentUser) return true;
-  const role = normalizeRole(members.find((m) => m.userId === currentUser)?.role ?? 'viewer');
-  return role === 'admin' || role === 'owner';
 };
 
 const toResourceOptions = (response: ResourcesResponse): ResourceOption[] => {
@@ -94,7 +72,6 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   const [loading, setLoading] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [org, setOrg] = createSignal<Organization | null>(null);
-  const [members, setMembers] = createSignal<OrganizationMember[]>([]);
   const [orgs, setOrgs] = createSignal<Organization[]>([]);
   const [resourceOptions, setResourceOptions] = createSignal<ResourceOption[]>([]);
   const [outgoingShares, setOutgoingShares] = createSignal<OrganizationShare[]>([]);
@@ -105,6 +82,12 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   const [resourceId, setResourceId] = createSignal('');
   const [resourceName, setResourceName] = createSignal('');
   const [accessRole, setAccessRole] = createSignal<ShareAccessRole>('viewer');
+  const [selectedQuickPick, setSelectedQuickPick] = createSignal('');
+  const [manualEntryExpanded, setManualEntryExpanded] = createSignal(false);
+
+  const [targetOrgError, setTargetOrgError] = createSignal('');
+  const [resourceTypeError, setResourceTypeError] = createSignal('');
+  const [resourceIdError, setResourceIdError] = createSignal('');
 
   const activeOrgId = () => getOrgID() || 'default';
 
@@ -112,6 +95,17 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     orgs()
       .filter((candidate) => candidate.id !== activeOrgId())
       .sort((left, right) => (left.displayName || left.id).localeCompare(right.displayName || right.id)),
+  );
+
+  const normalizedResourceType = createMemo(() => resourceType().trim().toLowerCase());
+  const normalizedResourceId = createMemo(() => resourceId().trim());
+  const hasTargetOrg = createMemo(() => targetOrgId().trim() !== '');
+  const hasQuickPickSelection = createMemo(() => selectedQuickPick().trim() !== '');
+  const manualEntryValid = createMemo(
+    () => isValidResourceType(normalizedResourceType()) && normalizedResourceId() !== '',
+  );
+  const canCreateShare = createMemo(
+    () => !saving() && hasTargetOrg() && (hasQuickPickSelection() || manualEntryValid()),
   );
 
   const orgNameById = createMemo(() => {
@@ -146,11 +140,15 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
         OrgsAPI.list(),
         resourcesPromise,
       ]);
+      const nextResourceOptions = toResourceOptions(resources);
 
-      setOrg(orgData);
-      setMembers(memberData);
+      setOrg({ ...orgData, members: memberData });
       setOrgs(allOrgs);
-      setResourceOptions(toResourceOptions(resources));
+      setResourceOptions(nextResourceOptions);
+      setManualEntryExpanded(nextResourceOptions.length === 0);
+      if (nextResourceOptions.length === 0) {
+        setSelectedQuickPick('');
+      }
 
       await loadShares(orgId);
 
@@ -159,6 +157,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
         allOrgs.find((candidate) => candidate.id !== orgId)?.id ||
         '';
       setTargetOrgId(firstTarget);
+      setTargetOrgError(firstTarget === '' ? 'Target organization is required' : '');
     } catch (error) {
       logger.error('Failed to load organization sharing data', error);
       notificationStore.error('Failed to load organization sharing details');
@@ -168,6 +167,11 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   };
 
   const applyResourceQuickPick = (value: string) => {
+    setSelectedQuickPick(value);
+    setResourceTypeError('');
+    setResourceIdError('');
+    if (!value) return;
+
     const [nextType, nextID] = value.split('::');
     const match = resourceOptions().find(
       (resource) => resource.id === (nextID ?? '') && resource.type === (nextType ?? ''),
@@ -178,14 +182,59 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     setResourceName(match.name);
   };
 
+  const toggleManualEntry = () => {
+    const expanding = !manualEntryExpanded();
+    setManualEntryExpanded(expanding);
+    setResourceTypeError('');
+    setResourceIdError('');
+    if (expanding) {
+      setSelectedQuickPick('');
+    }
+  };
+
+  const updateTargetOrg = (value: string) => {
+    setTargetOrgId(value);
+    setTargetOrgError(value.trim() === '' ? 'Target organization is required' : '');
+  };
+
+  const updateResourceType = (value: string) => {
+    setSelectedQuickPick('');
+    setResourceType(value);
+    const normalized = value.trim().toLowerCase();
+    setResourceTypeError(normalized === '' || isValidResourceType(normalized) ? '' : INVALID_RESOURCE_TYPE_ERROR);
+  };
+
+  const updateResourceId = (value: string) => {
+    setSelectedQuickPick('');
+    setResourceId(value);
+    setResourceIdError(value.trim() === '' ? 'Resource ID is required' : '');
+  };
+
+  const updateResourceName = (value: string) => {
+    setSelectedQuickPick('');
+    setResourceName(value);
+  };
+
   const createShare = async () => {
     const currentOrg = org();
     if (!currentOrg) return;
 
     const nextTargetOrgId = targetOrgId().trim();
-    const nextResourceType = resourceType().trim().toLowerCase();
-    const nextResourceId = resourceId().trim();
+    const nextResourceType = normalizedResourceType();
+    const nextResourceId = normalizedResourceId();
     const nextResourceName = resourceName().trim();
+    const hasQuickPick = hasQuickPickSelection();
+    const hasValidManualType = isValidResourceType(nextResourceType);
+    const hasValidManualResourceId = nextResourceId !== '';
+
+    setTargetOrgError(nextTargetOrgId === '' ? 'Target organization is required' : '');
+    if (hasQuickPick) {
+      setResourceTypeError('');
+      setResourceIdError('');
+    } else {
+      setResourceTypeError(hasValidManualType ? '' : INVALID_RESOURCE_TYPE_ERROR);
+      setResourceIdError(hasValidManualResourceId ? '' : 'Resource ID is required');
+    }
 
     if (!nextTargetOrgId) {
       notificationStore.error('Target organization is required');
@@ -195,8 +244,8 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       notificationStore.error('Target organization must differ from the current organization');
       return;
     }
-    if (!nextResourceType || !nextResourceId) {
-      notificationStore.error('Resource type and ID are required');
+    if (!hasQuickPick && (!hasValidManualType || !hasValidManualResourceId)) {
+      notificationStore.error('Valid resource type and resource ID are required');
       return;
     }
 
@@ -240,19 +289,21 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   };
 
   onMount(() => {
+    if (!isMultiTenantEnabled()) return;
     void loadSharingData();
   });
 
   return (
-    <div class="space-y-6">
-      <SettingsPanel
-        title="Organization Sharing"
-        description="Share views and resources across organizations with explicit role-based access."
-        icon={<Share2 class="w-5 h-5" />}
-        bodyClass="space-y-5"
-      >
+    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-gray-500">This feature is not available.</div>}>
+      <div class="space-y-6">
+        <SettingsPanel
+          title="Organization Sharing"
+          description="Share views and resources across organizations with explicit role-based access."
+          icon={<Share2 class="w-5 h-5" />}
+          bodyClass="space-y-5"
+        >
         <Show when={!loading()} fallback={<p class="text-sm text-gray-500 dark:text-gray-400">Loading sharing settings...</p>}>
-          <Show when={canManageOrg(org(), members(), props.currentUser)}>
+          <Show when={canManageOrg(org(), props.currentUser)}>
             <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
               <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Create Share</h4>
 
@@ -263,14 +314,19 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                   </span>
                   <select
                     value={targetOrgId()}
-                    onChange={(event) => setTargetOrgId(event.currentTarget.value)}
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                    onChange={(event) => updateTargetOrg(event.currentTarget.value)}
+                    class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 ${
+                      targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    }`}
                   >
                     <option value="">Select organization</option>
                     <For each={targetOrgOptions()}>
                       {(target) => <option value={target.id}>{target.displayName || target.id}</option>}
                     </For>
                   </select>
+                  <Show when={targetOrgError() !== ''}>
+                    <p class="text-xs text-red-600 dark:text-red-400">{targetOrgError()}</p>
+                  </Show>
                 </label>
 
                 <label class="space-y-1">
@@ -290,73 +346,106 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
               </div>
 
               <Show when={resourceOptions().length > 0}>
-                <label class="space-y-1 block">
-                  <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Quick Pick Resource
-                  </span>
-                  <select
-                    value={resourceType() && resourceId() ? `${resourceType()}::${resourceId()}` : ''}
-                    onChange={(event) => applyResourceQuickPick(event.currentTarget.value)}
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                  >
-                    <option value="">Select resource</option>
-                    <For each={resourceOptions()}>
-                      {(resource) => (
-                        <option value={`${resource.type}::${resource.id}`}>
-                          {resource.name} ({resource.type})
-                        </option>
-                      )}
-                    </For>
-                  </select>
-                </label>
+                <div class="rounded-md border border-blue-200 bg-blue-50/50 p-3 space-y-2 dark:border-blue-900 dark:bg-blue-900/10">
+                  <label class="space-y-1 block">
+                    <span class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                      Quick Pick Resource
+                    </span>
+                    <select
+                      value={selectedQuickPick()}
+                      onChange={(event) => applyResourceQuickPick(event.currentTarget.value)}
+                      class="w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700 dark:bg-gray-800 dark:text-gray-100"
+                    >
+                      <option value="">Select resource</option>
+                      <For each={resourceOptions()}>
+                        {(resource) => (
+                          <option value={`${resource.type}::${resource.id}`}>
+                            {resource.name} ({resource.type})
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                  </label>
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="text-xs text-blue-700 dark:text-blue-300">
+                      Choose a discovered resource, or switch to manual entry.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={toggleManualEntry}
+                      class="text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                    >
+                      {manualEntryExpanded() ? 'Hide manual entry' : 'Enter manually'}
+                    </button>
+                  </div>
+                </div>
               </Show>
 
-              <div class="grid gap-3 lg:grid-cols-3">
-                <label class="space-y-1">
-                  <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Resource Type
-                  </span>
-                  <input
-                    type="text"
-                    value={resourceType()}
-                    onInput={(event) => setResourceType(event.currentTarget.value)}
-                    placeholder="vm | container | view"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                  />
-                </label>
+              <Show
+                when={resourceOptions().length === 0 || manualEntryExpanded()}
+                fallback={
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    Manual entry is hidden while quick pick is active.
+                  </p>
+                }
+              >
+                <div class="grid gap-3 lg:grid-cols-3">
+                  <label class="space-y-1">
+                    <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Resource Type
+                    </span>
+                    <input
+                      type="text"
+                      value={resourceType()}
+                      onInput={(event) => updateResourceType(event.currentTarget.value)}
+                      placeholder={VALID_RESOURCE_TYPES.join(' | ')}
+                      class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 ${
+                        resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                    />
+                    <Show when={resourceTypeError() !== ''}>
+                      <p class="text-xs text-red-600 dark:text-red-400">{resourceTypeError()}</p>
+                    </Show>
+                  </label>
 
-                <label class="space-y-1">
-                  <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Resource ID
-                  </span>
-                  <input
-                    type="text"
-                    value={resourceId()}
-                    onInput={(event) => setResourceId(event.currentTarget.value)}
-                    placeholder="resource identifier"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                  />
-                </label>
+                  <label class="space-y-1">
+                    <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Resource ID
+                    </span>
+                    <input
+                      type="text"
+                      value={resourceId()}
+                      onInput={(event) => updateResourceId(event.currentTarget.value)}
+                      placeholder="resource identifier"
+                      class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 ${
+                        resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                    />
+                    <Show when={resourceIdError() !== ''}>
+                      <p class="text-xs text-red-600 dark:text-red-400">{resourceIdError()}</p>
+                    </Show>
+                  </label>
 
-                <label class="space-y-1">
-                  <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Resource Name
-                  </span>
-                  <input
-                    type="text"
-                    value={resourceName()}
-                    onInput={(event) => setResourceName(event.currentTarget.value)}
-                    placeholder="optional display name"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                  />
-                </label>
-              </div>
+                  <label class="space-y-1">
+                    <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Resource Name
+                    </span>
+                    <input
+                      type="text"
+                      value={resourceName()}
+                      onInput={(event) => updateResourceName(event.currentTarget.value)}
+                      placeholder="optional display name"
+                      class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                    />
+                  </label>
+                </div>
+              </Show>
 
               <div class="flex justify-end">
                 <button
                   type="button"
                   onClick={createShare}
-                  disabled={saving()}
+                  disabled={!canCreateShare()}
                   class="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving() ? 'Saving...' : 'Create Share'}
@@ -365,7 +454,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             </div>
           </Show>
 
-          <Show when={!canManageOrg(org(), members(), props.currentUser)}>
+          <Show when={!canManageOrg(org(), props.currentUser)}>
             <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
               Admin or owner role required to create or remove organization shares.
             </div>
@@ -412,13 +501,13 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                               {orgNameById().get(share.targetOrgId) || share.targetOrgId}
                             </td>
                             <td class="px-3 py-2">
-                              <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${shareRoleClass[role]}`}>
+                              <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
                                 {role}
                               </span>
                             </td>
-                            <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{formatDate(share.createdAt)}</td>
+                            <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{formatOrgDate(share.createdAt)}</td>
                             <td class="px-3 py-2 text-right">
-                              <Show when={canManageOrg(org(), members(), props.currentUser)}>
+                              <Show when={canManageOrg(org(), props.currentUser)}>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -480,11 +569,11 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                               </div>
                             </td>
                             <td class="px-3 py-2">
-                              <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${shareRoleClass[role]}`}>
+                              <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
                                 {role}
                               </span>
                             </td>
-                            <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{formatDate(share.createdAt)}</td>
+                            <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{formatOrgDate(share.createdAt)}</td>
                           </tr>
                         );
                       }}
@@ -494,9 +583,10 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
               </table>
             </div>
           </div>
-        </Show>
-      </SettingsPanel>
-    </div>
+          </Show>
+        </SettingsPanel>
+      </div>
+    </Show>
   );
 };
 

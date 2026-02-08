@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import path from 'path';
 import { URL } from 'node:url';
+import { configDefaults } from 'vitest/config';
 
 const frontendDevHost = process.env.FRONTEND_DEV_HOST ?? '0.0.0.0';
 const frontendDevPort = Number(
@@ -34,11 +35,13 @@ const backendWsUrl =
     }
   })();
 
+const srcAlias = path.resolve(__dirname, './src');
+
 export default defineConfig({
   plugins: [solid()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': srcAlias,
     },
     conditions: ['import', 'browser', 'default'],
   },
@@ -271,5 +274,13 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    alias: {
+      '@': srcAlias,
+    },
+    exclude: [
+      ...configDefaults.exclude,
+      'tests/integration/**',
+      '**/tests/integration/**',
+    ],
   },
 });
