@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   OrgsAPI,
@@ -7,12 +7,13 @@ import {
   type OrganizationRole,
   type OrganizationShare,
 } from '@/api/orgs';
-import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
+import { getOrgID } from '@/utils/apiClient';
 import { canManageOrg, formatOrgDate, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import { useResources, getDisplayName } from '@/hooks/useResources';
 import Share2 from 'lucide-solid/icons/share-2';
 import Trash2 from 'lucide-solid/icons/trash-2';
 
@@ -26,15 +27,6 @@ type ResourceOption = {
   id: string;
   type: string;
   name: string;
-};
-
-type ResourcesResponse = {
-  resources?: Array<{
-    id?: string;
-    type?: string;
-    name?: string;
-    displayName?: string;
-  }>;
 };
 
 const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [
@@ -55,26 +47,11 @@ const normalizeShareRole = (role: OrganizationRole): ShareAccessRole => {
   return 'viewer';
 };
 
-const toResourceOptions = (response: ResourcesResponse): ResourceOption[] => {
-  const resources = response.resources ?? [];
-  const normalized = resources
-    .map((resource) => ({
-      id: (resource.id ?? '').trim(),
-      type: (resource.type ?? '').trim(),
-      name: (resource.displayName ?? resource.name ?? resource.id ?? '').trim(),
-    }))
-    .filter((resource) => resource.id !== '' && resource.type !== '');
-
-  normalized.sort((left, right) => left.name.localeCompare(right.name));
-  return normalized;
-};
-
 export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> = (props) => {
   const [loading, setLoading] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [org, setOrg] = createSignal<Organization | null>(null);
   const [orgs, setOrgs] = createSignal<Organization[]>([]);
-  const [resourceOptions, setResourceOptions] = createSignal<ResourceOption[]>([]);
   const [outgoingShares, setOutgoingShares] = createSignal<OrganizationShare[]>([]);
   const [incomingShares, setIncomingShares] = createSignal<IncomingOrganizationShare[]>([]);
 
@@ -91,12 +68,23 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   const [resourceIdError, setResourceIdError] = createSignal('');
 
   const activeOrgId = () => getOrgID() || 'default';
+  const { resources } = useResources();
 
   const targetOrgOptions = createMemo(() =>
     orgs()
       .filter((candidate) => candidate.id !== activeOrgId())
       .sort((left, right) => (left.displayName || left.id).localeCompare(right.displayName || right.id)),
   );
+  const unifiedResourceOptions = createMemo<ResourceOption[]>(() => {
+    return resources()
+      .filter((resource) => resource.id && resource.type)
+      .map((resource) => ({
+        id: resource.id,
+        type: resource.type,
+        name: (getDisplayName(resource) || resource.id).trim(),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  });
 
   const normalizedResourceType = createMemo(() => resourceType().trim().toLowerCase());
   const normalizedResourceId = createMemo(() => resourceId().trim());
@@ -117,6 +105,12 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     return map;
   });
 
+  createEffect(() => {
+    if (unifiedResourceOptions().length > 0) return;
+    setManualEntryExpanded(true);
+    setSelectedQuickPick('');
+  });
+
   const loadShares = async (orgId: string) => {
     const [outgoing, incoming] = await Promise.all([
       OrgsAPI.listShares(orgId),
@@ -130,24 +124,17 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     setLoading(true);
     try {
       const orgId = activeOrgId();
-      const resourcesPromise = apiFetchJSON<ResourcesResponse>('/api/resources').catch((error) => {
-        logger.warn('Failed to load resource options for sharing', error);
-        return { resources: [] };
-      });
 
-      const [orgData, memberData, allOrgs, resources] = await Promise.all([
+      const [orgData, memberData, allOrgs] = await Promise.all([
         OrgsAPI.get(orgId),
         OrgsAPI.listMembers(orgId),
         OrgsAPI.list(),
-        resourcesPromise,
       ]);
-      const nextResourceOptions = toResourceOptions(resources);
 
       setOrg({ ...orgData, members: memberData });
       setOrgs(allOrgs);
-      setResourceOptions(nextResourceOptions);
-      setManualEntryExpanded(nextResourceOptions.length === 0);
-      if (nextResourceOptions.length === 0) {
+      if (unifiedResourceOptions().length === 0) {
+        setManualEntryExpanded(true);
         setSelectedQuickPick('');
       }
 
@@ -181,7 +168,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     if (!value) return;
 
     const [nextType, nextID] = value.split('::');
-    const match = resourceOptions().find(
+    const match = unifiedResourceOptions().find(
       (resource) => resource.id === (nextID ?? '') && resource.type === (nextType ?? ''),
     );
     if (!match) return;
@@ -430,7 +417,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                 </label>
               </div>
 
-              <Show when={resourceOptions().length > 0}>
+              <Show when={unifiedResourceOptions().length > 0}>
                 <div class="rounded-md border border-blue-200 bg-blue-50/50 p-3 space-y-2 dark:border-blue-900 dark:bg-blue-900/10">
                   <label class="space-y-1 block">
                     <span class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
@@ -442,7 +429,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       class="w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700 dark:bg-gray-800 dark:text-gray-100"
                     >
                       <option value="">Select resource</option>
-                      <For each={resourceOptions()}>
+                      <For each={unifiedResourceOptions()}>
                         {(resource) => (
                           <option value={`${resource.type}::${resource.id}`}>
                             {resource.name} ({resource.type})
@@ -467,7 +454,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
               </Show>
 
               <Show
-                when={resourceOptions().length === 0 || manualEntryExpanded()}
+                when={unifiedResourceOptions().length === 0 || manualEntryExpanded()}
                 fallback={
                   <p class="text-xs text-gray-500 dark:text-gray-400">
                     Manual entry is hidden while quick pick is active.
