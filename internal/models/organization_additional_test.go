@@ -31,3 +31,18 @@ func TestOrganizationAccessors(t *testing.T) {
 		t.Fatalf("CanUserManage results unexpected")
 	}
 }
+
+func TestOrganizationRoleNormalization(t *testing.T) {
+	if got := NormalizeOrganizationRole("member"); got != OrgRoleViewer {
+		t.Fatalf("expected member alias to normalize to viewer, got %q", got)
+	}
+	if got := NormalizeOrganizationRole("EDITOR"); got != OrgRoleEditor {
+		t.Fatalf("expected EDITOR to normalize to editor, got %q", got)
+	}
+	if !IsValidOrganizationRole(OrgRoleOwner) || !IsValidOrganizationRole("member") {
+		t.Fatalf("expected owner and member alias to be valid roles")
+	}
+	if IsValidOrganizationRole("unknown") {
+		t.Fatalf("expected unknown role to be invalid")
+	}
+}
