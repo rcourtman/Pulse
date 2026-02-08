@@ -29,7 +29,7 @@ Date: 2026-02-08
 | IWP-03 | Infrastructure Table Windowing and Render Containment | DONE | Codex | Claude | APPROVED | IWP-03 Review Evidence |
 | IWP-04 | Workloads Table Windowing and Grouped Render Containment | DONE | Codex | Claude | APPROVED | IWP-04 Review Evidence |
 | IWP-05 | Polling/Update Backpressure and Recompute Isolation | DONE | Codex | Claude | APPROVED | IWP-05 Review Evidence |
-| IWP-06 | Summary Path Hardening | TODO | Codex | Claude | — | — |
+| IWP-06 | Summary Path Hardening | DONE | Codex | Claude | APPROVED | IWP-06 Review Evidence |
 | IWP-07 | Final Performance Certification | TODO | Claude | Claude | — | — |
 
 ---
@@ -353,27 +353,54 @@ Rollback:
 
 ## IWP-06 Checklist: Summary Path Hardening
 
-- [ ] InfrastructureSummary performance behavior hardened and tested.
-- [ ] WorkloadsSummary performance behavior hardened and tested.
-- [ ] Cache/fetch dedupe and visible-series constraints validated in tests.
-- [ ] Perf regression assertions added for summary surfaces.
+- [x] InfrastructureSummary performance behavior hardened and tested.
+- [x] WorkloadsSummary performance behavior hardened and tested.
+- [x] Cache/fetch dedupe and visible-series constraints validated in tests.
+- [x] Perf regression assertions added for summary surfaces.
 
 ### Required Tests
 
-- [ ] `cd frontend-modern && npx vitest run src/components/Infrastructure/InfrastructureSummary.test.tsx src/components/Workloads/WorkloadsSummary.test.tsx src/utils/__tests__/infrastructureSummaryCache.test.ts` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `cd frontend-modern && npx vitest run src/components/Infrastructure/InfrastructureSummary.test.tsx src/components/Workloads/WorkloadsSummary.test.tsx src/utils/__tests__/infrastructureSummaryCache.test.ts` -> exit 0
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### IWP-06 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `frontend-modern/src/components/Infrastructure/InfrastructureSummary.test.tsx`: Added concurrent dedupe, focused-host bounded-series, large-host growth assertions (12 tests total)
+- `frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx`: Added adaptive maxPoints boundary matrix, visible-series assertions, node-scoped fallback, large workload count bound (12 tests total)
+- `frontend-modern/src/utils/__tests__/infrastructureSummaryCache.test.ts`: Added cache miss/hit, TTL expiry, per-series trim bound, oversized payload rejection (7 tests total)
+
+Audit findings:
+- InfrastructureSummary: cache hydration, shared fetch dedupe, abortable fetches, visible-series via focusedHostId, 30s poll
+- WorkloadsSummary: local cache with 5min TTL + versioning, adaptive maxPoints thresholds, per-series 360pt cap, visible-series via visibleWorkloadIds, adaptive polling by time range + idle state
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run ...InfrastructureSummary.test.tsx ...WorkloadsSummary.test.tsx ...infrastructureSummaryCache.test.ts` -> exit 0 (31 tests)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+
+Gate checklist:
+- P0: PASS (all tests pass, no behavioral changes, typecheck clean)
+- P1: PASS (test strengthening only, no cache/fetch/render behavior modified)
+- P2: PASS (explicit numeric assertions for adaptive thresholds and bounds)
+
+Verdict: APPROVED
+
+Commit:
+- pending checkpoint commit
+
+Residual risk:
+- None. No behavioral changes made, only test strengthening.
+
+Rollback:
+- Revert test file additions (no source files were modified)
 ```
 
 ---
@@ -413,7 +440,7 @@ TODO
 - IWP-02: `86cce391`
 - IWP-03: `bb4844a6`
 - IWP-04: `6b8bccd8`
-- IWP-05: TODO
+- IWP-05: `b343fcb8`
 - IWP-06: TODO
 - IWP-07: TODO
 

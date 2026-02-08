@@ -34,7 +34,7 @@ vi.mock('@/stores/websocket-global', () => ({
   }),
 }));
 
-const makeHost = (): Resource => ({
+const makeHost = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'node-1',
   type: 'node',
   name: 'node-1',
@@ -44,25 +44,29 @@ const makeHost = (): Resource => ({
   sourceType: 'api',
   status: 'online',
   lastSeen: Date.now(),
+  ...overrides,
 });
 
-const makeChartsResponse = () => ({
-  nodeData: {
-    'node-1': {
+const makeChartsResponse = (ids: string[] = ['node-1']) => ({
+  nodeData: Object.fromEntries(
+    ids.map((id, index) => [
+      id,
+      {
       cpu: [
-        { timestamp: Date.now() - 60_000, value: 10 },
-        { timestamp: Date.now(), value: 15 },
+        { timestamp: Date.now() - 60_000, value: 10 + index },
+        { timestamp: Date.now(), value: 15 + index },
       ],
       memory: [
-        { timestamp: Date.now() - 60_000, value: 45 },
-        { timestamp: Date.now(), value: 50 },
+        { timestamp: Date.now() - 60_000, value: 45 + index },
+        { timestamp: Date.now(), value: 50 + index },
       ],
       disk: [
-        { timestamp: Date.now() - 60_000, value: 30 },
-        { timestamp: Date.now(), value: 35 },
+        { timestamp: Date.now() - 60_000, value: 30 + index },
+        { timestamp: Date.now(), value: 35 + index },
       ],
-    },
-  },
+      },
+    ]),
+  ),
   dockerHostData: {},
   hostData: {},
   timestamp: Date.now(),
@@ -70,6 +74,9 @@ const makeChartsResponse = () => ({
     oldestDataTimestamp: Date.now() - 60_000,
   },
 });
+
+const countSparklinePaths = (container: HTMLElement): number =>
+  container.querySelectorAll('path[vector-effect="non-scaling-stroke"]').length;
 
 describe('InfrastructureSummary range behavior', () => {
   beforeEach(() => {
@@ -95,6 +102,33 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledWith('24h');
+    });
+  });
+
+  it('deduplicates concurrent summary fetches across component instances', async () => {
+    let resolveFetch: ((value: ReturnType<typeof makeChartsResponse>) => void) | undefined;
+    const pending = new Promise<ReturnType<typeof makeChartsResponse>>((resolve) => {
+      resolveFetch = resolve;
+    });
+    mockGetCharts.mockReset();
+    mockGetCharts.mockImplementation(() => pending);
+
+    render(() => (
+      <>
+        <InfrastructureSummary hosts={[makeHost()]} timeRange="1h" />
+        <InfrastructureSummary hosts={[makeHost()]} timeRange="1h" />
+      </>
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledTimes(1);
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    resolveFetch?.(makeChartsResponse());
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -329,6 +363,79 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
+    });
+  });
+
+  it('keeps per-chart rendered series bounded to the focused host', async () => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockResolvedValueOnce(makeChartsResponse(['node-1', 'node-2']));
+    const hosts = [
+      makeHost(),
+      makeHost({
+        id: 'node-2',
+        name: 'node-2',
+        displayName: 'node-2',
+        platformId: 'node-2',
+      }),
+    ];
+    const [focusedHostId, setFocusedHostId] = createSignal<string | null>(null);
+
+    const { container } = render(() => (
+      <InfrastructureSummary
+        hosts={hosts}
+        timeRange="1h"
+        focusedHostId={focusedHostId()}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(countSparklinePaths(container)).toBeGreaterThan(0);
+    });
+
+    const allSeriesPathCount = countSparklinePaths(container);
+    setFocusedHostId('node-2');
+
+    await waitFor(() => {
+      expect(countSparklinePaths(container)).toBeGreaterThan(0);
+      expect(countSparklinePaths(container)).toBeLessThan(allSeriesPathCount);
+    });
+  });
+
+  it('does not refetch charts on large host list growth for the same range', async () => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockResolvedValue(makeChartsResponse(['node-1']));
+
+    const [hosts, setHosts] = createSignal<Resource[]>(
+      Array.from({ length: 300 }, (_, i) =>
+        makeHost({
+          id: `node-${i}`,
+          name: `node-${i}`,
+          displayName: `node-${i}`,
+          platformId: `node-${i}`,
+        }),
+      ),
+    );
+
+    render(() => <InfrastructureSummary hosts={hosts()} timeRange="1h" />);
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledTimes(1);
+    });
+
+    setHosts(
+      Array.from({ length: 1200 }, (_, i) =>
+        makeHost({
+          id: `node-updated-${i}`,
+          name: `node-updated-${i}`,
+          displayName: `node-updated-${i}`,
+          platformId: `node-updated-${i}`,
+        }),
+      ),
+    );
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledTimes(1);
     });
   });
 

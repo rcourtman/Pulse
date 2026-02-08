@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TimeRange } from '@/api/charts';
+import type { ChartData, TimeRange } from '@/api/charts';
 import {
   __resetInfrastructureSummaryFetchesForTests,
   extractInfrastructureSummaryChartMapFromInfrastructureResponse,
   fetchInfrastructureSummaryAndCache,
+  persistInfrastructureSummaryCache,
   readInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
 
@@ -44,6 +45,14 @@ const makeResponse = () => ({
     oldestDataTimestamp: Date.now() - 30_000,
   },
 });
+
+const makeMetricSeries = (count: number, start = Date.now() - count * 30_000) =>
+  Array.from({ length: count }, (_, i) => ({
+    timestamp: start + i * 30_000,
+    value: i % 100,
+  }));
+
+const cacheKeyForRange = (range: TimeRange) => `pulse.infrastructureSummaryCharts.${range}`;
 
 describe('infrastructureSummaryCache fetch dedupe', () => {
   beforeEach(() => {
@@ -127,5 +136,117 @@ describe('infrastructureSummaryCache fetch dedupe', () => {
     expect(merged?.cpu?.length).toBe(2);
     expect(merged?.netin?.length).toBe(2);
     expect(merged?.netout?.length).toBe(2);
+  });
+});
+
+describe('infrastructureSummaryCache persistence', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('returns cache miss before persist and cache hit after persist', () => {
+    expect(readInfrastructureSummaryCache('1h')).toBeNull();
+
+    const now = Date.now();
+    persistInfrastructureSummaryCache(
+      '1h',
+      new Map([
+        [
+          'node-1',
+          {
+            cpu: makeMetricSeries(2, now - 60_000),
+            memory: makeMetricSeries(2, now - 60_000),
+            disk: makeMetricSeries(2, now - 60_000),
+            netin: makeMetricSeries(2, now - 60_000),
+            netout: makeMetricSeries(2, now - 60_000),
+          },
+        ],
+      ]),
+      now - 60_000,
+    );
+
+    const cached = readInfrastructureSummaryCache('1h');
+    expect(cached).not.toBeNull();
+    expect(cached?.map.size).toBe(1);
+    expect(cached?.map.get('node-1')?.cpu?.length).toBe(2);
+  });
+
+  it('evicts stale cache entries when ttl has expired', () => {
+    vi.useFakeTimers();
+    try {
+      const start = new Date('2026-01-01T00:00:00.000Z');
+      vi.setSystemTime(start);
+
+      persistInfrastructureSummaryCache(
+        '1h',
+        new Map([
+          [
+            'node-1',
+            {
+              cpu: makeMetricSeries(2, start.getTime() - 60_000),
+              memory: makeMetricSeries(2, start.getTime() - 60_000),
+              disk: makeMetricSeries(2, start.getTime() - 60_000),
+              netin: makeMetricSeries(2, start.getTime() - 60_000),
+              netout: makeMetricSeries(2, start.getTime() - 60_000),
+            },
+          ],
+        ]),
+        start.getTime() - 60_000,
+      );
+
+      vi.setSystemTime(new Date('2026-01-01T00:06:01.000Z'));
+      expect(readInfrastructureSummaryCache('1h')).toBeNull();
+      expect(localStorage.getItem(cacheKeyForRange('1h'))).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('trims cached metric series to bounded point counts', () => {
+    const sourceSeries = makeMetricSeries(1200);
+    persistInfrastructureSummaryCache(
+      '1h',
+      new Map([
+        [
+          'node-1',
+          {
+            cpu: sourceSeries,
+            memory: sourceSeries,
+            disk: sourceSeries,
+            netin: sourceSeries,
+            netout: sourceSeries,
+          },
+        ],
+      ]),
+      null,
+    );
+
+    const cached = readInfrastructureSummaryCache('1h');
+    const series = cached?.map.get('node-1');
+    expect(series).toBeDefined();
+    expect(series?.cpu?.length).toBeLessThanOrEqual(360);
+    expect(series?.memory?.length).toBeLessThanOrEqual(360);
+    expect(series?.disk?.length).toBeLessThanOrEqual(360);
+    expect(series?.netin?.length).toBeLessThanOrEqual(360);
+    expect(series?.netout?.length).toBeLessThanOrEqual(360);
+    const cachedCpu = series?.cpu ?? [];
+    expect(cachedCpu[cachedCpu.length - 1]?.timestamp).toBe(sourceSeries[sourceSeries.length - 1]?.timestamp);
+  });
+
+  it('drops oversized cache payloads to keep storage bounded', () => {
+    const denseSeries = makeMetricSeries(360);
+    const oversizedMap = new Map<string, ChartData>();
+    for (let i = 0; i < 40; i++) {
+      oversizedMap.set(`node-${i}`, {
+        cpu: denseSeries,
+        memory: denseSeries,
+        disk: denseSeries,
+        netin: denseSeries,
+        netout: denseSeries,
+      });
+    }
+
+    persistInfrastructureSummaryCache('1h', oversizedMap, null);
+    expect(localStorage.getItem(cacheKeyForRange('1h'))).toBeNull();
   });
 });
