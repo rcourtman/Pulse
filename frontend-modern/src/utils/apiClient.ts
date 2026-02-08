@@ -5,6 +5,9 @@ import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const AUTH_STORAGE_KEY = STORAGE_KEYS.AUTH;
+const ORG_STORAGE_KEY = STORAGE_KEYS.ORG_ID;
+const ORG_HEADER_NAME = 'X-Pulse-Org-ID';
+const ORG_COOKIE_NAME = 'pulse_org_id';
 
 const getSessionStorage = (): Storage | undefined => {
   if (typeof window === 'undefined') {
@@ -20,15 +23,18 @@ const getSessionStorage = (): Storage | undefined => {
 interface FetchOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>;
   skipAuth?: boolean;
+  skipOrgContext?: boolean;
 }
 
 class ApiClient {
   private apiToken: string | null = null;
   private csrfToken: string | null = null;
+  private orgID: string | null = null;
 
   constructor() {
     // Check session storage for existing auth on page load
     this.loadStoredAuth();
+    this.loadStoredOrgContext();
     // Load CSRF token from cookie
     this.loadCSRFToken();
   }
@@ -119,6 +125,83 @@ class ApiClient {
     }
   }
 
+  private loadStoredOrgContext() {
+    const storage = getSessionStorage();
+    if (!storage) return;
+
+    try {
+      const stored = storage.getItem(ORG_STORAGE_KEY);
+      if (stored && stored.trim() !== '') {
+        this.orgID = stored.trim();
+      } else {
+        this.orgID = null;
+      }
+      this.syncOrgCookie(this.orgID);
+    } catch {
+      this.orgID = null;
+    }
+  }
+
+  private syncOrgCookie(orgID: string | null) {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    if (!orgID) {
+      document.cookie = `${ORG_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+      return;
+    }
+
+    const secureSuffix =
+      typeof window !== 'undefined' && window.location?.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${ORG_COOKIE_NAME}=${encodeURIComponent(orgID)}; Path=/; SameSite=Lax${secureSuffix}`;
+  }
+
+  private persistOrgContext(orgID: string | null) {
+    const storage = getSessionStorage();
+
+    if (storage) {
+      try {
+        if (orgID) {
+          storage.setItem(ORG_STORAGE_KEY, orgID);
+        } else {
+          storage.removeItem(ORG_STORAGE_KEY);
+        }
+      } catch {
+        // Ignore storage errors
+      }
+    }
+
+    this.syncOrgCookie(orgID);
+  }
+
+  setOrgID(orgID: string | null) {
+    const normalized = orgID?.trim() || null;
+    this.orgID = normalized;
+    this.persistOrgContext(normalized);
+  }
+
+  getOrgID(): string | null {
+    if (this.orgID && this.orgID.trim() !== '') {
+      return this.orgID;
+    }
+
+    const storage = getSessionStorage();
+    if (!storage) {
+      return null;
+    }
+    try {
+      const stored = storage.getItem(ORG_STORAGE_KEY);
+      if (stored && stored.trim() !== '') {
+        this.orgID = stored.trim();
+        return this.orgID;
+      }
+    } catch {
+      // Ignore storage errors
+    }
+    return null;
+  }
+
   // Set API token
   setApiToken(token: string) {
     this.apiToken = token;
@@ -163,7 +246,9 @@ class ApiClient {
   // Clear all authentication
   clearAuth() {
     this.apiToken = null;
+    this.orgID = null;
     this.removeStoredToken();
+    this.persistOrgContext(null);
 
     const storage = getSessionStorage();
     if (!storage) return;
@@ -222,7 +307,7 @@ class ApiClient {
 
   // Main fetch wrapper that adds authentication
   async fetch(url: string, options: FetchOptions = {}): Promise<Response> {
-    const { skipAuth = false, headers = {}, ...fetchOptions } = options;
+    const { skipAuth = false, skipOrgContext = false, headers = {}, ...fetchOptions } = options;
 
     // Build headers object
     const finalHeaders: Record<string, string> = { ...headers };
@@ -232,6 +317,17 @@ class ApiClient {
       finalHeaders['X-Requested-With'] = 'XMLHttpRequest';
       if (!finalHeaders['Accept']) {
         finalHeaders['Accept'] = 'application/json';
+      }
+
+      if (skipOrgContext) {
+        if (!finalHeaders[ORG_HEADER_NAME]) {
+          finalHeaders[ORG_HEADER_NAME] = 'default';
+        }
+      } else if (!finalHeaders[ORG_HEADER_NAME]) {
+        const orgID = this.getOrgID();
+        if (orgID) {
+          finalHeaders[ORG_HEADER_NAME] = orgID;
+        }
       }
     }
 
@@ -264,6 +360,35 @@ class ApiClient {
     };
 
     const response = await fetch(url, finalOptions);
+
+    // Handle stale/invalid org context by clearing it and retrying once against default org.
+    if (
+      response.status === 400 &&
+      !skipOrgContext &&
+      url.startsWith('/api/') &&
+      finalHeaders[ORG_HEADER_NAME] &&
+      finalHeaders[ORG_HEADER_NAME] !== 'default'
+    ) {
+      const text = await response.clone().text();
+      let isInvalidOrg = false;
+      try {
+        const parsed = JSON.parse(text);
+        isInvalidOrg = parsed?.error === 'invalid_org';
+      } catch {
+        isInvalidOrg = false;
+      }
+
+      if (isInvalidOrg) {
+        this.setOrgID(null);
+        const retryHeaders: Record<string, string> = { ...finalHeaders };
+        delete retryHeaders[ORG_HEADER_NAME];
+        return fetch(url, {
+          ...fetchOptions,
+          headers: retryHeaders,
+          credentials: 'include',
+        });
+      }
+    }
 
     // If we get a 401 on an API call (not during initial auth check), redirect to login
     // Skip redirect for specific auth-check endpoints and background data fetching to avoid loops
@@ -405,3 +530,5 @@ export const getApiToken = () => apiClient.getApiToken();
 export const clearAuth = () => apiClient.clearAuth();
 export const clearApiToken = () => apiClient.clearApiToken();
 export const hasAuth = () => apiClient.hasAuth();
+export const setOrgID = (orgID: string | null) => apiClient.setOrgID(orgID);
+export const getOrgID = () => apiClient.getOrgID();

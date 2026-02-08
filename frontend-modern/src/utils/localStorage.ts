@@ -97,6 +97,7 @@ export const STORAGE_KEYS = {
   // Authentication
   AUTH: 'pulse_auth',
   LEGACY_TOKEN: 'pulse_api_token',
+  ORG_ID: 'pulse_org_id',
   SETUP_CREDENTIALS: 'pulse_setup_credentials',
 
   // UI preferences
@@ -155,6 +156,8 @@ export const STORAGE_KEYS = {
   WHATS_NEW_NAV_V2_SHOWN: 'pulse_whats_new_v2_shown',
   DEBUG_MODE: 'pulse_debug_mode',
   STORAGE_BACKUPS_V2_ENABLED: 'pulse-storage-backups-v2-enabled',
+  STORAGE_V2_ROLLBACK: 'pulse-storage-v2-rollback',
+  BACKUPS_V2_ROLLBACK: 'pulse-backups-v2-rollback',
 
   // GitHub star prompt
   GITHUB_STAR_DISMISSED: 'pulse-github-star-dismissed',
