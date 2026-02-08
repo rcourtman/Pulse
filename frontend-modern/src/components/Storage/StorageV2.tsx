@@ -10,18 +10,30 @@ import { buildStorageRecordsV2 } from '@/features/storageBackupsV2/storageAdapte
 import {
   getCephHealthLabel,
   getCephHealthStyles,
-  isCephType,
 } from '@/features/storageBackupsV2/storageDomain';
 import { PLATFORM_BLUEPRINTS } from '@/features/storageBackupsV2/platformBlueprint';
-import type { NormalizedHealth, StorageRecordV2 } from '@/features/storageBackupsV2/models';
+import type { NormalizedHealth } from '@/features/storageBackupsV2/models';
 import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
 import {
   STORAGE_V2_PATH,
   buildStorageV2Path,
 } from '@/routing/resourceLinks';
-import type { CephCluster, ZFSPool } from '@/types/api';
 import { formatBytes, formatPercent } from '@/utils/format';
 import { useStorageRouteState } from './useStorageRouteState';
+import { getCephClusterKeyFromRecord, isCephRecord, useStorageV2CephModel } from './useStorageV2CephModel';
+import {
+  type StorageGroupKey,
+  type StorageSortKey,
+  getRecordContent,
+  getRecordNodeLabel,
+  getRecordShared,
+  getRecordStatus,
+  getRecordType,
+  getRecordUsagePercent,
+  getRecordZfsPool,
+  sourceLabel,
+  useStorageV2Model,
+} from './useStorageV2Model';
 
 const HEALTH_CLASS: Record<NormalizedHealth, string> = {
   healthy: 'text-green-700 dark:text-green-300',
@@ -32,8 +44,6 @@ const HEALTH_CLASS: Record<NormalizedHealth, string> = {
 };
 
 type StorageV2View = 'pools' | 'disks';
-type StorageSortKey = 'name' | 'usage' | 'type';
-type StorageGroupKey = 'node' | 'type' | 'status';
 
 const STORAGE_SORT_OPTIONS: Array<{ value: StorageSortKey; label: string }> = [
   { value: 'name', label: 'Name' },
@@ -46,88 +56,6 @@ const STORAGE_GROUP_OPTIONS: Array<{ value: StorageGroupKey; label: string }> = 
   { value: 'type', label: 'Type' },
   { value: 'status', label: 'Status' },
 ];
-
-const getRecordDetails = (record: StorageRecordV2): Record<string, unknown> =>
-  (record.details || {}) as Record<string, unknown>;
-
-const getRecordStringDetail = (record: StorageRecordV2, key: string): string => {
-  const value = getRecordDetails(record)[key];
-  return typeof value === 'string' ? value : '';
-};
-
-const sourceLabel = (value: string): string =>
-  value
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
-const getRecordNodeHints = (record: StorageRecordV2): string[] => {
-  const details = getRecordDetails(record);
-  const detailNode = typeof details.node === 'string' ? details.node : '';
-  const detailParent = typeof details.parentId === 'string' ? details.parentId : '';
-  const locationRoot = record.location.label.split('/')[0]?.trim() || '';
-  return [detailNode, detailParent, locationRoot, record.location.label]
-    .map((value) => value.toLowerCase().trim())
-    .filter((value) => value.length > 0);
-};
-
-const getRecordType = (record: StorageRecordV2): string =>
-  getRecordStringDetail(record, 'type') || record.category || 'other';
-
-const getRecordContent = (record: StorageRecordV2): string => getRecordStringDetail(record, 'content');
-
-const getRecordStatus = (record: StorageRecordV2): string => {
-  const status = getRecordStringDetail(record, 'status');
-  if (status) return status;
-  if (record.health === 'healthy') return 'available';
-  if (record.health === 'warning') return 'degraded';
-  if (record.health === 'offline') return 'offline';
-  if (record.health === 'critical') return 'critical';
-  return 'unknown';
-};
-
-const getRecordShared = (record: StorageRecordV2): boolean | null => {
-  const shared = getRecordDetails(record).shared;
-  return typeof shared === 'boolean' ? shared : null;
-};
-
-const getRecordNodeLabel = (record: StorageRecordV2): string => {
-  const node = getRecordStringDetail(record, 'node');
-  if (node.trim()) return node;
-  return record.location.label || 'unassigned';
-};
-
-const getRecordUsagePercent = (record: StorageRecordV2): number => {
-  if (typeof record.capacity.usagePercent === 'number' && Number.isFinite(record.capacity.usagePercent)) {
-    return record.capacity.usagePercent;
-  }
-  const total = record.capacity.totalBytes || 0;
-  const used = record.capacity.usedBytes || 0;
-  if (total <= 0) return 0;
-  return (used / total) * 100;
-};
-
-const toZfsPool = (value: unknown): ZFSPool | null => {
-  if (!value || typeof value !== 'object') return null;
-  const candidate = value as Partial<ZFSPool>;
-  if (typeof candidate.state !== 'string' || !Array.isArray(candidate.devices)) return null;
-  return candidate as ZFSPool;
-};
-
-const getRecordZfsPool = (record: StorageRecordV2): ZFSPool | null =>
-  toZfsPool(getRecordDetails(record).zfsPool);
-
-const isCephRecord = (record: StorageRecordV2): boolean => {
-  if (isCephType(getRecordType(record))) return true;
-  return record.capabilities.includes('replication') && record.source.platform.includes('proxmox');
-};
-
-const getCephClusterKeyFromRecord = (record: StorageRecordV2): string => {
-  const details = getRecordDetails(record);
-  const parent = typeof details.parentId === 'string' ? details.parentId : '';
-  return record.refs?.platformEntityId || parent || record.location.label || record.source.platform;
-};
 
 const normalizeHealthFilter = (value: string): 'all' | NormalizedHealth => {
   const normalized = (value || '').trim().toLowerCase();
@@ -176,269 +104,29 @@ const StorageV2: Component = () => {
     return unifiedResources.length > 0 ? unifiedResources : (state.resources || []);
   });
 
-  const records = createMemo<StorageRecordV2[]>(() =>
-    buildStorageRecordsV2({ state, resources: adapterResources() }),
-  );
-
-  const sourceOptions = createMemo(() => {
-    const values = Array.from(new Set(records().map((record) => record.source.platform))).sort((a, b) =>
-      sourceLabel(a).localeCompare(sourceLabel(b)),
-    );
-    return ['all', ...values];
-  });
+  const records = createMemo(() => buildStorageRecordsV2({ state, resources: adapterResources() }));
 
   const nodeOptions = createMemo(() => {
     const nodes = state.nodes || [];
     return nodes.map((node) => ({ id: node.id, label: node.name, instance: node.instance }));
   });
 
-  const selectedNode = createMemo(() => {
-    if (selectedNodeId() === 'all') return null;
-    return nodeOptions().find((node) => node.id === selectedNodeId()) || null;
+  const { sourceOptions, selectedNode, filteredRecords, groupedRecords, summary } = useStorageV2Model({
+    records,
+    search,
+    sourceFilter,
+    healthFilter,
+    selectedNodeId,
+    nodeOptions,
+    sortKey,
+    sortDirection,
+    groupBy,
   });
 
-  const matchesSelectedNode = (record: StorageRecordV2): boolean => {
-    const node = selectedNode();
-    if (!node) return true;
-    const nodeName = node.label.toLowerCase().trim();
-    const nodeInstance = (node.instance || '').toLowerCase().trim();
-    const hints = getRecordNodeHints(record);
-    return hints.some((hint) => hint.includes(nodeName) || (nodeInstance && hint.includes(nodeInstance)));
-  };
-
-  const filtered = createMemo(() => {
-    const query = search().trim().toLowerCase();
-    return records()
-      .filter((record) => (sourceFilter() === 'all' ? true : record.source.platform === sourceFilter()))
-      .filter((record) => (healthFilter() === 'all' ? true : record.health === healthFilter()))
-      .filter((record) => matchesSelectedNode(record))
-      .filter((record) => {
-        if (!query) return true;
-        const haystack = [
-          record.name,
-          record.category,
-          record.location.label,
-          record.source.platform,
-          getRecordType(record),
-          getRecordContent(record),
-          getRecordStatus(record),
-          ...(record.capabilities || []),
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return haystack.includes(query);
-      });
+  const { cephSummaryStats, resolveCephCluster, getCephSummaryText, getCephPoolsText } = useStorageV2CephModel({
+    records,
+    cephClusters: () => state.cephClusters,
   });
-
-  const sorted = createMemo(() => {
-    const numericCompare = (a: number, b: number): number => {
-      if (a === b) return 0;
-      return a < b ? -1 : 1;
-    };
-
-    return [...filtered()].sort((a, b) => {
-      let comparison = 0;
-
-      if (sortKey() === 'usage') {
-        comparison = numericCompare(getRecordUsagePercent(a), getRecordUsagePercent(b));
-      } else if (sortKey() === 'type') {
-        comparison = getRecordType(a).localeCompare(getRecordType(b), undefined, {
-          sensitivity: 'base',
-        });
-      } else {
-        comparison = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      }
-
-      if (comparison === 0) {
-        comparison = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      }
-
-      return sortDirection() === 'asc' ? comparison : -comparison;
-    });
-  });
-
-  const grouped = createMemo(() => {
-    const groups = new Map<string, StorageRecordV2[]>();
-
-    for (const record of sorted()) {
-      const key =
-        groupBy() === 'type'
-          ? getRecordType(record)
-          : groupBy() === 'status'
-            ? getRecordStatus(record)
-            : getRecordNodeLabel(record);
-      const normalized = key.trim() || 'unknown';
-      if (!groups.has(normalized)) groups.set(normalized, []);
-      groups.get(normalized)!.push(record);
-    }
-
-    return Array.from(groups.entries())
-      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB, undefined, { sensitivity: 'base' }))
-      .map(([key, items]) => ({ key, items }));
-  });
-
-  const summary = createMemo(() => {
-    const list = filtered();
-    const totals = list.reduce(
-      (acc, record) => {
-        const total = record.capacity.totalBytes || 0;
-        const used = record.capacity.usedBytes || 0;
-        acc.total += total;
-        acc.used += used;
-        acc.byHealth[record.health] = (acc.byHealth[record.health] || 0) + 1;
-        return acc;
-      },
-      {
-        total: 0,
-        used: 0,
-        byHealth: {
-          healthy: 0,
-          warning: 0,
-          critical: 0,
-          offline: 0,
-          unknown: 0,
-        } as Record<NormalizedHealth, number>,
-      },
-    );
-    const usagePercent = totals.total > 0 ? (totals.used / totals.total) * 100 : 0;
-    return {
-      count: list.length,
-      totalBytes: totals.total,
-      usedBytes: totals.used,
-      usagePercent,
-      byHealth: totals.byHealth,
-    };
-  });
-
-  const visibleCephClusters = createMemo<CephCluster[]>(() => {
-    const explicit = state.cephClusters || [];
-    if (explicit.length > 0) return explicit;
-
-    const summaryByKey = new Map<
-      string,
-      { total: number; used: number; available: number; records: number; nodes: Set<string> }
-    >();
-
-    records().forEach((record) => {
-      if (!isCephRecord(record)) return;
-      const key = getCephClusterKeyFromRecord(record);
-      const current =
-        summaryByKey.get(key) ||
-        ({ total: 0, used: 0, available: 0, records: 0, nodes: new Set<string>() } as const);
-      const totalBytes = Math.max(0, record.capacity.totalBytes || 0);
-      const usedBytes = Math.max(0, record.capacity.usedBytes || 0);
-      const freeBytes = Math.max(0, record.capacity.freeBytes ?? totalBytes - usedBytes);
-
-      summaryByKey.set(key, {
-        total: current.total + totalBytes,
-        used: current.used + usedBytes,
-        available: current.available + freeBytes,
-        records: current.records + 1,
-        nodes: new Set([...current.nodes, getRecordNodeLabel(record)]),
-      });
-    });
-
-    return Array.from(summaryByKey.entries()).map(([instance, item], index) => {
-      const usagePercent = item.total > 0 ? (item.used / item.total) * 100 : 0;
-      const numOsds = Math.max(1, item.records * 2);
-      const numMons = Math.min(3, Math.max(1, item.nodes.size));
-      return {
-        id: `derived-ceph-${index}`,
-        instance,
-        name: `${instance} Ceph`,
-        health: 'HEALTH_UNKNOWN',
-        healthMessage: 'Derived from storage metrics - live Ceph telemetry unavailable.',
-        totalBytes: item.total,
-        usedBytes: item.used,
-        availableBytes: item.available,
-        usagePercent,
-        numMons,
-        numMgrs: numMons > 1 ? 2 : 1,
-        numOsds,
-        numOsdsUp: numOsds,
-        numOsdsIn: numOsds,
-        numPGs: Math.max(128, item.records * 64),
-        pools: undefined,
-        services: undefined,
-        lastUpdated: Date.now(),
-      } as CephCluster;
-    });
-  });
-
-  const cephClusterByKey = createMemo<Record<string, CephCluster>>(() => {
-    const map: Record<string, CephCluster> = {};
-    visibleCephClusters().forEach((cluster) => {
-      [cluster.instance, cluster.id, cluster.name].forEach((key) => {
-        if (key) map[key] = cluster;
-      });
-    });
-    return map;
-  });
-
-  const cephSummaryStats = createMemo(() => {
-    const clusters = visibleCephClusters();
-    const totals = clusters.reduce(
-      (acc, cluster) => {
-        acc.total += Math.max(0, cluster.totalBytes || 0);
-        acc.used += Math.max(0, cluster.usedBytes || 0);
-        acc.available += Math.max(0, cluster.availableBytes || 0);
-        return acc;
-      },
-      { total: 0, used: 0, available: 0 },
-    );
-    const usagePercent = totals.total > 0 ? (totals.used / totals.total) * 100 : 0;
-    return {
-      clusters,
-      totalBytes: totals.total,
-      usedBytes: totals.used,
-      availableBytes: totals.available,
-      usagePercent,
-    };
-  });
-
-  const resolveCephCluster = (record: StorageRecordV2): CephCluster | null => {
-    const key = getCephClusterKeyFromRecord(record);
-    return cephClusterByKey()[key] || null;
-  };
-
-  const getCephSummaryText = (record: StorageRecordV2, cluster: CephCluster | null): string => {
-    if (cluster && Number.isFinite(cluster.totalBytes)) {
-      const total = Math.max(0, cluster.totalBytes || 0);
-      const used = Math.max(0, cluster.usedBytes || 0);
-      const percent = total > 0 ? (used / total) * 100 : 0;
-      const parts = [`${formatBytes(used)} / ${formatBytes(total)} (${formatPercent(percent)})`];
-      if (Number.isFinite(cluster.numOsds) && Number.isFinite(cluster.numOsdsUp)) {
-        parts.push(`OSDs ${cluster.numOsdsUp}/${cluster.numOsds}`);
-      }
-      if (Number.isFinite(cluster.numPGs) && cluster.numPGs > 0) {
-        parts.push(`PGs ${cluster.numPGs.toLocaleString()}`);
-      }
-      return parts.join(' • ');
-    }
-
-    const total = Math.max(0, record.capacity.totalBytes || 0);
-    const used = Math.max(0, record.capacity.usedBytes || 0);
-    if (total <= 0) return '';
-    const percent = (used / total) * 100;
-    return `${formatBytes(used)} / ${formatBytes(total)} (${formatPercent(percent)})`;
-  };
-
-  const getCephPoolsText = (record: StorageRecordV2, cluster: CephCluster | null): string => {
-    if (cluster?.pools?.length) {
-      return cluster.pools
-        .slice(0, 2)
-        .map((pool) => {
-          const total = Math.max(1, pool.storedBytes + pool.availableBytes);
-          const percent = (pool.storedBytes / total) * 100;
-          return `${pool.name}: ${formatPercent(percent)}`;
-        })
-        .join(', ');
-    }
-
-    const percent = getRecordUsagePercent(record);
-    return `${record.name}: ${formatPercent(percent)}`;
-  };
 
   const nextPlatforms = createMemo(() =>
     PLATFORM_BLUEPRINTS.filter((platform) => platform.stage === 'next').map((platform) => platform.label),
@@ -447,13 +135,13 @@ const StorageV2: Component = () => {
   const isWaitingForData = createMemo(
     () =>
       storageBackupsResources.loading() &&
-      filtered().length === 0 &&
+      filteredRecords().length === 0 &&
       !connected() &&
       !initialDataReceived(),
   );
   const isDisconnectedAfterLoad = createMemo(() => !connected() && initialDataReceived() && !reconnecting());
   const isLoadingPools = createMemo(
-    () => storageBackupsResources.loading() && view() === 'pools' && filtered().length === 0,
+    () => storageBackupsResources.loading() && view() === 'pools' && filteredRecords().length === 0,
   );
   const hasV2FetchError = createMemo(() => Boolean(storageBackupsResources.error()));
 
@@ -568,7 +256,13 @@ const StorageV2: Component = () => {
         </div>
       </Card>
 
-      <Show when={view() === 'pools' && cephSummaryStats().clusters.length > 0 && filtered().some(isCephRecord)}>
+      <Show
+        when={
+          view() === 'pools' &&
+          cephSummaryStats().clusters.length > 0 &&
+          filteredRecords().some(isCephRecord)
+        }
+      >
         <Card padding="md" tone="glass">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="space-y-0.5">
@@ -787,7 +481,7 @@ const StorageV2: Component = () => {
             when={isLoadingPools()}
             fallback={
               <Show
-                when={grouped().length > 0}
+                when={groupedRecords().length > 0}
                 fallback={
                   <div class="p-6 text-sm text-gray-600 dark:text-gray-300">
                     No storage records match the current filters.
@@ -813,7 +507,7 @@ const StorageV2: Component = () => {
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                      <For each={grouped()}>
+                      <For each={groupedRecords()}>
                         {(group) => (
                           <>
                             <tr class="bg-gray-50 dark:bg-gray-900/40">
