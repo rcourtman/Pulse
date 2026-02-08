@@ -115,6 +115,69 @@ let cachedV2Workloads: WorkloadGuest[] = [];
 let cachedV2WorkloadsAt = 0;
 let sharedFetchV2Workloads: Promise<WorkloadGuest[]> | null = null;
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype;
+
+const isDeepEqual = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) {
+    return true;
+  }
+
+  if (typeof left !== typeof right) {
+    return false;
+  }
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+    for (let i = 0; i < left.length; i += 1) {
+      if (!isDeepEqual(left[i], right[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  if (!isPlainObject(left) || !isPlainObject(right)) {
+    return false;
+  }
+
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  for (const key of leftKeys) {
+    if (!Object.prototype.hasOwnProperty.call(right, key) || !isDeepEqual(left[key], right[key])) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const areWorkloadsEqual = (current: WorkloadGuest[], next: WorkloadGuest[]): boolean => {
+  if (current === next) {
+    return true;
+  }
+  if (current.length !== next.length) {
+    return false;
+  }
+  for (let i = 0; i < current.length; i += 1) {
+    const currentWorkload = current[i];
+    const nextWorkload = next[i];
+    if (currentWorkload.id !== nextWorkload.id) {
+      return false;
+    }
+    if (!isDeepEqual(currentWorkload, nextWorkload)) {
+      return false;
+    }
+  }
+  return true;
+};
+
 const normalizeWorkloadStatus = (status?: string | null): string => {
   const normalized = (status || '').trim().toLowerCase();
   if (!normalized) return 'unknown';
@@ -382,7 +445,12 @@ const fetchV2WorkloadsShared = async (force = false): Promise<WorkloadGuest[]> =
   }
 
   const request = (async () => {
+    const previous = cachedV2Workloads;
     const fetched = await fetchV2Workloads();
+    if (areWorkloadsEqual(previous, fetched)) {
+      cachedV2WorkloadsAt = Date.now();
+      return previous;
+    }
     setV2WorkloadsCache(fetched);
     return fetched;
   })();
@@ -418,13 +486,25 @@ export function useV2Workloads(enabled: Accessor<boolean> = () => true) {
     resourceMutate((previous) => {
       const current = previous ?? [];
       const next = typeof value === 'function' ? value(current) : value;
-      setV2WorkloadsCache(next ?? []);
-      return next ?? [];
+      const normalized = next ?? [];
+      if (areWorkloadsEqual(current, normalized)) {
+        setV2WorkloadsCache(current);
+        return current;
+      }
+      setV2WorkloadsCache(normalized);
+      return normalized;
     });
 
   const applyWorkloads = (next: WorkloadGuest[]) => {
-    setV2WorkloadsCache(next);
-    resourceMutate(next);
+    resourceMutate((previous) => {
+      const current = previous ?? [];
+      if (areWorkloadsEqual(current, next)) {
+        setV2WorkloadsCache(current);
+        return current;
+      }
+      setV2WorkloadsCache(next);
+      return next;
+    });
   };
 
   const refetch = async () => {

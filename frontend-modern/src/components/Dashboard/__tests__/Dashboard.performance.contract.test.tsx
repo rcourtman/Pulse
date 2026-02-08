@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@solidjs/testing-library';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 import { Dashboard } from '../Dashboard';
 import {
   filterWorkloads,
@@ -10,6 +11,14 @@ import {
 
 let mockLocationSearch = '';
 let mockV2Workloads: Array<Record<string, unknown>> = [];
+let setMockV2WorkloadsSignal: ((next: Array<Record<string, unknown>>) => void) | null = null;
+let guestRowMountCount = 0;
+let guestRowUnmountCount = 0;
+
+const pushMockV2Workloads = (next: Array<Record<string, unknown>>) => {
+  mockV2Workloads = next;
+  setMockV2WorkloadsSignal?.(next);
+};
 
 vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
@@ -32,7 +41,11 @@ vi.mock('@/App', () => ({
 }));
 
 vi.mock('@/hooks/useV2Workloads', () => ({
-  useV2Workloads: () => ({ workloads: () => mockV2Workloads as any, refetch: vi.fn() }),
+  useV2Workloads: () => {
+    const [workloads, setWorkloads] = createSignal(mockV2Workloads as any);
+    setMockV2WorkloadsSignal = (next) => setWorkloads(next as any);
+    return { workloads, refetch: vi.fn() };
+  },
 }));
 
 vi.mock('@/api/guestMetadata', () => ({
@@ -86,12 +99,20 @@ vi.mock('../GuestRow', () => {
       docker: new Set(['name', 'status']),
       k8s: new Set(['name', 'status']),
     },
-    GuestRow: (props: { guest: { name: string } }) => (
-      <tr data-testid={`guest-row-${props.guest.name}`}>
-        <td>{props.guest.name}</td>
-        <td>running</td>
-      </tr>
-    ),
+    GuestRow: (props: { guest: { name: string } }) => {
+      onMount(() => {
+        guestRowMountCount += 1;
+      });
+      onCleanup(() => {
+        guestRowUnmountCount += 1;
+      });
+      return (
+        <tr data-testid={`guest-row-${props.guest.name}`}>
+          <td>{props.guest.name}</td>
+          <td>running</td>
+        </tr>
+      );
+    },
   };
 });
 
@@ -165,6 +186,9 @@ describe('Dashboard performance contract', () => {
     localStorage.clear();
     mockLocationSearch = '';
     mockV2Workloads = [];
+    setMockV2WorkloadsSignal = null;
+    guestRowMountCount = 0;
+    guestRowUnmountCount = 0;
   });
 
   describe('Fixture profile validation', () => {
@@ -252,6 +276,33 @@ describe('Dashboard performance contract', () => {
       await waitFor(() => {
         expect(getGuestRowCount(container)).toBe(PROFILES.S);
       });
+    });
+
+    it('unchanged poll-like updates do not remount table rows', async () => {
+      mockLocationSearch = '?type=all';
+      const guests = makeGuests(40);
+      mockV2Workloads = guests;
+
+      const { container } = render(() => (
+        <Dashboard vms={[]} containers={[]} nodes={[]} useV2Workloads />
+      ));
+
+      await waitFor(() => {
+        expect(getGuestRowCount(container)).toBe(40);
+      });
+
+      const mountsAfterInitialRender = guestRowMountCount;
+      const unmountsAfterInitialRender = guestRowUnmountCount;
+      expect(mountsAfterInitialRender).toBe(40);
+
+      pushMockV2Workloads(guests.map((guest) => ({ ...guest })));
+
+      await waitFor(() => {
+        expect(getGuestRowCount(container)).toBe(40);
+      });
+
+      expect(guestRowMountCount).toBe(mountsAfterInitialRender);
+      expect(guestRowUnmountCount).toBe(unmountsAfterInitialRender);
     });
   });
 

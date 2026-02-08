@@ -1,4 +1,4 @@
-import { batch, createRoot, createSignal } from 'solid-js';
+import { batch, createEffect, createRoot, createSignal } from 'solid-js';
 import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -106,9 +106,16 @@ describe('useUnifiedResources', () => {
   it('refetches when lastUpdate changes even if resources are reconciled in place', async () => {
     let dispose = () => {};
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    let firstResourceEffectRuns = 0;
     createRoot((d) => {
       dispose = d;
       result = useUnifiedResources();
+      createEffect(() => {
+        const first = result!.resources()[0];
+        if (first) {
+          firstResourceEffectRuns += 1;
+        }
+      });
     });
 
     await flushAsync();
@@ -120,6 +127,7 @@ describe('useUnifiedResources', () => {
       { cache: 'no-store' },
     );
     const originalResourceRef = result!.resources()[0];
+    const effectsAfterInitialFetch = firstResourceEffectRuns;
 
     vi.advanceTimersByTime(800);
     await flushAsync();
@@ -153,6 +161,7 @@ describe('useUnifiedResources', () => {
     await flushAsync();
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
     expect(result!.resources()[0]).toBe(originalResourceRef);
+    expect(firstResourceEffectRuns).toBe(effectsAfterInitialFetch);
     expect(result!.resources()[0].discoveryTarget).toEqual({
       resourceType: 'host',
       hostId: 'host-1',

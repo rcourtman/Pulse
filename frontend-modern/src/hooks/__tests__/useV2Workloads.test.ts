@@ -1,4 +1,4 @@
-import { createRoot, createSignal } from 'solid-js';
+import { createEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type UseV2WorkloadsModule = typeof import('@/hooks/useV2Workloads');
@@ -8,6 +8,7 @@ const sampleResource = {
   type: 'vm',
   name: 'vm-101',
   status: 'running',
+  lastSeen: '2026-02-06T12:00:00Z',
   vmid: 101,
   node: 'pve1',
   instance: 'cluster-a',
@@ -22,6 +23,31 @@ const sampleResource = {
 const flushAsync = async () => {
   await Promise.resolve();
   await Promise.resolve();
+};
+
+const advanceAndFlush = async (ms: number) => {
+  vi.advanceTimersByTime(ms);
+  await flushAsync();
+};
+
+const deferred = <T,>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
+const waitForWorkloadCount = async (getCount: () => number, expectedMin = 1) => {
+  for (let i = 0; i < 20; i += 1) {
+    if (getCount() >= expectedMin) {
+      return;
+    }
+    await flushAsync();
+  }
+  throw new Error(`Timed out waiting for at least ${expectedMin} workloads`);
 };
 
 describe('useV2Workloads', () => {
@@ -82,20 +108,85 @@ describe('useV2Workloads', () => {
     disposeSecond();
   });
 
-  it('continues polling while enabled', async () => {
+  it('handles empty v2 responses without mutating into undefined state', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [],
+      meta: { totalPages: 1 },
+    });
+
     let dispose = () => {};
+    let result: ReturnType<UseV2WorkloadsModule['useV2Workloads']> | undefined;
     createRoot((d) => {
       dispose = d;
       const [enabled] = createSignal(true);
-      useV2Workloads(enabled);
+      result = useV2Workloads(enabled);
     });
 
     await flushAsync();
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+    expect(result!.workloads()).toEqual([]);
 
-    vi.advanceTimersByTime(5_000);
+    dispose();
+  });
+
+  it('keeps workload reference stable when polling returns identical payload', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseV2WorkloadsModule['useV2Workloads']> | undefined;
+    let effectRuns = 0;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useV2Workloads(enabled);
+      createEffect(() => {
+        result!.workloads();
+        effectRuns += 1;
+      });
+    });
+
     await flushAsync();
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+    await waitForWorkloadCount(() => result!.workloads().length);
+    const initialRef = result!.workloads();
+    const initialEffectRuns = effectRuns;
+
+    await advanceAndFlush(5_000);
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+    expect(result!.workloads()).toBe(initialRef);
+    expect(effectRuns).toBe(initialEffectRuns);
+
+    dispose();
+  });
+
+  it('maintains polling cadence under load without overlapping fetch churn', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseV2WorkloadsModule['useV2Workloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useV2Workloads(enabled);
+    });
+
+    await flushAsync();
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+    await waitForWorkloadCount(() => result!.workloads().length);
+
+    const slowPoll = deferred<unknown>();
+    apiFetchJSONMock.mockImplementationOnce(() => slowPoll.promise as Promise<any>);
+
+    await advanceAndFlush(5_000);
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+
+    await advanceAndFlush(10_000);
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+
+    slowPoll.resolve({
+      data: [sampleResource],
+      meta: { totalPages: 1 },
+    });
+    await flushAsync();
+
+    await advanceAndFlush(5_000);
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(3);
 
     dispose();
   });

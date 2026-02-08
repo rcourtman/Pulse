@@ -28,7 +28,7 @@ Date: 2026-02-08
 | IWP-02 | Workloads Derivation Pipeline Extraction | DONE | Codex | Claude | APPROVED | IWP-02 Review Evidence |
 | IWP-03 | Infrastructure Table Windowing and Render Containment | DONE | Codex | Claude | APPROVED | IWP-03 Review Evidence |
 | IWP-04 | Workloads Table Windowing and Grouped Render Containment | DONE | Codex | Claude | APPROVED | IWP-04 Review Evidence |
-| IWP-05 | Polling/Update Backpressure and Recompute Isolation | TODO | Codex | Claude | — | — |
+| IWP-05 | Polling/Update Backpressure and Recompute Isolation | DONE | Codex | Claude | APPROVED | IWP-05 Review Evidence |
 | IWP-06 | Summary Path Hardening | TODO | Codex | Claude | — | — |
 | IWP-07 | Final Performance Certification | TODO | Claude | Claude | — | — |
 
@@ -298,27 +298,55 @@ Rollback:
 
 ## IWP-05 Checklist: Polling/Update Backpressure and Recompute Isolation
 
-- [ ] Poll/update cadence reviewed and hardened for heavy datasets.
-- [ ] Unchanged payload updates avoid avoidable heavy downstream churn.
-- [ ] Hook tests cover cache, polling, coalescing, and freshness semantics.
-- [ ] Dashboard perf contract reflects polling/update behavior expectations.
+- [x] Poll/update cadence reviewed and hardened for heavy datasets.
+- [x] Unchanged payload updates avoid avoidable heavy downstream churn.
+- [x] Hook tests cover cache, polling, coalescing, and freshness semantics.
+- [x] Dashboard perf contract reflects polling/update behavior expectations.
 
 ### Required Tests
 
-- [ ] `cd frontend-modern && npx vitest run src/hooks/__tests__/useV2Workloads.test.ts src/hooks/__tests__/useUnifiedResources.test.ts src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `cd frontend-modern && npx vitest run src/hooks/__tests__/useV2Workloads.test.ts src/hooks/__tests__/useUnifiedResources.test.ts src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx` -> exit 0
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### IWP-05 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `frontend-modern/src/hooks/useV2Workloads.ts`: Added areWorkloadsEqual deep equality gate to prevent signal mutation when poll payload is unchanged (reference stability)
+- `frontend-modern/src/hooks/__tests__/useV2Workloads.test.ts`: Added cache-hit reuse, empty-response, unchanged-payload stability, and polling cadence tests
+- `frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts`: Strengthened unchanged-payload stability assertion
+- `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`: Added polling-update row stability contract
+
+Audit findings:
+- useUnifiedResources already has: cache age 15s, shared in-flight dedup, WS burst coalescing (800ms debounce + 2500ms throttle), reconcile(key:'id') reference stability. No code changes needed.
+- useV2Workloads had: cache age 15s, shared in-flight dedup, 5s poll. Missing: reference stability on unchanged payloads. Fixed with areWorkloadsEqual gate.
+
+Commands run + exit codes:
+1. `cd frontend-modern && npx vitest run ...useV2Workloads.test.ts ...useUnifiedResources.test.ts ...Dashboard.performance.contract.test.tsx` -> exit 0 (25 tests)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+
+Gate checklist:
+- P0: PASS (all tests pass, no polling interval changes, no cache behavior changes)
+- P1: PASS (conservative deep equality gate, poll intervals untouched)
+- P2: PASS (consistent with existing reconcile pattern in useUnifiedResources)
+
+Verdict: APPROVED
+
+Commit:
+- pending checkpoint commit
+
+Residual risk:
+- Deep equality comparison adds O(n) per poll tick; negligible at realistic fleet sizes
+
+Rollback:
+- Revert useV2Workloads.ts areWorkloadsEqual gate, revert test additions
 ```
 
 ---
@@ -384,7 +412,7 @@ TODO
 - IWP-01: `6f9e2cc3`
 - IWP-02: `86cce391`
 - IWP-03: `bb4844a6`
-- IWP-04: TODO
+- IWP-04: `6b8bccd8`
 - IWP-05: TODO
 - IWP-06: TODO
 - IWP-07: TODO
