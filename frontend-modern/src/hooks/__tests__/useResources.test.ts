@@ -825,6 +825,49 @@ describe('Stale legacy-only consumer detection', () => {
         dispose();
     });
 
+    it('useAlertsResources storage prefers unified conversion when unified resources are populated', () => {
+        const legacyStorage = [{
+            id: 'legacy-storage-1',
+            name: 'backup-ds',
+            node: 'legacy-pbs',
+            instance: 'pbs-1',
+            type: 'pbs',
+            status: 'offline',
+            used: 90,
+        }];
+
+        const store = createMockLegacyStore({
+            resources: [
+                createMockResource({
+                    id: 'datastore-unified-1',
+                    type: 'datastore',
+                    name: 'backup-ds',
+                    status: 'running',
+                    disk: { current: 40, total: 100, used: 40, free: 60 },
+                    platformData: {
+                        pbsInstanceId: 'pbs-1',
+                        pbsInstanceName: 'legacy-pbs',
+                        type: 'pbs',
+                    },
+                }),
+            ],
+            storage: legacyStorage,
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAlertsResources(store as any);
+        });
+
+        expect(selectors.storage()).toHaveLength(1);
+        expect(selectors.storage()[0].id).toBe('datastore-unified-1');
+        expect(selectors.storage()[0].status).toBe('available');
+        expect(selectors.storage()[0].used).toBe(40);
+
+        dispose();
+    });
+
     it('useAlertsResources ready signal is false when no nodes available', () => {
         const store = createMockLegacyStore({
             resources: [createMockResource({ id: 'vm-only-1', type: 'vm' })],
