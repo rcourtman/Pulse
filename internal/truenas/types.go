@@ -9,6 +9,7 @@ type FixtureSnapshot struct {
 	Pools       []Pool
 	Datasets    []Dataset
 	Disks       []Disk
+	Alerts      []Alert
 }
 
 // SystemInfo mirrors high-level TrueNAS system identity/status data.
@@ -53,4 +54,14 @@ type Disk struct {
 	SizeBytes  int64
 	Transport  string
 	Rotational bool
+}
+
+// Alert mirrors a TrueNAS alert listing entry.
+type Alert struct {
+	ID        string
+	Level     string
+	Message   string
+	Source    string
+	Dismissed bool
+	Datetime  time.Time
 }

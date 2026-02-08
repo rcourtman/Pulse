@@ -28,7 +28,7 @@ Date: 2026-02-08
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | TN-00 | Scope Freeze + Current-State Audit | DONE | Claude | Claude | APPROVED | TN-00 Review Evidence |
-| TN-01 | TrueNAS REST API Client Scaffold | TODO | Codex | Claude | — | — |
+| TN-01 | TrueNAS REST API Client Scaffold | DONE | Codex | Claude | APPROVED | TN-01 Review Evidence |
 | TN-02 | Configuration Model + Encrypted Persistence | TODO | Codex | Claude | — | — |
 | TN-03 | Setup API Endpoints (Add/Test/Remove) | TODO | Codex | Claude | — | — |
 | TN-04 | Live Provider Upgrade (Fixture -> API Client) | TODO | Codex | Claude | — | — |
@@ -116,28 +116,49 @@ Rollback:
 
 ## TN-01 Checklist: TrueNAS REST API Client Scaffold
 
-- [ ] `Client` struct with HTTP transport, base URL, and API key auth created.
-- [ ] Methods implemented: `GetSystemInfo()`, `GetPools()`, `GetDatasets()`, `GetDisks()`, `GetAlerts()`, `TestConnection()`.
-- [ ] TrueNAS API v2.0 JSON response parsing into existing types.
-- [ ] TLS handling (skip-verify, fingerprint pinning).
-- [ ] Unit tests with HTTP test server mocking TrueNAS responses.
+- [x] `Client` struct with HTTP transport, base URL, and API key auth created.
+- [x] Methods implemented: `GetSystemInfo()`, `GetPools()`, `GetDatasets()`, `GetDisks()`, `GetAlerts()`, `TestConnection()`.
+- [x] TrueNAS API v2.0 JSON response parsing into existing types.
+- [x] TLS handling (skip-verify, fingerprint pinning).
+- [x] Unit tests with HTTP test server mocking TrueNAS responses.
 
 ### Required Tests
 
-- [ ] `go test ./internal/truenas/... -count=1` -> exit 0
-- [ ] `go build ./...` -> exit 0
+- [x] `go test ./internal/truenas/... -count=1` -> exit 0
+- [x] `go build ./...` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### TN-01 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `internal/truenas/client.go` (new): Full HTTP client — NewClient, TestConnection, GetSystemInfo, GetPools, GetDatasets, GetDisks, GetAlerts, FetchSnapshot. TLS pinning, API key bearer + basic auth, configurable timeout, nestedValue parsing for TrueNAS JSON quirks.
+- `internal/truenas/client_test.go` (new): 7 test functions with httptest mock server — all getters, auth headers (API key + basic), TestConnection success/failure, FetchSnapshot assembly, error handling (non-2xx, malformed JSON, connection failure), TLS fingerprint pinning (match + mismatch).
+- `internal/truenas/types.go` (extended): Added Alert type (ID, Level, Message, Source, Dismissed, Datetime) and Alerts []Alert field to FixtureSnapshot.
+
+Commands run + exit codes (reviewer-rerun):
+1. `go test ./internal/truenas/... -count=1 -v` -> exit 0 (10 tests passed: 7 new client + 3 existing contract)
+2. `go build ./...` -> exit 0
+
+Gate checklist:
+- P0: PASS (all 3 files exist with expected edits, both commands rerun by reviewer with exit 0)
+- P1: PASS (all API methods tested with realistic TrueNAS payloads, nestedValue parsing handles parsed/rawvalue fallback, error paths tested for non-2xx/malformed/connection-failure, auth tested API key + basic, TLS pinning tested match + mismatch)
+- P2: PASS (progress tracker updated, packet evidence recorded)
+
+Verdict: APPROVED
+
+Residual risk:
+- System health is hardcoded to `true` in GetSystemInfo since TrueNAS /system/info doesn't return a health field directly. Will be addressed in TN-07 (health enrichment) which can use /system/state or /alert/list to derive health.
+
+Rollback:
+- Delete `internal/truenas/client.go` and `internal/truenas/client_test.go`.
+- Revert types.go to remove Alert type and Alerts field from FixtureSnapshot.
 ```
 
 ---
@@ -430,7 +451,7 @@ TODO
 
 ## Checkpoint Commits
 
-- TN-00: TODO
+- TN-00: `f9680ef8` docs(TN-00): TrueNAS GA lane — scope freeze and current-state audit
 - TN-01: TODO
 - TN-02: TODO
 - TN-03: TODO
@@ -445,4 +466,4 @@ TODO
 
 ## Current Recommended Next Packet
 
-- `TN-01` (TrueNAS REST API Client Scaffold)
+- `TN-02` (Configuration Model + Encrypted Persistence)
