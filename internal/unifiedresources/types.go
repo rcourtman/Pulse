@@ -82,6 +82,7 @@ const (
 	SourcePBS     DataSource = "pbs"
 	SourcePMG     DataSource = "pmg"
 	SourceK8s     DataSource = "kubernetes"
+	SourceTrueNAS DataSource = "truenas"
 )
 
 // SourceStatus describes the freshness of data from a source.

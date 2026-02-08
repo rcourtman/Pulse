@@ -21,6 +21,15 @@ var defaultStaleThresholds = map[DataSource]time.Duration{
 	SourcePBS:     120 * time.Second,
 	SourcePMG:     120 * time.Second,
 	SourceK8s:     120 * time.Second,
+	SourceTrueNAS: 120 * time.Second,
+}
+
+// IngestRecord is a source-native resource entry normalized for registry ingestion.
+type IngestRecord struct {
+	SourceID       string
+	ParentSourceID string
+	Resource       Resource
+	Identity       ResourceIdentity
 }
 
 // ResourceRegistry merges resources from multiple sources.
@@ -50,6 +59,7 @@ func NewRegistry(store ResourceStore) *ResourceRegistry {
 	rr.bySource[SourcePBS] = make(map[string]string)
 	rr.bySource[SourcePMG] = make(map[string]string)
 	rr.bySource[SourceK8s] = make(map[string]string)
+	rr.bySource[SourceTrueNAS] = make(map[string]string)
 
 	rr.loadOverrides()
 	return rr
@@ -95,6 +105,9 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	for _, ct := range snapshot.Containers {
 		rr.ingestContainer(ct)
 	}
+	for _, storage := range snapshot.Storage {
+		rr.ingestStorage(storage)
+	}
 	for _, dh := range snapshot.DockerHosts {
 		for _, dc := range dh.Containers {
 			rr.ingestDockerContainer(dc, dh)
@@ -123,6 +136,25 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	rr.applyManualLinks()
 	rr.buildChildCounts()
 	rr.MarkStale(time.Now().UTC(), nil)
+}
+
+// IngestRecords ingests normalized records for a single source.
+func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRecord) {
+	for _, record := range records {
+		if strings.TrimSpace(record.SourceID) == "" {
+			continue
+		}
+		resource := record.Resource
+		if parentSourceID := strings.TrimSpace(record.ParentSourceID); parentSourceID != "" {
+			parentID := rr.sourceResourceID(source, parentSourceID)
+			if parentID != "" {
+				resource.ParentID = &parentID
+			}
+		}
+		rr.ingest(source, record.SourceID, resource, record.Identity)
+	}
+
+	rr.buildChildCounts()
 }
 
 // List returns all resources.
@@ -277,6 +309,15 @@ func (rr *ResourceRegistry) ingestContainer(ct models.Container) {
 		resource.ParentID = &parentID
 	}
 	rr.ingest(SourceProxmox, ct.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestStorage(storage models.Storage) {
+	resource, identity := resourceFromStorage(storage)
+	parentSourceID := proxmoxNodeSourceID(storage.Instance, storage.Node)
+	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
+		resource.ParentID = &parentID
+	}
+	rr.ingest(SourceProxmox, storage.ID, resource, identity)
 }
 
 func (rr *ResourceRegistry) ingestDockerContainer(ct models.DockerContainer, host models.DockerHost) {
@@ -602,6 +643,17 @@ func (rr *ResourceRegistry) chooseNewID(resourceType ResourceType, identity Reso
 		return rr.canonicalIDFromIdentity(resourceType, identity)
 	}
 	return rr.sourceSpecificID(resourceType, source, sourceID)
+}
+
+func (rr *ResourceRegistry) sourceResourceID(source DataSource, sourceID string) string {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+
+	mapping, ok := rr.bySource[source]
+	if !ok {
+		return ""
+	}
+	return mapping[sourceID]
 }
 
 func (rr *ResourceRegistry) canonicalIDFromIdentity(resourceType ResourceType, identity ResourceIdentity) string {

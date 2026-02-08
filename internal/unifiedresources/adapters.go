@@ -289,6 +289,34 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 	return resource, identity
 }
 
+func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
+	name := strings.TrimSpace(storage.Name)
+	if name == "" {
+		name = strings.TrimSpace(storage.ID)
+	}
+
+	resource := Resource{
+		Type:      ResourceTypeStorage,
+		Name:      name,
+		Status:    statusFromStorage(storage),
+		LastSeen:  time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		Metrics:   metricsFromStorage(storage),
+		Proxmox: &ProxmoxData{
+			NodeName: storage.Node,
+			Instance: storage.Instance,
+		},
+	}
+
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{
+			storage.Name,
+			storage.Node,
+		}),
+	}
+	return resource, identity
+}
+
 func resourceFromDockerContainer(ct models.DockerContainer) (Resource, ResourceIdentity) {
 	metrics := metricsFromDockerContainer(ct)
 	resource := Resource{

@@ -45,6 +45,24 @@ func statusFromGuest(status string) ResourceStatus {
 	}
 }
 
+func statusFromStorage(storage models.Storage) ResourceStatus {
+	switch strings.ToLower(strings.TrimSpace(storage.Status)) {
+	case "online", "running", "available", "active", "ok":
+		return StatusOnline
+	case "warning", "degraded":
+		return StatusWarning
+	case "offline", "down", "unavailable", "error":
+		return StatusOffline
+	}
+	if !storage.Active {
+		return StatusOffline
+	}
+	if !storage.Enabled {
+		return StatusWarning
+	}
+	return StatusOnline
+}
+
 func statusFromDockerState(state string) ResourceStatus {
 	switch strings.ToLower(strings.TrimSpace(state)) {
 	case "running":

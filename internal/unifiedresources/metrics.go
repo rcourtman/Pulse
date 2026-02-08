@@ -164,6 +164,28 @@ func metricsFromContainer(ct models.Container) *ResourceMetrics {
 	return metrics
 }
 
+func metricsFromStorage(storage models.Storage) *ResourceMetrics {
+	metrics := &ResourceMetrics{}
+	if storage.Total <= 0 {
+		return metrics
+	}
+
+	used := storage.Used
+	total := storage.Total
+	percent := percentFromUsage(storage.Usage)
+	if percent == 0 && total > 0 {
+		percent = clampMetricValue((float64(used)/float64(total))*100, 0, 100)
+	}
+	metrics.Disk = &MetricValue{
+		Used:    &used,
+		Total:   &total,
+		Percent: percent,
+		Unit:    "bytes",
+		Source:  SourceProxmox,
+	}
+	return metrics
+}
+
 func metricsFromDockerContainer(ct models.DockerContainer) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
 	cpuPercent := percentFromUsage(ct.CPUPercent)
