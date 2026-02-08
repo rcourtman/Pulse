@@ -29,8 +29,8 @@ Date: 2026-02-08
 | URF-00 | Scope Freeze and Residual Gap Baseline | TODO | Codex | Claude | — | — |
 | URF-01 | Organization Sharing Cutover to Unified Resources API | DONE | Codex | Claude | APPROVED | URF-01 Review Evidence |
 | URF-02 | Alerts Runtime Cutover Off Legacy Conversion Hook | DONE | Codex | Claude | APPROVED | URF-02 Review Evidence |
-| URF-03 | AI Chat Runtime Cutover Off Legacy Conversion Hook | TODO | Codex | Claude | — | — |
-| URF-04 | SB5 Dependency Gate + Legacy Hook Deletion Readiness | TODO | Claude | Claude | — | — |
+| URF-03 | AI Chat Runtime Cutover Off Legacy Conversion Hook | DONE | Codex | Claude | APPROVED | URF-03 Review Evidence |
+| URF-04 | SB5 Dependency Gate + Legacy Hook Deletion Readiness | DONE | Claude | Claude | APPROVED | URF-04 Review Evidence |
 | URF-05 | Remove Frontend Runtime `useResourcesAsLegacy` Path | TODO | Codex | Claude | — | — |
 | URF-06 | AI Backend Contract Scaffold (Legacy -> Unified) | TODO | Codex | Claude | — | — |
 | URF-07 | AI Backend Migration to Unified Provider | TODO | Codex | Claude | — | — |
@@ -158,59 +158,104 @@ Residual risk:
 Rollback:
 - Revert `useResources.ts` to inline converter lambdas in useResourcesAsLegacy and restore useAlertsResources to call useResourcesAsLegacy.
 - Revert the new test in `useResources.test.ts`.
-- `git revert 3f208d67`
+- `git revert acc50cb2`
 ```
 
 ---
 
 ## URF-03 Checklist: AI Chat Runtime Cutover Off Legacy Conversion Hook
 
-- [ ] AI chat context/mentions no longer depend on `useAIChatResources()` legacy conversion output.
-- [ ] Mention IDs and summary semantics remain stable.
-- [ ] Tests lock unified-path parity.
+- [x] AI chat context/mentions no longer depend on `useAIChatResources()` legacy conversion output.
+- [x] Mention IDs and summary semantics remain stable.
+- [x] Tests lock unified-path parity.
 
 ### Required Tests
 
-- [ ] `cd frontend-modern && npx vitest run src/components/AI/__tests__/aiChatUtils.test.ts src/stores/__tests__/aiChat.test.ts src/hooks/__tests__/useResources.test.ts` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `cd frontend-modern && npx vitest run src/components/AI/__tests__/aiChatUtils.test.ts src/stores/__tests__/aiChat.test.ts src/hooks/__tests__/useResources.test.ts` -> exit 0
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### URF-03 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `frontend-modern/src/hooks/useResources.ts`: Rewrote useAIChatResources to call useResources() directly with per-type createMemo conversions and bounded legacy fallback. No longer routes through useResourcesAsLegacy. Same pattern as URF-02 alerts cutover.
+- `frontend-modern/src/hooks/__tests__/useResources.test.ts`: Added test verifying unified-path data is returned over legacy arrays for useAIChatResources.
+
+Commands run + exit codes (reviewer-rerun):
+1. `cd frontend-modern && npx vitest run src/components/AI/__tests__/aiChatUtils.test.ts src/stores/__tests__/aiChat.test.ts src/hooks/__tests__/useResources.test.ts` -> exit 0 (57 tests passed, 3 files)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+3. `cd frontend-modern && npx vitest run` -> exit 0 (684 tests passed, 74 files — milestone boundary)
+4. `rg -n "useAIChatResources\(|useResourcesAsLegacy\(" useResources.ts` -> useAIChatResources at line 1331 calls useResources() directly, no useResourcesAsLegacy call inside
+
+Gate checklist:
+- P0: PASS (files exist with expected edits, all commands rerun by reviewer with exit 0, full test suite green)
+- P1: PASS (mention ID semantics preserved — return type UseAIChatResourcesReturn unchanged, isCluster behavior preserved, unified-path parity test added)
+- P2: PASS (progress tracker updated, checkpoint commit created)
+
+Verdict: APPROVED
+
+Residual risk:
+- useResourcesAsLegacy still exists but now has NO first-party callers besides storage/backups (via Storage.tsx/UnifiedBackups.tsx which are already deleted in SB5-05). Actual deletion deferred to URF-05 after URF-04 gate.
+
+Rollback:
+- `git revert 748007bf`
 ```
 
 ---
 
 ## URF-04 Checklist: SB5 Dependency Gate + Legacy Hook Deletion Readiness
 
-- [ ] SB5 packets required for deletion are `DONE/APPROVED`.
-- [ ] Runtime references to legacy storage/backups shells verified.
-- [ ] Packet decision recorded as `GO` or `BLOCKED` with evidence.
+- [x] SB5 packets required for deletion are `DONE/APPROVED`.
+- [x] Runtime references to legacy storage/backups shells verified.
+- [x] Packet decision recorded as `GO` or `BLOCKED` with evidence.
 
 ### Required Tests
 
-- [ ] `rg -n "useResourcesAsLegacy\(" frontend-modern/src` -> reviewed
-- [ ] `rg -n "Storage\.tsx|UnifiedBackups\.tsx" docs/architecture/storage-backups-phase-5-legacy-deprecation-progress-2026-02.md` -> reviewed
+- [x] `rg -n "useResourcesAsLegacy\(" frontend-modern/src` -> reviewed
+- [x] `rg -n "Storage\.tsx|UnifiedBackups\.tsx" docs/architecture/storage-backups-phase-5-legacy-deprecation-progress-2026-02.md` -> reviewed
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED` or `BLOCKED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### URF-04 Review Evidence
 
 ```markdown
-TODO
+Gate: SB5 Dependency Gate + Legacy Hook Deletion Readiness
+Verdict: GO — all conditions satisfied for legacy hook deletion in URF-05.
+
+SB5 Status:
+- SB5 progress tracker status: "Complete"
+- All packets SB5-00 through SB5-06: DONE/APPROVED
+- Storage.tsx: DELETED (SB5-05) — confirmed via `ls` (No such file or directory)
+- UnifiedBackups.tsx: DELETED (SB5-05) — confirmed via `ls` (No such file or directory)
+
+useResourcesAsLegacy runtime callers (rg -n "useResourcesAsLegacy\(" frontend-modern/src):
+- frontend-modern/src/hooks/useResources.ts:810 — function DEFINITION (export function useResourcesAsLegacy)
+- frontend-modern/src/hooks/__tests__/useResources.test.ts:613 — TEST call
+- frontend-modern/src/hooks/__tests__/useResources.test.ts:645 — TEST call
+- frontend-modern/src/hooks/__tests__/useResources.test.ts:675 — TEST call
+- **NO runtime callers remain.** useAlertsResources (URF-02) and useAIChatResources (URF-03) both decoupled.
+
+Gate checklist:
+- P0: PASS (SB5 complete, all packets DONE/APPROVED, legacy shells deleted from disk, runtime caller audit shows zero first-party runtime consumers)
+- P1: PASS (useResourcesAsLegacy only referenced in test file — safe to delete function + test references in URF-05)
+- P2: PASS (progress tracker updated, gate decision recorded)
+
+Verdict: APPROVED (GO)
+
+Residual risk:
+- None. All blocking conditions for URF-05 are satisfied.
 ```
 
 ---
@@ -325,8 +370,8 @@ TODO
 
 - URF-00: TODO
 - URF-01: `061f1ebd` feat(URF-01): cutover Organization Sharing from legacy /api/resources to unified useResources()
-- URF-02: `3f208d67` feat(URF-02): alerts runtime cutover off legacy conversion hook
-- URF-03: TODO
+- URF-02: `acc50cb2` feat(URF-02): alerts runtime cutover off legacy conversion hook
+- URF-03: `748007bf` feat(URF-03): AI chat runtime cutover off legacy conversion hook
 - URF-04: TODO
 - URF-05: TODO
 - URF-06: TODO
@@ -335,4 +380,4 @@ TODO
 
 ## Current Recommended Next Packet
 
-- `URF-03` (AI Chat Runtime Cutover Off Legacy Conversion Hook)
+- `URF-05` (Remove Frontend Runtime `useResourcesAsLegacy` Path)
