@@ -29,7 +29,7 @@ Date: 2026-02-08
 |---|---|---|---|---|---|---|
 | 00 | Contract Freeze, Scope Fences, and Drift Baseline | DONE | Codex | Claude | APPROVED | See Packet 00 Review Evidence |
 | 01 | Introduce Unified Selector Layer (No Behavior Change) | DONE | Codex | Claude | APPROVED | See Packet 01 Review Evidence |
-| 02 | Alerts Consumer Migration to Unified Selectors | TODO | Codex | Claude | PENDING | See Packet 02 Review Evidence |
+| 02 | Alerts Consumer Migration to Unified Selectors | DONE | Codex | Claude | APPROVED | See Packet 02 Review Evidence |
 | 03 | AI Chat UI Context Migration to Unified Selectors | TODO | Codex | Claude | PENDING | See Packet 03 Review Evidence |
 | 04 | WebSocket Legacy Payload Deprecation Gates | TODO | Codex | Claude | PENDING | See Packet 04 Review Evidence |
 | 05 | Legacy Compatibility Narrowing | TODO | Codex | Claude | PENDING | See Packet 05 Review Evidence |
@@ -131,46 +131,46 @@ Rollback:
 ## Packet 02 Checklist: Alerts Consumer Migration to Unified Selectors
 
 ### Implementation
-- [ ] Core alerts read paths switched to unified selectors.
-- [ ] Direct legacy array reads removed from core decision points.
-- [ ] One-packet compatibility fallback retained for rollback safety.
+- [x] Core alerts read paths switched to unified selectors.
+- [x] Direct legacy array reads removed from core decision points.
+- [x] One-packet compatibility fallback retained for rollback safety.
 
 ### Required Tests
-- [ ] `cd frontend-modern && npx vitest run src/pages/__tests__/Alerts.helpers.test.ts` passed.
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
-- [ ] Exit codes recorded for all commands.
+- [x] `cd frontend-modern && npx vitest run src/pages/__tests__/Alerts.helpers.test.ts` passed.
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` passed.
+- [x] Exit codes recorded for all commands.
 
 ### Review Gates
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### Packet 02 Review Evidence
 
 ```text
 Files changed:
-- <path>: <reason>
+- frontend-modern/src/pages/Alerts.tsx: Migrated all 11 legacy array read sites to useAlertsResources() selectors. ThresholdsTab/ThresholdsTable now receive nodes/storage/dockerHosts as explicit props. Non-resource state fields unchanged.
 
 Commands run + exit codes:
-1. `<command>` -> exit <code>
-2. `<command>` -> exit <code>
+1. `cd frontend-modern && npx vitest run src/pages/__tests__/Alerts.helpers.test.ts` -> exit 0 (27 tests passed)
+2. `npx tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
 
 Gate checklist:
-- P0: PASS | FAIL (<reason>)
-- P1: PASS | FAIL | N/A (<reason>)
-- P2: PASS | FAIL (<reason>)
+- P0: PASS (All 11 legacy read sites migrated. Override hydration, allGuests, ThresholdsTab all use selectors. Tests + tsc pass.)
+- P1: PASS (Fallback retained via useResourcesAsLegacy underneath. Non-resource state untouched.)
+- P2: PASS (Behavior-preserving migration; no new logic introduced.)
 
-Verdict: APPROVED | CHANGES_REQUESTED | BLOCKED
+Verdict: APPROVED
 
 Commit:
-- `<hash>` (<message>)
+- (pending)
 
 Residual risk:
-- <risk or none>
+- ThresholdsTable still receives pbs/pmg/backups from state directly; these are out-of-scope for this packet.
 
 Rollback:
-- <steps>
+- Revert Alerts.tsx to pre-Packet-02 state; remove useAlertsResources import and revert to direct state.* reads.
 ```
 
 ## Packet 03 Checklist: AI Chat UI Context Migration to Unified Selectors

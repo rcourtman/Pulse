@@ -15,7 +15,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { useWebSocket } from '@/App';
-import { useResources } from '@/hooks/useResources';
+import { useAlertsResources, useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
@@ -23,7 +23,7 @@ import { NotificationsAPI, Webhook } from '@/api/notifications';
 import { LicenseAPI, type LicenseFeatureStatus } from '@/api/license';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
-import type { Alert, Incident, IncidentEvent, State, VM, Container, DockerHost, DockerContainer, Host } from '@/types/api';
+import type { Alert, Incident, IncidentEvent, State, VM, Container, DockerHost, DockerContainer, Host, Node, Storage } from '@/types/api';
 import type { ResourceType } from '@/types/resource';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -515,6 +515,7 @@ export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
 
 export function Alerts() {
   const { state, activeAlerts, updateAlert, removeAlerts } = useWebSocket();
+  const alertResources = useAlertsResources();
   const { get: getResource, resources: allResources } = useResources();
   const navigate = useNavigate();
   const location = useLocation();
@@ -762,15 +763,19 @@ export function Alerts() {
     const rawConfig = rawOverridesConfig();
     if (
       Object.keys(rawConfig).length > 0 &&
-      state.nodes &&
-      state.vms &&
-      state.containers &&
-      state.storage
+      alertResources.ready()
     ) {
+      const nodes = alertResources.nodes();
+      const vms = alertResources.vms();
+      const containers = alertResources.containers();
+      const storageResources = alertResources.storage();
+      const hosts = alertResources.hosts();
+      const dockerHosts = alertResources.dockerHosts();
+
       // Convert overrides object to array format
       const overridesList: Override[] = [];
 
-      const dockerHostsList: DockerHost[] = state.dockerHosts || [];
+      const dockerHostsList: DockerHost[] = dockerHosts;
       const dockerHostMap = new Map<string, DockerHost>();
       const dockerContainerMap = new Map<string, { host: DockerHost; container: DockerContainer }>();
       const hostAgentMap = new Map<string, Host>();
@@ -782,7 +787,7 @@ export function Alerts() {
           dockerContainerMap.set(resourceId, { host, container });
         });
       });
-      (state.hosts || []).forEach((host) => {
+      hosts.forEach((host) => {
         hostAgentMap.set(host.id, host);
       });
 
@@ -916,7 +921,7 @@ export function Alerts() {
           }
         } else {
           // Check if it's a node override by looking for matching node
-          const node = (state.nodes || []).find((n) => n.id === key);
+          const node = nodes.find((n) => n.id === key);
           if (node) {
             overridesList.push({
               id: key,
@@ -928,7 +933,7 @@ export function Alerts() {
             });
           } else {
             // Check if it's a storage device
-            const storage = (state.storage || []).find((s) => s.id === key);
+            const storage = storageResources.find((s) => s.id === key);
             if (storage) {
               overridesList.push({
                 id: key,
@@ -942,8 +947,8 @@ export function Alerts() {
               });
             } else {
               // Find the guest by matching the full ID
-              const vm = (state.vms || []).find((g) => g.id === key);
-              const container = (state.containers || []).find((g) => g.id === key);
+              const vm = vms.find((g) => g.id === key);
+              const container = containers.find((g) => g.id === key);
               const guest = vm || container;
               if (guest) {
                 overridesList.push({
@@ -1502,11 +1507,11 @@ export function Alerts() {
     }
   });
 
-  // Get all guests from state - memoize to prevent unnecessary updates
+  // Get all guests from alert resource selectors - memoize to prevent unnecessary updates
   const allGuests = createMemo(
     () => {
-      const vms = state.vms || [];
-      const containers = state.containers || [];
+      const vms = alertResources.vms();
+      const containers = alertResources.containers();
       return [...vms, ...containers];
     },
     [],
@@ -2194,7 +2199,10 @@ export function Alerts() {
                   setRawOverridesConfig={setRawOverridesConfig}
                   allGuests={allGuests}
                   state={state}
-                  hosts={state.hosts || []}
+                  nodes={alertResources.nodes()}
+                  hosts={alertResources.hosts()}
+                  storage={alertResources.storage()}
+                  dockerHosts={alertResources.dockerHosts()}
                   guestDefaults={guestDefaults}
                   guestDisableConnectivity={guestDisableConnectivity}
                   setGuestDefaults={setGuestDefaults}
@@ -2926,7 +2934,10 @@ function OverviewTab(props: {
 interface ThresholdsTabProps {
   allGuests: () => (VM | Container)[];
   state: State;
+  nodes: Node[];
   hosts: Host[];
+  storage: Storage[];
+  dockerHosts: DockerHost[];
   guestDefaults: () => Record<string, number | undefined>;
   nodeDefaults: () => Record<string, number | undefined>;
   pbsDefaults: () => Record<string, number | undefined>;
@@ -3108,10 +3119,10 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       rawOverridesConfig={props.rawOverridesConfig}
       setRawOverridesConfig={props.setRawOverridesConfig}
       allGuests={props.allGuests}
-      nodes={props.state.nodes || []}
+      nodes={props.nodes}
       hosts={props.hosts}
-      storage={props.state.storage || []}
-      dockerHosts={props.state.dockerHosts || []}
+      storage={props.storage}
+      dockerHosts={props.dockerHosts}
       pbsInstances={props.state.pbs || []}
       pmgInstances={props.state.pmg || []}
       backups={props.state.backups}
