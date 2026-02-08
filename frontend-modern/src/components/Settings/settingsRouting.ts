@@ -10,6 +10,10 @@ export type SettingsTab =
   | 'system-relay'
   | 'system-logs'
   | 'system-pro'
+  | 'organization-overview'
+  | 'organization-access'
+  | 'organization-billing'
+  | 'organization-sharing'
   | 'api'
   | 'security-overview'
   | 'security-auth'
@@ -54,6 +58,12 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (path.includes('/settings/integrations/relay')) return 'system-relay';
   if (path.includes('/settings/system-relay')) return 'system-relay';
   if (path.includes('/settings/system-pro')) return 'system-pro';
+  if (path.includes('/settings/organization/access')) return 'organization-access';
+  if (path.includes('/settings/organization/sharing')) return 'organization-sharing';
+  if (path.includes('/settings/billing')) return 'organization-billing';
+  if (path.includes('/settings/plan')) return 'organization-billing';
+  if (path.includes('/settings/organization/billing')) return 'organization-billing';
+  if (path.includes('/settings/organization')) return 'organization-overview';
   if (path.includes('/settings/operations/logs')) return 'system-logs';
   if (path.includes('/settings/system-logs')) return 'system-logs';
 
@@ -129,6 +139,18 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
       return 'system-general';
     case 'api':
       return 'api';
+    case 'organization':
+    case 'org':
+      return 'organization-overview';
+    case 'organization-access':
+    case 'org-access':
+      return 'organization-access';
+    case 'organization-sharing':
+    case 'sharing':
+      return 'organization-sharing';
+    case 'billing':
+    case 'plan':
+      return 'organization-billing';
     case 'security':
     case 'security-overview':
       return 'security-overview';
@@ -163,6 +185,14 @@ export function settingsTabPath(tab: SettingsTab): string {
       return '/settings/workloads/docker';
     case 'system-backups':
       return '/settings/backups';
+    case 'organization-overview':
+      return '/settings/organization';
+    case 'organization-access':
+      return '/settings/organization/access';
+    case 'organization-sharing':
+      return '/settings/organization/sharing';
+    case 'organization-billing':
+      return '/settings/billing';
     case 'api':
       return '/settings/integrations/api';
     case 'system-relay':

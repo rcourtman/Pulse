@@ -37,6 +37,10 @@ import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
 import { BackupsSettingsPanel } from './BackupsSettingsPanel';
 import { ProLicensePanel } from './ProLicensePanel';
 import { RelaySettingsPanel } from './RelaySettingsPanel';
+import OrganizationOverviewPanel from './OrganizationOverviewPanel';
+import OrganizationAccessPanel from './OrganizationAccessPanel';
+import OrganizationBillingPanel from './OrganizationBillingPanel';
+import OrganizationSharingPanel from './OrganizationSharingPanel';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import RadioTower from 'lucide-solid/icons/radio-tower';
 import { SecurityAuthPanel } from './SecurityAuthPanel';
@@ -84,6 +88,9 @@ import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Terminal from 'lucide-solid/icons/terminal';
 import Container from 'lucide-solid/icons/container';
+import Building2 from 'lucide-solid/icons/building-2';
+import Share2 from 'lucide-solid/icons/share-2';
+import CreditCard from 'lucide-solid/icons/credit-card';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
@@ -300,6 +307,22 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   'system-pro': {
     title: 'Pulse Pro',
     description: 'Manage license activation and Pulse Pro feature access.',
+  },
+  'organization-overview': {
+    title: 'Organization Overview',
+    description: 'Review organization metadata, membership footprint, and ownership.',
+  },
+  'organization-access': {
+    title: 'Organization Access',
+    description: 'Manage organization members, roles, and ownership transfers.',
+  },
+  'organization-sharing': {
+    title: 'Organization Sharing',
+    description: 'Share resources between organizations with scoped access.',
+  },
+  'organization-billing': {
+    title: 'Organization Billing',
+    description: 'Track plan tier, usage, and upgrade options for multi-tenant deployments.',
   },
   api: {
     title: 'API Access',
@@ -537,6 +560,16 @@ const Settings: Component<SettingsProps> = (props) => {
   const pveNodes = createMemo(() => nodes().filter((n) => n.type === 'pve'));
   const pbsNodes = createMemo(() => nodes().filter((n) => n.type === 'pbs'));
   const pmgNodes = createMemo(() => nodes().filter((n) => n.type === 'pmg'));
+  const orgNodeUsage = createMemo(
+    () =>
+      (state.nodes?.length ?? 0) +
+      (state.hosts?.length ?? 0) +
+      (state.dockerHosts?.length ?? 0) +
+      (state.kubernetesClusters?.length ?? 0) +
+      (state.pbs?.length ?? 0) +
+      (state.pmg?.length ?? 0),
+  );
+  const orgGuestUsage = createMemo(() => (state.vms?.length ?? 0) + (state.containers?.length ?? 0));
 
   // System settings
   const [pvePollingInterval, setPVEPollingInterval] = createSignal<number>(PVE_POLLING_MIN_SECONDS);
@@ -776,6 +809,9 @@ const Settings: Component<SettingsProps> = (props) => {
   // Security
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatusInfo | null>(null);
   const [securityStatusLoading, setSecurityStatusLoading] = createSignal(true);
+  const currentSettingsUser = createMemo(
+    () => securityStatus()?.proxyAuthUsername || securityStatus()?.authUsername || undefined,
+  );
   const [exportPassphrase, setExportPassphrase] = createSignal('');
   const [useCustomPassphrase, setUseCustomPassphrase] = createSignal(false);
   const [importPassphrase, setImportPassphrase] = createSignal('');
@@ -824,7 +860,13 @@ const Settings: Component<SettingsProps> = (props) => {
     });
   });
 
-  type SettingsNavGroupId = 'resources' | 'integrations' | 'operations' | 'system' | 'security';
+  type SettingsNavGroupId =
+    | 'resources'
+    | 'organization'
+    | 'integrations'
+    | 'operations'
+    | 'system'
+    | 'security';
   type SettingsNavItem = {
     id: SettingsTab;
     label: string;
@@ -845,6 +887,10 @@ const Settings: Component<SettingsProps> = (props) => {
     'system-relay': ['relay'],
     reporting: ['advanced_reporting'],
     'security-webhooks': ['audit_logging'],
+    'organization-overview': ['multi_tenant'],
+    'organization-access': ['multi_tenant'],
+    'organization-sharing': ['multi_tenant'],
+    'organization-billing': ['multi_tenant'],
   };
 
   const isFeatureLocked = (features?: string[]): boolean => {
@@ -866,6 +912,40 @@ const Settings: Component<SettingsProps> = (props) => {
         { id: 'proxmox', label: 'Infrastructure', icon: ProxmoxIcon },
         { id: 'agents', label: 'Workloads', icon: Bot, iconProps: { strokeWidth: 2 } },
         { id: 'docker', label: 'Docker', icon: Container, iconProps: { strokeWidth: 2 } },
+      ],
+    },
+    {
+      id: 'organization',
+      label: 'Organization',
+      items: [
+        {
+          id: 'organization-overview',
+          label: 'Overview',
+          icon: Building2,
+          iconProps: { strokeWidth: 2 },
+          features: ['multi_tenant'],
+        },
+        {
+          id: 'organization-access',
+          label: 'Access',
+          icon: Users,
+          iconProps: { strokeWidth: 2 },
+          features: ['multi_tenant'],
+        },
+        {
+          id: 'organization-sharing',
+          label: 'Sharing',
+          icon: Share2,
+          iconProps: { strokeWidth: 2 },
+          features: ['multi_tenant'],
+        },
+        {
+          id: 'organization-billing',
+          label: 'Billing',
+          icon: CreditCard,
+          iconProps: { strokeWidth: 2 },
+          features: ['multi_tenant'],
+        },
       ],
     },
     {
@@ -3508,6 +3588,26 @@ const Settings: Component<SettingsProps> = (props) => {
               {/* Pulse Pro License Tab */}
               <Show when={activeTab() === 'system-pro'}>
                 <ProLicensePanel />
+              </Show>
+
+              {/* Organization Overview Tab */}
+              <Show when={activeTab() === 'organization-overview'}>
+                <OrganizationOverviewPanel currentUser={currentSettingsUser()} />
+              </Show>
+
+              {/* Organization Access Tab */}
+              <Show when={activeTab() === 'organization-access'}>
+                <OrganizationAccessPanel currentUser={currentSettingsUser()} />
+              </Show>
+
+              {/* Organization Sharing Tab */}
+              <Show when={activeTab() === 'organization-sharing'}>
+                <OrganizationSharingPanel currentUser={currentSettingsUser()} />
+              </Show>
+
+              {/* Organization Billing Tab */}
+              <Show when={activeTab() === 'organization-billing'}>
+                <OrganizationBillingPanel nodeUsage={orgNodeUsage()} guestUsage={orgGuestUsage()} />
               </Show>
 
               {/* API Access */}

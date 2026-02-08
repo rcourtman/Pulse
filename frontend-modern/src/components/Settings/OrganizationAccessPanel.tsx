@@ -1,0 +1,282 @@
+import { Component, For, Show, createSignal, onMount } from 'solid-js';
+import SettingsPanel from '@/components/shared/SettingsPanel';
+import { OrgsAPI, type Organization, type OrganizationMember, type OrganizationRole } from '@/api/orgs';
+import { getOrgID } from '@/utils/apiClient';
+import { notificationStore } from '@/stores/notifications';
+import { logger } from '@/utils/logger';
+import Users from 'lucide-solid/icons/users';
+import Trash2 from 'lucide-solid/icons/trash-2';
+
+interface OrganizationAccessPanelProps {
+  currentUser?: string;
+}
+
+const roleOptions: Array<{ value: Exclude<OrganizationRole, 'member'>; label: string }> = [
+  { value: 'viewer', label: 'Viewer' },
+  { value: 'editor', label: 'Editor' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'owner', label: 'Owner' },
+];
+
+const normalizeRole = (role: OrganizationRole): Exclude<OrganizationRole, 'member'> => {
+  if (role === 'member') return 'viewer';
+  return role;
+};
+
+const canManageOrg = (org: Organization | null, currentUser?: string) => {
+  if (!org || !currentUser) return false;
+  if (org.ownerUserId === currentUser) return true;
+  const role = normalizeRole(org.members?.find((m) => m.userId === currentUser)?.role ?? 'viewer');
+  return role === 'admin' || role === 'owner';
+};
+
+const roleBadgeClass = (role: Exclude<OrganizationRole, 'member'>) => {
+  switch (role) {
+    case 'owner':
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200';
+    case 'admin':
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200';
+    case 'editor':
+      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200';
+    default:
+      return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+  }
+};
+
+export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = (props) => {
+  const [loading, setLoading] = createSignal(true);
+  const [saving, setSaving] = createSignal(false);
+  const [org, setOrg] = createSignal<Organization | null>(null);
+  const [members, setMembers] = createSignal<OrganizationMember[]>([]);
+  const [inviteUserID, setInviteUserID] = createSignal('');
+  const [inviteRole, setInviteRole] = createSignal<Exclude<OrganizationRole, 'member'>>('viewer');
+
+  const activeOrgId = () => getOrgID() || 'default';
+
+  const loadOrganizationAccess = async () => {
+    setLoading(true);
+    try {
+      const orgId = activeOrgId();
+      const [orgData, memberData] = await Promise.all([OrgsAPI.get(orgId), OrgsAPI.listMembers(orgId)]);
+      setOrg(orgData);
+      setMembers(memberData);
+    } catch (error) {
+      logger.error('Failed to load organization access data', error);
+      notificationStore.error('Failed to load organization access settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateRole = async (member: OrganizationMember, role: Exclude<OrganizationRole, 'member'>) => {
+    const currentOrg = org();
+    if (!currentOrg) return;
+    const currentRole = normalizeRole(member.role);
+    if (currentRole === role) return;
+
+    if (member.userId === currentOrg.ownerUserId && role !== 'owner') {
+      notificationStore.error('Current owner can only remain owner. Transfer ownership instead.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await OrgsAPI.updateMemberRole(currentOrg.id, { userId: member.userId, role });
+      notificationStore.success(`Updated ${member.userId} to ${role}`);
+      await loadOrganizationAccess();
+    } catch (error) {
+      logger.error('Failed to update member role', error);
+      notificationStore.error(error instanceof Error ? error.message : 'Failed to update member role');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inviteMember = async () => {
+    const currentOrg = org();
+    if (!currentOrg) return;
+
+    const userId = inviteUserID().trim();
+    if (!userId) {
+      notificationStore.error('User ID is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await OrgsAPI.inviteMember(currentOrg.id, { userId, role: inviteRole() });
+      notificationStore.success(`Added ${userId} as ${inviteRole()}`);
+      setInviteUserID('');
+      setInviteRole('viewer');
+      await loadOrganizationAccess();
+    } catch (error) {
+      logger.error('Failed to add organization member', error);
+      notificationStore.error(error instanceof Error ? error.message : 'Failed to add member');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeMember = async (member: OrganizationMember) => {
+    const currentOrg = org();
+    if (!currentOrg) return;
+    if (!confirm(`Remove ${member.userId} from ${currentOrg.displayName || currentOrg.id}?`)) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await OrgsAPI.removeMember(currentOrg.id, member.userId);
+      notificationStore.success(`Removed ${member.userId}`);
+      await loadOrganizationAccess();
+    } catch (error) {
+      logger.error('Failed to remove organization member', error);
+      notificationStore.error(error instanceof Error ? error.message : 'Failed to remove member');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  onMount(() => {
+    void loadOrganizationAccess();
+  });
+
+  return (
+    <div class="space-y-6">
+      <SettingsPanel
+        title="Organization Access"
+        description="Manage organization member roles and ownership transfers."
+        icon={<Users class="w-5 h-5" />}
+        bodyClass="space-y-5"
+      >
+        <Show when={!loading()} fallback={<p class="text-sm text-gray-500 dark:text-gray-400">Loading member access settings...</p>}>
+          <Show when={org()}>
+            {(currentOrg) => (
+              <>
+                <Show when={canManageOrg(currentOrg(), props.currentUser)}>
+                  <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Add Member</h4>
+                    <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                      <input
+                        type="text"
+                        value={inviteUserID()}
+                        onInput={(event) => setInviteUserID(event.currentTarget.value)}
+                        placeholder="username"
+                        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                      />
+                      <select
+                        value={inviteRole()}
+                        onChange={(event) => setInviteRole(event.currentTarget.value as Exclude<OrganizationRole, 'member'>)}
+                        class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                      >
+                        <For each={roleOptions.filter((option) => option.value !== 'owner' || currentOrg().ownerUserId === props.currentUser)}>
+                          {(option) => <option value={option.value}>{option.label}</option>}
+                        </For>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={inviteMember}
+                        disabled={saving()}
+                        class="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {saving() ? 'Saving...' : 'Add'}
+                      </button>
+                    </div>
+                  </div>
+                </Show>
+
+                <Show when={!canManageOrg(currentOrg(), props.currentUser)}>
+                  <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                    Admin or owner role required to manage organization access.
+                  </div>
+                </Show>
+
+                <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                  <table class="w-full text-sm">
+                    <thead class="bg-gray-50 dark:bg-gray-800/70">
+                      <tr>
+                        <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">User</th>
+                        <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Role</th>
+                        <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Added</th>
+                        <th class="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <Show
+                        when={members().length > 0}
+                        fallback={
+                          <tr>
+                            <td colSpan={4} class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                              No organization members found.
+                            </td>
+                          </tr>
+                        }
+                      >
+                        <For each={members()}>
+                          {(member) => {
+                            const role = normalizeRole(member.role);
+                            const isOwner = () => member.userId === currentOrg().ownerUserId;
+                            return (
+                              <tr class="border-t border-gray-100 dark:border-gray-800">
+                                <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{member.userId}</td>
+                                <td class="px-3 py-2">
+                                  <Show
+                                    when={canManageOrg(currentOrg(), props.currentUser)}
+                                    fallback={
+                                      <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
+                                        {role}
+                                      </span>
+                                    }
+                                  >
+                                    <select
+                                      value={role}
+                                      onChange={(event) => {
+                                        void updateRole(member, event.currentTarget.value as Exclude<OrganizationRole, 'member'>);
+                                      }}
+                                      disabled={saving() || (isOwner() && props.currentUser !== currentOrg().ownerUserId)}
+                                      class="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                    >
+                                      <For
+                                        each={roleOptions.filter(
+                                          (option) => option.value !== 'owner' || props.currentUser === currentOrg().ownerUserId,
+                                        )}
+                                      >
+                                        {(option) => <option value={option.value}>{option.label}</option>}
+                                      </For>
+                                    </select>
+                                  </Show>
+                                </td>
+                                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{new Date(member.addedAt).toLocaleDateString()}</td>
+                                <td class="px-3 py-2 text-right">
+                                  <Show when={canManageOrg(currentOrg(), props.currentUser) && !isOwner()}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void removeMember(member);
+                                      }}
+                                      disabled={saving()}
+                                      class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      <Trash2 class="w-3.5 h-3.5" />
+                                      Remove
+                                    </button>
+                                  </Show>
+                                </td>
+                              </tr>
+                            );
+                          }}
+                        </For>
+                      </Show>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </Show>
+        </Show>
+      </SettingsPanel>
+    </div>
+  );
+};
+
+export default OrganizationAccessPanel;
