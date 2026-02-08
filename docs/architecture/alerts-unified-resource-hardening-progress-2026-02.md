@@ -688,7 +688,7 @@ Rollback:
 - [x] Final verdict recorded: `APPROVED`
 
 ### Checkpoint Commit (Packet 10)
-`06ec9c3b` — feat(alerts): unified-resource hardening Packet 10 — final certification
+`010be4b0` — feat(alerts): unified-resource hardening Packet 10 — final certification
 
 ### Review Evidence (Packet 10)
 
