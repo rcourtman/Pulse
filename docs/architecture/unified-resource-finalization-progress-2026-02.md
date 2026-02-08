@@ -301,7 +301,7 @@ TODO
 ## Checkpoint Commits
 
 - URF-00: TODO
-- URF-01: TODO
+- URF-01: `061f1ebd` feat(URF-01): cutover Organization Sharing from legacy /api/resources to unified useResources()
 - URF-02: TODO
 - URF-03: TODO
 - URF-04: TODO
