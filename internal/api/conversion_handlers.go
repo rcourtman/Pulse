@@ -12,10 +12,14 @@ import (
 
 type ConversionHandlers struct {
 	recorder *conversion.Recorder
+	health   *conversion.PipelineHealth
 }
 
-func NewConversionHandlers(recorder *conversion.Recorder) *ConversionHandlers {
-	return &ConversionHandlers{recorder: recorder}
+func NewConversionHandlers(recorder *conversion.Recorder, health *conversion.PipelineHealth) *ConversionHandlers {
+	return &ConversionHandlers{
+		recorder: recorder,
+		health:   health,
+	}
 }
 
 func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Request) {
@@ -43,12 +47,38 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 			log.Warn().Err(err).Str("event_type", event.Type).Msg("Failed to record conversion event")
 		} else {
 			conversion.GetConversionMetrics().RecordEvent(event.Type, event.Surface)
+			if h.health != nil {
+				h.health.RecordEvent(event.Type)
+			}
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]bool{"accepted": true})
+}
+
+// HandleGetHealth returns conversion pipeline health status.
+func (h *ConversionHandlers) HandleGetHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	status := conversion.HealthStatus{
+		Status:              "healthy",
+		LastEventAgeSeconds: 0,
+		EventsTotal:         0,
+		EventsByType:        map[string]int64{},
+		StartedAt:           time.Now().UnixMilli(),
+	}
+	if h != nil && h.health != nil {
+		status = h.health.CheckHealth()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 type conversionStatsBucket struct {

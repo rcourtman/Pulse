@@ -213,6 +213,62 @@ ls -l "${PULSE_DATA_DIR:-/etc/pulse}/.encryption.key"
 
 7. Do not delete `.encryption.key`; remove only `truenas.enc`.
 
+## Canary Rollout Strategy
+
+### Phase 1: Internal / Dev
+
+1. Activation: Set `PULSE_ENABLE_TRUENAS=true` on internal/dev instances only.
+2. Duration: Run for a minimum of 48 hours.
+3. Monitoring checkpoint:
+   1. `pulse_monitor_poll_total{instance_type="truenas",result="error"}` error rate remains below 5% over a rolling 1-hour window.
+   2. `pulse_monitor_poll_staleness_seconds{instance_type="truenas"}` remains below 300 seconds continuously.
+   3. `pulse_monitor_poll_errors_total{instance_type="truenas",error_type="auth"}` does not increment (no auth errors).
+   4. Memory and CPU baseline is captured for comparison in later phases.
+4. Exit gate: All monitoring checks remain green for at least 24 continuous hours.
+5. Rollback: Unset `PULSE_ENABLE_TRUENAS` and restart Pulse (see `## 2) Disable Path` above).
+
+### Phase 2: Opt-in Early Adopters
+
+1. Activation: Users manually set `PULSE_ENABLE_TRUENAS=true` in their environments.
+2. Duration: Run for a minimum of 1 week.
+3. Monitoring checkpoint:
+   1. Maintain all Phase 1 metric checks across all opt-in instances:
+      - `pulse_monitor_poll_total{instance_type="truenas",result="error"}`
+      - `pulse_monitor_poll_staleness_seconds{instance_type="truenas"}`
+      - `pulse_monitor_poll_errors_total{instance_type="truenas",error_type="auth"}`
+   2. User-reported issues are triaged within 24 hours.
+   3. No data corruption or cross-platform interference is observed.
+4. Exit gate: Zero critical issues for at least 5 continuous days across all opt-in instances.
+5. Rollback: Users unset `PULSE_ENABLE_TRUENAS` and restart Pulse.
+
+### Phase 3: Default-On
+
+1. Activation: Change the `PULSE_ENABLE_TRUENAS` feature-flag default to `true` in code.
+2. Duration: Permanent (standard operation).
+3. Opt-out: Users can set `PULSE_ENABLE_TRUENAS=false` to disable.
+4. Monitoring checkpoint:
+   1. Maintain all Phase 2 checks and track aggregate fleet-wide poll error rate using `pulse_monitor_poll_total{instance_type="truenas",result="error"}`.
+   2. Keep automated staleness alerts active from `## Alert Thresholds` for `pulse_monitor_poll_staleness_seconds{instance_type="truenas"}`.
+5. Rollback: Revert the default-on commit and release a patch.
+
+### Abort Criteria (All Phases)
+
+1. If poll failure rate exceeds 50% across all connections for more than 5 minutes (derived from `pulse_monitor_poll_total{instance_type="truenas",result="error"}`), perform an immediate abort.
+2. If any data corruption or cross-platform resource interference is detected, perform an immediate abort.
+3. If memory or CPU regresses by more than 20% and is attributable to the TrueNAS poller, abort within 1 hour.
+4. If auth errors persist for more than 10 minutes without resolution (`pulse_monitor_poll_errors_total{instance_type="truenas",error_type="auth"}`), abort and investigate.
+5. If more than 3 user-reported critical bugs occur in any 24-hour window, abort and investigate.
+
+### Phase Transition Checklist
+
+For each phase transition, the operator must verify:
+
+1. All monitoring checkpoints from the current phase are green.
+2. No open critical or high-severity issues are attributed to TrueNAS.
+3. Rollback procedure has been tested in staging.
+4. Phase exit gate duration has been met.
+5. Stakeholder sign-off has been recorded.
+
 ## Alert Thresholds
 
 | Metric | Condition | Severity | Action |

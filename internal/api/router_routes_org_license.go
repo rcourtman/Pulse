@@ -11,7 +11,10 @@ import (
 )
 
 func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHandlers *RBACHandlers, auditHandlers *AuditHandlers) {
-	conversionHandlers := NewConversionHandlers(conversion.NewRecorder(metering.NewWindowedAggregator()))
+	conversionHandlers := NewConversionHandlers(
+		conversion.NewRecorder(metering.NewWindowedAggregator()),
+		conversion.NewPipelineHealth(),
+	)
 
 	// License routes (Pulse Pro)
 	r.mux.HandleFunc("/api/license/status", RequireAdmin(r.config, r.licenseHandlers.HandleLicenseStatus))
@@ -21,6 +24,7 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("GET /api/license/entitlements", RequireAuth(r.config, r.licenseHandlers.HandleEntitlements))
 	r.mux.HandleFunc("POST /api/conversion/events", RequireAuth(r.config, conversionHandlers.HandleRecordEvent))
 	r.mux.HandleFunc("GET /api/conversion/stats", RequireAuth(r.config, conversionHandlers.HandleGetStats))
+	r.mux.HandleFunc("GET /api/conversion/health", RequireAuth(r.config, conversionHandlers.HandleGetHealth))
 
 	// Organization routes (multi-tenant foundation)
 	r.mux.HandleFunc("GET /api/orgs", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, orgHandlers.HandleListOrgs)))

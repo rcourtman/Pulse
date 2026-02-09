@@ -29,7 +29,7 @@ Date: 2026-02-09
 | TRR-00 | Scope Freeze + TN-11 Evidence Reconciliation | DONE | Claude | Claude | APPROVED | TRR-00 Review Evidence |
 | TRR-01 | Operational Runbook (Enable/Disable/Rollback) | DONE | Codex | Claude | APPROVED | TRR-01 Review Evidence |
 | TRR-02 | Telemetry + Alert Thresholds | DONE | Codex | Claude | APPROVED | TRR-02 Review Evidence |
-| TRR-03 | Canary Rollout Controls | TODO | Codex | Claude | — | — |
+| TRR-03 | Canary Rollout Controls | DONE | Codex | Claude | APPROVED | TRR-03 Review Evidence |
 | TRR-04 | Soak/Failure-Injection Validation | TODO | Codex | Claude | — | — |
 | TRR-05 | Final Rollout Verdict | TODO | Claude | Claude | — | — |
 
@@ -180,26 +180,43 @@ Rollback:
 
 ## TRR-03 Checklist: Canary Rollout Controls
 
-- [ ] Phased rollout strategy documented (internal → opt-in → default-on).
-- [ ] Abort criteria defined with quantitative thresholds.
-- [ ] Rollback from each phase documented.
-- [ ] Monitoring checkpoints at each phase transition documented.
+- [x] Phased rollout strategy documented (internal → opt-in → default-on).
+- [x] Abort criteria defined with quantitative thresholds.
+- [x] Rollback from each phase documented.
+- [x] Monitoring checkpoints at each phase transition documented.
 
 ### Required Tests
 
-- [ ] `go build ./...` -> exit 0
+- [x] `go build ./...` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### TRR-03 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- docs/architecture/truenas-operational-runbook.md: Appended Canary Rollout Strategy section with 3 phases, abort criteria, and phase transition checklist
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0 (code unchanged, docs-only packet)
+
+Gate checklist:
+- P0: PASS (build clean, docs-only packet, no code changes)
+- P1: PASS (3 phases documented: internal/dev 48h → opt-in 1 week → default-on permanent; 5 abort criteria with quantitative thresholds; rollback per phase; 5-item phase transition checklist; metric names reference actual Prometheus labels)
+- P2: PASS (section inserted before Alert Thresholds as specified; runbook complete)
+
+Verdict: APPROVED
+
+Residual risk:
+- Phase 3 (default-on) requires a code change to the feature flag default — deferred to TRR-05 rollout verdict.
+
+Rollback:
+- Remove Canary Rollout Strategy section from runbook.
 ```
 
 ---
@@ -266,7 +283,7 @@ TODO
 
 - TRR-00: `687ecd79`
 - TRR-01: `64f6b350`
-- TRR-02: TODO
+- TRR-02: `9d25e014`
 - TRR-03: TODO
 - TRR-04: TODO
 - TRR-05: TODO

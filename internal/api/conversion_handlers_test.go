@@ -14,7 +14,7 @@ import (
 )
 
 func TestConversionHandleRecordEventValidPOST(t *testing.T) {
-	handlers := NewConversionHandlers(nil)
+	handlers := NewConversionHandlers(nil, nil)
 
 	body := []byte(fmt.Sprintf(`{
 		"type":"paywall_viewed",
@@ -44,7 +44,7 @@ func TestConversionHandleRecordEventValidPOST(t *testing.T) {
 }
 
 func TestConversionHandleRecordEventInvalidBody(t *testing.T) {
-	handlers := NewConversionHandlers(nil)
+	handlers := NewConversionHandlers(nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader([]byte("{")))
 	rec := httptest.NewRecorder()
@@ -65,7 +65,7 @@ func TestConversionHandleRecordEventInvalidBody(t *testing.T) {
 }
 
 func TestConversionHandleRecordEventMissingRequiredFields(t *testing.T) {
-	handlers := NewConversionHandlers(nil)
+	handlers := NewConversionHandlers(nil, nil)
 
 	body := []byte(fmt.Sprintf(`{
 		"type":"paywall_viewed",
@@ -93,7 +93,7 @@ func TestConversionHandleRecordEventMissingRequiredFields(t *testing.T) {
 }
 
 func TestConversionHandleRecordEventNonPOST(t *testing.T) {
-	handlers := NewConversionHandlers(nil)
+	handlers := NewConversionHandlers(nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/conversion/events", nil)
 	rec := httptest.NewRecorder()
@@ -108,7 +108,7 @@ func TestConversionHandleRecordEventNonPOST(t *testing.T) {
 func TestConversionHandleGetStats(t *testing.T) {
 	agg := metering.NewWindowedAggregator()
 	recorder := conversion.NewRecorder(agg)
-	handlers := NewConversionHandlers(recorder)
+	handlers := NewConversionHandlers(recorder, nil)
 
 	events := []conversion.ConversionEvent{
 		{
@@ -222,7 +222,7 @@ func TestConversionHandleGetStats(t *testing.T) {
 }
 
 func TestConversionHandleGetStatsNonGET(t *testing.T) {
-	handlers := NewConversionHandlers(nil)
+	handlers := NewConversionHandlers(nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/conversion/stats", nil)
 	rec := httptest.NewRecorder()
@@ -231,5 +231,90 @@ func TestConversionHandleGetStatsNonGET(t *testing.T) {
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestConversionHandleGetHealth(t *testing.T) {
+	health := conversion.NewPipelineHealth()
+	handlers := NewConversionHandlers(nil, health)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/conversion/health", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleGetHealth(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp conversion.HealthStatus
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed decoding response: %v", err)
+	}
+
+	if resp.Status == "" {
+		t.Fatal("status is empty")
+	}
+	if resp.StartedAt <= 0 {
+		t.Fatalf("started_at = %d, want > 0", resp.StartedAt)
+	}
+	if resp.EventsByType == nil {
+		t.Fatal("events_by_type is nil")
+	}
+}
+
+func TestConversionHandleGetHealthNonGET(t *testing.T) {
+	handlers := NewConversionHandlers(nil, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/conversion/health", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleGetHealth(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestConversionHandleRecordEventUpdatesHealth(t *testing.T) {
+	agg := metering.NewWindowedAggregator()
+	recorder := conversion.NewRecorder(agg)
+	health := conversion.NewPipelineHealth()
+	handlers := NewConversionHandlers(recorder, health)
+
+	body := []byte(fmt.Sprintf(`{
+		"type":"paywall_viewed",
+		"capability":"long_term_metrics",
+		"surface":"history_chart",
+		"tenant_mode":"single",
+		"timestamp":%d,
+		"idempotency_key":"paywall_viewed:history_chart:long_term_metrics:health"
+	}`, time.Now().UnixMilli()))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handlers.HandleRecordEvent(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusAccepted)
+	}
+
+	healthReq := httptest.NewRequest(http.MethodGet, "/api/conversion/health", nil)
+	healthRec := httptest.NewRecorder()
+	handlers.HandleGetHealth(healthRec, healthReq)
+	if healthRec.Code != http.StatusOK {
+		t.Fatalf("health status = %d, want %d", healthRec.Code, http.StatusOK)
+	}
+
+	var healthResp conversion.HealthStatus
+	if err := json.NewDecoder(healthRec.Body).Decode(&healthResp); err != nil {
+		t.Fatalf("failed decoding health response: %v", err)
+	}
+	if healthResp.EventsTotal != 1 {
+		t.Fatalf("health events_total = %d, want 1", healthResp.EventsTotal)
+	}
+	if healthResp.EventsByType[conversion.EventPaywallViewed] != 1 {
+		t.Fatalf("health events_by_type[%q] = %d, want 1", conversion.EventPaywallViewed, healthResp.EventsByType[conversion.EventPaywallViewed])
 	}
 }
