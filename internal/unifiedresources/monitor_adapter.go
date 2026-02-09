@@ -49,14 +49,12 @@ func (a *MonitorAdapter) GetPollingRecommendations() map[string]float64 {
 	recommendations := make(map[string]float64)
 
 	for _, resource := range a.GetAll() {
-		if resource.SourceType != LegacySourceAgent && resource.SourceType != LegacySourceHybrid {
+		sourceType := monitorSourceType(resource.Sources)
+		if sourceType != "agent" && sourceType != "hybrid" {
 			continue
 		}
 
-		hostname := ""
-		if resource.Identity != nil {
-			hostname = strings.TrimSpace(resource.Identity.Hostname)
-		}
+		hostname := monitorHostname(resource)
 		if hostname == "" {
 			hostname = strings.TrimSpace(resource.Name)
 		}
@@ -65,7 +63,7 @@ func (a *MonitorAdapter) GetPollingRecommendations() map[string]float64 {
 		}
 
 		key := strings.ToLower(hostname)
-		if resource.SourceType == LegacySourceHybrid {
+		if sourceType == "hybrid" {
 			if existing, exists := recommendations[key]; !exists || existing != 0 {
 				recommendations[key] = 0.5
 			}
@@ -77,17 +75,13 @@ func (a *MonitorAdapter) GetPollingRecommendations() map[string]float64 {
 	return recommendations
 }
 
-// GetAll returns all resources in legacy shape for monitor broadcast usage.
-func (a *MonitorAdapter) GetAll() []LegacyResource {
+// GetAll returns all unified resources for monitor broadcast usage.
+func (a *MonitorAdapter) GetAll() []Resource {
 	if a.registry == nil {
 		return nil
 	}
 
-	a.mu.RLock()
-	alerts := append([]models.Alert(nil), a.activeAlerts...)
-	a.mu.RUnlock()
-
-	return convertRegistryToLegacy(a.registry, alerts)
+	return a.registry.List()
 }
 
 // PopulateFromSnapshot ingests a fresh state snapshot into the registry.
@@ -101,4 +95,43 @@ func (a *MonitorAdapter) PopulateFromSnapshot(snapshot models.StateSnapshot) {
 	a.mu.Lock()
 	a.activeAlerts = append([]models.Alert(nil), snapshot.ActiveAlerts...)
 	a.mu.Unlock()
+}
+
+func monitorSourceType(sources []DataSource) string {
+	if len(sources) > 1 {
+		return "hybrid"
+	}
+	if len(sources) == 1 {
+		switch sources[0] {
+		case SourceAgent, SourceDocker, SourceK8s:
+			return "agent"
+		default:
+			return "api"
+		}
+	}
+	return "api"
+}
+
+func monitorHostname(resource Resource) string {
+	if resource.Agent != nil {
+		if hostname := strings.TrimSpace(resource.Agent.Hostname); hostname != "" {
+			return hostname
+		}
+	}
+	if resource.Docker != nil {
+		if hostname := strings.TrimSpace(resource.Docker.Hostname); hostname != "" {
+			return hostname
+		}
+	}
+	if resource.Proxmox != nil {
+		if hostname := strings.TrimSpace(resource.Proxmox.NodeName); hostname != "" {
+			return hostname
+		}
+	}
+	for _, hostname := range resource.Identity.Hostnames {
+		if trimmed := strings.TrimSpace(hostname); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

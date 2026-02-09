@@ -488,10 +488,10 @@ func TestMonitor_BackupTimeout_Extra(t *testing.T) {
 
 type mockResourceStoreExtra struct {
 	ResourceStoreInterface
-	resources []unifiedresources.LegacyResource
+	resources []unifiedresources.Resource
 }
 
-func (m *mockResourceStoreExtra) GetAll() []unifiedresources.LegacyResource {
+func (m *mockResourceStoreExtra) GetAll() []unifiedresources.Resource {
 	return m.resources
 }
 
@@ -504,29 +504,34 @@ func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 	now := time.Now().UTC()
 	total := int64(100)
 	used := int64(40)
-	free := int64(60)
 	uptime := int64(3600)
 
 	m.resourceStore = &mockResourceStoreExtra{
-		resources: []unifiedresources.LegacyResource{
+		resources: []unifiedresources.Resource{
 			{
-				ID:           "node-1",
-				Type:         unifiedresources.LegacyResourceTypeNode,
-				Name:         "node1",
-				DisplayName:  "Node One",
-				PlatformID:   "p1",
-				PlatformType: unifiedresources.LegacyPlatformProxmoxPVE,
-				SourceType:   unifiedresources.LegacySourceAPI,
-				Status:       unifiedresources.LegacyStatusOnline,
-				CPU:          &unifiedresources.LegacyMetricValue{Current: 12.5},
-				Memory:       &unifiedresources.LegacyMetricValue{Current: 40, Total: &total, Used: &used, Free: &free},
-				Network:      &unifiedresources.LegacyNetworkMetric{RXBytes: 111, TXBytes: 222},
-				Uptime:       &uptime,
-				LastSeen:     now,
-				Alerts: []unifiedresources.LegacyAlert{
-					{ID: "alert-1", Type: "cpu", Level: "warning", Message: "high cpu", Value: 90, Threshold: 80, StartTime: now},
+				ID:       "node-1",
+				Type:     unifiedresources.ResourceTypeHost,
+				Name:     "Node One",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+				Proxmox: &unifiedresources.ProxmoxData{
+					NodeName:    "node1",
+					Instance:    "p1",
+					Uptime:      uptime,
+					ClusterName: "cluster-a",
 				},
-				Identity: &unifiedresources.LegacyIdentity{Hostname: "node1", MachineID: "mid-1", IPs: []string{"10.0.0.10"}},
+				Metrics: &unifiedresources.ResourceMetrics{
+					CPU:    &unifiedresources.MetricValue{Percent: 12.5},
+					Memory: &unifiedresources.MetricValue{Percent: 40, Total: &total, Used: &used},
+					NetIn:  &unifiedresources.MetricValue{Value: 111},
+					NetOut: &unifiedresources.MetricValue{Value: 222},
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					Hostnames:   []string{"node1"},
+					MachineID:   "mid-1",
+					IPAddresses: []string{"10.0.0.10"},
+				},
 			},
 		},
 	}
@@ -544,8 +549,8 @@ func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 	if res[0].CPU == nil || res[0].Memory == nil || res[0].Network == nil {
 		t.Fatalf("expected cpu/memory/network payloads, got %#v", res[0])
 	}
-	if len(res[0].Alerts) != 1 || res[0].Alerts[0].ID != "alert-1" {
-		t.Fatalf("expected alert payload to be preserved, got %#v", res[0].Alerts)
+	if len(res[0].Alerts) != 0 {
+		t.Fatalf("expected no direct alert payload, got %#v", res[0].Alerts)
 	}
 	if res[0].Identity == nil || res[0].Identity.Hostname != "node1" {
 		t.Fatalf("expected identity payload to be preserved, got %#v", res[0].Identity)

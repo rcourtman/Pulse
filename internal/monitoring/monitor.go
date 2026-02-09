@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	stderrors "errors"
 	"fmt"
 	"math"
@@ -103,7 +104,7 @@ type ResourceStoreInterface interface {
 	// 0 = skip entirely, 0.5 = half frequency, 1 = normal
 	GetPollingRecommendations() map[string]float64
 	// GetAll returns all resources in the store (for WebSocket broadcasts)
-	GetAll() []unifiedresources.LegacyResource
+	GetAll() []unifiedresources.Resource
 	// PopulateFromSnapshot updates the store with data from a StateSnapshot
 	PopulateFromSnapshot(snapshot models.StateSnapshot)
 }
@@ -2708,89 +2709,706 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 		return nil
 	}
 
-	result := make([]models.ResourceFrontend, len(allResources))
-	for i, r := range allResources {
-		input := models.ResourceConvertInput{
-			ID:           r.ID,
-			Type:         string(r.Type),
-			Name:         r.Name,
-			DisplayName:  r.DisplayName,
-			PlatformID:   r.PlatformID,
-			PlatformType: string(r.PlatformType),
-			SourceType:   string(r.SourceType),
-			ParentID:     r.ParentID,
-			ClusterID:    r.ClusterID,
-			Status:       string(r.Status),
-			Temperature:  r.Temperature,
-			Uptime:       r.Uptime,
-			Tags:         r.Tags,
-			Labels:       r.Labels,
-			LastSeenUnix: r.LastSeen.UnixMilli(),
-		}
-
-		// Convert metrics
-		if r.CPU != nil {
-			input.CPU = &models.ResourceMetricInput{
-				Current: r.CPU.Current,
-				Total:   r.CPU.Total,
-				Used:    r.CPU.Used,
-				Free:    r.CPU.Free,
-			}
-		}
-		if r.Memory != nil {
-			input.Memory = &models.ResourceMetricInput{
-				Current: r.Memory.Current,
-				Total:   r.Memory.Total,
-				Used:    r.Memory.Used,
-				Free:    r.Memory.Free,
-			}
-		}
-		if r.Disk != nil {
-			input.Disk = &models.ResourceMetricInput{
-				Current: r.Disk.Current,
-				Total:   r.Disk.Total,
-				Used:    r.Disk.Used,
-				Free:    r.Disk.Free,
-			}
-		}
-		if r.Network != nil {
-			input.HasNetwork = true
-			input.NetworkRX = r.Network.RXBytes
-			input.NetworkTX = r.Network.TXBytes
-		}
-
-		// Convert alerts
-		if len(r.Alerts) > 0 {
-			input.Alerts = make([]models.ResourceAlertInput, len(r.Alerts))
-			for j, a := range r.Alerts {
-				input.Alerts[j] = models.ResourceAlertInput{
-					ID:            a.ID,
-					Type:          a.Type,
-					Level:         a.Level,
-					Message:       a.Message,
-					Value:         a.Value,
-					Threshold:     a.Threshold,
-					StartTimeUnix: a.StartTime.UnixMilli(),
-				}
-			}
-		}
-
-		// Convert identity
-		if r.Identity != nil {
-			input.Identity = &models.ResourceIdentityInput{
-				Hostname:  r.Identity.Hostname,
-				MachineID: r.Identity.MachineID,
-				IPs:       r.Identity.IPs,
-			}
-		}
-
-		// Pass platform data directly as json.RawMessage
-		input.PlatformData = r.PlatformData
-
-		result[i] = models.ConvertResourceToFrontend(input)
+	type broadcastResource struct {
+		input      models.ResourceConvertInput
+		sortKey    string
+		resourceID string
 	}
 
+	converted := make([]broadcastResource, 0, len(allResources))
+	for _, r := range allResources {
+		input := monitorResourceToConvertInput(r)
+		sortKey := strings.ToLower(input.DisplayName)
+		if sortKey == "" {
+			sortKey = strings.ToLower(input.Name)
+		}
+		converted = append(converted, broadcastResource{
+			input:      input,
+			sortKey:    sortKey,
+			resourceID: input.ID,
+		})
+	}
+
+	sort.Slice(converted, func(i, j int) bool {
+		if converted[i].sortKey == converted[j].sortKey {
+			return converted[i].resourceID < converted[j].resourceID
+		}
+		return converted[i].sortKey < converted[j].sortKey
+	})
+
+	result := make([]models.ResourceFrontend, len(converted))
+	for i, resource := range converted {
+		result[i] = models.ConvertResourceToFrontend(resource.input)
+	}
 	return result
+}
+
+func monitorResourceToConvertInput(resource unifiedresources.Resource) models.ResourceConvertInput {
+	resourceType := monitorLegacyResourceType(resource)
+	name, displayName := monitorLegacyNames(resource, resourceType)
+	platformID := monitorPlatformID(resource, resourceType)
+
+	input := models.ResourceConvertInput{
+		ID:           resource.ID,
+		Type:         resourceType,
+		Name:         name,
+		DisplayName:  displayName,
+		PlatformID:   platformID,
+		PlatformType: monitorPlatformType(resource, resourceType),
+		SourceType:   monitorSourceType(resource.Sources),
+		ParentID:     monitorStringValue(resource.ParentID),
+		ClusterID:    monitorClusterID(resource),
+		Status:       monitorLegacyStatus(resource, resourceType),
+		CPU:          monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.CPU })),
+		Memory:       monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
+		Disk:         monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Disk })),
+		Temperature:  monitorTemperature(resource),
+		Uptime:       monitorUptime(resource),
+		Tags:         append([]string(nil), resource.Tags...),
+		Labels:       monitorLabels(resource),
+		LastSeenUnix: monitorLastSeenUnix(resource.LastSeen),
+		Identity:     monitorIdentity(resource, name),
+		PlatformData: monitorPlatformData(resource, resourceType, platformID),
+	}
+
+	hasNetwork, rx, tx := monitorNetworkMetricInput(resource.Metrics)
+	input.HasNetwork = hasNetwork
+	input.NetworkRX = rx
+	input.NetworkTX = tx
+
+	return input
+}
+
+func monitorLegacyResourceType(resource unifiedresources.Resource) string {
+	switch resource.Type {
+	case unifiedresources.ResourceTypeVM:
+		return "vm"
+	case unifiedresources.ResourceTypeLXC:
+		return "container"
+	case unifiedresources.ResourceTypeContainer:
+		return "docker-container"
+	case unifiedresources.ResourceTypeK8sCluster:
+		return "k8s-cluster"
+	case unifiedresources.ResourceTypeK8sNode:
+		return "k8s-node"
+	case unifiedresources.ResourceTypePod:
+		return "pod"
+	case unifiedresources.ResourceTypeK8sDeployment:
+		return "k8s-deployment"
+	case unifiedresources.ResourceTypePBS:
+		return "pbs"
+	case unifiedresources.ResourceTypePMG:
+		return "pmg"
+	case unifiedresources.ResourceTypeStorage:
+		return "storage"
+	case unifiedresources.ResourceTypeCeph:
+		return "pool"
+	case unifiedresources.ResourceTypeHost:
+		if resource.Proxmox != nil {
+			return "node"
+		}
+		if resource.Docker != nil {
+			return "docker-host"
+		}
+		return "host"
+	default:
+		return string(resource.Type)
+	}
+}
+
+func monitorLegacyNames(resource unifiedresources.Resource, resourceType string) (string, string) {
+	name := strings.TrimSpace(resource.Name)
+	displayName := ""
+
+	switch resourceType {
+	case "node":
+		if resource.Proxmox != nil && resource.Proxmox.NodeName != "" && !strings.EqualFold(resource.Proxmox.NodeName, name) {
+			displayName = name
+			name = resource.Proxmox.NodeName
+		}
+	case "host":
+		if resource.Agent != nil && resource.Agent.Hostname != "" && !strings.EqualFold(resource.Agent.Hostname, name) {
+			displayName = name
+			name = resource.Agent.Hostname
+		}
+	case "docker-host":
+		if resource.Docker != nil && resource.Docker.Hostname != "" && !strings.EqualFold(resource.Docker.Hostname, name) {
+			displayName = name
+			name = resource.Docker.Hostname
+		}
+	}
+
+	if name == "" {
+		name = resource.ID
+	}
+	return name, strings.TrimSpace(displayName)
+}
+
+func monitorPlatformType(resource unifiedresources.Resource, resourceType string) string {
+	switch resourceType {
+	case "node", "vm", "container", "storage", "pool":
+		return "proxmox-pve"
+	case "docker-host", "docker-container":
+		return "docker"
+	case "k8s-cluster", "k8s-node", "pod", "k8s-deployment":
+		return "kubernetes"
+	case "pbs":
+		return "proxmox-pbs"
+	case "pmg":
+		return "proxmox-pmg"
+	case "host":
+		return "host-agent"
+	default:
+		if monitorHasSource(resource.Sources, unifiedresources.SourceK8s) {
+			return "kubernetes"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourceDocker) {
+			return "docker"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourcePBS) {
+			return "proxmox-pbs"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourcePMG) {
+			return "proxmox-pmg"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourceAgent) {
+			return "host-agent"
+		}
+		return "proxmox-pve"
+	}
+}
+
+func monitorPlatformID(resource unifiedresources.Resource, resourceType string) string {
+	switch resourceType {
+	case "node", "vm", "container":
+		if resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.Instance) != "" {
+			return strings.TrimSpace(resource.Proxmox.Instance)
+		}
+	case "host":
+		if resource.Agent != nil && strings.TrimSpace(resource.Agent.AgentID) != "" {
+			return strings.TrimSpace(resource.Agent.AgentID)
+		}
+	case "docker-host":
+		if resource.Docker != nil && strings.TrimSpace(resource.Docker.Hostname) != "" {
+			return strings.TrimSpace(resource.Docker.Hostname)
+		}
+	case "docker-container":
+		if resource.Docker != nil && strings.TrimSpace(resource.Docker.Hostname) != "" {
+			return strings.TrimSpace(resource.Docker.Hostname)
+		}
+		if resource.ParentID != nil {
+			return strings.TrimSpace(*resource.ParentID)
+		}
+	case "k8s-cluster", "k8s-node", "pod", "k8s-deployment":
+		if resource.Kubernetes != nil && strings.TrimSpace(resource.Kubernetes.AgentID) != "" {
+			return strings.TrimSpace(resource.Kubernetes.AgentID)
+		}
+	case "pbs":
+		if resource.PBS != nil && strings.TrimSpace(resource.PBS.Hostname) != "" {
+			return strings.TrimSpace(resource.PBS.Hostname)
+		}
+	case "pmg":
+		if resource.PMG != nil && strings.TrimSpace(resource.PMG.Hostname) != "" {
+			return strings.TrimSpace(resource.PMG.Hostname)
+		}
+	}
+	return resource.ID
+}
+
+func monitorLegacyStatus(resource unifiedresources.Resource, resourceType string) string {
+	switch resourceType {
+	case "docker-container":
+		switch resource.Status {
+		case unifiedresources.StatusOnline:
+			return "running"
+		case unifiedresources.StatusOffline:
+			return "stopped"
+		case unifiedresources.StatusWarning:
+			return "degraded"
+		}
+	case "pod":
+		if resource.Kubernetes != nil {
+			phase := strings.ToLower(strings.TrimSpace(resource.Kubernetes.PodPhase))
+			switch phase {
+			case "running":
+				return "running"
+			case "pending", "unknown":
+				return "degraded"
+			case "succeeded", "failed":
+				return "stopped"
+			}
+		}
+	}
+
+	switch resource.Status {
+	case unifiedresources.StatusOnline:
+		if monitorIsWorkloadType(resourceType) || resourceType == "pod" {
+			return "running"
+		}
+		return "online"
+	case unifiedresources.StatusOffline:
+		if monitorIsWorkloadType(resourceType) || resourceType == "pod" {
+			return "stopped"
+		}
+		return "offline"
+	case unifiedresources.StatusWarning:
+		return "degraded"
+	default:
+		return "unknown"
+	}
+}
+
+func monitorIsWorkloadType(resourceType string) bool {
+	switch resourceType {
+	case "docker-container", "container", "vm", "oci-container":
+		return true
+	default:
+		return false
+	}
+}
+
+func monitorClusterID(resource unifiedresources.Resource) string {
+	clusterID := strings.TrimSpace(resource.Identity.ClusterName)
+	if clusterID == "" && resource.Proxmox != nil {
+		clusterID = strings.TrimSpace(resource.Proxmox.ClusterName)
+	}
+	if clusterID == "" && resource.Kubernetes != nil {
+		clusterID = strings.TrimSpace(resource.Kubernetes.ClusterID)
+	}
+	if clusterID == "" && resource.Kubernetes != nil {
+		clusterID = strings.TrimSpace(resource.Kubernetes.ClusterName)
+	}
+	return clusterID
+}
+
+func monitorMetricInput(metric *unifiedresources.MetricValue) *models.ResourceMetricInput {
+	if metric == nil {
+		return nil
+	}
+
+	current := metric.Percent
+	if current == 0 {
+		current = metric.Value
+	}
+	if metric.Percent != 0 && metric.Value != 0 {
+		current = math.Max(metric.Percent, metric.Value)
+	}
+
+	result := &models.ResourceMetricInput{Current: current}
+	if metric.Total != nil {
+		total := *metric.Total
+		result.Total = &total
+	}
+	if metric.Used != nil {
+		used := *metric.Used
+		result.Used = &used
+	}
+	if result.Total != nil && result.Used != nil {
+		free := *result.Total - *result.Used
+		result.Free = &free
+	}
+	return result
+}
+
+func monitorNetworkMetricInput(metrics *unifiedresources.ResourceMetrics) (bool, int64, int64) {
+	if metrics == nil || (metrics.NetIn == nil && metrics.NetOut == nil) {
+		return false, 0, 0
+	}
+
+	var rx int64
+	var tx int64
+	if metrics.NetIn != nil {
+		rx = int64(math.Round(metrics.NetIn.Value))
+	}
+	if metrics.NetOut != nil {
+		tx = int64(math.Round(metrics.NetOut.Value))
+	}
+	return true, rx, tx
+}
+
+func monitorTemperature(resource unifiedresources.Resource) *float64 {
+	if resource.Agent != nil && resource.Agent.Temperature != nil {
+		value := *resource.Agent.Temperature
+		return &value
+	}
+	if resource.Proxmox != nil && resource.Proxmox.Temperature != nil {
+		value := *resource.Proxmox.Temperature
+		return &value
+	}
+	if resource.Docker != nil && resource.Docker.Temperature != nil {
+		value := *resource.Docker.Temperature
+		return &value
+	}
+	if resource.Kubernetes != nil && resource.Kubernetes.Temperature != nil {
+		value := *resource.Kubernetes.Temperature
+		return &value
+	}
+	return nil
+}
+
+func monitorUptime(resource unifiedresources.Resource) *int64 {
+	if resource.Agent != nil && resource.Agent.UptimeSeconds > 0 {
+		value := resource.Agent.UptimeSeconds
+		return &value
+	}
+	if resource.Proxmox != nil && resource.Proxmox.Uptime > 0 {
+		value := resource.Proxmox.Uptime
+		return &value
+	}
+	if resource.Docker != nil && resource.Docker.UptimeSeconds > 0 {
+		value := resource.Docker.UptimeSeconds
+		return &value
+	}
+	if resource.Kubernetes != nil && resource.Kubernetes.UptimeSeconds > 0 {
+		value := resource.Kubernetes.UptimeSeconds
+		return &value
+	}
+	if resource.PBS != nil && resource.PBS.UptimeSeconds > 0 {
+		value := resource.PBS.UptimeSeconds
+		return &value
+	}
+	if resource.PMG != nil && resource.PMG.UptimeSeconds > 0 {
+		value := resource.PMG.UptimeSeconds
+		return &value
+	}
+	return nil
+}
+
+func monitorLabels(resource unifiedresources.Resource) map[string]string {
+	if resource.Kubernetes == nil || len(resource.Kubernetes.Labels) == 0 {
+		return nil
+	}
+	labels := make(map[string]string, len(resource.Kubernetes.Labels))
+	for key, value := range resource.Kubernetes.Labels {
+		labels[key] = value
+	}
+	return labels
+}
+
+func monitorIdentity(resource unifiedresources.Resource, fallbackName string) *models.ResourceIdentityInput {
+	hostname := ""
+	if resource.Agent != nil {
+		hostname = strings.TrimSpace(resource.Agent.Hostname)
+	}
+	if hostname == "" && resource.Docker != nil {
+		hostname = strings.TrimSpace(resource.Docker.Hostname)
+	}
+	if hostname == "" && resource.Proxmox != nil {
+		hostname = strings.TrimSpace(resource.Proxmox.NodeName)
+	}
+	if hostname == "" {
+		for _, candidate := range resource.Identity.Hostnames {
+			if trimmed := strings.TrimSpace(candidate); trimmed != "" {
+				hostname = trimmed
+				break
+			}
+		}
+	}
+	if hostname == "" {
+		hostname = fallbackName
+	}
+
+	ips := make([]string, 0, len(resource.Identity.IPAddresses))
+	for _, ip := range resource.Identity.IPAddresses {
+		trimmed := strings.TrimSpace(ip)
+		if trimmed == "" {
+			continue
+		}
+		ips = append(ips, trimmed)
+	}
+
+	machineID := strings.TrimSpace(resource.Identity.MachineID)
+	if hostname == "" && machineID == "" && len(ips) == 0 {
+		return nil
+	}
+
+	return &models.ResourceIdentityInput{
+		Hostname:  hostname,
+		MachineID: machineID,
+		IPs:       ips,
+	}
+}
+
+func monitorPlatformData(resource unifiedresources.Resource, resourceType string, platformID string) json.RawMessage {
+	var payload interface{}
+
+	switch resourceType {
+	case "node":
+		if resource.Proxmox != nil {
+			payload = map[string]interface{}{
+				"instance":         resource.Proxmox.Instance,
+				"host":             "",
+				"guestURL":         "",
+				"pveVersion":       resource.Proxmox.PVEVersion,
+				"kernelVersion":    resource.Proxmox.KernelVersion,
+				"cpuInfo":          resource.Proxmox.CPUInfo,
+				"loadAverage":      []float64{},
+				"isClusterMember":  resource.Proxmox.ClusterName != "",
+				"clusterName":      resource.Proxmox.ClusterName,
+				"connectionHealth": monitorSourceStatus(resource.SourceStatus, unifiedresources.SourceProxmox),
+			}
+		}
+	case "vm":
+		if resource.Proxmox != nil {
+			payload = map[string]interface{}{
+				"vmid":       resource.Proxmox.VMID,
+				"node":       resource.Proxmox.NodeName,
+				"instance":   resource.Proxmox.Instance,
+				"cpus":       resource.Proxmox.CPUs,
+				"template":   resource.Proxmox.Template,
+				"networkIn":  monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetIn }),
+				"networkOut": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetOut }),
+				"diskRead":   monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.DiskRead }),
+				"diskWrite": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue {
+					return metrics.DiskWrite
+				}),
+				"lastBackup":  resource.Proxmox.LastBackup,
+				"ipAddresses": append([]string(nil), resource.Identity.IPAddresses...),
+			}
+		}
+	case "container", "oci-container":
+		if resource.Proxmox != nil {
+			payload = map[string]interface{}{
+				"vmid":       resource.Proxmox.VMID,
+				"node":       resource.Proxmox.NodeName,
+				"instance":   resource.Proxmox.Instance,
+				"cpus":       resource.Proxmox.CPUs,
+				"template":   resource.Proxmox.Template,
+				"networkIn":  monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetIn }),
+				"networkOut": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetOut }),
+				"diskRead":   monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.DiskRead }),
+				"diskWrite": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue {
+					return metrics.DiskWrite
+				}),
+				"lastBackup":  resource.Proxmox.LastBackup,
+				"ipAddresses": append([]string(nil), resource.Identity.IPAddresses...),
+			}
+		}
+	case "host":
+		if resource.Agent != nil {
+			payload = map[string]interface{}{
+				"platform":      resource.Agent.Platform,
+				"osName":        resource.Agent.OSName,
+				"osVersion":     resource.Agent.OSVersion,
+				"kernelVersion": resource.Agent.KernelVersion,
+				"architecture":  resource.Agent.Architecture,
+				"agentVersion":  resource.Agent.AgentVersion,
+				"interfaces":    resource.Agent.NetworkInterfaces,
+				"disks":         resource.Agent.Disks,
+			}
+		}
+	case "docker-host":
+		if resource.Docker != nil {
+			payload = map[string]interface{}{
+				"agentId":        platformID,
+				"runtime":        resource.Docker.Runtime,
+				"runtimeVersion": resource.Docker.RuntimeVersion,
+				"dockerVersion":  resource.Docker.DockerVersion,
+				"os":             resource.Docker.OS,
+				"kernelVersion":  resource.Docker.KernelVersion,
+				"architecture":   resource.Docker.Architecture,
+				"agentVersion":   resource.Docker.AgentVersion,
+				"swarm":          resource.Docker.Swarm,
+				"interfaces":     resource.Docker.NetworkInterfaces,
+				"disks":          resource.Docker.Disks,
+			}
+		}
+	case "docker-container":
+		if resource.Docker != nil {
+			payload = map[string]interface{}{
+				"hostId":    monitorStringValue(resource.ParentID),
+				"hostName":  resource.Docker.Hostname,
+				"image":     resource.Docker.Image,
+				"state":     strings.ToLower(string(resource.Status)),
+				"status":    strings.ToLower(string(resource.Status)),
+				"health":    "",
+				"createdAt": time.Time{},
+			}
+		}
+	case "k8s-cluster":
+		if resource.Kubernetes != nil {
+			payload = map[string]interface{}{
+				"agentId":           resource.Kubernetes.AgentID,
+				"server":            resource.Kubernetes.Server,
+				"context":           resource.Kubernetes.Context,
+				"version":           resource.Kubernetes.Version,
+				"customDisplayName": "",
+				"hidden":            false,
+				"pendingUninstall":  resource.Kubernetes.PendingUninstall,
+				"nodeCount":         resource.ChildCount,
+			}
+		}
+	case "k8s-node":
+		if resource.Kubernetes != nil {
+			payload = map[string]interface{}{
+				"clusterId":               resource.Kubernetes.ClusterID,
+				"ready":                   resource.Kubernetes.Ready,
+				"unschedulable":           resource.Kubernetes.Unschedulable,
+				"kubeletVersion":          resource.Kubernetes.KubeletVersion,
+				"containerRuntimeVersion": resource.Kubernetes.ContainerRuntimeVersion,
+				"osImage":                 resource.Kubernetes.OSImage,
+				"kernelVersion":           resource.Kubernetes.KernelVersion,
+				"architecture":            resource.Kubernetes.Architecture,
+				"capacityCpuCores":        resource.Kubernetes.CapacityCPU,
+				"capacityMemoryBytes":     resource.Kubernetes.CapacityMemoryBytes,
+				"capacityPods":            resource.Kubernetes.CapacityPods,
+				"allocatableCpuCores":     resource.Kubernetes.AllocCPU,
+				"allocatableMemoryBytes":  resource.Kubernetes.AllocMemoryBytes,
+				"allocatablePods":         resource.Kubernetes.AllocPods,
+				"roles":                   append([]string(nil), resource.Kubernetes.Roles...),
+			}
+		}
+	case "pod":
+		if resource.Kubernetes != nil {
+			payload = map[string]interface{}{
+				"clusterId": resource.Kubernetes.ClusterID,
+				"namespace": resource.Kubernetes.Namespace,
+				"nodeName":  resource.Kubernetes.NodeName,
+				"phase":     resource.Kubernetes.PodPhase,
+				"restarts":  resource.Kubernetes.Restarts,
+				"ownerKind": resource.Kubernetes.OwnerKind,
+				"ownerName": resource.Kubernetes.OwnerName,
+			}
+		}
+	case "k8s-deployment":
+		if resource.Kubernetes != nil {
+			payload = map[string]interface{}{
+				"clusterId":         resource.Kubernetes.ClusterID,
+				"namespace":         resource.Kubernetes.Namespace,
+				"desiredReplicas":   resource.Kubernetes.DesiredReplicas,
+				"updatedReplicas":   resource.Kubernetes.UpdatedReplicas,
+				"readyReplicas":     resource.Kubernetes.ReadyReplicas,
+				"availableReplicas": resource.Kubernetes.AvailableReplicas,
+			}
+		}
+	case "pbs":
+		if resource.PBS != nil {
+			payload = map[string]interface{}{
+				"host":             resource.PBS.Hostname,
+				"version":          resource.PBS.Version,
+				"connectionHealth": resource.PBS.ConnectionHealth,
+				"memoryUsed":       monitorMetricUsed(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
+				"memoryTotal":      monitorMetricTotal(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
+				"numDatastores":    resource.PBS.DatastoreCount,
+			}
+		}
+	case "pmg":
+		if resource.PMG != nil {
+			payload = map[string]interface{}{
+				"host":             resource.PMG.Hostname,
+				"version":          resource.PMG.Version,
+				"connectionHealth": resource.PMG.ConnectionHealth,
+				"nodeCount":        resource.PMG.NodeCount,
+				"queueActive":      resource.PMG.QueueActive,
+				"queueDeferred":    resource.PMG.QueueDeferred,
+				"queueHold":        resource.PMG.QueueHold,
+				"queueIncoming":    resource.PMG.QueueIncoming,
+				"queueTotal":       resource.PMG.QueueTotal,
+				"mailCountTotal":   resource.PMG.MailCountTotal,
+				"spamIn":           resource.PMG.SpamIn,
+				"virusIn":          resource.PMG.VirusIn,
+				"lastUpdated":      resource.PMG.LastUpdated,
+			}
+		}
+	case "storage", "pool":
+		payload = map[string]interface{}{
+			"instance": platformID,
+			"node":     monitorStringValue(resource.ParentID),
+			"type":     "",
+			"content":  "",
+			"shared":   false,
+			"enabled":  true,
+			"active":   resource.Status == unifiedresources.StatusOnline,
+		}
+	}
+
+	if payload == nil {
+		return nil
+	}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil
+	}
+	return encoded
+}
+
+func monitorMetricValue(metrics *unifiedresources.ResourceMetrics, pick func(*unifiedresources.ResourceMetrics) *unifiedresources.MetricValue) *unifiedresources.MetricValue {
+	if metrics == nil {
+		return nil
+	}
+	return pick(metrics)
+}
+
+func monitorMetricInt64(metrics *unifiedresources.ResourceMetrics, pick func(*unifiedresources.ResourceMetrics) *unifiedresources.MetricValue) int64 {
+	metric := monitorMetricValue(metrics, pick)
+	if metric == nil {
+		return 0
+	}
+	return int64(math.Round(metric.Value))
+}
+
+func monitorMetricUsed(metric *unifiedresources.MetricValue) int64 {
+	if metric == nil || metric.Used == nil {
+		return 0
+	}
+	return *metric.Used
+}
+
+func monitorMetricTotal(metric *unifiedresources.MetricValue) int64 {
+	if metric == nil || metric.Total == nil {
+		return 0
+	}
+	return *metric.Total
+}
+
+func monitorSourceStatus(statuses map[unifiedresources.DataSource]unifiedresources.SourceStatus, source unifiedresources.DataSource) string {
+	if statuses == nil {
+		return ""
+	}
+	status, ok := statuses[source]
+	if !ok {
+		return ""
+	}
+	return status.Status
+}
+
+func monitorHasSource(sources []unifiedresources.DataSource, source unifiedresources.DataSource) bool {
+	for _, candidate := range sources {
+		if candidate == source {
+			return true
+		}
+	}
+	return false
+}
+
+func monitorSourceType(sources []unifiedresources.DataSource) string {
+	if len(sources) > 1 {
+		return "hybrid"
+	}
+	if len(sources) == 1 {
+		switch sources[0] {
+		case unifiedresources.SourceAgent, unifiedresources.SourceDocker, unifiedresources.SourceK8s:
+			return "agent"
+		default:
+			return "api"
+		}
+	}
+	return "api"
+}
+
+func monitorStringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
+}
+
+func monitorLastSeenUnix(value time.Time) int64 {
+	if value.IsZero() {
+		return time.Now().UTC().UnixMilli()
+	}
+	return value.UnixMilli()
 }
 
 // pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls

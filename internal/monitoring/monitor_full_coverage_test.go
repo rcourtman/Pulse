@@ -406,7 +406,7 @@ func (m *mockResourceStore) ShouldSkipAPIPolling(hostname string) bool {
 	return hostname == "ignored-node"
 }
 func (m *mockResourceStore) GetPollingRecommendations() map[string]float64      { return nil }
-func (m *mockResourceStore) GetAll() []unifiedresources.LegacyResource          { return nil }
+func (m *mockResourceStore) GetAll() []unifiedresources.Resource                { return nil }
 func (m *mockResourceStore) PopulateFromSnapshot(snapshot models.StateSnapshot) {}
 
 func TestMonitor_ShouldSkipNodeMetrics(t *testing.T) {
