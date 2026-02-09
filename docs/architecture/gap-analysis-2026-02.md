@@ -1,23 +1,23 @@
 # Pulse v2.0 Implementation Status Report (2026-02)
 
-**Date:** 2026-02-08
-**Status:** Complete (All Lanes Closed)
+**Date:** 2026-02-09
+**Status:** COMPLETE (All Lanes Closed)
 
 This document provides a factual assessment of the codebase state relative to the v2.0 architectural vision. It identifies implemented components and closure evidence across all implementation lanes.
 
 ## Executive Summary
 
-All implementation lanes are now closed with certification evidence recorded in their progress trackers: W0 Monetization Foundation is COMPLETE (MON-01..MON-09); W1 Unified Resources is COMPLETE (URF-00..URF-08); W2 TrueNAS GA is COMPLETE (TN-00..TN-11 GO) and rollout readiness is also COMPLETE (TRR-00..TRR-05 GO); W3 Mobile is COMPLETE (Packets 00-04); W4 Multi-Tenant is COMPLETE (Productization 00-08, RBAC-00..RBAC-05, RBO-00..RBO-05); W5 Conversion is COMPLETE (CNV-01..CNV-06, CVO-00..CVO-05 GO); and W6 Hosted is COMPLETE (HW-00..HW-08, HOP-00..HOP-05, GO_WITH_CONDITIONS private_beta).
+All implementation lanes are now closed with certification evidence recorded in their progress trackers: W0 Monetization Foundation is COMPLETE (MON-01..MON-09); W1 Unified Resources is COMPLETE (URF-00..URF-08); W2 TrueNAS GA is COMPLETE (TN-00..TN-11 GO) and rollout readiness is also COMPLETE (TRR-00..TRR-07 GO); W3 Mobile is COMPLETE (Packets 00-04); W4 Multi-Tenant is COMPLETE (Productization 00-08, RBAC-00..RBAC-05, RBO-00..RBO-08); W5 Conversion is COMPLETE (CNV-01..CNV-06, CVO-00..CVO-05 GO); and W6 Hosted is COMPLETE (HW-00..HW-08, HOP-00..HOP-09, GO_WITH_CONDITIONS private_beta).
 
 | Workstream | Status | Implementation Notes |
 | :--- | :--- | :--- |
 | **W0: Monetization** | **100%** | **W0-A (Enforcement):** Complete — token parsing, feature gates, `max_nodes` enforcement active. **W0-B (Advanced Primitives):** COMPLETE — B1-B6 implemented, legacy compatibility wiring complete, and final certification approved (MON-01..MON-09). |
 | **W1: Unified Resources** | **100%** | **Complete:** URF-00 through URF-08 are DONE/APPROVED; first-party runtime is unified-resource-native. Compatibility bridges remain explicitly bounded. |
-| **W2: TrueNAS** | **100%** | **COMPLETE:** TN-00..TN-11 DONE/APPROVED (GO verdict). Rollout readiness lane (TRR-00..TRR-05) also COMPLETE (GO). Plan: `truenas-ga-plan-2026-02.md`. Progress: `truenas-ga-progress-2026-02.md`, `truenas-rollout-readiness-progress-2026-02.md`. |
+| **W2: TrueNAS** | **100%** | **COMPLETE:** TN-00..TN-11 DONE/APPROVED (GO verdict). Rollout readiness lane (TRR-00..TRR-07) also COMPLETE (GO reaffirmed). Plan: `truenas-ga-plan-2026-02.md`. Progress: `truenas-ga-progress-2026-02.md`, `truenas-rollout-readiness-progress-2026-02.md`. |
 | **W3: Mobile App** | **100%** | **Complete:** Packets 00-04 are DONE/APPROVED (pairing, connection hardening, push+deep linking, approvals, biometrics/app lock). |
-| **W4: Multi-Tenant** | **100%** | **COMPLETE:** Productization (Packets 00-08) certified. Per-tenant RBAC (RBAC-00..RBAC-05 LANE_COMPLETE). User limit enforcement (`max_users`) implemented. RBAC operations hardening (RBO-00..RBO-05 LANE_COMPLETE, GO_WITH_CONDITIONS). Plan: `multi-tenant-rbac-operations-plan-2026-02.md`. Progress: `multi-tenant-rbac-operations-progress-2026-02.md`. |
+| **W4: Multi-Tenant** | **100%** | **COMPLETE:** Productization (Packets 00-08) certified. Per-tenant RBAC (RBAC-00..RBAC-05 LANE_COMPLETE). User limit enforcement (`max_users`) implemented. RBAC operations hardening (RBO-00..RBO-08 LANE_COMPLETE, GO_WITH_CONDITIONS burn-down complete). Plan: `multi-tenant-rbac-operations-plan-2026-02.md`. Progress: `multi-tenant-rbac-operations-progress-2026-02.md`. |
 | **W5: Conversion** | **100%** | **COMPLETE:** CNV-01..CNV-06 DONE/APPROVED. Backend conversion event contract, frontend emission, trial lifecycle wiring, dynamic upgrade reasons, real usage in limits. Plan: `conversion-readiness-plan-2026-02.md`. Progress: `conversion-readiness-progress-2026-02.md`. |
-| **W6: Hosted** | **100%** | **COMPLETE:** HW-00..HW-08 DONE/APPROVED (GO_WITH_CONDITIONS private_beta). Operations lane (HOP-00..HOP-05) LANE_COMPLETE. Tenant provisioning, per-tenant RBAC, billing-state API, lifecycle operations, metrics, SLOs, and runbooks all delivered. Plan: `hosted-operations-plan-2026-02.md`. Progress: `hosted-operations-progress-2026-02.md`. |
+| **W6: Hosted** | **100%** | **COMPLETE:** HW-00..HW-08 DONE/APPROVED (GO_WITH_CONDITIONS private_beta). Operations lane (HOP-00..HOP-09) LANE_COMPLETE. Tenant provisioning, per-tenant RBAC, billing-state API, lifecycle operations, metrics, SLOs, rate limiting, and runbooks are delivered. Plan: `hosted-operations-plan-2026-02.md`. Progress: `hosted-operations-progress-2026-02.md`. |
 
 ---
 
@@ -96,8 +96,7 @@ All B1-B6 primitives from the Release Readiness Guiding Light are implemented an
 - ✅ Normalized frontend entitlement API endpoint
 - ✅ Contract parity tests: evaluator produces identical results to legacy tier logic across all tiers
 
-**Deferred (not in scope for W0-B primitives):**
-- DatabaseSource for SaaS/hosted mode
+**Deferred (real residuals, as of 2026-02-09):**
 - SQLite metering persistence + daily aggregation
 - Stripe/billing webhook handlers
 - Frontend UI components consuming entitlement API
@@ -173,7 +172,7 @@ The `apiClient.ts` reference to `/api/resources` on line 402 is **configuration 
     *   Alert and AI context compatibility for TrueNAS resources is implemented (TN-09).
     *   Integration test matrix and end-to-end validation are complete (TN-10).
     *   Final GA certification is complete with GO verdict (TN-11).
-    *   Rollout readiness lane is complete: operational runbook (TRR-01), telemetry + alert thresholds (TRR-02), canary rollout controls (TRR-03), soak/failure-injection validation (TRR-04), and final rollout verdict GO (TRR-05).
+    *   Rollout readiness lane is complete: operational runbook (TRR-01), telemetry + alert thresholds (TRR-02), canary rollout controls (TRR-03), soak/failure-injection validation (TRR-04), final rollout verdict GO (TRR-05), typed error classification hardening (TRR-06), and phase-1 lifecycle integration tests (TRR-07).
     *   `PULSE_ENABLE_TRUENAS`: feature flag remains the operational rollout control.
 
 #### TrueNAS Integration Audit (2026-02-09)
@@ -185,7 +184,7 @@ The `apiClient.ts` reference to `/api/resources` on line 402 is **configuration 
     *   `internal/api/truenas_handlers.go` + route wiring: setup lifecycle endpoints are implemented (TN-03).
     *   `internal/monitoring/truenas_poller.go`: periodic polling, telemetry, and failure-mode handling are implemented (TN-05, TRR-02, TRR-04).
     *   `docs/architecture/truenas-ga-progress-2026-02.md`: TN-00..TN-11 all DONE/APPROVED with final GO verdict.
-    *   `docs/architecture/truenas-rollout-readiness-progress-2026-02.md`: TRR-00..TRR-05 all DONE/APPROVED with final GO verdict.
+    *   `docs/architecture/truenas-rollout-readiness-progress-2026-02.md`: TRR-00..TRR-07 all DONE/APPROVED with GO verdict reaffirmed.
 *   **Verdict:** TrueNAS integration lane is complete and GA-ready. Runtime wiring is fully implemented, certification passed, and rollout-readiness controls are complete.
 
 ### W3: Mobile App Operational
@@ -252,7 +251,7 @@ The `apiClient.ts` reference to `/api/resources` on line 402 is **configuration 
     *   **RBAC Handler Wiring:** RBAC handlers resolve tenant-specific managers from request context (RBAC-02).
     *   **User Limit Enforcement:** `max_users` is enforced on member-add paths via `enforceUserLimitForMemberAdd()` (RBAC-03).
     *   **Cross-Tenant Isolation Coverage:** RBAC and user-limit isolation test matrix is complete (RBAC-04).
-    *   **RBAC Operations Hardening:** org deletion lifecycle cleanup (RBO-01), integrity verification + break-glass recovery (RBO-02), Prometheus metrics (RBO-03), load/soak benchmarks (RBO-04), and final operational verdict GO_WITH_CONDITIONS (RBO-05).
+    *   **RBAC Operations Hardening:** org deletion lifecycle cleanup (RBO-01), integrity verification + break-glass recovery (RBO-02), Prometheus metrics (RBO-03), load/soak benchmarks (RBO-04), final operational verdict GO_WITH_CONDITIONS (RBO-05), and condition burn-down packets (RBO-06..RBO-08).
 
 #### Multi-Tenant Isolation Audit (2026-02-09, Updated)
 
@@ -271,11 +270,11 @@ The `apiClient.ts` reference to `/api/resources` on line 402 is **configuration 
 *   **RBAC isolation is resolved:** Users, roles, and assignments now resolve through per-tenant RBAC managers, enabling different role assignments for the same user across organizations.
 *   **Node Limits ARE Enforced:** Contrary to previous assessment, `max_nodes` limits ARE enforced per-tenant. The `LicenseServiceProvider` pattern in `middleware_license.go` provides context-aware license services, which `enforceNodeLimitFor*` functions use.
 *   **User limits are now enforced:** `max_users` checks are active on tenant member-add paths and covered by isolation tests.
-*   **Operations hardening is complete:** lifecycle cleanup, integrity/recovery helpers, metrics, and load/soak validation are complete with a lane-level GO_WITH_CONDITIONS recommendation.
+*   **Operations hardening is complete:** lifecycle cleanup, integrity/recovery helpers, metrics, load/soak validation, and post-verdict burn-down fixes are complete with lane status `LANE_COMPLETE`.
 *   **Data Safety:** Monitoring/resource storage and IAM controls are now both tenant-scoped.
 
 **Verdict:**
-Multi-tenant isolation is complete across request handling, storage, RBAC/auth, and plan-limit enforcement. W4 productization and residual RBAC lanes are closed; operations hardening is `LANE_COMPLETE` with production recommendation `GO_WITH_CONDITIONS`.
+Multi-tenant isolation is complete across request handling, storage, RBAC/auth, and plan-limit enforcement. W4 productization and residual RBAC lanes are closed; operations hardening is `LANE_COMPLETE` (RBO-00..RBO-08) with `GO_WITH_CONDITIONS` recommendation and burn-down follow-ups closed.
 
 
 ### W5: Conversion Readiness
@@ -319,7 +318,7 @@ Conversion instrumentation is implemented end-to-end. Event contracts are define
     *   Hosted observability metrics package and instrumentation lane closeout (HW-06 + HOP-03).
     *   Operational runbook, security baseline, and SLO definitions (HW-07 + HOP-04).
     *   Final certification complete with `GO_WITH_CONDITIONS (private_beta)` (HW-08).
-    *   Hosted operations lane complete: rollout policy (HOP-01), lifecycle safety drills (HOP-02), billing-state controls + metrics wiring (HOP-03), SLO/alert tuning + incident playbooks (HOP-04), final operational verdict `GO_WITH_CONDITIONS` (HOP-05).
+    *   Hosted operations lane complete: rollout policy (HOP-01), lifecycle safety drills (HOP-02), billing-state controls + metrics wiring (HOP-03), SLO/alert tuning + incident playbooks (HOP-04), final operational verdict `GO_WITH_CONDITIONS` (HOP-05), suspended-org enforcement middleware (HOP-06), pending-deletion reaper (HOP-07), tenant-aware rate limiting (HOP-08), and follow-up verdict checkpoint (HOP-09).
 
 #### Provisioning Audit (2026-02-09)
 
@@ -330,7 +329,7 @@ Conversion instrumentation is implemented end-to-end. Event contracts are define
 | **Provisioning API** | **COMPLETE** | `POST /api/public/signup` is implemented with hosted-mode 404 gate and dedicated signup rate limiting (HW-01). |
 | **Database Automation** | **COMPLETE** | Provisioning service orchestrates org creation with idempotency and rollback, backed by per-org file isolation and billing-state persistence (HW-02/HW-04). |
 | **Lifecycle Management** | **COMPLETE** | Admin lifecycle endpoints (`suspend`, `unsuspend`, `soft-delete`) plus safety drills and RBAC cleanup are implemented (HW-05, HOP-02). |
-| **Host Provisioning** | **COMPLETE (Private Beta Scope)** | Tenant provisioning, entitlement/billing-state wiring, metrics, rollout controls, and runbooks are complete for shared-app hosted private beta under `PULSE_HOSTED_MODE` (HW-08, HOP-05). |
+| **Host Provisioning** | **COMPLETE (Private Beta Scope)** | Tenant provisioning, entitlement/billing-state wiring, metrics, rollout controls, suspended-org protection, reaper automation, and tenant-aware rate limiting are complete for shared-app hosted private beta under `PULSE_HOSTED_MODE` (HW-08, HOP-09). |
 
 **Key Findings:**
 *   **Architecture:** Pulse uses a "Shared Application, Independent Storage" model. Each tenant gets a directory, not a database schema.

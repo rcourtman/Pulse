@@ -1,8 +1,8 @@
 # Next Release Readiness (Guiding Light)
 
-Status: Complete (W0-W6 Lanes Closed)
+Status: COMPLETE (W0-W6 Lanes Closed)
 Owner: Pulse
-Date: 2026-02-08
+Date: 2026-02-09
 Applies to: Next major release after the 5.1.x hotfix line
 
 Related plans:
