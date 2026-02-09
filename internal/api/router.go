@@ -80,7 +80,6 @@ type Router struct {
 	resourceRegistry          *unifiedresources.ResourceRegistry
 	trueNASPoller             *monitoring.TrueNASPoller
 	monitorResourceAdapter    *unifiedresources.MonitorAdapter
-	aiResourceAdapter         *unifiedresources.AIAdapter
 	aiUnifiedAdapter          *unifiedresources.UnifiedAIAdapter
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
@@ -189,7 +188,6 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	}
 	r.resourceRegistry = unifiedresources.NewRegistry(nil)
 	r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(r.resourceRegistry)
-	r.aiResourceAdapter = unifiedresources.NewAIAdapter(r.resourceRegistry)
 	r.aiUnifiedAdapter = unifiedresources.NewUnifiedAIAdapter(r.resourceRegistry)
 
 	// Sync the configured admin user to the authorizer (if supported)
@@ -349,12 +347,7 @@ func (r *Router) setupRoutes() {
 			r.aiSettingsHandler.SetIncidentStore(incidentStore)
 		}
 	}
-	// Inject unified resource provider for Phase 2 AI context (cleaner, deduplicated view)
-	if r.aiResourceAdapter != nil {
-		r.aiSettingsHandler.SetResourceProvider(r.aiResourceAdapter)
-	} else {
-		log.Warn().Msg("[Router] aiResourceAdapter is nil, cannot inject resource provider")
-	}
+	// Inject unified resource provider for AI context and routing.
 	if r.aiUnifiedAdapter != nil {
 		r.aiSettingsHandler.SetUnifiedResourceProvider(r.aiUnifiedAdapter)
 	} else {
@@ -730,9 +723,6 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 		if r.resourceHandlers != nil {
 			r.resourceHandlers.SetStateProvider(m)
 		}
-		if r.aiResourceAdapter != nil {
-			r.aiResourceAdapter.PopulateFromSnapshot(m.GetState())
-		}
 		if r.resourceV2Handlers != nil {
 			r.resourceV2Handlers.SetStateProvider(m)
 		}
@@ -779,11 +769,11 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 }
 
 // SetUnifiedResourceProvider forwards the unified-resource-native provider to active AI services.
-// URF-06 keeps buildUnifiedResourceContext on the legacy provider, so this is scaffold wiring only.
 func (h *AISettingsHandler) SetUnifiedResourceProvider(urp ai.UnifiedResourceProvider) {
 	if h == nil {
 		return
 	}
+	h.unifiedResourceProvider = urp
 
 	if h.legacyAIService != nil {
 		h.legacyAIService.SetUnifiedResourceProvider(urp)

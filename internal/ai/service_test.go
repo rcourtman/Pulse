@@ -578,12 +578,12 @@ func TestService_Execute_SystemPrompt(t *testing.T) {
 		CustomContext: "This is my home lab",
 	}
 
-	mockRP := &mockResourceProvider{
-		getStatsFunc: func() unifiedresources.LegacyStoreStats {
-			return unifiedresources.LegacyStoreStats{TotalResources: 1}
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats {
+			return unifiedresources.ResourceStats{Total: 1}
 		},
 	}
-	svc.SetResourceProvider(mockRP)
+	svc.SetUnifiedResourceProvider(mockURP)
 
 	var capturedSystemPrompt string
 	mockP := &mockProvider{

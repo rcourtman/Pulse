@@ -307,14 +307,8 @@ func TestBuildUnifiedResourceContext_UnifiedPath(t *testing.T) {
 			return []unifiedresources.Resource{k8sNode}
 		},
 	}
-	legacyProvider := &mockResourceProvider{
-		getStatsFunc: func() unifiedresources.LegacyStoreStats {
-			return unifiedresources.LegacyStoreStats{TotalResources: 999}
-		},
-	}
 
 	s := &Service{
-		resourceProvider:        legacyProvider,
 		unifiedResourceProvider: unifiedProvider,
 		alertProvider: &resourceContextAlertProvider{
 			active: []AlertInfo{
@@ -346,9 +340,6 @@ func TestBuildUnifiedResourceContext_UnifiedPath(t *testing.T) {
 	assertContains("worker-1")
 	assertContains("Resources with Active Alerts")
 	assertContains("Node not ready")
-	if strings.Contains(got, "Total resources: 999") {
-		t.Fatalf("expected unified provider to take precedence over legacy provider, got %q", got)
-	}
 }
 
 func TestBuildUnifiedResourceContextIncludesTrueNASResources(t *testing.T) {
@@ -384,71 +375,42 @@ func TestBuildUnifiedResourceContextIncludesTrueNASResources(t *testing.T) {
 func TestBuildUnifiedResourceContext_TruncatesLargeContext(t *testing.T) {
 	largeName := strings.Repeat("a", 60000)
 
-	node := unifiedresources.LegacyResource{
-		ID:           "node-1",
-		Name:         "node-1",
-		DisplayName:  largeName,
-		Type:         unifiedresources.LegacyResourceTypeNode,
-		PlatformType: unifiedresources.LegacyPlatformProxmoxPVE,
-		Status:       unifiedresources.LegacyStatusOnline,
+	node := unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   largeName,
+		Type:   unifiedresources.ResourceTypeHost,
+		Status: unifiedresources.StatusOnline,
 	}
 
-	stats := unifiedresources.LegacyStoreStats{
-		TotalResources: 1,
-		ByType: map[unifiedresources.LegacyResourceType]int{
-			unifiedresources.LegacyResourceTypeNode: 1,
+	stats := unifiedresources.ResourceStats{
+		Total: 1,
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypeHost: 1,
 		},
 	}
 
-	mockRP := &mockResourceProvider{
-		getStatsFunc: func() unifiedresources.LegacyStoreStats {
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats {
 			return stats
 		},
-		getInfrastructureFunc: func() []unifiedresources.LegacyResource {
-			return []unifiedresources.LegacyResource{node}
+		getInfrastructureFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{node}
 		},
-		getWorkloadsFunc: func() []unifiedresources.LegacyResource {
+		getWorkloadsFunc: func() []unifiedresources.Resource {
 			return nil
 		},
-		getAllFunc: func() []unifiedresources.LegacyResource {
-			return []unifiedresources.LegacyResource{node}
-		},
-		getSummaryFunc: func() unifiedresources.LegacyResourceSummary {
-			return unifiedresources.LegacyResourceSummary{TotalResources: 1}
+		getAllFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{node}
 		},
 	}
 
-	s := &Service{resourceProvider: mockRP}
+	s := &Service{unifiedResourceProvider: mockURP}
 	got := s.buildUnifiedResourceContext()
 	if !strings.Contains(got, "[... Context truncated ...]") {
 		t.Fatal("expected context to be truncated")
 	}
 	if len(got) <= 50000 {
 		t.Fatalf("expected truncated context length > 50000, got %d", len(got))
-	}
-}
-
-func TestBuildUnifiedResourceContext_WithLegacyAdapterProvider(t *testing.T) {
-	adapter := unifiedresources.NewLegacyAdapter(nil)
-	adapter.PopulateFromSnapshot(models.StateSnapshot{
-		Nodes: []models.Node{
-			{ID: "node-1", Name: "node-1", Status: "online"},
-		},
-		VMs: []models.VM{
-			{ID: "vm-1", Name: "vm-1", Node: "node-1", Status: "running"},
-		},
-	})
-
-	s := &Service{resourceProvider: adapter}
-	got := s.buildUnifiedResourceContext()
-	if got == "" {
-		t.Fatal("expected non-empty context from adapter provider")
-	}
-	if !strings.Contains(got, "node-1") {
-		t.Fatalf("expected context to include node from adapter, got %q", got)
-	}
-	if !strings.Contains(got, "vm-1") {
-		t.Fatalf("expected context to include vm from adapter, got %q", got)
 	}
 }
 
@@ -701,8 +663,4 @@ func (m *resourceContextAlertProvider) GetAlertHistory(resourceID string, limit 
 		}
 	}
 	return out
-}
-
-func metricValue(current float64) *unifiedresources.LegacyMetricValue {
-	return &unifiedresources.LegacyMetricValue{Current: current}
 }

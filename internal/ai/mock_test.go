@@ -60,7 +60,6 @@ func (m *mockThresholdProvider) GetGuestDiskThreshold() float64   { return m.gue
 func (m *mockThresholdProvider) GetStorageThreshold() float64     { return m.storage }
 
 type mockResourceProvider struct {
-	ResourceProvider
 	getAllFunc            func() []unifiedresources.LegacyResource
 	getStatsFunc          func() unifiedresources.LegacyStoreStats
 	getSummaryFunc        func() unifiedresources.LegacyResourceSummary

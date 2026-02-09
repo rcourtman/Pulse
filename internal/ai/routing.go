@@ -60,7 +60,7 @@ func (e *RoutingError) ForAI() string {
 //
 // Routing priority:
 // 1. VMID lookup from command (for pct/qm commands)
-// 2. Unified ResourceProvider lookup (PRIMARY - uses the new infrastructure model)
+// 2. Unified provider lookup (PRIMARY - uses the new infrastructure model)
 // 3. Explicit context fields (FALLBACK - for backwards compatibility)
 // 4. VMID extracted from target ID
 //
@@ -139,15 +139,15 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 		}
 	}
 
-	// Step 2: Try unified ResourceProvider lookup (PRIMARY method for workloads)
+	// Step 2: Try unified provider lookup (PRIMARY method for workloads)
 	// This uses the new redesigned infrastructure model which knows the relationships
 	// between all resources (containers → hosts, VMs → nodes, etc.)
 	if result.TargetNode == "" {
 		s.mu.RLock()
-		rp := s.resourceProvider
+		urp := s.unifiedResourceProvider
 		s.mu.RUnlock()
 
-		if rp != nil {
+		if urp != nil {
 			// Try to find the host for this workload
 			resourceName := ""
 			if name, ok := req.Context["containerName"].(string); ok && name != "" {
@@ -159,7 +159,7 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 			}
 
 			if resourceName != "" {
-				if host := rp.FindContainerHost(resourceName); host != "" {
+				if host := urp.FindContainerHost(resourceName); host != "" {
 					result.TargetNode = strings.ToLower(host)
 					result.RoutingMethod = "resource_provider_lookup"
 					log.Info().
@@ -167,7 +167,7 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 						Str("host", host).
 						Str("target_type", req.TargetType).
 						Str("command", command).
-						Msg("Routing via unified ResourceProvider")
+						Msg("Routing via unified provider")
 				}
 			}
 		}

@@ -54,7 +54,7 @@ type AISettingsHandler struct {
 
 	// Providers to be applied to new services
 	stateProvider           ai.StateProvider
-	resourceProvider        ai.ResourceProvider
+	unifiedResourceProvider ai.UnifiedResourceProvider
 	metadataProvider        ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
 	metricsHistoryProvider  ai.MetricsHistoryProvider
@@ -163,8 +163,8 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	if h.stateProvider != nil {
 		svc.SetStateProvider(h.stateProvider)
 	}
-	if h.resourceProvider != nil {
-		svc.SetResourceProvider(h.resourceProvider)
+	if h.unifiedResourceProvider != nil {
+		svc.SetUnifiedResourceProvider(h.unifiedResourceProvider)
 	}
 	if h.metadataProvider != nil {
 		svc.SetMetadataProvider(h.metadataProvider)
@@ -330,18 +330,6 @@ func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 // GetStateProvider returns the state provider for infrastructure context
 func (h *AISettingsHandler) GetStateProvider() ai.StateProvider {
 	return h.stateProvider
-}
-
-// SetResourceProvider sets the resource provider for unified infrastructure context (Phase 2)
-func (h *AISettingsHandler) SetResourceProvider(rp ai.ResourceProvider) {
-	h.resourceProvider = rp
-	h.legacyAIService.SetResourceProvider(rp)
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetResourceProvider(rp)
-	}
 }
 
 // SetMetadataProvider sets the metadata provider for AI URL discovery

@@ -402,9 +402,9 @@ func TestRouteToAgent_VMIDNotFoundFallsBackToContext(t *testing.T) {
 	}
 }
 
-func TestRouteToAgent_ResourceProviderContexts(t *testing.T) {
+func TestRouteToAgent_UnifiedProviderContexts(t *testing.T) {
 	s := &Service{}
-	mockRP := &mockResourceProvider{
+	mockURP := &mockUnifiedResourceProvider{
 		findContainerHostFunc: func(containerNameOrID string) string {
 			if containerNameOrID == "" {
 				return ""
@@ -412,7 +412,7 @@ func TestRouteToAgent_ResourceProviderContexts(t *testing.T) {
 			return "rp-host"
 		},
 	}
-	s.resourceProvider = mockRP
+	s.unifiedResourceProvider = mockURP
 
 	agents := []agentexec.ConnectedAgent{
 		{AgentID: "agent-1", Hostname: "rp-host"},

@@ -150,7 +150,6 @@ type Service struct {
 	alertProvider           AlertProvider
 	knowledgeStore          *knowledge.Store
 	costStore               *cost.Store
-	resourceProvider        ResourceProvider // Unified resource model provider (Phase 2)
 	unifiedResourceProvider UnifiedResourceProvider
 	patrolService           *PatrolService        // Background AI monitoring service
 	metadataProvider        MetadataProvider      // Enables AI to update resource URLs
@@ -2402,13 +2401,13 @@ func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 		}
 	}
 
-	// If no target node found in context, try the ResourceProvider
+	// If no target node found in context, try the unified resource provider
 	if targetNode == "" {
 		s.mu.RLock()
-		rp := s.resourceProvider
+		urp := s.unifiedResourceProvider
 		s.mu.RUnlock()
 
-		if rp != nil {
+		if urp != nil {
 			resourceName := ""
 			if name, ok := req.Context["containerName"].(string); ok && name != "" {
 				resourceName = name
@@ -2419,7 +2418,7 @@ func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 			}
 
 			if resourceName != "" {
-				if host := rp.FindContainerHost(resourceName); host != "" {
+				if host := urp.FindContainerHost(resourceName); host != "" {
 					targetNode = strings.ToLower(host)
 				}
 			}
@@ -3427,13 +3426,13 @@ Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`
 
 	// Add connected infrastructure info via unified resource model
 	s.mu.RLock()
-	hasResourceProvider := s.resourceProvider != nil
+	hasUnifiedResourceProvider := s.unifiedResourceProvider != nil
 	s.mu.RUnlock()
 
-	if hasResourceProvider {
+	if hasUnifiedResourceProvider {
 		prompt += s.buildUnifiedResourceContext()
 	} else {
-		log.Warn().Msg("AI context: resource provider not available, infrastructure context will be limited")
+		log.Warn().Msg("AI context: unified resource provider not available, infrastructure context will be limited")
 	}
 
 	// Add user annotations from all resources (global context)

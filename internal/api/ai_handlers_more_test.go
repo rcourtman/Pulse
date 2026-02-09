@@ -45,33 +45,30 @@ func (stubMetricsHistoryProvider) GetAllStorageMetrics(string, time.Duration) ma
 	return nil
 }
 
-type stubResourceProvider struct{}
+type stubUnifiedResourceProvider struct{}
 
-func (stubResourceProvider) GetAll() []unifiedresources.LegacyResource            { return nil }
-func (stubResourceProvider) GetInfrastructure() []unifiedresources.LegacyResource { return nil }
-func (stubResourceProvider) GetWorkloads() []unifiedresources.LegacyResource      { return nil }
-func (stubResourceProvider) GetByType(unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
+func (stubUnifiedResourceProvider) GetAll() []unifiedresources.Resource            { return nil }
+func (stubUnifiedResourceProvider) GetInfrastructure() []unifiedresources.Resource { return nil }
+func (stubUnifiedResourceProvider) GetWorkloads() []unifiedresources.Resource      { return nil }
+func (stubUnifiedResourceProvider) GetByType(unifiedresources.ResourceType) []unifiedresources.Resource {
 	return nil
 }
-func (stubResourceProvider) GetStats() unifiedresources.LegacyStoreStats {
-	return unifiedresources.LegacyStoreStats{}
+func (stubUnifiedResourceProvider) GetStats() unifiedresources.ResourceStats {
+	return unifiedresources.ResourceStats{}
 }
-func (stubResourceProvider) GetTopByCPU(int, []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
+func (stubUnifiedResourceProvider) GetTopByCPU(int, []unifiedresources.ResourceType) []unifiedresources.Resource {
 	return nil
 }
-func (stubResourceProvider) GetTopByMemory(int, []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
+func (stubUnifiedResourceProvider) GetTopByMemory(int, []unifiedresources.ResourceType) []unifiedresources.Resource {
 	return nil
 }
-func (stubResourceProvider) GetTopByDisk(int, []unifiedresources.LegacyResourceType) []unifiedresources.LegacyResource {
+func (stubUnifiedResourceProvider) GetTopByDisk(int, []unifiedresources.ResourceType) []unifiedresources.Resource {
 	return nil
 }
-func (stubResourceProvider) GetRelated(string) map[string][]unifiedresources.LegacyResource {
-	return map[string][]unifiedresources.LegacyResource{}
+func (stubUnifiedResourceProvider) GetRelated(string) map[string][]unifiedresources.Resource {
+	return map[string][]unifiedresources.Resource{}
 }
-func (stubResourceProvider) GetResourceSummary() unifiedresources.LegacyResourceSummary {
-	return unifiedresources.LegacyResourceSummary{}
-}
-func (stubResourceProvider) FindContainerHost(string) string { return "" }
+func (stubUnifiedResourceProvider) FindContainerHost(string) string { return "" }
 
 func TestAISettingsHandler_setSSECORSHeaders(t *testing.T) {
 	handler := newTestAISettingsHandler(&config.Config{AllowedOrigins: "*"}, nil, nil)
@@ -127,7 +124,7 @@ func TestAISettingsHandler_GetAIService_MultiTenantProviders(t *testing.T) {
 	handler := NewAISettingsHandler(mtp, nil, nil)
 
 	handler.SetStateProvider(&stubStateProvider{})
-	handler.SetResourceProvider(stubResourceProvider{})
+	handler.SetUnifiedResourceProvider(stubUnifiedResourceProvider{})
 	handler.SetMetadataProvider(stubMetadataProvider{})
 	handler.SetPatrolThresholdProvider(stubThresholdProvider{})
 	handler.SetMetricsHistoryProvider(stubMetricsHistoryProvider{})

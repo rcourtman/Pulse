@@ -1134,7 +1134,7 @@ func TestService_ExecuteTool_RunCommand_WithTargetHost(t *testing.T) {
 	}
 }
 
-func TestService_HasAgentForTarget_WithResourceProvider(t *testing.T) {
+func TestService_HasAgentForTarget_WithUnifiedResourceProvider(t *testing.T) {
 	mockAgent := agentexec.ConnectedAgent{
 		AgentID:  "agent-1",
 		Hostname: "host-from-provider",
@@ -1144,10 +1144,9 @@ func TestService_HasAgentForTarget_WithResourceProvider(t *testing.T) {
 	}
 	svc := NewService(nil, mockServer)
 
-	// Mock resource provider that returns host for container
-	mockRP := &mockResourceProvider{}
-	mockRP.ResourceProvider = mockRP
-	svc.resourceProvider = mockRP
+	// Mock unified resource provider that returns host for container
+	mockURP := &mockUnifiedResourceProvider{}
+	svc.unifiedResourceProvider = mockURP
 
 	// Overwrite FindContainerHost behavior
 	// The mock by default returns empty string, so this should fail
