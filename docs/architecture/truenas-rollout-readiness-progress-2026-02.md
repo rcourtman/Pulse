@@ -366,7 +366,7 @@ No blocking issues remain. Recommend proceeding with Phase 1 (internal/dev deplo
 - TRR-02: `9d25e014`
 - TRR-03: `14953c87`
 - TRR-04: `b5cb6c19`
-- TRR-05: TODO
+- TRR-05: `6d3aa97d`
 
 ## Current Recommended Next Packet
 

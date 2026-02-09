@@ -722,7 +722,7 @@ Rationale: All 12 packets executed and approved. Full test coverage across all T
 - TN-08: `8435c06b` feat(TN-08): frontend ZFS health tag resolution and TrueNAS storage tests
 - TN-09: `d67a8ce3` feat(TN-09): AI context TrueNAS section with tag-based host categorization
 - TN-10: `cd0f8044` feat(TN-10): integration test matrix — full lifecycle, error paths, health transitions
-- TN-11: PENDING_COMMIT
+- TN-11: `844de5fe` docs(TN-11): final certification — GO verdict, all 12 packets DONE/APPROVED
 
 ## Current Recommended Next Packet
 
