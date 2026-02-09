@@ -1,5 +1,29 @@
 # Changelog Draft - Delete After Release
 
+## Pulse v2.0 — Release Highlights
+
+### New Features
+- **Unified Resource Model (W1)**: Single API surface for all infrastructure resources. New `/api/v2/resources` endpoints. Legacy compatibility facade retained.
+- **TrueNAS Support (W2)**: First-party TrueNAS storage array integration. Setup, discovery, polling, ZFS health mapping, alerts, and AI context. Feature flag: `PULSE_ENABLE_TRUENAS`.
+- **Mobile App (W3)**: Companion app with QR pairing, relay protocol, push notifications, approval workflows, and biometric lock.
+- **Multi-Tenant (W4)**: Secure multi-org isolation with per-tenant RBAC, storage, monitoring, user limits, and operational kill-switch. Feature flag: `PULSE_MULTI_TENANT_ENABLED`.
+- **Conversion Pipeline (W5)**: In-app conversion event tracking, dynamic upgrade reasons, trial lifecycle, and real usage in limit displays.
+- **Hosted Mode (W6)**: Private beta. Tenant provisioning, billing-state API, lifecycle management, observability. Feature flag: `PULSE_HOSTED_MODE`. Posture: GO_WITH_CONDITIONS (private_beta).
+
+### Monetization Foundation (W0)
+- Entitlement primitives: capabilities, limits, meters, plan_version, subscription_state
+- Canonical evaluator with legacy alias resolution
+- Metering pipeline with windowed aggregation
+- Subscription state machine (trial/active/grace/expired/suspended)
+- CRL revocation cache with fail-open
+- Frontend entitlement API endpoint
+
+### Operator Notes
+- **Feature flags**: `PULSE_ENABLE_TRUENAS`, `PULSE_MULTI_TENANT_ENABLED`, `PULSE_HOSTED_MODE` control major features
+- **Kill-switches**: TrueNAS (delete connections via API), Multi-Tenant (env var + restart), Conversion (runtime API config), Hosted (env var + restart)
+- **Incident severity**: All runbooks now use P1-P4 framework
+- **No manual data migration required** for this release
+
 ## PVE Backup Visibility Fix (Issue #1139)
 
 ### Fixed
