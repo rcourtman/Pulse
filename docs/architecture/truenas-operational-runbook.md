@@ -2,6 +2,10 @@
 
 This runbook defines operator procedures for TrueNAS enablement, disablement, immediate deactivation (kill-switch), code rollback, and data cleanup.
 
+Status: Active  
+Owner: Pulse Operations  
+Last Updated: 2026-02-09
+
 ## Prerequisites
 
 1. Ensure Pulse is reachable at `http://localhost:7655`.
@@ -16,6 +20,26 @@ This runbook defines operator procedures for TrueNAS enablement, disablement, im
 ```bash
 AUTH_HEADER=(-H "Authorization: Bearer $PULSE_TOKEN")
 ```
+
+## Ownership and Escalation Routing
+
+### Owner routing
+
+| Scope | Primary Owner | Escalation Owner |
+|---|---|---|
+| TrueNAS poller health, staleness, and connectivity incidents | Pulse Operations | Engineering |
+| Kill-switch execution and disable/enable operations | Pulse Operations | Engineering |
+| Code rollback and release-level incident coordination | Engineering | Pulse Operations |
+| Security-impacting TrueNAS incidents (P1) | Security Response Owner | Engineering |
+
+### Escalation routing
+
+1. Classify incident severity using `## Incident Severity and Response`.
+2. Route response ownership by severity:
+   - `P1`: Page `Pulse Operations` immediately and notify `Security Response Owner` + `Engineering` immediately. Start containment within 15 minutes using `## 3) Kill-Switch` or `## 2) Disable Path`.
+   - `P2`: Assign to `Pulse Operations` immediately. Escalate to `Engineering` if mitigation is not active within 1 hour.
+   - `P3`/`P4`: Assign to `Pulse Operations`. Escalate to `Engineering` if unresolved by next business day.
+3. If kill-switch or rollback is executed, open an incident record and capture owner handoff timestamps, actions taken, and final resolution owner.
 
 ## 1) Enable Path
 

@@ -262,7 +262,7 @@ Rollback:
 |---------|-------------------|---------------------|----------------|
 | **W2** multi-tenant | Severity/SLA definitions (P1-P4) with response times. No step-by-step playbooks. | Kill-switch + rollback documented and code-verified. | SLA timings present. No explicit contacts. |
 | **W4** hosted | Full P1-P4 playbooks with detection, actions, investigation, resolution. | Documented. **P1 code gap**: `HandlePublicSignup` doesn't clean up org directory on RBAC failure. | SLA timings present. References "security response owner" but no explicit contact. |
-| **W6** TrueNAS | Severity/SLA definitions (P1-P4) with response times. No step-by-step playbooks. | Kill-switch + code rollback documented with commit refs and verification. | SLA timings present. No explicit contacts. |
+| **W6** TrueNAS | Severity/SLA definitions (P1-P4) with response times. No step-by-step playbooks. | Kill-switch + code rollback documented with commit refs and verification. | Explicit owner/escalation routing section added and verified (`Ownership and Escalation Routing`). |
 | Conversion | Incident playbooks present. | Kill-switch API documented. | Response guidance present. |
 
 ### Findings
@@ -271,33 +271,36 @@ Rollback:
 |---|---------|----------|-------------|
 | 1 | W4 partial provisioning cleanup not implemented in `HandlePublicSignup` (lines 117-125) | **P1** | Code gap, not runbook gap. Runbook correctly documents desired behavior. Track for engineering follow-up. Out of SEC-03 scope. |
 | 2 | W2/W6 lack detailed step-by-step incident playbooks (have severity/SLA definitions only) | **P2** | Adequate for single-team pre-release. Enhance post-release as team/customer base grows. |
-| 3 | No explicit escalation contacts/rotation aliases across runbooks | **P2** | Expected for small team. Will add as part of operational maturity. |
+| 3 | W6 TrueNAS runbook previously lacked explicit owner/escalation routing | **P2** | **Resolved** in `docs/architecture/truenas-operational-runbook.md` via `Ownership and Escalation Routing` section. |
 
 ### Required Commands
 
 - [x] `rg -n "rollback|kill-switch|incident|SLA|severity" docs/architecture/*runbook*.md` -> exit 0
+- [x] `rg -n "owner|escalat" docs/architecture/truenas-operational-runbook.md` -> exit 0
 
 ### Review Gates
 
 - [x] P0 PASS — No P0 findings. Incident severity/SLA and rollback/kill-switch present in all runbooks.
 - [x] P1 PASS — W4 code gap (partial provisioning cleanup) is tracked as residual risk; runbook itself is correct.
-- [x] P2 PASS — P2 findings documented and tracked; per severity rubric, P2 does not block release.
+- [x] P2 PASS — TrueNAS owner/escalation routing is explicit; SEC-03 P2 gap is closed.
 - [x] Verdict recorded
 
 ### SEC-03 Review Record
 
 ```
 Files changed:
+- docs/architecture/truenas-operational-runbook.md: added explicit `Ownership and Escalation Routing` section for W6
 - docs/architecture/release-security-gate-progress-2026-02.md: runbook verification results and triage
 
 Commands run + exit codes (reviewer independent rerun):
 1. `rg -n "rollback|kill-switch|incident|SLA|severity" docs/architecture/*runbook*.md` -> exit 0
-2. Manual verification of W2, W4, W6, conversion runbook sections
+2. `rg -n "owner|escalat" docs/architecture/truenas-operational-runbook.md` -> exit 0
+3. Manual verification of W2, W4, W6, conversion runbook sections
 
 Gate checklist:
 - P0: PASS (incident response sections present in all runbooks)
 - P1: PASS (rollback/kill-switch documented; W4 code gap tracked as residual risk)
-- P2: PASS (P2 findings documented; per rubric, P2 does not block)
+- P2: PASS (W6 owner/escalation routing explicitly documented and verified)
 
 Verdict: APPROVED
 
@@ -309,8 +312,6 @@ Residual risk:
   Owner: Engineering. Follow-up: pre-release or first post-release patch.
 - P2: W2/W6 incident playbooks lack step-by-step detail.
   Owner: Operations. Follow-up: post-release operational maturity.
-- P2: Escalation contacts not explicit.
-  Owner: Operations. Follow-up: post-release.
 
 Rollback:
 - Revert checkpoint commit.
@@ -397,7 +398,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- <pending checkpoint>
+- `c1bc837c` (docs(SEC-04): final security verdict — GO_WITH_CONDITIONS)
 
 Residual risk:
 - See consolidated table above.
