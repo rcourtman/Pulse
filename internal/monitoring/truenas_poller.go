@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -185,25 +186,81 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 	}
 
 	p.mu.Lock()
-	providers := make([]*truenas.Provider, 0, len(p.providers))
-	for _, provider := range p.providers {
-		providers = append(providers, provider)
+	type providerEntry struct {
+		id       string
+		provider *truenas.Provider
+	}
+	entries := make([]providerEntry, 0, len(p.providers))
+	for id, provider := range p.providers {
+		entries = append(entries, providerEntry{id: id, provider: provider})
 	}
 	p.mu.Unlock()
 
-	for _, provider := range providers {
-		if provider == nil {
-			continue
-		}
-		if err := provider.Refresh(ctx); err != nil {
-			log.Printf("[TrueNASPoller] Refresh failed: %v", err)
+	pm := getPollMetrics()
+
+	for _, entry := range entries {
+		if entry.provider == nil {
 			continue
 		}
 
-		records := provider.Records()
+		start := time.Now()
+		err := entry.provider.Refresh(ctx)
+		end := time.Now()
+		if err != nil {
+			pm.RecordResult(PollResult{
+				InstanceName: entry.id,
+				InstanceType: "truenas",
+				Success:      false,
+				Error:        classifyTrueNASError(err, entry.id),
+				StartTime:    start,
+				EndTime:      end,
+			})
+			log.Printf("[TrueNASPoller] Refresh failed for %s: %v", entry.id, err)
+			continue
+		}
+
+		pm.RecordResult(PollResult{
+			InstanceName: entry.id,
+			InstanceType: "truenas",
+			Success:      true,
+			StartTime:    start,
+			EndTime:      end,
+		})
+
+		records := entry.provider.Records()
 		if len(records) == 0 {
 			continue
 		}
 		p.registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+	}
+}
+
+// classifyTrueNASError wraps a TrueNAS API error in MonitorError for metrics classification.
+func classifyTrueNASError(err error, connectionID string) *internalerrors.MonitorError {
+	if err == nil {
+		return nil
+	}
+
+	errType := internalerrors.ErrorTypeAPI
+	retryable := true
+
+	errStr := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded"):
+		errType = internalerrors.ErrorTypeTimeout
+	case strings.Contains(errStr, "401") || strings.Contains(errStr, "403") || strings.Contains(errStr, "unauthorized") || strings.Contains(errStr, "forbidden"):
+		errType = internalerrors.ErrorTypeAuth
+		retryable = false
+	case strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "no such host") || strings.Contains(errStr, "connection reset"):
+		errType = internalerrors.ErrorTypeConnection
+	}
+
+	return &internalerrors.MonitorError{
+		Type:      errType,
+		Op:        "truenas_poll",
+		Instance:  connectionID,
+		Err:       err,
+		Timestamp: time.Now(),
+		Retryable: retryable,
 	}
 }

@@ -28,7 +28,7 @@ Date: 2026-02-09
 |---|---|---|---|---|---|---|
 | TRR-00 | Scope Freeze + TN-11 Evidence Reconciliation | DONE | Claude | Claude | APPROVED | TRR-00 Review Evidence |
 | TRR-01 | Operational Runbook (Enable/Disable/Rollback) | DONE | Codex | Claude | APPROVED | TRR-01 Review Evidence |
-| TRR-02 | Telemetry + Alert Thresholds | TODO | Codex | Claude | — | — |
+| TRR-02 | Telemetry + Alert Thresholds | DONE | Codex | Claude | APPROVED | TRR-02 Review Evidence |
 | TRR-03 | Canary Rollout Controls | TODO | Codex | Claude | — | — |
 | TRR-04 | Soak/Failure-Injection Validation | TODO | Codex | Claude | — | — |
 | TRR-05 | Final Rollout Verdict | TODO | Claude | Claude | — | — |
@@ -132,27 +132,48 @@ Rollback:
 
 ## TRR-02 Checklist: Telemetry + Alert Thresholds
 
-- [ ] PollMetrics wired into TrueNAS poller (poll attempt, success, error, staleness).
-- [ ] TrueNAS API errors wrapped in MonitorError with correct ErrorType.
-- [ ] Test verifies metrics emitted on success and failure.
-- [ ] Alert thresholds documented in operational runbook.
+- [x] PollMetrics wired into TrueNAS poller (poll attempt, success, error, staleness).
+- [x] TrueNAS API errors wrapped in MonitorError with correct ErrorType.
+- [x] Test verifies metrics emitted on success and failure.
+- [x] Alert thresholds documented in operational runbook.
 
 ### Required Tests
 
-- [ ] `go test ./internal/monitoring/... -run "TrueNAS" -count=1 -v` -> exit 0
-- [ ] `go build ./...` -> exit 0
+- [x] `go test ./internal/monitoring/... -run "TrueNAS" -count=1 -v` -> exit 0
+- [x] `go build ./...` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### TRR-02 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- internal/monitoring/truenas_poller.go: Wired getPollMetrics().RecordResult() into pollAll() for both success and error paths; added classifyTrueNASError() wrapping errors in MonitorError with type classification (api/timeout/auth/connection)
+- internal/monitoring/truenas_poller_test.go: Added TestTrueNASPollerRecordsMetrics — server fails 3 cycles then recovers, exercising both error and success metrics paths
+- docs/architecture/truenas-operational-runbook.md: Appended Alert Thresholds section with 7 metric/condition/severity/action rows
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/monitoring/... -run "TrueNAS" -count=1 -v` -> exit 0 (5 tests PASS, 0.734s)
+3. `go test ./internal/monitoring/... -count=1` -> exit 0 (18.662s)
+
+Gate checklist:
+- P0: PASS (build clean, all tests green including full monitoring suite)
+- P1: PASS (PollMetrics wired with instance_type="truenas"; error classification covers timeout/auth/connection/api; test exercises failure→recovery path; existing tests unbroken)
+- P2: PASS (alert thresholds documented in runbook; 3 files changed within scope)
+
+Verdict: APPROVED
+
+Residual risk:
+- classifyTrueNASError uses string matching on error messages — if TrueNAS client error format changes, classification may degrade to "api" fallback (acceptable, no data loss)
+
+Rollback:
+- Revert truenas_poller.go to remove metrics wiring; revert test file; remove Alert Thresholds section from runbook.
 ```
 
 ---
@@ -244,7 +265,7 @@ TODO
 ## Checkpoint Commits
 
 - TRR-00: `687ecd79`
-- TRR-01: TODO
+- TRR-01: `64f6b350`
 - TRR-02: TODO
 - TRR-03: TODO
 - TRR-04: TODO

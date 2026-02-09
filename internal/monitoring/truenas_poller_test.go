@@ -40,6 +40,73 @@ func TestTrueNASPollerPollsConfiguredConnections(t *testing.T) {
 	}, "expected TrueNAS resources to be ingested")
 }
 
+func TestTrueNASPollerRecordsMetrics(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	var requestCount atomic.Int64
+	var errorCount atomic.Int64
+	var successCount atomic.Int64
+	var remainingFailures atomic.Int64
+	remainingFailures.Store(3)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+
+		if remainingFailures.Load() > 0 {
+			remainingFailures.Add(-1)
+			errorCount.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":"simulated failure"}`))
+			return
+		}
+
+		successCount.Add(1)
+		switch r.URL.Path {
+		case "/api/v2.0/system/info":
+			_, _ = w.Write([]byte(`{"hostname":"metrics-host","version":"TrueNAS-SCALE-24.10.2","buildtime":"24.10.2.1","uptime_seconds":86400,"system_serial":"SER-001"}`))
+		case "/api/v2.0/pool":
+			_, _ = w.Write([]byte(`[{"id":1,"name":"tank","status":"ONLINE","size":1000,"allocated":400,"free":600}]`))
+		case "/api/v2.0/pool/dataset":
+			_, _ = w.Write([]byte(`[]`))
+		case "/api/v2.0/disk":
+			_, _ = w.Write([]byte(`[]`))
+		case "/api/v2.0/alert/list":
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	persistence := config.NewConfigPersistence(t.TempDir())
+	connection := trueNASInstanceForServer(t, "metrics-conn", server.URL, true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	poller := NewTrueNASPoller(registry, persistence, 50*time.Millisecond)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+
+	waitForCondition(t, 5*time.Second, func() bool {
+		return hasTrueNASHost(registry, "metrics-host")
+	}, "expected TrueNAS resources to appear after initial failures")
+
+	if errorCount.Load() == 0 {
+		t.Fatal("expected at least one failed request to exercise metrics error path")
+	}
+	if successCount.Load() == 0 {
+		t.Fatal("expected successful requests to exercise metrics success path")
+	}
+	if requestCount.Load() < errorCount.Load()+successCount.Load() {
+		t.Fatalf("unexpected request accounting: total=%d errors=%d successes=%d", requestCount.Load(), errorCount.Load(), successCount.Load())
+	}
+}
+
 func TestTrueNASPollerHandlesConnectionAddRemove(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)

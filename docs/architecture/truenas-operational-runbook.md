@@ -213,6 +213,18 @@ ls -l "${PULSE_DATA_DIR:-/etc/pulse}/.encryption.key"
 
 7. Do not delete `.encryption.key`; remove only `truenas.enc`.
 
+## Alert Thresholds
+
+| Metric | Condition | Severity | Action |
+|---|---|---|---|
+| `pulse_monitor_poll_total{instance_type="truenas",result="error"}` | > 3 consecutive errors | WARNING | Check TrueNAS connection, verify API key |
+| `pulse_monitor_poll_staleness_seconds{instance_type="truenas"}` | > 300s | WARNING | Investigate poll failures, check network |
+| `pulse_monitor_poll_staleness_seconds{instance_type="truenas"}` | > 600s | CRITICAL | TrueNAS data is stale, operator intervention needed |
+| `pulse_monitor_poll_errors_total{instance_type="truenas",error_type="auth"}` | Any increment | CRITICAL | API key revoked or expired, immediate attention |
+| `pulse_monitor_poll_errors_total{instance_type="truenas",error_type="timeout"}` | > 5 in 10 minutes | WARNING | TrueNAS API response time degraded |
+| `pulse_monitor_poll_errors_total{instance_type="truenas",error_type="connection"}` | Any increment | WARNING | Network connectivity to TrueNAS lost |
+| `pulse_monitor_poll_duration_seconds{instance_type="truenas"}` | p95 > 10s | WARNING | TrueNAS API latency elevated |
+
 ## Quick Reference
 
 | Operation | Primary Action | Restart Required | Propagation Window | Verification |
@@ -222,4 +234,3 @@ ls -l "${PULSE_DATA_DIR:-/etc/pulse}/.encryption.key"
 | Kill-Switch | Delete all `/api/truenas/connections/:id` | No | 60s provider removal + 120s staleness | Connections list becomes `[]`; v2 resources show stale TrueNAS source |
 | Code Rollback | `git revert --no-edit f9680ef8^..687ecd79` | Yes (apply change) | Immediate after deploy | `go build ./...` exits `0`; TrueNAS UI/backend paths removed |
 | Data Cleanup | Remove `truenas.enc` only | No (API reads empty config) | Immediate | `GET /api/truenas/connections` returns `[]`; `.encryption.key` still exists |
-
