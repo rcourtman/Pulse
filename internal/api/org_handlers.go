@@ -21,17 +21,25 @@ import (
 const orgRequestBodyLimit = 64 * 1024
 
 type OrgHandlers struct {
-	persistence *config.MultiTenantPersistence
-	mtMonitor   *monitoring.MultiTenantMonitor
+	persistence  *config.MultiTenantPersistence
+	mtMonitor    *monitoring.MultiTenantMonitor
+	rbacProvider *TenantRBACProvider
 }
 
 func NewOrgHandlers(
 	persistence *config.MultiTenantPersistence,
 	mtMonitor *monitoring.MultiTenantMonitor,
+	rbacProvider ...*TenantRBACProvider,
 ) *OrgHandlers {
+	var provider *TenantRBACProvider
+	if len(rbacProvider) > 0 {
+		provider = rbacProvider[0]
+	}
+
 	return &OrgHandlers{
-		persistence: persistence,
-		mtMonitor:   mtMonitor,
+		persistence:  persistence,
+		mtMonitor:    mtMonitor,
+		rbacProvider: provider,
 	}
 }
 
@@ -291,6 +299,9 @@ func (h *OrgHandlers) HandleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 
 	if h.mtMonitor != nil {
 		h.mtMonitor.RemoveTenant(orgID)
+	}
+	if h.rbacProvider != nil {
+		_ = h.rbacProvider.RemoveTenant(orgID)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

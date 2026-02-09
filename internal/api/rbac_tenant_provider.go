@@ -103,6 +103,13 @@ func (p *TenantRBACProvider) Close() error {
 	return closeErr
 }
 
+// ManagerCount returns the number of cached managers. Used for testing.
+func (p *TenantRBACProvider) ManagerCount() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return len(p.managers)
+}
+
 func (p *TenantRBACProvider) resolveDataDir(orgID string) (string, error) {
 	if orgID == "default" {
 		return p.baseDataDir, nil
