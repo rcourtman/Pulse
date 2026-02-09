@@ -13,21 +13,16 @@ import Camera from 'lucide-solid/icons/camera';
 import Mail from 'lucide-solid/icons/mail';
 import Users from 'lucide-solid/icons/users';
 import Boxes from 'lucide-solid/icons/boxes';
+import { unwrap } from 'solid-js/store';
+import type { Resource } from '@/types/resource';
 
 // Workaround for eslint false-positive when `For` is used only in JSX
 const __ensureForUsage = For;
 void __ensureForUsage;
 import type {
-  VM,
-  Container,
-  Node,
-  Host,
   Alert,
-  Storage,
   PBSInstance,
   PMGInstance,
-  DockerHost,
-  DockerContainer,
   PVEBackups,
   PBSBackup,
   PMGBackup,
@@ -39,7 +34,8 @@ import type {
   SnapshotAlertConfig,
   BackupAlertConfig,
 } from '@/types/alerts';
-import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
+import { ResourceTable } from './ResourceTable';
+import type { GroupHeaderMeta, Resource as TableResource } from './ResourceTable';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
 import { formatTemperature } from '@/utils/temperature';
@@ -163,11 +159,12 @@ interface ThresholdsTableProps {
   setOverrides: (overrides: Override[]) => void;
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;
   setRawOverridesConfig: (config: Record<string, RawOverrideConfig>) => void;
-  allGuests: () => (VM | Container)[];
-  nodes: Node[];
-  hosts: Host[];
-  storage: Storage[];
-  dockerHosts: DockerHost[];
+  allGuests: () => Resource[];
+  nodes: Resource[];
+  hosts: Resource[];
+  storage: Resource[];
+  dockerHosts: Resource[];
+  allResources: Resource[];
   pbsInstances?: PBSInstance[]; // PBS instances from state
   pmgInstances?: PMGInstance[]; // PMG instances from state
   backups?: Backups;
@@ -340,6 +337,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const location = useLocation();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+
+  const pd = (r: Resource): Record<string, unknown> | undefined =>
+    r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
 
   // Collapsible section state management
   const { isCollapsed, toggleSection, expandAll, collapseAll } = useCollapsedSections();
@@ -694,17 +694,23 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return base;
   };
 
-  const buildNodeHeaderMeta = (node: Node) => {
+  const buildNodeHeaderMeta = (node: Resource) => {
+    const data = pd(node);
+    const clusterName = (data?.clusterName as string | undefined) ?? undefined;
+    const isClusterMember =
+      (data?.isClusterMember as boolean | undefined) ?? Boolean(node.clusterId);
+
     const originalDisplayName = node.displayName?.trim() || node.name;
-    const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
+    const friendlyName = getFriendlyNodeName(originalDisplayName, clusterName);
+
     // Prioritize guestURL over host (same as NodeGroupHeader)
-    const guestUrlValue = node.guestURL?.trim();
-    const hostValue = node.host?.trim();
+    const guestUrlValue =
+      typeof data?.guestURL === 'string' ? (data.guestURL as string).trim() : '';
+    const hostValue = typeof data?.host === 'string' ? (data.host as string).trim() : '';
+
     let host: string | undefined;
     if (guestUrlValue && guestUrlValue !== '') {
-      host = guestUrlValue.startsWith('http')
-        ? guestUrlValue
-        : `https://${guestUrlValue}`;
+      host = guestUrlValue.startsWith('http') ? guestUrlValue : `https://${guestUrlValue}`;
     } else if (hostValue && hostValue !== '') {
       host = hostValue.startsWith('http')
         ? hostValue
@@ -719,8 +725,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       rawName: originalDisplayName,
       host,
       status: node.status,
-      clusterName: node.isClusterMember ? node.clusterName?.trim() || 'Cluster' : undefined,
-      isClusterMember: node.isClusterMember ?? false,
+      clusterName: isClusterMember ? clusterName?.trim() || 'Cluster' : undefined,
+      isClusterMember,
     };
 
     const keys = new Set<string>();
@@ -733,7 +739,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return { headerMeta, keys };
   };
 
-  const nodesWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const nodesWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
       return prev;
@@ -744,6 +750,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     const nodes = (props.nodes ?? []).map((node) => {
       const override = overridesMap.get(node.id);
+      const data = pd(node);
+      const clusterName = (data?.clusterName as string | undefined) ?? undefined;
+      const isClusterMember =
+        (data?.isClusterMember as boolean | undefined) ?? Boolean(node.clusterId);
 
       // Check if any threshold values actually differ from defaults
       const hasCustomThresholds =
@@ -760,13 +770,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const hasNote = Boolean(note && note.trim().length > 0);
 
       const originalDisplayName = node.displayName?.trim() || node.name;
-      const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
+      const friendlyName = getFriendlyNodeName(originalDisplayName, clusterName);
       const rawName = node.name;
       const sanitizedName = friendlyName || originalDisplayName || rawName.split('.')[0] || rawName;
       // Build a best-effort management URL for the node
       // Prioritize guestURL over host (same as NodeGroupHeader)
-      const guestUrlValue = node.guestURL?.trim();
-      const hostValue = node.host?.trim() || rawName;
+      const guestUrlValue =
+        typeof data?.guestURL === 'string' ? (data.guestURL as string).trim() : '';
+      const hostValue =
+        (typeof data?.host === 'string' ? (data.host as string).trim() : '') || rawName;
       let normalizedHost: string;
       if (guestUrlValue && guestUrlValue !== '') {
         normalizedHost = guestUrlValue.startsWith('http') ? guestUrlValue : `https://${guestUrlValue}`;
@@ -787,19 +799,19 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         resourceType: 'Node',
         status: node.status,
         uptime: node.uptime,
-        cpu: node.cpu,
-        memory: node.memory?.usage,
+        cpu: (node.cpu?.current ?? 0) / 100,
+        memory: node.memory?.current,
         hasOverride:
           hasCustomThresholds || hasNote || Boolean(override?.disableConnectivity) || false,
         disabled: false,
         disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
         defaults: props.nodeDefaults,
-        clusterName: node.isClusterMember ? node.clusterName?.trim() : undefined,
-        isClusterMember: node.isClusterMember ?? false,
-        instance: node.instance,
+        clusterName: isClusterMember ? clusterName?.trim() : undefined,
+        isClusterMember,
+        instance: node.platformId,
         note,
-      } satisfies Resource;
+      } satisfies TableResource;
     });
 
     if (search) {
@@ -808,7 +820,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return nodes;
   }, []);
 
-  const hostAgentsWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const hostAgentsWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
     }
@@ -817,7 +829,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
     const seen = new Set<string>();
 
-    const hosts = (props.hosts ?? []).map((host) => {
+    const hosts: TableResource[] = (props.hosts ?? []).map((host) => {
       const override = overridesMap.get(host.id);
       const hasCustomThresholds =
         override?.thresholds &&
@@ -829,8 +841,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           );
         });
 
-      const displayName = host.displayName?.trim() || host.hostname || host.id;
-      const status = host.status || (host.lastSeen ? 'online' : 'offline');
+      const displayName = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const status = host.status;
 
       seen.add(host.id);
 
@@ -838,11 +850,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         id: host.id,
         name: displayName,
         displayName,
-        rawName: host.hostname || host.id,
+        rawName: host.identity?.hostname ?? host.name,
         type: 'hostAgent' as const,
         resourceType: 'Host Agent',
-        node: host.hostname,
-        instance: host.platform || host.osName || '',
+        node: host.identity?.hostname ?? host.name,
+        instance: (pd(host)?.platform as string) || (pd(host)?.osName as string) || '',
         status,
         hasOverride:
           hasCustomThresholds ||
@@ -852,7 +864,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
         defaults: props.hostDefaults,
-      } satisfies Resource;
+      } satisfies TableResource;
     });
 
     (props.overrides() ?? [])
@@ -874,7 +886,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           disableConnectivity: override.disableConnectivity || false,
           thresholds: override.thresholds || {},
           defaults: props.hostDefaults,
-        } satisfies Resource);
+        } satisfies TableResource);
       });
 
     if (search) {
@@ -895,7 +907,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
 
   // Process host disks with their overrides
-  const hostDisksWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const hostDisksWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
     }
@@ -903,13 +915,23 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const search = searchTerm().toLowerCase();
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
     const seen = new Set<string>();
-    const disks: Resource[] = [];
+    const disks: TableResource[] = [];
 
     // Extract disks from all hosts
     (props.hosts ?? []).forEach((host) => {
-      const hostDisplayName = host.displayName?.trim() || host.hostname || host.id;
+      const hostDisplayName =
+        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
 
-      (host.disks ?? []).forEach((disk) => {
+      const disksForHost =
+        (pd(host)?.disks ?? []) as Array<{
+          mountpoint?: string;
+          device?: string;
+          used?: number;
+          total?: number;
+          type?: string;
+        }>;
+
+      disksForHost.forEach((disk) => {
         const diskLabel = disk.mountpoint?.trim() || disk.device?.trim() || 'disk';
         const resourceId = hostDiskResourceID(host.id, disk.mountpoint || '', disk.device);
         const override = overridesMap.get(resourceId);
@@ -930,13 +952,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           host: host.id,
           node: hostDisplayName,
           instance: disk.type || '',
-          status: host.status || 'online',
+          status: host.status,
           hasOverride: hasCustomThresholds || Boolean(override?.disabled),
           disabled: override?.disabled || false,
           thresholds: override?.thresholds || {},
           defaults: { disk: props.hostDefaults.disk },
           subtitle: `${((disk.used || 0) / 1024 / 1024 / 1024).toFixed(1)} / ${((disk.total || 0) / 1024 / 1024 / 1024).toFixed(1)} GB`,
-        } satisfies Resource);
+        } satisfies TableResource);
       });
     });
 
@@ -973,8 +995,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   }, []);
 
   // Group host disks by their host
-  const hostDisksGroupedByHost = createMemo<Record<string, Resource[]>>(() => {
-    const grouped: Record<string, Resource[]> = {};
+  const hostDisksGroupedByHost = createMemo<Record<string, TableResource[]>>(() => {
+    const grouped: Record<string, TableResource[]> = {};
     hostDisksWithOverrides().forEach((disk) => {
       const key = disk.node?.trim() || 'Unknown Host';
       if (!grouped[key]) {
@@ -992,7 +1014,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   });
 
   // Process Docker hosts with their overrides (primarily for connectivity toggles)
-  const dockerHostsWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const dockerHostsWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
     }
@@ -1001,12 +1023,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
     const seen = new Set<string>();
 
-    const hosts = (props.dockerHosts ?? []).map((host) => {
-      const originalName = host.displayName?.trim() || host.hostname || host.id;
+    const hosts: TableResource[] = (props.dockerHosts ?? []).map((host) => {
+      const originalName = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const friendlyName = getFriendlyNodeName(originalName);
       const override = overridesMap.get(host.id);
       const disableConnectivity = override?.disableConnectivity || false;
-      const status = host.status || (host.lastSeen ? 'online' : 'offline');
+      const status = host.status;
 
       seen.add(host.id);
 
@@ -1017,15 +1039,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         rawName: originalName,
         type: 'dockerHost' as const,
         resourceType: 'Container Host',
-        node: host.hostname,
-        instance: host.displayName,
+        node: host.identity?.hostname ?? host.name,
+        instance: (pd(host)?.platform as string) || (pd(host)?.osName as string) || '',
         status,
         hasOverride: disableConnectivity,
         disableConnectivity,
         thresholds: override?.thresholds || {},
         defaults: {},
         editable: false,
-      } satisfies Resource;
+      } satisfies TableResource;
     });
 
     // Include any overrides referencing Docker hosts that are no longer reporting
@@ -1058,37 +1080,45 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return hosts;
   }, []);
 
+  const dockerContainersByHostId = createMemo(() => {
+    const map = new Map<string, Resource[]>();
+    (props.allResources ?? []).forEach((resource) => {
+      if (resource.type !== 'docker-container') return;
+      const parentId = resource.parentId;
+      if (!parentId) return;
+      const existing = map.get(parentId);
+      if (existing) {
+        existing.push(resource);
+      } else {
+        map.set(parentId, [resource]);
+      }
+    });
+    return map;
+  });
+
   // Process Docker containers grouped by host
-  const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((prev = {}) => {
+  const dockerContainersGroupedByHost = createMemo<Record<string, TableResource[]>>((prev = {}) => {
     if (editingId()) {
       return prev;
     }
 
     const search = searchTerm().toLowerCase();
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
-    const groups: Record<string, Resource[]> = {};
+    const groups: Record<string, TableResource[]> = {};
     const seen = new Set<string>();
 
-    const normalizeContainerName = (container: DockerContainer): string => {
-      const name = container.name?.trim() || '';
-      if (name.startsWith('/')) {
-        return name.replace(/^\/+/, '') || (container.id?.slice(0, 12) ?? 'container');
-      }
-      if (!name) {
-        return container.id?.slice(0, 12) ?? 'container';
-      }
-      return name;
-    };
-
     (props.dockerHosts ?? []).forEach((host) => {
-      const hostLabel = host.displayName?.trim() || host.hostname || host.id;
+      const hostLabel = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const friendlyHostName = getFriendlyNodeName(hostLabel);
       const hostLabelLower = hostLabel.toLowerCase();
       const friendlyHostNameLower = friendlyHostName.toLowerCase();
 
-      (host.containers || []).forEach((container) => {
-        const containerId = container.id || normalizeContainerName(container);
-        const resourceId = `docker:${host.id}/${containerId}`;
+      const hostHostname = host.identity?.hostname ?? host.name;
+      const containers = dockerContainersByHostId().get(host.id) ?? [];
+
+      containers.forEach((container) => {
+        const shortId = container.id.includes('/') ? (container.id.split('/').pop() ?? container.id) : container.id;
+        const resourceId = `docker:${host.id}/${shortId}`;
         const override = overridesMap.get(resourceId);
         const overrideSeverity = override?.poweredOffSeverity;
 
@@ -1110,9 +1140,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           overrideSeverity !== undefined ||
           false;
 
-        const containerName = normalizeContainerName(container);
+        const containerName = container.name?.replace(/^\/+/, '') || shortId;
         const containerNameLower = containerName.toLowerCase();
-        const imageLower = container.image?.toLowerCase() || '';
+        const image = (pd(container)?.image as string) ?? '';
+        const imageLower = image.toLowerCase();
 
         const matchesSearch =
           !search ||
@@ -1124,16 +1155,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           return;
         }
 
-        const status = container.state || container.status || 'unknown';
+        const status = container.status;
         const groupKey = friendlyHostName || hostLabel;
 
-        const resource: Resource = {
+        const resource: TableResource = {
           id: resourceId,
           name: containerName,
           type: 'dockerContainer',
           resourceType: 'Container',
           node: groupKey,
-          instance: host.hostname,
+          instance: hostHostname,
           status,
           hasOverride,
           disabled: override?.disabled || false,
@@ -1141,7 +1172,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           thresholds: override?.thresholds || {},
           defaults: props.dockerDefaults,
           hostId: host.id,
-          image: container.image,
+          image,
           poweredOffSeverity: overrideSeverity,
         };
 
@@ -1186,7 +1217,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     }
 
     // With search applied, remove empty groups (should already be filtered)
-    const filteredGroups: Record<string, Resource[]> = {};
+    const filteredGroups: Record<string, TableResource[]> = {};
     Object.entries(groups).forEach(([group, resources]) => {
       if (resources.length > 0) {
         filteredGroups[group] = resources;
@@ -1195,26 +1226,30 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return filteredGroups;
   }, {});
 
-  const dockerContainersFlat = createMemo<Resource[]>(() =>
+  const dockerContainersFlat = createMemo<TableResource[]>(() =>
     Object.values(dockerContainersGroupedByHost() ?? {}).flat(),
   );
 
   const totalDockerContainers = createMemo(() =>
-    (props.dockerHosts ?? []).reduce((sum, host) => sum + (host.containers?.length ?? 0), 0),
+    (props.dockerHosts ?? []).reduce(
+      (sum, host) => sum + (dockerContainersByHostId().get(host.id)?.length ?? 0),
+      0,
+    ),
   );
 
   const dockerHostGroupMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.dockerHosts ?? []).forEach((host) => {
-      const originalName = host.displayName?.trim() || host.hostname || host.id;
+      const originalName = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const friendlyName = getFriendlyNodeName(originalName);
       const headerMeta: GroupHeaderMeta = {
         displayName: friendlyName,
         rawName: originalName,
-        status: host.status || (host.lastSeen ? 'online' : 'offline'),
+        status: host.status,
       };
 
-      [friendlyName, originalName, host.hostname, host.id]
+      const hostname = host.identity?.hostname ?? host.name;
+      [friendlyName, originalName, hostname, host.id]
         .filter((key): key is string => Boolean(key && key.trim()))
         .forEach((key) => {
           meta[key.trim()] = headerMeta;
@@ -1229,7 +1264,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return meta;
   });
 
-  const countOverrides = (resources: Resource[] | undefined) =>
+  const countOverrides = (resources: TableResource[] | undefined) =>
     resources?.filter(
       (resource) => resource.hasOverride || resource.disabled || resource.disableConnectivity,
     ).length ?? 0;
@@ -1440,7 +1475,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   });
 
   // Process guests with their overrides and group by node
-  const guestsGroupedByNode = createMemo<Record<string, Resource[]>>((prev = {}) => {
+  const guestsGroupedByNode = createMemo<Record<string, TableResource[]>>((prev = {}) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
       return prev;
@@ -1450,8 +1485,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
 
     const guests = (props.allGuests() ?? []).map((guest) => {
-      // Use canonical format: instance:node:vmid
-      const guestId = guest.id || `${guest.instance}:${guest.node}:${guest.vmid}`;
+      const gpd = guest.platformData ? (unwrap(guest.platformData) as Record<string, unknown>) : undefined;
+      const vmid = (gpd?.vmid as number | undefined) ?? undefined;
+      const node = (gpd?.node as string | undefined) ?? '';
+      const instance = (gpd?.instance as string | undefined) ?? guest.platformId ?? '';
+      const guestId = guest.id;
       const override = overridesMap.get(guestId);
       const overrideSeverity = override?.poweredOffSeverity;
 
@@ -1478,10 +1516,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         id: guestId,
         name: guest.name,
         type: 'guest' as const,
-        resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
-        vmid: guest.vmid,
-        node: guest.node,
-        instance: guest.instance,
+        resourceType: guest.type === 'vm' ? 'VM' : 'CT',
+        vmid,
+        node,
+        instance,
         status: guest.status,
         hasOverride: hasOverride,
         disabled: override?.disabled || false,
@@ -1505,7 +1543,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     // Group by instance (not node - node is just the hostname which may be duplicated)
     // Instance is the disambiguated name like "px1" or "px1 (10.0.2.224)"
-    const grouped: Record<string, Resource[]> = {};
+    const grouped: Record<string, TableResource[]> = {};
     filteredGuests.forEach((guest) => {
       const groupKey = guest.instance || guest.node || 'Unknown';
       if (!grouped[groupKey]) {
@@ -1525,7 +1563,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return grouped;
   }, {});
 
-  const guestsFlat = createMemo<Resource[]>(() =>
+  const guestsFlat = createMemo<TableResource[]>(() =>
     Object.values(guestsGroupedByNode() ?? {}).flat(),
   );
 
@@ -1541,7 +1579,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   });
 
   // Process PBS servers with their overrides
-  const pbsServersWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const pbsServersWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
       return prev;
@@ -1646,7 +1684,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
 
   // Process PMG servers with their overrides
-  const pmgServersWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const pmgServersWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
       return prev;
@@ -1704,8 +1742,33 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return pmgServers;
   }, []);
 
+  const storageCoords = (r: Resource): { node: string; instance: string } => {
+    const data = pd(r);
+    if (r.type === 'datastore') {
+      const instance =
+        (data?.pbsInstanceId as string | undefined) || r.parentId || r.platformId || 'pbs';
+      const node = (data?.pbsInstanceName as string | undefined) || instance;
+      return { node, instance };
+    }
+    return {
+      node: (data?.node as string | undefined) || '',
+      instance: (data?.instance as string | undefined) || r.platformId || '',
+    };
+  };
+
+  const normalizeStorageStatus = (status: string | undefined): string => {
+    switch ((status ?? '').toLowerCase()) {
+      case 'online':
+      case 'running':
+      case 'available':
+        return 'available';
+      default:
+        return 'offline';
+    }
+  };
+
   // Process storage with their overrides
-  const storageWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const storageWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
       return prev;
@@ -1716,6 +1779,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     const storageDevices = (props.storage ?? []).map((storage) => {
       const override = overridesMap.get(storage.id);
+      const coords = storageCoords(storage);
 
       // Storage only has usage threshold
       const hasCustomThresholds =
@@ -1730,9 +1794,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         name: storage.name,
         type: 'storage' as const,
         resourceType: 'Storage',
-        node: storage.node,
-        instance: storage.instance,
-        status: storage.status,
+        node: coords.node,
+        instance: coords.instance,
+        status: normalizeStorageStatus(storage.status),
         hasOverride: hasOverride,
         disabled: override?.disabled || false,
         thresholds: override?.thresholds || {},
@@ -1748,8 +1812,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return storageDevices;
   }, []);
 
-  const storageGroupedByNode = createMemo<Record<string, Resource[]>>(() => {
-    const grouped: Record<string, Resource[]> = {};
+  const storageGroupedByNode = createMemo<Record<string, TableResource[]>>(() => {
+    const grouped: Record<string, TableResource[]> = {};
     storageWithOverrides().forEach((storage) => {
       const key = storage.node?.trim() || 'Unassigned';
       if (!grouped[key]) {

@@ -15,7 +15,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { useWebSocket } from '@/App';
-import { useAlertsResources, useResources } from '@/hooks/useResources';
+import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
@@ -23,8 +23,9 @@ import { NotificationsAPI, Webhook } from '@/api/notifications';
 import { LicenseAPI, type LicenseFeatureStatus } from '@/api/license';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
-import type { Alert, Incident, IncidentEvent, State, VM, Container, DockerHost, DockerContainer, Host, Node, Storage } from '@/types/api';
-import type { ResourceType } from '@/types/resource';
+import type { Alert, Incident, IncidentEvent, State } from '@/types/api';
+import type { Resource, ResourceType } from '@/types/resource';
+import { unwrap } from 'solid-js/store';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
@@ -513,10 +514,18 @@ export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
   }
 }
 
+// Temporary legacy adapters for guest resources used by ThresholdsTable.
+const platformData = (r: Resource): Record<string, unknown> | undefined =>
+  r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
+
+const guessNumericId = (value: string): number => {
+  const match = value.match(/(\d+)\s*$/);
+  return match ? parseInt(match[1], 10) : 0;
+};
+
 export function Alerts() {
   const { state, activeAlerts, updateAlert, removeAlerts } = useWebSocket();
-  const alertResources = useAlertsResources();
-  const { get: getResource, resources: allResources } = useResources();
+  const { get: getResource, resources: allResources, byType, children } = useResources();
   const navigate = useNavigate();
   const location = useLocation();
   const alertsActivation = useAlertsActivation();
@@ -763,31 +772,48 @@ export function Alerts() {
     const rawConfig = rawOverridesConfig();
     if (
       Object.keys(rawConfig).length > 0 &&
-      alertResources.ready()
+      byType('node').length > 0
     ) {
-      const nodes = alertResources.nodes();
-      const vms = alertResources.vms();
-      const containers = alertResources.containers();
-      const storageResources = alertResources.storage();
-      const hosts = alertResources.hosts();
-      const dockerHosts = alertResources.dockerHosts();
+      const nodeResources = byType('node');
+      const vmResources = byType('vm');
+      const containerResources = [...byType('container'), ...byType('oci-container')];
+      const storageResources = allResources().filter((r) => r.type === 'storage' || r.type === 'datastore');
+      const hostResources = byType('host');
+      const dockerHostResources = byType('docker-host');
 
       // Convert overrides object to array format
       const overridesList: Override[] = [];
 
-      const dockerHostsList: DockerHost[] = dockerHosts;
-      const dockerHostMap = new Map<string, DockerHost>();
-      const dockerContainerMap = new Map<string, { host: DockerHost; container: DockerContainer }>();
-      const hostAgentMap = new Map<string, Host>();
+      const pd = platformData;
+      const dockerHostMap = new Map<string, Resource>();
+      const dockerContainerMap = new Map<string, { host: Resource; container: Resource; containerShortId: string }>();
+      const hostAgentMap = new Map<string, Resource>();
 
-      dockerHostsList.forEach((host) => {
+      const storageCoords = (r: Resource): { node: string; instance: string } => {
+        const data = pd(r);
+        if (r.type === 'datastore') {
+          const instance =
+            (data?.pbsInstanceId as string | undefined) || r.parentId || r.platformId || 'pbs';
+          const node =
+            (data?.pbsInstanceName as string | undefined) || instance;
+          return { node, instance };
+        }
+        return {
+          node: (data?.node as string | undefined) || '',
+          instance: (data?.instance as string | undefined) || r.platformId || '',
+        };
+      };
+
+      dockerHostResources.forEach((host) => {
         dockerHostMap.set(host.id, host);
-        (host.containers || []).forEach((container) => {
-          const resourceId = `docker:${host.id}/${container.id}`;
-          dockerContainerMap.set(resourceId, { host, container });
+        const containers = children(host.id).filter((r) => r.type === 'docker-container');
+        containers.forEach((container) => {
+          const shortId = container.id.includes('/') ? container.id.split('/').pop()! : container.id;
+          const resourceId = `docker:${host.id}/${shortId}`;
+          dockerContainerMap.set(resourceId, { host, container, containerShortId: shortId });
         });
       });
-      hosts.forEach((host) => {
+      hostResources.forEach((host) => {
         hostAgentMap.set(host.id, host);
       });
 
@@ -797,7 +823,11 @@ export function Alerts() {
         if (dockerHost) {
           overridesList.push({
             id: key,
-            name: dockerHost.displayName?.trim() || dockerHost.hostname || dockerHost.id,
+            name:
+              dockerHost.displayName?.trim() ||
+              dockerHost.identity?.hostname ||
+              dockerHost.name ||
+              dockerHost.id,
             type: 'dockerHost',
             resourceType: 'Container Host',
             disableConnectivity: thresholds.disableConnectivity || false,
@@ -809,14 +839,14 @@ export function Alerts() {
         // Docker container override stored as docker:hostId/containerId
         const dockerContainer = dockerContainerMap.get(key);
         if (dockerContainer) {
-          const { host, container } = dockerContainer;
-          const containerName = container.name?.replace(/^\/+/, '') || container.id;
+          const { host, container, containerShortId } = dockerContainer;
+          const containerName = container.name?.replace(/^\/+/, '') || containerShortId;
           overridesList.push({
             id: key,
             name: containerName,
             type: 'dockerContainer',
             resourceType: 'Container',
-            node: host.hostname,
+            node: host.identity?.hostname ?? host.name,
             instance: host.displayName,
             disabled: thresholds.disabled || false,
             disableConnectivity: thresholds.disableConnectivity || false,
@@ -879,7 +909,7 @@ export function Alerts() {
             name: displayName,
             type: 'hostDisk',
             resourceType: 'Host Disk',
-            node: host?.displayName?.trim() || host?.hostname || hostId,
+            node: host?.displayName?.trim() || host?.identity?.hostname || host?.name || hostId,
             disabled: thresholds.disabled || false,
             thresholds: extractTriggerValues(thresholds),
           });
@@ -890,15 +920,16 @@ export function Alerts() {
         const hostAgent = hostAgentMap.get(key);
         if (hostAgent) {
           const displayName =
-            hostAgent.displayName?.trim() || hostAgent.hostname || hostAgent.id;
+            hostAgent.displayName?.trim() || hostAgent.identity?.hostname || hostAgent.name || hostAgent.id;
+          const data = pd(hostAgent);
 
           overridesList.push({
             id: hostAgent.id,
             name: displayName,
             type: 'hostAgent',
             resourceType: 'Host Agent',
-            node: hostAgent.hostname,
-            instance: hostAgent.platform || hostAgent.osName || '',
+            node: hostAgent.identity?.hostname ?? hostAgent.name,
+            instance: (data?.platform as string | undefined) || (data?.osName as string | undefined) || '',
             disabled: thresholds.disabled || false,
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
@@ -921,7 +952,7 @@ export function Alerts() {
           }
         } else {
           // Check if it's a node override by looking for matching node
-          const node = nodes.find((n) => n.id === key);
+          const node = nodeResources.find((n) => n.id === key);
           if (node) {
             overridesList.push({
               id: key,
@@ -935,30 +966,32 @@ export function Alerts() {
             // Check if it's a storage device
             const storage = storageResources.find((s) => s.id === key);
             if (storage) {
+              const coords = storageCoords(storage);
               overridesList.push({
                 id: key,
                 name: storage.name,
                 type: 'storage',
                 resourceType: 'Storage',
-                node: storage.node,
-                instance: storage.instance,
+                node: coords.node,
+                instance: coords.instance,
                 disabled: thresholds.disabled || false,
                 thresholds: extractTriggerValues(thresholds),
               });
             } else {
               // Find the guest by matching the full ID
-              const vm = vms.find((g) => g.id === key);
-              const container = containers.find((g) => g.id === key);
+              const vm = vmResources.find((g) => g.id === key);
+              const container = containerResources.find((g) => g.id === key);
               const guest = vm || container;
               if (guest) {
+                const data = pd(guest);
                 overridesList.push({
                   id: key,
                   name: guest.name,
                   type: 'guest',
-                  resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
-                  vmid: guest.vmid,
-                  node: guest.node,
-                  instance: guest.instance,
+                  resourceType: guest.type === 'vm' ? 'VM' : 'CT',
+                  vmid: (data?.vmid as number | undefined) ?? guessNumericId(guest.id),
+                  node: (data?.node as string | undefined) ?? '',
+                  instance: ((data?.instance as string | undefined) ?? guest.platformId),
                   disabled: thresholds.disabled || false,
                   disableConnectivity: thresholds.disableConnectivity || false,
                   poweredOffSeverity:
@@ -1509,17 +1542,12 @@ export function Alerts() {
 
   // Get all guests from alert resource selectors - memoize to prevent unnecessary updates
   const allGuests = createMemo(
-    () => {
-      const vms = alertResources.vms();
-      const containers = alertResources.containers();
-      return [...vms, ...containers];
-    },
+    () => [...byType('vm'), ...byType('container'), ...byType('oci-container')],
     [],
     {
       equals: (prev, next) => {
-        // Only update if the actual guest list changed
         if (prev.length !== next.length) return false;
-        return prev.every((p, i) => p.vmid === next[i].vmid && p.name === next[i].name);
+        return prev.every((p, i) => p.id === next[i].id && p.name === next[i].name);
       },
     },
   );
@@ -2199,10 +2227,11 @@ export function Alerts() {
                   setRawOverridesConfig={setRawOverridesConfig}
                   allGuests={allGuests}
                   state={state}
-                  nodes={alertResources.nodes()}
-                  hosts={alertResources.hosts()}
-                  storage={alertResources.storage()}
-                  dockerHosts={alertResources.dockerHosts()}
+                  nodes={byType('node')}
+                  hosts={byType('host')}
+                  storage={allResources().filter((r) => r.type === 'storage' || r.type === 'datastore')}
+                  dockerHosts={byType('docker-host')}
+                  allResources={allResources()}
                   guestDefaults={guestDefaults}
                   guestDisableConnectivity={guestDisableConnectivity}
                   setGuestDefaults={setGuestDefaults}
@@ -2932,12 +2961,13 @@ function OverviewTab(props: {
 
 // Thresholds Tab - Improved design
 interface ThresholdsTabProps {
-  allGuests: () => (VM | Container)[];
+  allGuests: () => Resource[];
   state: State;
-  nodes: Node[];
-  hosts: Host[];
-  storage: Storage[];
-  dockerHosts: DockerHost[];
+  nodes: Resource[];
+  hosts: Resource[];
+  storage: Resource[];
+  dockerHosts: Resource[];
+  allResources: Resource[];
   guestDefaults: () => Record<string, number | undefined>;
   nodeDefaults: () => Record<string, number | undefined>;
   pbsDefaults: () => Record<string, number | undefined>;
@@ -3123,6 +3153,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       hosts={props.hosts}
       storage={props.storage}
       dockerHosts={props.dockerHosts}
+      allResources={props.allResources}
       pbsInstances={props.state.pbs || []}
       pmgInstances={props.state.pmg || []}
       backups={props.state.backups}

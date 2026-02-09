@@ -1,5 +1,6 @@
 import { Component, createSignal, Show, For, onMount, createEffect, createMemo } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
+import { unwrap } from 'solid-js/store';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
@@ -11,6 +12,7 @@ import { MonitoringAPI } from '@/api/monitoring';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '@/api/agentProfiles';
 import { SecurityAPI } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
+import { useResources } from '@/hooks/useResources';
 import type { SecurityStatus } from '@/types/config';
 import type { HostLookupResponse } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
@@ -18,6 +20,7 @@ import { HOST_AGENT_SCOPE, HOST_AGENT_CONFIG_READ_SCOPE, DOCKER_REPORT_SCOPE, KU
 import { copyToClipboard } from '@/utils/clipboard';
 import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
+import type { Resource } from '@/types/resource';
 
 const TOKEN_PLACEHOLDER = '<api-token>';
 
@@ -149,7 +152,10 @@ const buildCommandsByPlatform = (url: string): Record<
 
 export const UnifiedAgents: Component = () => {
     const { state } = useWebSocket();
+    const { byType } = useResources();
     const navigate = useNavigate();
+
+    const pd = (r: Resource) => (r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined);
 
     let hasLoggedSecurityStatusError = false;
 
@@ -351,8 +357,8 @@ export const UnifiedAgents: Component = () => {
     let previousHostTypes = new Map<string, Set<'host' | 'docker'>>();
 
     const allHosts = createMemo(() => {
-        const hosts = state.hosts || [];
-        const dockerHosts = state.dockerHosts || [];
+        const hosts = byType('host');
+        const dockerHosts = byType('docker-host');
 
         // Create a unified list
         const unified = new Map<string, {
@@ -370,50 +376,68 @@ export const UnifiedAgents: Component = () => {
         }>();
 
         // Process Host Agents (include linked ones with a badge)
-        hosts.forEach(h => {
+        hosts.forEach(r => {
+            const platformData = pd(r);
+            const hostname = r.identity?.hostname || r.name || 'Unknown';
+            const agentVersion = platformData?.agentVersion;
+            const isLegacy = platformData?.isLegacy;
+            const linkedNodeId = platformData?.linkedNodeId;
+            const commandsEnabled = platformData?.commandsEnabled;
+            const agentId = (platformData?.agentId as string | undefined) || r.id;
             // Use id as key (not hostname) to avoid overwriting when different machines share the same hostname
-            const key = h.id;
+            const key = r.id;
             unified.set(key, {
-                id: h.id,
-                agentId: h.id,
-                hostname: h.hostname || 'Unknown',
-                displayName: h.displayName,
+                id: r.id,
+                agentId,
+                hostname,
+                displayName: r.displayName,
                 types: ['host'],
-                status: h.status || 'unknown',
-                version: h.agentVersion,
-                lastSeen: h.lastSeen,
-                isLegacy: h.isLegacy,
-                linkedNodeId: h.linkedNodeId,
-                commandsEnabled: h.commandsEnabled
+                status: r.status || 'unknown',
+                version: typeof agentVersion === 'string' ? agentVersion : undefined,
+                lastSeen: r.lastSeen,
+                isLegacy: typeof isLegacy === 'boolean' ? isLegacy : undefined,
+                linkedNodeId: typeof linkedNodeId === 'string' ? linkedNodeId : undefined,
+                commandsEnabled: typeof commandsEnabled === 'boolean' ? commandsEnabled : undefined,
             });
         });
 
         // Process Docker Agents (merge if same id - indicates same physical machine)
-        dockerHosts.forEach(d => {
+        dockerHosts.forEach(r => {
+            const platformData = pd(r);
+            const hostname = r.identity?.hostname || r.name || 'Unknown';
+            const agentId = (platformData?.agentId as string | undefined) || r.id;
+            const agentVersion = platformData?.agentVersion;
+            const dockerVersion = platformData?.dockerVersion;
+            const isLegacy = platformData?.isLegacy;
             // Use id as key (not hostname) to avoid overwriting 
-            const key = d.id;
+            const key = r.id;
             const existing = unified.get(key);
             if (existing) {
                 if (!existing.types.includes('docker')) {
                     existing.types.push('docker');
                 }
-                if (!existing.agentId && d.agentId) {
-                    existing.agentId = d.agentId;
+                if (!existing.agentId && agentId) {
+                    existing.agentId = agentId;
                 }
                 // Update version/status if newer
-                if (!existing.version && d.agentVersion) existing.version = d.agentVersion;
-                if (d.isLegacy) existing.isLegacy = true;
+                if (!existing.version && typeof agentVersion === 'string') existing.version = agentVersion;
+                if (isLegacy) existing.isLegacy = true;
             } else {
                 unified.set(key, {
-                    id: d.id,
-                    agentId: d.agentId || d.id,
-                    hostname: d.hostname || 'Unknown',
-                    displayName: d.displayName,
+                    id: r.id,
+                    agentId,
+                    hostname,
+                    displayName: r.displayName,
                     types: ['docker'],
-                    status: d.status || 'unknown',
-                    version: d.agentVersion || d.dockerVersion,
-                    lastSeen: d.lastSeen,
-                    isLegacy: d.isLegacy,
+                    status: r.status || 'unknown',
+                    version:
+                        typeof agentVersion === 'string'
+                            ? agentVersion
+                            : typeof dockerVersion === 'string'
+                                ? dockerVersion
+                                : undefined,
+                    lastSeen: r.lastSeen,
+                    isLegacy: typeof isLegacy === 'boolean' ? isLegacy : undefined,
                 });
             }
         });
@@ -561,16 +585,26 @@ export const UnifiedAgents: Component = () => {
 
     // Host agents linked to PVE nodes (shown separately with unlink option)
     const linkedHostAgents = createMemo(() => {
-        const hosts = state.hosts || [];
-        return hosts.filter(h => h.linkedNodeId).map(h => ({
-            id: h.id,
-            hostname: h.hostname || 'Unknown',
-            displayName: h.displayName,
-            linkedNodeId: h.linkedNodeId,
-            status: h.status,
-            version: h.agentVersion,
-            lastSeen: h.lastSeen ? new Date(h.lastSeen).getTime() : undefined,
-        }));
+        const hosts = byType('host');
+        return hosts.flatMap(r => {
+            const platformData = pd(r);
+            const linkedNodeId = platformData?.linkedNodeId;
+            if (typeof linkedNodeId !== 'string' || !linkedNodeId) return [];
+
+            const hostname = r.identity?.hostname || r.name || 'Unknown';
+            const version = platformData?.agentVersion;
+            return [
+                {
+                    id: r.id,
+                    hostname,
+                    displayName: r.displayName,
+                    linkedNodeId,
+                    status: r.status,
+                    version: typeof version === 'string' ? version : undefined,
+                    lastSeen: r.lastSeen ? new Date(r.lastSeen).getTime() : undefined,
+                }
+            ];
+        });
     });
     const hasLinkedAgents = createMemo(() => linkedHostAgents().length > 0);
 
@@ -789,7 +823,7 @@ export const UnifiedAgents: Component = () => {
     // Clear pending state when agent reports matching the expected value, or after timeout
     createEffect(() => {
         const pending = pendingCommandConfig();
-        const hosts = state.hosts || [];
+        const hosts = byType('host');
         const now = Date.now();
         const TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
@@ -802,14 +836,16 @@ export const UnifiedAgents: Component = () => {
             const entry = pending[hostId];
             const host = hosts.find(h => h.id === hostId);
 
-            if (host && host.commandsEnabled === entry.enabled) {
+            const hostCommandsEnabled = host ? pd(host)?.commandsEnabled : undefined;
+            if (host && typeof hostCommandsEnabled === 'boolean' && hostCommandsEnabled === entry.enabled) {
                 // Agent confirmed the change
                 delete newPending[hostId];
                 updated = true;
             } else if (now - entry.timestamp > TIMEOUT_MS) {
                 // Timed out waiting for agent
                 delete newPending[hostId];
-                timedOut.push(host?.hostname || hostId);
+                const hostLabel = host ? (host.identity?.hostname || host.name || hostId) : hostId;
+                timedOut.push(hostLabel);
                 updated = true;
             }
         }

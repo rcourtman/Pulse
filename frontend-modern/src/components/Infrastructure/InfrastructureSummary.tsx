@@ -1,11 +1,11 @@
 import { Component, For, Show, createMemo, createEffect, createSignal, onCleanup } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { Card } from '@/components/shared/Card';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import type { Resource } from '@/types/resource';
 import { getDisplayName } from '@/types/resource';
 import type { MetricPoint, ChartData, TimeRange } from '@/api/charts';
 import { useResources } from '@/hooks/useResources';
-import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import {
     fetchInfrastructureSummaryAndCache,
     readInfrastructureSummaryCache,
@@ -14,17 +14,7 @@ import {
     SUMMARY_TIME_RANGES,
     SUMMARY_TIME_RANGE_LABEL,
 } from '@/components/shared/summaryTimeRange';
-
-const HOST_COLORS = [
-    '#3b82f6', // blue
-    '#8b5cf6', // purple
-    '#10b981', // emerald
-    '#f97316', // orange
-    '#ec4899', // pink
-    '#06b6d4', // cyan
-    '#f59e0b', // amber
-    '#ef4444', // red
-];
+import { HOST_COLORS } from '@/pages/DashboardPanels/hostColors';
 
 const normalizeHostIdentifier = (value?: string | null): string[] => {
     if (!value) return [];
@@ -39,7 +29,10 @@ const normalizeHostIdentifier = (value?: string | null): string[] => {
 };
 
 const getAgentIdFromResource = (resource: Resource): string | null => {
-    const platformData = resource.platformData as { agent?: { agentId?: string } } | undefined;
+    const platformData =
+        resource.platformData
+            ? (unwrap(resource.platformData) as { agent?: { agentId?: string } } | undefined)
+            : undefined;
     const agentId = platformData?.agent?.agentId;
     if (!agentId || typeof agentId !== 'string') return null;
     const trimmed = agentId.trim();
@@ -89,6 +82,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
     const hasCurrentRangeCharts = createMemo(() => chartRange() === selectedRange());
     const isCurrentRangeLoaded = createMemo(() => loadedRange() === selectedRange());
+
+    const { workloads, byType } = useResources();
+    const hostAgents = createMemo(() => byType('host'));
 
     // Fetch charts data directly — no dependency on dashboard sparkline store
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
@@ -290,8 +286,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     // Find chart data from a linked host agent when the primary chart data
     // (typically from nodeData) doesn't include agent-specific metrics like
     // netin/netout/diskread/diskwrite.
-    // The WebSocket state's hosts[] have internal IDs that match hostData chart keys,
-    // and linkedNodeId/hostname fields that let us correlate with infrastructure resources.
+    // Host agent resources have internal IDs that match hostData chart keys, and
+    // platformData.linkedNodeId + identity.hostname fields that let us correlate
+    // with infrastructure resources.
     const findAgentChartData = (host: Resource): ChartData | undefined => {
         if (!hasCurrentRangeCharts()) return undefined;
         const map = chartMap();
@@ -303,9 +300,8 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             if (direct) return direct;
         }
 
-        const wsStore = getGlobalWebSocketStore();
-        const wsHosts = wsStore.state.hosts;
-        if (!wsHosts || wsHosts.length === 0) return undefined;
+        const agentHosts = hostAgents();
+        if (!agentHosts || agentHosts.length === 0) return undefined;
 
         const hostCandidates = new Set<string>([
             ...normalizeHostIdentifier(host.platformId),
@@ -314,21 +310,28 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             ...normalizeHostIdentifier(host.identity?.hostname),
         ]);
 
-        // Find a WebSocket host agent that matches this infrastructure resource
+        // Find a host agent resource that matches this infrastructure resource
         // by linked node ID, hostname, or name
-        for (const wsHost of wsHosts) {
+        for (const agentHost of agentHosts) {
+            const platformData =
+                agentHost.platformData
+                    ? (unwrap(agentHost.platformData) as { linkedNodeId?: string } | undefined)
+                    : undefined;
+            const linkedNodeId = platformData?.linkedNodeId;
+
             // Match by linked node: agent is linked to a PVE node matching this resource
-            const linkedMatch = wsHost.linkedNodeId && (
-                host.id === wsHost.linkedNodeId ||
-                host.name === wsHost.linkedNodeId ||
-                host.platformId === wsHost.linkedNodeId
+            const linkedMatch = linkedNodeId && (
+                host.id === linkedNodeId ||
+                host.name === linkedNodeId ||
+                host.platformId === linkedNodeId
             );
             // Match by hostname: agent hostname matches this resource
-            const wsHostNames = normalizeHostIdentifier(wsHost.hostname);
-            const hostnameMatch = wsHostNames.some((candidate) => hostCandidates.has(candidate));
+            const agentHostName = agentHost.identity?.hostname ?? agentHost.name;
+            const agentHostNames = normalizeHostIdentifier(agentHostName);
+            const hostnameMatch = agentHostNames.some((candidate) => hostCandidates.has(candidate));
 
             if (linkedMatch || hostnameMatch) {
-                const agentData = map.get(wsHost.id);
+                const agentData = map.get(agentHost.id);
                 if (agentData) return agentData;
             }
         }
@@ -416,9 +419,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     const seriesFor = (metric: 'cpu' | 'memory' | 'disk') =>
         displaySeries().map((s) => ({ id: s.id, data: s[metric], color: s.color, name: s.name }));
     const rangeLabel = () => props.timeRange || '1h';
-
-    // Workload stats from WebSocket state (zero API calls)
-    const { workloads } = useResources();
 
     const workloadStats = createMemo(() => {
         const all = workloads();

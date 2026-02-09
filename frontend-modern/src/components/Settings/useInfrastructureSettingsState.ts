@@ -12,7 +12,9 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
-import type { State } from '@/types/api';
+import { useResources } from '@/hooks/useResources';
+import type { Resource } from '@/types/resource';
+import type { State, Temperature } from '@/types/api';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { EventDataMap, EventType } from '@/stores/events';
 import type { SettingsTab } from './settingsTypes';
@@ -110,6 +112,7 @@ export function useInfrastructureSettingsState({
   loadSecurityStatus,
   initializeSystemSettingsState,
 }: UseInfrastructureSettingsStateParams) {
+  const { byType } = useResources();
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
   const [discoveredNodes, setDiscoveredNodes] = createSignal<DiscoveredServer[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
@@ -133,24 +136,26 @@ export function useInfrastructureSettingsState({
 
   const orgNodeUsage = createMemo(
     () =>
-      (state.nodes?.length ?? 0) +
-      (state.hosts?.length ?? 0) +
-      (state.dockerHosts?.length ?? 0) +
+      byType('node').length +
+      byType('host').length +
+      byType('docker-host').length +
       (state.kubernetesClusters?.length ?? 0) +
       (state.pbs?.length ?? 0) +
       (state.pmg?.length ?? 0),
   );
-  const orgGuestUsage = createMemo(() => (state.vms?.length ?? 0) + (state.containers?.length ?? 0));
+  const orgGuestUsage = createMemo(
+    () => byType('vm').length + byType('container').length + byType('oci-container').length,
+  );
 
   const matchStateNode = (
     configNode: NodeConfigWithStatus | NodeConfig,
-    stateNodes: State['nodes'] | undefined,
+    nodeResources: Resource[] | undefined,
   ) => {
-    if (!stateNodes || stateNodes.length === 0) {
+    if (!nodeResources || nodeResources.length === 0) {
       return undefined;
     }
 
-    return stateNodes.find((n) => {
+    return nodeResources.find((n) => {
       if (n.id === configNode.id) return true;
       if (n.name === configNode.name) return true;
       const configNameBase = configNode.name.replace(/\.lan$/, '');
@@ -164,16 +169,20 @@ export function useInfrastructureSettingsState({
   const loadNodes = async () => {
     try {
       const nodesList = await NodesAPI.getNodes();
-      const stateNodes = state.nodes;
+      const nodeResources = byType('node');
       const nodesWithStatus = nodesList.map((node) => {
-        const stateNode = matchStateNode(node, stateNodes);
+        const stateNode = matchStateNode(node, nodeResources);
 
+        const tempValue = stateNode?.temperature;
+        const temperature: Temperature | undefined = typeof tempValue === 'number' && tempValue > 0
+          ? { cpuPackage: tempValue, cpuMax: tempValue, available: true, hasCPU: true, lastUpdate: new Date(stateNode!.lastSeen).toISOString() }
+          : node.temperature;
         return {
           ...node,
           hasPassword: node.hasPassword ?? !!node.password,
           hasToken: node.hasToken ?? !!node.tokenValue,
           status: node.status || ('pending' as const),
-          temperature: stateNode?.temperature || node.temperature,
+          temperature,
         };
       });
       setNodes(nodesWithStatus);
@@ -876,14 +885,16 @@ export function useInfrastructureSettingsState({
 
   createEffect(
     on(
-      () => state.nodes,
-      (stateNodes) => {
+      () => byType('node'),
+      (nodeResources) => {
         const currentNodes = nodes();
-        if (stateNodes && stateNodes.length > 0 && currentNodes.length > 0) {
+        if (nodeResources && nodeResources.length > 0 && currentNodes.length > 0) {
           const updatedNodes = currentNodes.map((node) => {
-            const stateNode = matchStateNode(node, stateNodes);
-            if (stateNode?.temperature) {
-              return { ...node, temperature: stateNode.temperature };
+            const stateNode = matchStateNode(node, nodeResources);
+            const tempValue = stateNode?.temperature;
+            if (typeof tempValue === 'number' && tempValue > 0) {
+              const temp: Temperature = { cpuPackage: tempValue, cpuMax: tempValue, available: true, hasCPU: true, lastUpdate: new Date(stateNode!.lastSeen).toISOString() };
+              return { ...node, temperature: temp };
             }
             return node;
           });

@@ -23,14 +23,7 @@ vi.mock('@/api/charts', async () => {
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
     workloads: () => [],
-  }),
-}));
-
-vi.mock('@/stores/websocket-global', () => ({
-  getGlobalWebSocketStore: () => ({
-    state: {
-      hosts: [],
-    },
+    byType: () => [],
   }),
 }));
 

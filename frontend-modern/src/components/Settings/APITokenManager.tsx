@@ -1,14 +1,16 @@
 import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
-import type { DockerHost, Host } from '@/types/api';
 import { getPulseBaseUrl } from '@/utils/url';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { useResources } from '@/hooks/useResources';
+import type { Resource } from '@/types/resource';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import {
   API_SCOPE_LABELS,
@@ -32,24 +34,69 @@ const SCOPES_DOC_URL =
 const WILDCARD_SCOPE = '*';
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
-  const { state, markDockerHostsTokenRevoked, markHostsTokenRevoked } = useWebSocket();
-  const dockerHosts = createMemo<DockerHost[]>(() => state.dockerHosts ?? []);
-  const hosts = createMemo<Host[]>(() => state.hosts ?? []);
+  const { markDockerHostsTokenRevoked, markHostsTokenRevoked } = useWebSocket();
+  const { byType } = useResources();
+
+  const dockerHostResources = createMemo(() => byType('docker-host'));
+  const hostResources = createMemo(() => byType('host'));
+
+  const readPlatformData = (resource: Resource): Record<string, unknown> | undefined => {
+    return resource.platformData ? (unwrap(resource.platformData) as Record<string, unknown>) : undefined;
+  };
+
+  const readPlatformString = (value: unknown): string | undefined => {
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  };
+
+  const readPlatformNumber = (value: unknown): number | undefined => {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  };
+
+  const readNestedPlatformField = (platformData: Record<string, unknown> | undefined, field: string): unknown => {
+    if (!platformData) return undefined;
+    if (field in platformData) return platformData[field];
+    const agent = platformData.agent;
+    if (agent && typeof agent === 'object' && field in (agent as Record<string, unknown>)) {
+      return (agent as Record<string, unknown>)[field];
+    }
+    const docker = platformData.docker;
+    if (docker && typeof docker === 'object' && field in (docker as Record<string, unknown>)) {
+      return (docker as Record<string, unknown>)[field];
+    }
+    return undefined;
+  };
+
+  const tokenIdForResource = (resource: Resource): string | undefined => {
+    const platformData = readPlatformData(resource);
+    return readPlatformString(readNestedPlatformField(platformData, 'tokenId'));
+  };
+
+  const revokedTokenIdForResource = (resource: Resource): string | undefined => {
+    const platformData = readPlatformData(resource);
+    return readPlatformString(readNestedPlatformField(platformData, 'revokedTokenId'));
+  };
+
+  const tokenRevokedAtForResource = (resource: Resource): number | undefined => {
+    const platformData = readPlatformData(resource);
+    return readPlatformNumber(readNestedPlatformField(platformData, 'tokenRevokedAt'));
+  };
+
   const dockerTokenUsage = createMemo(() => {
     type UsageHost = { id: string; label: string };
     const usage = new Map<string, { count: number; hosts: UsageHost[] }>();
-    for (const host of dockerHosts()) {
-      const tokenId = host.tokenId;
+    for (const resource of dockerHostResources()) {
+      const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
-      const label = host.displayName?.trim() || host.hostname || host.id;
+      const label =
+        resource.displayName?.trim() || resource.identity?.hostname || resource.name || resource.id;
       const previous = usage.get(tokenId);
       if (previous) {
         usage.set(tokenId, {
           count: previous.count + 1,
-          hosts: [...previous.hosts, { id: host.id, label }],
+          hosts: [...previous.hosts, { id: resource.id, label }],
         });
       } else {
-        usage.set(tokenId, { count: 1, hosts: [{ id: host.id, label }] });
+        usage.set(tokenId, { count: 1, hosts: [{ id: resource.id, label }] });
       }
     }
     return usage;
@@ -57,18 +104,19 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const hostTokenUsage = createMemo(() => {
     type UsageHost = { id: string; label: string };
     const usage = new Map<string, { count: number; hosts: UsageHost[] }>();
-    for (const host of hosts()) {
-      const tokenId = host.tokenId;
+    for (const resource of hostResources()) {
+      const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
-      const label = host.displayName?.trim() || host.hostname || host.id;
+      const label =
+        resource.displayName?.trim() || resource.identity?.hostname || resource.name || resource.id;
       const previous = usage.get(tokenId);
       if (previous) {
         usage.set(tokenId, {
           count: previous.count + 1,
-          hosts: [...previous.hosts, { id: host.id, label }],
+          hosts: [...previous.hosts, { id: resource.id, label }],
         });
       } else {
-        usage.set(tokenId, { count: 1, hosts: [{ id: host.id, label }] });
+        usage.set(tokenId, { count: 1, hosts: [{ id: resource.id, label }] });
       }
     }
     return usage;
@@ -211,16 +259,16 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     const activeTokenIds = new Set(tokens().map((token) => token.id));
     const pendingDockerByToken = new Map<string, string[]>();
 
-    for (const host of dockerHosts()) {
-      const tokenId = host.tokenId;
+    for (const resource of dockerHostResources()) {
+      const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
       if (activeTokenIds.has(tokenId)) continue;
-      if (host.revokedTokenId === tokenId) continue;
+      if (revokedTokenIdForResource(resource) === tokenId) continue;
 
       if (!pendingDockerByToken.has(tokenId)) {
         pendingDockerByToken.set(tokenId, []);
       }
-      pendingDockerByToken.get(tokenId)!.push(host.id);
+      pendingDockerByToken.get(tokenId)!.push(resource.id);
     }
 
     pendingDockerByToken.forEach((hostIds, tokenId) => {
@@ -229,16 +277,16 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     });
 
     const pendingHostsByToken = new Map<string, string[]>();
-    for (const host of hosts()) {
-      const tokenId = host.tokenId;
+    for (const resource of hostResources()) {
+      const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
       if (activeTokenIds.has(tokenId)) continue;
-      if (host.revokedTokenId === tokenId && host.tokenRevokedAt) continue;
+      if (revokedTokenIdForResource(resource) === tokenId && tokenRevokedAtForResource(resource)) continue;
 
       if (!pendingHostsByToken.has(tokenId)) {
         pendingHostsByToken.set(tokenId, []);
       }
-      pendingHostsByToken.get(tokenId)!.push(host.id);
+      pendingHostsByToken.get(tokenId)!.push(resource.id);
     }
 
     pendingHostsByToken.forEach((hostIds, tokenId) => {

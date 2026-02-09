@@ -11,6 +11,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
+import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
@@ -64,6 +65,7 @@ interface SettingsProps {
 
 const Settings: Component<SettingsProps> = (props) => {
   const { state, connected: _connected } = useWebSocket();
+  const { byType } = useResources();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -1027,8 +1029,8 @@ const Settings: Component<SettingsProps> = (props) => {
                           <Show when={pveNodes().length > 0}>
                             <PveNodesTable
                               nodes={pveNodes()}
-                              stateNodes={state.nodes ?? []}
-                              stateHosts={state.hosts ?? []}
+                              stateNodes={byType('node')}
+                              stateHosts={byType('host')}
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {

@@ -56,6 +56,50 @@ vi.mock('@/api/agentProfiles', () => ({
   },
 }));
 
+vi.mock('@/hooks/useResources', () => ({
+  useResources: () => ({
+    byType: (type: string) => {
+      if (type === 'host') {
+        return (mockWsStore?.state?.hosts || []).map((h: any) => ({
+          id: h.id,
+          type: 'host',
+          name: h.hostname || h.id,
+          displayName: h.displayName,
+          status: h.status || 'unknown',
+          lastSeen: h.lastSeen,
+          identity: { hostname: h.hostname },
+          platformData: {
+            agentVersion: h.agentVersion,
+            isLegacy: h.isLegacy,
+            linkedNodeId: h.linkedNodeId,
+            commandsEnabled: h.commandsEnabled,
+            agentId: h.id,
+          },
+        }));
+      }
+      if (type === 'docker-host') {
+        return (mockWsStore?.state?.dockerHosts || []).map((d: any) => ({
+          id: d.id,
+          type: 'docker-host',
+          name: d.hostname || d.id,
+          displayName: d.displayName,
+          status: d.status || 'unknown',
+          lastSeen: d.lastSeen,
+          identity: { hostname: d.hostname },
+          platformData: {
+            agentId: d.agentId || d.id,
+            agentVersion: d.agentVersion,
+            dockerVersion: d.dockerVersion,
+            isLegacy: d.isLegacy,
+          },
+        }));
+      }
+      return [];
+    },
+    resources: () => [],
+  }),
+}));
+
 vi.mock('@/stores/notifications', () => ({
   notificationStore: {
     success: (...args: unknown[]) => notificationSuccessMock(...args),

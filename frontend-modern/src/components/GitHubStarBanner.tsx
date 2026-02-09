@@ -1,6 +1,6 @@
 import { createSignal, createEffect, Show } from 'solid-js';
 import { createLocalStorageBooleanSignal, createLocalStorageStringSignal, STORAGE_KEYS } from '@/utils/localStorage';
-import { useWebSocket } from '@/App';
+import { useResources } from '@/hooks/useResources';
 import GithubIcon from 'lucide-solid/icons/github';
 import StarIcon from 'lucide-solid/icons/star';
 import XIcon from 'lucide-solid/icons/x';
@@ -12,7 +12,7 @@ function getTodayDateString(): string {
 }
 
 export function GitHubStarBanner() {
-  const wsContext = useWebSocket();
+  const { resources } = useResources();
 
   // Track if user has dismissed the modal (permanent)
   const [dismissed, setDismissed] = createLocalStorageBooleanSignal(
@@ -42,15 +42,8 @@ export function GitHubStarBanner() {
       return;
     }
 
-    const state = wsContext?.state;
-    if (!state) return;
-
     // Check if user has connected infrastructure
-    const hasInfrastructure =
-      (state.nodes?.length ?? 0) > 0 ||
-      (state.dockerHosts?.length ?? 0) > 0 ||
-      (state.kubernetesClusters?.length ?? 0) > 0 ||
-      (state.hosts?.length ?? 0) > 0;
+    const hasInfrastructure = resources().length > 0;
 
     if (!hasInfrastructure) {
       setShowModal(false);

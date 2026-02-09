@@ -1,5 +1,5 @@
 import { Component, createSignal, createMemo, onMount, Show, For } from 'solid-js';
-import { useWebSocket } from '@/App';
+import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment, type ProfileSuggestion } from '@/api/agentProfiles';
@@ -20,7 +20,7 @@ import Lightbulb from 'lucide-solid/icons/lightbulb';
 
 
 export const AgentProfilesPanel: Component = () => {
-    const { state } = useWebSocket();
+    const { byType } = useResources();
 
     // License state
     const [hasFeature, setHasFeature] = createSignal(false);
@@ -47,13 +47,13 @@ export const AgentProfilesPanel: Component = () => {
 
     // Connected agents from WebSocket state
     const connectedAgents = createMemo(() => {
-        const hosts = state.hosts || [];
-        return hosts.map(h => ({
-            id: h.id,
-            hostname: h.hostname || 'Unknown',
-            displayName: h.displayName,
-            status: h.status || 'unknown',
-            lastSeen: h.lastSeen,
+        const hosts = byType('host');
+        return hosts.map(r => ({
+            id: r.id,
+            hostname: r.identity?.hostname || 'Unknown',
+            displayName: r.displayName,
+            status: r.status || 'unknown',
+            lastSeen: r.lastSeen,
         }));
     });
 

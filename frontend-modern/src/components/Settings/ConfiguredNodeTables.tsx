@@ -1,12 +1,14 @@
 import { Component, For, Show, createMemo } from 'solid-js';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
-import type { Node, PBSInstance, PMGInstance, Host } from '@/types/api';
+import type { PBSInstance, PMGInstance } from '@/types/api';
+import type { Resource } from '@/types/resource';
+import { unwrap } from 'solid-js/store';
 import { Card } from '@/components/shared/Card';
 
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
-  stateNodes: Node[];
-  stateHosts?: Host[];
+  stateNodes: Resource[];
+  stateHosts?: Resource[];
   globalTemperatureMonitoringEnabled?: boolean;
   onTestConnection: (nodeId: string) => void;
   onEdit: (node: NodeConfigWithStatus) => void;
@@ -59,19 +61,21 @@ const resolvePveStatusMeta = (
   node: NodeConfigWithStatus,
   stateNodes: PveNodesTableProps['stateNodes'],
 ): StatusMeta => {
-  const stateNode = stateNodes.find((n) => n.instance === node.name);
+  const stateNode = stateNodes.find((n) => n.platformId === node.name || n.name === node.name);
+  const pd = stateNode?.platformData ? unwrap(stateNode.platformData) as Record<string, unknown> : undefined;
+  const connectionHealth = pd?.connectionHealth as string | undefined;
   if (
-    stateNode?.connectionHealth === 'unhealthy' ||
-    stateNode?.connectionHealth === 'error' ||
+    connectionHealth === 'unhealthy' ||
+    connectionHealth === 'error' ||
     stateNode?.status === 'offline' ||
-    stateNode?.status === 'disconnected'
+    stateNode?.status === ('disconnected' as string)
   ) {
     return STATUS_META.offline;
   }
-  if (stateNode?.connectionHealth === 'degraded') {
+  if (connectionHealth === 'degraded') {
     return STATUS_META.degraded;
   }
-  if (stateNode && (stateNode.status === 'online' || stateNode.connectionHealth === 'healthy')) {
+  if (stateNode && (stateNode.status === 'online' || connectionHealth === 'healthy')) {
     return STATUS_META.online;
   }
 
