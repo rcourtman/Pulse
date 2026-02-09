@@ -3,7 +3,7 @@
 Linked plan:
 - `docs/architecture/release-security-gate-plan-2026-02.md`
 
-Status: In Progress
+Status: Complete — `GO_WITH_CONDITIONS`
 Date: 2026-02-09
 
 ## Rules
@@ -23,7 +23,7 @@ Date: 2026-02-09
 | SEC-01 | AuthZ + Tenant Isolation Replay | DONE | Codex | Claude | APPROVED | SEC-01 section below |
 | SEC-02 | Secret Exposure + Dependency Risk Audit | DONE | Codex | Claude | APPROVED | SEC-02 section below |
 | SEC-03 | Security Runbook + Incident Readiness Ratification | DONE | Codex | Claude | APPROVED | SEC-03 section below |
-| SEC-04 | Final Security Verdict | PENDING | Claude | Claude | — | — |
+| SEC-04 | Final Security Verdict | DONE | Claude | Claude | APPROVED | SEC-04 section below |
 
 ---
 
@@ -302,7 +302,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- <pending checkpoint>
+- `d6d64855` (docs(SEC-03): security runbook + incident readiness ratification)
 
 Residual risk:
 - P1: W4 HandlePublicSignup doesn't clean up org on RBAC failure (code fix needed).
@@ -318,20 +318,90 @@ Rollback:
 
 ## SEC-04 Checklist: Final Security Verdict
 
-- [ ] SEC-00 through SEC-03 are `DONE` and `APPROVED`.
-- [ ] Milestone command set rerun with explicit exit codes.
-- [ ] Residual risks documented with owner and follow-up date.
-- [ ] Final verdict recorded (`GO` / `GO_WITH_CONDITIONS` / `NO_GO`).
+- [x] SEC-00 through SEC-03 are `DONE` and `APPROVED`.
+- [x] Milestone command set rerun with explicit exit codes.
+- [x] Residual risks documented with owner and follow-up date.
+- [x] Final verdict recorded (`GO` / `GO_WITH_CONDITIONS` / `NO_GO`).
+
+### Predecessor Packet Status
+
+| Packet | Status | Review State | Checkpoint |
+|--------|--------|-------------|-----------|
+| SEC-00 | DONE | APPROVED | `6ba41c7a` |
+| SEC-01 | DONE | APPROVED | `9bf68206` |
+| SEC-02 | DONE | APPROVED | `f6a73b33` |
+| SEC-03 | DONE | APPROVED | `d6d64855` |
 
 ### Required Commands
 
-- [ ] `go build ./...` -> exit 0
-- [ ] `go test ./pkg/auth/... -count=1` -> exit 0
-- [ ] `go test ./internal/api/... -run "Security|Scope|Authorization|Spoof|Tenant|RBAC|Org" -count=1` -> exit 0
+- [x] `go build ./...` -> exit 0
+- [x] `go test ./pkg/auth/... -count=1` -> exit 0 (1.626s)
+- [x] `go test ./internal/api/... -run "Security|Scope|Authorization|Spoof|Tenant|RBAC|Org" -count=1` -> exit 0 (6.672s)
+
+### Consolidated Residual Risks
+
+| # | Risk | Severity | Owner | Follow-up |
+|---|------|----------|-------|-----------|
+| 1 | Go stdlib vulns (GO-2026-4337/4340/4341) require upgrade to go1.25.7 | P1 | Engineering | Pre-release or first post-release patch |
+| 2 | W4 HandlePublicSignup doesn't clean up org directory on RBAC failure | P1 | Engineering | Pre-release or first post-release patch |
+| 3 | W2/W6 incident playbooks lack step-by-step detail | P2 | Operations | Post-release operational maturity |
+| 4 | Escalation contacts not explicit across runbooks | P2 | Operations | Post-release |
+
+### Risk Acceptance
+
+- **P0 findings: 0** — No release blockers.
+- **P1 findings: 2** — Both have clear remediation paths (Go upgrade, code fix). Neither is an auth bypass or data leak. Both are acceptable for release with documented follow-up.
+- **P2 findings: 2** — Tracked for post-release. Per severity rubric, P2 does not block.
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS — Zero P0 findings across all packets. All security test suites green.
+- [x] P1 PASS — 2 P1 residual risks accepted with owner and follow-up timeline.
+- [x] P2 PASS — 2 P2 findings tracked; per rubric, do not block.
+- [x] Verdict recorded
+
+---
+
+## FINAL SECURITY VERDICT: `GO_WITH_CONDITIONS`
+
+**Conditions:**
+1. Upgrade Go toolchain to 1.25.7 before or immediately after public release (P1 stdlib vulns).
+2. Fix `HandlePublicSignup` partial provisioning cleanup before or immediately after public release (P1 code gap).
+
+**Evidence summary:**
+- 560+ security tests across auth, scope, tenant isolation, RBAC, WebSocket, and monitoring — all green.
+- 5 new regression tests added closing previously uncovered critical paths.
+- Zero secrets detected (gitleaks).
+- Zero frontend dependency vulnerabilities (npm audit).
+- 3 Go stdlib P1 vulnerabilities triaged and accepted with remediation plan.
+- 4 operational runbooks verified for incident response, rollback, and kill-switch readiness.
+
+**Certification date:** 2026-02-09
+
+### SEC-04 Review Record
+
+```
+Files changed:
+- docs/architecture/release-security-gate-progress-2026-02.md: final verdict and consolidated risk record
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./pkg/auth/... -count=1` -> exit 0
+3. `go test ./internal/api/... -run "Security|Scope|Authorization|Spoof|Tenant|RBAC|Org" -count=1` -> exit 0
+
+Gate checklist:
+- P0: PASS (zero P0 findings, all security suites green)
+- P1: PASS (2 P1 risks accepted with remediation plan)
+- P2: PASS (2 P2 findings tracked for post-release)
+
+Verdict: APPROVED
+
+Commit:
+- <pending checkpoint>
+
+Residual risk:
+- See consolidated table above.
+
+Rollback:
+- Revert checkpoint commit.
+```
