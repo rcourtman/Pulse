@@ -108,7 +108,7 @@ func TestSetMultiTenantMonitor_WiresHandlers(t *testing.T) {
 		hostAgentHandlers:       &HostAgentHandlers{},
 		kubernetesAgentHandlers: &KubernetesAgentHandlers{},
 		systemSettingsHandler:   &SystemSettingsHandler{},
-		resourceHandlers:        &ResourceHandlers{},
+		resourceV2Handlers:      &ResourceV2Handlers{},
 	}
 
 	router.SetMultiTenantMonitor(mtm)
@@ -137,7 +137,7 @@ func TestSetMultiTenantMonitor_WiresHandlers(t *testing.T) {
 	if router.systemSettingsHandler.mtMonitor != mtm {
 		t.Fatalf("expected systemSettingsHandler mtMonitor to be set")
 	}
-	if router.resourceHandlers.tenantStateProvider == nil {
+	if router.resourceV2Handlers.tenantStateProvider == nil {
 		t.Fatalf("expected tenant state provider to be set")
 	}
 }

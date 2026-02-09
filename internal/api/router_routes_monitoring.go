@@ -30,11 +30,6 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/backups/pbs", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackupsPBS)))
 	r.mux.HandleFunc("/api/snapshots", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleSnapshots)))
 
-	// Unified resources API (Phase 1 of unified resource architecture)
-	r.mux.HandleFunc("/api/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResources)))
-	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceStats)))
-	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResource)))
-
 	// Unified resources API v2 (merge layer)
 	r.mux.HandleFunc("/api/v2/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceV2Handlers.HandleListResources)))
 	r.mux.HandleFunc("/api/v2/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceV2Handlers.HandleStats)))

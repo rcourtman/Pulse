@@ -399,7 +399,6 @@ class ApiClient {
       '/api/charts',
       '/api/charts/infrastructure',
       '/api/charts/infrastructure-summary',
-      '/api/resources',
     ];
     const shouldSkipRedirect = skipRedirectUrls.some(path => url.includes(path));
     if (response.status === 401 && !shouldSkipRedirect) {

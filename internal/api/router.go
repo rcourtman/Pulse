@@ -75,7 +75,6 @@ type Router struct {
 	aiSettingsHandler         *AISettingsHandler
 	aiHandler                 *AIHandler // AI chat handler
 	discoveryHandlers         *DiscoveryHandlers
-	resourceHandlers          *ResourceHandlers
 	resourceV2Handlers        *ResourceV2Handlers
 	resourceRegistry          *unifiedresources.ResourceRegistry
 	trueNASPoller             *monitoring.TrueNASPoller
@@ -273,7 +272,6 @@ func (r *Router) setupRoutes() {
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
-	r.resourceHandlers = NewResourceHandlers()
 	r.resourceV2Handlers = NewResourceV2Handlers(r.config)
 	if r.trueNASPoller != nil {
 		r.resourceV2Handlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
@@ -718,10 +716,6 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 			m.SetResourceStore(r.monitorResourceAdapter)
 		} else {
 			log.Warn().Msg("[Router] monitorResourceAdapter is nil, cannot inject resource store")
-		}
-		// Legacy /api/resources handlers still hydrate from monitor state on-demand.
-		if r.resourceHandlers != nil {
-			r.resourceHandlers.SetStateProvider(m)
 		}
 		if r.resourceV2Handlers != nil {
 			r.resourceV2Handlers.SetStateProvider(m)
@@ -3771,18 +3765,6 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	state := monitor.GetState()
-
-	// Also populate the unified resource store (Phase 1 of unified architecture)
-	// This runs on every state request to keep resources up-to-date
-	// Use tenant-specific store to prevent cross-tenant data contamination
-	if r.resourceHandlers != nil {
-		orgID := GetOrgID(req.Context())
-		if orgID != "" && orgID != "default" {
-			r.resourceHandlers.PopulateFromSnapshotForTenant(orgID, state)
-		} else {
-			r.resourceHandlers.PopulateFromSnapshot(state)
-		}
-	}
 
 	frontendState := state.ToFrontend()
 
