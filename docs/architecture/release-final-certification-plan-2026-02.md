@@ -11,6 +11,7 @@ Dependencies (must be complete first):
 - `docs/architecture/release-security-gate-progress-2026-02.md`
 - `docs/architecture/release-regression-bug-sweep-progress-2026-02.md`
 - `docs/architecture/release-documentation-readiness-progress-2026-02.md`
+- `docs/architecture/release-conformance-ratification-progress-2026-02.md` (RAT lane — added post-RFC-00 via RAT-05)
 
 ## Intent
 

@@ -37,8 +37,9 @@ Date: 2026-02-09
 | SEC | `release-security-gate-progress-2026-02.md` | Complete | 5/5 | `GO_WITH_CONDITIONS` |
 | RGS | `release-regression-bug-sweep-progress-2026-02.md` | Complete | 5/5 | `GO` |
 | DOC | `release-documentation-readiness-progress-2026-02.md` | Complete | 5/5 | `GO` |
+| RAT | `release-conformance-ratification-progress-2026-02.md` | Complete | 7/7 | `GO` |
 
-**Disposition**: All three dependency lanes are COMPLETE with GO or GO_WITH_CONDITIONS verdicts. RFC-01 is UNBLOCKED. SEC conditions: Go stdlib P1 vulns (GO-2026-4337/4340/4341) require toolchain upgrade to go1.25.7. No P0 findings in any lane.
+**Disposition**: All four dependency lanes are COMPLETE. SEC: GO_WITH_CONDITIONS (Go stdlib P1 vulns — upgrade to go1.25.7). RGS: GO. DOC: GO. RAT: GO (post-LEX conformance replay confirmed all baselines green, 2026-02-09). No P0 findings in any lane.
 
 ### Frozen Certification Command Set
 
@@ -48,6 +49,7 @@ Date: 2026-02-09
 4. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json`
 5. `go test ./internal/api/... -run "Security|Tenant|RBAC|Contract|RouteInventory" -count=1`
 6. `go test ./internal/monitoring/... -run "Tenant|Alert|Isolation|TrueNAS" -count=1`
+7. `bash scripts/conformance-smoke.sh` (RAT-04 conformance harness — added via RAT-05)
 
 ### Required Commands
 

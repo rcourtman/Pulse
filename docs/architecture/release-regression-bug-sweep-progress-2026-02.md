@@ -22,7 +22,7 @@ Date: 2026-02-09
 | RGS-01 | Backend Regression Replay | DONE | Codex | Claude | APPROVED | `c61a0143` |
 | RGS-02 | Frontend Regression Replay | DONE | Codex | Claude | APPROVED | `732ef220` |
 | RGS-03 | Flake and Stability Burn-Down | DONE | Codex | Claude | APPROVED | `7b305651` |
-| RGS-04 | Final Regression Verdict | DONE | Claude | Claude | APPROVED | RGS-04 section below |
+| RGS-04 | Final Regression Verdict | DONE | Claude | Claude | APPROVED | `3a891a41` |
 
 ---
 
@@ -335,7 +335,7 @@ Residual risk:
 - ESLint warning in `AIIntelligence.tsx` (className → class) — cosmetic, non-blocking.
 
 Commit:
-- (recorded after checkpoint)
+- `3a891a41` (docs(RGS-04): final regression verdict — GO)
 
 Rollback:
 - Revert checkpoint commit.
