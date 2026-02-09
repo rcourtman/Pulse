@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -279,16 +280,39 @@ func extractTempInput(sensorMap map[string]interface{}) float64 {
 			case int:
 				return float64(v)
 			case string:
-				// Raspberry Pi reports in millidegrees as string
-				var milliTemp float64
-				if _, err := fmt.Sscanf(v, "%f", &milliTemp); err == nil {
-					// Convert from millidegrees to degrees
-					return milliTemp / 1000.0
+				if parsed, ok := parseStringTemperature(v); ok {
+					return parsed
 				}
 			}
 		}
 	}
 	return math.NaN()
+}
+
+// parseStringTemperature parses numeric string temperature values.
+// It preserves normal degree values (e.g., "45.0", "+45.0C") and only converts
+// probable millidegree values (e.g., "42000") down to degrees.
+func parseStringTemperature(value string) (float64, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		// Fall back to parsing numeric prefixes such as "+45.0°C".
+		if _, scanErr := fmt.Sscanf(value, "%f", &parsed); scanErr != nil {
+			return 0, false
+		}
+	}
+
+	// lm-sensors fallback on some platforms can report millidegrees as raw strings.
+	// Convert only when the magnitude strongly indicates millidegrees.
+	if math.Abs(parsed) >= 1000 {
+		parsed = parsed / 1000.0
+	}
+
+	return parsed, true
 }
 
 // parseFansAndOther extracts fan speeds and other temperature readings from a sensor chip.

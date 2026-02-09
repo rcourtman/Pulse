@@ -100,3 +100,66 @@ func TestExtractNVMeCompositeTemp(t *testing.T) {
 		}
 	})
 }
+
+func TestExtractTempInput_StringTemperatures(t *testing.T) {
+	t.Run("preserves normal celsius values", func(t *testing.T) {
+		sensorMap := map[string]interface{}{
+			"temp1_input": "+45.5°C",
+		}
+
+		got := extractTempInput(sensorMap)
+		if math.Abs(got-45.5) > 0.0001 {
+			t.Fatalf("extractTempInput() = %v, want 45.5", got)
+		}
+	})
+
+	t.Run("converts millidegree strings", func(t *testing.T) {
+		sensorMap := map[string]interface{}{
+			"temp1_input": "42000",
+		}
+
+		got := extractTempInput(sensorMap)
+		if math.Abs(got-42.0) > 0.0001 {
+			t.Fatalf("extractTempInput() = %v, want 42.0", got)
+		}
+	})
+}
+
+func TestParse_WithStringTemperatureValues(t *testing.T) {
+	input := `{
+		"coretemp-isa-0000": {
+			"Package id 0": {
+				"temp1_input": "+50.0°C"
+			},
+			"Core 0": {
+				"temp2_input": "48.0"
+			}
+		},
+		"nvme-pci-0100": {
+			"Composite": {
+				"temp1_input": "39000"
+			}
+		}
+	}`
+
+	data, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+
+	if !data.Available {
+		t.Fatal("Expected Available to be true")
+	}
+
+	if math.Abs(data.CPUPackage-50.0) > 0.0001 {
+		t.Fatalf("CPUPackage = %v, want 50.0", data.CPUPackage)
+	}
+
+	if math.Abs(data.Cores["Core 0"]-48.0) > 0.0001 {
+		t.Fatalf("Core 0 = %v, want 48.0", data.Cores["Core 0"])
+	}
+
+	if math.Abs(data.NVMe["nvme0"]-39.0) > 0.0001 {
+		t.Fatalf("nvme0 = %v, want 39.0", data.NVMe["nvme0"])
+	}
+}
