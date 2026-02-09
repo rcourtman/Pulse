@@ -177,10 +177,13 @@ When no persisted billing record exists for an org, runtime default is:
 - Billing-state manipulation attempts.
 - Cross-tenant access attempts (depends on W4 RBAC isolation hardening).
 
-### W4 RBAC isolation dependency
+### W4 RBAC isolation status
 
-- `HARD BLOCKER` for production hosted rollout.
-- Current blocker statement: RBAC still treated as globally shared (`rbac.db`) rather than fully isolated per tenant in production threat posture.
+- **RESOLVED** (2026-02) — W4 RBAC lane LANE_COMPLETE.
+- TenantRBACProvider implements per-org SQLite databases with lazy-loading.
+- Default-org backward compatibility preserved for self-hosted deployments.
+- 34 isolation tests pass, including 9 cross-tenant isolation assertions.
+- Reference: `docs/architecture/multi-tenant-rbac-user-limits-progress-2026-02.md`
 
 ## Section 7: Data Handling Policy
 
@@ -214,9 +217,60 @@ When no persisted billing record exists for an org, runtime default is:
 
 ## Section 8: Known Limitations and Dependencies
 
-- W4 RBAC isolation remains a production hard blocker; currently treated as global `rbac.db` in hosted security posture.
+- W4 RBAC per-tenant isolation is resolved (TenantRBACProvider with per-org SQLite). SSO handlers still use global `auth.GetManager()` — flagged for future work but not a blocker for private beta.
 - Suspended-org enforcement middleware is deferred pending full per-request org resolution path from W4.
 - Signup flow does not implement password hashing directly; credential handling is delegated to existing auth system integration.
 - `ListOrganizations` owner-email uniqueness scan is `O(n)`; acceptable for private beta, not long-term scale.
 - No background reaper exists for soft-deleted orgs (`pending_deletion` persists).
 - No Stripe/payment integration exists yet; billing operations are manual/admin override driven.
+
+## Section 9: Hosted Mode Rollout Policy
+
+### Environment gate
+
+- **Guard variable**: `PULSE_HOSTED_MODE` (environment variable)
+- **Values**: `"true"` = enabled, anything else = disabled
+- **Read at**: Router initialization (`internal/api/router.go`, `os.Getenv("PULSE_HOSTED_MODE") == "true"`)
+- **Enforcement**: Per-handler first-operation check; returns HTTP 404 when disabled
+
+### Gated endpoints
+
+| Endpoint | Handler | Auth |
+|----------|---------|------|
+| `POST /api/public/signup` | HostedSignupHandlers | Unauthenticated (rate-limited) |
+| `GET /api/admin/orgs/{id}/billing-state` | BillingStateHandlers | Admin + Scope |
+| `PUT /api/admin/orgs/{id}/billing-state` | BillingStateHandlers | Admin + Scope |
+| `POST /api/admin/orgs/{id}/suspend` | OrgLifecycleHandlers | Admin |
+| `POST /api/admin/orgs/{id}/unsuspend` | OrgLifecycleHandlers | Admin |
+| `POST /api/admin/orgs/{id}/soft-delete` | OrgLifecycleHandlers | Admin |
+
+### Rollout stages
+
+| Stage | `PULSE_HOSTED_MODE` | Audience | Criteria to advance |
+|-------|---------------------|----------|---------------------|
+| Development | `true` (dev only) | Engineering team | All HOP packets DONE |
+| Private beta | `true` (staging + prod) | Trusted tenants (invite-only) | HOP-05 GO or GO_WITH_CONDITIONS |
+| Public beta | `true` (prod) | Open signup | Stripe integration, suspended-org middleware, load testing |
+| GA | `true` (prod, default) | All users | All GA upgrade conditions met |
+
+### Enable procedure
+
+1. Verify all prerequisite conditions for the target stage are met.
+2. Set `PULSE_HOSTED_MODE=true` in the target environment's configuration.
+3. Restart the Pulse process to pick up the environment variable.
+4. Verify hosted endpoints respond (not 404) by hitting `GET /api/admin/orgs/default/billing-state` with admin credentials.
+5. Monitor `pulse_hosted_signups_total` and `pulse_hosted_provisions_total` metrics for initial traffic.
+
+### Disable procedure (emergency)
+
+1. Remove or set `PULSE_HOSTED_MODE=false` in the target environment.
+2. Restart the Pulse process.
+3. Verify all hosted endpoints return 404.
+4. Existing tenants retain their data — disabling the gate only prevents new hosted operations.
+5. File an incident report if disable was triggered by a security or stability event.
+
+### Private beta controls
+
+- **Tenant limiting**: No technical enforcement beyond signup rate limit (`5/hr/IP`). Operational control via invite-only distribution of signup URL.
+- **Tenant cap**: Monitor `pulse_hosted_active_tenants` gauge. Manual intervention if count exceeds operational comfort threshold.
+- **Rollback**: Disable `PULSE_HOSTED_MODE` to immediately halt all hosted operations without data loss.
