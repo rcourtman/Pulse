@@ -30,7 +30,7 @@ Date: 2026-02-09
 | TRR-01 | Operational Runbook (Enable/Disable/Rollback) | DONE | Codex | Claude | APPROVED | TRR-01 Review Evidence |
 | TRR-02 | Telemetry + Alert Thresholds | DONE | Codex | Claude | APPROVED | TRR-02 Review Evidence |
 | TRR-03 | Canary Rollout Controls | DONE | Codex | Claude | APPROVED | TRR-03 Review Evidence |
-| TRR-04 | Soak/Failure-Injection Validation | TODO | Codex | Claude | — | — |
+| TRR-04 | Soak/Failure-Injection Validation | DONE | Codex | Claude | APPROVED | TRR-04 Review Evidence |
 | TRR-05 | Final Rollout Verdict | TODO | Claude | Claude | — | — |
 
 ---
@@ -223,29 +223,49 @@ Rollback:
 
 ## TRR-04 Checklist: Soak/Failure-Injection Validation
 
-- [ ] API timeout test: poller continues, metrics record timeout.
-- [ ] Auth failure test: poller logs error, no crash.
-- [ ] Stale data recovery test: consecutive failures → staleness → recovery.
-- [ ] Connection flap test: up → down → up → resources recover.
-- [ ] Concurrent config change test: no race/panic.
+- [x] API timeout test: poller continues, metrics record timeout.
+- [x] Auth failure test: poller logs error, no crash.
+- [x] Stale data recovery test: consecutive failures → staleness → recovery.
+- [x] Connection flap test: up → down → up → resources recover.
+- [x] Concurrent config change test: no race/panic.
 
 ### Required Tests
 
-- [ ] `go test ./internal/monitoring/... -run "TrueNAS" -count=1 -v` -> exit 0
-- [ ] `go test ./internal/truenas/... -count=1 -v` -> exit 0
-- [ ] `go build ./...` -> exit 0
+- [x] `go test ./internal/monitoring/... -run "TrueNAS" -count=1 -v` -> exit 0
+- [x] `go test ./internal/truenas/... -count=1 -v` -> exit 0
+- [x] `go build ./...` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### TRR-04 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- internal/monitoring/truenas_poller_test.go: Added 5 failure-injection tests + timeout injection helper
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./internal/monitoring/... -run "TrueNAS" -count=1 -v` -> exit 0 (10 tests: 5 existing + 5 new, 1.697s)
+3. `go test ./internal/monitoring/... -run "TrueNAS" -count=1 -race` -> exit 0 (no races, 2.810s)
+4. `go test ./internal/truenas/... -count=1 -v` -> exit 0 (25 pass, 1 skip, 0.228s)
+
+Gate checklist:
+- P0: PASS (build clean, all tests green, race detector clean)
+- P1: PASS (5 failure scenarios tested: API timeout with recovery, 401 auth failure resilience, stale data recovery cycle, connection flap via 503 toggle, concurrent config change with provider convergence; all use waitForCondition for determinism)
+- P2: PASS (1 file changed within scope, all 5 checklist items satisfied)
+
+Verdict: APPROVED
+
+Residual risk:
+- Timeout test injects client timeout via internal helper (accesses poller.providers directly) — acceptable for test code, not production path
+
+Rollback:
+- Revert failure-injection test additions from truenas_poller_test.go
 ```
 
 ---
@@ -284,7 +304,7 @@ TODO
 - TRR-00: `687ecd79`
 - TRR-01: `64f6b350`
 - TRR-02: `9d25e014`
-- TRR-03: TODO
+- TRR-03: `14953c87`
 - TRR-04: TODO
 - TRR-05: TODO
 
