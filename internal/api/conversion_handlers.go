@@ -13,12 +13,14 @@ import (
 type ConversionHandlers struct {
 	recorder *conversion.Recorder
 	health   *conversion.PipelineHealth
+	config   *conversion.CollectionConfig
 }
 
-func NewConversionHandlers(recorder *conversion.Recorder, health *conversion.PipelineHealth) *ConversionHandlers {
+func NewConversionHandlers(recorder *conversion.Recorder, health *conversion.PipelineHealth, config *conversion.CollectionConfig) *ConversionHandlers {
 	return &ConversionHandlers{
 		recorder: recorder,
 		health:   health,
+		config:   config,
 	}
 }
 
@@ -41,6 +43,16 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if h != nil && h.config != nil && !h.config.IsSurfaceEnabled(event.Surface) {
+		reason := "surface_disabled"
+		if !h.config.IsEnabled() {
+			reason = "collection_disabled"
+		}
+		conversion.GetConversionMetrics().RecordSkipped(reason)
+		writeConversionAccepted(w)
+		return
+	}
+
 	if h != nil && h.recorder != nil {
 		if err := h.recorder.Record(event); err != nil {
 			// Analytics ingestion is fire-and-forget; do not fail UX if recording fails.
@@ -53,9 +65,7 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]bool{"accepted": true})
+	writeConversionAccepted(w)
 }
 
 // HandleGetHealth returns conversion pipeline health status.
@@ -135,6 +145,58 @@ func (h *ConversionHandlers) HandleGetStats(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+// HandleGetConfig returns runtime conversion collection controls.
+func (h *ConversionHandlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	snapshot := conversion.CollectionConfigSnapshot{
+		Enabled:          true,
+		DisabledSurfaces: []string{},
+	}
+	if h != nil && h.config != nil {
+		snapshot = h.config.GetConfig()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(snapshot)
+}
+
+// HandleUpdateConfig updates runtime conversion collection controls.
+func (h *ConversionHandlers) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var snapshot conversion.CollectionConfigSnapshot
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&snapshot); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if h != nil {
+		if h.config == nil {
+			h.config = conversion.NewCollectionConfig()
+		}
+		h.config.UpdateConfig(snapshot)
+		snapshot = h.config.GetConfig()
+	} else {
+		cfg := conversion.NewCollectionConfig()
+		cfg.UpdateConfig(snapshot)
+		snapshot = cfg.GetConfig()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(snapshot)
+}
+
 func conversionValidationReason(err error) string {
 	if err == nil {
 		return "unknown"
@@ -170,4 +232,10 @@ func writeConversionValidationError(w http.ResponseWriter, message string) {
 		"error":   "validation_error",
 		"message": message,
 	})
+}
+
+func writeConversionAccepted(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]bool{"accepted": true})
 }
