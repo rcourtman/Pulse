@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/hosted"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
@@ -93,6 +94,7 @@ func (h *OrgLifecycleHandlers) HandleSuspendOrg(w http.ResponseWriter, r *http.R
 	}
 
 	h.logLifecycleChange(r, org.ID, oldStatus, org.Status, req.Reason)
+	hosted.GetHostedMetrics().RecordLifecycleTransition(string(oldStatus), string(org.Status))
 	writeJSON(w, http.StatusOK, org)
 }
 
@@ -133,6 +135,7 @@ func (h *OrgLifecycleHandlers) HandleUnsuspendOrg(w http.ResponseWriter, r *http
 	}
 
 	h.logLifecycleChange(r, org.ID, oldStatus, org.Status, "")
+	hosted.GetHostedMetrics().RecordLifecycleTransition(string(oldStatus), string(org.Status))
 	writeJSON(w, http.StatusOK, org)
 }
 
@@ -194,6 +197,7 @@ func (h *OrgLifecycleHandlers) HandleSoftDeleteOrg(w http.ResponseWriter, r *htt
 	}
 
 	h.logLifecycleChange(r, org.ID, oldStatus, org.Status, "soft_delete")
+	hosted.GetHostedMetrics().RecordLifecycleTransition(string(oldStatus), string(org.Status))
 	writeJSON(w, http.StatusOK, org)
 }
 

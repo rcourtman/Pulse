@@ -88,6 +88,50 @@ func TestBillingStatePutGetRoundTrip(t *testing.T) {
 	}
 }
 
+func TestBillingStatePutAuditLogEmitted(t *testing.T) {
+	baseDir := t.TempDir()
+	store := config.NewFileBillingStore(baseDir)
+	handlers := NewBillingStateHandlers(store, true)
+
+	if err := store.SaveBillingState("acme", &entitlements.BillingState{
+		Capabilities:      []string{},
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		PlanVersion:       string(entitlements.SubStateTrial),
+		SubscriptionState: entitlements.SubStateTrial,
+	}); err != nil {
+		t.Fatalf("seed billing state: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/admin/orgs/acme/billing-state", strings.NewReader(`{
+		"capabilities":[],
+		"limits":{},
+		"meters_enabled":[],
+		"plan_version":"active",
+		"subscription_state":"active"
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "acme")
+
+	rec := httptest.NewRecorder()
+	handlers.HandlePutBillingState(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+
+	var payload entitlements.BillingState
+	if err := decodeResponse(rec, &payload); err != nil {
+		t.Fatalf("decode put response: %v", err)
+	}
+	if payload.SubscriptionState != entitlements.SubStateActive {
+		t.Fatalf("expected subscription_state %q, got %q", entitlements.SubStateActive, payload.SubscriptionState)
+	}
+	if !strings.Contains(body, `"subscription_state":"active"`) {
+		t.Fatalf("expected response body to include active subscription_state, got %s", body)
+	}
+}
+
 func TestBillingStatePutRejectsInvalidSubscriptionState(t *testing.T) {
 	router, _ := newBillingStateTestRouter(t, true)
 

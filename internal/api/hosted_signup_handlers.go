@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/hosted"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
@@ -119,10 +120,13 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		return
 	}
 	if err := authManager.UpdateUserRoles(userID, []string{auth.RoleAdmin}); err != nil {
+		hosted.GetHostedMetrics().RecordProvision("failure")
 		writeErrorResponse(w, http.StatusInternalServerError, "user_create_failed", "Failed to create admin user", nil)
 		return
 	}
 
+	hosted.GetHostedMetrics().RecordSignup()
+	hosted.GetHostedMetrics().RecordProvision("success")
 	writeJSON(w, http.StatusCreated, hostedSignupResponse{
 		OrgID:   orgID,
 		UserID:  userID,
