@@ -74,17 +74,6 @@ Lightweight HTML status page for quick checks.
 
 ### Unified Resources
 `GET /api/resources`
-Returns a unified, flattened resource list. Requires `monitoring:read`.
-Legacy endpoint; prefer `/api/v2/resources` for the unified resource model.
-
-`GET /api/resources/stats`
-Summary counts and health rollups.
-
-`GET /api/resources/{id}`
-Fetch a single resource by ID.
-
-### Unified Resources (v2)
-`GET /api/v2/resources`
 Returns the unified resource list with pagination + aggregations. Requires `monitoring:read`.
 
 Query params:
@@ -100,31 +89,31 @@ Query params:
 - `sort`: `name` (default), `status`, `type`, `lastSeen`
 - `order`: `asc` (default) or `desc`
 
-`GET /api/v2/resources/stats`
+`GET /api/resources/stats`
 Returns aggregations (counts + health rollups).
 
-`GET /api/v2/resources/{id}`
+`GET /api/resources/{id}`
 Fetch a single resource by ID.
 
-`GET /api/v2/resources/{id}/children`
+`GET /api/resources/{id}/children`
 Returns child resources for the parent ID.
 
-`GET /api/v2/resources/{id}/metrics`
+`GET /api/resources/{id}/metrics`
 Returns the resource metrics payload.
 
-`POST /api/v2/resources/{id}/link`
+`POST /api/resources/{id}/link`
 Manually link two resources.
 ```json
 { "targetId": "resource-id", "reason": "optional note" }
 ```
 
-`POST /api/v2/resources/{id}/unlink`
+`POST /api/resources/{id}/unlink`
 Manually unlink two resources.
 ```json
 { "targetId": "resource-id", "reason": "optional note" }
 ```
 
-`POST /api/v2/resources/{id}/report-merge`
+`POST /api/resources/{id}/report-merge`
 Report an incorrect merge (creates exclusions).
 ```json
 { "sources": ["proxmox", "agent"], "notes": "optional note" }

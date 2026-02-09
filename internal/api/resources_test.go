@@ -13,11 +13,11 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-type resourceV2StateProvider struct {
+type resourceStateProvider struct {
 	snapshot models.StateSnapshot
 }
 
-func (s resourceV2StateProvider) GetState() models.StateSnapshot {
+func (s resourceStateProvider) GetState() models.StateSnapshot {
 	return s.snapshot
 }
 
@@ -31,7 +31,7 @@ func (m mockSupplementalRecordsProvider) GetCurrentRecords() []unified.IngestRec
 	return out
 }
 
-func TestResourceV2ListMergesLinkedHost(t *testing.T) {
+func TestResourceListMergesLinkedHost(t *testing.T) {
 	now := time.Now().UTC()
 	node := models.Node{
 		ID:                "instance-pve1",
@@ -60,18 +60,18 @@ func TestResourceV2ListMergesLinkedHost(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=host", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	var resp ResourcesV2Response
+	var resp ResourcesResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestResourceV2ListMergesLinkedHost(t *testing.T) {
 	}
 }
 
-func TestResourceV2ListDoesNotMergeOneSidedLinkedHost(t *testing.T) {
+func TestResourceListDoesNotMergeOneSidedLinkedHost(t *testing.T) {
 	now := time.Now().UTC()
 	node := models.Node{
 		ID:                "instance-pve1",
@@ -123,18 +123,18 @@ func TestResourceV2ListDoesNotMergeOneSidedLinkedHost(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=host", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	var resp ResourcesV2Response
+	var resp ResourcesResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestResourceV2ListDoesNotMergeOneSidedLinkedHost(t *testing.T) {
 	}
 }
 
-func TestResourceV2GetResource(t *testing.T) {
+func TestResourceGetResource(t *testing.T) {
 	now := time.Now().UTC()
 	host := models.Host{
 		ID:       "host-1",
@@ -178,14 +178,14 @@ func TestResourceV2GetResource(t *testing.T) {
 	snapshot := models.StateSnapshot{Hosts: []models.Host{host}}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
-	listReq := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=host", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
 	h.HandleListResources(listRec, listReq)
 
-	var listResp ResourcesV2Response
+	var listResp ResourcesResponse
 	if err := json.NewDecoder(listRec.Body).Decode(&listResp); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestResourceV2GetResource(t *testing.T) {
 
 	resourceID := listResp.Data[0].ID
 	getRec := httptest.NewRecorder()
-	getReq := httptest.NewRequest(http.MethodGet, "/api/v2/resources/"+resourceID, nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/api/resources/"+resourceID, nil)
 	h.HandleGetResource(getRec, getReq)
 
 	if getRec.Code != http.StatusOK {
@@ -225,7 +225,7 @@ func containsSource(sources []unified.DataSource, target unified.DataSource) boo
 	return false
 }
 
-func TestResourceV2LinkMergesResources(t *testing.T) {
+func TestResourceLinkMergesResources(t *testing.T) {
 	now := time.Now().UTC()
 	host := models.Host{
 		ID:       "host-1",
@@ -246,14 +246,14 @@ func TestResourceV2LinkMergesResources(t *testing.T) {
 	snapshot := models.StateSnapshot{Hosts: []models.Host{host}, DockerHosts: []models.DockerHost{dockerHost}}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
-	listReq := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=host", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
 	h.HandleListResources(listRec, listReq)
 
-	var listResp ResourcesV2Response
+	var listResp ResourcesResponse
 	if err := json.NewDecoder(listRec.Body).Decode(&listResp); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
@@ -266,17 +266,17 @@ func TestResourceV2LinkMergesResources(t *testing.T) {
 	linkPayload := map[string]string{"targetId": secondaryID, "reason": "manual merge"}
 	payloadBytes, _ := json.Marshal(linkPayload)
 	linkRec := httptest.NewRecorder()
-	linkReq := httptest.NewRequest(http.MethodPost, "/api/v2/resources/"+primaryID+"/link", bytes.NewReader(payloadBytes))
+	linkReq := httptest.NewRequest(http.MethodPost, "/api/resources/"+primaryID+"/link", bytes.NewReader(payloadBytes))
 	h.HandleLink(linkRec, linkReq)
 	if linkRec.Code != http.StatusOK {
 		t.Fatalf("link status = %d, body=%s", linkRec.Code, linkRec.Body.String())
 	}
 
 	listRec2 := httptest.NewRecorder()
-	listReq2 := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=host", nil)
+	listReq2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
 	h.HandleListResources(listRec2, listReq2)
 
-	var listResp2 ResourcesV2Response
+	var listResp2 ResourcesResponse
 	if err := json.NewDecoder(listRec2.Body).Decode(&listResp2); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestResourceV2LinkMergesResources(t *testing.T) {
 	}
 }
 
-func TestResourceV2ReportMergeCreatesExclusions(t *testing.T) {
+func TestResourceReportMergeCreatesExclusions(t *testing.T) {
 	now := time.Now().UTC()
 	sharedInterfaces := []models.HostNetworkInterface{
 		{
@@ -319,18 +319,18 @@ func TestResourceV2ReportMergeCreatesExclusions(t *testing.T) {
 	snapshot := models.StateSnapshot{Hosts: []models.Host{host}, DockerHosts: []models.DockerHost{dockerHost}}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
-	listReq := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=host", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
 	h.HandleListResources(listRec, listReq)
 
 	if listRec.Code != http.StatusOK {
 		t.Fatalf("list status = %d, body=%s", listRec.Code, listRec.Body.String())
 	}
 
-	var listResp ResourcesV2Response
+	var listResp ResourcesResponse
 	if err := json.NewDecoder(listRec.Body).Decode(&listResp); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
@@ -345,21 +345,21 @@ func TestResourceV2ReportMergeCreatesExclusions(t *testing.T) {
 	}
 	reportBytes, _ := json.Marshal(reportPayload)
 	reportRec := httptest.NewRecorder()
-	reportReq := httptest.NewRequest(http.MethodPost, "/api/v2/resources/"+resourceID+"/report-merge", bytes.NewReader(reportBytes))
+	reportReq := httptest.NewRequest(http.MethodPost, "/api/resources/"+resourceID+"/report-merge", bytes.NewReader(reportBytes))
 	h.HandleReportMerge(reportRec, reportReq)
 	if reportRec.Code != http.StatusOK {
 		t.Fatalf("report-merge status = %d, body=%s", reportRec.Code, reportRec.Body.String())
 	}
 
 	listRec2 := httptest.NewRecorder()
-	listReq2 := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=host", nil)
+	listReq2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
 	h.HandleListResources(listRec2, listReq2)
 
 	if listRec2.Code != http.StatusOK {
 		t.Fatalf("list status = %d, body=%s", listRec2.Code, listRec2.Body.String())
 	}
 
-	var listResp2 ResourcesV2Response
+	var listResp2 ResourcesResponse
 	if err := json.NewDecoder(listRec2.Body).Decode(&listResp2); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
@@ -368,7 +368,7 @@ func TestResourceV2ReportMergeCreatesExclusions(t *testing.T) {
 	}
 }
 
-func TestResourceV2ListIncludesKubernetesPods(t *testing.T) {
+func TestResourceListIncludesKubernetesPods(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
 		KubernetesClusters: []models.KubernetesCluster{
@@ -398,18 +398,18 @@ func TestResourceV2ListIncludesKubernetesPods(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=pod", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=pod", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	var resp ResourcesV2Response
+	var resp ResourcesResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -441,7 +441,7 @@ func TestResourceV2ListIncludesKubernetesPods(t *testing.T) {
 	}
 }
 
-func TestResourceV2TypeAliasKubernetesIncludesKubernetesResources(t *testing.T) {
+func TestResourceTypeAliasKubernetesIncludesKubernetesResources(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
 		KubernetesClusters: []models.KubernetesCluster{
@@ -471,18 +471,18 @@ func TestResourceV2TypeAliasKubernetesIncludesKubernetesResources(t *testing.T) 
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=k8s", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=k8s", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	var resp ResourcesV2Response
+	var resp ResourcesResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -492,7 +492,7 @@ func TestResourceV2TypeAliasKubernetesIncludesKubernetesResources(t *testing.T) 
 	}
 }
 
-func TestResourceV2ListIncludesPBSAndPMG(t *testing.T) {
+func TestResourceListIncludesPBSAndPMG(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
 		PBSInstances: []models.PBSInstance{
@@ -528,18 +528,18 @@ func TestResourceV2ListIncludesPBSAndPMG(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=pbs,pmg", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=pbs,pmg", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	var resp ResourcesV2Response
+	var resp ResourcesResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -574,7 +574,7 @@ func TestResourceV2ListIncludesPBSAndPMG(t *testing.T) {
 	}
 }
 
-func TestResourceV2ListIncludesStorageMetadata(t *testing.T) {
+func TestResourceListIncludesStorageMetadata(t *testing.T) {
 	snapshot := models.StateSnapshot{
 		Storage: []models.Storage{
 			{
@@ -597,18 +597,18 @@ func TestResourceV2ListIncludesStorageMetadata(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?type=storage", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=storage", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	var resp ResourcesV2Response
+	var resp ResourcesResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -643,12 +643,12 @@ func TestResourceV2ListIncludesStorageMetadata(t *testing.T) {
 	}
 }
 
-func TestResourceV2ListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
+func TestResourceListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
 	now := time.Now().UTC()
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: models.StateSnapshot{LastUpdate: now}})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: now}})
 	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
 		records: []unified.IngestRecord{
 			{
@@ -669,14 +669,14 @@ func TestResourceV2ListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?source=truenas", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?source=truenas", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	var resp ResourcesV2Response
+	var resp ResourcesResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -693,7 +693,7 @@ func TestResourceV2ListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
 	}
 }
 
-func TestResourceV2ListWithoutSupplementalProvider(t *testing.T) {
+func TestResourceListWithoutSupplementalProvider(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
 		LastUpdate: now,
@@ -708,18 +708,18 @@ func TestResourceV2ListWithoutSupplementalProvider(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceV2Handlers(cfg)
-	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	truenasRec := httptest.NewRecorder()
-	truenasReq := httptest.NewRequest(http.MethodGet, "/api/v2/resources?source=truenas", nil)
+	truenasReq := httptest.NewRequest(http.MethodGet, "/api/resources?source=truenas", nil)
 	h.HandleListResources(truenasRec, truenasReq)
 
 	if truenasRec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", truenasRec.Code, truenasRec.Body.String())
 	}
 
-	var truenasResp ResourcesV2Response
+	var truenasResp ResourcesResponse
 	if err := json.NewDecoder(truenasRec.Body).Decode(&truenasResp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -728,14 +728,14 @@ func TestResourceV2ListWithoutSupplementalProvider(t *testing.T) {
 	}
 
 	agentRec := httptest.NewRecorder()
-	agentReq := httptest.NewRequest(http.MethodGet, "/api/v2/resources?source=agent", nil)
+	agentReq := httptest.NewRequest(http.MethodGet, "/api/resources?source=agent", nil)
 	h.HandleListResources(agentRec, agentReq)
 
 	if agentRec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", agentRec.Code, agentRec.Body.String())
 	}
 
-	var agentResp ResourcesV2Response
+	var agentResp ResourcesResponse
 	if err := json.NewDecoder(agentRec.Body).Decode(&agentResp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}

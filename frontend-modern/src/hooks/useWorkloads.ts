@@ -2,12 +2,12 @@ import { createMemo, createResource, onCleanup, createEffect, type Accessor } fr
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 
-const V2_WORKLOADS_URL = '/api/v2/resources?type=vm,lxc,docker_container,pod';
-const V2_WORKLOADS_PAGE_LIMIT = 200;
-const V2_WORKLOADS_MAX_PAGES = 20;
-const V2_WORKLOADS_CACHE_MAX_AGE_MS = 15_000;
+const WORKLOADS_URL = '/api/resources?type=vm,lxc,docker_container,pod';
+const WORKLOADS_PAGE_LIMIT = 200;
+const WORKLOADS_MAX_PAGES = 20;
+const WORKLOADS_CACHE_MAX_AGE_MS = 15_000;
 
-type V2MetricValue = {
+type APIMetricValue = {
   value?: number;
   used?: number;
   total?: number;
@@ -15,7 +15,7 @@ type V2MetricValue = {
   unit?: string;
 };
 
-type V2NetworkInterface = {
+type APINetworkInterface = {
   name?: string;
   mac?: string;
   addresses?: string[];
@@ -23,7 +23,7 @@ type V2NetworkInterface = {
   txBytes?: number;
 };
 
-type V2DiskInfo = {
+type APIDiskInfo = {
   device?: string;
   mountpoint?: string;
   filesystem?: string;
@@ -32,7 +32,7 @@ type V2DiskInfo = {
   free?: number;
 };
 
-type V2Resource = {
+type APIResource = {
   id: string;
   type?: string;
   name?: string;
@@ -46,13 +46,13 @@ type V2Resource = {
     clusterName?: string;
   };
   metrics?: {
-    cpu?: V2MetricValue;
-    memory?: V2MetricValue;
-    disk?: V2MetricValue;
-    netIn?: V2MetricValue;
-    netOut?: V2MetricValue;
-    diskRead?: V2MetricValue;
-    diskWrite?: V2MetricValue;
+    cpu?: APIMetricValue;
+    memory?: APIMetricValue;
+    disk?: APIMetricValue;
+    netIn?: APIMetricValue;
+    netOut?: APIMetricValue;
+    diskRead?: APIMetricValue;
+    diskWrite?: APIMetricValue;
   };
   parentId?: string;
   parentName?: string;
@@ -76,8 +76,8 @@ type V2Resource = {
     osName?: string;
     osVersion?: string;
     agentVersion?: string;
-    networkInterfaces?: V2NetworkInterface[];
-    disks?: V2DiskInfo[];
+    networkInterfaces?: APINetworkInterface[];
+    disks?: APIDiskInfo[];
   };
   docker?: {
     containerId?: string;
@@ -100,9 +100,9 @@ type V2Resource = {
   };
 };
 
-type V2ListResponse = {
-  data?: V2Resource[];
-  resources?: V2Resource[];
+type APIListResponse = {
+  data?: APIResource[];
+  resources?: APIResource[];
   meta?: {
     page?: number;
     limit?: number;
@@ -111,9 +111,9 @@ type V2ListResponse = {
   };
 };
 
-let cachedV2Workloads: WorkloadGuest[] = [];
-let cachedV2WorkloadsAt = 0;
-let sharedFetchV2Workloads: Promise<WorkloadGuest[]> | null = null;
+let cachedWorkloads: WorkloadGuest[] = [];
+let cachedWorkloadsAt = 0;
+let sharedFetchWorkloads: Promise<WorkloadGuest[]> | null = null;
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype;
@@ -208,7 +208,7 @@ const resolvePlatformType = (sources?: string[]): string | undefined => {
   return undefined;
 };
 
-const buildMetric = (metric?: V2MetricValue) => {
+const buildMetric = (metric?: APIMetricValue) => {
   const total = metric?.total ?? 0;
   const used = metric?.used ?? 0;
   const free = metric?.total !== undefined && metric?.used !== undefined
@@ -218,7 +218,7 @@ const buildMetric = (metric?: V2MetricValue) => {
   return { total, used, free, usage };
 };
 
-const mapNetworkInterfaces = (interfaces?: V2NetworkInterface[]) =>
+const mapNetworkInterfaces = (interfaces?: APINetworkInterface[]) =>
   interfaces?.map((iface) => ({
     name: iface.name,
     mac: iface.mac,
@@ -227,7 +227,7 @@ const mapNetworkInterfaces = (interfaces?: V2NetworkInterface[]) =>
     txBytes: iface.txBytes,
   }));
 
-const mapDisks = (disks?: V2DiskInfo[]) =>
+const mapDisks = (disks?: APIDiskInfo[]) =>
   disks?.map((disk) => {
     const total = disk.total ?? 0;
     const used = disk.used ?? 0;
@@ -251,14 +251,14 @@ const toIsoString = (value?: string): string => {
   return new Date(parsed).toISOString();
 };
 
-const resolveWorkloadsPayload = (payload: unknown): { data: V2Resource[]; totalPages: number } => {
+const resolveWorkloadsPayload = (payload: unknown): { data: APIResource[]; totalPages: number } => {
   if (Array.isArray(payload)) {
-    return { data: payload as V2Resource[], totalPages: 1 };
+    return { data: payload as APIResource[], totalPages: 1 };
   }
   if (!payload || typeof payload !== 'object') {
     return { data: [], totalPages: 1 };
   }
-  const record = payload as V2ListResponse;
+  const record = payload as APIListResponse;
   const data = Array.isArray(record.data)
     ? record.data
     : Array.isArray(record.resources)
@@ -270,10 +270,10 @@ const resolveWorkloadsPayload = (payload: unknown): { data: V2Resource[]; totalP
   return { data, totalPages };
 };
 
-const buildV2WorkloadsUrl = (page: number) =>
-  `${V2_WORKLOADS_URL}&page=${page}&limit=${V2_WORKLOADS_PAGE_LIMIT}`;
+const buildWorkloadsUrl = (page: number) =>
+  `${WORKLOADS_URL}&page=${page}&limit=${WORKLOADS_PAGE_LIMIT}`;
 
-const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
+const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   const workloadType = resolveWorkloadType(resource.type);
   if (!workloadType) return null;
 
@@ -308,7 +308,7 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
 
   // For PVE guests, use the legacy ID format (instance:node:vmid) so metrics keys
   // match what the backend charts API returns. Without this, sparklines
-  // show no data because the hashed v2 ID doesn't match any backend keys.
+  // show no data because the hashed unified ID doesn't match any backend keys.
   const guestId = (() => {
     if ((workloadType === 'vm' || workloadType === 'lxc') && instance && node && vmid > 0) {
       return `${instance}:${node}:${vmid}`;
@@ -397,16 +397,16 @@ const mapResourceToWorkload = (resource: V2Resource): WorkloadGuest | null => {
   };
 };
 
-async function fetchV2Workloads(): Promise<WorkloadGuest[]> {
-  const firstResponse = await apiFetchJSON<unknown>(buildV2WorkloadsUrl(1), { cache: 'no-store' });
+async function fetchWorkloads(): Promise<WorkloadGuest[]> {
+  const firstResponse = await apiFetchJSON<unknown>(buildWorkloadsUrl(1), { cache: 'no-store' });
   const firstPage = resolveWorkloadsPayload(firstResponse);
-  const allResources: V2Resource[] = [...firstPage.data];
+  const allResources: APIResource[] = [...firstPage.data];
 
-  const totalPages = Math.min(firstPage.totalPages, V2_WORKLOADS_MAX_PAGES);
+  const totalPages = Math.min(firstPage.totalPages, WORKLOADS_MAX_PAGES);
   if (totalPages > 1) {
     const pageRequests: Promise<unknown>[] = [];
     for (let page = 2; page <= totalPages; page++) {
-      pageRequests.push(apiFetchJSON<unknown>(buildV2WorkloadsUrl(page), { cache: 'no-store' }));
+      pageRequests.push(apiFetchJSON<unknown>(buildWorkloadsUrl(page), { cache: 'no-store' }));
     }
     const settled = await Promise.allSettled(pageRequests);
     for (const result of settled) {
@@ -427,58 +427,58 @@ async function fetchV2Workloads(): Promise<WorkloadGuest[]> {
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 
-const hasFreshV2WorkloadsCache = () =>
-  cachedV2Workloads.length > 0 && Date.now() - cachedV2WorkloadsAt <= V2_WORKLOADS_CACHE_MAX_AGE_MS;
+const hasFreshWorkloadsCache = () =>
+  cachedWorkloads.length > 0 && Date.now() - cachedWorkloadsAt <= WORKLOADS_CACHE_MAX_AGE_MS;
 
-const setV2WorkloadsCache = (workloads: WorkloadGuest[], at = Date.now()) => {
-  cachedV2Workloads = workloads;
-  cachedV2WorkloadsAt = at;
+const setWorkloadsCache = (workloads: WorkloadGuest[], at = Date.now()) => {
+  cachedWorkloads = workloads;
+  cachedWorkloadsAt = at;
 };
 
-const fetchV2WorkloadsShared = async (force = false): Promise<WorkloadGuest[]> => {
-  if (!force && hasFreshV2WorkloadsCache()) {
-    return cachedV2Workloads;
+const fetchWorkloadsShared = async (force = false): Promise<WorkloadGuest[]> => {
+  if (!force && hasFreshWorkloadsCache()) {
+    return cachedWorkloads;
   }
 
-  if (sharedFetchV2Workloads) {
-    return sharedFetchV2Workloads;
+  if (sharedFetchWorkloads) {
+    return sharedFetchWorkloads;
   }
 
   const request = (async () => {
-    const previous = cachedV2Workloads;
-    const fetched = await fetchV2Workloads();
+    const previous = cachedWorkloads;
+    const fetched = await fetchWorkloads();
     if (areWorkloadsEqual(previous, fetched)) {
-      cachedV2WorkloadsAt = Date.now();
+      cachedWorkloadsAt = Date.now();
       return previous;
     }
-    setV2WorkloadsCache(fetched);
+    setWorkloadsCache(fetched);
     return fetched;
   })();
 
-  sharedFetchV2Workloads = request;
+  sharedFetchWorkloads = request;
 
   try {
     return await request;
   } finally {
-    if (sharedFetchV2Workloads === request) {
-      sharedFetchV2Workloads = null;
+    if (sharedFetchWorkloads === request) {
+      sharedFetchWorkloads = null;
     }
   }
 };
 
-export const __resetV2WorkloadsCacheForTests = () => {
-  cachedV2Workloads = [];
-  cachedV2WorkloadsAt = 0;
-  sharedFetchV2Workloads = null;
+export const __resetWorkloadsCacheForTests = () => {
+  cachedWorkloads = [];
+  cachedWorkloadsAt = 0;
+  sharedFetchWorkloads = null;
 };
 
-export function useV2Workloads(enabled: Accessor<boolean> = () => true) {
-  const source = createMemo(() => (enabled() ? 'v2-workloads' : null));
+export function useWorkloads(enabled: Accessor<boolean> = () => true) {
+  const source = createMemo(() => (enabled() ? 'workloads' : null));
   const [workloads, { mutate: resourceMutate }] = createResource(
     source,
-    () => fetchV2WorkloadsShared(),
+    () => fetchWorkloadsShared(),
     {
-      initialValue: cachedV2Workloads,
+      initialValue: cachedWorkloads,
     },
   );
 
@@ -488,10 +488,10 @@ export function useV2Workloads(enabled: Accessor<boolean> = () => true) {
       const next = typeof value === 'function' ? value(current) : value;
       const normalized = next ?? [];
       if (areWorkloadsEqual(current, normalized)) {
-        setV2WorkloadsCache(current);
+        setWorkloadsCache(current);
         return current;
       }
-      setV2WorkloadsCache(normalized);
+      setWorkloadsCache(normalized);
       return normalized;
     });
 
@@ -499,22 +499,22 @@ export function useV2Workloads(enabled: Accessor<boolean> = () => true) {
     resourceMutate((previous) => {
       const current = previous ?? [];
       if (areWorkloadsEqual(current, next)) {
-        setV2WorkloadsCache(current);
+        setWorkloadsCache(current);
         return current;
       }
-      setV2WorkloadsCache(next);
+      setWorkloadsCache(next);
       return next;
     });
   };
 
   const refetch = async () => {
-    const data = await fetchV2WorkloadsShared(true);
+    const data = await fetchWorkloadsShared(true);
     applyWorkloads(data);
     return data;
   };
 
-  if (!hasFreshV2WorkloadsCache()) {
-    void fetchV2WorkloadsShared().then(applyWorkloads).catch(() => undefined);
+  if (!hasFreshWorkloadsCache()) {
+    void fetchWorkloadsShared().then(applyWorkloads).catch(() => undefined);
   }
 
   // Poll for fresh metrics while enabled.
@@ -525,7 +525,7 @@ export function useV2Workloads(enabled: Accessor<boolean> = () => true) {
     if (!enabled()) return;
     const id = setInterval(async () => {
       try {
-        const data = await fetchV2WorkloadsShared(true);
+        const data = await fetchWorkloadsShared(true);
         applyWorkloads(data);
       } catch {
         // Silently ignore poll errors; keep showing last data
@@ -543,4 +543,4 @@ export function useV2Workloads(enabled: Accessor<boolean> = () => true) {
   };
 }
 
-export default useV2Workloads;
+export default useWorkloads;

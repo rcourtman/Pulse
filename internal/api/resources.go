@@ -18,8 +18,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
-// ResourceV2Handlers provides HTTP handlers for the v2 unified resource API.
-type ResourceV2Handlers struct {
+// ResourceHandlers provides HTTP handlers for the unified resource API.
+type ResourceHandlers struct {
 	cfg                 *config.Config
 	storeMu             sync.Mutex
 	stores              map[string]unified.ResourceStore
@@ -36,9 +36,9 @@ type SupplementalRecordsProvider interface {
 	GetCurrentRecords() []unified.IngestRecord
 }
 
-// NewResourceV2Handlers creates a new handler.
-func NewResourceV2Handlers(cfg *config.Config) *ResourceV2Handlers {
-	return &ResourceV2Handlers{
+// NewResourceHandlers creates a new ResourceHandlers.
+func NewResourceHandlers(cfg *config.Config) *ResourceHandlers {
+	return &ResourceHandlers{
 		cfg:                 cfg,
 		stores:              make(map[string]unified.ResourceStore),
 		registryCache:       make(map[string]registryCacheEntry),
@@ -47,17 +47,17 @@ func NewResourceV2Handlers(cfg *config.Config) *ResourceV2Handlers {
 }
 
 // SetStateProvider sets the state provider for on-demand population.
-func (h *ResourceV2Handlers) SetStateProvider(provider StateProvider) {
+func (h *ResourceHandlers) SetStateProvider(provider StateProvider) {
 	h.stateProvider = provider
 }
 
 // SetTenantStateProvider sets the tenant-aware provider.
-func (h *ResourceV2Handlers) SetTenantStateProvider(provider TenantStateProvider) {
+func (h *ResourceHandlers) SetTenantStateProvider(provider TenantStateProvider) {
 	h.tenantStateProvider = provider
 }
 
 // SetSupplementalRecordsProvider configures additional records for a source.
-func (h *ResourceV2Handlers) SetSupplementalRecordsProvider(source unified.DataSource, provider SupplementalRecordsProvider) {
+func (h *ResourceHandlers) SetSupplementalRecordsProvider(source unified.DataSource, provider SupplementalRecordsProvider) {
 	h.supplementalMu.Lock()
 	if h.supplementalRecords == nil {
 		h.supplementalRecords = make(map[unified.DataSource]SupplementalRecordsProvider)
@@ -75,8 +75,8 @@ func (h *ResourceV2Handlers) SetSupplementalRecordsProvider(source unified.DataS
 	h.cacheMu.Unlock()
 }
 
-// HandleListResources handles GET /api/v2/resources.
-func (h *ResourceV2Handlers) HandleListResources(w http.ResponseWriter, r *http.Request) {
+// HandleListResources handles GET /api/resources.
+func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -99,7 +99,7 @@ func (h *ResourceV2Handlers) HandleListResources(w http.ResponseWriter, r *http.
 	attachDiscoveryTargets(paged)
 	attachMetricsTargets(paged, registry)
 
-	response := ResourcesV2Response{
+	response := ResourcesResponse{
 		Data:         paged,
 		Meta:         meta,
 		Aggregations: registry.Stats(),
@@ -109,8 +109,8 @@ func (h *ResourceV2Handlers) HandleListResources(w http.ResponseWriter, r *http.
 	json.NewEncoder(w).Encode(response)
 }
 
-// HandleGetResource handles GET /api/v2/resources/{id}.
-func (h *ResourceV2Handlers) HandleGetResource(w http.ResponseWriter, r *http.Request) {
+// HandleGetResource handles GET /api/resources/{id}.
+func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -123,7 +123,7 @@ func (h *ResourceV2Handlers) HandleGetResource(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	id := strings.TrimPrefix(r.URL.Path, "/api/v2/resources/")
+	id := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	id = strings.TrimSuffix(id, "/")
 	if id == "" {
 		http.Error(w, "Resource ID required", http.StatusBadRequest)
@@ -145,7 +145,7 @@ func (h *ResourceV2Handlers) HandleGetResource(w http.ResponseWriter, r *http.Re
 }
 
 // HandleResourceRoutes dispatches nested resource routes.
-func (h *ResourceV2Handlers) HandleResourceRoutes(w http.ResponseWriter, r *http.Request) {
+func (h *ResourceHandlers) HandleResourceRoutes(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/children") {
 		h.HandleGetChildren(w, r)
 		return
@@ -169,8 +169,8 @@ func (h *ResourceV2Handlers) HandleResourceRoutes(w http.ResponseWriter, r *http
 	h.HandleGetResource(w, r)
 }
 
-// HandleGetChildren handles GET /api/v2/resources/{id}/children.
-func (h *ResourceV2Handlers) HandleGetChildren(w http.ResponseWriter, r *http.Request) {
+// HandleGetChildren handles GET /api/resources/{id}/children.
+func (h *ResourceHandlers) HandleGetChildren(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -183,7 +183,7 @@ func (h *ResourceV2Handlers) HandleGetChildren(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/v2/resources/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	path = strings.TrimSuffix(path, "/children")
 	path = strings.TrimSuffix(path, "/")
 	if path == "" {
@@ -199,8 +199,8 @@ func (h *ResourceV2Handlers) HandleGetChildren(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// HandleGetMetrics handles GET /api/v2/resources/{id}/metrics.
-func (h *ResourceV2Handlers) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
+// HandleGetMetrics handles GET /api/resources/{id}/metrics.
+func (h *ResourceHandlers) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -213,7 +213,7 @@ func (h *ResourceV2Handlers) HandleGetMetrics(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/v2/resources/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	path = strings.TrimSuffix(path, "/metrics")
 	path = strings.TrimSuffix(path, "/")
 	if path == "" {
@@ -231,8 +231,8 @@ func (h *ResourceV2Handlers) HandleGetMetrics(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(resource.Metrics)
 }
 
-// HandleStats handles GET /api/v2/resources/stats.
-func (h *ResourceV2Handlers) HandleStats(w http.ResponseWriter, r *http.Request) {
+// HandleStats handles GET /api/resources/stats.
+func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -249,8 +249,8 @@ func (h *ResourceV2Handlers) HandleStats(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(registry.Stats())
 }
 
-// HandleLink handles POST /api/v2/resources/{id}/link.
-func (h *ResourceV2Handlers) HandleLink(w http.ResponseWriter, r *http.Request) {
+// HandleLink handles POST /api/resources/{id}/link.
+func (h *ResourceHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -263,7 +263,7 @@ func (h *ResourceV2Handlers) HandleLink(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/v2/resources/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	path = strings.TrimSuffix(path, "/link")
 	path = strings.TrimSuffix(path, "/")
 	if path == "" {
@@ -306,8 +306,8 @@ func (h *ResourceV2Handlers) HandleLink(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// HandleUnlink handles POST /api/v2/resources/{id}/unlink.
-func (h *ResourceV2Handlers) HandleUnlink(w http.ResponseWriter, r *http.Request) {
+// HandleUnlink handles POST /api/resources/{id}/unlink.
+func (h *ResourceHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -320,7 +320,7 @@ func (h *ResourceV2Handlers) HandleUnlink(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/v2/resources/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	path = strings.TrimSuffix(path, "/unlink")
 	path = strings.TrimSuffix(path, "/")
 	if path == "" {
@@ -362,8 +362,8 @@ func (h *ResourceV2Handlers) HandleUnlink(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// HandleReportMerge handles POST /api/v2/resources/{id}/report-merge.
-func (h *ResourceV2Handlers) HandleReportMerge(w http.ResponseWriter, r *http.Request) {
+// HandleReportMerge handles POST /api/resources/{id}/report-merge.
+func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -376,7 +376,7 @@ func (h *ResourceV2Handlers) HandleReportMerge(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/v2/resources/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	path = strings.TrimSuffix(path, "/report-merge")
 	path = strings.TrimSuffix(path, "/")
 	if path == "" {
@@ -461,7 +461,7 @@ func (h *ResourceV2Handlers) HandleReportMerge(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	log.Printf("v2 report-merge: resource=%s exclusions=%d user=%s sources=%v", path, exclusionsAdded, getUserID(r), payload.Sources)
+	log.Printf("report-merge: resource=%s exclusions=%d user=%s sources=%v", path, exclusionsAdded, getUserID(r), payload.Sources)
 	h.invalidateCache(orgID)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -473,7 +473,7 @@ func (h *ResourceV2Handlers) HandleReportMerge(w http.ResponseWriter, r *http.Re
 }
 
 // buildRegistry constructs a registry for the current tenant.
-func (h *ResourceV2Handlers) buildRegistry(orgID string) (*unified.ResourceRegistry, error) {
+func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistry, error) {
 	store, err := h.getStore(orgID)
 	if err != nil {
 		return nil, err
@@ -521,7 +521,7 @@ func (h *ResourceV2Handlers) buildRegistry(orgID string) (*unified.ResourceRegis
 	return registry, nil
 }
 
-func (h *ResourceV2Handlers) getStore(orgID string) (unified.ResourceStore, error) {
+func (h *ResourceHandlers) getStore(orgID string) (unified.ResourceStore, error) {
 	h.storeMu.Lock()
 	defer h.storeMu.Unlock()
 	key := cacheKey(orgID)
@@ -540,7 +540,7 @@ func (h *ResourceV2Handlers) getStore(orgID string) (unified.ResourceStore, erro
 	return store, nil
 }
 
-func (h *ResourceV2Handlers) invalidateCache(orgID string) {
+func (h *ResourceHandlers) invalidateCache(orgID string) {
 	key := cacheKey(orgID)
 	h.cacheMu.Lock()
 	delete(h.registryCache, key)
@@ -555,8 +555,8 @@ func cacheKey(orgID string) string {
 	return key
 }
 
-// ResourcesV2Response represents list response.
-type ResourcesV2Response struct {
+// ResourcesResponse represents the list response for the unified resources API.
+type ResourcesResponse struct {
 	Data         []unified.Resource    `json:"data"`
 	Meta         ResourcesMeta         `json:"meta"`
 	Aggregations unified.ResourceStats `json:"aggregations"`
@@ -592,9 +592,9 @@ type listFilters struct {
 
 func parseListFilters(r *http.Request) listFilters {
 	filters := listFilters{
-		types:     parseResourceTypesV2(r.URL.Query().Get("type")),
-		sources:   parseSourcesV2(r.URL.Query().Get("source")),
-		statuses:  parseStatusesV2(r.URL.Query().Get("status")),
+		types:     parseResourceTypes(r.URL.Query().Get("type")),
+		sources:   parseSources(r.URL.Query().Get("source")),
+		statuses:  parseStatuses(r.URL.Query().Get("status")),
 		parent:    strings.TrimSpace(r.URL.Query().Get("parent")),
 		cluster:   strings.TrimSpace(r.URL.Query().Get("cluster")),
 		query:     strings.TrimSpace(strings.ToLower(r.URL.Query().Get("q"))),
@@ -733,7 +733,7 @@ func paginate(resources []unified.Resource, page, limit int) ([]unified.Resource
 	return paged, meta
 }
 
-func parseResourceTypesV2(raw string) map[unified.ResourceType]struct{} {
+func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 	result := make(map[unified.ResourceType]struct{})
 	for _, part := range splitCSV(raw) {
 		switch part {
@@ -771,7 +771,7 @@ func parseResourceTypesV2(raw string) map[unified.ResourceType]struct{} {
 	return result
 }
 
-func parseSourcesV2(raw string) map[unified.DataSource]struct{} {
+func parseSources(raw string) map[unified.DataSource]struct{} {
 	result := make(map[unified.DataSource]struct{})
 	for _, part := range splitCSV(raw) {
 		switch part {
@@ -794,7 +794,7 @@ func parseSourcesV2(raw string) map[unified.DataSource]struct{} {
 	return result
 }
 
-func parseStatusesV2(raw string) map[unified.ResourceStatus]struct{} {
+func parseStatuses(raw string) map[unified.ResourceStatus]struct{} {
 	result := make(map[unified.ResourceStatus]struct{})
 	for _, part := range splitCSV(raw) {
 		switch part {

@@ -30,10 +30,10 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/backups/pbs", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackupsPBS)))
 	r.mux.HandleFunc("/api/snapshots", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleSnapshots)))
 
-	// Unified resources API v2 (merge layer)
-	r.mux.HandleFunc("/api/v2/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceV2Handlers.HandleListResources)))
-	r.mux.HandleFunc("/api/v2/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceV2Handlers.HandleStats)))
-	r.mux.HandleFunc("/api/v2/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceV2Handlers.HandleResourceRoutes)))
+	// Unified resources API
+	r.mux.HandleFunc("/api/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleListResources)))
+	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleStats)))
+	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleResourceRoutes)))
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
 	r.mux.HandleFunc("/api/guests/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {

@@ -75,7 +75,7 @@ type Router struct {
 	aiSettingsHandler         *AISettingsHandler
 	aiHandler                 *AIHandler // AI chat handler
 	discoveryHandlers         *DiscoveryHandlers
-	resourceV2Handlers        *ResourceV2Handlers
+	resourceHandlers          *ResourceHandlers
 	resourceRegistry          *unifiedresources.ResourceRegistry
 	trueNASPoller             *monitoring.TrueNASPoller
 	monitorResourceAdapter    *unifiedresources.MonitorAdapter
@@ -272,9 +272,9 @@ func (r *Router) setupRoutes() {
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
-	r.resourceV2Handlers = NewResourceV2Handlers(r.config)
+	r.resourceHandlers = NewResourceHandlers(r.config)
 	if r.trueNASPoller != nil {
-		r.resourceV2Handlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
+		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
 	}
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant)
@@ -717,8 +717,8 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 		} else {
 			log.Warn().Msg("[Router] monitorResourceAdapter is nil, cannot inject resource store")
 		}
-		if r.resourceV2Handlers != nil {
-			r.resourceV2Handlers.SetStateProvider(m)
+		if r.resourceHandlers != nil {
+			r.resourceHandlers.SetStateProvider(m)
 		}
 
 		// Set state provider on AI handler so patrol service gets created

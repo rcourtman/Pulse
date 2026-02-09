@@ -971,7 +971,7 @@ function App() {
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     );
   };

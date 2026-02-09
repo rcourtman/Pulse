@@ -54,7 +54,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
     setError(null);
     try {
       const response = await apiFetch(
-        `/api/v2/resources/${encodeURIComponent(props.resourceId)}/report-merge`,
+        `/api/resources/${encodeURIComponent(props.resourceId)}/report-merge`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

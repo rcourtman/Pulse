@@ -1,7 +1,7 @@
 import { createEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type UseV2WorkloadsModule = typeof import('@/hooks/useV2Workloads');
+type UseWorkloadsModule = typeof import('@/hooks/useWorkloads');
 
 const sampleResource = {
   id: 'cluster-a-pve1-101',
@@ -50,10 +50,10 @@ const waitForWorkloadCount = async (getCount: () => number, expectedMin = 1) => 
   throw new Error(`Timed out waiting for at least ${expectedMin} workloads`);
 };
 
-describe('useV2Workloads', () => {
+describe('useWorkloads', () => {
   let apiFetchJSONMock: ReturnType<typeof vi.fn>;
-  let useV2Workloads: UseV2WorkloadsModule['useV2Workloads'];
-  let resetV2WorkloadsCacheForTests: UseV2WorkloadsModule['__resetV2WorkloadsCacheForTests'];
+  let useWorkloads: UseWorkloadsModule['useWorkloads'];
+  let resetWorkloadsCacheForTests: UseWorkloadsModule['__resetWorkloadsCacheForTests'];
 
   beforeEach(async () => {
     vi.useFakeTimers();
@@ -69,11 +69,11 @@ describe('useV2Workloads', () => {
     }));
 
     ({
-      useV2Workloads,
-      __resetV2WorkloadsCacheForTests: resetV2WorkloadsCacheForTests,
-    } = await import('@/hooks/useV2Workloads'));
+      useWorkloads,
+      __resetWorkloadsCacheForTests: resetWorkloadsCacheForTests,
+    } = await import('@/hooks/useWorkloads'));
 
-    resetV2WorkloadsCacheForTests();
+    resetWorkloadsCacheForTests();
   });
 
   afterEach(() => {
@@ -87,7 +87,7 @@ describe('useV2Workloads', () => {
     createRoot((d) => {
       disposeFirst = d;
       const [enabled] = createSignal(true);
-      useV2Workloads(enabled);
+      useWorkloads(enabled);
     });
 
     await flushAsync();
@@ -99,7 +99,7 @@ describe('useV2Workloads', () => {
     createRoot((d) => {
       disposeSecond = d;
       const [enabled] = createSignal(true);
-      useV2Workloads(enabled);
+      useWorkloads(enabled);
     });
 
     await flushAsync();
@@ -108,18 +108,18 @@ describe('useV2Workloads', () => {
     disposeSecond();
   });
 
-  it('handles empty v2 responses without mutating into undefined state', async () => {
+  it('handles empty responses without mutating into undefined state', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [],
       meta: { totalPages: 1 },
     });
 
     let dispose = () => {};
-    let result: ReturnType<UseV2WorkloadsModule['useV2Workloads']> | undefined;
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
     createRoot((d) => {
       dispose = d;
       const [enabled] = createSignal(true);
-      result = useV2Workloads(enabled);
+      result = useWorkloads(enabled);
     });
 
     await flushAsync();
@@ -131,12 +131,12 @@ describe('useV2Workloads', () => {
 
   it('keeps workload reference stable when polling returns identical payload', async () => {
     let dispose = () => {};
-    let result: ReturnType<UseV2WorkloadsModule['useV2Workloads']> | undefined;
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
     let effectRuns = 0;
     createRoot((d) => {
       dispose = d;
       const [enabled] = createSignal(true);
-      result = useV2Workloads(enabled);
+      result = useWorkloads(enabled);
       createEffect(() => {
         result!.workloads();
         effectRuns += 1;
@@ -159,11 +159,11 @@ describe('useV2Workloads', () => {
 
   it('maintains polling cadence under load without overlapping fetch churn', async () => {
     let dispose = () => {};
-    let result: ReturnType<UseV2WorkloadsModule['useV2Workloads']> | undefined;
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
     createRoot((d) => {
       dispose = d;
       const [enabled] = createSignal(true);
-      result = useV2Workloads(enabled);
+      result = useWorkloads(enabled);
     });
 
     await flushAsync();

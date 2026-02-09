@@ -4,7 +4,7 @@ import { apiFetch } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
 
-const UNIFIED_RESOURCES_BASE_URL = '/api/v2/resources';
+const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
 const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=host,pbs,pmg,k8s_cluster,k8s_node';
 const STORAGE_BACKUPS_UNIFIED_RESOURCES_QUERY =
   'type=storage,pbs,pmg,vm,lxc,container,pod,host,k8s_cluster,k8s_node';
@@ -14,7 +14,7 @@ const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
 const UNIFIED_RESOURCES_WS_DEBOUNCE_MS = 800;
 const UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS = 2_500;
 
-type V2MetricValue = {
+type APIMetricValue = {
   value?: number;
   used?: number;
   total?: number;
@@ -22,7 +22,7 @@ type V2MetricValue = {
   unit?: string;
 };
 
-type V2KubernetesData = {
+type APIKubernetesData = {
   uptimeSeconds?: number;
   temperature?: number;
   metricCapabilities?: {
@@ -35,7 +35,7 @@ type V2KubernetesData = {
   };
 };
 
-type V2Resource = {
+type APIResource = {
   id: string;
   type?: string;
   name?: string;
@@ -50,13 +50,13 @@ type V2Resource = {
     clusterName?: string;
   };
   metrics?: {
-    cpu?: V2MetricValue;
-    memory?: V2MetricValue;
-    disk?: V2MetricValue;
-    netIn?: V2MetricValue;
-    netOut?: V2MetricValue;
-    diskRead?: V2MetricValue;
-    diskWrite?: V2MetricValue;
+    cpu?: APIMetricValue;
+    memory?: APIMetricValue;
+    disk?: APIMetricValue;
+    netIn?: APIMetricValue;
+    netOut?: APIMetricValue;
+    diskRead?: APIMetricValue;
+    diskWrite?: APIMetricValue;
   };
   parentId?: string;
   tags?: string[];
@@ -93,7 +93,7 @@ type V2Resource = {
     connectionHealth?: string;
     lastUpdated?: string;
   };
-  kubernetes?: V2KubernetesData;
+  kubernetes?: APIKubernetesData;
   discoveryTarget?: {
     resourceType?: string;
     hostId?: string;
@@ -106,9 +106,9 @@ type V2Resource = {
   };
 };
 
-type V2ListResponse = {
-  data?: V2Resource[];
-  resources?: V2Resource[];
+type APIListResponse = {
+  data?: APIResource[];
+  resources?: APIResource[];
   meta?: {
     totalPages?: number;
   };
@@ -261,7 +261,7 @@ const resolveType = (value?: string): ResourceType => {
   }
 };
 
-const metricToResourceMetric = (metric?: V2MetricValue) => {
+const metricToResourceMetric = (metric?: APIMetricValue) => {
   if (!metric) return undefined;
   const used = metric.used ?? undefined;
   const total = metric.total ?? undefined;
@@ -275,7 +275,7 @@ const metricToResourceMetric = (metric?: V2MetricValue) => {
   };
 };
 
-const toResource = (v2: V2Resource): Resource => {
+const toResource = (v2: APIResource): Resource => {
   const sources = v2.sources || [];
   const sourceFlags = readSourceFlags(sources);
   const lastSeen = v2.lastSeen ? Date.parse(v2.lastSeen) : NaN;
@@ -376,14 +376,14 @@ const buildUnifiedResourcesUrl = (query: string, page: number): string => {
   return `${UNIFIED_RESOURCES_BASE_URL}?${params.toString()}`;
 };
 
-const resolveV2ResourcesPayload = (payload: unknown): { data: V2Resource[]; totalPages: number } => {
+const resolveResourcesPayload = (payload: unknown): { data: APIResource[]; totalPages: number } => {
   if (Array.isArray(payload)) {
-    return { data: payload as V2Resource[], totalPages: 1 };
+    return { data: payload as APIResource[], totalPages: 1 };
   }
   if (!payload || typeof payload !== 'object') {
     return { data: [], totalPages: 1 };
   }
-  const record = payload as V2ListResponse;
+  const record = payload as APIListResponse;
   const data = Array.isArray(record.data)
     ? record.data
     : Array.isArray(record.resources)
@@ -395,9 +395,9 @@ const resolveV2ResourcesPayload = (payload: unknown): { data: V2Resource[]; tota
   return { data, totalPages };
 };
 
-const dedupeV2Resources = (resources: V2Resource[]): V2Resource[] => {
+const dedupeResources = (resources: APIResource[]): APIResource[] => {
   const ids = new Set<string>();
-  const deduped: V2Resource[] = [];
+  const deduped: APIResource[] = [];
   for (const resource of resources) {
     if (!resource?.id || ids.has(resource.id)) continue;
     ids.add(resource.id);
@@ -435,7 +435,7 @@ const setUnifiedResourcesCache = (
 
 async function fetchUnifiedResources(query: string): Promise<Resource[]> {
   const normalizedQuery = normalizeUnifiedResourcesQuery(query);
-  const allRawResources: V2Resource[] = [];
+  const allRawResources: APIResource[] = [];
   let totalPages = 1;
 
   for (let page = 1; page <= totalPages && page <= UNIFIED_RESOURCES_MAX_PAGES; page += 1) {
@@ -444,13 +444,13 @@ async function fetchUnifiedResources(query: string): Promise<Resource[]> {
       throw new Error('Failed to fetch unified resources');
     }
 
-    const payload = (await response.json()) as V2ListResponse | V2Resource[];
-    const resolved = resolveV2ResourcesPayload(payload);
+    const payload = (await response.json()) as APIListResponse | APIResource[];
+    const resolved = resolveResourcesPayload(payload);
     allRawResources.push(...resolved.data);
     totalPages = Math.max(totalPages, resolved.totalPages);
   }
 
-  return dedupeV2Resources(allRawResources).map((resource) => toResource(resource));
+  return dedupeResources(allRawResources).map((resource) => toResource(resource));
 }
 
 const fetchUnifiedResourcesShared = async (

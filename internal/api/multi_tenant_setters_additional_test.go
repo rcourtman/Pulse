@@ -18,7 +18,7 @@ func TestRouterSetMultiTenantMonitor(t *testing.T) {
 		hostAgentHandlers:       &HostAgentHandlers{},
 		kubernetesAgentHandlers: &KubernetesAgentHandlers{},
 		systemSettingsHandler:   &SystemSettingsHandler{},
-		resourceV2Handlers:      NewResourceV2Handlers(nil),
+		resourceHandlers:        NewResourceHandlers(nil),
 	}
 
 	router.SetMultiTenantMonitor(nil)
@@ -26,7 +26,7 @@ func TestRouterSetMultiTenantMonitor(t *testing.T) {
 	if router.mtMonitor != nil {
 		t.Fatalf("mtMonitor should be nil after SetMultiTenantMonitor(nil)")
 	}
-	if router.resourceV2Handlers.tenantStateProvider == nil {
-		t.Fatalf("tenantStateProvider should be set on resource v2 handlers")
+	if router.resourceHandlers.tenantStateProvider == nil {
+		t.Fatalf("tenantStateProvider should be set on resource handlers")
 	}
 }

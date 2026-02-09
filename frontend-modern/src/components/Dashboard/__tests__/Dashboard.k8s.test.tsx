@@ -9,7 +9,7 @@ const mockWebSocketState = {
 };
 
 let mockLocationSearch = '?type=k8s';
-let mockV2Workloads: Array<Record<string, unknown>> = [];
+let mockWorkloads: Array<Record<string, unknown>> = [];
 const navigateSpy = vi.fn();
 type HostFilterMock = {
   id?: string;
@@ -52,9 +52,9 @@ vi.mock('@/App', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useV2Workloads', () => ({
-  useV2Workloads: () => ({
-    workloads: () => mockV2Workloads as any,
+vi.mock('@/hooks/useWorkloads', () => ({
+  useWorkloads: () => ({
+    workloads: () => mockWorkloads as any,
     refetch: vi.fn(),
   }),
 }));
@@ -152,7 +152,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
 
   it('renders Kubernetes pods in the unified workloads table and shows cluster filter in k8s view', async () => {
     lastHostFilter = undefined;
-    mockV2Workloads = [
+    mockWorkloads = [
       {
         id: 'v2-k8s-pod-visible',
         vmid: 0,
@@ -185,7 +185,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 
@@ -198,7 +198,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
 
   it('does not let preselected host filtering suppress k8s workloads', async () => {
     lastHostFilter = undefined;
-    mockV2Workloads = [
+    mockWorkloads = [
       {
         id: 'v2-k8s-pod-visible',
         vmid: 0,
@@ -232,7 +232,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 
@@ -244,7 +244,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
   it('renders only native v2 kubernetes workloads', async () => {
     lastHostFilter = undefined;
     mockLocationSearch = '?type=k8s';
-    mockV2Workloads = [
+    mockWorkloads = [
       {
         id: 'v2-k8s-pod-1',
         vmid: 0,
@@ -277,7 +277,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 
@@ -291,7 +291,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
   it('shows and dismisses the migration notice for legacy kubernetes redirects', async () => {
     lastHostFilter = undefined;
     localStorage.clear();
-    mockV2Workloads = [
+    mockWorkloads = [
       {
         id: 'v2-k8s-pod-visible',
         vmid: 0,
@@ -325,7 +325,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 
@@ -346,7 +346,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
   it('filters kubernetes workloads by selected cluster', async () => {
     lastHostFilter = undefined;
     mockLocationSearch = '?type=k8s';
-    mockV2Workloads = [
+    mockWorkloads = [
       {
         id: 'v2-k8s-pod-a',
         vmid: 0,
@@ -406,7 +406,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 
@@ -431,7 +431,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
   it('applies kubernetes context from URL query params', async () => {
     lastHostFilter = undefined;
     mockLocationSearch = '?type=k8s&context=cluster-b';
-    mockV2Workloads = [
+    mockWorkloads = [
       {
         id: 'v2-k8s-pod-a',
         vmid: 0,
@@ -491,7 +491,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 
@@ -504,7 +504,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
   it('applies non-kubernetes host query params to workload filtering', async () => {
     lastHostFilter = undefined;
     mockLocationSearch = '?type=all&host=pve-a';
-    mockV2Workloads = [
+    mockWorkloads = [
       {
         id: 'v2-vm-a',
         vmid: 101,
@@ -560,7 +560,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 
@@ -573,7 +573,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
   it('opens the Kubernetes workload drawer from resource deep links in mixed workloads', async () => {
     lastHostFilter = undefined;
     mockLocationSearch = '?type=k8s&resource=v2-k8s-pod-b';
-    mockV2Workloads = [
+    mockWorkloads = [
       {
         id: 'v2-vm-101',
         vmid: 101,
@@ -657,7 +657,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 
@@ -674,7 +674,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
   it('groups Kubernetes workloads by context with the same grouped table behavior as other workloads', async () => {
     lastHostFilter = undefined;
     mockLocationSearch = '?type=k8s';
-    mockV2Workloads = [
+    mockWorkloads = [
       {
         id: 'v2-k8s-pod-a',
         vmid: 0,
@@ -734,7 +734,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 
@@ -750,14 +750,14 @@ describe('Dashboard Kubernetes workloads integration', () => {
   it('canonicalizes type=all workload query params', async () => {
     lastHostFilter = undefined;
     mockLocationSearch = '?type=all';
-    mockV2Workloads = [];
+    mockWorkloads = [];
 
     render(() => (
       <Dashboard
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 
@@ -773,14 +773,14 @@ describe('Dashboard Kubernetes workloads integration', () => {
   it('preserves migration metadata while canonicalizing workload query params', async () => {
     lastHostFilter = undefined;
     mockLocationSearch = '?type=all&migrated=1&from=kubernetes';
-    mockV2Workloads = [];
+    mockWorkloads = [];
 
     render(() => (
       <Dashboard
         vms={[]}
         containers={[]}
         nodes={[]}
-        useV2Workloads
+        useWorkloads
       />
     ));
 

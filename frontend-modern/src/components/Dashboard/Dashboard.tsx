@@ -22,7 +22,7 @@ import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { useV2Workloads } from '@/hooks/useV2Workloads';
+import { useWorkloads } from '@/hooks/useWorkloads';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { aiChatStore } from '@/stores/aiChat';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
@@ -244,7 +244,7 @@ interface DashboardProps {
   vms: VM[];
   containers: Container[];
   nodes: Node[];
-  useV2Workloads?: boolean;
+  useWorkloads?: boolean;
 }
 
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
@@ -359,10 +359,10 @@ export function Dashboard(props: DashboardProps) {
       return next;
     });
 
-  const v2Enabled = createMemo(() => props.useV2Workloads === true);
-  const v2Workloads = useV2Workloads(v2Enabled);
+  const workloadsEnabled = createMemo(() => props.useWorkloads === true);
+  const workloads = useWorkloads(workloadsEnabled);
 
-  // Keep workload identities stable across v2 polling updates.
+  // Keep workload identities stable across polling updates.
   const dedupeGuests = (guests: WorkloadGuest[]): WorkloadGuest[] => {
     const seen = new Set<string>();
     const deduped: WorkloadGuest[] = [];
@@ -376,7 +376,7 @@ export function Dashboard(props: DashboardProps) {
   };
 
   const allGuests = createMemo<WorkloadGuest[]>(() =>
-    v2Enabled() ? dedupeGuests(v2Workloads.workloads()) : [],
+    workloadsEnabled() ? dedupeGuests(workloads.workloads()) : [],
   );
 
   const workloadNodeOptions = createMemo(() => {
@@ -668,8 +668,8 @@ export function Dashboard(props: DashboardProps) {
   let lastConnected = connected();
   createEffect(() => {
     const isConnected = connected();
-    if (v2Enabled() && isConnected && !lastConnected) {
-      void v2Workloads.refetch();
+    if (workloadsEnabled() && isConnected && !lastConnected) {
+      void workloads.refetch();
     }
     lastConnected = isConnected;
   });

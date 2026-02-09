@@ -10,14 +10,14 @@ import {
 } from '../workloadSelectors';
 
 let mockLocationSearch = '';
-let mockV2Workloads: Array<Record<string, unknown>> = [];
-let setMockV2WorkloadsSignal: ((next: Array<Record<string, unknown>>) => void) | null = null;
+let mockWorkloads: Array<Record<string, unknown>> = [];
+let setMockWorkloadsSignal: ((next: Array<Record<string, unknown>>) => void) | null = null;
 let guestRowMountCount = 0;
 let guestRowUnmountCount = 0;
 
-const pushMockV2Workloads = (next: Array<Record<string, unknown>>) => {
-  mockV2Workloads = next;
-  setMockV2WorkloadsSignal?.(next);
+const pushMockWorkloads = (next: Array<Record<string, unknown>>) => {
+  mockWorkloads = next;
+  setMockWorkloadsSignal?.(next);
 };
 
 vi.mock('@solidjs/router', async () => {
@@ -40,10 +40,10 @@ vi.mock('@/App', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useV2Workloads', () => ({
-  useV2Workloads: () => {
-    const [workloads, setWorkloads] = createSignal(mockV2Workloads as any);
-    setMockV2WorkloadsSignal = (next) => setWorkloads(next as any);
+vi.mock('@/hooks/useWorkloads', () => ({
+  useWorkloads: () => {
+    const [workloads, setWorkloads] = createSignal(mockWorkloads as any);
+    setMockWorkloadsSignal = (next) => setWorkloads(next as any);
     return { workloads, refetch: vi.fn() };
   },
 }));
@@ -185,8 +185,8 @@ describe('Dashboard performance contract', () => {
     vi.clearAllMocks();
     localStorage.clear();
     mockLocationSearch = '';
-    mockV2Workloads = [];
-    setMockV2WorkloadsSignal = null;
+    mockWorkloads = [];
+    setMockWorkloadsSignal = null;
     guestRowMountCount = 0;
     guestRowUnmountCount = 0;
   });
@@ -207,10 +207,10 @@ describe('Dashboard performance contract', () => {
   describe('Baseline structural contracts', () => {
     it('renders Profile S dashboard table and guest rows', async () => {
       mockLocationSearch = '?type=all';
-      mockV2Workloads = makeGuests(PROFILES.S);
+      mockWorkloads = makeGuests(PROFILES.S);
 
       const { container, getByTestId } = render(() => (
-        <Dashboard vms={[]} containers={[]} nodes={[]} useV2Workloads />
+        <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -228,10 +228,10 @@ describe('Dashboard performance contract', () => {
   describe('Workload windowing contracts', () => {
     it('Profile M: caps mounted guest rows when windowing is active', async () => {
       mockLocationSearch = '?type=all';
-      mockV2Workloads = makeGuests(PROFILES.M);
+      mockWorkloads = makeGuests(PROFILES.M);
 
       const { container } = render(() => (
-        <Dashboard vms={[]} containers={[]} nodes={[]} useV2Workloads />
+        <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -246,10 +246,10 @@ describe('Dashboard performance contract', () => {
 
     it('Profile L: keeps mounted guest rows capped under large load', async () => {
       mockLocationSearch = '?type=all';
-      mockV2Workloads = makeGuests(PROFILES.L);
+      mockWorkloads = makeGuests(PROFILES.L);
 
       const { container } = render(() => (
-        <Dashboard vms={[]} containers={[]} nodes={[]} useV2Workloads />
+        <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -267,10 +267,10 @@ describe('Dashboard performance contract', () => {
 
     it('Profile S: renders all guest rows without windowing', async () => {
       mockLocationSearch = '?type=all';
-      mockV2Workloads = makeGuests(PROFILES.S);
+      mockWorkloads = makeGuests(PROFILES.S);
 
       const { container } = render(() => (
-        <Dashboard vms={[]} containers={[]} nodes={[]} useV2Workloads />
+        <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -281,10 +281,10 @@ describe('Dashboard performance contract', () => {
     it('unchanged poll-like updates do not remount table rows', async () => {
       mockLocationSearch = '?type=all';
       const guests = makeGuests(40);
-      mockV2Workloads = guests;
+      mockWorkloads = guests;
 
       const { container } = render(() => (
-        <Dashboard vms={[]} containers={[]} nodes={[]} useV2Workloads />
+        <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -295,7 +295,7 @@ describe('Dashboard performance contract', () => {
       const unmountsAfterInitialRender = guestRowUnmountCount;
       expect(mountsAfterInitialRender).toBe(40);
 
-      pushMockV2Workloads(guests.map((guest) => ({ ...guest })));
+      pushMockWorkloads(guests.map((guest) => ({ ...guest })));
 
       await waitFor(() => {
         expect(getGuestRowCount(container)).toBe(40);
@@ -318,10 +318,10 @@ describe('Dashboard performance contract', () => {
 
       for (const mode of ['all', 'vm', 'lxc', 'docker'] as const) {
         mockLocationSearch = `?type=${mode}`;
-        mockV2Workloads = profileGuests;
+        mockWorkloads = profileGuests;
 
         const { container, unmount } = render(() => (
-          <Dashboard vms={[]} containers={[]} nodes={[]} useV2Workloads />
+          <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
         ));
 
         await waitFor(() => {

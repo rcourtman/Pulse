@@ -49,7 +49,7 @@ run_permutation() {
 run_permutation \
   "Default Mode" \
   "go build ./..." \
-  "go test ./internal/api/... -run \"TestRouterRouteInventory|TestResourceV2|TestTenantMiddleware_Enforcement_Permanent|TestWebSocketIsolation_Permanent|TestStateIsolation_Permanent|TestResourceIsolation_Permanent\" -count=1"
+  "go test ./internal/api/... -run \"TestRouterRouteInventory|TestResource|TestTenantMiddleware_Enforcement_Permanent|TestWebSocketIsolation_Permanent|TestStateIsolation_Permanent|TestResourceIsolation_Permanent\" -count=1"
 
 run_permutation \
   "Monitoring Subsystem" \

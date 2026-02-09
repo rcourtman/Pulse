@@ -99,8 +99,8 @@ func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 		}
 	}
 
-	// Wire tenant state provider to v2 resource handlers
-	if r.resourceV2Handlers != nil {
-		r.resourceV2Handlers.SetTenantStateProvider(NewMultiTenantStateProvider(mtm, r.monitor))
+	// Wire tenant state provider to resource handlers
+	if r.resourceHandlers != nil {
+		r.resourceHandlers.SetTenantStateProvider(NewMultiTenantStateProvider(mtm, r.monitor))
 	}
 }
