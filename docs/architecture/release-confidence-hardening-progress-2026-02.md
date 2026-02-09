@@ -22,10 +22,10 @@ Date: 2026-02-09
 |---|---|---|---|---|---|---|
 | RC-00 | Scope Freeze + Evidence Discipline | DONE | Claude | Claude | APPROVED | RC-00 section |
 | RC-01 | Toolchain Pinning (Go stdlib vuln clear) | DONE | SEC lane | Claude | APPROVED | RC-01 section |
-| RC-02 | Security Re-Scan + Verdict Upgrade | READY |  |  |  | RC-02 section |
+| RC-02 | Security Re-Scan + Verdict Upgrade | DONE | Claude | Claude | APPROVED | RC-02 section |
 | RC-03 | Hosted Signup Partial Provisioning Cleanup | DONE | SEC lane | Claude | APPROVED | RC-03 section |
 | RC-04 | Frontend Release-Test Hygiene (No network noise) | DONE | Claude | Claude | APPROVED | RC-04 section |
-| RC-05 | Full Certification Replay | BLOCKED |  |  |  | RC-05 section |
+| RC-05 | Full Certification Replay | READY |  |  |  | RC-05 section |
 | RC-06 | Release Artifact + Docker Validation | BLOCKED |  |  |  | RC-06 section |
 | RC-07 | Final GO Verdict + Docs Alignment | BLOCKED |  |  |  | RC-07 section |
 
@@ -220,17 +220,72 @@ Evidence:
 ## RC-02 Checklist: Security Re-Scan + Verdict Upgrade
 
 Blocked by:
-- RC-01
+- RC-01 (DONE)
 
-- [ ] `gitleaks detect --no-git --source .` -> exit 0
-- [ ] `govulncheck ./...` -> exit 0
-- [ ] `cd frontend-modern && npm audit --omit=dev` -> exit 0
-- [ ] Update security gate tracker with rerun evidence.
-- [ ] If all conditions are resolved, record updated security verdict `GO`.
+- [x] `gitleaks detect --no-git --source .` -> exit 0 (no leaks detected, ~6.97 MB scanned)
+- [x] `govulncheck ./...` -> exit 0 (No vulnerabilities found — all 3 previous P1 stdlib findings cleared by go1.25.7)
+- [x] `cd frontend-modern && npm audit --omit=dev` -> exit 0 (0 vulnerabilities)
+- [x] Update security gate tracker with rerun evidence.
+  - The security gate tracker (`release-security-gate-progress-2026-02.md`) already contains the addendum upgrading the verdict from `GO_WITH_CONDITIONS` to `GO` with evidence of go1.25.7 upgrade and govulncheck exit 0. No further update needed.
+- [x] If all conditions are resolved, record updated security verdict `GO`.
+  - **Security verdict is `GO`** — all 3 P1 conditions from SEC-04 have been resolved:
+    1. Go toolchain upgraded to 1.25.7 (RC-01)
+    2. Hosted signup cleanup implemented (RC-03)
+    3. govulncheck now exits 0 (0 findings)
+
+### Scan Results Summary
+
+| Scan | Command | Exit Code | Findings |
+|------|---------|-----------|----------|
+| Secrets | `gitleaks detect --no-git --source .` | 0 | 0 leaks |
+| Go deps | `govulncheck ./...` | 0 | 0 vulnerabilities |
+| Frontend deps | `npm audit --omit=dev` | 0 | 0 vulnerabilities |
+
+### Verdict Posture Change
+
+The security gate was already `GO` (addendum in SEC-04 tracker). RC-02 independently confirms this:
+- Previous SEC-02 found 3 reachable P1 Go stdlib vulns (go1.25.5) → now 0 (go1.25.7)
+- Previous SEC-03 found P1 code gap in HandlePublicSignup → now resolved (RC-03)
+- **No new findings.** Security posture is strictly improved.
+
+### Review Gates
+
+- [x] P0 PASS — All 3 scans exit 0. Zero findings across all categories.
+- [x] P1 PASS — Previous P1 conditions fully resolved. Security verdict confirmed `GO`.
+- [x] P2 PASS — Tracker updated; evidence complete.
+- [x] Verdict recorded
+
+### RC-02 Review Record
+
+```
+Files changed:
+- docs/architecture/release-confidence-hardening-progress-2026-02.md: RC-02 scan evidence and verdict confirmation
+
+Commands run + exit codes:
+1. `gitleaks detect --no-git --source .` -> exit 0
+2. `govulncheck ./...` -> exit 0
+3. `cd frontend-modern && npm audit --omit=dev` -> exit 0
+
+Gate checklist:
+- P0: PASS (all 3 scans clean)
+- P1: PASS (all SEC-04 conditions resolved, verdict GO confirmed)
+- P2: PASS (tracker accurate)
+
+Verdict: APPROVED
+
+Commit:
+- (pending checkpoint)
+
+Residual risk:
+- None. All previous P1 security findings resolved.
+
+Rollback:
+- Revert tracker changes only (no code changes in this packet).
+```
 
 Evidence:
-- Commands run + exit codes:
-- Commit:
+- Commands run + exit codes: see review record
+- Commit: (pending)
 
 ## RC-03 Checklist: Hosted Signup Partial Provisioning Cleanup
 
@@ -356,7 +411,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- (pending checkpoint)
+- `1636752a` (docs(RC-04): frontend test hygiene verified — zero network noise, 707/707 pass)
 
 Residual risk:
 - P2: Import resolution errors in stderr from parallel in-flight DashboardPanels work. Does not affect test outcomes.
@@ -367,7 +422,7 @@ Rollback:
 
 Evidence:
 - Commands run + exit codes: see review record
-- Commit: (pending)
+- Commit: `1636752a`
 
 ## RC-05 Checklist: Full Certification Replay
 
