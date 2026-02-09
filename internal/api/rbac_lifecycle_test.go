@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -86,6 +87,69 @@ func TestRBACLifecycle_HandleDeleteOrgRemovesTenantManager(t *testing.T) {
 
 	if got := provider.ManagerCount(); got != 0 {
 		t.Fatalf("expected empty RBAC manager cache after org delete, got %d", got)
+	}
+}
+
+func TestOrgLifecycle_DeletionCleansUpAuditLogger(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	baseDir := t.TempDir()
+	manager := audit.NewTenantLoggerManager(baseDir, nil)
+	SetTenantAuditManager(manager)
+	defer SetTenantAuditManager(nil)
+
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() {
+		if err := provider.Close(); err != nil {
+			t.Errorf("provider close failed: %v", err)
+		}
+	})
+
+	handlers := NewOrgHandlers(persistence, nil, provider)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	handlers.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
+	}
+
+	if err := manager.Log("acme", "org_created", "alice", "127.0.0.1", "/api/orgs", true, "initial event"); err != nil {
+		t.Fatalf("initial tenant audit log failed: %v", err)
+	}
+	if _, exists := manager.GetAllLoggers()["acme"]; !exists {
+		t.Fatalf("expected tenant audit logger to be initialized for acme")
+	}
+	if err := manager.Log("acme", "org_updated", "alice", "127.0.0.1", "/api/orgs/acme", true, "verify logger reuse"); err != nil {
+		t.Fatalf("second tenant audit log failed: %v", err)
+	}
+
+	deleteReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme", nil), "alice")
+	deleteReq.SetPathValue("id", "acme")
+	deleteRec := httptest.NewRecorder()
+	handlers.HandleDeleteOrg(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("delete failed: %d %s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	if _, exists := manager.GetAllLoggers()["acme"]; exists {
+		t.Fatalf("expected tenant audit logger to be removed after org delete")
+	}
+
+	if err := manager.Log("acme", "post_delete_event", "alice", "127.0.0.1", "/api/orgs/acme", true, "recreate logger"); err != nil {
+		t.Fatalf("tenant audit log after delete failed: %v", err)
+	}
+	if _, exists := manager.GetAllLoggers()["acme"]; !exists {
+		t.Fatalf("expected tenant audit logger to be recreated after post-delete log")
+	}
+	if got := len(manager.GetAllLoggers()); got != 1 {
+		t.Fatalf("expected 1 cached tenant audit logger after recreation, got %d", got)
 	}
 }
 

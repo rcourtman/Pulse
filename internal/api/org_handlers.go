@@ -303,6 +303,9 @@ func (h *OrgHandlers) HandleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 	if h.rbacProvider != nil {
 		_ = h.rbacProvider.RemoveTenant(orgID)
 	}
+	if mgr := GetTenantAuditManager(); mgr != nil {
+		mgr.RemoveTenantLogger(orgID)
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
