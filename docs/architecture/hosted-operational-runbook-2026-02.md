@@ -112,48 +112,131 @@ When no persisted billing record exists for an org, runtime default is:
 - `plan_version=trial`
 - Empty `capabilities`, `limits`, `meters_enabled`
 
-## Section 4: Escalation Procedures
+## Section 4: Incident Response Playbooks
 
 ### P1: Cross-tenant data leak
 
-1. Immediately suspend affected org(s) using lifecycle admin endpoint.
-2. Freeze sensitive admin changes until scope is known.
-3. Notify security response owner immediately.
-4. Preserve logs and audit trail for incident timeline.
-5. Treat W4 RBAC isolation status as first triage checkpoint.
+**Detection**: User report, anomalous cross-org API access patterns, or RBAC isolation test failure.
+
+**Response SLA**: Acknowledge within 15 minutes, contain within 1 hour.
+
+**Immediate actions**:
+1. Suspend affected org(s) via `POST /api/admin/orgs/{id}/suspend` with reason `security_incident`.
+2. Freeze all admin API access except read-only operations.
+3. Notify security response owner immediately (out-of-band communication).
+4. Preserve all logs and audit entries — do NOT rotate or clean up during incident.
+
+**Investigation**:
+1. Verify TenantRBACProvider isolation — confirm per-org SQLite database boundaries.
+2. Check for shared-state leaks in monitoring, metrics, or config paths.
+3. Review API access logs for cross-org resource access patterns.
+4. Verify `data/orgs/<org-id>/` directory isolation.
+
+**Resolution**:
+1. Patch isolation gap and deploy fix.
+2. Unsuspend affected orgs only after fix is verified.
+3. Notify affected tenants of data exposure scope.
+4. Post-incident review within 48 hours.
 
 ### P2: Billing state inconsistency
 
-1. Compare effective entitlement behavior vs persisted billing payload.
-2. Apply manual billing override via admin billing-state API.
-3. Investigate `DatabaseSource` cache staleness/TTL behavior.
-4. Confirm corrected state after cache propagation window.
+**Detection**: Tenant reports unexpected feature gating, or admin observes billing/entitlement mismatch.
+
+**Response SLA**: Acknowledge within 1 hour, resolve within 4 hours.
+
+**Immediate actions**:
+1. Read current billing state: `GET /api/admin/orgs/{id}/billing-state`.
+2. Compare with expected entitlement behavior in the application.
+3. Check `DatabaseSource` cache age — TTL is 1 hour.
+
+**Investigation**:
+1. Verify `billing.json` file contents in `data/orgs/<org-id>/billing.json`.
+2. Check for file corruption or write failures in billing store.
+3. Review recent billing state PUT audit log entries.
+
+**Resolution**:
+1. Apply manual billing override: `PUT /api/admin/orgs/{id}/billing-state` with correct state.
+2. Force cache refresh by restarting Pulse process if TTL wait is unacceptable.
+3. Verify corrected behavior from tenant perspective.
 
 ### P3: Provisioning failures
 
+**Detection**: `pulse_hosted_provisions_total{status="failure"}` counter increasing, or user signup returning 500.
+
+**Response SLA**: Acknowledge within 2 hours, resolve within 8 hours.
+
+**Immediate actions**:
 1. Check available disk space on hosted data volume.
-2. Verify tenant directory permissions for `data/orgs/`.
-3. Check RBAC database lock/contention conditions.
-4. Retry provisioning only after root cause is resolved.
+2. Verify `data/orgs/` directory exists and is writable.
+
+**Investigation**:
+1. Check RBAC database lock/contention in `TenantRBACProvider`.
+2. Review Pulse process logs for `tenant_init_failed` or `create_failed` error codes.
+3. Verify file system permissions on the data directory.
+4. Check for hitting OS file descriptor limits.
+
+**Resolution**:
+1. Resolve root cause (disk space, permissions, locks).
+2. Retry provisioning only after root cause is confirmed fixed.
+3. If partial provisioning occurred, verify rollback cleaned up orphan directories.
 
 ### P4: Signup abuse
 
-1. Review spike pattern by source IP and request volume.
-2. Tune signup limiter settings (baseline: `5/hr/IP`).
-3. Add temporary source blocking at edge/LB where needed.
+**Detection**: `rate(pulse_hosted_signups_total[5m]) > 2` alert, or abnormal IP patterns in access logs.
+
+**Response SLA**: Acknowledge within 4 hours.
+
+**Immediate actions**:
+1. Review source IP distribution in access logs.
+2. Confirm abuse pattern (same IP, rotating IPs, bot signatures).
+
+**Investigation**:
+1. Check current rate limiter effectiveness (baseline: `5/hr/IP`).
+2. Identify whether legitimate users are being affected.
+
+**Resolution**:
+1. Tune signup rate limiter settings if needed.
+2. Add temporary IP blocking at load balancer for confirmed abusers.
+3. Consider CAPTCHA or email verification for future mitigation.
 4. Preserve abuse telemetry for rate-limit policy tuning.
 
-## Section 5: SLO Definitions
+## Section 5: SLO Definitions and Alert Thresholds
 
-- API availability:
-  - `99.9%` for hosted admin endpoints.
-  - `99.5%` for public signup endpoint.
-- Provisioning latency:
-  - P95 `< 2s` for tenant creation.
-- Billing propagation delay:
-  - `< 1 hour` (bounded by `DatabaseSource` cache TTL).
-- Lifecycle transition latency:
-  - P95 `< 500ms`.
+### SLO targets
+
+| SLO | Target | Measurement window | Alert threshold |
+|-----|--------|-------------------|-----------------|
+| Admin API availability | 99.9% | Rolling 7d | < 99.5% over 1h triggers P2 |
+| Public signup availability | 99.5% | Rolling 7d | < 99.0% over 1h triggers P3 |
+| Provisioning latency (P95) | < 2s | Rolling 24h | > 5s over 15min triggers P3 |
+| Billing propagation delay | < 1 hour | Per-event | > 2h triggers P2 |
+| Lifecycle transition latency (P95) | < 500ms | Rolling 24h | > 2s over 15min triggers P3 |
+
+### Prometheus alert queries (private beta)
+
+**Signup rate anomaly** (possible abuse):
+```
+rate(pulse_hosted_signups_total[5m]) > 2
+```
+Action: Review source IPs. If bot pattern confirmed, trigger P4 signup abuse playbook.
+
+**Provisioning failure rate**:
+```
+rate(pulse_hosted_provisions_total{status="failure"}[15m]) / rate(pulse_hosted_provisions_total[15m]) > 0.1
+```
+Action: If > 10% failure rate sustained 15min, trigger P3 provisioning failure playbook.
+
+**Active tenant count regression**:
+```
+delta(pulse_hosted_active_tenants[1h]) < -5
+```
+Action: Investigate tenant data loss or accidental bulk deletion. Trigger P1 if confirmed.
+
+**Lifecycle transition volume anomaly**:
+```
+rate(pulse_hosted_lifecycle_transitions_total{to_status="suspended"}[1h]) > 5
+```
+Action: Review if automated suspension is occurring. Verify operator intent.
 
 ## Section 6: Security Baseline
 
