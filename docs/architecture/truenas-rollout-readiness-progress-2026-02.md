@@ -33,6 +33,7 @@ Date: 2026-02-09
 | TRR-04 | Soak/Failure-Injection Validation | DONE | Codex | Claude | APPROVED | TRR-04 Review Evidence |
 | TRR-05 | Final Rollout Verdict | DONE | Claude | Claude | APPROVED | TRR-05 Review Evidence |
 | TRR-06 | Typed Error Classification Hardening | DONE | Codex | Claude | APPROVED | TRR-06 Review Evidence |
+| TRR-07 | Phase-1 Lifecycle Integration Tests | DONE | Codex | Claude | APPROVED | TRR-07 Review Evidence |
 
 ---
 
@@ -369,11 +370,13 @@ No blocking issues remain. Recommend proceeding with Phase 1 (internal/dev deplo
 - TRR-04: `b5cb6c19`
 - TRR-05: `6d3aa97d`
 - TRR-06: `2acd7e02`
+- TRR-07: `57e6d0d7`
 
 ## Current Recommended Next Packet
 
-- LANE COMPLETE. All packets DONE/APPROVED including post-GO hardening. GO verdict reaffirmed.
-- Next action: Begin Phase 1 deployment (internal/dev) per canary rollout strategy.
+- LANE COMPLETE. All packets DONE/APPROVED including post-GO hardening and Phase-1 lifecycle evidence. GO verdict reaffirmed.
+- All 3 runbook lifecycle paths (feature flag gate, enable/disable cycle, kill-switch) have deterministic test coverage.
+- Next action: Execute Phase 1 operational deployment (internal/dev, 48h soak) per canary rollout strategy.
 
 ---
 
@@ -440,4 +443,63 @@ Residual risk:
 
 Rollback:
 - Revert commit `2acd7e02`. This restores the string-based `classifyTrueNASError` — functionally equivalent, just less robust.
+```
+
+---
+
+## TRR-07 Checklist: Phase-1 Lifecycle Integration Tests
+
+- [x] Feature flag gate test: `Start()` is a no-op when `IsFeatureEnabled()` returns false.
+- [x] Enable/disable cycle test: flag on→poll→stop→flag off→restart→no poll activity.
+- [x] Kill-switch test: all connections removed→providers drain to 0→no further polling.
+- [x] All 3 tests use deterministic `waitForCondition` (no raw `time.Sleep`).
+- [x] All existing TrueNAS tests pass unchanged (no regression).
+- [x] Race detector clean across all TrueNAS monitoring tests.
+
+### Required Tests
+
+- [x] `go build ./...` -> exit 0
+- [x] `go test ./internal/monitoring/... -run "TrueNASPollerFeatureFlagGate|TrueNASPollerEnableDisableCycle|TrueNASPollerKillSwitchAllConnectionsRemoved" -count=1 -v` -> exit 0 (3 PASS)
+- [x] `go test ./internal/monitoring/... -run "TrueNAS" -count=1 -race` -> exit 0 (no races)
+- [x] `go test ./internal/truenas/... -count=1` -> exit 0
+- [x] `go test ./internal/api/... -run "TrueNAS" -count=1` -> exit 0
+
+### Review Gates
+
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### TRR-07 Review Evidence
+
+```markdown
+Files changed:
+- `internal/monitoring/truenas_poller_test.go`: Added 3 Phase-1 lifecycle integration tests (132 lines, 0 production code changes):
+  - `TestTrueNASPollerFeatureFlagGate` (line 50): Sets flag=false, verifies Start() is a no-op (cancel==nil, stopped channel pre-closed, 0 requests after 200ms, safe Stop()). Exercises `truenas_poller.go:53` gate.
+  - `TestTrueNASPollerEnableDisableCycle` (line 90): Enables flag → Start → waits for provider + 5 requests → Stop → verifies resources ingested → disables flag → Start again → verifies cancel==nil, request count unchanged, resource count unchanged. Proves runbook §1 (Enable) + §2 (Disable) lifecycle.
+  - `TestTrueNASPollerKillSwitchAllConnectionsRemoved` (line 138): Starts with 1 connection → waits for provider + polling → saves empty config → waits for providers to drain to 0 → verifies request count stable for 200ms → clean Stop. Proves runbook §3 (Kill-Switch) lifecycle.
+
+Commands run + exit codes (reviewer-rerun):
+1. `go build ./...` -> exit 0
+2. `go test ./internal/monitoring/... -run "TrueNASPollerFeatureFlagGate|TrueNASPollerEnableDisableCycle|TrueNASPollerKillSwitchAllConnectionsRemoved" -count=1 -v` -> exit 0 (3 PASS, 0.70s)
+3. `go test ./internal/monitoring/... -run "TrueNAS" -count=1 -race` -> exit 0 (no races, 3.52s)
+4. `go test ./internal/truenas/... -count=1` -> exit 0 (0.35s)
+5. `go test ./internal/api/... -run "TrueNAS" -count=1` -> exit 0 (0.40s)
+
+Gate checklist:
+- P0: PASS (1 file changed with expected edits, all 5 validation commands rerun by reviewer with exit 0, checkpoint commit `57e6d0d7` created with only scoped file)
+- P1: PASS (all 3 runbook lifecycle paths tested deterministically: feature flag gate at truenas_poller.go:53 verified as no-op, enable/disable cycle proves flag→poll→stop→disable→no-poll, kill-switch proves empty config→providers drain→polling stops; existing 14 TrueNAS monitoring tests + 13 error classification subtests + 26 truenas package tests + 6 API tests all pass unchanged; race detector clean)
+- P2: PASS (progress tracker updated with packet board entry, checkpoint commit, and review evidence; total TrueNAS test count now 17 monitoring tests + 13 classification subtests)
+
+Verdict: APPROVED
+
+Commit:
+- `57e6d0d7` feat(TRR-07): add Phase-1 lifecycle integration tests for TrueNAS poller
+
+Residual risk:
+- None. All 3 runbook lifecycle paths (enable, disable, kill-switch) now have deterministic test coverage.
+
+Rollback:
+- Revert commit `57e6d0d7`. This removes the 3 lifecycle tests — no production code is affected.
 ```
