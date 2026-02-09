@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -444,21 +443,89 @@ func TestResourceContextUnifiedProvider_NilRegistry(t *testing.T) {
 }
 
 func TestResourceContextUnifiedProvider_ResourceCounts(t *testing.T) {
-	legacy, unified := resourceContextTestAdaptersFromSnapshot(resourceContextTestSnapshot())
+	registry := unifiedresources.NewRegistry(nil)
+	now := time.Now().UTC()
 
-	if got, want := len(unified.GetAll()), len(legacy.GetAll()); got != want {
-		t.Fatalf("GetAll() count mismatch: unified=%d legacy=%d", got, want)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeHost,
+				Name:     "host-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{
+		{
+			SourceID: "vm-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeVM,
+				Name:     "vm-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+		{
+			SourceID: "ct-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeLXC,
+				Name:     "ct-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+	unified := unifiedresources.NewUnifiedAIAdapter(registry)
+
+	if got, want := len(unified.GetAll()), 3; got != want {
+		t.Fatalf("GetAll() count mismatch: got=%d want=%d", got, want)
 	}
 }
 
 func TestResourceContextUnifiedProvider_InfrastructureWorkloadSplit(t *testing.T) {
-	legacy, unified := resourceContextTestAdaptersFromSnapshot(resourceContextTestSnapshot())
+	registry := unifiedresources.NewRegistry(nil)
+	now := time.Now().UTC()
 
-	if got, want := len(unified.GetInfrastructure()), len(legacy.GetInfrastructure()); got != want {
-		t.Fatalf("GetInfrastructure() count mismatch: unified=%d legacy=%d", got, want)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeHost,
+				Name:     "host-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{
+		{
+			SourceID: "vm-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeVM,
+				Name:     "vm-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+		{
+			SourceID: "ct-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeLXC,
+				Name:     "ct-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+	unified := unifiedresources.NewUnifiedAIAdapter(registry)
+
+	if got, want := len(unified.GetInfrastructure()), 1; got != want {
+		t.Fatalf("GetInfrastructure() count mismatch: got=%d want=%d", got, want)
 	}
-	if got, want := len(unified.GetWorkloads()), len(legacy.GetWorkloads()); got != want {
-		t.Fatalf("GetWorkloads() count mismatch: unified=%d legacy=%d", got, want)
+	if got, want := len(unified.GetWorkloads()), 2; got != want {
+		t.Fatalf("GetWorkloads() count mismatch: got=%d want=%d", got, want)
 	}
 }
 
@@ -554,78 +621,6 @@ func TestResourceContextUnifiedProvider_FindContainerHost(t *testing.T) {
 	}
 	if got := unified.FindContainerHost("abc123"); got != "docker-node-1" {
 		t.Fatalf("FindContainerHost(abc123) = %q, want docker-node-1", got)
-	}
-}
-
-func resourceContextTestAdaptersFromSnapshot(snapshot models.StateSnapshot) (*unifiedresources.AIAdapter, *unifiedresources.UnifiedAIAdapter) {
-	registry := unifiedresources.NewRegistry(nil)
-	legacy := unifiedresources.NewAIAdapter(registry)
-	unified := unifiedresources.NewUnifiedAIAdapter(registry)
-	legacy.PopulateFromSnapshot(snapshot)
-	return legacy, unified
-}
-
-func resourceContextTestSnapshot() models.StateSnapshot {
-	now := time.Now().UTC()
-	return models.StateSnapshot{
-		Nodes: []models.Node{
-			{
-				ID:       "node-1",
-				Name:     "node-1",
-				Instance: "pve-a",
-				Status:   "online",
-				CPU:      0.35,
-				Memory:   models.Memory{Total: 100, Used: 35, Usage: 0.35},
-				LastSeen: now,
-			},
-		},
-		VMs: []models.VM{
-			{
-				ID:       "vm-101",
-				VMID:     101,
-				Name:     "vm-101",
-				Node:     "node-1",
-				Instance: "pve-a",
-				Status:   "running",
-				CPU:      0.75,
-				Memory:   models.Memory{Total: 100, Used: 70, Usage: 0.70},
-				LastSeen: now,
-			},
-		},
-		Containers: []models.Container{
-			{
-				ID:       "ct-201",
-				VMID:     201,
-				Name:     "ct-201",
-				Node:     "node-1",
-				Instance: "pve-a",
-				Status:   "running",
-				CPU:      0.40,
-				Memory:   models.Memory{Total: 100, Used: 45, Usage: 0.45},
-				LastSeen: now,
-			},
-		},
-		DockerHosts: []models.DockerHost{
-			{
-				ID:       "docker-host-1",
-				Hostname: "docker-host-1",
-				Status:   "online",
-				CPUUsage: 0.20,
-				Memory:   models.Memory{Total: 100, Used: 30, Usage: 0.30},
-				LastSeen: now,
-				Containers: []models.DockerContainer{
-					{
-						ID:            "docker-ctr-1",
-						Name:          "docker-ctr-1",
-						State:         "running",
-						CPUPercent:    0.50,
-						MemoryLimit:   100,
-						MemoryUsage:   20,
-						MemoryPercent: 0.20,
-					},
-				},
-			},
-		},
 	}
 }
 
