@@ -1,6 +1,8 @@
 import { For, Match, Switch, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
+import { INFRASTRUCTURE_PATH, WORKLOADS_PATH } from '@/routing/resourceLinks';
+import { METRIC_THRESHOLDS } from '@/utils/metricThresholds';
 
 const PANEL_BASE_CLASS =
   'border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-5';
@@ -21,6 +23,17 @@ function statusBadgeClass(tone: StatusTone): string {
     default:
       return `${base} border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-600 dark:bg-gray-700/60 dark:text-gray-400`;
   }
+}
+
+function infrastructureCpuBarClass(percent: number): string {
+  const thresholds = METRIC_THRESHOLDS.cpu;
+  if (percent > thresholds.critical) return 'bg-red-500/60 dark:bg-red-500/50';
+  if (percent > thresholds.warning) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
+  return 'bg-green-500/60 dark:bg-green-500/50';
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value)}%`;
 }
 
 export default function Dashboard() {
@@ -60,6 +73,8 @@ export default function Dashboard() {
   const isEmpty = createMemo(
     () => initialDataReceived() && resources().length === 0 && !hasConnectionError(),
   );
+  const infrastructureTopCPU = createMemo(() => overview().infrastructure.topCPU.slice(0, 5));
+  const workloadTypes = createMemo(() => Object.entries(overview().workloads.byType));
 
   const statusDistribution = createMemo(() => {
     const byStatus = overview().health.byStatus || {};
@@ -209,7 +224,143 @@ export default function Dashboard() {
               </div>
             </section>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" />
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <section
+                class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`}
+                aria-labelledby="infrastructure-panel-heading"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <h2
+                    id="infrastructure-panel-heading"
+                    class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100"
+                  >
+                    Infrastructure
+                  </h2>
+                  <a
+                    href={INFRASTRUCTURE_PATH}
+                    aria-label="View all infrastructure"
+                    class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    View all →
+                  </a>
+                </div>
+
+                <div class="mt-4 space-y-4">
+                  <div class="space-y-1">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
+                      Total infrastructure
+                    </p>
+                    <p class="text-lg sm:text-xl font-semibold font-mono text-gray-900 dark:text-gray-100">
+                      {overview().infrastructure.total}
+                    </p>
+                    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+                      <span class="font-medium text-emerald-600 dark:text-emerald-400">
+                        Online {overview().infrastructure.byStatus.online ?? 0}
+                      </span>
+                      <span class="font-medium text-gray-500 dark:text-gray-400">
+                        Offline {overview().infrastructure.byStatus.offline ?? 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  <Switch>
+                    <Match when={overview().infrastructure.total === 0}>
+                      <p class="text-sm text-gray-500 dark:text-gray-400">No infrastructure resources</p>
+                    </Match>
+                    <Match when={overview().infrastructure.total > 0}>
+                      <div class="space-y-2">
+                        <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
+                          Top CPU consumers
+                        </p>
+                        <ul class="space-y-2">
+                          <For each={infrastructureTopCPU()}>
+                            {(entry) => (
+                              <li class="space-y-1">
+                                <div class="flex items-center justify-between gap-3">
+                                  <span class="truncate text-sm text-gray-700 dark:text-gray-200">{entry.name}</span>
+                                  <span class="text-xs sm:text-sm font-mono font-semibold text-gray-700 dark:text-gray-200">
+                                    {formatPercent(entry.percent)}
+                                  </span>
+                                </div>
+                                <div class="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700/70">
+                                  <div
+                                    class={`h-full rounded ${infrastructureCpuBarClass(entry.percent)}`}
+                                    style={{
+                                      width: `${Math.max(0, Math.min(100, entry.percent))}%`,
+                                    }}
+                                  />
+                                </div>
+                              </li>
+                            )}
+                          </For>
+                        </ul>
+                      </div>
+                    </Match>
+                  </Switch>
+                </div>
+              </section>
+
+              <section
+                class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`}
+                aria-labelledby="workloads-panel-heading"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <h2
+                    id="workloads-panel-heading"
+                    class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100"
+                  >
+                    Workloads
+                  </h2>
+                  <a
+                    href={WORKLOADS_PATH}
+                    aria-label="View all workloads"
+                    class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    View all →
+                  </a>
+                </div>
+
+                <div class="mt-4 space-y-4">
+                  <div class="space-y-1">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
+                      Total workloads
+                    </p>
+                    <p class="text-lg sm:text-xl font-semibold font-mono text-gray-900 dark:text-gray-100">
+                      {overview().workloads.total}
+                    </p>
+                    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+                      <span class="font-medium text-emerald-600 dark:text-emerald-400">
+                        Running {overview().workloads.running}
+                      </span>
+                      <span class="font-medium text-gray-500 dark:text-gray-400">
+                        Stopped {overview().workloads.stopped}
+                      </span>
+                    </div>
+                  </div>
+
+                  <Switch>
+                    <Match when={overview().workloads.total === 0}>
+                      <p class="text-sm text-gray-500 dark:text-gray-400">No workloads</p>
+                    </Match>
+                    <Match when={overview().workloads.total > 0}>
+                      <div class="space-y-2">
+                        <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Type breakdown</p>
+                        <ul class="space-y-1">
+                          <For each={workloadTypes()}>
+                            {([type, count]) => (
+                              <li class="flex items-center justify-between gap-3 text-sm">
+                                <span class="text-gray-700 dark:text-gray-200">{type}</span>
+                                <span class="font-mono font-semibold text-gray-700 dark:text-gray-200">{count}</span>
+                              </li>
+                            )}
+                          </For>
+                        </ul>
+                      </div>
+                    </Match>
+                  </Switch>
+                </div>
+              </section>
+            </div>
           </section>
         </Match>
       </Switch>
