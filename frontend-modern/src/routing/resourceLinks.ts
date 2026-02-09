@@ -9,6 +9,8 @@ export const WORKLOADS_PATH = '/workloads';
 export const STORAGE_V2_PATH = '/storage-v2';
 export const BACKUPS_V2_PATH = '/backups-v2';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
+export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
+export const AI_PATROL_PATH = '/ai';
 
 export const INFRASTRUCTURE_QUERY_PARAMS = {
   source: 'source',

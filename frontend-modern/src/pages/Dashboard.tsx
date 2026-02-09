@@ -2,6 +2,8 @@ import { For, Match, Switch, createEffect, createMemo, createSignal, onCleanup }
 import { useWebSocket } from '@/App';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import {
+  ALERTS_OVERVIEW_PATH,
+  AI_PATROL_PATH,
   buildBackupsPath,
   buildStoragePath,
   INFRASTRUCTURE_PATH,
@@ -465,6 +467,50 @@ export default function Dashboard() {
                 </div>
               </section>
             </div>
+
+            <section class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`} aria-labelledby="alerts-panel-heading">
+              <div class="flex items-center justify-between gap-3">
+                <h2 id="alerts-panel-heading" class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  Alerts & Findings
+                </h2>
+                <a
+                  href={ALERTS_OVERVIEW_PATH}
+                  aria-label="View all alerts"
+                  class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  View all →
+                </a>
+              </div>
+              <div class="mt-4 flex flex-wrap items-center gap-6">
+                <div class="space-y-1">
+                  <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Critical</p>
+                  <p class="text-lg sm:text-xl font-semibold font-mono text-red-600 dark:text-red-400">
+                    {overview().alerts.activeCritical}
+                  </p>
+                </div>
+                <div class="space-y-1">
+                  <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Warning</p>
+                  <p class="text-lg sm:text-xl font-semibold font-mono text-amber-600 dark:text-amber-400">
+                    {overview().alerts.activeWarning}
+                  </p>
+                </div>
+                <div class="space-y-1">
+                  <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Total active</p>
+                  <p class="text-lg sm:text-xl font-semibold font-mono text-gray-900 dark:text-gray-100">
+                    {overview().alerts.total}
+                  </p>
+                </div>
+                <div class="ml-auto">
+                  <a
+                    href={AI_PATROL_PATH}
+                    aria-label="View patrol findings"
+                    class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    View findings →
+                  </a>
+                </div>
+              </div>
+            </section>
           </section>
         </Match>
       </Switch>

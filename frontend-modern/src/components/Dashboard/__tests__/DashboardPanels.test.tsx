@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { computeDashboardOverview } from '@/hooks/useDashboardOverview';
 
@@ -157,5 +158,58 @@ describe('Dashboard panels data contract', () => {
     expect(overview.storage.totalUsed).toBe(3070);
     expect(overview.storage.warningCount).toBe(2);
     expect(overview.storage.criticalCount).toBe(1);
+  });
+
+  it('computes alerts summary data for dashboard panels', () => {
+    const alerts: Alert[] = [
+      {
+        id: 'a-1',
+        type: 'cpu',
+        level: 'critical',
+        resourceId: 'r1',
+        resourceName: 'Host 1',
+        node: 'n1',
+        instance: 'i1',
+        message: 'CPU critical',
+        value: 95,
+        threshold: 90,
+        startTime: '2026-02-01T00:00:00Z',
+        acknowledged: false,
+      },
+      {
+        id: 'a-2',
+        type: 'memory',
+        level: 'warning',
+        resourceId: 'r2',
+        resourceName: 'Host 2',
+        node: 'n2',
+        instance: 'i2',
+        message: 'Memory high',
+        value: 85,
+        threshold: 80,
+        startTime: '2026-02-01T00:00:00Z',
+        acknowledged: false,
+      },
+      {
+        id: 'a-3',
+        type: 'disk',
+        level: 'critical',
+        resourceId: 'r3',
+        resourceName: 'Host 3',
+        node: 'n3',
+        instance: 'i3',
+        message: 'Disk full',
+        value: 96,
+        threshold: 90,
+        startTime: '2026-02-01T00:00:00Z',
+        acknowledged: false,
+      },
+    ];
+
+    const overview = computeDashboardOverview([], alerts);
+
+    expect(overview.alerts.activeCritical).toBe(2);
+    expect(overview.alerts.activeWarning).toBe(1);
+    expect(overview.alerts.total).toBe(3);
   });
 });
