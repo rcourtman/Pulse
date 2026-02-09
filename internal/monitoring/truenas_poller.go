@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -21,13 +22,14 @@ const defaultTrueNASPollInterval = 60 * time.Second
 
 // TrueNASPoller manages periodic polling of configured TrueNAS connections.
 type TrueNASPoller struct {
-	registry    *unifiedresources.ResourceRegistry
-	persistence *config.ConfigPersistence
-	mu          sync.Mutex
-	providers   map[string]*truenas.Provider // keyed by connection ID
-	cancel      context.CancelFunc
-	stopped     chan struct{}
-	interval    time.Duration
+	registry              *unifiedresources.ResourceRegistry
+	persistence           *config.ConfigPersistence
+	mu                    sync.Mutex
+	providers             map[string]*truenas.Provider // keyed by connection ID
+	cachedRecordsByConnID map[string][]unifiedresources.IngestRecord
+	cancel                context.CancelFunc
+	stopped               chan struct{}
+	interval              time.Duration
 }
 
 // NewTrueNASPoller builds a new TrueNAS poller with the provided poll interval.
@@ -40,11 +42,12 @@ func NewTrueNASPoller(registry *unifiedresources.ResourceRegistry, persistence *
 	close(stopped)
 
 	return &TrueNASPoller{
-		registry:    registry,
-		persistence: persistence,
-		providers:   make(map[string]*truenas.Provider),
-		stopped:     stopped,
-		interval:    interval,
+		registry:              registry,
+		persistence:           persistence,
+		providers:             make(map[string]*truenas.Provider),
+		cachedRecordsByConnID: make(map[string][]unifiedresources.IngestRecord),
+		stopped:               stopped,
+		interval:              interval,
 	}
 }
 
@@ -176,6 +179,7 @@ func (p *TrueNASPoller) syncConnections() {
 	for id := range p.providers {
 		if _, ok := activeIDs[id]; !ok {
 			delete(p.providers, id)
+			delete(p.cachedRecordsByConnID, id)
 		}
 	}
 }
@@ -233,10 +237,59 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 
 		records := entry.provider.Records()
 		if len(records) == 0 {
+			p.mu.Lock()
+			p.cachedRecordsByConnID[entry.id] = nil
+			p.mu.Unlock()
 			continue
 		}
 		p.registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+		p.mu.Lock()
+		p.cachedRecordsByConnID[entry.id] = cloneIngestRecords(records)
+		p.mu.Unlock()
 	}
+}
+
+// GetCurrentRecords returns the latest known TrueNAS records across active connections.
+func (p *TrueNASPoller) GetCurrentRecords() []unifiedresources.IngestRecord {
+	if p == nil {
+		return nil
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if len(p.cachedRecordsByConnID) == 0 {
+		return nil
+	}
+
+	connectionIDs := make([]string, 0, len(p.cachedRecordsByConnID))
+	for id := range p.cachedRecordsByConnID {
+		connectionIDs = append(connectionIDs, id)
+	}
+	sort.Strings(connectionIDs)
+
+	total := 0
+	for _, id := range connectionIDs {
+		total += len(p.cachedRecordsByConnID[id])
+	}
+	if total == 0 {
+		return nil
+	}
+
+	records := make([]unifiedresources.IngestRecord, 0, total)
+	for _, id := range connectionIDs {
+		records = append(records, cloneIngestRecords(p.cachedRecordsByConnID[id])...)
+	}
+	return records
+}
+
+func cloneIngestRecords(records []unifiedresources.IngestRecord) []unifiedresources.IngestRecord {
+	if len(records) == 0 {
+		return nil
+	}
+	cloned := make([]unifiedresources.IngestRecord, len(records))
+	copy(cloned, records)
+	return cloned
 }
 
 // classifyTrueNASError wraps a TrueNAS API error in MonitorError for metrics classification.

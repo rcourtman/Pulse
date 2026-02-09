@@ -25,16 +25,24 @@ type ResourceV2Handlers struct {
 	stores              map[string]unified.ResourceStore
 	cacheMu             sync.Mutex
 	registryCache       map[string]registryCacheEntry
+	supplementalMu      sync.RWMutex
+	supplementalRecords map[unified.DataSource]SupplementalRecordsProvider
 	stateProvider       StateProvider
 	tenantStateProvider TenantStateProvider
+}
+
+// SupplementalRecordsProvider provides out-of-band ingest records for a specific source.
+type SupplementalRecordsProvider interface {
+	GetCurrentRecords() []unified.IngestRecord
 }
 
 // NewResourceV2Handlers creates a new handler.
 func NewResourceV2Handlers(cfg *config.Config) *ResourceV2Handlers {
 	return &ResourceV2Handlers{
-		cfg:           cfg,
-		stores:        make(map[string]unified.ResourceStore),
-		registryCache: make(map[string]registryCacheEntry),
+		cfg:                 cfg,
+		stores:              make(map[string]unified.ResourceStore),
+		registryCache:       make(map[string]registryCacheEntry),
+		supplementalRecords: make(map[unified.DataSource]SupplementalRecordsProvider),
 	}
 }
 
@@ -46,6 +54,25 @@ func (h *ResourceV2Handlers) SetStateProvider(provider StateProvider) {
 // SetTenantStateProvider sets the tenant-aware provider.
 func (h *ResourceV2Handlers) SetTenantStateProvider(provider TenantStateProvider) {
 	h.tenantStateProvider = provider
+}
+
+// SetSupplementalRecordsProvider configures additional records for a source.
+func (h *ResourceV2Handlers) SetSupplementalRecordsProvider(source unified.DataSource, provider SupplementalRecordsProvider) {
+	h.supplementalMu.Lock()
+	if h.supplementalRecords == nil {
+		h.supplementalRecords = make(map[unified.DataSource]SupplementalRecordsProvider)
+	}
+	if provider == nil {
+		delete(h.supplementalRecords, source)
+	} else {
+		h.supplementalRecords[source] = provider
+	}
+	h.supplementalMu.Unlock()
+
+	// Provider changes alter ingestion inputs, so clear all cached registries.
+	h.cacheMu.Lock()
+	h.registryCache = make(map[string]registryCacheEntry)
+	h.cacheMu.Unlock()
 }
 
 // HandleListResources handles GET /api/v2/resources.
@@ -468,6 +495,22 @@ func (h *ResourceV2Handlers) buildRegistry(orgID string) (*unified.ResourceRegis
 
 	registry := unified.NewRegistry(store)
 	registry.IngestSnapshot(snapshot)
+	h.supplementalMu.RLock()
+	supplementalProviders := make(map[unified.DataSource]SupplementalRecordsProvider, len(h.supplementalRecords))
+	for source, provider := range h.supplementalRecords {
+		supplementalProviders[source] = provider
+	}
+	h.supplementalMu.RUnlock()
+	for source, provider := range supplementalProviders {
+		if provider == nil {
+			continue
+		}
+		records := provider.GetCurrentRecords()
+		if len(records) == 0 {
+			continue
+		}
+		registry.IngestRecords(source, records)
+	}
 
 	h.cacheMu.Lock()
 	h.registryCache[key] = registryCacheEntry{registry: registry, lastUpdate: snapshot.LastUpdate}

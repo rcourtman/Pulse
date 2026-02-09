@@ -277,6 +277,9 @@ func (r *Router) setupRoutes() {
 	r.hostAgentHandlers = NewHostAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.resourceHandlers = NewResourceHandlers()
 	r.resourceV2Handlers = NewResourceV2Handlers(r.config)
+	if r.trueNASPoller != nil {
+		r.resourceV2Handlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
+	}
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant)
 	rbacProvider := NewTenantRBACProvider(r.config.DataPath)

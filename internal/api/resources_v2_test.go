@@ -21,6 +21,16 @@ func (s resourceV2StateProvider) GetState() models.StateSnapshot {
 	return s.snapshot
 }
 
+type mockSupplementalRecordsProvider struct {
+	records []unified.IngestRecord
+}
+
+func (m mockSupplementalRecordsProvider) GetCurrentRecords() []unified.IngestRecord {
+	out := make([]unified.IngestRecord, len(m.records))
+	copy(out, m.records)
+	return out
+}
+
 func TestResourceV2ListMergesLinkedHost(t *testing.T) {
 	now := time.Now().UTC()
 	node := models.Node{
@@ -630,5 +640,106 @@ func TestResourceV2ListIncludesStorageMetadata(t *testing.T) {
 	}
 	if resource.Proxmox == nil || resource.Proxmox.NodeName != "pve-1" || resource.Proxmox.Instance != "cluster-a" {
 		t.Fatalf("expected proxmox node/instance metadata to remain populated, got %+v", resource.Proxmox)
+	}
+}
+
+func TestResourceV2ListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
+	now := time.Now().UTC()
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceV2Handlers(cfg)
+	h.SetStateProvider(resourceV2StateProvider{snapshot: models.StateSnapshot{LastUpdate: now}})
+	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
+		records: []unified.IngestRecord{
+			{
+				SourceID: "system:truenas-main",
+				Resource: unified.Resource{
+					Type:      unified.ResourceTypeHost,
+					Name:      "truenas-main",
+					Status:    unified.StatusOnline,
+					LastSeen:  now,
+					UpdatedAt: now,
+				},
+				Identity: unified.ResourceIdentity{
+					MachineID: "tn-main",
+					Hostnames: []string{"truenas-main"},
+				},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/resources?source=truenas", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesV2Response
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 truenas resource, got %d", len(resp.Data))
+	}
+
+	resource := resp.Data[0]
+	if resource.Type != unified.ResourceTypeHost {
+		t.Fatalf("resource type = %q, want %q", resource.Type, unified.ResourceTypeHost)
+	}
+	if !containsSource(resource.Sources, unified.SourceTrueNAS) {
+		t.Fatalf("expected truenas source, got %+v", resource.Sources)
+	}
+}
+
+func TestResourceV2ListWithoutSupplementalProvider(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		LastUpdate: now,
+		Hosts: []models.Host{
+			{
+				ID:       "host-1",
+				Hostname: "agent-host",
+				Status:   "online",
+				LastSeen: now,
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceV2Handlers(cfg)
+	h.SetStateProvider(resourceV2StateProvider{snapshot: snapshot})
+
+	truenasRec := httptest.NewRecorder()
+	truenasReq := httptest.NewRequest(http.MethodGet, "/api/v2/resources?source=truenas", nil)
+	h.HandleListResources(truenasRec, truenasReq)
+
+	if truenasRec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", truenasRec.Code, truenasRec.Body.String())
+	}
+
+	var truenasResp ResourcesV2Response
+	if err := json.NewDecoder(truenasRec.Body).Decode(&truenasResp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(truenasResp.Data) != 0 {
+		t.Fatalf("expected 0 truenas resources without supplemental provider, got %d", len(truenasResp.Data))
+	}
+
+	agentRec := httptest.NewRecorder()
+	agentReq := httptest.NewRequest(http.MethodGet, "/api/v2/resources?source=agent", nil)
+	h.HandleListResources(agentRec, agentReq)
+
+	if agentRec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", agentRec.Code, agentRec.Body.String())
+	}
+
+	var agentResp ResourcesV2Response
+	if err := json.NewDecoder(agentRec.Body).Decode(&agentResp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(agentResp.Data) != 1 {
+		t.Fatalf("expected 1 agent resource, got %d", len(agentResp.Data))
 	}
 }
