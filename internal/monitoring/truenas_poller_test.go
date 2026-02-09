@@ -47,6 +47,138 @@ func TestTrueNASPollerPollsConfiguredConnections(t *testing.T) {
 	}
 }
 
+func TestTrueNASPollerFeatureFlagGate(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(false)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	mock := newTrueNASMockServer(t, "nas-feature-flag-off")
+	t.Cleanup(mock.Close)
+
+	persistence := config.NewConfigPersistence(t.TempDir())
+	connection := trueNASInstanceForServer(t, "feature-flag-off-conn", mock.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	poller := NewTrueNASPoller(registry, persistence, 50*time.Millisecond)
+	initialStopped := poller.stopped
+
+	poller.Start(context.Background())
+
+	if poller.cancel != nil {
+		t.Fatal("expected Start() to be a no-op with feature flag disabled")
+	}
+	if poller.stopped != initialStopped {
+		t.Fatal("expected stopped channel to remain unchanged when Start() is gated")
+	}
+	select {
+	case <-poller.stopped:
+	default:
+		t.Fatal("expected stopped channel to remain pre-closed when Start() is gated")
+	}
+
+	noPollDeadline := time.Now().Add(200 * time.Millisecond)
+	waitForCondition(t, 500*time.Millisecond, func() bool {
+		return time.Now().After(noPollDeadline) && mock.RequestCount() == 0
+	}, "expected no TrueNAS polling requests when feature flag is disabled")
+
+	poller.Stop()
+}
+
+func TestTrueNASPollerEnableDisableCycle(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	mock := newTrueNASMockServer(t, "nas-enable-disable")
+	t.Cleanup(mock.Close)
+
+	persistence := config.NewConfigPersistence(t.TempDir())
+	connection := trueNASInstanceForServer(t, "enable-disable-conn", mock.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	poller := NewTrueNASPoller(registry, persistence, 50*time.Millisecond)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		return pollerProviderCount(poller) == 1 && pollerHasProvider(poller, connection.ID) && mock.RequestCount() >= 5
+	}, "expected enabled poller to start and poll configured TrueNAS connection")
+
+	poller.Stop()
+	if !hasTrueNASHost(registry, "nas-enable-disable") {
+		t.Fatal("expected enabled poller to ingest TrueNAS resources")
+	}
+
+	requestCountAfterStop := mock.RequestCount()
+	resourceCountAfterStop := len(registry.List())
+
+	truenas.SetFeatureEnabled(false)
+	poller.Start(context.Background())
+
+	if poller.cancel != nil {
+		t.Fatal("expected Start() to remain a no-op after disable without restarting process")
+	}
+
+	noPollDeadline := time.Now().Add(200 * time.Millisecond)
+	waitForCondition(t, 500*time.Millisecond, func() bool {
+		return time.Now().After(noPollDeadline) && mock.RequestCount() == requestCountAfterStop
+	}, "expected no additional polling requests after disable and restart attempt")
+
+	if got := len(registry.List()); got != resourceCountAfterStop {
+		t.Fatalf("expected no new resources after disable restart attempt, got before=%d after=%d", resourceCountAfterStop, got)
+	}
+}
+
+func TestTrueNASPollerKillSwitchAllConnectionsRemoved(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	mock := newTrueNASMockServer(t, "nas-kill-switch")
+	t.Cleanup(mock.Close)
+
+	persistence := config.NewConfigPersistence(t.TempDir())
+	connection := trueNASInstanceForServer(t, "kill-switch-conn", mock.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	poller := NewTrueNASPoller(registry, persistence, 50*time.Millisecond)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		return pollerProviderCount(poller) == 1 && pollerHasProvider(poller, connection.ID) && mock.RequestCount() >= 5
+	}, "expected initial TrueNAS connection to be active and polling")
+
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() clear error = %v", err)
+	}
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		return pollerProviderCount(poller) == 0
+	}, "expected all TrueNAS providers to be drained after removing all connections")
+
+	if pollerHasProvider(poller, connection.ID) {
+		t.Fatalf("expected provider %q to be removed after kill-switch config update", connection.ID)
+	}
+
+	requestCountAfterDrain := mock.RequestCount()
+	noPollDeadline := time.Now().Add(200 * time.Millisecond)
+	waitForCondition(t, 500*time.Millisecond, func() bool {
+		return time.Now().After(noPollDeadline) && mock.RequestCount() == requestCountAfterDrain
+	}, "expected no further polling after all TrueNAS connections are removed")
+
+	poller.Stop()
+}
+
 func TestTrueNASPollerRecordsMetrics(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)
