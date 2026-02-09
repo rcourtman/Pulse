@@ -12,6 +12,7 @@ type Resource struct {
 	UpdatedAt time.Time      `json:"updatedAt,omitempty"`
 
 	DiscoveryTarget *DiscoveryTarget `json:"discoveryTarget,omitempty"`
+	MetricsTarget   *MetricsTarget   `json:"metricsTarget,omitempty"`
 
 	Sources      []DataSource                `json:"sources"`
 	SourceStatus map[DataSource]SourceStatus `json:"sourceStatus,omitempty"`
@@ -43,6 +44,13 @@ type DiscoveryTarget struct {
 	HostID       string `json:"hostId"`
 	ResourceID   string `json:"resourceId"`
 	Hostname     string `json:"hostname,omitempty"`
+}
+
+// MetricsTarget describes the resource type and ID to use when querying
+// the metrics history endpoint for this unified resource.
+type MetricsTarget struct {
+	ResourceType string `json:"resourceType"`
+	ResourceID   string `json:"resourceId"`
 }
 
 // ResourceType represents the kind of resource.

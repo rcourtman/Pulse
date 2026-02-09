@@ -97,6 +97,7 @@ func (h *ResourceV2Handlers) HandleListResources(w http.ResponseWriter, r *http.
 
 	paged, meta := paginate(resources, filters.page, filters.limit)
 	attachDiscoveryTargets(paged)
+	attachMetricsTargets(paged, registry)
 
 	response := ResourcesV2Response{
 		Data:         paged,
@@ -137,6 +138,7 @@ func (h *ResourceV2Handlers) HandleGetResource(w http.ResponseWriter, r *http.Re
 
 	resourceCopy := *resource
 	attachDiscoveryTarget(&resourceCopy)
+	attachMetricsTarget(&resourceCopy, registry)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resourceCopy)
@@ -831,6 +833,80 @@ func attachDiscoveryTarget(resource *unified.Resource) {
 		return
 	}
 	resource.DiscoveryTarget = buildDiscoveryTarget(*resource)
+}
+
+func attachMetricsTargets(resources []unified.Resource, registry *unified.ResourceRegistry) {
+	for i := range resources {
+		attachMetricsTarget(&resources[i], registry)
+	}
+}
+
+func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceRegistry) {
+	if resource == nil || registry == nil {
+		return
+	}
+	resource.MetricsTarget = buildMetricsTarget(*resource, registry)
+}
+
+func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceRegistry) *unified.MetricsTarget {
+	sourceTargets := registry.SourceTargets(resource.ID)
+	if len(sourceTargets) == 0 {
+		return nil
+	}
+
+	// Build a map from source to source target for quick lookup.
+	bySource := make(map[unified.DataSource]unified.SourceTarget, len(sourceTargets))
+	for _, st := range sourceTargets {
+		bySource[st.Source] = st
+	}
+
+	switch resource.Type {
+	case unified.ResourceTypeHost:
+		// Infrastructure hosts: prefer Proxmox > Agent > Docker source.
+		if st, ok := bySource[unified.SourceProxmox]; ok {
+			return &unified.MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
+		}
+		if st, ok := bySource[unified.SourceAgent]; ok {
+			return &unified.MetricsTarget{ResourceType: "host", ResourceID: st.SourceID}
+		}
+		if st, ok := bySource[unified.SourceDocker]; ok {
+			return &unified.MetricsTarget{ResourceType: "dockerHost", ResourceID: st.SourceID}
+		}
+	case unified.ResourceTypeVM:
+		if st, ok := bySource[unified.SourceProxmox]; ok {
+			return &unified.MetricsTarget{ResourceType: "guest", ResourceID: st.SourceID}
+		}
+	case unified.ResourceTypeLXC:
+		if st, ok := bySource[unified.SourceProxmox]; ok {
+			return &unified.MetricsTarget{ResourceType: "guest", ResourceID: st.SourceID}
+		}
+	case unified.ResourceTypeContainer:
+		if st, ok := bySource[unified.SourceDocker]; ok {
+			return &unified.MetricsTarget{ResourceType: "docker", ResourceID: st.SourceID}
+		}
+	case unified.ResourceTypeStorage, unified.ResourceTypeCeph:
+		if st, ok := bySource[unified.SourceProxmox]; ok {
+			return &unified.MetricsTarget{ResourceType: "storage", ResourceID: st.SourceID}
+		}
+	case unified.ResourceTypePod:
+		if st, ok := bySource[unified.SourceK8s]; ok {
+			return &unified.MetricsTarget{ResourceType: "k8s", ResourceID: st.SourceID}
+		}
+	case unified.ResourceTypeK8sCluster, unified.ResourceTypeK8sNode:
+		if st, ok := bySource[unified.SourceK8s]; ok {
+			return &unified.MetricsTarget{ResourceType: "k8s", ResourceID: st.SourceID}
+		}
+	case unified.ResourceTypePBS:
+		if st, ok := bySource[unified.SourcePBS]; ok {
+			return &unified.MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
+		}
+	case unified.ResourceTypePMG:
+		if st, ok := bySource[unified.SourcePMG]; ok {
+			return &unified.MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
+		}
+	}
+
+	return nil
 }
 
 func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {

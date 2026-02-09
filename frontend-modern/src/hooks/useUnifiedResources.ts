@@ -100,6 +100,10 @@ type V2Resource = {
     resourceId?: string;
     hostname?: string;
   };
+  metricsTarget?: {
+    resourceType?: string;
+    resourceId?: string;
+  };
 };
 
 type V2ListResponse = {
@@ -295,6 +299,11 @@ const toResource = (v2: V2Resource): Resource => {
       }
       : undefined;
 
+  const metricsTarget =
+    v2.metricsTarget?.resourceType && v2.metricsTarget?.resourceId
+      ? { resourceType: v2.metricsTarget.resourceType, resourceId: v2.metricsTarget.resourceId }
+      : undefined;
+
   return {
     id: v2.id,
     type: resolveType(v2.type),
@@ -342,6 +351,7 @@ const toResource = (v2: V2Resource): Resource => {
       ips: v2.identity?.ipAddresses,
     },
     discoveryTarget,
+    metricsTarget,
     platformData: {
       sources: v2.sources,
       sourceStatus: v2.sourceStatus,

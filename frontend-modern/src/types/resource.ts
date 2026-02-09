@@ -144,6 +144,9 @@ export interface Resource {
     // Canonical discovery request coordinates from backend
     discoveryTarget?: ResourceDiscoveryTarget;
 
+    // Metrics history query coordinates from backend
+    metricsTarget?: { resourceType: string; resourceId: string };
+
     // Platform-specific data (varies by type)
     platformData?: Record<string, unknown>;
 }

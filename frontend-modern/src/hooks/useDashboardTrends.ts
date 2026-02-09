@@ -116,11 +116,24 @@ function asHistoryResourceType(type: string): HistoryResourceType | null {
   return historyTypes.includes(type as HistoryResourceType) ? (type as HistoryResourceType) : null;
 }
 
-function buildHistoryTargets(ids: string[], unifiedTypeById: Map<string, UnifiedResourceType>): HistoryTarget[] {
+function buildHistoryTargets(
+  ids: string[],
+  unifiedTypeById: Map<string, UnifiedResourceType>,
+  metricsTargetById: Map<string, { resourceType: string; resourceId: string }>,
+): HistoryTarget[] {
   const uniqueIds = dedupeValues(ids);
   const targets: HistoryTarget[] = [];
 
   for (const id of uniqueIds) {
+    const mt = metricsTargetById.get(id);
+    if (mt) {
+      const historyType = asHistoryResourceType(mt.resourceType);
+      if (historyType) {
+        targets.push({ id: mt.resourceId, resourceType: historyType });
+        continue;
+      }
+    }
+    // Fallback: derive from unified type
     const unifiedType = unifiedTypeById.get(id);
     if (!unifiedType) continue;
     const mappedType = mapUnifiedTypeToHistoryType(unifiedType);
@@ -314,17 +327,28 @@ export function useDashboardTrends(
     const currentOverview = overview();
     const currentResources = resources();
     const unifiedTypeById = new Map(currentResources.map((resource) => [resource.id, resource.type] as const));
+    const metricsTargetById = new Map<string, { resourceType: string; resourceId: string }>();
+    for (const resource of currentResources) {
+      if (resource.metricsTarget) {
+        metricsTargetById.set(resource.id, resource.metricsTarget);
+      }
+    }
 
     const cpuTargets = buildHistoryTargets(
       currentOverview.infrastructure.topCPU.map((item) => item.id),
       unifiedTypeById,
+      metricsTargetById,
     );
     const memoryTargets = buildHistoryTargets(
       currentOverview.infrastructure.topMemory.map((item) => item.id),
       unifiedTypeById,
+      metricsTargetById,
     );
     const storageTargets = dedupeValues(
-      currentResources.filter((resource) => isStorage(resource)).map((resource) => resource.id),
+      currentResources.filter((resource) => isStorage(resource)).map((resource) => {
+        const mt = resource.metricsTarget;
+        return mt ? mt.resourceId : resource.id;
+      }),
     ).sort();
 
     return {
