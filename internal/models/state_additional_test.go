@@ -186,6 +186,115 @@ func TestStateLinkHostAgentToNode(t *testing.T) {
 	}
 }
 
+func TestUpdateNodesForInstancePreservesLinkWhenNodeIDChanges(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{ID: "host-1", Hostname: "pve01"},
+		},
+		Nodes: []Node{
+			{
+				ID:                "cluster-a-pve01-old",
+				Name:              "pve01",
+				Instance:          "cluster-entry-a",
+				ClusterName:       "cluster-a",
+				LinkedHostAgentID: "host-1",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("cluster-entry-a", []Node{
+		{
+			ID:          "cluster-a-pve01-new",
+			Name:        "pve01",
+			Instance:    "cluster-entry-a",
+			ClusterName: "cluster-a",
+			Status:      "online",
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("nodes = %#v, want exactly 1 node", state.Nodes)
+	}
+	if state.Nodes[0].ID != "cluster-a-pve01-new" {
+		t.Fatalf("node id = %q, want cluster-a-pve01-new", state.Nodes[0].ID)
+	}
+	if state.Nodes[0].LinkedHostAgentID != "host-1" {
+		t.Fatalf("linkedHostAgentID = %q, want host-1", state.Nodes[0].LinkedHostAgentID)
+	}
+}
+
+func TestUpdateNodesForInstanceDeduplicatesLogicalNode(t *testing.T) {
+	state := NewState()
+	older := time.Now().Add(-2 * time.Minute)
+	newer := time.Now()
+
+	state.UpdateNodesForInstance("instance-a", []Node{
+		{
+			ID:               "node-old",
+			Name:             "pve01",
+			Instance:         "instance-a",
+			Status:           "offline",
+			ConnectionHealth: "error",
+			LastSeen:         older,
+		},
+		{
+			ID:               "node-new",
+			Name:             "pve01",
+			Instance:         "instance-a",
+			Status:           "online",
+			ConnectionHealth: "healthy",
+			LastSeen:         newer,
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("expected one logical node after dedupe, got %d (%#v)", len(state.Nodes), state.Nodes)
+	}
+	if state.Nodes[0].ID != "node-new" {
+		t.Fatalf("node id = %q, want node-new", state.Nodes[0].ID)
+	}
+	if state.Nodes[0].Status != "online" {
+		t.Fatalf("status = %q, want online", state.Nodes[0].Status)
+	}
+}
+
+func TestUpdateNodesForInstancePrefersHealthyOnCrossInstanceCollision(t *testing.T) {
+	now := time.Now()
+	state := &State{
+		Nodes: []Node{
+			{
+				ID:               "shared-node-id",
+				Name:             "pve01",
+				Instance:         "instance-b",
+				Status:           "online",
+				ConnectionHealth: "healthy",
+				LastSeen:         now,
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("instance-a", []Node{
+		{
+			ID:               "shared-node-id",
+			Name:             "pve01",
+			Instance:         "instance-a",
+			Status:           "offline",
+			ConnectionHealth: "error",
+			LastSeen:         now.Add(-time.Minute),
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("nodes = %#v, want exactly one merged node", state.Nodes)
+	}
+	if state.Nodes[0].Instance != "instance-b" {
+		t.Fatalf("instance = %q, want instance-b", state.Nodes[0].Instance)
+	}
+	if state.Nodes[0].Status != "online" {
+		t.Fatalf("status = %q, want online", state.Nodes[0].Status)
+	}
+}
+
 func TestStateUnlinkHostAgent(t *testing.T) {
 	state := &State{
 		Hosts: []Host{{ID: "h1", LinkedNodeID: "n1", LinkedVMID: "vm", LinkedContainerID: "ct"}},

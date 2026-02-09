@@ -1,12 +1,5 @@
 import { createSignal, createEffect, For, Show, onCleanup } from 'solid-js';
-
-export interface MentionResource {
-  id: string;
-  name: string;
-  type: 'vm' | 'container' | 'node' | 'storage' | 'docker' | 'host';
-  status?: string;
-  node?: string;
-}
+import type { MentionResource } from './mentionResources';
 
 interface MentionAutocompleteProps {
   query: string;

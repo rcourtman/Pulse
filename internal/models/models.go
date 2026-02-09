@@ -1318,16 +1318,103 @@ func (s *State) UpdateNodes(nodes []Node) {
 	s.LastUpdate = time.Now()
 }
 
+func normalizeNodeIdentityPart(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func nodeLogicalKey(node Node) string {
+	name := normalizeNodeIdentityPart(node.Name)
+	if name == "" {
+		return ""
+	}
+
+	if cluster := normalizeNodeIdentityPart(node.ClusterName); cluster != "" {
+		return "cluster:" + cluster + ":" + name
+	}
+	if instance := normalizeNodeIdentityPart(node.Instance); instance != "" {
+		return "instance:" + instance + ":" + name
+	}
+	if host := normalizeNodeIdentityPart(node.Host); host != "" {
+		return "host:" + host + ":" + name
+	}
+
+	return "name:" + name
+}
+
+func nodeStatusRank(status string) int {
+	switch normalizeNodeIdentityPart(status) {
+	case "online":
+		return 3
+	case "degraded":
+		return 2
+	case "unknown":
+		return 1
+	default:
+		return 0
+	}
+}
+
+func nodeConnectionHealthRank(health string) int {
+	switch normalizeNodeIdentityPart(health) {
+	case "healthy":
+		return 3
+	case "degraded":
+		return 2
+	case "unknown":
+		return 1
+	default:
+		return 0
+	}
+}
+
+func preferNodeForMerge(existing Node, candidate Node) Node {
+	existingScore := nodeStatusRank(existing.Status)*100 + nodeConnectionHealthRank(existing.ConnectionHealth)*10
+	if existing.LinkedHostAgentID != "" {
+		existingScore += 2
+	}
+	if existing.IsClusterMember {
+		existingScore++
+	}
+
+	candidateScore := nodeStatusRank(candidate.Status)*100 + nodeConnectionHealthRank(candidate.ConnectionHealth)*10
+	if candidate.LinkedHostAgentID != "" {
+		candidateScore += 2
+	}
+	if candidate.IsClusterMember {
+		candidateScore++
+	}
+
+	if candidateScore > existingScore {
+		return candidate
+	}
+	if candidateScore < existingScore {
+		return existing
+	}
+
+	if candidate.LastSeen.After(existing.LastSeen) {
+		return candidate
+	}
+	if existing.LastSeen.After(candidate.LastSeen) {
+		return existing
+	}
+
+	return existing
+}
+
 // UpdateNodesForInstance updates nodes for a specific instance, merging with existing nodes
 func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Preserve LinkedHostAgentID for nodes that are being updated
-	existingNodeLinks := make(map[string]string) // nodeID -> linkedHostAgentID
+	existingNodeLinks := make(map[string]string)             // nodeID -> linkedHostAgentID
+	existingNodeLinksByLogicalKey := make(map[string]string) // logical node key -> linkedHostAgentID
 	for _, node := range s.Nodes {
 		if node.LinkedHostAgentID != "" {
 			existingNodeLinks[node.ID] = node.LinkedHostAgentID
+			if key := nodeLogicalKey(node); key != "" {
+				existingNodeLinksByLogicalKey[key] = node.LinkedHostAgentID
+			}
 		}
 	}
 
@@ -1337,6 +1424,25 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		if node.Instance != instanceName {
 			nodeMap[node.ID] = node
 		}
+	}
+
+	// Deduplicate incoming nodes by logical identity so a single node cannot appear
+	// multiple times in the same poll cycle with different IDs.
+	dedupedNodes := make(map[string]Node)
+	for _, node := range nodes {
+		key := nodeLogicalKey(node)
+		if key == "" {
+			key = "id:" + normalizeNodeIdentityPart(node.ID)
+		}
+		if key == "id:" {
+			key = "instance:" + normalizeNodeIdentityPart(instanceName) + ":" + normalizeNodeIdentityPart(node.Name)
+		}
+
+		if existing, ok := dedupedNodes[key]; ok {
+			dedupedNodes[key] = preferNodeForMerge(existing, node)
+			continue
+		}
+		dedupedNodes[key] = node
 	}
 
 	// Build hostname-to-hostAgentID map for linking new nodes to existing host agents
@@ -1355,13 +1461,21 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	}
 
 	// Add or update nodes from this instance
-	for _, node := range nodes {
+	for _, node := range dedupedNodes {
 		// Preserve existing link if we had one, but only if the host agent still exists
 		if existingLink, ok := existingNodeLinks[node.ID]; ok {
 			if validHostAgentIDs[existingLink] {
 				node.LinkedHostAgentID = existingLink
 			}
 			// If host agent no longer exists, leave LinkedHostAgentID empty (stale reference cleared)
+		}
+		// Fallback: preserve link by logical identity when node IDs changed across polls.
+		if node.LinkedHostAgentID == "" {
+			if existingLink, ok := existingNodeLinksByLogicalKey[nodeLogicalKey(node)]; ok {
+				if validHostAgentIDs[existingLink] {
+					node.LinkedHostAgentID = existingLink
+				}
+			}
 		}
 		// If no existing link, try to match by hostname
 		if node.LinkedHostAgentID == "" {
@@ -1374,7 +1488,20 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 				}
 			}
 		}
-		nodeMap[node.ID] = node
+
+		targetKey := strings.TrimSpace(node.ID)
+		if targetKey == "" {
+			targetKey = nodeLogicalKey(node)
+		}
+		if targetKey == "" {
+			targetKey = "instance:" + normalizeNodeIdentityPart(instanceName) + ":" + normalizeNodeIdentityPart(node.Name)
+		}
+
+		if existing, ok := nodeMap[targetKey]; ok {
+			nodeMap[targetKey] = preferNodeForMerge(existing, node)
+		} else {
+			nodeMap[targetKey] = node
+		}
 	}
 
 	// Convert map back to slice

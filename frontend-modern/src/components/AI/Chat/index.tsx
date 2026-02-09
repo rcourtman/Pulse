@@ -8,7 +8,8 @@ import { logger } from '@/utils/logger';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
-import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
+import { MentionAutocomplete } from './MentionAutocomplete';
+import { buildMentionResources, type MentionResource } from './mentionResources';
 import type { PendingApproval, PendingQuestion, ModelInfo } from './types';
 
 const MODEL_LEGACY_STORAGE_KEY = 'pulse:ai_chat_model';
@@ -332,72 +333,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     try {
       const state = await MonitoringAPI.getState();
       setIsCluster((state.nodes?.length || 0) > 1);
-      const resources: MentionResource[] = [];
-
-      // Add VMs
-      for (const vm of state.vms || []) {
-        resources.push({
-          id: `vm:${vm.node}:${vm.vmid}`,
-          name: vm.name,
-          type: 'vm',
-          status: vm.status,
-          node: vm.node,
-        });
-      }
-
-      // Add LXC containers
-      for (const container of state.containers || []) {
-        resources.push({
-          id: `lxc:${container.node}:${container.vmid}`,
-          name: container.name,
-          type: 'container',
-          status: container.status,
-          node: container.node,
-        });
-      }
-
-      // Add Docker hosts
-      for (const host of state.dockerHosts || []) {
-        resources.push({
-          id: `host:${host.id}`,
-          name: host.displayName || host.hostname || host.id,
-          type: 'host',
-          status: host.status || 'online',
-        });
-        // Add Docker containers
-        for (const container of host.containers || []) {
-          resources.push({
-            id: `docker:${host.id}:${container.id}`,
-            name: container.name,
-            type: 'docker',
-            status: container.state,
-            node: host.hostname || host.id,
-          });
-        }
-      }
-
-      // Add nodes
-      for (const node of state.nodes || []) {
-        resources.push({
-          id: `node:${node.instance}:${node.name}`,
-          name: node.name,
-          type: 'node',
-          status: node.status,
-        });
-      }
-
-      // Add standalone host agents
-      for (const host of state.hosts || []) {
-        resources.push({
-          id: `host:${host.id}`,
-          name: host.displayName || host.hostname,
-          type: 'host',
-          status: host.status,
-        });
-      }
-
+      const resources: MentionResource[] = buildMentionResources(state);
       setMentionResources(resources);
-      console.log('[AIChat] Loaded', resources.length, 'resources for @ mention autocomplete');
+      logger.debug('[AIChat] Loaded mention resources', { count: resources.length });
     } catch (error) {
       logger.error('[AIChat] Failed to fetch resources for autocomplete:', error);
       console.error('[AIChat] Failed to fetch resources:', error);
