@@ -67,6 +67,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
           // Continue to check for updates
         } else {
           // Version matches, use cached data
+          setVersionInfo(currentVersion);
           setUpdateInfo(state.updateInfo);
           setUpdateAvailable(state.updateInfo.available);
 
