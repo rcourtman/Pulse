@@ -128,6 +128,7 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		LogAuditEventForTenant(GetOrgID(r.Context()), "role_created", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Created role "+role.ID)
+		RecordRBACRoleMutation("create")
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(role)
 
@@ -158,6 +159,7 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		LogAuditEventForTenant(GetOrgID(r.Context()), "role_updated", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Updated role "+role.ID)
+		RecordRBACRoleMutation("update")
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(role)
 
@@ -174,6 +176,7 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		LogAuditEventForTenant(GetOrgID(r.Context()), "role_deleted", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Deleted role "+id)
+		RecordRBACRoleMutation("delete")
 		w.WriteHeader(http.StatusNoContent)
 
 	default:
@@ -250,6 +253,7 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 		}
 
 		LogAuditEventForTenant(GetOrgID(r.Context()), "user_roles_updated", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Updated roles for user "+username+": ["+strings.Join(req.RoleIDs, ", ")+"]")
+		RecordRBACRoleMutation("assign")
 		w.WriteHeader(http.StatusNoContent)
 
 	case http.MethodGet:

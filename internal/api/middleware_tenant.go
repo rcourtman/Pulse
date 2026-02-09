@@ -70,6 +70,8 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 			orgID = "default"
 		}
 
+		var loadedOrg *models.Organization
+
 		// 2. Validate Organization Exists (only for non-default orgs)
 		// This must check existence WITHOUT creating directories to prevent DoS.
 		// It also must run BEFORE feature checks to ensure invalid org IDs return 400 (Bad Request)
@@ -78,6 +80,20 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 			if !m.persistence.OrgExists(orgID) {
 				writeJSONError(w, http.StatusBadRequest, "invalid_org", "Invalid Organization ID")
 				return
+			}
+		}
+
+		// 2b. Load org metadata and enforce lifecycle status for non-default orgs.
+		// If loading fails, keep backward-compatible behavior by falling back later.
+		if orgID != "default" && m.persistence != nil {
+			org, loadErr := m.persistence.LoadOrganization(orgID)
+			if loadErr == nil && org != nil {
+				loadedOrg = org
+				status := models.NormalizeOrgStatus(org.Status)
+				if status == models.OrgStatusSuspended || status == models.OrgStatusPendingDeletion {
+					writeJSONError(w, http.StatusForbidden, "org_suspended", "Organization is suspended")
+					return
+				}
 			}
 		}
 
@@ -141,8 +157,10 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 		// 5. Inject into Context
 		ctx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
 
-		// Also store a mock organization object for now
-		org := &models.Organization{ID: orgID, DisplayName: orgID}
+		org := loadedOrg
+		if org == nil {
+			org = &models.Organization{ID: orgID, DisplayName: orgID}
+		}
 		ctx = context.WithValue(ctx, OrgContextKey, org)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
