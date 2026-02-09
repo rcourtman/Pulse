@@ -1,4 +1,5 @@
 import type { SettingsTab } from './settingsTypes';
+import { trackPaywallViewed } from '@/utils/conversionEvents';
 
 export const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
   'system-relay': ['relay'],
@@ -38,5 +39,9 @@ export function getTabLockReason(
   if (!requiredFeatures || requiredFeatures.length === 0) return null;
   if (!licenseLoaded()) return null;
   if (requiredFeatures.every((feature) => hasFeature(feature))) return null;
+  const primaryRequiredFeature = requiredFeatures[0];
+  if (primaryRequiredFeature) {
+    trackPaywallViewed(primaryRequiredFeature, 'settings_tab');
+  }
   return 'This settings section requires Pulse Pro.';
 }

@@ -53,6 +53,7 @@ import { ApprovalBanner, PatrolStatusBar, RunHistoryPanel, CountdownTimer } from
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import { hasFeature } from '@/stores/license';
 import { formatRelativeTime } from '@/utils/format';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
 import {
   formatTriggerReason,
   groupModelsByProvider,
@@ -379,6 +380,30 @@ export function AIIntelligence() {
     if (showBlockedBanner()) return blockedReason() || 'Patrol is paused';
     return '';
   });
+
+  createEffect((wasAutoFixLocked) => {
+    const isAutoFixLocked = autoFixLocked();
+    if (isAutoFixLocked && !wasAutoFixLocked) {
+      trackPaywallViewed('ai_autofix', 'ai_intelligence');
+    }
+    return isAutoFixLocked;
+  }, false);
+
+  createEffect((wasAlertAnalysisLocked) => {
+    const isAlertAnalysisLocked = alertAnalysisLocked();
+    if (isAlertAnalysisLocked && !wasAlertAnalysisLocked) {
+      trackPaywallViewed('ai_alerts', 'ai_intelligence');
+    }
+    return isAlertAnalysisLocked;
+  }, false);
+
+  createEffect((wasLicenseBannerVisible) => {
+    const isLicenseBannerVisible = licenseRequired() && !showBlockedBanner();
+    if (isLicenseBannerVisible && !wasLicenseBannerVisible) {
+      trackPaywallViewed('ai_autofix', 'ai_intelligence_banner');
+    }
+    return isLicenseBannerVisible;
+  }, false);
 
   const shouldShowLiveRun = createMemo(
     () => patrolEnabledLocal() && ((patrolStatus()?.running ?? false) || manualRunRequested() || patrolStream.isStreaming()),
@@ -814,7 +839,7 @@ export function AIIntelligence() {
                         </div>
                         <Show when={autoFixLocked()}>
                           <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href="https://pulserelay.pro/" target="_blank" rel="noreferrer">Upgrade to Pro</a>
+                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href="https://pulserelay.pro/" target="_blank" rel="noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_autofix')}>Upgrade to Pro</a>
                             {' '}to unlock auto-fix.
                           </p>
                         </Show>
@@ -850,7 +875,7 @@ export function AIIntelligence() {
                         </div>
                         <Show when={alertAnalysisLocked()}>
                           <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href="https://pulserelay.pro/" target="_blank" rel="noreferrer">Upgrade to Pro</a>
+                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href="https://pulserelay.pro/" target="_blank" rel="noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_alerts')}>Upgrade to Pro</a>
                             {' '}to enable alert-triggered analysis.
                           </p>
                         </Show>
@@ -906,7 +931,7 @@ export function AIIntelligence() {
         <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-3 py-2">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <p class="text-xs text-blue-700 dark:text-blue-300">
-              <a class="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline" href={upgradeUrl()} target="_blank" rel="noopener noreferrer">Upgrade to Pro</a>
+              <a class="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline" href={upgradeUrl()} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence_banner', 'ai_autofix')}>Upgrade to Pro</a>
               {' '}to unlock automatic fixes and alert-triggered analysis.
             </p>
           </div>

@@ -12,6 +12,7 @@ import { Portal } from 'solid-js/web';
 import { formatBytes } from '@/utils/format';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
 
 
 /** Format a tooltip value according to the metric unit. */
@@ -107,6 +108,14 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     const isLocked = createMemo(() => isRangeLocked(range()));
 
     const lockDays = createMemo(() => (range() === '30d' ? '30' : '90'));
+
+    createEffect((wasLockOverlayVisible) => {
+        const lockOverlayVisible = isLocked() && !props.hideLock;
+        if (lockOverlayVisible && !wasLockOverlayVisible) {
+            trackPaywallViewed('long_term_metrics', 'history_chart');
+        }
+        return lockOverlayVisible;
+    }, false);
 
     // Hover state for tooltip
     const [hoveredPoint, setHoveredPoint] = createSignal<{
@@ -617,6 +626,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                         <a
                             href="https://pulserelay.pro/pricing"
                             target="_blank"
+                            onClick={() => trackUpgradeClicked('history_chart', 'long_term_metrics')}
                             class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
                         >
                             Unlock Pro Features
