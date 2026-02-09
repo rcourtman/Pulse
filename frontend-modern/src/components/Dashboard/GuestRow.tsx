@@ -9,6 +9,10 @@ import { StackedMemoryBar } from './StackedMemoryBar';
 
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
+import { GuestMetadataAPI } from '@/api/guestMetadata';
+import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
+import { showSuccess, showError } from '@/utils/toast';
+import { logger } from '@/utils/logger';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { type ColumnPriority } from '@/hooks/useBreakpoint';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
@@ -518,6 +522,54 @@ export function GuestRow(props: GuestRowProps) {
   const diskAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'disk');
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
+  const urlEdit = createUrlEditState();
+
+  const handleStartEditingUrl = (event: MouseEvent) => {
+    urlEdit.startEditing(guestId(), customUrl() || '', event);
+  };
+
+  const handleSaveUrl = async () => {
+    const newUrl = urlEdit.editingValue().trim();
+    urlEdit.setIsSaving(true);
+
+    try {
+      await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: newUrl });
+      setCustomUrl(newUrl || undefined);
+
+      if (props.onCustomUrlUpdate) {
+        props.onCustomUrlUpdate(guestId(), newUrl);
+      }
+
+      showSuccess(newUrl ? 'Guest URL saved' : 'Guest URL cleared');
+      urlEdit.finishEditing();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save guest URL';
+      logger.error('Failed to save guest URL:', err);
+      showError(message);
+      urlEdit.setIsSaving(false);
+    }
+  };
+
+  const handleDeleteUrl = async () => {
+    urlEdit.setIsSaving(true);
+
+    try {
+      await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: '' });
+      setCustomUrl(undefined);
+
+      if (props.onCustomUrlUpdate) {
+        props.onCustomUrlUpdate(guestId(), '');
+      }
+
+      showSuccess('Guest URL removed');
+      urlEdit.finishEditing();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to remove guest URL';
+      logger.error('Failed to remove guest URL:', err);
+      showError(message);
+      urlEdit.setIsSaving(false);
+    }
+  };
 
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
   const networkInterfaces = createMemo(() => props.guest.networkInterfaces ?? []);
@@ -993,23 +1045,49 @@ export function GuestRow(props: GuestRowProps) {
         {/* Link Column - at the end like NodeSummaryTable */}
         <Show when={isColVisible('link')}>
           <td class="px-0 py-1 align-middle text-center">
-            <Show when={customUrl() && customUrl() !== ''} fallback={<span class="text-xs text-gray-300 dark:text-gray-700">-</span>}>
-              <a
-                href={customUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                title={`Open ${customUrl()}`}
-                onClick={(event) => event.stopPropagation()}
+            <div class="inline-flex items-center justify-center gap-1" onClick={(event) => event.stopPropagation()}>
+              <Show when={customUrl() && customUrl() !== ''} fallback={<span class="text-xs text-gray-300 dark:text-gray-700">-</span>}>
+                <a
+                  href={customUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                  title={`Open ${customUrl()}`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </Show>
+              <button
+                type="button"
+                onClick={handleStartEditingUrl}
+                class="inline-flex justify-center items-center text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                title={customUrl() ? 'Edit URL' : 'Add URL'}
               >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                 </svg>
-              </a>
-            </Show>
+              </button>
+            </div>
           </td>
         </Show>
       </tr>
+
+      <UrlEditPopover
+        isOpen={urlEdit.isEditing() && urlEdit.editingId() === guestId()}
+        value={urlEdit.editingValue()}
+        position={urlEdit.position()}
+        isSaving={urlEdit.isSaving()}
+        hasExistingUrl={!!customUrl()}
+        placeholder="https://192.168.1.100:8080"
+        helpText="Add a URL to quickly access this guest's web interface"
+        onValueChange={urlEdit.setEditingValue}
+        onSave={handleSaveUrl}
+        onCancel={urlEdit.cancelEditing}
+        onDelete={handleDeleteUrl}
+      />
 
     </>
   );
