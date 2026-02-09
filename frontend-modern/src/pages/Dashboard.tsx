@@ -4,6 +4,7 @@ import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useDashboardTrends } from '@/hooks/useDashboardTrends';
 import { Sparkline } from '@/components/shared/Sparkline';
 import type { TrendData } from '@/hooks/useDashboardTrends';
+import { isInfrastructure, isStorage } from '@/types/resource';
 import {
   ALERTS_OVERVIEW_PATH,
   AI_PATROL_PATH,
@@ -56,8 +57,39 @@ function deltaColorClass(delta: number | null): string {
   return 'text-gray-500 dark:text-gray-400';
 }
 
+type ActionPriority = 'critical' | 'high' | 'medium' | 'low';
+
+interface ActionItem {
+  id: string;
+  priority: ActionPriority;
+  label: string;
+  link: string;
+}
+
+const PRIORITY_ORDER: Record<ActionPriority, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+const MAX_ACTION_ITEMS = 8;
+
+function priorityBadgeClass(priority: ActionPriority): string {
+  switch (priority) {
+    case 'critical':
+      return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    case 'high':
+      return 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300';
+    case 'medium':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+    case 'low':
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+  }
+}
+
 export default function Dashboard() {
-  const { state, connected, reconnecting, reconnect, initialDataReceived } = useWebSocket();
+  const { state, connected, reconnecting, reconnect, initialDataReceived, activeAlerts } = useWebSocket();
   const overview = useDashboardOverview();
   const trends = useDashboardTrends(overview);
   const trendsLoading = createMemo(() => trends().loading);
@@ -156,6 +188,109 @@ export default function Dashboard() {
     if (warningAlerts > 0) return 'bg-amber-50/30 dark:bg-amber-900/10';
     return 'bg-white dark:bg-gray-800';
   });
+
+  const actionItems = createMemo<ActionItem[]>(() => {
+    const items: ActionItem[] = [];
+    const resources = Array.isArray(state.resources) ? state.resources : [];
+    const alerts = Object.values(activeAlerts as Record<string, import('@/types/api').Alert | undefined>).filter(
+      (a): a is import('@/types/api').Alert => a !== undefined
+    );
+
+    // Tier 1: Active critical alerts
+    for (const alert of alerts) {
+      if (alert.level === 'critical') {
+        items.push({
+          id: `alert-crit-${alert.id}`,
+          priority: 'critical',
+          label: `Critical alert: ${alert.resourceName} — ${alert.message}`,
+          link: ALERTS_OVERVIEW_PATH,
+        });
+      }
+    }
+
+    // Tier 2: Infrastructure offline
+    for (const resource of resources) {
+      if (isInfrastructure(resource) && (resource.status === 'offline')) {
+        items.push({
+          id: `infra-offline-${resource.id}`,
+          priority: 'high',
+          label: `Offline: ${resource.displayName || resource.name}`,
+          link: INFRASTRUCTURE_PATH,
+        });
+      }
+    }
+
+    // Tier 3: Storage critical (≥90%)
+    for (const resource of resources) {
+      if (isStorage(resource) && resource.disk) {
+        const diskPercent = typeof resource.disk.total === 'number' && resource.disk.total > 0
+          ? (resource.disk.used ?? 0) / resource.disk.total * 100
+          : null;
+        if (diskPercent !== null && diskPercent >= 90) {
+          items.push({
+            id: `storage-crit-${resource.id}`,
+            priority: 'high',
+            label: `Storage critical: ${resource.displayName || resource.name} at ${Math.round(diskPercent)}%`,
+            link: buildStoragePath(),
+          });
+        }
+      }
+    }
+
+    // Tier 4: Active warning alerts
+    for (const alert of alerts) {
+      if (alert.level === 'warning') {
+        items.push({
+          id: `alert-warn-${alert.id}`,
+          priority: 'medium',
+          label: `Warning: ${alert.resourceName} — ${alert.message}`,
+          link: ALERTS_OVERVIEW_PATH,
+        });
+      }
+    }
+
+    // Tier 5: Storage warning (≥80% but <90%)
+    for (const resource of resources) {
+      if (isStorage(resource) && resource.disk) {
+        const diskPercent = typeof resource.disk.total === 'number' && resource.disk.total > 0
+          ? (resource.disk.used ?? 0) / resource.disk.total * 100
+          : null;
+        if (diskPercent !== null && diskPercent >= 80 && diskPercent < 90) {
+          items.push({
+            id: `storage-warn-${resource.id}`,
+            priority: 'medium',
+            label: `Storage warning: ${resource.displayName || resource.name} at ${Math.round(diskPercent)}%`,
+            link: buildStoragePath(),
+          });
+        }
+      }
+    }
+
+    // Tier 6: CPU critical (≥90%)
+    const topCPU = overview().infrastructure.topCPU;
+    for (const entry of topCPU) {
+      if (entry.percent >= 90) {
+        items.push({
+          id: `cpu-crit-${entry.id}`,
+          priority: 'low',
+          label: `High CPU: ${entry.name} at ${Math.round(entry.percent)}%`,
+          link: INFRASTRUCTURE_PATH,
+        });
+      }
+    }
+
+    // Sort by priority then by label for stability
+    items.sort((a, b) => {
+      const priorityDiff = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+      if (priorityDiff !== 0) return priorityDiff;
+      return a.label.localeCompare(b.label);
+    });
+
+    return items;
+  });
+
+  const displayedActions = createMemo(() => actionItems().slice(0, MAX_ACTION_ITEMS));
+  const overflowCount = createMemo(() => Math.max(0, actionItems().length - MAX_ACTION_ITEMS));
 
   return (
     <main data-testid="dashboard-page" aria-labelledby="dashboard-title" class="space-y-6">
@@ -265,6 +400,53 @@ export default function Dashboard() {
                 </div>
               </div>
             </section>
+
+            {actionItems().length > 0 && (
+              <section
+                class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`}
+                aria-labelledby="action-queue-heading"
+              >
+                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">DP-ACTION</p>
+                <h2
+                  id="action-queue-heading"
+                  class="mt-1 text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100"
+                >
+                  Needs Action
+                </h2>
+                <div class="mt-2 mb-3 border-b border-gray-100 dark:border-gray-700/50" />
+
+                <ul class="space-y-2" role="list">
+                  <For each={displayedActions()}>
+                    {(item) => (
+                      <li class="flex items-start gap-2.5">
+                        <span
+                          class={`mt-0.5 inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${priorityBadgeClass(item.priority)}`}
+                        >
+                          {item.priority}
+                        </span>
+                        <a
+                          href={item.link}
+                          class="text-sm text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 hover:underline truncate"
+                        >
+                          {item.label}
+                        </a>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+
+                {overflowCount() > 0 && (
+                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    <a
+                      href={ALERTS_OVERVIEW_PATH}
+                      class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                    >
+                      and {overflowCount()} more…
+                    </a>
+                  </p>
+                )}
+              </section>
+            )}
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <section
