@@ -394,12 +394,12 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       </div>
                       <div class="ml-8 relative group">
                         <code class="block p-3 bg-gray-900 dark:bg-gray-950 rounded-lg text-sm font-mono text-green-400 border border-gray-700 whitespace-pre-wrap break-all">
-                          {`curl -LO https://github.com/rcourtman/Pulse/releases/download/${props.updateInfo()?.latestVersion}/pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz
-sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /usr/local/bin pulse`}
+                          {`curl -LO https://github.com/rcourtman/Pulse/releases/download/v${props.updateInfo()?.latestVersion}/pulse-v${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz
+sudo tar -xzf pulse-v${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /usr/local/bin pulse`}
                         </code>
                         <button
                           type="button"
-                          onClick={() => navigator.clipboard.writeText(`curl -LO https://github.com/rcourtman/Pulse/releases/download/${props.updateInfo()?.latestVersion}/pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz\nsudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /usr/local/bin pulse`)}
+                          onClick={() => navigator.clipboard.writeText(`curl -LO https://github.com/rcourtman/Pulse/releases/download/v${props.updateInfo()?.latestVersion}/pulse-v${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz\nsudo tar -xzf pulse-v${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /usr/local/bin pulse`)}
                           class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                           title="Copy to clipboard"
                         >
