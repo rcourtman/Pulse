@@ -25,8 +25,8 @@ Date: 2026-02-09
 | RC-02 | Security Re-Scan + Verdict Upgrade | DONE | Claude | Claude | APPROVED | RC-02 section |
 | RC-03 | Hosted Signup Partial Provisioning Cleanup | DONE | SEC lane | Claude | APPROVED | RC-03 section |
 | RC-04 | Frontend Release-Test Hygiene (No network noise) | DONE | Claude | Claude | APPROVED | RC-04 section |
-| RC-05 | Full Certification Replay | READY |  |  |  | RC-05 section |
-| RC-06 | Release Artifact + Docker Validation | BLOCKED |  |  |  | RC-06 section |
+| RC-05 | Full Certification Replay | DONE | Claude | Claude | APPROVED | RC-05 section |
+| RC-06 | Release Artifact + Docker Validation | READY |  |  |  | RC-06 section |
 | RC-07 | Final GO Verdict + Docs Alignment | BLOCKED |  |  |  | RC-07 section |
 
 ---
@@ -274,7 +274,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- (pending checkpoint)
+- `89f6696c` (docs(RC-02): security re-scan — all 3 scans exit 0, verdict GO confirmed)
 
 Residual risk:
 - None. All previous P1 security findings resolved.
@@ -285,7 +285,7 @@ Rollback:
 
 Evidence:
 - Commands run + exit codes: see review record
-- Commit: (pending)
+- Commit: `89f6696c`
 
 ## RC-03 Checklist: Hosted Signup Partial Provisioning Cleanup
 
@@ -427,23 +427,66 @@ Evidence:
 ## RC-05 Checklist: Full Certification Replay
 
 Blocked by:
-- RC-01
-- RC-02
-- RC-03
-- RC-04
+- RC-01 (DONE)
+- RC-02 (DONE)
+- RC-03 (DONE)
+- RC-04 (DONE)
 
-- [ ] `go build ./...` -> exit 0
-- [ ] `go test ./... -count=1` -> exit 0
-- [ ] `cd frontend-modern && npx vitest run` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
-- [ ] `go test ./internal/api/... -run "Security|Tenant|RBAC|Contract|RouteInventory" -count=1` -> exit 0
-- [ ] `go test ./internal/monitoring/... -run "Tenant|Alert|Isolation|TrueNAS" -count=1` -> exit 0
-- [ ] `bash scripts/conformance-smoke.sh` -> exit 0
+- [x] `go build ./...` -> exit 0
+- [x] `go test ./... -count=1` -> exit 0 (all packages, 20.1s for monitoring)
+- [x] `cd frontend-modern && npx vitest run` -> exit 0 (80 files, 707 tests, 13.9s)
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `go test ./internal/api/... -run "Security|Tenant|RBAC|Contract|RouteInventory" -count=1` -> exit 0 (6.5s)
+- [x] `go test ./internal/monitoring/... -run "Tenant|Alert|Isolation|TrueNAS" -count=1` -> exit 0 (3.0s)
+- [x] `bash scripts/conformance-smoke.sh` -> exit 0 (6/6 permutations PASS)
+
+### Flake Notes
+
+- `TestTrueNASPollerRecordsMetrics` flaked once during initial parallel run (resource contention from 3 concurrent `go test` processes). Passed on both the targeted rerun (exit 0) and the full sequential suite rerun (exit 0). Same known P2 timing sensitivity documented in RFC-01. Not a regression.
+
+### Review Gates
+
+- [x] P0 PASS — All 7 frozen commands exit 0. Full suite green.
+- [x] P1 PASS — No true regressions. Known flake resolved by sequential rerun.
+- [x] P2 PASS — Tracker updated; flake documented.
+- [x] Verdict recorded
+
+### RC-05 Review Record
+
+```
+Files changed:
+- docs/architecture/release-confidence-hardening-progress-2026-02.md: RC-05 certification replay evidence
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+2. `go test ./... -count=1` -> exit 0 (sequential rerun, all packages)
+3. `cd frontend-modern && npx vitest run` -> exit 0 (80 files, 707 tests)
+4. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+5. `go test ./internal/api/... -run "Security|Tenant|RBAC|Contract|RouteInventory" -count=1` -> exit 0 (6.5s)
+6. `go test ./internal/monitoring/... -run "Tenant|Alert|Isolation|TrueNAS" -count=1` -> exit 0 (3.0s)
+7. `bash scripts/conformance-smoke.sh` -> exit 0 (6/6 PASS)
+
+Gate checklist:
+- P0: PASS (all 7 commands green)
+- P1: PASS (no regressions; flake resolved)
+- P2: PASS (tracker accurate)
+
+Verdict: APPROVED
+
+Commit:
+- (pending checkpoint)
+
+Residual risk:
+- P2: TestTrueNASPollerRecordsMetrics timing sensitivity (same as RFC-01). Passes deterministically in sequential runs.
+
+Rollback:
+- N/A (evidence packet; no code changes).
+```
 
 Evidence:
-- Commands run + exit codes:
-- Flake notes (if any):
-- Commit:
+- Commands run + exit codes: see review record
+- Flake notes: TestTrueNASPollerRecordsMetrics — parallel contention flake, passes on rerun and in full sequential suite
+- Commit: (pending)
 
 ## RC-06 Checklist: Release Artifact + Docker Validation
 
