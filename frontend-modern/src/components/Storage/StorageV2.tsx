@@ -120,7 +120,7 @@ const StorageV2: Component = () => {
 
   const adapterResources = createMemo(() => {
     const unifiedResources = storageBackupsResources.resources();
-    return unifiedResources.length > 0 ? unifiedResources : (state.resources || []);
+    return unifiedResources;
   });
 
   const records = createMemo(() => buildStorageRecordsV2({ state, resources: adapterResources() }));

@@ -189,52 +189,60 @@ describe('useResources - Resource Filtering Logic', () => {
     });
 });
 
-describe('Fallback Logic', () => {
-    describe('hasUnifiedResources check', () => {
-        it('returns true when resources array has items', () => {
-            const resources: Resource[] = [createMockResource()];
-            expect(resources.length > 0).toBe(true);
-        });
-
-        it('returns false when resources array is empty', () => {
-            const resources: Resource[] = [];
-            expect(resources.length > 0).toBe(false);
-        });
-    });
-
-    describe('legacy array fallback', () => {
-        // This tests the concept - actual implementation uses WebSocket store
-        it('uses legacy array when unified resources not available', () => {
-            const unifiedResources: Resource[] = [];
-            const legacyVms = [{ id: 'vm-1', name: 'Legacy VM' }];
-
-            const hasUnifiedResources = unifiedResources.length > 0;
-            const result = hasUnifiedResources ? unifiedResources : legacyVms;
-
-            expect(result).toEqual(legacyVms);
-        });
-
-        it('uses unified resources when available', () => {
-            const unifiedResources: Resource[] = [createMockResource({ id: 'unified-1' })];
-            const legacyVms = [{ id: 'vm-1', name: 'Legacy VM' }];
-
-            const hasUnifiedResources = unifiedResources.length > 0;
-            const result = hasUnifiedResources ? unifiedResources : legacyVms;
-
-            expect(result).toEqual(unifiedResources);
-        });
-    });
-});
-
 describe('useAlertsResources', () => {
     it('exposes all resource types needed by alerts consumers', () => {
         const store = createMockLegacyStore({
-            nodes: [{ id: 'node-1' }],
-            vms: [{ id: 'vm-1' }],
-            containers: [{ id: 'ct-1' }],
-            storage: [{ id: 'storage-1' }],
-            hosts: [{ id: 'host-1' }],
-            dockerHosts: [{ id: 'docker-host-1' }],
+            resources: [
+                createMockResource({
+                    id: 'node-1',
+                    type: 'node',
+                    name: 'Node 1',
+                    platformData: { host: 'pve1.local' },
+                }),
+                createMockResource({
+                    id: 'vm-1',
+                    type: 'vm',
+                    name: 'VM 1',
+                    cpu: { current: 10 },
+                    platformData: { vmid: 1, node: 'pve1', instance: 'pve1/qemu/1' },
+                }),
+                createMockResource({
+                    id: 'ct-1',
+                    type: 'container',
+                    name: 'CT 1',
+                    cpu: { current: 10 },
+                    platformData: { vmid: 2, node: 'pve1', instance: 'pve1/lxc/2' },
+                }),
+                createMockResource({
+                    id: 'storage-1',
+                    type: 'storage',
+                    name: 'local-lvm',
+                    status: 'online',
+                    disk: { current: 25, total: 100, used: 25, free: 75 },
+                    platformData: { node: 'pve1', instance: 'pve1', type: 'lvmthin' },
+                }),
+                createMockResource({
+                    id: 'host-1',
+                    type: 'host',
+                    name: 'host-1',
+                    status: 'online',
+                }),
+                createMockResource({
+                    id: 'docker-host-1',
+                    type: 'docker-host',
+                    name: 'docker-host-1',
+                    status: 'online',
+                    platformData: { agentId: 'agent-1', runtime: 'docker' },
+                }),
+                createMockResource({
+                    id: 'docker/container-1',
+                    type: 'docker-container',
+                    name: 'nginx',
+                    parentId: 'docker-host-1',
+                    status: 'running',
+                    platformData: { image: 'nginx:latest' },
+                }),
+            ],
         });
 
         let dispose = () => {};
@@ -262,7 +270,14 @@ describe('useAlertsResources', () => {
 
     it('ready signal is true when nodes are available', () => {
         const store = createMockLegacyStore({
-            nodes: [{ id: 'node-1' }],
+            resources: [
+                createMockResource({
+                    id: 'node-1',
+                    type: 'node',
+                    name: 'Node 1',
+                    platformData: { host: 'pve1.local' },
+                }),
+            ],
         });
 
         let dispose = () => {};
@@ -280,11 +295,49 @@ describe('useAlertsResources', () => {
 describe('useAIChatResources', () => {
     it('exposes all resource types needed by AI chat consumers', () => {
         const store = createMockLegacyStore({
-            nodes: [{ id: 'node-1' }],
-            vms: [{ id: 'vm-1' }],
-            containers: [{ id: 'ct-1' }],
-            dockerHosts: [{ id: 'docker-host-1' }],
-            hosts: [{ id: 'host-1' }],
+            resources: [
+                createMockResource({
+                    id: 'node-1',
+                    type: 'node',
+                    name: 'Node 1',
+                    platformData: { host: 'pve1.local' },
+                }),
+                createMockResource({
+                    id: 'vm-1',
+                    type: 'vm',
+                    name: 'VM 1',
+                    cpu: { current: 10 },
+                    platformData: { vmid: 1, node: 'pve1', instance: 'pve1/qemu/1' },
+                }),
+                createMockResource({
+                    id: 'ct-1',
+                    type: 'container',
+                    name: 'CT 1',
+                    cpu: { current: 10 },
+                    platformData: { vmid: 2, node: 'pve1', instance: 'pve1/lxc/2' },
+                }),
+                createMockResource({
+                    id: 'docker-host-1',
+                    type: 'docker-host',
+                    name: 'docker-host-1',
+                    status: 'online',
+                    platformData: { agentId: 'agent-1', runtime: 'docker' },
+                }),
+                createMockResource({
+                    id: 'docker/container-1',
+                    type: 'docker-container',
+                    name: 'nginx',
+                    parentId: 'docker-host-1',
+                    status: 'running',
+                    platformData: { image: 'nginx:latest' },
+                }),
+                createMockResource({
+                    id: 'host-1',
+                    type: 'host',
+                    name: 'host-1',
+                    status: 'online',
+                }),
+            ],
         });
 
         let dispose = () => {};
@@ -310,7 +363,20 @@ describe('useAIChatResources', () => {
 
     it('isCluster is true when multiple nodes exist', () => {
         const store = createMockLegacyStore({
-            nodes: [{ id: 'node-1' }, { id: 'node-2' }],
+            resources: [
+                createMockResource({
+                    id: 'node-1',
+                    type: 'node',
+                    name: 'Node 1',
+                    platformData: { host: 'pve1.local' },
+                }),
+                createMockResource({
+                    id: 'node-2',
+                    type: 'node',
+                    name: 'Node 2',
+                    platformData: { host: 'pve2.local' },
+                }),
+            ],
         });
 
         let dispose = () => {};
@@ -326,6 +392,60 @@ describe('useAIChatResources', () => {
 });
 
 describe('Stale legacy-only consumer detection', () => {
+    it('useAlertsResources ignores legacy arrays when unified resources are empty', () => {
+        const store = createMockLegacyStore({
+            resources: [],
+            nodes: [{ id: 'legacy-node-1', name: 'Legacy Node' }],
+            vms: [{ id: 'legacy-vm-1', name: 'Legacy VM' }],
+            containers: [{ id: 'legacy-ct-1', name: 'Legacy CT' }],
+            storage: [{ id: 'legacy-storage-1', name: 'Legacy Storage' }],
+            hosts: [{ id: 'legacy-host-1', name: 'Legacy Host' }],
+            dockerHosts: [{ id: 'legacy-docker-host-1', name: 'Legacy Docker Host' }],
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAlertsResources(store as any);
+        });
+
+        expect(selectors.nodes()).toHaveLength(0);
+        expect(selectors.vms()).toHaveLength(0);
+        expect(selectors.containers()).toHaveLength(0);
+        expect(selectors.storage()).toHaveLength(0);
+        expect(selectors.hosts()).toHaveLength(0);
+        expect(selectors.dockerHosts()).toHaveLength(0);
+        expect(selectors.ready()).toBe(false);
+
+        dispose();
+    });
+
+    it('useAIChatResources ignores legacy arrays when unified resources are empty', () => {
+        const store = createMockLegacyStore({
+            resources: [],
+            nodes: [{ id: 'legacy-node-1', name: 'Legacy Node' }],
+            vms: [{ id: 'legacy-vm-1', name: 'Legacy VM' }],
+            containers: [{ id: 'legacy-ct-1', name: 'Legacy CT' }],
+            hosts: [{ id: 'legacy-host-1', name: 'Legacy Host' }],
+            dockerHosts: [{ id: 'legacy-docker-host-1', name: 'Legacy Docker Host' }],
+        });
+
+        let dispose = () => {};
+        const selectors = createRoot((d) => {
+            dispose = d;
+            return useAIChatResources(store as any);
+        });
+
+        expect(selectors.nodes()).toHaveLength(0);
+        expect(selectors.vms()).toHaveLength(0);
+        expect(selectors.containers()).toHaveLength(0);
+        expect(selectors.hosts()).toHaveLength(0);
+        expect(selectors.dockerHosts()).toHaveLength(0);
+        expect(selectors.isCluster()).toBe(false);
+
+        dispose();
+    });
+
     it('unified selectors return unified conversion output, not raw legacy arrays', () => {
         const legacyNodes = [{ id: 'legacy-node-1', name: 'Legacy Node' }];
         const legacyVms = [{ id: 'legacy-vm-1', name: 'Legacy VM', cpu: 0.01 }];

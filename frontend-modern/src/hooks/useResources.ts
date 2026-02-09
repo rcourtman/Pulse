@@ -1,9 +1,9 @@
 /**
  * useResources Hook
  * 
- * Provides reactive access to unified resources from the WebSocket state.
- * This is the primary way for frontend components to access resource data
- * as we migrate away from legacy arrays (nodes, vms, containers, etc.).
+ * Provides reactive access to unified resources via the REST-backed unified resources hook.
+ * This is the primary way for frontend components to access resource data as we migrate away
+ * from legacy arrays (nodes, vms, containers, etc.). Tests can still inject a store override.
  * 
  * Example usage:
  * ```tsx
@@ -24,6 +24,7 @@
 import { createMemo, type Accessor } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
+import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import type {
     Resource,
     ResourceType,
@@ -499,35 +500,6 @@ function isStorageActiveStatus(status: string | undefined): boolean {
     return normalized === 'online' || normalized === 'running' || normalized === 'available';
 }
 
-function buildStorageBridgeKey(storage: Pick<Storage, 'id' | 'instance' | 'node' | 'name' | 'type'>): string {
-    const instance = (storage.instance || '').trim().toLowerCase();
-    const node = (storage.node || '').trim().toLowerCase();
-    const name = (storage.name || '').trim().toLowerCase();
-    const type = (storage.type || '').trim().toLowerCase();
-    if (instance || node || name || type) {
-        return `identity:${instance}|${node}|${name}|${type}`;
-    }
-    return `id:${(storage.id || '').trim().toLowerCase()}`;
-}
-
-function mergeStorageBridgeRecord(
-    current: Storage,
-    incoming: Storage,
-    preferIncoming: boolean,
-): Storage {
-    const preferred = preferIncoming ? incoming : current;
-    const secondary = preferred === current ? incoming : current;
-    return {
-        ...secondary,
-        ...preferred,
-        nodes: preferred.nodes ?? secondary.nodes,
-        nodeIds: preferred.nodeIds ?? secondary.nodeIds,
-        nodeCount: preferred.nodeCount ?? secondary.nodeCount,
-        pbsNames: preferred.pbsNames ?? secondary.pbsNames,
-        zfsPool: preferred.zfsPool ?? secondary.zfsPool,
-    };
-}
-
 function resourceToLegacyStorage(resource: Resource): Storage {
     const platformData = resource.platformData
         ? (unwrap(resource.platformData) as Record<string, unknown>)
@@ -611,8 +583,18 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
     // Get the WebSocket store instance
     const wsStore = storeOverride ?? getGlobalWebSocketStore();
 
-    // All resources from WebSocket state
+    // Use REST-backed unified resources when no test override is provided.
+    // The `query: ''` fetches ALL resource types (no type filter).
+    const unifiedHook = storeOverride
+        ? null
+        : useUnifiedResources({ query: '', cacheKey: 'all-resources' });
+
+    // All resources from the unified source.
     const resources = createMemo<Resource[]>(() => {
+        if (unifiedHook) {
+            return unifiedHook.resources() ?? [];
+        }
+        // Test override path: read directly from provided store
         return wsStore.state.resources ?? [];
     });
 
@@ -751,80 +733,36 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
 
 /**
  * Alerts-focused legacy resource selectors used during convergence.
- * Uses unified resources directly with local legacy conversion and fallback.
+ * Uses unified resources directly with local legacy conversion.
  */
 export function useAlertsResources(storeOverride?: ResourceStoreLike): UseAlertsResourcesReturn {
     const wsStore = storeOverride ?? getGlobalWebSocketStore();
     const { resources, byType } = useResources(wsStore);
-    const hasUnifiedResources = createMemo(() => resources().length > 0);
 
     const nodes = createMemo<Node[]>(() => {
-        const legacy = wsStore.state.nodes ?? [];
-        if (!hasUnifiedResources()) {
-            return [...legacy];
-        }
         return byType('node').map(resourceToLegacyNode);
     });
 
     const vms = createMemo<VM[]>(() => {
-        const legacy = wsStore.state.vms ?? [];
-        if (!hasUnifiedResources()) {
-            return [...legacy];
-        }
         return byType('vm').map(resourceToLegacyVM);
     });
 
     const containers = createMemo<Container[]>(() => {
-        const legacy = wsStore.state.containers ?? [];
-        if (!hasUnifiedResources()) {
-            return [...legacy];
-        }
         return [...byType('container'), ...byType('oci-container')].map(resourceToLegacyContainer);
     });
 
     const hosts = createMemo<Host[]>(() => {
-        const legacy = wsStore.state.hosts ?? [];
-        if (!hasUnifiedResources()) {
-            return [...legacy];
-        }
         return byType('host').map(resourceToLegacyHost);
     });
 
     const dockerHosts = createMemo<DockerHost[]>(() => {
-        const legacy = wsStore.state.dockerHosts ?? [];
-        if (!hasUnifiedResources()) {
-            return [...legacy];
-        }
         return dockerHostsFromResources(byType('docker-host'), byType('docker-container'));
     });
 
     const storage = createMemo<Storage[]>(() => {
-        const legacy = wsStore.state.storage ?? [];
-        const recordsByKey = new Map<string, Storage>();
-        const appendRecords = (items: Storage[], preferIncoming: boolean) => {
-            items.forEach((item) => {
-                const key = buildStorageBridgeKey(item);
-                const existing = recordsByKey.get(key);
-                if (!existing) {
-                    recordsByKey.set(key, item);
-                    return;
-                }
-                recordsByKey.set(key, mergeStorageBridgeRecord(existing, item, preferIncoming));
-            });
-        };
-
-        appendRecords(legacy, false);
-
-        if (!hasUnifiedResources()) {
-            return Array.from(recordsByKey.values());
-        }
-
-        const unifiedStorage = resources()
+        return resources()
             .filter((resource) => resource.type === 'storage' || resource.type === 'datastore')
             .map(resourceToLegacyStorage);
-
-        appendRecords(unifiedStorage, true);
-        return Array.from(recordsByKey.values());
     });
 
     const ready = createMemo(() => nodes().length > 0);
@@ -842,50 +780,29 @@ export function useAlertsResources(storeOverride?: ResourceStoreLike): UseAlerts
 
 /**
  * AI-chat-focused legacy resource selectors used during convergence.
- * Uses unified resources directly with local legacy conversion and fallback.
+ * Uses unified resources directly with local legacy conversion.
  */
 export function useAIChatResources(storeOverride?: ResourceStoreLike): UseAIChatResourcesReturn {
     const wsStore = storeOverride ?? getGlobalWebSocketStore();
-    const { resources, byType } = useResources(wsStore);
-    const hasUnifiedResources = createMemo(() => resources().length > 0);
+    const { byType } = useResources(wsStore);
 
     const nodes = createMemo<Node[]>(() => {
-        const legacy = wsStore.state.nodes ?? [];
-        if (!hasUnifiedResources()) {
-            return [...legacy];
-        }
         return byType('node').map(resourceToLegacyNode);
     });
 
     const vms = createMemo<VM[]>(() => {
-        const legacy = wsStore.state.vms ?? [];
-        if (!hasUnifiedResources()) {
-            return [...legacy];
-        }
         return byType('vm').map(resourceToLegacyVM);
     });
 
     const containers = createMemo<Container[]>(() => {
-        const legacy = wsStore.state.containers ?? [];
-        if (!hasUnifiedResources()) {
-            return [...legacy];
-        }
         return [...byType('container'), ...byType('oci-container')].map(resourceToLegacyContainer);
     });
 
     const dockerHosts = createMemo<DockerHost[]>(() => {
-        const legacy = wsStore.state.dockerHosts ?? [];
-        if (!hasUnifiedResources()) {
-            return [...legacy];
-        }
         return dockerHostsFromResources(byType('docker-host'), byType('docker-container'));
     });
 
     const hosts = createMemo<Host[]>(() => {
-        const legacy = wsStore.state.hosts ?? [];
-        if (!hasUnifiedResources()) {
-            return [...legacy];
-        }
         return byType('host').map(resourceToLegacyHost);
     });
 

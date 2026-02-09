@@ -1,5 +1,4 @@
 import { createEffect, createMemo, createResource, createSignal, type Accessor } from 'solid-js';
-import { useWebSocket } from '@/App';
 import {
   ChartsAPI as ChartService,
   type AggregatedMetricPoint,
@@ -7,7 +6,7 @@ import {
   type ResourceType as HistoryResourceType,
 } from '@/api/charts';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
-import { isStorage, type ResourceType as UnifiedResourceType } from '@/types/resource';
+import { isStorage, type Resource, type ResourceType as UnifiedResourceType } from '@/types/resource';
 
 export type TrendPoint = {
   timestamp: number;
@@ -41,6 +40,7 @@ interface DashboardTrendRequest {
   cpu: HistoryTarget[];
   memory: HistoryTarget[];
   storage: string[];
+  infrastructureRange: HistoryTimeRange;
 }
 
 interface DashboardTrendSnapshot {
@@ -247,7 +247,7 @@ async function fetchDashboardTrendSnapshot(request: DashboardTrendRequest): Prom
             target.resourceType,
             target.id,
             'cpu',
-            INFRASTRUCTURE_RANGE,
+            request.infrastructureRange,
             SPARKLINE_POINTS,
           );
           return [target.id, extractTrendData(points)] as const;
@@ -264,7 +264,7 @@ async function fetchDashboardTrendSnapshot(request: DashboardTrendRequest): Prom
             target.resourceType,
             target.id,
             'memory',
-            INFRASTRUCTURE_RANGE,
+            request.infrastructureRange,
             SPARKLINE_POINTS,
           );
           return [target.id, extractTrendData(points)] as const;
@@ -303,14 +303,17 @@ async function fetchDashboardTrendSnapshot(request: DashboardTrendRequest): Prom
   };
 }
 
-export function useDashboardTrends(overview: Accessor<DashboardOverview>): Accessor<DashboardTrends> {
-  const { state } = useWebSocket();
+export function useDashboardTrends(
+  overview: Accessor<DashboardOverview>,
+  resources: Accessor<Resource[]>,
+  infrastructureRange?: Accessor<HistoryTimeRange>,
+): Accessor<DashboardTrends> {
   const [error, setError] = createSignal<string | null>(null);
 
   const trendRequest = createMemo<DashboardTrendRequest>(() => {
     const currentOverview = overview();
-    const resources = Array.isArray(state.resources) ? state.resources : [];
-    const unifiedTypeById = new Map(resources.map((resource) => [resource.id, resource.type] as const));
+    const currentResources = resources();
+    const unifiedTypeById = new Map(currentResources.map((resource) => [resource.id, resource.type] as const));
 
     const cpuTargets = buildHistoryTargets(
       currentOverview.infrastructure.topCPU.map((item) => item.id),
@@ -321,13 +324,14 @@ export function useDashboardTrends(overview: Accessor<DashboardOverview>): Acces
       unifiedTypeById,
     );
     const storageTargets = dedupeValues(
-      resources.filter((resource) => isStorage(resource)).map((resource) => resource.id),
+      currentResources.filter((resource) => isStorage(resource)).map((resource) => resource.id),
     ).sort();
 
     return {
       cpu: cpuTargets,
       memory: memoryTargets,
       storage: storageTargets,
+      infrastructureRange: infrastructureRange ? infrastructureRange() : INFRASTRUCTURE_RANGE,
     };
   });
 

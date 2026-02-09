@@ -1,13 +1,13 @@
 import { render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Resource } from '@/types/resource';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
 import DashboardPage from '@/pages/Dashboard';
 
-let wsInitialDataReceived = true;
+let unifiedLoading = false;
+let unifiedResources: any[] = [];
+let unifiedError: unknown = undefined;
 let wsConnected = true;
 let wsReconnecting = false;
-let wsResources: Resource[] = [];
 const reconnectSpy = vi.fn();
 
 const overviewMock: DashboardOverview = {
@@ -46,12 +46,22 @@ const overviewMock: DashboardOverview = {
 
 vi.mock('@/App', () => ({
   useWebSocket: () => ({
-    state: { resources: wsResources },
+    state: { resources: [] },
     activeAlerts: {},
     connected: () => wsConnected,
     reconnecting: () => wsReconnecting,
     reconnect: reconnectSpy,
-    initialDataReceived: () => wsInitialDataReceived,
+    initialDataReceived: () => true,
+  }),
+}));
+
+vi.mock('@/hooks/useUnifiedResources', () => ({
+  useUnifiedResources: () => ({
+    resources: () => unifiedResources,
+    loading: () => unifiedLoading,
+    error: () => unifiedError,
+    refetch: vi.fn(),
+    mutate: vi.fn(),
   }),
 }));
 
@@ -73,12 +83,22 @@ vi.mock('@/hooks/useDashboardTrends', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useDashboardBackups', () => ({
+  useDashboardBackups: () => () => ({
+    totalBackups: 0,
+    byOutcome: {},
+    latestBackupTimestamp: null,
+    hasData: false,
+  }),
+}));
+
 describe('Dashboard page module contract', () => {
   beforeEach(() => {
-    wsInitialDataReceived = true;
+    unifiedLoading = false;
+    unifiedResources = [];
+    unifiedError = undefined;
     wsConnected = true;
     wsReconnecting = false;
-    wsResources = [];
     reconnectSpy.mockReset();
   });
 
@@ -86,8 +106,8 @@ describe('Dashboard page module contract', () => {
     expect(typeof DashboardPage).toBe('function');
   });
 
-  it('renders loading skeleton blocks before initial data is received', () => {
-    wsInitialDataReceived = false;
+  it('renders loading skeleton blocks when resources are loading', () => {
+    unifiedLoading = true;
 
     render(() => <DashboardPage />);
 

@@ -488,7 +488,7 @@ type UseUnifiedResourcesOptions = {
 };
 
 export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
-  const query = normalizeUnifiedResourcesQuery(options?.query || DEFAULT_UNIFIED_RESOURCES_QUERY);
+  const query = normalizeUnifiedResourcesQuery(options?.query ?? DEFAULT_UNIFIED_RESOURCES_QUERY);
   const cacheKey = (options?.cacheKey || query || 'all').trim();
   const cacheEntry = getUnifiedResourcesCacheEntry(cacheKey);
   const initialResources = cacheEntry.resources;

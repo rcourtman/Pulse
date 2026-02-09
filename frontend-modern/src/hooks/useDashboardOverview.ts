@@ -1,5 +1,4 @@
 import { createMemo, type Accessor } from 'solid-js';
-import { useWebSocket } from '@/App';
 import type { Alert } from '@/types/api';
 import type { Resource, ResourceMetric, ResourceStatus } from '@/types/resource';
 import { isInfrastructure, isStorage, isWorkload } from '@/types/resource';
@@ -204,16 +203,9 @@ export function computeDashboardOverview(
   };
 }
 
-function isAlertRecordEntry(value: Alert | undefined): value is Alert {
-  return value !== undefined;
-}
-
-export function useDashboardOverview(): Accessor<DashboardOverview> {
-  const { state, activeAlerts } = useWebSocket();
-
-  return createMemo(() => {
-    const resources = Array.isArray(state.resources) ? state.resources : [];
-    const alerts = Object.values(activeAlerts as Record<string, Alert | undefined>).filter(isAlertRecordEntry);
-    return computeDashboardOverview(resources, alerts);
-  });
+export function useDashboardOverview(
+  resources: Accessor<Resource[]>,
+  alerts: Accessor<Alert[]>,
+): Accessor<DashboardOverview> {
+  return createMemo(() => computeDashboardOverview(resources(), alerts()));
 }

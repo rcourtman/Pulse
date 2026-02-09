@@ -326,7 +326,7 @@ const BackupsV2: Component = () => {
   const [currentPage, setCurrentPage] = createSignal(1);
   const adapterResources = createMemo(() => {
     const unifiedResources = storageBackupsResources.resources();
-    return unifiedResources.length > 0 ? unifiedResources : (state.resources || []);
+    return unifiedResources;
   });
   const records = createMemo<BackupRecordV2[]>(() =>
     buildBackupRecordsV2({ state, resources: adapterResources() }),
