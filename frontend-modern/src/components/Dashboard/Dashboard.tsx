@@ -1115,8 +1115,6 @@ export function Dashboard(props: DashboardProps) {
         globalTemperatureMonitoringEnabled={ws.state.temperatureMonitoringEnabled}
         onNodeSelect={handleNodeSelect}
         nodes={props.nodes}
-        filteredVms={filteredGuests().filter((g) => resolveWorkloadType(g) === 'vm') as VM[]}
-        filteredContainers={filteredGuests().filter((g) => resolveWorkloadType(g) === 'lxc') as Container[]}
         searchTerm={search()}
         showNodeSummary={!isWorkloadsRoute()}
       />

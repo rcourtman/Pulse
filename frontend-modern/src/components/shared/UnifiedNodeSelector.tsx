@@ -1,7 +1,8 @@
 import { Component, Show, createSignal, createEffect, createMemo, onMount, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { NodeSummaryTable } from './NodeSummaryTable';
-import type { Node, VM, Container, Storage } from '@/types/api';
+import { useResources } from '@/hooks/useResources';
+import type { Node } from '@/types/api';
 
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'backups';
@@ -9,15 +10,13 @@ interface UnifiedNodeSelectorProps {
   onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => void;
   onNamespaceSelect?: (namespace: string) => void;
   nodes?: Node[];
-  filteredVms?: VM[];
-  filteredContainers?: Container[];
-  filteredStorage?: Storage[];
   searchTerm?: string;
   showNodeSummary?: boolean;
 }
 
 export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) => {
   const { state } = useWebSocket();
+  const { byType } = useResources();
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
 
   // Handle ESC key to deselect node
@@ -42,8 +41,44 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     setSelectedNode(null);
   });
 
-  // No longer syncing with search term - selection is independent
-  // This allows users to select a node AND search within it
+  // Compute per-node VM counts from unified resources
+  const vmCounts = createMemo(() => {
+    const counts: Record<string, number> = {};
+    byType('vm').forEach(r => {
+      if (r.parentId) counts[r.parentId] = (counts[r.parentId] || 0) + 1;
+    });
+    return counts;
+  });
+
+  // Compute per-node container counts (LXC + OCI containers)
+  const containerCounts = createMemo(() => {
+    const counts: Record<string, number> = {};
+    const containers = [...byType('container'), ...byType('oci-container')];
+    containers.forEach(r => {
+      if (r.parentId) counts[r.parentId] = (counts[r.parentId] || 0) + 1;
+    });
+    return counts;
+  });
+
+  // Compute per-node storage counts from unified resources
+  const storageCounts = createMemo(() => {
+    const counts: Record<string, number> = {};
+    byType('storage').forEach(r => {
+      if (r.parentId) counts[r.parentId] = (counts[r.parentId] || 0) + 1;
+    });
+    return counts;
+  });
+
+  // Physical disks are NOT unified resources — compute from legacy state
+  const diskCounts = createMemo(() => {
+    const counts: Record<string, number> = {};
+    const nodes = props.nodes || state.nodes || [];
+    (state.physicalDisks ?? []).forEach((disk) => {
+      const node = nodes.find(n => n.instance === disk.instance && n.name === disk.node);
+      if (node) counts[node.id] = (counts[node.id] || 0) + 1;
+    });
+    return counts;
+  });
 
   // Calculate backup counts for nodes and PBS instances
   const pveBackupsState = () => state.backups?.pve ?? state.pveBackups;
@@ -106,9 +141,11 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
         <NodeSummaryTable
           nodes={nodes()}
           pbsInstances={props.currentTab === 'backups' ? state.pbs : undefined}
-          vms={state.vms} // Always use unfiltered data for counts
-          containers={state.containers} // Always use unfiltered data for counts
-          storage={state.storage} // Always use unfiltered data for counts
+          vmCounts={vmCounts()}
+          containerCounts={containerCounts()}
+          storageCounts={storageCounts()}
+          diskCounts={diskCounts()}
+          hosts={state.hosts}
           backupCounts={backupCounts()}
           currentTab={props.currentTab}
           selectedNode={selectedNode()}

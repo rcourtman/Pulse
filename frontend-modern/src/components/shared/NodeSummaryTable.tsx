@@ -1,5 +1,5 @@
 import { Component, For, Show, createMemo, createSignal, lazy, Suspense } from 'solid-js';
-import type { Host, Node, VM, Container, Storage, PBSInstance } from '@/types/api';
+import type { Host, Node, PBSInstance } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -23,9 +23,11 @@ const NodeDrawer = lazy(() => import('./NodeDrawer').then(m => ({ default: m.Nod
 interface NodeSummaryTableProps {
   nodes: Node[];
   pbsInstances?: PBSInstance[];
-  vms?: VM[];
-  containers?: Container[];
-  storage?: Storage[];
+  vmCounts?: Record<string, number>;
+  containerCounts?: Record<string, number>;
+  storageCounts?: Record<string, number>;
+  diskCounts?: Record<string, number>;
+  hosts?: Host[];
   backupCounts?: Record<string, number>;
   currentTab: 'dashboard' | 'storage' | 'backups';
   selectedNode: string | null;
@@ -34,7 +36,7 @@ interface NodeSummaryTableProps {
 }
 
 export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
-  const { activeAlerts, state } = useWebSocket();
+  const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const { isMobile } = useBreakpoint();
@@ -96,43 +98,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return count;
   });
 
-  const nodeKey = (instance?: string, nodeName?: string) => `${instance ?? ''}::${nodeName ?? ''}`;
-
-  const vmCountsByNode = createMemo<Record<string, number>>(() => {
-    const counts: Record<string, number> = {};
-    (props.vms ?? []).forEach((vm) => {
-      const key = nodeKey(vm.instance, vm.node);
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    return counts;
-  });
-
-  const containerCountsByNode = createMemo<Record<string, number>>(() => {
-    const counts: Record<string, number> = {};
-    (props.containers ?? []).forEach((ct) => {
-      const key = nodeKey(ct.instance, ct.node);
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    return counts;
-  });
-
-  const storageCountsByNode = createMemo<Record<string, number>>(() => {
-    const counts: Record<string, number> = {};
-    (props.storage ?? []).forEach((storage) => {
-      const key = nodeKey(storage.instance, storage.node);
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    return counts;
-  });
-
-  const diskCountsByNode = createMemo<Record<string, number>>(() => {
-    const counts: Record<string, number> = {};
-    (state.physicalDisks ?? []).forEach((disk) => {
-      const key = nodeKey(disk.instance, disk.node);
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    return counts;
-  });
 
   const getCpuTemperatureValue = (item: TableItem) => {
     if (!isPVE(item)) return null;
@@ -241,17 +206,16 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     }
 
     const node = item;
-    const keyId = nodeKey(node.instance, node.name);
 
     switch (key) {
       case 'vmCount':
-        return vmCountsByNode()[keyId] ?? 0;
+        return props.vmCounts?.[node.id] ?? 0;
       case 'containerCount':
-        return containerCountsByNode()[keyId] ?? 0;
+        return props.containerCounts?.[node.id] ?? 0;
       case 'storageCount':
-        return storageCountsByNode()[keyId] ?? 0;
+        return props.storageCounts?.[node.id] ?? 0;
       case 'diskCount':
-        return diskCountsByNode()[keyId] ?? 0;
+        return props.diskCounts?.[node.id] ?? 0;
       case 'backupCount':
         return props.backupCounts?.[node.id] ?? 0;
       default:
@@ -455,13 +419,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 const resourceId = isPVEItem ? node!.id || node!.name : pbs!.id || pbs!.name;
                 const linkedHostForDrawer = (): Host | undefined => {
                   if (!isPVEItem || !node) return undefined;
+                  const hosts = props.hosts ?? [];
 
                   if (node.linkedHostAgentId) {
-                    const byId = state.hosts.find((host) => host.id === node.linkedHostAgentId);
+                    const byId = hosts.find((host) => host.id === node.linkedHostAgentId);
                     if (byId) return byId;
                   }
 
-                  return state.hosts.find(
+                  return hosts.find(
                     (host) => host.linkedNodeId === node.id || host.hostname === node.name,
                   );
                 };
