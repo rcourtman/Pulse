@@ -133,10 +133,10 @@ Rollback:
 ### Required Commands
 
 - [x] `go build ./...` -> exit 0
-- [x] `go test ./pkg/auth/... -count=1` -> exit 0 (1.432s)
-- [x] `go test ./internal/api/... -run "Security|Scope|Authorization|Spoof|Tenant|RBAC|Org" -count=1` -> exit 0 (6.708s)
-- [x] `go test ./internal/websocket/... -run "Tenant|Isolation|Alert" -count=1` -> exit 0 (1.835s)
-- [x] `go test ./internal/monitoring/... -run "Tenant|Alert|Isolation" -count=1` -> exit 0 (0.676s)
+- [x] `go test ./pkg/auth/... -count=1` -> exit 0 (1.589s)
+- [x] `go test ./internal/api/... -run "Security|Scope|Authorization|Spoof|Tenant|RBAC|Org" -count=1` -> exit 0 (6.239s)
+- [x] `go test ./internal/websocket/... -run "Tenant|Isolation|Alert" -count=1` -> exit 0 (1.859s)
+- [x] `go test ./internal/monitoring/... -run "Tenant|Alert|Isolation" -count=1` -> exit 0 (0.689s)
 
 ### Review Gates
 
@@ -149,11 +149,9 @@ Rollback:
 
 ```
 Files changed:
-- internal/api/tenant_org_binding_test.go: 3 new regression tests (cross-tenant detail, scope escalation, token reuse)
-- internal/websocket/hub_multitenant_test.go: 1 new regression test (org auth denial)
-- internal/websocket/hub_alert_tenant_test.go: 1 new regression test (unknown tenant alert leak)
+- docs/architecture/release-security-gate-progress-2026-02.md: refreshed SEC-01 replay command evidence with current run results
 
-Commands run + exit codes (reviewer independent rerun):
+Commands run + exit codes:
 1. `go build ./...` -> exit 0
 2. `go test ./pkg/auth/... -count=1` -> exit 0
 3. `go test ./internal/api/... -run "Security|Scope|Authorization|Spoof|Tenant|RBAC|Org" -count=1` -> exit 0
@@ -168,13 +166,13 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- <pending checkpoint>
+- N/A (no commit requested for this replay evidence refresh)
 
 Residual risk:
-- None — all identified gaps closed with passing regression tests.
+- None identified from SEC-01 replay scope.
 
 Rollback:
-- Revert checkpoint commit; remove added test functions.
+- Revert SEC-01 section changes in this tracker file.
 ```
 
 ## SEC-02 Checklist: Secret Exposure + Dependency Risk Audit

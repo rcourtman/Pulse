@@ -281,6 +281,13 @@ For each phase transition, the operator must verify:
 | `pulse_monitor_poll_errors_total{instance_type="truenas",error_type="connection"}` | Any increment | WARNING | Network connectivity to TrueNAS lost |
 | `pulse_monitor_poll_duration_seconds{instance_type="truenas"}` | p95 > 10s | WARNING | TrueNAS API latency elevated |
 
+## Incident Severity and Response
+
+- P1: Data loss, security breach, or broad outage. Response: immediate acknowledgement and containment start in < 15 minutes.
+- P2: Degraded functionality or single-feature outage. Response: acknowledge and begin mitigation in < 1 hour.
+- P3: Non-blocking degradation or monitoring gaps. Response: triage and mitigation plan in < 4 hours.
+- P4: Cosmetic or documentation-only issue. Response: address by next business day.
+
 ## Quick Reference
 
 | Operation | Primary Action | Restart Required | Propagation Window | Verification |

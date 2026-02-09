@@ -19,7 +19,7 @@ Date: 2026-02-09
 |---|---|---|---|---|---|---|
 | DOC-00 | Scope Freeze + Source of Truth Map | DONE | Claude | Claude | APPROVED | DOC-00 Review |
 | DOC-01 | Architecture Snapshot Ratification | DONE | Codex | Claude | APPROVED | DOC-01 Review |
-| DOC-02 | Runbook Consistency and Rollback Accuracy | PENDING | Codex | Claude | — | — |
+| DOC-02 | Runbook Consistency and Rollback Accuracy | DONE | Codex | Claude | APPROVED | DOC-02 Review |
 | DOC-03 | Release Notes and Debt Ledger Closeout | PENDING | Codex | Claude | — | — |
 | DOC-04 | Final Documentation Verdict | PENDING | Claude | Claude | — | — |
 
@@ -103,28 +103,56 @@ Gate checklist:
 
 Verdict: APPROVED
 
+Commit:
+- `6ace5d5c` (docs(DOC-01): architecture snapshot ratification — guiding-light and gap-analysis reconciled)
+
 Residual risk:
 - None
 
 Rollback:
-- `git revert <commit-hash>`
+- `git revert 6ace5d5c`
 
 ## DOC-02 Checklist: Runbook Consistency and Rollback Accuracy
 
-- [ ] W2/W4/W6 runbooks verified against current architecture.
-- [ ] Rollback and kill-switch procedures reconciled.
-- [ ] Incident response sections reconciled.
+- [x] W2/W4/W6 runbooks verified against current architecture.
+- [x] Rollback and kill-switch procedures reconciled.
+- [x] Incident response sections reconciled.
 
 ### Required Commands
 
-- [ ] `rg -n "rollback|kill-switch|incident|SLA|severity|Phase" docs/architecture/*runbook*.md` -> exit 0
+- [x] `rg -n "rollback|kill-switch|incident|SLA|severity|Phase" docs/architecture/*runbook*.md` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS
+- [x] P1 PASS (N/A — docs-only, no behavioral changes)
+- [x] P2 PASS
+- [x] Verdict recorded
+
+### DOC-02 Review
+
+Files changed:
+- `docs/architecture/truenas-operational-runbook.md`: Added "Incident Severity and Response" section (P1-P4) after Alert Thresholds.
+- `docs/architecture/multi-tenant-operational-runbook.md`: Added "Incident Severity and Response" section (P1-P4) after Alerting Thresholds.
+- `docs/architecture/conversion-operations-runbook.md`: Added "Incident Severity and Response" section (P1-P4) and "Rollback" section after kill-switch.
+- `docs/architecture/hosted-operational-runbook-2026-02.md`: No changes needed (already complete).
+
+Commands run + exit codes:
+1. `rg -n "rollback|kill-switch|incident|SLA|severity|Phase" docs/architecture/*runbook*.md` -> exit 0
+2. `rg -n "Incident Severity and Response" docs/architecture/*runbook*.md` -> exit 0 (3 new sections confirmed)
+
+Gate checklist:
+- P0: PASS (files verified, new sections present and consistent with Hosted P1-P4 model, acceptance command rerun with exit 0)
+- P1: N/A (docs-only packet)
+- P2: PASS (tracker updated to match evidence)
+
+Verdict: APPROVED
+
+Residual risk:
+- Kill-switch patterns remain heterogeneous (2 runtime API, 2 restart-required). Documented as-is; unification is a future operational improvement, not a release blocker.
+
+Rollback:
+- `git revert <commit-hash>`
 
 ## DOC-03 Checklist: Release Notes and Debt Ledger Closeout
 
