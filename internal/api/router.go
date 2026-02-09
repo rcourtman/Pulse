@@ -93,6 +93,7 @@ type Router struct {
 	updateHistory             *updates.UpdateHistory
 	exportLimiter             *RateLimiter
 	downloadLimiter           *RateLimiter
+	signupRateLimiter         *RateLimiter
 	persistence               *config.ConfigPersistence
 	multiTenant               *config.MultiTenantPersistence
 	oidcMu                    sync.Mutex
@@ -117,6 +118,7 @@ type Router struct {
 	relayMu              sync.RWMutex
 	relayClient          *relay.Client
 	relayCancel          context.CancelFunc
+	hostedMode           bool
 }
 
 func pulseBinDir() string {
@@ -166,22 +168,24 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	updateManager.SetHistory(updateHistory)
 
 	r := &Router{
-		mux:             http.NewServeMux(),
-		config:          cfg,
-		monitor:         monitor,
-		mtMonitor:       mtMonitor,
-		wsHub:           wsHub,
-		reloadFunc:      reloadFunc,
-		updateManager:   updateManager,
-		updateHistory:   updateHistory,
-		exportLimiter:   NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
-		downloadLimiter: NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
-		persistence:     config.NewConfigPersistence(cfg.DataPath),
-		multiTenant:     config.NewMultiTenantPersistence(cfg.DataPath),
-		authorizer:      auth.GetAuthorizer(),
-		serverVersion:   strings.TrimSpace(serverVersion),
-		projectRoot:     projectRoot,
-		checksumCache:   make(map[string]checksumCacheEntry),
+		mux:               http.NewServeMux(),
+		config:            cfg,
+		monitor:           monitor,
+		mtMonitor:         mtMonitor,
+		wsHub:             wsHub,
+		reloadFunc:        reloadFunc,
+		updateManager:     updateManager,
+		updateHistory:     updateHistory,
+		exportLimiter:     NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
+		downloadLimiter:   NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
+		signupRateLimiter: NewRateLimiter(5, 1*time.Hour),    // signup attempts per hour per IP
+		persistence:       config.NewConfigPersistence(cfg.DataPath),
+		multiTenant:       config.NewMultiTenantPersistence(cfg.DataPath),
+		authorizer:        auth.GetAuthorizer(),
+		serverVersion:     strings.TrimSpace(serverVersion),
+		projectRoot:       projectRoot,
+		checksumCache:     make(map[string]checksumCacheEntry),
+		hostedMode:        os.Getenv("PULSE_HOSTED_MODE") == "true",
 	}
 	r.resourceRegistry = unifiedresources.NewRegistry(nil)
 	r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(r.resourceRegistry)
@@ -282,6 +286,7 @@ func (r *Router) setupRoutes() {
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacProvider := NewTenantRBACProvider(r.config.DataPath)
 	rbacHandlers := NewRBACHandlers(r.config, rbacProvider)
+	hostedSignupHandlers := NewHostedSignupHandlers(r.multiTenant, rbacProvider, r.hostedMode)
 	infraUpdateHandlers := NewUpdateDetectionHandlers(r.monitor)
 	auditHandlers := NewAuditHandlers()
 
@@ -410,6 +415,7 @@ func (r *Router) setupRoutes() {
 	r.registerConfigSystemRoutes(updateHandlers)
 	r.registerAIRelayRoutes()
 	r.registerOrgLicenseRoutes(orgHandlers, rbacHandlers, auditHandlers)
+	r.registerHostedRoutes(hostedSignupHandlers)
 
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
