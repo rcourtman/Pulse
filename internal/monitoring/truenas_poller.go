@@ -2,7 +2,11 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -244,15 +248,28 @@ func classifyTrueNASError(err error, connectionID string) *internalerrors.Monito
 	errType := internalerrors.ErrorTypeAPI
 	retryable := true
 
-	errStr := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded"):
-		errType = internalerrors.ErrorTypeTimeout
-	case strings.Contains(errStr, "401") || strings.Contains(errStr, "403") || strings.Contains(errStr, "unauthorized") || strings.Contains(errStr, "forbidden"):
-		errType = internalerrors.ErrorTypeAuth
-		retryable = false
-	case strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "no such host") || strings.Contains(errStr, "connection reset"):
-		errType = internalerrors.ErrorTypeConnection
+	var apiErr *truenas.APIError
+	if errors.As(err, &apiErr) {
+		switch {
+		case apiErr.StatusCode == http.StatusUnauthorized || apiErr.StatusCode == http.StatusForbidden:
+			errType = internalerrors.ErrorTypeAuth
+			retryable = false
+		case apiErr.StatusCode == http.StatusRequestTimeout || apiErr.StatusCode == http.StatusGatewayTimeout:
+			errType = internalerrors.ErrorTypeTimeout
+		default:
+			errType = internalerrors.ErrorTypeAPI
+		}
+	} else {
+		// Transport-level errors: timeout takes precedence over generic connection failures.
+		var urlErr *url.Error
+		if (errors.As(err, &urlErr) && urlErr.Timeout()) || errors.Is(err, context.DeadlineExceeded) {
+			errType = internalerrors.ErrorTypeTimeout
+		} else {
+			var netOpErr *net.OpError
+			if errors.As(err, &netOpErr) {
+				errType = internalerrors.ErrorTypeConnection
+			}
+		}
 	}
 
 	return &internalerrors.MonitorError{

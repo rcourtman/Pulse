@@ -2,6 +2,8 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -557,6 +559,123 @@ func TestTrueNASPollerStopsCleanly(t *testing.T) {
 	case <-poller.stopped:
 	case <-time.After(time.Second):
 		t.Fatal("expected poller stopped channel to close")
+	}
+}
+
+func TestClassifyTrueNASError(t *testing.T) {
+	tests := []struct {
+		name          string
+		err           error
+		expectedType  string
+		expectedRetry bool
+	}{
+		{
+			name:         "nil error returns nil",
+			err:          nil,
+			expectedType: "",
+		},
+		{
+			name:          "APIError 401 classifies as auth",
+			err:           &truenas.APIError{StatusCode: 401, Method: "GET", Path: "/system/info", Body: "Unauthorized"},
+			expectedType:  "auth",
+			expectedRetry: false,
+		},
+		{
+			name:          "APIError 403 classifies as auth",
+			err:           &truenas.APIError{StatusCode: 403, Method: "GET", Path: "/pool", Body: "Forbidden"},
+			expectedType:  "auth",
+			expectedRetry: false,
+		},
+		{
+			name:          "APIError 500 classifies as api",
+			err:           &truenas.APIError{StatusCode: 500, Method: "GET", Path: "/pool", Body: "Internal Server Error"},
+			expectedType:  "api",
+			expectedRetry: true,
+		},
+		{
+			name:          "APIError 408 classifies as timeout",
+			err:           &truenas.APIError{StatusCode: 408, Method: "GET", Path: "/system/info", Body: "Request Timeout"},
+			expectedType:  "timeout",
+			expectedRetry: true,
+		},
+		{
+			name:          "APIError 504 classifies as timeout",
+			err:           &truenas.APIError{StatusCode: 504, Method: "GET", Path: "/pool", Body: "Gateway Timeout"},
+			expectedType:  "timeout",
+			expectedRetry: true,
+		},
+		{
+			name:          "wrapped APIError 401 classifies as auth",
+			err:           fmt.Errorf("fetch truenas system info: %w", &truenas.APIError{StatusCode: 401, Method: "GET", Path: "/system/info", Body: "Unauthorized"}),
+			expectedType:  "auth",
+			expectedRetry: false,
+		},
+		{
+			name:          "context.DeadlineExceeded classifies as timeout",
+			err:           context.DeadlineExceeded,
+			expectedType:  "timeout",
+			expectedRetry: true,
+		},
+		{
+			name:          "wrapped context.DeadlineExceeded classifies as timeout",
+			err:           fmt.Errorf("fetch truenas system info: %w", context.DeadlineExceeded),
+			expectedType:  "timeout",
+			expectedRetry: true,
+		},
+		{
+			name:          "url.Error with timeout classifies as timeout",
+			err:           &url.Error{Op: "Get", URL: "https://truenas.local/api/v2.0/system/info", Err: context.DeadlineExceeded},
+			expectedType:  "timeout",
+			expectedRetry: true,
+		},
+		{
+			name:          "net.OpError classifies as connection",
+			err:           &net.OpError{Op: "dial", Net: "tcp", Addr: nil, Err: fmt.Errorf("connection refused")},
+			expectedType:  "connection",
+			expectedRetry: true,
+		},
+		{
+			name:          "wrapped net.OpError classifies as connection",
+			err:           fmt.Errorf("truenas request GET /system/info failed: %w", &net.OpError{Op: "dial", Net: "tcp", Addr: nil, Err: fmt.Errorf("connection refused")}),
+			expectedType:  "connection",
+			expectedRetry: true,
+		},
+		{
+			name:          "plain error classifies as api fallback",
+			err:           fmt.Errorf("some unknown error"),
+			expectedType:  "api",
+			expectedRetry: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifyTrueNASError(tt.err, "test-conn")
+
+			if tt.err == nil {
+				if result != nil {
+					t.Fatalf("expected nil, got %+v", result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Fatal("expected non-nil MonitorError")
+			}
+
+			if string(result.Type) != tt.expectedType {
+				t.Errorf("expected type %q, got %q", tt.expectedType, result.Type)
+			}
+			if result.Retryable != tt.expectedRetry {
+				t.Errorf("expected retryable=%v, got %v", tt.expectedRetry, result.Retryable)
+			}
+			if result.Instance != "test-conn" {
+				t.Errorf("expected instance %q, got %q", "test-conn", result.Instance)
+			}
+			if result.Op != "truenas_poll" {
+				t.Errorf("expected op %q, got %q", "truenas_poll", result.Op)
+			}
+		})
 	}
 }
 

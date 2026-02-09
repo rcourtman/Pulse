@@ -39,6 +39,18 @@ type Client struct {
 	baseURL    string
 }
 
+// APIError represents an HTTP-level error from the TrueNAS REST API.
+type APIError struct {
+	StatusCode int
+	Method     string
+	Path       string
+	Body       string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("truenas request %s %s failed: status=%d body=%q", e.Method, e.Path, e.StatusCode, e.Body)
+}
+
 // NewClient creates a new TrueNAS REST API client.
 func NewClient(config ClientConfig) (*Client, error) {
 	host := strings.TrimSpace(config.Host)
@@ -328,7 +340,12 @@ func (c *Client) getJSON(ctx context.Context, method string, path string, destin
 		if message == "" {
 			message = http.StatusText(response.StatusCode)
 		}
-		return fmt.Errorf("truenas request %s %s failed: status=%d body=%q", method, path, response.StatusCode, message)
+		return &APIError{
+			StatusCode: response.StatusCode,
+			Method:     method,
+			Path:       path,
+			Body:       message,
+		}
 	}
 
 	decoder := json.NewDecoder(response.Body)
