@@ -1,6 +1,6 @@
 # Hosted Operations Progress (HOP Lane) — 2026-02
 
-Status: LANE_COMPLETE
+Status: Active (follow-up cycle)
 Owner: Orchestrator (Claude)
 Created: 2026-02-09
 Plan: `docs/architecture/hosted-operations-plan-2026-02.md`
@@ -30,6 +30,10 @@ W6 Hosted Readiness Lane — LANE_COMPLETE (HW-00 through HW-08, all DONE/APPROV
 | HOP-03 | Billing-state controls + metrics wiring | DONE | `11f5ded7` | 6 metrics calls wired, audit test passes, exit 0 |
 | HOP-04 | SLO/alert tuning + incident playbooks | DONE | `82a61931` | Sections 4+5 expanded, 4 alert queries, P1-P4 playbooks |
 | HOP-05 | Final operational verdict | DONE | (this commit) | GO_WITH_CONDITIONS — see verdict below |
+| HOP-06 | Suspended-org enforcement middleware | PENDING | — | — |
+| HOP-07 | Pending_deletion background reaper | PENDING | — | — |
+| HOP-08 | Tenant-aware rate limiting baseline | PENDING | — | — |
+| HOP-09 | Follow-up verdict + checkpoint | PENDING | — | — |
 
 ## Detailed Packet Records
 
@@ -244,5 +248,87 @@ Verdict: APPROVED
 The hosted private beta infrastructure is operationally ready. All code paths are tested, instrumented with metrics, and documented with incident playbooks and SLO thresholds. The `PULSE_HOSTED_MODE` gate provides a safe enable/disable switch. Per-tenant RBAC isolation is complete.
 
 **Recommendation**: Proceed to private beta when business readiness criteria are met. Follow the enable procedure in Section 9 of the operational runbook.
+
+---
+
+## Follow-Up Cycle: Private Beta Conditions Burn-Down
+
+### HOP-06: Suspended-Org Enforcement Middleware
+
+**Status**: PENDING
+**Shape**: code (middleware + tests)
+**Implementer**: Codex
+**Reviewer**: Orchestrator (Claude)
+
+Checklist:
+- [ ] TenantMiddleware checks org status after org resolution
+- [ ] Suspended orgs return 403 for non-admin requests
+- [ ] Pending_deletion orgs return 403 for non-admin requests
+- [ ] Admin users bypass org status check (can still manage suspended orgs)
+- [ ] Default org exempt from status enforcement
+- [ ] Tests: suspended blocks regular user, allows admin, active unaffected, pending_deletion blocks
+
+Required Tests:
+- [ ] `go build ./...` → exit 0
+- [ ] `go test ./internal/api/... -run "Suspend|HostedModeGate" -count=1` → exit 0
+
+---
+
+### HOP-07: Pending-Deletion Background Reaper Safety Path
+
+**Status**: PENDING
+**Shape**: code (scaffold + tests)
+**Implementer**: Codex
+**Reviewer**: Orchestrator (Claude)
+
+Checklist:
+- [ ] Reaper struct with configurable scan interval and org lister dependency
+- [ ] Scans for pending_deletion orgs past retention period
+- [ ] Dry-run mode (default): logs what would be purged, no actual deletion
+- [ ] Live mode (`PULSE_REAPER_LIVE=true`): actually deletes expired orgs
+- [ ] Default org guard: never reaps default org
+- [ ] Graceful shutdown via context cancellation
+- [ ] Tests: expiry detection, dry-run vs live, retention calculation, default org guard
+
+Required Tests:
+- [ ] `go build ./...` → exit 0
+- [ ] `go test ./internal/hosted/... -count=1` → exit 0
+
+---
+
+### HOP-08: Tenant-Aware Rate Limiting Baseline
+
+**Status**: PENDING
+**Shape**: code (enhancement + tests)
+**Implementer**: Codex
+**Reviewer**: Orchestrator (Claude)
+
+Checklist:
+- [ ] TenantRateLimiter struct keyed on org ID
+- [ ] Per-org rate limits (higher than IP limits, e.g., 2000/min)
+- [ ] Integrates with existing middleware chain (applied after TenantMiddleware)
+- [ ] Default org gets higher/no limit
+- [ ] Independent from existing IP-based rate limiting (both apply)
+- [ ] Rate limit response headers include org context
+- [ ] Tests: per-org limiting, independent org limits, default org exempt, header verification
+
+Required Tests:
+- [ ] `go build ./...` → exit 0
+- [ ] `go test ./internal/api/... -run "RateLimit" -count=1` → exit 0
+
+---
+
+### HOP-09: Follow-Up Verdict + Checkpoint
+
+**Status**: PENDING
+**Shape**: docs (certification)
+**Implementer**: Orchestrator (Claude)
+
+Checklist:
+- [ ] All validation commands rerun with exit codes
+- [ ] HOP-06 through HOP-08 packet evidence recorded
+- [ ] GA upgrade requirements table updated
+- [ ] Updated verdict recorded
+- [ ] Residual risks documented
 
 ---
