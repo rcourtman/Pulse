@@ -38,3 +38,11 @@ func (r *Recorder) Record(event ConversionEvent) error {
 	}
 	return err
 }
+
+// Snapshot returns a non-destructive copy of the current aggregation window buckets.
+func (r *Recorder) Snapshot() []metering.AggregatedBucket {
+	if r == nil || r.agg == nil {
+		return []metering.AggregatedBucket{}
+	}
+	return r.agg.Snapshot()
+}

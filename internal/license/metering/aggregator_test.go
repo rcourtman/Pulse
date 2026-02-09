@@ -250,6 +250,123 @@ func TestAggregatorFlushEmpty(t *testing.T) {
 	}
 }
 
+func TestAggregatorSnapshotEmpty(t *testing.T) {
+	agg := NewWindowedAggregator()
+
+	buckets := agg.Snapshot()
+	if buckets == nil {
+		t.Fatal("Snapshot() returned nil, want empty slice")
+	}
+	if len(buckets) != 0 {
+		t.Fatalf("len(snapshot) = %d, want 0", len(buckets))
+	}
+	if got := agg.BucketCount(); got != 0 {
+		t.Fatalf("BucketCount() = %d, want 0", got)
+	}
+}
+
+func TestAggregatorSnapshotNonDestructive(t *testing.T) {
+	agg := NewWindowedAggregator()
+
+	events := []Event{
+		{Type: EventAgentSeen, TenantID: "tenant-a", Key: "agent-1", Value: 1},
+		{Type: EventAgentSeen, TenantID: "tenant-a", Key: "agent-1", Value: 1},
+		{Type: EventRelayBytes, TenantID: "tenant-a", Key: "relay-1", Value: 100},
+	}
+	for _, event := range events {
+		if err := agg.Record(event); err != nil {
+			t.Fatalf("record failed: %v", err)
+		}
+	}
+
+	snapshot := agg.Snapshot()
+	if len(snapshot) != 2 {
+		t.Fatalf("len(snapshot) = %d, want 2", len(snapshot))
+	}
+
+	if got := agg.BucketCount(); got != 2 {
+		t.Fatalf("BucketCount() after snapshot = %d, want 2", got)
+	}
+
+	flushed := agg.Flush()
+	if len(flushed) != 2 {
+		t.Fatalf("len(flush) = %d, want 2", len(flushed))
+	}
+
+	snapshotBuckets := make(map[string]AggregatedBucket, len(snapshot))
+	for _, bucket := range snapshot {
+		snapshotBuckets[bucketID(bucket)] = bucket
+	}
+	for _, bucket := range flushed {
+		snap, ok := snapshotBuckets[bucketID(bucket)]
+		if !ok {
+			t.Fatalf("snapshot missing bucket %q", bucketID(bucket))
+		}
+		if snap.Count != bucket.Count {
+			t.Fatalf("bucket %q count = %d in snapshot, want %d", bucketID(bucket), snap.Count, bucket.Count)
+		}
+		if snap.TotalValue != bucket.TotalValue {
+			t.Fatalf("bucket %q total = %d in snapshot, want %d", bucketID(bucket), snap.TotalValue, bucket.TotalValue)
+		}
+	}
+}
+
+func TestAggregatorSnapshotReturnsCopy(t *testing.T) {
+	agg := NewWindowedAggregator()
+
+	if err := agg.Record(Event{
+		Type:     EventAgentSeen,
+		TenantID: "tenant-a",
+		Key:      "agent-1",
+		Value:    1,
+	}); err != nil {
+		t.Fatalf("record failed: %v", err)
+	}
+
+	first := agg.Snapshot()
+	if len(first) != 1 {
+		t.Fatalf("len(first snapshot) = %d, want 1", len(first))
+	}
+	first[0].Key = "mutated"
+	first[0].Count = 999
+	first[0].TotalValue = 999
+
+	second := agg.Snapshot()
+	if len(second) != 1 {
+		t.Fatalf("len(second snapshot) = %d, want 1", len(second))
+	}
+	if second[0].Key != "agent-1" {
+		t.Fatalf("second snapshot key = %q, want agent-1", second[0].Key)
+	}
+	if second[0].Count != 1 {
+		t.Fatalf("second snapshot count = %d, want 1", second[0].Count)
+	}
+	if second[0].TotalValue != 1 {
+		t.Fatalf("second snapshot total = %d, want 1", second[0].TotalValue)
+	}
+}
+
+func TestAggregatorSnapshotPreservesIdempotencyState(t *testing.T) {
+	agg := NewWindowedAggregator()
+
+	event := Event{
+		Type:           EventAgentSeen,
+		TenantID:       "tenant-a",
+		Key:            "agent-1",
+		Value:          1,
+		IdempotencyKey: "idem-key",
+	}
+	if err := agg.Record(event); err != nil {
+		t.Fatalf("first record failed: %v", err)
+	}
+
+	_ = agg.Snapshot()
+
+	if err := agg.Record(event); !errors.Is(err, ErrDuplicateEvent) {
+		t.Fatalf("second record error = %v, want %v", err, ErrDuplicateEvent)
+	}
+}
+
 func TestAggregatorConcurrency(t *testing.T) {
 	agg := NewWindowedAggregator()
 

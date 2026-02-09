@@ -25,7 +25,7 @@ type bucketKey struct {
 
 // WindowedAggregator aggregates metering events in memory with hourly flush windows.
 type WindowedAggregator struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 
 	// counters holds the current window's aggregation buckets.
 	// map[bucketKey]*bucket
@@ -130,10 +130,37 @@ func (w *WindowedAggregator) Flush() []AggregatedBucket {
 	return out
 }
 
+// Snapshot returns all aggregated buckets for the current window without resetting state.
+// The returned slice is a copy and is safe for callers to modify.
+func (w *WindowedAggregator) Snapshot() []AggregatedBucket {
+	if w == nil {
+		return []AggregatedBucket{}
+	}
+
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	windowEnd := time.Now()
+	out := make([]AggregatedBucket, 0, len(w.counters))
+	for key, b := range w.counters {
+		out = append(out, AggregatedBucket{
+			TenantID:    key.TenantID,
+			Type:        key.Type,
+			Key:         key.Key,
+			Count:       b.count,
+			TotalValue:  b.totalValue,
+			WindowStart: w.windowStart,
+			WindowEnd:   windowEnd,
+		})
+	}
+
+	return out
+}
+
 // BucketCount returns the number of active aggregation buckets (for testing/monitoring).
 func (w *WindowedAggregator) BucketCount() int {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 
 	return len(w.counters)
 }
