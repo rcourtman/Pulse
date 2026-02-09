@@ -1,6 +1,8 @@
 package truenas
 
 import (
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -79,7 +81,7 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	}
 }
 
-func TestTrueNASResourcesFlowThroughLegacyRenderTypesWithoutSpecialCasing(t *testing.T) {
+func TestTrueNASResourcesFlowThroughUnifiedTypesWithoutSpecialCasing(t *testing.T) {
 	previous := IsFeatureEnabled()
 	SetFeatureEnabled(true)
 	t.Cleanup(func() {
@@ -90,19 +92,19 @@ func TestTrueNASResourcesFlowThroughLegacyRenderTypesWithoutSpecialCasing(t *tes
 	registry.IngestRecords(unifiedresources.SourceTrueNAS, NewDefaultProvider().Records())
 
 	adapter := unifiedresources.NewMonitorAdapter(registry)
-	legacy := adapter.GetAll()
-	if len(legacy) == 0 {
-		t.Fatal("expected legacy resources from registry")
+	resources := adapter.GetAll()
+	if len(resources) == 0 {
+		t.Fatal("expected resources from registry")
 	}
 
-	for _, resource := range legacy {
-		if resource.Type == unifiedresources.LegacyResourceTypeTrueNAS {
+	for _, resource := range resources {
+		if string(resource.Type) == "truenas" {
 			t.Fatalf("expected canonical render type, got truenas-specific type for %s", resource.ID)
 		}
 		switch resource.Type {
-		case unifiedresources.LegacyResourceTypeHost, unifiedresources.LegacyResourceTypeStorage:
+		case unifiedresources.ResourceTypeHost, unifiedresources.ResourceTypeStorage:
 		default:
-			t.Fatalf("unexpected legacy type for truenas fixture resource: %s (%s)", resource.Type, resource.ID)
+			t.Fatalf("unexpected unified type for truenas fixture resource: %s (%s)", resource.Type, resource.ID)
 		}
 
 		frontend := models.ConvertResourceToFrontend(toFrontendInput(resource))
@@ -162,60 +164,113 @@ func containsSource(sources []unifiedresources.DataSource, source unifiedresourc
 	return false
 }
 
-func toFrontendInput(resource unifiedresources.LegacyResource) models.ResourceConvertInput {
+func toFrontendInput(resource unifiedresources.Resource) models.ResourceConvertInput {
 	input := models.ResourceConvertInput{
 		ID:           resource.ID,
 		Type:         string(resource.Type),
 		Name:         resource.Name,
-		DisplayName:  resource.DisplayName,
-		PlatformID:   resource.PlatformID,
-		PlatformType: string(resource.PlatformType),
-		SourceType:   string(resource.SourceType),
-		ParentID:     resource.ParentID,
-		ClusterID:    resource.ClusterID,
+		DisplayName:  resource.Name,
+		SourceType:   firstSourceType(resource.Sources),
+		ParentID:     stringValue(resource.ParentID),
+		ClusterID:    resource.Identity.ClusterName,
 		Status:       string(resource.Status),
-		Temperature:  resource.Temperature,
-		Uptime:       resource.Uptime,
 		Tags:         resource.Tags,
-		Labels:       resource.Labels,
 		LastSeenUnix: resource.LastSeen.UnixMilli(),
-		PlatformData: resource.PlatformData,
 	}
-	if resource.CPU != nil {
-		input.CPU = &models.ResourceMetricInput{
-			Current: resource.CPU.Current,
-			Total:   resource.CPU.Total,
-			Used:    resource.CPU.Used,
-			Free:    resource.CPU.Free,
-		}
-	}
-	if resource.Memory != nil {
-		input.Memory = &models.ResourceMetricInput{
-			Current: resource.Memory.Current,
-			Total:   resource.Memory.Total,
-			Used:    resource.Memory.Used,
-			Free:    resource.Memory.Free,
-		}
-	}
-	if resource.Disk != nil {
-		input.Disk = &models.ResourceMetricInput{
-			Current: resource.Disk.Current,
-			Total:   resource.Disk.Total,
-			Used:    resource.Disk.Used,
-			Free:    resource.Disk.Free,
-		}
-	}
-	if resource.Network != nil {
+	input.CPU = metricToInput(metricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.CPU }))
+	input.Memory = metricToInput(metricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory }))
+	input.Disk = metricToInput(metricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Disk }))
+
+	if resource.Metrics != nil && (resource.Metrics.NetIn != nil || resource.Metrics.NetOut != nil) {
 		input.HasNetwork = true
-		input.NetworkRX = resource.Network.RXBytes
-		input.NetworkTX = resource.Network.TXBytes
-	}
-	if resource.Identity != nil {
-		input.Identity = &models.ResourceIdentityInput{
-			Hostname:  resource.Identity.Hostname,
-			MachineID: resource.Identity.MachineID,
-			IPs:       resource.Identity.IPs,
+		if resource.Metrics.NetIn != nil {
+			input.NetworkRX = int64(math.Round(resource.Metrics.NetIn.Value))
+		}
+		if resource.Metrics.NetOut != nil {
+			input.NetworkTX = int64(math.Round(resource.Metrics.NetOut.Value))
 		}
 	}
+	input.Identity = identityToInput(resource.Identity)
 	return input
+}
+
+func firstSourceType(sources []unifiedresources.DataSource) string {
+	if len(sources) == 0 {
+		return ""
+	}
+	return string(sources[0])
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func metricValue(
+	metrics *unifiedresources.ResourceMetrics,
+	pick func(*unifiedresources.ResourceMetrics) *unifiedresources.MetricValue,
+) *unifiedresources.MetricValue {
+	if metrics == nil {
+		return nil
+	}
+	return pick(metrics)
+}
+
+func metricToInput(metric *unifiedresources.MetricValue) *models.ResourceMetricInput {
+	if metric == nil {
+		return nil
+	}
+
+	current := metric.Percent
+	if current == 0 {
+		current = metric.Value
+	}
+	if metric.Percent != 0 && metric.Value != 0 {
+		current = math.Max(metric.Percent, metric.Value)
+	}
+
+	result := &models.ResourceMetricInput{Current: current}
+	if metric.Total != nil {
+		total := *metric.Total
+		result.Total = &total
+	}
+	if metric.Used != nil {
+		used := *metric.Used
+		result.Used = &used
+	}
+	if result.Total != nil && result.Used != nil {
+		free := *result.Total - *result.Used
+		result.Free = &free
+	}
+	return result
+}
+
+func identityToInput(identity unifiedresources.ResourceIdentity) *models.ResourceIdentityInput {
+	hostname := ""
+	for _, candidate := range identity.Hostnames {
+		if trimmed := strings.TrimSpace(candidate); trimmed != "" {
+			hostname = trimmed
+			break
+		}
+	}
+
+	ips := make([]string, 0, len(identity.IPAddresses))
+	for _, ip := range identity.IPAddresses {
+		if trimmed := strings.TrimSpace(ip); trimmed != "" {
+			ips = append(ips, trimmed)
+		}
+	}
+
+	machineID := strings.TrimSpace(identity.MachineID)
+	if hostname == "" && machineID == "" && len(ips) == 0 {
+		return nil
+	}
+
+	return &models.ResourceIdentityInput{
+		Hostname:  hostname,
+		MachineID: machineID,
+		IPs:       ips,
+	}
 }
