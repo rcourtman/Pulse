@@ -31,8 +31,8 @@ Date: 2026-02-08
 |---|---|---|---|---|---|---|
 | HW-00 | Scope Freeze + Hosted Threat Model | DONE | Claude | Claude | APPROVED | HW-00 Review Evidence |
 | HW-01 | Public Signup Endpoint + Hosted Mode Gate | DONE | Codex | Claude | APPROVED | HW-01 Review Evidence |
-| HW-02 | Tenant Provisioning Service Layer | TODO | Codex | Claude | — | — |
-| HW-03 | Billing-State Integration Seam: DatabaseSource | TODO | Codex | Claude | — | — |
+| HW-02 | Tenant Provisioning Service Layer | DONE | Codex | Claude | APPROVED | HW-02 Review Evidence |
+| HW-03 | Billing-State Integration Seam: DatabaseSource | DONE | Codex | Claude | APPROVED | HW-03 Review Evidence |
 | HW-04 | Billing-State Admin API + Org Billing Persistence | TODO | Codex | Claude | — | — |
 | HW-05 | Tenant Lifecycle Operations | TODO | Codex | Claude | — | — |
 | HW-06 | Hosted Observability Metrics | TODO | Codex | Claude | — | — |
@@ -165,56 +165,97 @@ Rollback:
 
 ## HW-02 Checklist: Tenant Provisioning Service Layer
 
-- [ ] `Provisioner` struct with dependencies (MultiTenantPersistence, AuthManager, LicenseService).
-- [ ] `ProvisionTenant()` orchestrates: validate → check uniqueness → create org → create user → assign trial.
-- [ ] Idempotent: existing org with same owner email returns existing.
-- [ ] Partial failure rollback: clean up org dir if user creation fails.
-- [ ] Unit tests with mock dependencies.
+- [x] `Provisioner` struct with dependencies (OrgPersistence, AuthProvider interfaces).
+- [x] `ProvisionTenant()` orchestrates: validate → check uniqueness → create org → create user → assign trial.
+- [x] Idempotent: existing org with same owner email returns existing with status="existing".
+- [x] Partial failure rollback: clean up org dir if user creation fails.
+- [x] Unit tests with mock dependencies.
 
 ### Required Tests
 
-- [ ] `go test ./internal/hosted/... -count=1` -> exit 0
-- [ ] `go build ./...` -> exit 0
+- [x] `go test ./internal/hosted/... -count=1` -> exit 0
+- [x] `go build ./...` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### HW-02 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `internal/hosted/provisioner.go` (new): Provisioner struct with OrgPersistence, AuthProvider, AuthManager interfaces. ProvisionTenant orchestrates: validate → ListOrganizations for email uniqueness → UUID org ID → GetPersistence (triggers EnsureConfigDir) → SaveOrganization → GetManager + UpdateUserRoles(admin). Typed errors: ValidationError (400), SystemError (500). Partial failure rollback via cleanupOrgDirectory (os.RemoveAll with logging). NewTenantRBACAuthProvider adapter for compatibility. Injectable newOrgID/now for test determinism.
+- `internal/hosted/provisioner_test.go` (new): 4 tests — success (verifies org persistence + RBAC admin + member role), idempotent duplicate email (returns existing org, no auth calls), validation failures (3 subtests: invalid email/short password/bad org name with ValidationError type checks), partial failure rollback (auth fails → org dir removed, verified with os.Stat).
+
+Commands run + exit codes (reviewer-rerun):
+1. `go build ./...` -> exit 0
+2. `go test ./internal/hosted/... -count=1 -v` -> exit 0 (4 tests, 3 subtests)
+
+Gate checklist:
+- P0: PASS (both files exist, build + tests pass)
+- P1: PASS (idempotency via ListOrganizations owner email scan, rollback on auth failure verified with os.Stat, typed errors for 400/500 distinction, context cancellation checks throughout)
+- P2: PASS (progress tracker updated)
+
+Verdict: APPROVED
+
+Residual risk:
+- ListOrganizations email scan is O(n) — acceptable for private beta scale, not for 10k+ tenants.
+- Validation functions duplicated from api package (isValidSignupEmail, isValidHostedOrgName). Acceptable for package independence; could be extracted to shared package later.
+
+Rollback:
+- Delete `internal/hosted/provisioner.go` and `internal/hosted/provisioner_test.go`.
 ```
 
 ---
 
 ## HW-03 Checklist: Billing-State Integration Seam: DatabaseSource
 
-- [ ] `BillingStore` interface defined: `GetBillingState(orgID) (*BillingState, error)`.
-- [ ] `DatabaseSource` implements `EntitlementSource` with cached billing store lookup.
-- [ ] Fail-open: use last cached state on store failure (bounded staleness, default 1hr).
-- [ ] Default behavior: trial-equivalent entitlements when no cache and store unavailable.
-- [ ] Unit tests: happy path, cache hit, cache miss with store failure, cache expiry, defaults.
+- [x] `BillingStore` interface defined: `GetBillingState(orgID) (*BillingState, error)`.
+- [x] `DatabaseSource` implements `EntitlementSource` with cached billing store lookup.
+- [x] Fail-open: use last cached state on store failure (bounded staleness, default 1hr).
+- [x] Default behavior: trial-equivalent entitlements when no cache and store unavailable.
+- [x] Unit tests: happy path, cache hit, cache miss with store failure, cache expiry, defaults.
 
 ### Required Tests
 
-- [ ] `go test ./internal/license/entitlements/... -count=1` -> exit 0
-- [ ] `go build ./...` -> exit 0
+- [x] `go test ./internal/license/entitlements/... -count=1` -> exit 0
+- [x] `go build ./...` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### HW-03 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- `internal/license/entitlements/billing_store.go` (new): BillingState struct (capabilities, limits, meters_enabled, plan_version, subscription_state using existing SubscriptionState type). BillingStore interface with GetBillingState(orgID).
+- `internal/license/entitlements/database_source.go` (new): DatabaseSource struct with store, orgID, cache, cacheTime, cacheTTL, mutex, defaults. Implements all 5 EntitlementSource methods. currentState() logic: fresh cache → return cached; stale → attempt refresh; refresh fail + stale cache → return stale (fail-open); no cache + fail → trial defaults. Defensive cloning via cloneBillingState/cloneStringSlice/cloneInt64Map. Default cacheTTL = 1 hour.
+- `internal/license/entitlements/database_source_test.go` (new): 6 tests — happy path (all 5 methods return correct values, store called once), cache hit (second call doesn't call store), cache miss + refresh (expired cache triggers store call), fail-open with stale cache (store error returns previous cached state), fail-open with no cache (store error returns trial defaults), interface compliance (compile-time check DatabaseSource implements EntitlementSource).
+
+Commands run + exit codes (reviewer-rerun):
+1. `go build ./...` -> exit 0
+2. `go test ./internal/license/entitlements/... -count=1 -v` -> exit 0 (6 new + existing tests all pass)
+
+Gate checklist:
+- P0: PASS (all 3 files exist with expected edits, both commands rerun by reviewer with exit 0)
+- P1: PASS (fail-open behavior verified in 2 tests: stale cache and no-cache scenarios, defensive cloning prevents mutation, mutex protects concurrent access, interface compliance verified at compile time, trial defaults correct: plan_version="trial", subscription_state=SubStateTrial)
+- P2: PASS (progress tracker updated)
+
+Verdict: APPROVED
+
+Residual risk:
+- No concrete BillingStore implementation yet — HW-04 will create the file-based persistence.
+- Cache TTL is not configurable at runtime (set at construction time). Acceptable for initial implementation.
+
+Rollback:
+- Delete billing_store.go, database_source.go, database_source_test.go.
 ```
 
 ---
@@ -367,7 +408,7 @@ TODO
 ## Checkpoint Commits
 
 - HW-00: `41964648` docs(HW-00): W6 hosted readiness lane — scope freeze, threat model, and boundary definition
-- HW-01: TODO
+- HW-01: `89109610` feat(HW-01): public signup endpoint with hosted mode gate and rate limiting
 - HW-02: TODO
 - HW-03: TODO
 - HW-04: TODO
