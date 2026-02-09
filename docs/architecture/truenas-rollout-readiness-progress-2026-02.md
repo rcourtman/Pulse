@@ -27,7 +27,7 @@ Date: 2026-02-09
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | TRR-00 | Scope Freeze + TN-11 Evidence Reconciliation | DONE | Claude | Claude | APPROVED | TRR-00 Review Evidence |
-| TRR-01 | Operational Runbook (Enable/Disable/Rollback) | TODO | Codex | Claude | — | — |
+| TRR-01 | Operational Runbook (Enable/Disable/Rollback) | DONE | Codex | Claude | APPROVED | TRR-01 Review Evidence |
 | TRR-02 | Telemetry + Alert Thresholds | TODO | Codex | Claude | — | — |
 | TRR-03 | Canary Rollout Controls | TODO | Codex | Claude | — | — |
 | TRR-04 | Soak/Failure-Injection Validation | TODO | Codex | Claude | — | — |
@@ -84,28 +84,48 @@ Rollback:
 
 ## TRR-01 Checklist: Operational Runbook
 
-- [ ] Enable path documented with verification steps.
-- [ ] Disable path documented with staleness verification.
-- [ ] Kill-switch documented for immediate deactivation.
-- [ ] Code rollback documented with commit range.
-- [ ] Data cleanup documented (truenas.enc removal).
-- [ ] All lifecycle paths have explicit verification commands.
+- [x] Enable path documented with verification steps.
+- [x] Disable path documented with staleness verification.
+- [x] Kill-switch documented for immediate deactivation.
+- [x] Code rollback documented with commit range.
+- [x] Data cleanup documented (truenas.enc removal).
+- [x] All lifecycle paths have explicit verification commands.
 
 ### Required Tests
 
-- [ ] `go build ./...` -> exit 0
+- [x] `go build ./...` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded: `APPROVED`
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
 
 ### TRR-01 Review Evidence
 
 ```markdown
-TODO
+Files changed:
+- docs/architecture/truenas-operational-runbook.md: Created operational runbook (5 lifecycle sections, verification commands, quick reference table)
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+
+Gate checklist:
+- P0: PASS (build clean, docs-only packet, no code changes)
+- P1: PASS (all 5 lifecycle paths documented with verification: enable, disable, kill-switch, code rollback, data cleanup; reviewer corrected disable path verification — connections API is always registered regardless of feature flag, poller is the gated component)
+- P2: PASS (runbook complete, verification steps explicit, quick reference table included)
+
+Verdict: APPROVED
+
+Reviewer corrections applied:
+- Disable path: changed expected response from HTTP 404 to "no poll activity in logs" — trueNASHandlers is always initialized (router.go:267), only the poller checks IsFeatureEnabled()
+
+Residual risk:
+- None for docs-only packet.
+
+Rollback:
+- Delete truenas-operational-runbook.md.
 ```
 
 ---
@@ -223,7 +243,7 @@ TODO
 
 ## Checkpoint Commits
 
-- TRR-00: TODO
+- TRR-00: `687ecd79`
 - TRR-01: TODO
 - TRR-02: TODO
 - TRR-03: TODO
