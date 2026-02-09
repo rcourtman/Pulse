@@ -167,3 +167,22 @@ func TestAlertResolvedFallbackToGlobal(t *testing.T) {
 		t.Fatalf("expected orgB alertResolved type, got %q", msgB.Type)
 	}
 }
+
+func TestAlertBroadcastUnknownTenantDoesNotLeak(t *testing.T) {
+	hub := NewHub(nil)
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+
+	orgAClient := registerTenantTestClient(t, hub, "client-a", "orgA")
+	orgBClient := registerTenantTestClient(t, hub, "client-b", "orgB")
+	drainClientMessages(orgAClient)
+	drainClientMessages(orgBClient)
+
+	hub.BroadcastAlertToTenant("orgC", map[string]string{"id": "alert-unknown-org"})
+	assertNoClientMessage(t, orgAClient, 250*time.Millisecond)
+	assertNoClientMessage(t, orgBClient, 250*time.Millisecond)
+
+	hub.BroadcastAlertResolvedToTenant("orgC", "alert-unknown-org")
+	assertNoClientMessage(t, orgAClient, 250*time.Millisecond)
+	assertNoClientMessage(t, orgBClient, 250*time.Millisecond)
+}

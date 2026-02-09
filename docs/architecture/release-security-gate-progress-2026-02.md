@@ -20,7 +20,7 @@ Date: 2026-02-09
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | SEC-00 | Scope Freeze + Threat Replay Contract | DONE | Claude | Claude | APPROVED | SEC-00 section below |
-| SEC-01 | AuthZ + Tenant Isolation Replay | PENDING | Codex | Claude | — | — |
+| SEC-01 | AuthZ + Tenant Isolation Replay | DONE | Codex | Claude | APPROVED | SEC-01 section below |
 | SEC-02 | Secret Exposure + Dependency Risk Audit | PENDING | Codex | Claude | — | — |
 | SEC-03 | Security Runbook + Incident Readiness Ratification | PENDING | Codex | Claude | — | — |
 | SEC-04 | Final Security Verdict | PENDING | Claude | Claude | — | — |
@@ -104,7 +104,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- <pending checkpoint>
+- `6ba41c7a` (docs(SEC-00): scope freeze + threat replay contract)
 
 Residual risk:
 - None
@@ -115,25 +115,67 @@ Rollback:
 
 ## SEC-01 Checklist: AuthZ + Tenant Isolation Replay
 
-- [ ] API security/scope/tenant suites rerun.
-- [ ] Websocket isolation suites rerun.
-- [ ] Monitoring isolation suites rerun.
-- [ ] Missing critical regressions covered by tests.
+- [x] API security/scope/tenant suites rerun.
+- [x] Websocket isolation suites rerun.
+- [x] Monitoring isolation suites rerun.
+- [x] Missing critical regressions covered by tests.
+
+### Gap Analysis (5 gaps found and closed)
+
+| # | Gap | Test Added | File |
+|---|-----|-----------|------|
+| 1 | Cross-tenant API resource detail access | `TestTenantMiddlewareBlocksOrgBoundTokenFromOtherOrg_ResourceDetailEndpoints` | `internal/api/tenant_org_binding_test.go` |
+| 2 | Scope escalation (read→write) | `TestTenantMiddlewareOrgBoundReadScopeCannotWriteAlertsConfig` | `internal/api/tenant_org_binding_test.go` |
+| 3 | WebSocket org authorization denial | `TestHandleWebSocket_OrgAuthorizationDenied` | `internal/websocket/hub_multitenant_test.go` |
+| 4 | Alert broadcast to unknown tenant leak | `TestAlertBroadcastUnknownTenantDoesNotLeak` | `internal/websocket/hub_alert_tenant_test.go` |
+| 5 | Token reuse across tenants | `TestTenantMiddlewareRejectsOrgBoundTokenReuseAcrossTenants` | `internal/api/tenant_org_binding_test.go` |
 
 ### Required Commands
 
-- [ ] `go build ./...` -> exit 0
-- [ ] `go test ./pkg/auth/... -count=1` -> exit 0
-- [ ] `go test ./internal/api/... -run "Security|Scope|Authorization|Spoof|Tenant|RBAC|Org" -count=1` -> exit 0
-- [ ] `go test ./internal/websocket/... -run "Tenant|Isolation|Alert" -count=1` -> exit 0
-- [ ] `go test ./internal/monitoring/... -run "Tenant|Alert|Isolation" -count=1` -> exit 0
+- [x] `go build ./...` -> exit 0
+- [x] `go test ./pkg/auth/... -count=1` -> exit 0 (1.432s)
+- [x] `go test ./internal/api/... -run "Security|Scope|Authorization|Spoof|Tenant|RBAC|Org" -count=1` -> exit 0 (6.708s)
+- [x] `go test ./internal/websocket/... -run "Tenant|Isolation|Alert" -count=1` -> exit 0 (1.835s)
+- [x] `go test ./internal/monitoring/... -run "Tenant|Alert|Isolation" -count=1` -> exit 0 (0.676s)
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS — All auth/tenant/RBAC suites green; no regressions.
+- [x] P1 PASS — 5 previously uncovered critical paths now have regression tests.
+- [x] P2 PASS — Tracker accurate; gaps documented with test references.
+- [x] Verdict recorded
+
+### SEC-01 Review Record
+
+```
+Files changed:
+- internal/api/tenant_org_binding_test.go: 3 new regression tests (cross-tenant detail, scope escalation, token reuse)
+- internal/websocket/hub_multitenant_test.go: 1 new regression test (org auth denial)
+- internal/websocket/hub_alert_tenant_test.go: 1 new regression test (unknown tenant alert leak)
+
+Commands run + exit codes (reviewer independent rerun):
+1. `go build ./...` -> exit 0
+2. `go test ./pkg/auth/... -count=1` -> exit 0
+3. `go test ./internal/api/... -run "Security|Scope|Authorization|Spoof|Tenant|RBAC|Org" -count=1` -> exit 0
+4. `go test ./internal/websocket/... -run "Tenant|Isolation|Alert" -count=1` -> exit 0
+5. `go test ./internal/monitoring/... -run "Tenant|Alert|Isolation" -count=1` -> exit 0
+
+Gate checklist:
+- P0: PASS (all 5 suites green, no auth/isolation regressions)
+- P1: PASS (5 gap-closing tests added for critical paths)
+- P2: PASS (tracker updated accurately)
+
+Verdict: APPROVED
+
+Commit:
+- <pending checkpoint>
+
+Residual risk:
+- None — all identified gaps closed with passing regression tests.
+
+Rollback:
+- Revert checkpoint commit; remove added test functions.
+```
 
 ## SEC-02 Checklist: Secret Exposure + Dependency Risk Audit
 

@@ -15,6 +15,16 @@ func (f fakeMultiTenantChecker) CheckMultiTenant(ctx context.Context, orgID stri
 	return f.result
 }
 
+type fakeOrgAuthChecker struct {
+	called bool
+	allow  bool
+}
+
+func (f *fakeOrgAuthChecker) CanAccessOrg(userID string, token interface{}, orgID string) bool {
+	f.called = true
+	return f.allow
+}
+
 func TestHandleWebSocket_MultiTenantDisabled(t *testing.T) {
 	hub := NewHub(nil)
 	hub.SetMultiTenantChecker(fakeMultiTenantChecker{
@@ -56,5 +66,32 @@ func TestHandleWebSocket_MultiTenantUnlicensed(t *testing.T) {
 
 	if rec.Code != http.StatusPaymentRequired {
 		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, rec.Code)
+	}
+}
+
+func TestHandleWebSocket_OrgAuthorizationDenied(t *testing.T) {
+	hub := NewHub(nil)
+	authChecker := &fakeOrgAuthChecker{allow: false}
+	hub.SetOrgAuthChecker(authChecker)
+	hub.SetMultiTenantChecker(fakeMultiTenantChecker{
+		result: MultiTenantCheckResult{
+			Allowed:        true,
+			FeatureEnabled: true,
+			Licensed:       true,
+			Reason:         "allowed",
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/ws", nil)
+	req.Header.Set("X-Pulse-Org-ID", "tenant-a")
+	rec := httptest.NewRecorder()
+
+	hub.HandleWebSocket(rec, req)
+
+	if !authChecker.called {
+		t.Fatalf("expected org auth checker to be called")
+	}
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
 	}
 }
