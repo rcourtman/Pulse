@@ -34,7 +34,7 @@ Date: 2026-02-09
 
 | Lane | Tracker File | Status | Packets Complete | Final Verdict |
 |------|-------------|--------|-----------------|---------------|
-| SEC | `release-security-gate-progress-2026-02.md` | In Progress | 0/5 (all PENDING) | None |
+| SEC | `release-security-gate-progress-2026-02.md` | In Progress | 1/5 (SEC-00 APPROVED) | None |
 | RGS | `release-regression-bug-sweep-progress-2026-02.md` | In Progress | 0/5 (all PENDING) | None |
 | DOC | `release-documentation-readiness-progress-2026-02.md` | In Progress | 1/5 (DOC-00 APPROVED) | None |
 
@@ -76,7 +76,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- *(pending — will be recorded after checkpoint commit)*
+- `46026f6d` (docs(RFC-00): dependency reconciliation and scope freeze for final certification)
 
 Residual risk:
 - All three dependency lanes are incomplete. RFC-01 cannot proceed until they finish. No code risk.
