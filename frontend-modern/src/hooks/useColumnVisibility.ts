@@ -97,9 +97,9 @@ export function useColumnVisibility(
     }
   };
 
-  // Reset to defaults (restore default hidden columns)
+  // Show all toggleable columns (clear user hidden list)
   const resetToDefaults = () => {
-    setHiddenColumns(defaultHidden);
+    setHiddenColumns([]);
   };
 
   // Compute visible columns based on breakpoint and user preferences
