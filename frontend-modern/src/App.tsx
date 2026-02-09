@@ -47,6 +47,7 @@ import { OrgSwitcher } from './components/OrgSwitcher';
 import type { State, Alert } from '@/types/api';
 import { startMetricsCollector } from './stores/metricsCollector';
 import BoxesIcon from 'lucide-solid/icons/boxes';
+import LayoutDashboardIcon from 'lucide-solid/icons/layout-dashboard';
 import ServerIcon from 'lucide-solid/icons/server';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
 import ArchiveIcon from 'lucide-solid/icons/archive';
@@ -80,6 +81,7 @@ import {
 import { LEGACY_REDIRECTS } from './routing/legacyRedirects';
 import {
   buildBackupsPath,
+  DASHBOARD_PATH,
   buildInfrastructurePath,
   buildStoragePath,
   buildWorkloadsPath,
@@ -1366,6 +1368,19 @@ function AppLayout(props: {
 
   const platformTabs = createMemo(() => {
     const allPlatforms: PlatformTab[] = [
+      {
+        id: 'dashboard' as const,
+        label: 'Dashboard',
+        route: DASHBOARD_PATH,
+        settingsRoute: '/settings',
+        tooltip: 'Environment overview and command center',
+        enabled: true,
+        live: true,
+        icon: (
+          <LayoutDashboardIcon class="w-4 h-4 shrink-0" />
+        ),
+        alwaysShow: true,
+      },
       {
         id: 'infrastructure' as const,
         label: 'Infrastructure',

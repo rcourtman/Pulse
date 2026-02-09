@@ -47,6 +47,7 @@ const overviewMock: DashboardOverview = {
 vi.mock('@/App', () => ({
   useWebSocket: () => ({
     state: { resources: wsResources },
+    activeAlerts: {},
     connected: () => wsConnected,
     reconnecting: () => wsReconnecting,
     reconnect: reconnectSpy,
@@ -56,6 +57,20 @@ vi.mock('@/App', () => ({
 
 vi.mock('@/hooks/useDashboardOverview', () => ({
   useDashboardOverview: () => () => overviewMock,
+}));
+
+vi.mock('@/hooks/useDashboardTrends', () => ({
+  useDashboardTrends: () => () => ({
+    infrastructure: {
+      cpu: new Map(),
+      memory: new Map(),
+    },
+    storage: {
+      capacity: null,
+    },
+    loading: false,
+    error: null,
+  }),
 }));
 
 describe('Dashboard page module contract', () => {
