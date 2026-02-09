@@ -1,0 +1,180 @@
+# Release Regression and Bug Sweep Progress Tracker
+
+Linked plan:
+- `docs/architecture/release-regression-bug-sweep-plan-2026-02.md`
+
+Status: In Progress
+Date: 2026-02-09
+
+## Rules
+
+1. A packet can only move to `DONE` when every checkbox in that packet is checked.
+2. Reviewer must provide explicit command exit-code evidence.
+3. `DONE` is invalid if command output is timed out, missing, truncated without exit code, or replaced by summary-only claims.
+4. If review fails, set status to `CHANGES_REQUESTED`, add findings, and keep checkboxes open.
+5. After every `APPROVED` packet, create a checkpoint commit and record the hash.
+
+## Packet Board
+
+| Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
+|---|---|---|---|---|---|---|
+| RGS-00 | Scope Freeze + Critical Path Inventory | DONE | Claude | Claude | APPROVED | RGS-00 section below |
+| RGS-01 | Backend Regression Replay | PENDING | Codex | Claude | — | — |
+| RGS-02 | Frontend Regression Replay | PENDING | Codex | Claude | — | — |
+| RGS-03 | Flake and Stability Burn-Down | PENDING | Codex | Claude | — | — |
+| RGS-04 | Final Regression Verdict | PENDING | Claude | Claude | — | — |
+
+---
+
+## RGS-00 Checklist: Scope Freeze + Critical Path Inventory
+
+- [x] Critical backend systems inventory recorded.
+- [x] Critical frontend journey inventory recorded.
+- [x] Pass/fail gates frozen.
+
+### Critical Backend Systems Inventory
+
+| # | Subsystem | Package Path | Regression Risk |
+|---|-----------|-------------|-----------------|
+| 1 | API Layer (routing, middleware, handlers) | `internal/api/` | HIGH — all user-facing endpoints |
+| 2 | Monitoring (metrics collection, history) | `internal/monitoring/` | HIGH — core data pipeline |
+| 3 | WebSocket (real-time state push) | `internal/websocket/` | HIGH — live dashboard updates |
+| 4 | Alerts (alerting pipeline) | `internal/alerts/` | MEDIUM — user-configured notifications |
+| 5 | AI (chat, patrol, investigation, remediation) | `internal/ai/` | MEDIUM — assistant and autonomous agents |
+| 6 | License/Entitlements (feature gating, claims) | `internal/license/` | HIGH — commercial gates, node limits |
+| 7 | Multi-Tenant (org isolation, RBAC) | `internal/api/middleware_tenant.go`, `rbac_tenant_provider.go` | HIGH — security boundary |
+| 8 | Unified Resources (v2 resource model) | `internal/unifiedresources/`, `internal/api/resources_v2.go` | MEDIUM — new primary surface |
+| 9 | TrueNAS (storage array integration) | `internal/truenas/` | MEDIUM — new platform support |
+| 10 | Config/Persistence (encrypted config) | `internal/config/` | HIGH — data integrity |
+
+### Critical Frontend Journeys Inventory
+
+| # | Journey | Key Files | Regression Risk |
+|---|---------|-----------|-----------------|
+| 1 | Dashboard/Navigation (unified IA routing) | `src/App.tsx`, route components | HIGH — first impression |
+| 2 | Settings (AI config, relay, org panels) | `src/components/Settings/` | MEDIUM — admin configuration |
+| 3 | Alerts (config, notification management) | `src/components/Alerts/` | MEDIUM — operational alerting |
+| 4 | Infrastructure (node management, TrueNAS) | `src/components/Infrastructure/` | HIGH — core monitoring view |
+| 5 | AI Chat (assistant interaction, tools) | `src/components/AI/` | MEDIUM — assistant UX |
+| 6 | License/Upgrade (paywall, entitlements) | paywall surfaces, upgrade prompts | MEDIUM — commercial conversion |
+
+### Pass/Fail Gates (Frozen)
+
+| Gate | Command | Threshold |
+|------|---------|-----------|
+| Go Build | `go build ./...` | exit 0 |
+| Go Test (full) | `go test ./...` | exit 0 |
+| Frontend Tests | `cd frontend-modern && npx vitest run` | exit 0 |
+| TypeScript | `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` | exit 0 |
+
+### Required Commands
+
+- [x] `go build ./...` -> exit 0 (verified 2026-02-09)
+
+### Review Record
+
+Files changed:
+- `docs/architecture/release-regression-bug-sweep-progress-2026-02.md`: scope freeze inventory and gates
+
+Commands run + exit codes:
+1. `go build ./...` -> exit 0
+
+Gate checklist:
+- P0: PASS (build gate verified with exit 0)
+- P1: N/A (scope freeze packet — no behavioral changes)
+- P2: PASS (tracker updated accurately with inventory and gates)
+
+Verdict: APPROVED
+
+Residual risk:
+- None for scope freeze packet.
+
+Rollback:
+- Revert tracker edits only (documentation-only packet).
+
+### Review Gates
+
+- [x] P0 PASS
+- [x] P1 N/A (scope freeze — no behavioral changes)
+- [x] P2 PASS
+- [x] Verdict recorded: APPROVED
+
+## RGS-01 Checklist: Backend Regression Replay
+
+- [ ] API suite replayed.
+- [ ] Monitoring suite replayed.
+- [ ] Websocket suite replayed.
+- [ ] Alerts + AI suites replayed.
+- [ ] Regressions fixed or triaged.
+
+### Required Commands
+
+- [ ] `go build ./...` -> exit 0
+- [ ] `go test ./internal/api/... -count=1` -> exit 0
+- [ ] `go test ./internal/monitoring/... -count=1` -> exit 0
+- [ ] `go test ./internal/websocket/... -count=1` -> exit 0
+- [ ] `go test ./internal/alerts/... -count=1` -> exit 0
+- [ ] `go test ./internal/ai/... -count=1` -> exit 0
+
+### Review Gates
+
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded
+
+## RGS-02 Checklist: Frontend Regression Replay
+
+- [ ] Full vitest suite replayed.
+- [ ] TypeScript gate replayed.
+- [ ] Routing/settings/alerts high-risk paths validated.
+
+### Required Commands
+
+- [ ] `cd frontend-modern && npx vitest run` -> exit 0
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+
+### Review Gates
+
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded
+
+## RGS-03 Checklist: Flake and Stability Burn-Down
+
+- [ ] Critical backend suites rerun for stability.
+- [ ] Critical frontend suites rerun for stability.
+- [ ] Flaky tests fixed or formally deferred.
+
+### Required Commands
+
+- [ ] `go test ./internal/api/... -count=3` -> exit 0
+- [ ] `cd frontend-modern && npx vitest run --runInBand` -> exit 0
+
+### Review Gates
+
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded
+
+## RGS-04 Checklist: Final Regression Verdict
+
+- [ ] RGS-00 through RGS-03 are `DONE` and `APPROVED`.
+- [ ] Full regression baseline commands rerun with explicit exit codes.
+- [ ] Final verdict recorded (`GO` / `GO_WITH_CONDITIONS` / `NO_GO`).
+
+### Required Commands
+
+- [ ] `go build ./...` -> exit 0
+- [ ] `go test ./...` -> exit 0
+- [ ] `cd frontend-modern && npx vitest run` -> exit 0
+- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+
+### Review Gates
+
+- [ ] P0 PASS
+- [ ] P1 PASS
+- [ ] P2 PASS
+- [ ] Verdict recorded
