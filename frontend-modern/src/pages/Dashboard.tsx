@@ -1,7 +1,13 @@
 import { For, Match, Switch, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
-import { INFRASTRUCTURE_PATH, WORKLOADS_PATH } from '@/routing/resourceLinks';
+import {
+  buildBackupsPath,
+  buildStoragePath,
+  INFRASTRUCTURE_PATH,
+  WORKLOADS_PATH,
+} from '@/routing/resourceLinks';
+import { formatBytes } from '@/utils/format';
 import { METRIC_THRESHOLDS } from '@/utils/metricThresholds';
 
 const PANEL_BASE_CLASS =
@@ -29,6 +35,12 @@ function infrastructureCpuBarClass(percent: number): string {
   const thresholds = METRIC_THRESHOLDS.cpu;
   if (percent > thresholds.critical) return 'bg-red-500/60 dark:bg-red-500/50';
   if (percent > thresholds.warning) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
+  return 'bg-green-500/60 dark:bg-green-500/50';
+}
+
+function storageCapacityBarClass(percent: number): string {
+  if (percent > 90) return 'bg-red-500/60 dark:bg-red-500/50';
+  if (percent > 80) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
   return 'bg-green-500/60 dark:bg-green-500/50';
 }
 
@@ -75,6 +87,11 @@ export default function Dashboard() {
   );
   const infrastructureTopCPU = createMemo(() => overview().infrastructure.topCPU.slice(0, 5));
   const workloadTypes = createMemo(() => Object.entries(overview().workloads.byType));
+  const storageCapacityPercent = createMemo(() => {
+    const { totalUsed, totalCapacity } = overview().storage;
+    if (totalCapacity <= 0) return 0;
+    return Math.max(0, Math.min(100, (totalUsed / totalCapacity) * 100));
+  });
 
   const statusDistribution = createMemo(() => {
     const byStatus = overview().health.byStatus || {};
@@ -358,6 +375,93 @@ export default function Dashboard() {
                       </div>
                     </Match>
                   </Switch>
+                </div>
+              </section>
+
+              <section class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`} aria-labelledby="storage-panel-heading">
+                <div class="flex items-center justify-between gap-3">
+                  <h2 id="storage-panel-heading" class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    Storage
+                  </h2>
+                  <a
+                    href={buildStoragePath()}
+                    aria-label="View all storage"
+                    class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    View all →
+                  </a>
+                </div>
+
+                <div class="mt-4 space-y-4">
+                  <div class="space-y-1">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Total pools</p>
+                    <p class="text-lg sm:text-xl font-semibold font-mono text-gray-900 dark:text-gray-100">
+                      {overview().storage.total}
+                    </p>
+                  </div>
+
+                  <Switch>
+                    <Match when={overview().storage.total === 0}>
+                      <p class="text-sm text-gray-500 dark:text-gray-400">No storage resources</p>
+                    </Match>
+                    <Match when={overview().storage.total > 0}>
+                      <div class="space-y-2">
+                        <div class="flex items-center justify-between gap-3">
+                          <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Overall capacity
+                          </p>
+                          <span class="text-xs sm:text-sm font-mono font-semibold text-gray-700 dark:text-gray-200">
+                            {formatPercent(storageCapacityPercent())}
+                          </span>
+                        </div>
+                        <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
+                          {formatBytes(overview().storage.totalUsed)} / {formatBytes(overview().storage.totalCapacity)}
+                        </p>
+                        <div class="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700/70">
+                          <div
+                            class={`h-full rounded ${storageCapacityBarClass(storageCapacityPercent())}`}
+                            style={{
+                              width: `${storageCapacityPercent()}%`,
+                            }}
+                          />
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+                          {overview().storage.warningCount > 0 && (
+                            <span class="font-medium text-amber-600 dark:text-amber-400">
+                              Warnings {overview().storage.warningCount}
+                            </span>
+                          )}
+                          {overview().storage.criticalCount > 0 && (
+                            <span class="font-medium text-red-600 dark:text-red-400">
+                              Critical {overview().storage.criticalCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </Match>
+                  </Switch>
+                </div>
+              </section>
+
+              <section class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`} aria-labelledby="backups-panel-heading">
+                <div class="flex items-center justify-between gap-3">
+                  <h2 id="backups-panel-heading" class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    Backups
+                  </h2>
+                  <a
+                    href={buildBackupsPath()}
+                    aria-label="View all backups"
+                    class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    View all →
+                  </a>
+                </div>
+
+                <div class="mt-4 space-y-1">
+                  <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Summary</p>
+                  <p class="text-sm text-gray-700 dark:text-gray-200">
+                    Backup details are available on the Backups page
+                  </p>
                 </div>
               </section>
             </div>

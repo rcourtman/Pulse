@@ -115,4 +115,47 @@ describe('Dashboard panels data contract', () => {
       pod: 1,
     });
   });
+
+  it('computes storage summary data for dashboard panels', () => {
+    const resources: Resource[] = [
+      createResource({
+        id: 'store-1',
+        type: 'storage',
+        status: 'online',
+        disk: { current: 40, total: 1000, used: 400 },
+      }),
+      createResource({
+        id: 'store-2',
+        type: 'datastore',
+        status: 'online',
+        disk: { current: 85, total: 1000, used: 850 },
+      }),
+      createResource({
+        id: 'store-3',
+        type: 'pool',
+        status: 'online',
+        disk: { current: 90, total: 1000, used: 900 },
+      }),
+      createResource({
+        id: 'store-4',
+        type: 'dataset',
+        status: 'online',
+        disk: { current: 92, total: 1000, used: 920 },
+      }),
+      createResource({
+        id: 'infra-1',
+        type: 'host',
+        status: 'online',
+        disk: { current: 99, total: 1000, used: 990 },
+      }),
+    ];
+
+    const overview = computeDashboardOverview(resources, []);
+
+    expect(overview.storage.total).toBe(4);
+    expect(overview.storage.totalCapacity).toBe(4000);
+    expect(overview.storage.totalUsed).toBe(3070);
+    expect(overview.storage.warningCount).toBe(2);
+    expect(overview.storage.criticalCount).toBe(1);
+  });
 });
