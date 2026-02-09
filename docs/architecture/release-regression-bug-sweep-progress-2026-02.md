@@ -21,7 +21,7 @@ Date: 2026-02-09
 | RGS-00 | Scope Freeze + Critical Path Inventory | DONE | Claude | Claude | APPROVED | `e2f91c2c` |
 | RGS-01 | Backend Regression Replay | DONE | Codex | Claude | APPROVED | `c61a0143` |
 | RGS-02 | Frontend Regression Replay | DONE | Codex | Claude | APPROVED | `RGS-02 Review Record` |
-| RGS-03 | Flake and Stability Burn-Down | PENDING | Codex | Claude | — | — |
+| RGS-03 | Flake and Stability Burn-Down | DONE | Codex | Claude | APPROVED | RGS-03 section below |
 | RGS-04 | Final Regression Verdict | PENDING | Claude | Claude | — | — |
 
 ---
@@ -210,21 +210,48 @@ Rollback:
 
 ## RGS-03 Checklist: Flake and Stability Burn-Down
 
-- [ ] Critical backend suites rerun for stability.
-- [ ] Critical frontend suites rerun for stability.
-- [ ] Flaky tests fixed or formally deferred.
+- [x] Critical backend suites rerun for stability.
+- [x] Critical frontend suites rerun for stability.
+- [x] Flaky tests fixed or formally deferred.
 
 ### Required Commands
 
-- [ ] `go test ./internal/api/... -count=3` -> exit 0
-- [ ] `cd frontend-modern && npx vitest run --runInBand` -> exit 0
+- [x] `go test ./internal/api/... -count=3` -> exit 0 (`real` 308.05s, verified 2026-02-09)
+- [x] `cd frontend-modern && npx vitest run --sequence.concurrent=false` -> exit 0 (`real` 8.77s, 682/682 tests, verified 2026-02-09)
+
+**Note:** Original plan specified `--runInBand` (Jest flag). Vitest equivalent is `--sequence.concurrent=false` for sequential execution. Command corrected and rerun by reviewer.
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS — Backend 3x stability pass (308s, zero failures); frontend sequential pass (682/682).
+- [x] P1 PASS — No flaky tests detected in either backend (3x) or frontend (sequential) runs.
+- [x] P2 PASS — Tracker includes exact commands, timings, exit codes; plan command corrected with note.
+- [x] Verdict recorded: APPROVED
+
+### RGS-03 Review Record
+
+Files changed:
+- `docs/architecture/release-regression-bug-sweep-progress-2026-02.md`: RGS-03 checklist, corrected frontend command, review evidence
+
+Commands run + exit codes:
+1. `go test ./internal/api/... -count=3` -> exit 0 (`real` 308.05s)
+2. `cd frontend-modern && npx vitest run --sequence.concurrent=false` -> exit 0 (`real` 8.77s, 682/682)
+
+Gate checklist:
+- P0: PASS (both stability gates green)
+- P1: PASS (no flaky tests detected)
+- P2: PASS (evidence complete; plan command corrected)
+
+Verdict: APPROVED
+
+Residual risk:
+- None. No flaky tests detected in backend (3x) or frontend (sequential).
+
+Commit:
+- Pending checkpoint commit.
+
+Rollback:
+- Revert tracker edits only (documentation-only packet).
 
 ## RGS-04 Checklist: Final Regression Verdict
 
