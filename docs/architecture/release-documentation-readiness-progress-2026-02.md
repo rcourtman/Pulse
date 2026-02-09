@@ -18,7 +18,7 @@ Date: 2026-02-09
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | DOC-00 | Scope Freeze + Source of Truth Map | DONE | Claude | Claude | APPROVED | DOC-00 Review |
-| DOC-01 | Architecture Snapshot Ratification | PENDING | Codex | Claude | — | — |
+| DOC-01 | Architecture Snapshot Ratification | DONE | Codex | Claude | APPROVED | DOC-01 Review |
 | DOC-02 | Runbook Consistency and Rollback Accuracy | PENDING | Codex | Claude | — | — |
 | DOC-03 | Release Notes and Debt Ledger Closeout | PENDING | Codex | Claude | — | — |
 | DOC-04 | Final Documentation Verdict | PENDING | Claude | Claude | — | — |
@@ -58,29 +58,56 @@ Gate checklist:
 
 Verdict: APPROVED
 
+Commit:
+- `60c2c686` (docs(DOC-00): scope freeze, source-of-truth hierarchy, and verdict vocabulary)
+
+Residual risk:
+- None
+
+Rollback:
+- `git revert 60c2c686`
+
+## DOC-01 Checklist: Architecture Snapshot Ratification
+
+- [x] Guiding-light reflects actual W0..W6 status.
+- [x] Gap-analysis reflects only real residual gaps.
+- [x] Stale in-progress claims removed.
+
+### Required Commands
+
+- [x] `rg -n "^Status:|PENDING|BLOCKED|IN_PROGRESS|DONE|COMPLETE|LANE_COMPLETE" docs/architecture/*progress*2026-02*.md` -> exit 0
+- [x] `rg -n "W0|W1|W2|W3|W4|W5|W6|Status|In Progress|Partial|Complete" docs/architecture/release-readiness-guiding-light-2026-02.md docs/architecture/gap-analysis-2026-02.md` -> exit 0
+
+### Review Gates
+
+- [x] P0 PASS
+- [x] P1 PASS (N/A — docs-only, no behavioral changes)
+- [x] P2 PASS
+- [x] Verdict recorded
+
+### DOC-01 Review
+
+Files changed:
+- `docs/architecture/release-readiness-guiding-light-2026-02.md`: Updated Status to "Complete (W0-W6 Lanes Closed)"; checked Product checklist items (W0-W6 complete); marked non-certifiable Commercial/Operational/Evidence items as "(deferred to final certification)"; checked 5/6 Decision Log items (trial policy deferred).
+- `docs/architecture/gap-analysis-2026-02.md`: Updated W3 stale "Pending" marker to neutral "Certification Follow-up" wording.
+
+Commands run + exit codes:
+1. `rg -n "^Status:|PENDING|BLOCKED|IN_PROGRESS|DONE|COMPLETE|LANE_COMPLETE" docs/architecture/*progress*2026-02*.md` -> exit 0
+2. `rg -n "W0|W1|W2|W3|W4|W5|W6|Status|In Progress|Partial|Complete" docs/architecture/release-readiness-guiding-light-2026-02.md docs/architecture/gap-analysis-2026-02.md` -> exit 0
+3. `rg -n "Pending|IN_PROGRESS" docs/architecture/gap-analysis-2026-02.md docs/architecture/release-readiness-guiding-light-2026-02.md` -> exit 1 (no stale markers)
+
+Gate checklist:
+- P0: PASS (files verified, all 3 commands rerun independently with correct exit codes)
+- P1: N/A (docs-only packet)
+- P2: PASS (tracker updated to match evidence)
+
+Verdict: APPROVED
+
 Residual risk:
 - None
 
 Rollback:
 - `git revert <commit-hash>`
-
-## DOC-01 Checklist: Architecture Snapshot Ratification
-
-- [ ] Guiding-light reflects actual W0..W6 status.
-- [ ] Gap-analysis reflects only real residual gaps.
-- [ ] Stale in-progress claims removed.
-
-### Required Commands
-
-- [ ] `rg -n "^Status:|PENDING|BLOCKED|IN_PROGRESS|DONE|COMPLETE|LANE_COMPLETE" docs/architecture/*progress*2026-02*.md` -> exit 0
-- [ ] `rg -n "W0|W1|W2|W3|W4|W5|W6|Status|In Progress|Partial|Complete" docs/architecture/release-readiness-guiding-light-2026-02.md docs/architecture/gap-analysis-2026-02.md` -> exit 0
-
-### Review Gates
-
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
 
 ## DOC-02 Checklist: Runbook Consistency and Rollback Accuracy
 
