@@ -5568,6 +5568,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	// Normalize resource types so frontend aliases match the SQLite store keys.
+	switch resourceType {
+	case "docker":
+		resourceType = "dockerContainer"
+	}
+
 	// Parse time range
 	var duration time.Duration
 	var stepSecs int64 = 0 // Default to no downsampling (use tier resolution)
