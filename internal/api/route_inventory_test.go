@@ -67,6 +67,7 @@ func parseRouterRoutes(t *testing.T) ([]string, []string, []string) {
 		"router_routes_monitoring.go",
 		"router_routes_auth_security.go",
 		"router_routes_org_license.go",
+		"router_routes_hosted.go",
 	}
 
 	fset := token.NewFileSet()
@@ -288,6 +289,7 @@ var bareRouteAllowlist = []string{
 	"/install-host-agent.sh",
 	"/install.ps1",
 	"/install.sh",
+	"POST /api/public/signup",
 	"/socket.io/",
 	"/uninstall-host-agent.ps1",
 	"/uninstall-host-agent.sh",
@@ -394,6 +396,12 @@ var allRouteAllowlist = []string{
 	"GET /api/audit",
 	"GET /api/audit/",
 	"GET /api/audit/{id}/verify",
+	"GET /api/admin/orgs/{id}/billing-state",
+	"PUT /api/admin/orgs/{id}/billing-state",
+	"POST /api/admin/orgs/{id}/suspend",
+	"POST /api/admin/orgs/{id}/unsuspend",
+	"POST /api/admin/orgs/{id}/soft-delete",
+	"POST /api/public/signup",
 	"/api/admin/roles",
 	"/api/admin/roles/",
 	"/api/admin/users",
