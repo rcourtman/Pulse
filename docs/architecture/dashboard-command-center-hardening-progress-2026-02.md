@@ -657,5 +657,5 @@ Rollback:
 - DCC-07: `83995e33` feat(DCC-07): activate dashboard navigation tab + fix test mocks
 - DCC-08: `NO-OP` (certification-only — full regression suite green)
 - DCC-09: `NO-OP` (docs-only — RAT mapping update + final certification)
-- DCC-10: `ca8790ad` fix(DCC-10): storage metrics history maps disk->usage
+- DCC-10: `7d9bec9e` fix(DCC-10): storage metrics history maps disk->usage
 
