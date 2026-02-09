@@ -1,6 +1,9 @@
 import { For, Match, Switch, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
+import { useDashboardTrends } from '@/hooks/useDashboardTrends';
+import { Sparkline } from '@/components/shared/Sparkline';
+import type { TrendData } from '@/hooks/useDashboardTrends';
 import {
   ALERTS_OVERVIEW_PATH,
   AI_PATROL_PATH,
@@ -38,9 +41,26 @@ function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
 }
 
+function formatDelta(delta: number | null): string | null {
+  if (delta === null) return null;
+  const sign = delta >= 0 ? '+' : '';
+  return `${sign}${delta.toFixed(1)}%`;
+}
+
+function deltaColorClass(delta: number | null): string {
+  if (delta === null) return 'text-gray-400 dark:text-gray-500';
+  if (delta > 5) return 'text-red-500 dark:text-red-400';
+  if (delta > 0) return 'text-amber-500 dark:text-amber-400';
+  if (delta < -5) return 'text-emerald-500 dark:text-emerald-400';
+  if (delta < 0) return 'text-blue-500 dark:text-blue-400';
+  return 'text-gray-500 dark:text-gray-400';
+}
+
 export default function Dashboard() {
   const { state, connected, reconnecting, reconnect, initialDataReceived } = useWebSocket();
   const overview = useDashboardOverview();
+  const trends = useDashboardTrends(overview);
+  const trendsLoading = createMemo(() => trends().loading);
   const [loadingTimedOut, setLoadingTimedOut] = createSignal(false);
   let loadingTimeout: number | undefined;
 
@@ -250,6 +270,7 @@ export default function Dashboard() {
               <section
                 class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`}
                 aria-labelledby="infrastructure-panel-heading"
+                aria-busy={trendsLoading()}
               >
                 <div class="flex items-center justify-between gap-3">
                   <div>
@@ -322,6 +343,27 @@ export default function Dashboard() {
                                           }}
                                         />
                                       </div>
+                                      {(() => {
+                                        const trendData: TrendData | undefined = trends().infrastructure.cpu.get(entry.id);
+                                        if (!trendData || trendData.points.length < 2) return (
+                                          <p class="text-[10px] text-gray-400 dark:text-gray-500" aria-label="No trend data available">
+                                            No trend data
+                                          </p>
+                                        );
+                                        return (
+                                          <div class="flex items-center gap-2 mt-1">
+                                            <div class="flex-1 min-w-0">
+                                              <Sparkline data={trendData.points} metric="cpu" width={0} height={20} />
+                                            </div>
+                                            <span
+                                              class={`text-[10px] font-mono font-medium whitespace-nowrap ${deltaColorClass(trendData.delta)}`}
+                                              aria-label={`CPU trend ${formatDelta(trendData.delta) ?? 'unavailable'} over 1 hour`}
+                                            >
+                                              {formatDelta(trendData.delta) ?? '—'}
+                                            </span>
+                                          </div>
+                                        );
+                                      })()}
                                     </li>
                                   )}
                                 </For>
@@ -357,6 +399,27 @@ export default function Dashboard() {
                                           }}
                                         />
                                       </div>
+                                      {(() => {
+                                        const trendData: TrendData | undefined = trends().infrastructure.memory.get(entry.id);
+                                        if (!trendData || trendData.points.length < 2) return (
+                                          <p class="text-[10px] text-gray-400 dark:text-gray-500" aria-label="No trend data available">
+                                            No trend data
+                                          </p>
+                                        );
+                                        return (
+                                          <div class="flex items-center gap-2 mt-1">
+                                            <div class="flex-1 min-w-0">
+                                              <Sparkline data={trendData.points} metric="memory" width={0} height={20} />
+                                            </div>
+                                            <span
+                                              class={`text-[10px] font-mono font-medium whitespace-nowrap ${deltaColorClass(trendData.delta)}`}
+                                              aria-label={`Memory trend ${formatDelta(trendData.delta) ?? 'unavailable'} over 1 hour`}
+                                            >
+                                              {formatDelta(trendData.delta) ?? '—'}
+                                            </span>
+                                          </div>
+                                        );
+                                      })()}
                                     </li>
                                   )}
                                 </For>
@@ -464,7 +527,11 @@ export default function Dashboard() {
                 </div>
               </section>
 
-              <section class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`} aria-labelledby="storage-panel-heading">
+              <section
+                class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`}
+                aria-labelledby="storage-panel-heading"
+                aria-busy={trendsLoading()}
+              >
                 <div class="flex items-center justify-between gap-3">
                   <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">DP-STORE</p>
@@ -527,6 +594,28 @@ export default function Dashboard() {
                             </span>
                           )}
                         </div>
+                        {(() => {
+                          const storageTrend: TrendData | null = trends().storage.capacity;
+                          if (!storageTrend || storageTrend.points.length < 2) return (
+                            <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-2" aria-label="No storage trend data available">
+                              No trend data
+                            </p>
+                          );
+                          return (
+                            <div class="mt-3 space-y-1">
+                              <div class="flex items-center justify-between">
+                                <p class="text-[10px] font-medium text-gray-500 dark:text-gray-400">24h capacity trend</p>
+                                <span
+                                  class={`text-[10px] font-mono font-medium ${deltaColorClass(storageTrend.delta)}`}
+                                  aria-label={`Storage capacity trend ${formatDelta(storageTrend.delta) ?? 'unavailable'} over 24 hours`}
+                                >
+                                  {formatDelta(storageTrend.delta) ?? '—'}
+                                </span>
+                              </div>
+                              <Sparkline data={storageTrend.points} metric="disk" width={0} height={24} />
+                            </div>
+                          );
+                        })()}
                       </div>
                     </Match>
                   </Switch>
