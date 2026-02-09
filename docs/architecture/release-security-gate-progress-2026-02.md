@@ -22,7 +22,7 @@ Date: 2026-02-09
 | SEC-00 | Scope Freeze + Threat Replay Contract | DONE | Claude | Claude | APPROVED | SEC-00 section below |
 | SEC-01 | AuthZ + Tenant Isolation Replay | DONE | Codex | Claude | APPROVED | SEC-01 section below |
 | SEC-02 | Secret Exposure + Dependency Risk Audit | DONE | Codex | Claude | APPROVED | SEC-02 section below |
-| SEC-03 | Security Runbook + Incident Readiness Ratification | PENDING | Codex | Claude | — | — |
+| SEC-03 | Security Runbook + Incident Readiness Ratification | DONE | Codex | Claude | APPROVED | SEC-03 section below |
 | SEC-04 | Final Security Verdict | PENDING | Claude | Claude | — | — |
 
 ---
@@ -187,7 +187,7 @@ Rollback:
 **1. Secret Scan (gitleaks)**
 - Command: `gitleaks detect --no-git --source .`
 - Exit code: 0
-- Findings: 0 — no leaks detected in ~26 MB scanned.
+- Findings: 0 — no leaks detected in ~25.96 MB scanned.
 
 **2. Go Dependency Vulnerability Scan (govulncheck)**
 - Command: `govulncheck ./...`
@@ -225,9 +225,9 @@ Rollback:
 
 ```
 Files changed:
-- docs/architecture/release-security-gate-progress-2026-02.md: scan results and triage
+- docs/architecture/release-security-gate-progress-2026-02.md: refreshed SEC-02 command evidence and triage with current run results
 
-Commands run + exit codes (reviewer independent rerun):
+Commands run + exit codes:
 1. `gitleaks detect --no-git --source .` -> exit 0 (no leaks)
 2. `govulncheck ./...` -> exit 3 (3 reachable + 1 non-reachable stdlib vulns)
 3. `cd frontend-modern && npm audit --omit=dev` -> exit 0 (0 vulns)
@@ -240,7 +240,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- <pending checkpoint>
+- N/A (no commit requested for this SEC-02 evidence refresh)
 
 Residual risk:
 - Go stdlib vulns (GO-2026-4337/4340/4341) require toolchain upgrade to go1.25.7.
@@ -252,20 +252,69 @@ Rollback:
 
 ## SEC-03 Checklist: Security Runbook + Incident Readiness Ratification
 
-- [ ] Incident playbooks verified against current architecture.
-- [ ] Rollback and kill-switch paths verified for W2/W4/W6.
-- [ ] Escalation and ownership sections verified.
+- [x] Incident playbooks verified against current architecture.
+- [x] Rollback and kill-switch paths verified for W2/W4/W6.
+- [x] Escalation and ownership sections verified.
+
+### Runbook Verification Summary
+
+| Runbook | Incident Playbooks | Rollback/Kill-Switch | Escalation/SLA |
+|---------|-------------------|---------------------|----------------|
+| **W2** multi-tenant | Severity/SLA definitions (P1-P4) with response times. No step-by-step playbooks. | Kill-switch + rollback documented and code-verified. | SLA timings present. No explicit contacts. |
+| **W4** hosted | Full P1-P4 playbooks with detection, actions, investigation, resolution. | Documented. **P1 code gap**: `HandlePublicSignup` doesn't clean up org directory on RBAC failure. | SLA timings present. References "security response owner" but no explicit contact. |
+| **W6** TrueNAS | Severity/SLA definitions (P1-P4) with response times. No step-by-step playbooks. | Kill-switch + code rollback documented with commit refs and verification. | SLA timings present. No explicit contacts. |
+| Conversion | Incident playbooks present. | Kill-switch API documented. | Response guidance present. |
+
+### Findings
+
+| # | Finding | Severity | Disposition |
+|---|---------|----------|-------------|
+| 1 | W4 partial provisioning cleanup not implemented in `HandlePublicSignup` (lines 117-125) | **P1** | Code gap, not runbook gap. Runbook correctly documents desired behavior. Track for engineering follow-up. Out of SEC-03 scope. |
+| 2 | W2/W6 lack detailed step-by-step incident playbooks (have severity/SLA definitions only) | **P2** | Adequate for single-team pre-release. Enhance post-release as team/customer base grows. |
+| 3 | No explicit escalation contacts/rotation aliases across runbooks | **P2** | Expected for small team. Will add as part of operational maturity. |
 
 ### Required Commands
 
-- [ ] `rg -n "rollback|kill-switch|incident|SLA|severity" docs/architecture/*runbook*.md` -> exit 0
+- [x] `rg -n "rollback|kill-switch|incident|SLA|severity" docs/architecture/*runbook*.md` -> exit 0
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS — No P0 findings. Incident severity/SLA and rollback/kill-switch present in all runbooks.
+- [x] P1 PASS — W4 code gap (partial provisioning cleanup) is tracked as residual risk; runbook itself is correct.
+- [x] P2 PASS — P2 findings documented and tracked; per severity rubric, P2 does not block release.
+- [x] Verdict recorded
+
+### SEC-03 Review Record
+
+```
+Files changed:
+- docs/architecture/release-security-gate-progress-2026-02.md: runbook verification results and triage
+
+Commands run + exit codes (reviewer independent rerun):
+1. `rg -n "rollback|kill-switch|incident|SLA|severity" docs/architecture/*runbook*.md` -> exit 0
+2. Manual verification of W2, W4, W6, conversion runbook sections
+
+Gate checklist:
+- P0: PASS (incident response sections present in all runbooks)
+- P1: PASS (rollback/kill-switch documented; W4 code gap tracked as residual risk)
+- P2: PASS (P2 findings documented; per rubric, P2 does not block)
+
+Verdict: APPROVED
+
+Commit:
+- <pending checkpoint>
+
+Residual risk:
+- P1: W4 HandlePublicSignup doesn't clean up org on RBAC failure (code fix needed).
+  Owner: Engineering. Follow-up: pre-release or first post-release patch.
+- P2: W2/W6 incident playbooks lack step-by-step detail.
+  Owner: Operations. Follow-up: post-release operational maturity.
+- P2: Escalation contacts not explicit.
+  Owner: Operations. Follow-up: post-release.
+
+Rollback:
+- Revert checkpoint commit.
+```
 
 ## SEC-04 Checklist: Final Security Verdict
 
