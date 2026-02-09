@@ -278,7 +278,6 @@ const Settings: Component<SettingsProps> = (props) => {
     nodePendingDeleteTypeLabel,
     saveNode,
   } = useInfrastructureSettingsState({
-    state,
     eventBus,
     currentTab,
     discoveryEnabled,

@@ -14,7 +14,7 @@ import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
-import type { State, Temperature } from '@/types/api';
+import type { Temperature } from '@/types/api';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { EventDataMap, EventType } from '@/stores/events';
 import type { SettingsTab } from './settingsTypes';
@@ -58,7 +58,6 @@ type InfrastructureEventBus = {
 };
 
 interface UseInfrastructureSettingsStateParams {
-  state: State;
   eventBus: InfrastructureEventBus;
   currentTab: Accessor<SettingsTab>;
   discoveryEnabled: Accessor<boolean>;
@@ -86,7 +85,6 @@ interface UseInfrastructureSettingsStateParams {
 }
 
 export function useInfrastructureSettingsState({
-  state,
   eventBus,
   currentTab,
   discoveryEnabled,
@@ -139,9 +137,9 @@ export function useInfrastructureSettingsState({
       byType('node').length +
       byType('host').length +
       byType('docker-host').length +
-      (state.kubernetesClusters?.length ?? 0) +
-      (state.pbs?.length ?? 0) +
-      (state.pmg?.length ?? 0),
+      byType('k8s-cluster').length +
+      byType('pbs').length +
+      byType('pmg').length,
   );
   const orgGuestUsage = createMemo(
     () => byType('vm').length + byType('container').length + byType('oci-container').length,
