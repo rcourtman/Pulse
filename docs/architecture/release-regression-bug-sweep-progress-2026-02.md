@@ -19,8 +19,8 @@ Date: 2026-02-09
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | RGS-00 | Scope Freeze + Critical Path Inventory | DONE | Claude | Claude | APPROVED | `e2f91c2c` |
-| RGS-01 | Backend Regression Replay | DONE | Codex | Claude | APPROVED | RGS-01 Review Record |
-| RGS-02 | Frontend Regression Replay | PENDING | Codex | Claude | — | — |
+| RGS-01 | Backend Regression Replay | DONE | Codex | Claude | APPROVED | `c61a0143` |
+| RGS-02 | Frontend Regression Replay | DONE | Codex | Claude | APPROVED | `RGS-02 Review Record` |
 | RGS-03 | Flake and Stability Burn-Down | PENDING | Codex | Claude | — | — |
 | RGS-04 | Final Regression Verdict | PENDING | Claude | Claude | — | — |
 
@@ -160,28 +160,64 @@ Residual risk:
 - Monitoring suite showed one transient failure in Codex's run (passed on rerun and passed in reviewer's run). Stability addressed in RGS-03.
 
 Commit:
-- (recorded after checkpoint)
+- `c61a0143` (test(RGS-01): backend regression replay — fix route inventory allowlist + evidence)
 
 Rollback:
 - Revert `route_inventory_test.go` and tracker edits.
 
 ## RGS-02 Checklist: Frontend Regression Replay
 
-- [ ] Full vitest suite replayed.
-- [ ] TypeScript gate replayed.
-- [ ] Routing/settings/alerts high-risk paths validated.
+- [x] Full vitest suite replayed.
+- [x] TypeScript gate replayed.
+- [x] Routing/settings/alerts high-risk paths validated.
 
 ### Required Commands
 
-- [ ] `cd frontend-modern && npx vitest run` -> exit 0
-- [ ] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+- [x] `cd frontend-modern && npx vitest run` -> exit 0 (`real` 11.50s, verified 2026-02-09)
+- [x] `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0 (`real` 4.72s, verified 2026-02-09)
 
 ### Review Gates
 
-- [ ] P0 PASS
-- [ ] P1 PASS
-- [ ] P2 PASS
-- [ ] Verdict recorded
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: APPROVED
+
+### Review Record (Reviewer: Claude — independent verification)
+
+Files changed:
+- `docs/architecture/release-regression-bug-sweep-progress-2026-02.md`: RGS-02 evidence and review gates
+- (No source changes — zero regressions found)
+
+Implementer commands (Codex):
+1. `cd frontend-modern && npx vitest run` -> exit 0 (75 files, 682 tests, 11.50s)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0 (4.72s)
+
+Reviewer independent verification (Claude):
+1. `cd frontend-modern && npx vitest run` -> exit 0 (75 files, 682 tests, 8.99s)
+2. `frontend-modern/node_modules/.bin/tsc --noEmit -p frontend-modern/tsconfig.json` -> exit 0
+
+High-risk path validation:
+- Routing: `navigation.test.ts` (4), `storageBackupsMode.test.ts` (12) — PASS
+- Settings: `RelaySettingsPanel.test.ts` (3), `settingsNavigation.integration.test.tsx` — PASS
+- Alerts: `alertEvaluation.test.ts`, `alertRules.test.ts` — PASS
+- Infrastructure: `ResourceDetailDrawer.discovery.test.ts` (7) — PASS
+
+Gate checklist:
+- P0: PASS (both required commands independently verified exit 0)
+- P1: PASS (all high-risk routing/settings/alerts paths green, zero regressions)
+- P2: PASS (tracker updated accurately with evidence)
+
+Verdict: APPROVED
+
+Residual risk:
+- Non-blocking warning noise in `settingsNavigation.integration.test.tsx` (`Failed to parse URL from /api/health`); tests green.
+
+Commit:
+- (recorded after checkpoint)
+
+Rollback:
+- Revert tracker edits only (documentation-only packet).
 
 ## RGS-03 Checklist: Flake and Stability Burn-Down
 
