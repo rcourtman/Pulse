@@ -354,15 +354,11 @@ export function createWebSocketStore(url: string) {
               setInitialDataReceived(true);
             }
 
-            // URC2 Packet 05 transitional contract:
-            // - `state.resources` is the canonical source once populated.
-            // - Legacy arrays remain hydrated only for explicit compatibility bridges:
-            //   1) rollback when unified resources are not yet populated,
-            //   2) bounded type-specific fallback for PBS/PMG/storage in useAlertsResources/useAIChatResources.
-            // - Do not add new legacy-only consumers.
-            //
-            // Keep legacy field updates explicit here so remaining rollback paths are
-            // visible and reviewable rather than hidden in downstream selectors.
+            // Unified resource contract (LEX-05):
+            // `state.resources` is the canonical source for all resource data.
+            // Legacy per-type arrays (nodes, vms, containers, etc.) are still
+            // hydrated when present in the payload for backward-compatible consumers.
+            // New consumers should use `state.resources` via the useResources() hook.
             // Only update if we have actual data, don't overwrite with empty arrays
             if (message.data.nodes !== undefined) {
               logger.debug('[WebSocket] Updating nodes', {
@@ -491,14 +487,6 @@ export function createWebSocketStore(url: string) {
                 types: [...new Set(message.data.resources?.map((r: any) => r.type) || [])],
               });
               setState('resources', reconcile(message.data.resources, { key: 'id' }));
-
-              if (
-                (message.data.resources?.length || 0) > 0
-                && !message.data.nodes?.length
-                && !message.data.vms?.length
-              ) {
-                logger.debug('[WebSocket] Unified-only mode detected: legacy arrays absent');
-              }
             }
             // Sync active alerts from state
             if (message.data.activeAlerts !== undefined) {

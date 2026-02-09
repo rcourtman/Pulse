@@ -384,6 +384,7 @@ function App() {
     activeAlerts: [],
     recentlyResolved: [],
     lastUpdate: '',
+    resources: [],
   };
 
   // Simple auth state

@@ -29,8 +29,8 @@ export interface State {
   recentlyResolved: ResolvedAlert[];
   lastUpdate: string;
   temperatureMonitoringEnabled?: boolean;
-  // Unified resources (new data model - eventually replaces legacy arrays above)
-  resources?: Resource[];
+  // Unified resources (canonical resource model)
+  resources: Resource[];
 }
 
 export interface RemovedDockerHost {
