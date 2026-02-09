@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -231,6 +232,67 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 			t.Errorf("got %s", res.TokenValue)
 		}
 	})
+}
+
+func TestProxmoxSetup_PVEPrivilegeProbe_FallsBackToGuestAgentAudit(t *testing.T) {
+	mc := &mockCollector{}
+	var pulseMonitorPrivs string
+
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		if name != "pveum" {
+			return "", nil
+		}
+
+		// Temp role privilege probe: pveum role add PulseTmpPrivCheck_* -privs <priv>
+		if len(arg) >= 5 && arg[0] == "role" && arg[1] == "add" && strings.HasPrefix(arg[2], "PulseTmpPrivCheck_") {
+			for i := 0; i < len(arg)-1; i++ {
+				if arg[i] == "-privs" {
+					priv := arg[i+1]
+					if priv == "VM.Monitor" {
+						return "", fmt.Errorf("unknown privilege")
+					}
+					return "", nil
+				}
+			}
+		}
+
+		// Capture configured privileges for PulseMonitor role.
+		if len(arg) >= 5 && arg[0] == "role" && (arg[1] == "modify" || arg[1] == "add") && arg[2] == proxmoxMonitorRole {
+			for i := 0; i < len(arg)-1; i++ {
+				if arg[i] == "-privs" {
+					pulseMonitorPrivs = arg[i+1]
+				}
+			}
+			return "", nil
+		}
+
+		// Token creation path expects a value row.
+		if len(arg) > 2 && arg[0] == "user" && arg[1] == "token" && arg[2] == "add" {
+			return "│ value │ my-token │", nil
+		}
+
+		return "", nil
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+	}
+
+	tokenID, tokenValue, err := p.setupPVEToken(context.Background(), "pulse-test")
+	if err != nil {
+		t.Fatalf("setupPVEToken returned error: %v", err)
+	}
+	if tokenID == "" || tokenValue == "" {
+		t.Fatalf("expected tokenID and tokenValue to be set, got tokenID=%q tokenValue=%q", tokenID, tokenValue)
+	}
+
+	if !strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.Audit") {
+		t.Fatalf("expected PulseMonitor privileges to include VM.GuestAgent.Audit, got %q", pulseMonitorPrivs)
+	}
+	if strings.Contains(pulseMonitorPrivs, "VM.Monitor") {
+		t.Fatalf("did not expect PulseMonitor privileges to include VM.Monitor when it is unavailable, got %q", pulseMonitorPrivs)
+	}
 }
 
 func TestProxmoxSetup_RunAll(t *testing.T) {

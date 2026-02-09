@@ -4304,19 +4304,21 @@ elif [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then
     EXTRA_PRIVS+=("VM.GuestAgent.Audit")
 fi
 
-if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then
-    PRIV_STRING="${EXTRA_PRIVS[*]}"
-    pveum role delete PulseMonitor 2>/dev/null || true
-    if pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null; then
-        pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
-        echo "  • Applied privileges: $PRIV_STRING"
-    else
-        echo "  • Failed to create PulseMonitor role with: $PRIV_STRING"
-        echo "    Assign these privileges manually if Pulse reports permission errors."
-    fi
-else
-    echo "  • No additional privileges detected. Pulse may show limited VM metrics."
-fi
+	if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then
+	    # Join as comma-separated list (pveum expects comma-separated privilege names).
+	    PRIV_STRING="$(IFS=,; echo "${EXTRA_PRIVS[*]}")"
+
+	    # Prefer modify (non-destructive) in case PulseMonitor already exists.
+	    if pveum role modify PulseMonitor -privs "$PRIV_STRING" 2>/dev/null || pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null; then
+	        pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+	        echo "  • Applied privileges: $PRIV_STRING"
+	    else
+	        echo "  • Failed to configure PulseMonitor role with: $PRIV_STRING"
+	        echo "    Assign these privileges manually if Pulse reports permission errors."
+	    fi
+	else
+	    echo "  • No additional privileges detected. Pulse may show limited VM metrics."
+	fi
 
 attempt_auto_registration
 

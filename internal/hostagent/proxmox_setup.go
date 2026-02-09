@@ -44,6 +44,72 @@ const (
 	proxmoxComment = "Pulse monitoring service"
 )
 
+const proxmoxMonitorRole = "PulseMonitor"
+
+func privProbeRoleName(priv string) string {
+	// Keep role name deterministic (helps tests) and valid for pveum.
+	// Replace characters that are likely to cause issues in role names.
+	safe := strings.NewReplacer(".", "_", ":", "_", "/", "_", " ", "_", ",", "_").Replace(priv)
+	return "PulseTmpPrivCheck_" + safe
+}
+
+func (p *ProxmoxSetup) probePVEPrivilege(ctx context.Context, privilege string) bool {
+	roleName := privProbeRoleName(privilege)
+
+	// If privilege doesn't exist on this PVE version, pveum will fail with a non-zero exit code.
+	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "role", "add", roleName, "-privs", privilege); err != nil {
+		return false
+	}
+	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "role", "delete", roleName)
+	return true
+}
+
+func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context) {
+	// Baseline: read-only access.
+	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", "PVEAuditor"); err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to add PVEAuditor role (may already exist)")
+	}
+
+	// Extra privileges are optional, but enable additional features:
+	// - Sys.Audit: required for pending apt updates + some cluster/ceph visibility
+	// - VM.Monitor (PVE 8) or VM.GuestAgent.Audit (PVE 9+): guest agent data
+	// - Datastore.Audit: improved storage visibility
+	var extraPrivs []string
+
+	if p.probePVEPrivilege(ctx, "Sys.Audit") {
+		extraPrivs = append(extraPrivs, "Sys.Audit")
+	}
+
+	if p.probePVEPrivilege(ctx, "VM.Monitor") {
+		extraPrivs = append(extraPrivs, "VM.Monitor")
+	} else if p.probePVEPrivilege(ctx, "VM.GuestAgent.Audit") {
+		extraPrivs = append(extraPrivs, "VM.GuestAgent.Audit")
+	}
+
+	if p.probePVEPrivilege(ctx, "Datastore.Audit") {
+		extraPrivs = append(extraPrivs, "Datastore.Audit")
+	}
+
+	if len(extraPrivs) > 0 {
+		privString := strings.Join(extraPrivs, ",")
+
+		// Prefer modify (non-destructive) in case the role already exists.
+		if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "role", "modify", proxmoxMonitorRole, "-privs", privString); err != nil {
+			if _, addErr := p.collector.CommandCombinedOutput(ctx, "pveum", "role", "add", proxmoxMonitorRole, "-privs", privString); addErr != nil {
+				p.logger.Warn().Err(addErr).Str("privs", privString).Msg("Failed to configure PulseMonitor role")
+				return
+			}
+		}
+
+		if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", proxmoxMonitorRole); err != nil {
+			p.logger.Warn().Err(err).Msg("Failed to apply PulseMonitor role")
+		}
+	}
+
+	// Add PVEDatastoreAdmin on /storage for backup visibility (issue #1139)
+	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/storage", "-user", proxmoxUserPVE, "-role", "PVEDatastoreAdmin")
+}
+
 var (
 	stateFilePath = "/var/lib/pulse-agent/proxmox-registered" // Legacy, kept for backward compat
 	stateFileDir  = "/var/lib/pulse-agent"
@@ -250,17 +316,8 @@ func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (str
 	// Create user (ignore error if already exists)
 	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "user", "add", proxmoxUserPVE, "--comment", proxmoxComment)
 
-	// Add PVEAuditor role
-	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", "PVEAuditor"); err != nil {
-		p.logger.Warn().Err(err).Msg("Failed to add PVEAuditor role (may already exist)")
-	}
-
-	// Try to create PulseMonitor role with additional privileges
-	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "role", "add", "PulseMonitor", "-privs", "Sys.Audit,VM.Monitor,Datastore.Audit")
-	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", "PulseMonitor")
-
-	// Add PVEDatastoreAdmin on /storage for backup visibility (issue #1139)
-	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/storage", "-user", proxmoxUserPVE, "-role", "PVEDatastoreAdmin")
+	// Apply baseline + optional enhanced permissions (Sys.Audit, guest agent access).
+	p.configurePVEPermissions(ctx)
 
 	// Create token with privilege separation disabled
 	output, err := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "0")

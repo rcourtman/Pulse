@@ -107,6 +107,39 @@ func TestPVESetupScriptArgumentAlignment(t *testing.T) {
 	}
 }
 
+func TestPVESetupScript_ConfiguresPulseMonitorRoleSafely(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/setup-script?type=pve&host=http://SENTINEL_HOST:8006&pulse_url=http://SENTINEL_URL:7656&auth_token=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+
+	// Privileges must be comma-separated for pveum, and role updates should be non-destructive.
+	wantSnippets := []string{
+		`PRIV_STRING="$(IFS=,; echo "${EXTRA_PRIVS[*]}")"`,
+		`pveum role modify PulseMonitor -privs "$PRIV_STRING" 2>/dev/null || pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null`,
+	}
+	for _, snippet := range wantSnippets {
+		if !containsString(script, snippet) {
+			t.Fatalf("expected generated script to contain:\n%s\n\nGot (first 500 chars):\n%s", snippet, truncate(script, 500))
+		}
+	}
+}
+
 func containsString(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
 		(findSubstring(s, substr) >= 0))
