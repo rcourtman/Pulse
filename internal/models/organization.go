@@ -21,6 +21,30 @@ const (
 	OrgRoleMember OrganizationRole = OrgRoleViewer
 )
 
+// OrgStatus represents lifecycle status for an organization.
+type OrgStatus string
+
+const (
+	OrgStatusActive          OrgStatus = "active"
+	OrgStatusSuspended       OrgStatus = "suspended"
+	OrgStatusPendingDeletion OrgStatus = "pending_deletion"
+)
+
+// NormalizeOrgStatus canonicalizes lifecycle status values.
+// Empty status is treated as active for backward compatibility.
+func NormalizeOrgStatus(status OrgStatus) OrgStatus {
+	switch strings.ToLower(strings.TrimSpace(string(status))) {
+	case "", string(OrgStatusActive):
+		return OrgStatusActive
+	case string(OrgStatusSuspended):
+		return OrgStatusSuspended
+	case string(OrgStatusPendingDeletion):
+		return OrgStatusPendingDeletion
+	default:
+		return OrgStatus(strings.ToLower(strings.TrimSpace(string(status))))
+	}
+}
+
 // NormalizeOrganizationRole canonicalizes role values and maps legacy aliases.
 func NormalizeOrganizationRole(role OrganizationRole) OrganizationRole {
 	switch strings.ToLower(strings.TrimSpace(string(role))) {
@@ -98,6 +122,10 @@ type Organization struct {
 	// DisplayName is the human-readable name of the organization.
 	DisplayName string `json:"displayName"`
 
+	// Status is the current lifecycle status for the organization.
+	// Empty status is treated as active for backward compatibility.
+	Status OrgStatus `json:"status,omitempty"`
+
 	// CreatedAt is when the organization was registered.
 	CreatedAt time.Time `json:"createdAt"`
 
@@ -111,6 +139,18 @@ type Organization struct {
 
 	// SharedResources contains outgoing cross-organization shares.
 	SharedResources []OrganizationShare `json:"sharedResources,omitempty"`
+
+	// SuspendedAt records when the organization was suspended.
+	SuspendedAt *time.Time `json:"suspendedAt,omitempty"`
+
+	// SuspendReason stores the reason for suspension, if provided.
+	SuspendReason string `json:"suspendReason,omitempty"`
+
+	// DeletionRequestedAt records when soft-deletion was requested.
+	DeletionRequestedAt *time.Time `json:"deletionRequestedAt,omitempty"`
+
+	// RetentionDays stores the soft-delete retention period in days.
+	RetentionDays int `json:"retentionDays,omitempty"`
 
 	// EncryptionKeyID refers to the specific encryption key used for this org's data
 	// (Future proofing for per-tenant encryption keys)
