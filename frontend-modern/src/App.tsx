@@ -102,6 +102,7 @@ const AlertsPage = lazy(() =>
 );
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
 const InfrastructurePage = lazy(() => import('./pages/Infrastructure'));
+const DashboardPage = lazy(() => import('./pages/Dashboard'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
@@ -1114,6 +1115,7 @@ function App() {
   // Use Router with routes
   return (
     <Router root={RootLayout}>
+      <Route path="/dashboard" component={DashboardPage} />
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
       <Route path={STORAGE_PATH} component={StorageV2Component} />
