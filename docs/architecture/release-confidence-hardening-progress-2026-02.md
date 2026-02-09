@@ -23,7 +23,7 @@ Date: 2026-02-09
 | RC-00 | Scope Freeze + Evidence Discipline | DONE | Claude | Claude | APPROVED | RC-00 section |
 | RC-01 | Toolchain Pinning (Go stdlib vuln clear) | DONE | SEC lane | Claude | APPROVED | RC-01 section |
 | RC-02 | Security Re-Scan + Verdict Upgrade | READY |  |  |  | RC-02 section |
-| RC-03 | Hosted Signup Partial Provisioning Cleanup | READY |  |  |  | RC-03 section |
+| RC-03 | Hosted Signup Partial Provisioning Cleanup | DONE | SEC lane | Claude | APPROVED | RC-03 section |
 | RC-04 | Frontend Release-Test Hygiene (No network noise) | READY |  |  |  | RC-04 section |
 | RC-05 | Full Certification Replay | BLOCKED |  |  |  | RC-05 section |
 | RC-06 | Release Artifact + Docker Validation | BLOCKED |  |  |  | RC-06 section |
@@ -203,7 +203,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- (pending checkpoint)
+- `abb55732` (feat(RC-01): pin Go toolchain to 1.25.7, clearing all stdlib vulns)
 
 Residual risk:
 - None. All 3 P1 stdlib findings resolved.
@@ -215,7 +215,7 @@ Rollback:
 Evidence:
 - Commands run + exit codes: see review record above
 - Search proof (old version references removed): 0 matches for `go1.24` pattern
-- Commit: (pending)
+- Commit: `abb55732`
 
 ## RC-02 Checklist: Security Re-Scan + Verdict Upgrade
 
@@ -235,19 +235,76 @@ Evidence:
 ## RC-03 Checklist: Hosted Signup Partial Provisioning Cleanup
 
 Blocked by:
-- RC-00
+- RC-00 (DONE)
 
-- [ ] Identify all failure points after tenant directory initialization in `/api/public/signup`.
-- [ ] Implement best-effort cleanup:
-- [ ] Org directory removal.
-- [ ] RBAC manager cleanup (close/remove cache).
-- [ ] Add regression tests forcing RBAC failure and asserting cleanup.
-- [ ] `go test ./internal/api/... -run "HostedSignup" -count=1` -> exit 0
+- [x] Identify all failure points after tenant directory initialization in `/api/public/signup`.
+  - 4 failure points after tenant dir init: (1) org save failure, (2) RBAC GetManager failure, (3) UpdateUserRoles failure, (4) tenant dir init failure itself
+- [x] Implement best-effort cleanup:
+- [x] Org directory removal.
+  - `h.persistence.DeleteOrganization(orgID)` called on all failure paths
+- [x] RBAC manager cleanup (close/remove cache).
+  - `h.rbacProvider.RemoveTenant(orgID)` called before org dir removal (proper ordering to avoid lingering DB handles)
+  - `sync.Once` ensures idempotent cleanup
+- [x] Add regression tests forcing RBAC failure and asserting cleanup.
+  - `TestHostedSignupCleanupOnRBACFailure`: uses `failingRBACProvider` wrapper to force `UpdateUserRoles` failure, asserts `RemoveTenant` was called, asserts no org directories remain
+- [x] `go test ./internal/api/... -run "HostedSignup" -count=1` -> exit 0 (0.377s, 5 tests all PASS)
+
+### Implementation Summary
+
+- Introduced `HostedRBACProvider` interface (replaces concrete `*TenantRBACProvider` dependency) for testability
+- Added `cleanupProvisioning` closure using `sync.Once` that runs on any post-init failure:
+  1. Records failure metric
+  2. Calls `RemoveTenant(orgID)` to close/remove RBAC DB handles
+  3. Calls `DeleteOrganization(orgID)` to remove org directory
+- Added to all 4 failure paths after tenant dir initialization
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/api/hosted_signup_handlers.go` | `HostedRBACProvider` interface, `cleanupProvisioning` on all failure paths |
+| `internal/api/hosted_signup_handlers_test.go` | `TestHostedSignupCleanupOnRBACFailure`, `failingRBACProvider`, `failingManager` test doubles |
+
+### Review Gates
+
+- [x] P0 PASS — All 5 hosted signup tests pass. Cleanup runs on all post-init failure paths.
+- [x] P1 PASS — RBAC failure path now cleans up org directory and DB handles. Regression test forces this path and verifies cleanup.
+- [x] P2 PASS — Tracker updated; evidence complete.
+- [x] Verdict recorded
+
+### RC-03 Review Record
+
+```
+Files changed:
+- internal/api/hosted_signup_handlers.go: HostedRBACProvider interface, cleanupProvisioning on all failure paths
+- internal/api/hosted_signup_handlers_test.go: TestHostedSignupCleanupOnRBACFailure regression test, test doubles
+
+Commands run + exit codes:
+1. `go test ./internal/api/... -run "HostedSignup" -count=1` -> exit 0 (0.377s)
+2. `go build ./...` -> exit 0
+3. `go test ./... -count=1` -> exit 0
+
+Gate checklist:
+- P0: PASS (all hosted signup tests green)
+- P1: PASS (cleanup implemented on all failure paths, regression test added)
+- P2: PASS (tracker accurate)
+
+Verdict: APPROVED
+
+Commit:
+- (pending checkpoint)
+
+Residual risk:
+- None. SEC-03 P1 finding (partial provisioning cleanup) is now resolved.
+
+Rollback:
+- Revert handler and test changes.
+```
 
 Evidence:
-- Commands run + exit codes:
-- Test names added:
-- Commit:
+- Commands run + exit codes: see review record
+- Test names added: `TestHostedSignupCleanupOnRBACFailure`
+- Commit: (pending)
 
 ## RC-04 Checklist: Frontend Release-Test Hygiene (No network noise)
 

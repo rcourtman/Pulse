@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 )
 
 func TestHostedSignupSuccess(t *testing.T) {
-	router, persistence, rbacProvider := newHostedSignupTestRouter(t, true)
+	router, persistence, rbacProvider, _ := newHostedSignupTestRouter(t, true)
 
 	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","password":"securepass123","org_name":"My Organization"}`)
 	if rec.Code != http.StatusCreated {
@@ -88,7 +89,7 @@ func TestHostedSignupValidationFailures(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			router, _, _ := newHostedSignupTestRouter(t, true)
+			router, _, _, _ := newHostedSignupTestRouter(t, true)
 			rec := doHostedSignupRequest(router, tc.body)
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
@@ -98,7 +99,7 @@ func TestHostedSignupValidationFailures(t *testing.T) {
 }
 
 func TestHostedSignupHostedModeGate(t *testing.T) {
-	router, _, _ := newHostedSignupTestRouter(t, false)
+	router, _, _, _ := newHostedSignupTestRouter(t, false)
 
 	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","password":"securepass123","org_name":"My Organization"}`)
 	if rec.Code != http.StatusNotFound {
@@ -107,7 +108,7 @@ func TestHostedSignupHostedModeGate(t *testing.T) {
 }
 
 func TestHostedSignupRateLimit(t *testing.T) {
-	router, _, _ := newHostedSignupTestRouter(t, true)
+	router, _, _, _ := newHostedSignupTestRouter(t, true)
 
 	for i := 1; i <= 6; i++ {
 		body := fmt.Sprintf(
@@ -125,7 +126,41 @@ func TestHostedSignupRateLimit(t *testing.T) {
 	}
 }
 
-func newHostedSignupTestRouter(t *testing.T, hostedMode bool) (*Router, *config.MultiTenantPersistence, *TenantRBACProvider) {
+func TestHostedSignupCleanupOnRBACFailure(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	realRBAC := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() {
+		_ = realRBAC.Close()
+	})
+
+	wrapped := &failingRBACProvider{
+		inner:      realRBAC,
+		failUpdate: true,
+	}
+
+	router := newHostedSignupTestRouterWithDeps(t, true, persistence, wrapped)
+
+	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","password":"securepass123","org_name":"My Organization"}`)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if wrapped.removeCalls == 0 {
+		t.Fatalf("expected RBAC provider RemoveTenant to be called during cleanup")
+	}
+
+	// Cleanup should remove any partially provisioned org directories.
+	orgsDir := baseDir + "/orgs"
+	entries, err := os.ReadDir(orgsDir)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("read orgs dir: %v", err)
+	}
+	if err == nil && len(entries) != 0 {
+		t.Fatalf("expected no org directories after cleanup; found %d", len(entries))
+	}
+}
+
+func newHostedSignupTestRouter(t *testing.T, hostedMode bool) (*Router, *config.MultiTenantPersistence, *TenantRBACProvider, string) {
 	t.Helper()
 
 	baseDir := t.TempDir()
@@ -134,6 +169,13 @@ func newHostedSignupTestRouter(t *testing.T, hostedMode bool) (*Router, *config.
 	t.Cleanup(func() {
 		_ = rbacProvider.Close()
 	})
+
+	router := newHostedSignupTestRouterWithDeps(t, hostedMode, persistence, rbacProvider)
+	return router, persistence, rbacProvider, baseDir
+}
+
+func newHostedSignupTestRouterWithDeps(t *testing.T, hostedMode bool, persistence *config.MultiTenantPersistence, rbacProvider HostedRBACProvider) *Router {
+	t.Helper()
 
 	router := &Router{
 		mux:               http.NewServeMux(),
@@ -147,7 +189,7 @@ func newHostedSignupTestRouter(t *testing.T, hostedMode bool) (*Router, *config.
 	hostedSignupHandlers := NewHostedSignupHandlers(persistence, rbacProvider, hostedMode)
 	router.registerHostedRoutes(hostedSignupHandlers)
 
-	return router, persistence, rbacProvider
+	return router
 }
 
 func doHostedSignupRequest(router *Router, body string) *httptest.ResponseRecorder {
@@ -165,4 +207,35 @@ func containsRoleID(items []string, target string) bool {
 		}
 	}
 	return false
+}
+
+type failingRBACProvider struct {
+	inner      *TenantRBACProvider
+	failUpdate bool
+
+	removeCalls int
+}
+
+func (p *failingRBACProvider) GetManager(orgID string) (auth.ExtendedManager, error) {
+	manager, err := p.inner.GetManager(orgID)
+	if err != nil {
+		return nil, err
+	}
+	if !p.failUpdate {
+		return manager, nil
+	}
+	return failingManager{ExtendedManager: manager}, nil
+}
+
+func (p *failingRBACProvider) RemoveTenant(orgID string) error {
+	p.removeCalls++
+	return p.inner.RemoveTenant(orgID)
+}
+
+type failingManager struct {
+	auth.ExtendedManager
+}
+
+func (m failingManager) UpdateUserRoles(username string, roleIDs []string) error {
+	return fmt.Errorf("forced UpdateUserRoles failure")
 }

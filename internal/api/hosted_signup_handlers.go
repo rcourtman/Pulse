@@ -2,8 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,13 +14,19 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/hosted"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rs/zerolog/log"
 )
 
 const hostedSignupRequestBodyLimit = 64 * 1024
 
+type HostedRBACProvider interface {
+	GetManager(orgID string) (auth.ExtendedManager, error)
+	RemoveTenant(orgID string) error
+}
+
 type HostedSignupHandlers struct {
 	persistence  *config.MultiTenantPersistence
-	rbacProvider *TenantRBACProvider
+	rbacProvider HostedRBACProvider
 	hostedMode   bool
 }
 
@@ -35,7 +44,7 @@ type hostedSignupResponse struct {
 
 func NewHostedSignupHandlers(
 	persistence *config.MultiTenantPersistence,
-	rbacProvider *TenantRBACProvider,
+	rbacProvider HostedRBACProvider,
 	hostedMode bool,
 ) *HostedSignupHandlers {
 	return &HostedSignupHandlers{
@@ -88,8 +97,24 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 	orgID := uuid.NewString()
 	userID := req.Email
 
+	var cleanupOnce sync.Once
+	cleanupProvisioning := func() {
+		cleanupOnce.Do(func() {
+			hosted.GetHostedMetrics().RecordProvision("failure")
+
+			// Best-effort cleanup: close/remove RBAC manager first to avoid lingering DB handles.
+			if err := h.rbacProvider.RemoveTenant(orgID); err != nil {
+				log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted signup cleanup: failed to remove RBAC tenant")
+			}
+			if err := h.persistence.DeleteOrganization(orgID); err != nil && !errors.Is(err, os.ErrNotExist) {
+				log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted signup cleanup: failed to delete org directory")
+			}
+		})
+	}
+
 	// Force tenant directory creation using the same EnsureConfigDir-backed path as multi-tenant persistence.
 	if _, err := h.persistence.GetPersistence(orgID); err != nil {
+		cleanupProvisioning()
 		writeErrorResponse(w, http.StatusInternalServerError, "tenant_init_failed", "Failed to initialize tenant data directory", nil)
 		return
 	}
@@ -110,17 +135,19 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		},
 	}
 	if err := h.persistence.SaveOrganization(org); err != nil {
+		cleanupProvisioning()
 		writeErrorResponse(w, http.StatusInternalServerError, "create_failed", "Failed to create organization", nil)
 		return
 	}
 
 	authManager, err := h.rbacProvider.GetManager(orgID)
 	if err != nil {
+		cleanupProvisioning()
 		writeErrorResponse(w, http.StatusInternalServerError, "auth_unavailable", "Failed to initialize organization auth manager", nil)
 		return
 	}
 	if err := authManager.UpdateUserRoles(userID, []string{auth.RoleAdmin}); err != nil {
-		hosted.GetHostedMetrics().RecordProvision("failure")
+		cleanupProvisioning()
 		writeErrorResponse(w, http.StatusInternalServerError, "user_create_failed", "Failed to create admin user", nil)
 		return
 	}
