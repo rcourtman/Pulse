@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import BackupsV2 from '@/components/Backups/BackupsV2';
+import Backups from '@/components/Backups/Backups';
 
 let mockLocationSearch = '';
 let mockLocationPath = '/backups';
@@ -133,7 +133,7 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
   }),
 }));
 
-describe('BackupsV2', () => {
+describe('Backups', () => {
   beforeEach(() => {
     localStorage.clear();
     navigateSpy.mockReset();
@@ -147,7 +147,7 @@ describe('BackupsV2', () => {
   });
 
   it('renders a dense backup operations view with key indicators', async () => {
-    render(() => <BackupsV2 />);
+    render(() => <Backups />);
 
     expect(screen.getByRole('button', { name: '30d' })).toBeInTheDocument();
 
@@ -164,7 +164,7 @@ describe('BackupsV2', () => {
   });
 
   it('filters by source platform', async () => {
-    render(() => <BackupsV2 />);
+    render(() => <Backups />);
 
     fireEvent.change(screen.getByLabelText('Source'), {
       target: { value: 'proxmox-pbs' },
@@ -196,7 +196,7 @@ describe('BackupsV2', () => {
       },
     };
 
-    render(() => <BackupsV2 />);
+    render(() => <Backups />);
 
     await waitFor(() => {
       expect(screen.getByText('pmg-config-backup.tar.zst')).toBeInTheDocument();
@@ -209,7 +209,7 @@ describe('BackupsV2', () => {
   });
 
   it('filters by namespace', async () => {
-    render(() => <BackupsV2 />);
+    render(() => <Backups />);
 
     fireEvent.change(screen.getByLabelText('Namespace'), {
       target: { value: 'tenant-a' },
@@ -223,7 +223,7 @@ describe('BackupsV2', () => {
   });
 
   it('shows active namespace chip and clears namespace filter from chip action', async () => {
-    render(() => <BackupsV2 />);
+    render(() => <Backups />);
 
     fireEvent.change(screen.getByLabelText('Namespace'), {
       target: { value: 'tenant-a' },
@@ -242,7 +242,7 @@ describe('BackupsV2', () => {
   });
 
   it('does not render the legacy issues-only focus toggle', async () => {
-    render(() => <BackupsV2 />);
+    render(() => <Backups />);
 
     expect(screen.queryByRole('button', { name: 'Issues Only' })).not.toBeInTheDocument();
   });
@@ -250,7 +250,7 @@ describe('BackupsV2', () => {
   it('canonicalizes query params for v2 route contracts', async () => {
     mockLocationSearch = '?search=vm-101&source=pbs&namespace=tenant-a&backupType=remote&status=verified';
 
-    render(() => <BackupsV2 />);
+    render(() => <Backups />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();
@@ -271,7 +271,7 @@ describe('BackupsV2', () => {
     mockLocationPath = '/backups';
     mockLocationSearch = '?search=vm-101&source=pbs&namespace=tenant-a&backupType=remote&status=verified';
 
-    render(() => <BackupsV2 />);
+    render(() => <Backups />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();
@@ -287,14 +287,14 @@ describe('BackupsV2', () => {
     expect(params.get('search')).toBeNull();
   });
 
-  it('GA contract: BackupsV2 served at /backups is the only canonical path', async () => {
+  it('GA contract: Backups served at /backups is the only canonical path', async () => {
     mockLocationPath = '/backups';
     mockLocationSearch = '?source=pbs&status=verified';
 
-    render(() => <BackupsV2 />);
+    render(() => <Backups />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('backups-v2-page')).toBeInTheDocument();
+      expect(screen.getByTestId('backups-page')).toBeInTheDocument();
     });
 
     const path =

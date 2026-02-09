@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Alert } from '@/types/api';
-import type { Resource } from '@/types/resource';
-import StorageV2 from '@/components/Storage/StorageV2';
+import type { Resource, ResourceType } from '@/types/resource';
+import Storage from '@/components/Storage/Storage';
 
 let mockLocationSearch = '';
 let mockLocationPath = '/storage';
@@ -14,10 +14,6 @@ let wsReconnecting = false;
 let wsActiveAlerts: Record<string, Alert> = {};
 let wsState: any = {
   resources: [] as Resource[],
-  nodes: [
-    { id: 'node-1', name: 'pve1', instance: 'cluster-main' },
-    { id: 'node-2', name: 'pve2', instance: 'cluster-main' },
-  ],
   storage: [],
   cephClusters: [],
   pbs: [],
@@ -29,6 +25,21 @@ let hookResources: Resource[] = [];
 let hookLoading = false;
 let hookError: unknown = undefined;
 let alertsActivationState: 'active' | 'pending_review' | 'snoozed' | null = 'active';
+
+let nodeResources: Resource[] = [
+  {
+    id: 'node-1', type: 'node', name: 'pve1', displayName: 'pve1',
+    platformId: 'cluster-main', platformType: 'proxmox-pve', sourceType: 'api',
+    status: 'online', uptime: 1000, lastSeen: Date.now(),
+    platformData: { proxmox: { instance: 'cluster-main' } },
+  },
+  {
+    id: 'node-2', type: 'node', name: 'pve2', displayName: 'pve2',
+    platformId: 'cluster-main', platformType: 'proxmox-pve', sourceType: 'api',
+    status: 'online', uptime: 1000, lastSeen: Date.now(),
+    platformData: { proxmox: { instance: 'cluster-main' } },
+  },
+];
 
 type StorageResourceOptions = {
   platformId?: string;
@@ -128,17 +139,41 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     refetch: vi.fn(),
     mutate: vi.fn(),
   }),
+  useUnifiedResources: () => ({
+    resources: () => nodeResources,
+    loading: () => false,
+    error: () => undefined,
+    refetch: vi.fn(),
+    mutate: vi.fn(),
+  }),
+}));
+
+vi.mock('@/hooks/useResources', () => ({
+  useResources: () => ({
+    resources: () => nodeResources,
+    infra: () => nodeResources,
+    workloads: () => [],
+    byType: (type: ResourceType) => nodeResources.filter(r => r.type === type),
+    byPlatform: () => [],
+    filtered: () => [],
+    get: (id: string) => nodeResources.find(r => r.id === id),
+    children: () => [],
+    statusCounts: () => ({}),
+    topByCpu: () => [],
+    topByMemory: () => [],
+    hasResources: () => nodeResources.length > 0,
+  }),
 }));
 
 vi.mock('@/components/Storage/DiskList', () => ({
-  DiskList: (props: { selectedNode: string | null; searchTerm: string }) => (
+  DiskList: (props: { nodes: Resource[]; selectedNode: string | null; searchTerm: string }) => (
     <div data-testid="disk-list">
       disk-view:{props.selectedNode || 'all'}:{props.searchTerm || ''}
     </div>
   ),
 }));
 
-describe('StorageV2', () => {
+describe('Storage', () => {
   beforeEach(() => {
     mockLocationPath = '/storage';
     mockLocationSearch = '';
@@ -152,15 +187,25 @@ describe('StorageV2', () => {
     reconnectSpy.mockReset();
     wsState = {
       resources: [],
-      nodes: [
-        { id: 'node-1', name: 'pve1', instance: 'cluster-main' },
-        { id: 'node-2', name: 'pve2', instance: 'cluster-main' },
-      ],
       storage: [],
       cephClusters: [],
       pbs: [],
       physicalDisks: [],
     };
+    nodeResources = [
+      {
+        id: 'node-1', type: 'node', name: 'pve1', displayName: 'pve1',
+        platformId: 'cluster-main', platformType: 'proxmox-pve', sourceType: 'api',
+        status: 'online', uptime: 1000, lastSeen: Date.now(),
+        platformData: { proxmox: { instance: 'cluster-main' } },
+      },
+      {
+        id: 'node-2', type: 'node', name: 'pve2', displayName: 'pve2',
+        platformId: 'cluster-main', platformType: 'proxmox-pve', sourceType: 'api',
+        status: 'online', uptime: 1000, lastSeen: Date.now(),
+        platformData: { proxmox: { instance: 'cluster-main' } },
+      },
+    ];
     hookResources = [];
     hookLoading = false;
     hookError = undefined;
@@ -176,7 +221,7 @@ describe('StorageV2', () => {
       buildStorageResource('storage-2', 'Local-LVM-PVE2', 'pve2'),
     ];
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     expect(screen.getByRole('heading', { name: 'Storage' })).toBeInTheDocument();
     expect(screen.getByText('Storage capacity and health across connected platforms.')).toBeInTheDocument();
@@ -211,7 +256,7 @@ describe('StorageV2', () => {
       }),
     ];
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     expect(screen.getByRole('columnheader', { name: 'Node' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();
@@ -247,7 +292,7 @@ describe('StorageV2', () => {
     mockLocationSearch =
       '?tab=disks&search=ceph&group=status&source=proxmox-pve&status=warning&node=node-2&sort=usage&order=desc&from=proxmox-overview';
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();
@@ -288,7 +333,7 @@ describe('StorageV2', () => {
     hookResources = [buildStorageResource('storage-1', 'Node-Store', 'pve1')];
     mockLocationSearch = '?tab=disks&node=node-2&q=ceph&source=proxmox-pve';
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:node-2:ceph');
     expect((screen.getByLabelText('View') as HTMLSelectElement).value).toBe('disks');
@@ -343,7 +388,7 @@ describe('StorageV2', () => {
       ],
     };
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     expect(screen.getByText('Ceph Summary')).toBeInTheDocument();
     expect(screen.getByText('Primary Ceph')).toBeInTheDocument();
@@ -362,7 +407,7 @@ describe('StorageV2', () => {
       'alert-1': buildAlert('alert-1', 'storage-alerted', 'critical'),
     };
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     await waitFor(() => {
       const row = screen.getByText('Alerted-Store').closest('tr');
@@ -378,7 +423,7 @@ describe('StorageV2', () => {
       'alert-1': buildAlert('alert-1', 'storage-acked', 'warning', true),
     };
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     await waitFor(() => {
       const row = screen.getByText('Acknowledged-Store').closest('tr');
@@ -397,7 +442,7 @@ describe('StorageV2', () => {
     ];
     mockLocationSearch = '?resource=storage-ceph-link';
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     await waitFor(() => {
       const row = document.querySelector('tr[data-row-id="storage-ceph-link"]');
@@ -454,7 +499,7 @@ describe('StorageV2', () => {
       ],
     };
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     await waitFor(() => {
       expect(screen.getAllByText('DEGRADED').length).toBeGreaterThan(0);
@@ -468,7 +513,7 @@ describe('StorageV2', () => {
     wsConnected = false;
     wsInitialDataReceived = false;
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     expect(screen.getByText('Waiting for storage data from connected platforms.')).toBeInTheDocument();
   });
@@ -476,7 +521,7 @@ describe('StorageV2', () => {
   it('shows reconnect banner and retries on demand', () => {
     wsReconnecting = true;
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     expect(screen.getByText('Reconnecting to backend data stream…')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
@@ -488,7 +533,7 @@ describe('StorageV2', () => {
     wsInitialDataReceived = true;
     wsReconnecting = false;
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     expect(screen.getByText('Storage data stream disconnected. Data may be stale.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
@@ -498,7 +543,7 @@ describe('StorageV2', () => {
   it('shows warning when v2 fetch reports an error', () => {
     hookError = new Error('network');
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     expect(
       screen.getByText('Unable to refresh storage resources. Showing latest available data.'),
@@ -506,7 +551,7 @@ describe('StorageV2', () => {
   });
 
   it('switches to physical disks view', () => {
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     fireEvent.change(screen.getByLabelText('View'), {
       target: { value: 'disks' },
@@ -518,17 +563,17 @@ describe('StorageV2', () => {
   it('shows loading placeholder when pool resources are loading', () => {
     hookLoading = true;
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     expect(screen.getByText('Loading storage resources...')).toBeInTheDocument();
   });
 
-  it('GA contract: StorageV2 served at /storage is the only canonical path', async () => {
+  it('GA contract: Storage served at /storage is the only canonical path', async () => {
     hookResources = [buildStorageResource('storage-ga', 'GA-Store', 'pve1', { status: 'degraded' })];
     mockLocationPath = '/storage';
     mockLocationSearch = '?source=proxmox-pve&status=warning';
 
-    render(() => <StorageV2 />);
+    render(() => <Storage />);
 
     await waitFor(() => {
       expect(screen.getByText('GA-Store')).toBeInTheDocument();

@@ -9,9 +9,9 @@ import { hideTooltip, showTooltip } from '@/components/shared/Tooltip';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 import { formatAbsoluteTime, formatBytes } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import { buildBackupRecordsV2 } from '@/features/storageBackupsV2/backupAdapters';
-import { PLATFORM_BLUEPRINTS } from '@/features/storageBackupsV2/platformBlueprint';
-import type { BackupOutcome, BackupRecordV2 } from '@/features/storageBackupsV2/models';
+import { buildBackupRecords } from '@/features/storageBackups/backupAdapters';
+import { PLATFORM_BLUEPRINTS } from '@/features/storageBackups/platformBlueprint';
+import type { BackupOutcome, BackupRecord } from '@/features/storageBackups/models';
 import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
 import {
   BACKUPS_QUERY_PARAMS,
@@ -109,14 +109,14 @@ const formatTimeOnly = (timestamp: number | null): string => {
   });
 };
 
-const isStaleIssue = (record: BackupRecordV2, nowMs: number): boolean => {
+const isStaleIssue = (record: BackupRecord, nowMs: number): boolean => {
   if (!record.completedAt || record.completedAt <= 0) return false;
   return nowMs - record.completedAt >= STALE_ISSUE_THRESHOLD_MS;
 };
 
 type IssueTone = 'none' | 'amber' | 'rose' | 'blue';
 
-const deriveIssueTone = (record: BackupRecordV2, nowMs: number): IssueTone => {
+const deriveIssueTone = (record: BackupRecord, nowMs: number): IssueTone => {
   if (record.outcome === 'failed' || record.outcome === 'offline') return 'rose';
   if (record.outcome === 'running') return 'blue';
   if (record.outcome === 'warning' || record.verified === false || isStaleIssue(record, nowMs)) return 'amber';
@@ -129,7 +129,7 @@ const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string> = {
   blue: 'bg-blue-500/80 dark:bg-blue-500/85',
 };
 
-const timeAgeTextClass = (record: BackupRecordV2, nowMs: number): string => {
+const timeAgeTextClass = (record: BackupRecord, nowMs: number): string => {
   if (!record.completedAt || record.completedAt <= 0) return 'text-gray-500 dark:text-gray-500';
   const ageMs = nowMs - record.completedAt;
   if (ageMs >= STALE_ISSUE_THRESHOLD_MS) return 'text-rose-700 dark:text-rose-300';
@@ -189,7 +189,7 @@ const isBackupOutcome = (value: string): value is BackupOutcome =>
   value === 'offline' ||
   value === 'unknown';
 
-const detailString = (record: BackupRecordV2, key: string): string => {
+const detailString = (record: BackupRecord, key: string): string => {
   const details = (record.details as Record<string, unknown> | undefined) || {};
   const value = details[key];
   if (typeof value === 'string') return value;
@@ -197,7 +197,7 @@ const detailString = (record: BackupRecordV2, key: string): string => {
   return '';
 };
 
-const deriveMode = (record: BackupRecordV2): BackupMode => {
+const deriveMode = (record: BackupRecord): BackupMode => {
   if (record.mode === 'snapshot' || record.mode === 'local' || record.mode === 'remote') return record.mode;
   const detailMode = detailString(record, 'mode');
   if (detailMode === 'snapshot' || detailMode === 'local' || detailMode === 'remote') return detailMode;
@@ -205,7 +205,7 @@ const deriveMode = (record: BackupRecordV2): BackupMode => {
   return 'local';
 };
 
-const deriveClusterLabel = (record: BackupRecordV2): string => {
+const deriveClusterLabel = (record: BackupRecord): string => {
   const kubernetesCluster = (record.kubernetes?.cluster || '').trim();
   if (kubernetesCluster) return kubernetesCluster;
   const proxmoxInstance = (record.proxmox?.instance || '').trim();
@@ -214,7 +214,7 @@ const deriveClusterLabel = (record: BackupRecordV2): string => {
   return 'n/a';
 };
 
-const deriveNodeLabel = (record: BackupRecordV2): string => {
+const deriveNodeLabel = (record: BackupRecord): string => {
   const typedNode =
     (record.proxmox?.node || '').trim() ||
     (record.kubernetes?.node || '').trim() ||
@@ -226,14 +226,14 @@ const deriveNodeLabel = (record: BackupRecordV2): string => {
   return 'n/a';
 };
 
-const deriveNamespaceLabel = (record: BackupRecordV2): string => {
+const deriveNamespaceLabel = (record: BackupRecord): string => {
   const namespace = (record.proxmox?.namespace || record.kubernetes?.namespace || detailString(record, 'namespace')).trim();
   if (namespace) return namespace;
   if (record.source.platform === 'proxmox-pbs') return 'root';
   return 'n/a';
 };
 
-const deriveEntityIdLabel = (record: BackupRecordV2): string => {
+const deriveEntityIdLabel = (record: BackupRecord): string => {
   const proxmoxId = (record.proxmox?.vmid || '').trim();
   if (proxmoxId) return proxmoxId;
   const dockerContainerId = (record.docker?.containerId || '').trim();
@@ -247,7 +247,7 @@ const deriveEntityIdLabel = (record: BackupRecordV2): string => {
   return record.refs?.platformEntityId || 'n/a';
 };
 
-const deriveGuestType = (record: BackupRecordV2): string => {
+const deriveGuestType = (record: BackupRecord): string => {
   const workload = record.scope.workloadType || 'other';
   if (workload === 'vm') return 'VM';
   if (workload === 'container') {
@@ -267,10 +267,10 @@ const firstNonEmpty = (...values: Array<string | null | undefined>): string => {
   return '';
 };
 
-const deriveDetailsOwner = (record: BackupRecordV2): string =>
+const deriveDetailsOwner = (record: BackupRecord): string =>
   firstNonEmpty(record.proxmox?.owner, detailString(record, 'owner'));
 
-const summarizeDetails = (record: BackupRecordV2): string => {
+const summarizeDetails = (record: BackupRecord): string => {
   const pieces: string[] = [];
   const datastore = firstNonEmpty(record.proxmox?.datastore, detailString(record, 'datastore'));
   const namespace = firstNonEmpty(record.proxmox?.namespace, record.kubernetes?.namespace, detailString(record, 'namespace'));
@@ -307,7 +307,7 @@ const groupHeaderRowClass = () => 'bg-gray-50 dark:bg-gray-900/40';
 const groupHeaderTextClass = () =>
   'py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-300';
 
-const BackupsV2: Component = () => {
+const Backups: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, connected, initialDataReceived } = useWebSocket();
@@ -328,8 +328,8 @@ const BackupsV2: Component = () => {
     const unifiedResources = storageBackupsResources.resources();
     return unifiedResources;
   });
-  const records = createMemo<BackupRecordV2[]>(() =>
-    buildBackupRecordsV2({ state, resources: adapterResources() }),
+  const records = createMemo<BackupRecord[]>(() =>
+    buildBackupRecords({ state, resources: adapterResources() }),
   );
 
   const sourceOptions = createMemo(() => {
@@ -431,7 +431,7 @@ const BackupsV2: Component = () => {
     if (nextPath !== currentPath) navigate(nextPath, { replace: true });
   });
 
-  const baseFilteredRecords = createMemo<BackupRecordV2[]>(() => {
+  const baseFilteredRecords = createMemo<BackupRecord[]>(() => {
     const query = search().trim().toLowerCase();
     return records().filter((record) => {
       const mode = deriveMode(record);
@@ -484,7 +484,7 @@ const BackupsV2: Component = () => {
     });
   });
 
-  const rangeFilteredRecords = createMemo<BackupRecordV2[]>(() => {
+  const rangeFilteredRecords = createMemo<BackupRecord[]>(() => {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
     const start = new Date(end);
@@ -499,7 +499,7 @@ const BackupsV2: Component = () => {
     });
   });
 
-  const filteredRecords = createMemo<BackupRecordV2[]>(() => {
+  const filteredRecords = createMemo<BackupRecord[]>(() => {
     const dayKey = selectedDateKey();
     if (!dayKey) return rangeFilteredRecords();
     return rangeFilteredRecords().filter((record) => {
@@ -520,7 +520,7 @@ const BackupsV2: Component = () => {
     }
   });
 
-  const sortedRecords = createMemo<BackupRecordV2[]>(() => {
+  const sortedRecords = createMemo<BackupRecord[]>(() => {
     return [...filteredRecords()].sort((a, b) => {
       const aTs = a.completedAt || 0;
       const bTs = b.completedAt || 0;
@@ -530,14 +530,14 @@ const BackupsV2: Component = () => {
   });
 
   const groupedByDay = createMemo(() => {
-    const groups: Array<{ key: string; label: string; tone: 'recent' | 'default'; items: BackupRecordV2[] }> = [];
+    const groups: Array<{ key: string; label: string; tone: 'recent' | 'default'; items: BackupRecord[] }> = [];
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const yesterday = today - 24 * 60 * 60 * 1000;
 
     const groupMap = new Map<
       string,
-      { key: string; label: string; tone: 'recent' | 'default'; items: BackupRecordV2[] }
+      { key: string; label: string; tone: 'recent' | 'default'; items: BackupRecord[] }
     >();
     for (const record of sortedRecords()) {
       const key = record.completedAt ? dateKeyFromTimestamp(record.completedAt) : 'unknown';
@@ -557,7 +557,7 @@ const BackupsV2: Component = () => {
             label = fullDateLabel(key);
           }
         }
-        const group = { key, label, tone, items: [] as BackupRecordV2[] };
+        const group = { key, label, tone, items: [] as BackupRecord[] };
         groupMap.set(key, group);
         groups.push(group);
       }
@@ -572,7 +572,7 @@ const BackupsV2: Component = () => {
   const pagedGroups = createMemo(() => {
     const start = (currentPage() - 1) * PAGE_SIZE;
     const end = start + PAGE_SIZE;
-    const result: Array<{ key: string; label: string; tone: 'recent' | 'default'; items: BackupRecordV2[] }> = [];
+    const result: Array<{ key: string; label: string; tone: 'recent' | 'default'; items: BackupRecord[] }> = [];
 
     let cursor = 0;
     for (const group of groupedByDay()) {
@@ -750,7 +750,7 @@ const BackupsV2: Component = () => {
   };
 
   return (
-    <div data-testid="backups-v2-page" class="flex flex-col gap-4">
+    <div data-testid="backups-page" class="flex flex-col gap-4">
       <Card padding="sm" class="order-2">
         <div class="flex flex-col gap-2">
           <div class="w-full">
@@ -773,13 +773,13 @@ const BackupsV2: Component = () => {
           <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
               <label
-                for="backups-v2-source-filter"
+                for="backups-source-filter"
                 class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
               >
                 Source
               </label>
               <select
-                id="backups-v2-source-filter"
+                id="backups-source-filter"
                 value={sourceFilter()}
                 onChange={(event) => {
                   setSourceFilter(event.currentTarget.value);
@@ -829,13 +829,13 @@ const BackupsV2: Component = () => {
 
             <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
               <label
-                for="backups-v2-status-filter"
+                for="backups-status-filter"
                 class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
               >
                 Status
               </label>
               <select
-                id="backups-v2-status-filter"
+                id="backups-status-filter"
                 value={outcomeFilter()}
                 onChange={(event) => {
                   const value = event.currentTarget.value as 'all' | BackupOutcome;
@@ -857,13 +857,13 @@ const BackupsV2: Component = () => {
 
             <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
               <label
-                for="backups-v2-verification-filter"
+                for="backups-verification-filter"
                 class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
               >
                 Verification
               </label>
               <select
-                id="backups-v2-verification-filter"
+                id="backups-verification-filter"
                 value={verificationFilter()}
                 onChange={(event) => {
                   setVerificationFilter(event.currentTarget.value as VerificationFilter);
@@ -881,13 +881,13 @@ const BackupsV2: Component = () => {
 
             <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
               <label
-                for="backups-v2-node-filter"
+                for="backups-node-filter"
                 class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
               >
                 Node
               </label>
               <select
-                id="backups-v2-node-filter"
+                id="backups-node-filter"
                 value={nodeFilter()}
                 onChange={(event) => {
                   setNodeFilter(event.currentTarget.value);
@@ -904,13 +904,13 @@ const BackupsV2: Component = () => {
 
             <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
               <label
-                for="backups-v2-namespace-filter"
+                for="backups-namespace-filter"
                 class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
               >
                 Namespace
               </label>
               <select
-                id="backups-v2-namespace-filter"
+                id="backups-namespace-filter"
                 value={namespaceFilter()}
                 onChange={(event) => {
                   setNamespaceFilter(event.currentTarget.value);
@@ -1427,4 +1427,4 @@ const BackupsV2: Component = () => {
   );
 };
 
-export default BackupsV2;
+export default Backups;

@@ -9,9 +9,9 @@ import type {
   StorageBackupPlatform,
   StorageCapability,
   StorageCategory,
-  StorageRecordV2,
-  StorageV2Adapter,
-  StorageV2AdapterContext,
+  StorageRecord,
+  StorageAdapter,
+  StorageAdapterContext,
 } from './models';
 
 const asNumberOrNull = (value: unknown): number | null => {
@@ -38,7 +38,7 @@ type ResourceWithStorageMeta = Resource & {
   storage?: unknown;
 };
 
-const canonicalStorageIdentityKey = (record: StorageRecordV2): string => {
+const canonicalStorageIdentityKey = (record: StorageRecord): string => {
   const platform = normalizeIdentityPart(String(record.source.platform || 'generic'));
   const location = normalizeIdentityPart(record.location?.label) || normalizeIdentityPart(record.refs?.platformEntityId);
   const name = normalizeIdentityPart(record.name) || normalizeIdentityPart(record.id);
@@ -234,7 +234,7 @@ const capabilitiesForStorage = (
   return dedupe(caps);
 };
 
-const mapResourceStorageRecord = (resource: Resource, adapterId: string): StorageRecordV2 => {
+const mapResourceStorageRecord = (resource: Resource, adapterId: string): StorageRecord => {
   const platformData = (resource.platformData as Record<string, unknown> | undefined) || {};
   const storageMeta = readResourceStorageMeta(resource, platformData);
   const resourceType = (resource.type || '').toLowerCase();
@@ -297,7 +297,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   };
 };
 
-const mapLegacyStorageRecord = (storage: Storage, adapterId: string): StorageRecordV2 => {
+const mapLegacyStorageRecord = (storage: Storage, adapterId: string): StorageRecord => {
   const usagePercent = Number.isFinite(storage.usage) ? storage.usage : null;
   const totalBytes = Number.isFinite(storage.total) ? storage.total : null;
   const usedBytes = Number.isFinite(storage.used) ? storage.used : null;
@@ -337,7 +337,7 @@ const mapLegacyPBSDatastore = (
   instance: { id: string; name: string; datastores: PBSDatastore[] },
   datastore: PBSDatastore,
   adapterId: string,
-): StorageRecordV2 => {
+): StorageRecord => {
   const usagePercent = Number.isFinite(datastore.usage) ? datastore.usage : null;
   const totalBytes = Number.isFinite(datastore.total) ? datastore.total : null;
   const usedBytes = Number.isFinite(datastore.used) ? datastore.used : null;
@@ -369,7 +369,7 @@ const mapLegacyPBSDatastore = (
   };
 };
 
-const resourceStorageAdapter: StorageV2Adapter = {
+const resourceStorageAdapter: StorageAdapter = {
   id: 'resource-storage',
   supports: (ctx) => Array.isArray(ctx.resources) && ctx.resources.length > 0,
   build: (ctx) =>
@@ -378,13 +378,13 @@ const resourceStorageAdapter: StorageV2Adapter = {
       .map((resource) => mapResourceStorageRecord(resource, 'resource-storage')),
 };
 
-const legacyStorageAdapter: StorageV2Adapter = {
+const legacyStorageAdapter: StorageAdapter = {
   id: 'legacy-storage',
   supports: (ctx) => (ctx.state.storage || []).length > 0,
   build: (ctx) => (ctx.state.storage || []).map((storage) => mapLegacyStorageRecord(storage, 'legacy-storage')),
 };
 
-const legacyPbsDatastoreAdapter: StorageV2Adapter = {
+const legacyPbsDatastoreAdapter: StorageAdapter = {
   id: 'legacy-pbs-datastore',
   supports: (ctx) => (ctx.state.pbs || []).some((instance) => (instance.datastores || []).length > 0),
   build: (ctx) =>
@@ -399,13 +399,13 @@ const legacyPbsDatastoreAdapter: StorageV2Adapter = {
     ),
 };
 
-export const DEFAULT_STORAGE_V2_ADAPTERS: StorageV2Adapter[] = [
+export const DEFAULT_STORAGE_ADAPTERS: StorageAdapter[] = [
   resourceStorageAdapter,
   legacyStorageAdapter,
   legacyPbsDatastoreAdapter,
 ];
 
-const mergeStorageRecords = (current: StorageRecordV2, incoming: StorageRecordV2): StorageRecordV2 => {
+const mergeStorageRecords = (current: StorageRecord, incoming: StorageRecord): StorageRecord => {
   const currentRank = STORAGE_DATA_ORIGIN_PRECEDENCE[current.source.origin];
   const incomingRank = STORAGE_DATA_ORIGIN_PRECEDENCE[incoming.source.origin];
   const preferred = incomingRank > currentRank ? incoming : current;
@@ -422,11 +422,11 @@ const mergeStorageRecords = (current: StorageRecordV2, incoming: StorageRecordV2
   };
 };
 
-export const buildStorageRecordsV2 = (
-  ctx: StorageV2AdapterContext,
-  adapters: StorageV2Adapter[] = DEFAULT_STORAGE_V2_ADAPTERS,
-): StorageRecordV2[] => {
-  const map = new Map<string, StorageRecordV2>();
+export const buildStorageRecords = (
+  ctx: StorageAdapterContext,
+  adapters: StorageAdapter[] = DEFAULT_STORAGE_ADAPTERS,
+): StorageRecord[] => {
+  const map = new Map<string, StorageRecord>();
 
   for (const adapter of adapters) {
     if (!adapter.supports(ctx)) continue;

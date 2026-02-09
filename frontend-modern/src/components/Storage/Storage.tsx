@@ -1,28 +1,30 @@
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
+import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { DiskList } from '@/components/Storage/DiskList';
 import { EnhancedStorageBar } from '@/components/Storage/EnhancedStorageBar';
 import { ZFSHealthMap } from '@/components/Storage/ZFSHealthMap';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import { buildStorageRecordsV2 } from '@/features/storageBackupsV2/storageAdapters';
+import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
 import {
   getCephHealthLabel,
   getCephHealthStyles,
-} from '@/features/storageBackupsV2/storageDomain';
-import { PLATFORM_BLUEPRINTS } from '@/features/storageBackupsV2/platformBlueprint';
-import type { NormalizedHealth, StorageRecordV2 } from '@/features/storageBackupsV2/models';
+} from '@/features/storageBackups/storageDomain';
+import { PLATFORM_BLUEPRINTS } from '@/features/storageBackups/platformBlueprint';
+import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
 import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
 import {
   buildStoragePath,
   parseStorageLinkSearch,
 } from '@/routing/resourceLinks';
 import { formatBytes, formatPercent } from '@/utils/format';
+import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { useStorageRouteState } from './useStorageRouteState';
-import { getCephClusterKeyFromRecord, isCephRecord, useStorageV2CephModel } from './useStorageV2CephModel';
-import { useStorageV2AlertState } from './useStorageV2AlertState';
+import { getCephClusterKeyFromRecord, isCephRecord, useStorageCephModel } from './useStorageCephModel';
+import { useStorageAlertState } from './useStorageAlertState';
 import {
   type StorageGroupKey,
   type StorageSortKey,
@@ -34,8 +36,8 @@ import {
   getRecordUsagePercent,
   getRecordZfsPool,
   sourceLabel,
-  useStorageV2Model,
-} from './useStorageV2Model';
+  useStorageModel,
+} from './useStorageModel';
 
 const HEALTH_CLASS: Record<NormalizedHealth, string> = {
   healthy: 'text-green-700 dark:text-green-300',
@@ -45,7 +47,7 @@ const HEALTH_CLASS: Record<NormalizedHealth, string> = {
   unknown: 'text-gray-500 dark:text-gray-400',
 };
 
-type StorageV2View = 'pools' | 'disks';
+type StorageView = 'pools' | 'disks';
 
 const STORAGE_SORT_OPTIONS: Array<{ value: StorageSortKey; label: string }> = [
   { value: 'name', label: 'Name' },
@@ -80,27 +82,29 @@ const normalizeGroupKey = (value: string): StorageGroupKey => {
   return 'node';
 };
 
-const normalizeView = (value: string): StorageV2View => (value === 'disks' ? 'disks' : 'pools');
+const normalizeView = (value: string): StorageView => (value === 'disks' ? 'disks' : 'pools');
 
 const normalizeSortDirection = (value: string): 'asc' | 'desc' =>
   value === 'desc' ? 'desc' : 'asc';
 
-const getStorageMetaBoolean = (record: StorageRecordV2, key: 'isCeph' | 'isZfs'): boolean | null => {
+const getStorageMetaBoolean = (record: StorageRecord, key: 'isCeph' | 'isZfs'): boolean | null => {
   const details = (record.details || {}) as Record<string, unknown>;
   const value = details[key];
   return typeof value === 'boolean' ? value : null;
 };
 
-const isRecordCeph = (record: StorageRecordV2): boolean => {
+const isRecordCeph = (record: StorageRecord): boolean => {
   const isCephMeta = getStorageMetaBoolean(record, 'isCeph');
   if (isCephMeta !== null) return isCephMeta;
   return isCephRecord(record);
 };
 
-const StorageV2: Component = () => {
+const Storage: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, activeAlerts, connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
+  const { byType } = useResources();
+  const nodes = createMemo(() => byType('node'));
   const storageBackupsResources = useStorageBackupsResources();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
@@ -108,7 +112,7 @@ const StorageV2: Component = () => {
   const [search, setSearch] = createSignal('');
   const [sourceFilter, setSourceFilter] = createSignal('all');
   const [healthFilter, setHealthFilter] = createSignal<'all' | NormalizedHealth>('all');
-  const [view, setView] = createSignal<StorageV2View>('pools');
+  const [view, setView] = createSignal<StorageView>('pools');
   const [selectedNodeId, setSelectedNodeId] = createSignal('all');
   const [sortKey, setSortKey] = createSignal<StorageSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -123,27 +127,30 @@ const StorageV2: Component = () => {
     return unifiedResources;
   });
 
-  const records = createMemo(() => buildStorageRecordsV2({ state, resources: adapterResources() }));
+  const records = createMemo(() => buildStorageRecords({ state, resources: adapterResources() }));
   const activeAlertsAccessor = () => {
     if (typeof activeAlerts === 'function') {
       return (activeAlerts as () => unknown)();
     }
     return activeAlerts;
   };
-  const { getRecordAlertState } = useStorageV2AlertState({
+  const { getRecordAlertState } = useStorageAlertState({
     records,
     activeAlerts: activeAlertsAccessor,
     alertsEnabled,
   });
 
   const nodeOptions = createMemo(() => {
-    const nodes = state.nodes || [];
-    return nodes.map((node) => ({ id: node.id, label: node.name, instance: node.instance }));
+    return nodes().map((node) => ({
+      id: node.id,
+      label: node.name,
+      instance: getProxmoxData(node)?.instance,
+    }));
   });
 
   const nodeOnlineByLabel = createMemo(() => {
     const map = new Map<string, boolean>();
-    (state.nodes || []).forEach((node) => {
+    nodes().forEach((node) => {
       const key = (node.name || '').trim().toLowerCase();
       if (!key) return;
       const hasNodeStatus = typeof node.status === 'string' && node.status.trim().length > 0;
@@ -156,7 +163,7 @@ const StorageV2: Component = () => {
     return map;
   });
 
-  const { sourceOptions, selectedNode, filteredRecords, groupedRecords, summary } = useStorageV2Model({
+  const { sourceOptions, selectedNode, filteredRecords, groupedRecords, summary } = useStorageModel({
     records,
     search,
     sourceFilter,
@@ -168,7 +175,7 @@ const StorageV2: Component = () => {
     groupBy,
   });
 
-  const { cephSummaryStats, resolveCephCluster, getCephSummaryText, getCephPoolsText } = useStorageV2CephModel({
+  const { cephSummaryStats, resolveCephCluster, getCephSummaryText, getCephPoolsText } = useStorageCephModel({
     records,
     cephClusters: () => state.cephClusters,
   });
@@ -188,7 +195,7 @@ const StorageV2: Component = () => {
   const isLoadingPools = createMemo(
     () => storageBackupsResources.loading() && view() === 'pools' && filteredRecords().length === 0,
   );
-  const hasV2FetchError = createMemo(() => Boolean(storageBackupsResources.error()));
+  const hasFetchError = createMemo(() => Boolean(storageBackupsResources.error()));
 
   const isActiveStorageRoute = () => location.pathname === '/storage';
 
@@ -393,7 +400,7 @@ const StorageV2: Component = () => {
         <div class="grid gap-2 md:grid-cols-[minmax(140px,1fr)_minmax(180px,1fr)_minmax(120px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(130px,1fr)_auto]">
           <select
             value={view()}
-            onChange={(event) => setView(event.currentTarget.value as StorageV2View)}
+            onChange={(event) => setView(event.currentTarget.value as StorageView)}
             class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
             aria-label="View"
           >
@@ -499,7 +506,7 @@ const StorageV2: Component = () => {
         </Card>
       </Show>
 
-      <Show when={hasV2FetchError()}>
+      <Show when={hasFetchError()}>
         <Card padding="sm" tone="warning">
           <div class="text-xs text-amber-800 dark:text-amber-200">
             Unable to refresh storage resources. Showing latest available data.
@@ -537,6 +544,7 @@ const StorageV2: Component = () => {
           <div class="p-2">
             <DiskList
               disks={state.physicalDisks || []}
+              nodes={nodes()}
               selectedNode={selectedNode()?.id || null}
               searchTerm={search()}
             />
@@ -888,4 +896,4 @@ const StorageV2: Component = () => {
   );
 };
 
-export default StorageV2;
+export default Storage;

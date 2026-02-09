@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { KNOWN_STORAGE_BACKUP_PLATFORMS } from '@/features/storageBackupsV2/models';
+import { KNOWN_STORAGE_BACKUP_PLATFORMS } from '@/features/storageBackups/models';
 import {
   PLATFORM_BLUEPRINTS,
   PLATFORM_BLUEPRINT_BY_ID,
-} from '@/features/storageBackupsV2/platformBlueprint';
+} from '@/features/storageBackups/platformBlueprint';
 
 describe('platformBlueprint', () => {
   it('defines one blueprint per known platform', () => {

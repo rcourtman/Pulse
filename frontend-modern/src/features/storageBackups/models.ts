@@ -99,7 +99,7 @@ export interface CapacitySnapshot {
   usagePercent: number | null;
 }
 
-export interface StorageRecordV2 {
+export interface StorageRecord {
   id: string;
   name: string;
   category: StorageCategory;
@@ -161,7 +161,7 @@ export interface DockerBackupDetails {
   backupId?: string;
 }
 
-export interface BackupRecordV2 {
+export interface BackupRecord {
   id: string;
   name: string;
   category: BackupCategory;
@@ -187,24 +187,24 @@ export interface BackupRecordV2 {
   details?: Record<string, unknown>;
 }
 
-export interface StorageV2AdapterContext {
+export interface StorageAdapterContext {
   state: State;
   resources: Resource[];
 }
 
-export interface BackupV2AdapterContext {
+export interface BackupAdapterContext {
   state: State;
   resources: Resource[];
 }
 
-export interface StorageV2Adapter {
+export interface StorageAdapter {
   id: string;
-  supports: (ctx: StorageV2AdapterContext) => boolean;
-  build: (ctx: StorageV2AdapterContext) => StorageRecordV2[];
+  supports: (ctx: StorageAdapterContext) => boolean;
+  build: (ctx: StorageAdapterContext) => StorageRecord[];
 }
 
-export interface BackupV2Adapter {
+export interface BackupAdapter {
   id: string;
-  supports: (ctx: BackupV2AdapterContext) => boolean;
-  build: (ctx: BackupV2AdapterContext) => BackupRecordV2[];
+  supports: (ctx: BackupAdapterContext) => boolean;
+  build: (ctx: BackupAdapterContext) => BackupRecord[];
 }

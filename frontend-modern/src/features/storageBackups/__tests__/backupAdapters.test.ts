@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { buildBackupRecordsV2 } from '@/features/storageBackupsV2/backupAdapters';
+import { buildBackupRecords } from '@/features/storageBackups/backupAdapters';
 
 const baseState = (overrides: Partial<State> = {}): State =>
   ({
@@ -92,7 +92,7 @@ describe('backupAdapters', () => {
       },
     });
 
-    const records = buildBackupRecordsV2({ state, resources: [] });
+    const records = buildBackupRecords({ state, resources: [] });
     expect(records).toHaveLength(1);
 
     const record = records[0];
@@ -139,7 +139,7 @@ describe('backupAdapters', () => {
       },
     });
 
-    const records = buildBackupRecordsV2({ state, resources: [] });
+    const records = buildBackupRecords({ state, resources: [] });
     expect(records).toHaveLength(2);
 
     const pbsRecord = records.find((record) => record.source.platform === 'proxmox-pbs');
@@ -181,7 +181,7 @@ describe('backupAdapters', () => {
       },
     ];
 
-    const records = buildBackupRecordsV2({ state, resources });
+    const records = buildBackupRecords({ state, resources });
     expect(records).toHaveLength(1);
     expect(records[0].source.origin).toBe('resource');
     expect(records[0].source.platform).toBe('kubernetes');
@@ -243,7 +243,7 @@ describe('backupAdapters', () => {
       },
     ];
 
-    const records = buildBackupRecordsV2({ state, resources });
+    const records = buildBackupRecords({ state, resources });
     expect(records).toHaveLength(1);
     expect(records.every((record) => !record.id.startsWith('resource:'))).toBe(true);
   });
@@ -296,7 +296,7 @@ describe('backupAdapters', () => {
       },
     });
 
-    const records = buildBackupRecordsV2({ state, resources: [] });
+    const records = buildBackupRecords({ state, resources: [] });
     expect(records).toHaveLength(1);
     expect(records[0].id).toBe('pbs-1');
     expect(records[0].source.adapterId).toBe('legacy-pbs-backups');
@@ -347,7 +347,7 @@ describe('backupAdapters', () => {
       },
     ];
 
-    const records = buildBackupRecordsV2({ state, resources });
+    const records = buildBackupRecords({ state, resources });
     expect(records).toHaveLength(1);
     const record = records[0];
     expect(record.source.adapterId).toBe('kubernetes-artifact-backups');
@@ -403,7 +403,7 @@ describe('backupAdapters', () => {
       },
     ];
 
-    const records = buildBackupRecordsV2({ state, resources });
+    const records = buildBackupRecords({ state, resources });
     expect(records).toHaveLength(1);
     const record = records[0];
     expect(record.source.adapterId).toBe('docker-artifact-backups');
@@ -449,7 +449,7 @@ describe('backupAdapters', () => {
       },
     ];
 
-    const records = buildBackupRecordsV2({ state, resources });
+    const records = buildBackupRecords({ state, resources });
     expect(records).toHaveLength(1);
     expect(records[0].id.startsWith('resource:')).toBe(false);
     expect(records[0].source.adapterId).toBe('kubernetes-artifact-backups');
@@ -484,7 +484,7 @@ describe('backupAdapters', () => {
       },
     ];
 
-    const records = buildBackupRecordsV2({ state, resources });
+    const records = buildBackupRecords({ state, resources });
     expect(records).toHaveLength(1);
     expect(records[0].id.startsWith('resource:')).toBe(true);
     expect(records[0].source.adapterId).toBe('resource-backups');

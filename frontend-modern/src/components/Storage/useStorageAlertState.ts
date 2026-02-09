@@ -1,9 +1,9 @@
 import { Accessor, createMemo } from 'solid-js';
 import type { Alert } from '@/types/api';
-import type { StorageRecordV2 } from '@/features/storageBackupsV2/models';
+import type { StorageRecord } from '@/features/storageBackups/models';
 import { getAlertStyles } from '@/utils/alerts';
 
-export type StorageV2AlertRowState = {
+export type StorageAlertRowState = {
   hasAlert: boolean;
   alertCount: number;
   severity: 'critical' | 'warning' | null;
@@ -13,13 +13,13 @@ export type StorageV2AlertRowState = {
   hasAcknowledgedOnlyAlert: boolean;
 };
 
-type UseStorageV2AlertStateOptions = {
-  records: Accessor<StorageRecordV2[]>;
+type UseStorageAlertStateOptions = {
+  records: Accessor<StorageRecord[]>;
   activeAlerts: Accessor<unknown>;
   alertsEnabled: Accessor<boolean>;
 };
 
-const EMPTY_ALERT_STATE: StorageV2AlertRowState = {
+const EMPTY_ALERT_STATE: StorageAlertRowState = {
   hasAlert: false,
   alertCount: 0,
   severity: null,
@@ -52,9 +52,9 @@ const severityWeight = (value: 'critical' | 'warning' | null): number => {
 };
 
 const mergeAlertState = (
-  current: StorageV2AlertRowState,
-  incoming: StorageV2AlertRowState,
-): StorageV2AlertRowState => {
+  current: StorageAlertRowState,
+  incoming: StorageAlertRowState,
+): StorageAlertRowState => {
   const mergedHasUnacknowledged = current.hasUnacknowledgedAlert || incoming.hasUnacknowledgedAlert;
   const mergedAcknowledgedOnly =
     !mergedHasUnacknowledged &&
@@ -74,7 +74,7 @@ const mergeAlertState = (
   };
 };
 
-const getRecordAlertResourceIds = (record: StorageRecordV2): string[] => {
+const getRecordAlertResourceIds = (record: StorageRecord): string[] => {
   const refs = record.refs || {};
   const details = (record.details || {}) as Record<string, unknown>;
   const detailNode = typeof details.node === 'string' ? details.node.trim() : '';
@@ -92,12 +92,12 @@ const getRecordAlertResourceIds = (record: StorageRecordV2): string[] => {
   );
 };
 
-export const useStorageV2AlertState = (options: UseStorageV2AlertStateOptions) => {
-  const alertStateByRecordId = createMemo<Record<string, StorageV2AlertRowState>>(() => {
+export const useStorageAlertState = (options: UseStorageAlertStateOptions) => {
+  const alertStateByRecordId = createMemo<Record<string, StorageAlertRowState>>(() => {
     const records = options.records();
     const activeAlerts = asAlertRecord(options.activeAlerts());
     const enabled = options.alertsEnabled();
-    const byRecordId: Record<string, StorageV2AlertRowState> = {};
+    const byRecordId: Record<string, StorageAlertRowState> = {};
 
     for (const record of records) {
       let merged = EMPTY_ALERT_STATE;
@@ -120,7 +120,7 @@ export const useStorageV2AlertState = (options: UseStorageV2AlertStateOptions) =
     return byRecordId;
   });
 
-  const getRecordAlertState = (recordId: string): StorageV2AlertRowState =>
+  const getRecordAlertState = (recordId: string): StorageAlertRowState =>
     alertStateByRecordId()[recordId] || EMPTY_ALERT_STATE;
 
   return {

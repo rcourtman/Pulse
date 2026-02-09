@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BACKUPS_V2_PATH,
   BACKUPS_QUERY_PARAMS,
   PMG_THRESHOLDS_PATH,
   buildBackupsPath,
-  buildBackupsV2Path,
   buildInfrastructurePath,
   buildStoragePath,
-  buildStorageV2Path,
   buildWorkloadsPath,
   parseBackupsLinkSearch,
   INFRASTRUCTURE_QUERY_PARAMS,
   parseStorageLinkSearch,
   parseInfrastructureLinkSearch,
-  STORAGE_V2_PATH,
   parseWorkloadsLinkSearch,
   STORAGE_QUERY_PARAMS,
   WORKLOADS_QUERY_PARAMS,
@@ -166,27 +162,4 @@ describe('resource link routing contract', () => {
     });
   });
 
-  it('builds v2 storage and backups paths with compatible query contracts', () => {
-    expect(
-      buildStorageV2Path({
-        source: 'kubernetes',
-        status: 'healthy',
-        query: 'pvc',
-        sort: 'usage',
-        order: 'desc',
-      }),
-    ).toBe('/storage-v2?source=kubernetes&status=healthy&q=pvc&sort=usage&order=desc');
-
-    expect(
-      buildBackupsV2Path({
-        source: 'proxmox-pbs',
-        namespace: 'tenant-a',
-        status: 'success',
-        query: 'vmid:101',
-      }),
-    ).toBe('/backups-v2?source=proxmox-pbs&namespace=tenant-a&status=success&q=vmid%3A101');
-
-    expect(buildStorageV2Path()).toBe(STORAGE_V2_PATH);
-    expect(buildBackupsV2Path()).toBe(BACKUPS_V2_PATH);
-  });
 });

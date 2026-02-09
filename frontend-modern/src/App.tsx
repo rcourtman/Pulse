@@ -95,8 +95,8 @@ import { showToast } from '@/utils/toast';
 const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
 );
-const StorageV2Component = lazy(() => import('./components/Storage/StorageV2'));
-const BackupsV2Component = lazy(() => import('./components/Backups/BackupsV2'));
+const StorageComponent = lazy(() => import('./components/Storage/Storage'));
+const BackupsComponent = lazy(() => import('./components/Backups/Backups'));
 const Replication = lazy(() => import('./components/Replication/Replication'));
 const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
@@ -1120,8 +1120,8 @@ function App() {
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
-      <Route path={STORAGE_PATH} component={StorageV2Component} />
-      <Route path={BACKUPS_PATH} component={BackupsV2Component} />
+      <Route path={STORAGE_PATH} component={StorageComponent} />
+      <Route path={BACKUPS_PATH} component={BackupsComponent} />
       <Route path="/ceph" component={CephPage} />
       <Route path="/replication" component={Replication} />
       <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />

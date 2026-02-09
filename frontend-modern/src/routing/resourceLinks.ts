@@ -6,8 +6,6 @@ export const WORKLOADS_QUERY_PARAMS = {
 } as const;
 
 export const WORKLOADS_PATH = '/workloads';
-export const STORAGE_V2_PATH = '/storage-v2';
-export const BACKUPS_V2_PATH = '/backups-v2';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const DASHBOARD_PATH = '/dashboard';
 export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
@@ -177,32 +175,6 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   return serialized ? `/storage?${serialized}` : '/storage';
 };
 
-export const buildStorageV2Path = (options: StorageLinkOptions = {}): string => {
-  const params = new URLSearchParams();
-  const tab = normalizeQueryValue(options.tab);
-  const group = normalizeQueryValue(options.group);
-  const source = normalizeQueryValue(options.source);
-  const status = normalizeQueryValue(options.status);
-  const node = normalizeQueryValue(options.node);
-  const query = normalizeQueryValue(options.query);
-  const resource = normalizeQueryValue(options.resource);
-  const sort = normalizeQueryValue(options.sort);
-  const order = normalizeQueryValue(options.order);
-
-  if (tab) params.set(STORAGE_QUERY_PARAMS.tab, tab);
-  if (group) params.set(STORAGE_QUERY_PARAMS.group, group);
-  if (source) params.set(STORAGE_QUERY_PARAMS.source, source);
-  if (status) params.set(STORAGE_QUERY_PARAMS.status, status);
-  if (node) params.set(STORAGE_QUERY_PARAMS.node, node);
-  if (query) params.set(STORAGE_QUERY_PARAMS.query, query);
-  if (resource) params.set(STORAGE_QUERY_PARAMS.resource, resource);
-  if (sort) params.set(STORAGE_QUERY_PARAMS.sort, sort);
-  if (order) params.set(STORAGE_QUERY_PARAMS.order, order);
-
-  const serialized = params.toString();
-  return serialized ? `${STORAGE_V2_PATH}?${serialized}` : STORAGE_V2_PATH;
-};
-
 export const parseBackupsLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
   const queryValue =
@@ -244,26 +216,3 @@ export const buildBackupsPath = (options: BackupsLinkOptions = {}): string => {
   return serialized ? `/backups?${serialized}` : '/backups';
 };
 
-export const buildBackupsV2Path = (options: BackupsLinkOptions = {}): string => {
-  const params = new URLSearchParams();
-  const guestType = normalizeQueryValue(options.guestType);
-  const source = normalizeQueryValue(options.source);
-  const namespace = normalizeQueryValue(options.namespace);
-  const backupType = normalizeQueryValue(options.backupType);
-  const status = normalizeQueryValue(options.status);
-  const group = normalizeQueryValue(options.group);
-  const node = normalizeQueryValue(options.node);
-  const query = normalizeQueryValue(options.query);
-
-  if (guestType) params.set(BACKUPS_QUERY_PARAMS.guestType, guestType);
-  if (source) params.set(BACKUPS_QUERY_PARAMS.source, source);
-  if (namespace) params.set(BACKUPS_QUERY_PARAMS.namespace, namespace);
-  if (backupType) params.set(BACKUPS_QUERY_PARAMS.backupType, backupType);
-  if (status) params.set(BACKUPS_QUERY_PARAMS.status, status);
-  if (group) params.set(BACKUPS_QUERY_PARAMS.group, group);
-  if (node) params.set(BACKUPS_QUERY_PARAMS.node, node);
-  if (query) params.set(BACKUPS_QUERY_PARAMS.query, query);
-
-  const serialized = params.toString();
-  return serialized ? `${BACKUPS_V2_PATH}?${serialized}` : BACKUPS_V2_PATH;
-};

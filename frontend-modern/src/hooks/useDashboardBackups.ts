@@ -1,7 +1,7 @@
 import { createMemo, type Accessor } from 'solid-js';
 import { useWebSocket } from '@/App';
-import { buildBackupRecordsV2 } from '@/features/storageBackupsV2/backupAdapters';
-import type { BackupOutcome } from '@/features/storageBackupsV2/models';
+import { buildBackupRecords } from '@/features/storageBackups/backupAdapters';
+import type { BackupOutcome } from '@/features/storageBackups/models';
 import type { Resource } from '@/types/resource';
 
 export interface DashboardBackupSummary {
@@ -16,7 +16,7 @@ export function useDashboardBackups(resources: Accessor<Resource[]>) {
 
   return createMemo<DashboardBackupSummary>(() => {
     const currentResources = resources();
-    const records = buildBackupRecordsV2({ state: state as any, resources: currentResources });
+    const records = buildBackupRecords({ state: state as any, resources: currentResources });
 
     if (records.length === 0) {
       return { totalBackups: 0, byOutcome: {}, latestBackupTimestamp: null, hasData: false };

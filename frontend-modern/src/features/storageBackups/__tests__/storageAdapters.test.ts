@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { buildStorageRecordsV2 } from '@/features/storageBackupsV2/storageAdapters';
+import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
 
 const baseState = (overrides: Partial<State> = {}): State =>
   ({
@@ -104,7 +104,7 @@ describe('storageAdapters', () => {
       },
     } as Resource;
 
-    const records = buildStorageRecordsV2({ state: baseState(), resources: [enriched] });
+    const records = buildStorageRecords({ state: baseState(), resources: [enriched] });
 
     expect(records).toHaveLength(1);
     expect(records[0].details?.type).toBe('rbd');
@@ -133,7 +133,7 @@ describe('storageAdapters', () => {
       }),
     ];
 
-    const records = buildStorageRecordsV2({ state, resources });
+    const records = buildStorageRecords({ state, resources });
 
     expect(records).toHaveLength(1);
     expect(records[0].id).toBe('resource-storage-id');
@@ -159,7 +159,7 @@ describe('storageAdapters', () => {
         },
       }),
     ];
-    const records = buildStorageRecordsV2({ state, resources });
+    const records = buildStorageRecords({ state, resources });
 
     expect(records).toHaveLength(1);
     expect(records[0].source.origin).toBe('resource');
@@ -184,7 +184,7 @@ describe('storageAdapters', () => {
       }),
     ];
 
-    const records = buildStorageRecordsV2({ state, resources });
+    const records = buildStorageRecords({ state, resources });
 
     expect(records).toHaveLength(2);
     expect(new Set(records.map((record) => record.location.label))).toEqual(new Set(['pve1', 'pve2']));
@@ -248,13 +248,13 @@ describe('storageAdapters', () => {
       },
     ];
 
-    const records = buildStorageRecordsV2({ state, resources });
+    const records = buildStorageRecords({ state, resources });
     expect(records).toHaveLength(1);
     expect(records[0].capabilities.filter((capability) => capability === 'deduplication')).toHaveLength(1);
     expect(records[0].capabilities.filter((capability) => capability === 'backup-repository')).toHaveLength(1);
   });
 
-  it('maps a TrueNAS pool to StorageRecordV2 with zfs metadata and healthy health', () => {
+  it('maps a TrueNAS pool to StorageRecord with zfs metadata and healthy health', () => {
     const truenasPool = {
       ...makeResourceStorage({
         id: 'truenas-pool-1',
@@ -272,7 +272,7 @@ describe('storageAdapters', () => {
       },
     } as Resource;
 
-    const records = buildStorageRecordsV2({ state: baseState(), resources: [truenasPool] });
+    const records = buildStorageRecords({ state: baseState(), resources: [truenasPool] });
 
     expect(records).toHaveLength(1);
     expect(records[0].health).toBe('healthy');
@@ -297,7 +297,7 @@ describe('storageAdapters', () => {
       },
     } as Resource;
 
-    const records = buildStorageRecordsV2({ state: baseState(), resources: [truenasPoolDegraded] });
+    const records = buildStorageRecords({ state: baseState(), resources: [truenasPoolDegraded] });
 
     expect(records).toHaveLength(1);
     expect(records[0].health).toBe('warning');
@@ -322,7 +322,7 @@ describe('storageAdapters', () => {
       },
     } as Resource;
 
-    const records = buildStorageRecordsV2({ state: baseState(), resources: [truenasPoolFaulted] });
+    const records = buildStorageRecords({ state: baseState(), resources: [truenasPoolFaulted] });
 
     expect(records).toHaveLength(1);
     expect(['critical', 'offline']).toContain(records[0].health);
@@ -346,7 +346,7 @@ describe('storageAdapters', () => {
       },
     } as Resource;
 
-    const records = buildStorageRecordsV2({ state: baseState(), resources: [truenasDataset] });
+    const records = buildStorageRecords({ state: baseState(), resources: [truenasDataset] });
 
     expect(records).toHaveLength(1);
     expect(records[0].details?.type).toBe('zfs-dataset');

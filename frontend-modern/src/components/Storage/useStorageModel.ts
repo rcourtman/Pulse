@@ -1,5 +1,5 @@
 import { Accessor, createMemo } from 'solid-js';
-import type { NormalizedHealth, StorageRecordV2 } from '@/features/storageBackupsV2/models';
+import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
 import type { ZFSPool } from '@/types/api';
 
 export type StorageSortKey = 'name' | 'usage' | 'type';
@@ -13,7 +13,7 @@ export type StorageNodeOption = {
 
 export type StorageGroupedRecords = {
   key: string;
-  items: StorageRecordV2[];
+  items: StorageRecord[];
 };
 
 export type StorageSummary = {
@@ -24,8 +24,8 @@ export type StorageSummary = {
   byHealth: Record<NormalizedHealth, number>;
 };
 
-type UseStorageV2ModelOptions = {
-  records: Accessor<StorageRecordV2[]>;
+type UseStorageModelOptions = {
+  records: Accessor<StorageRecord[]>;
   search: Accessor<string>;
   sourceFilter: Accessor<string>;
   healthFilter: Accessor<'all' | NormalizedHealth>;
@@ -36,10 +36,10 @@ type UseStorageV2ModelOptions = {
   groupBy: Accessor<StorageGroupKey>;
 };
 
-const getRecordDetails = (record: StorageRecordV2): Record<string, unknown> =>
+const getRecordDetails = (record: StorageRecord): Record<string, unknown> =>
   (record.details || {}) as Record<string, unknown>;
 
-const getRecordStringDetail = (record: StorageRecordV2, key: string): string => {
+const getRecordStringDetail = (record: StorageRecord, key: string): string => {
   const value = getRecordDetails(record)[key];
   return typeof value === 'string' ? value : '';
 };
@@ -51,7 +51,7 @@ export const sourceLabel = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-export const getRecordNodeHints = (record: StorageRecordV2): string[] => {
+export const getRecordNodeHints = (record: StorageRecord): string[] => {
   const details = getRecordDetails(record);
   const detailNode = typeof details.node === 'string' ? details.node : '';
   const detailParent = typeof details.parentId === 'string' ? details.parentId : '';
@@ -61,12 +61,12 @@ export const getRecordNodeHints = (record: StorageRecordV2): string[] => {
     .filter((value) => value.length > 0);
 };
 
-export const getRecordType = (record: StorageRecordV2): string =>
+export const getRecordType = (record: StorageRecord): string =>
   getRecordStringDetail(record, 'type') || record.category || 'other';
 
-export const getRecordContent = (record: StorageRecordV2): string => getRecordStringDetail(record, 'content');
+export const getRecordContent = (record: StorageRecord): string => getRecordStringDetail(record, 'content');
 
-export const getRecordStatus = (record: StorageRecordV2): string => {
+export const getRecordStatus = (record: StorageRecord): string => {
   const status = getRecordStringDetail(record, 'status');
   if (status) return status;
   if (record.health === 'healthy') return 'available';
@@ -76,18 +76,18 @@ export const getRecordStatus = (record: StorageRecordV2): string => {
   return 'unknown';
 };
 
-export const getRecordShared = (record: StorageRecordV2): boolean | null => {
+export const getRecordShared = (record: StorageRecord): boolean | null => {
   const shared = getRecordDetails(record).shared;
   return typeof shared === 'boolean' ? shared : null;
 };
 
-export const getRecordNodeLabel = (record: StorageRecordV2): string => {
+export const getRecordNodeLabel = (record: StorageRecord): string => {
   const node = getRecordStringDetail(record, 'node');
   if (node.trim()) return node;
   return record.location.label || 'unassigned';
 };
 
-export const getRecordUsagePercent = (record: StorageRecordV2): number => {
+export const getRecordUsagePercent = (record: StorageRecord): number => {
   if (typeof record.capacity.usagePercent === 'number' && Number.isFinite(record.capacity.usagePercent)) {
     return record.capacity.usagePercent;
   }
@@ -104,16 +104,16 @@ const toZfsPool = (value: unknown): ZFSPool | null => {
   return candidate as ZFSPool;
 };
 
-export const getRecordZfsPool = (record: StorageRecordV2): ZFSPool | null =>
+export const getRecordZfsPool = (record: StorageRecord): ZFSPool | null =>
   toZfsPool(getRecordDetails(record).zfsPool);
 
-export const useStorageV2Model = (options: UseStorageV2ModelOptions) => {
+export const useStorageModel = (options: UseStorageModelOptions) => {
   const selectedNode = createMemo(() => {
     if (options.selectedNodeId() === 'all') return null;
     return options.nodeOptions().find((node) => node.id === options.selectedNodeId()) || null;
   });
 
-  const matchesSelectedNode = (record: StorageRecordV2): boolean => {
+  const matchesSelectedNode = (record: StorageRecord): boolean => {
     const node = selectedNode();
     if (!node) return true;
     const nodeName = node.label.toLowerCase().trim();
@@ -186,7 +186,7 @@ export const useStorageV2Model = (options: UseStorageV2ModelOptions) => {
       return [{ key: 'All', items: sortedRecords() }];
     }
 
-    const groups = new Map<string, StorageRecordV2[]>();
+    const groups = new Map<string, StorageRecord[]>();
 
     for (const record of sortedRecords()) {
       const key =

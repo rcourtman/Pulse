@@ -5,10 +5,10 @@ import type {
   BackupCategory,
   BackupMode,
   BackupOutcome,
-  BackupRecordV2,
+  BackupRecord,
   BackupScope,
-  BackupV2Adapter,
-  BackupV2AdapterContext,
+  BackupAdapter,
+  BackupAdapterContext,
   SourceDescriptor,
   StorageBackupPlatform,
 } from './models';
@@ -123,7 +123,7 @@ const readDateAny = (record: Record<string, unknown>, keys: string[]): number | 
 const isProxmoxPlatform = (platform: string): boolean =>
   platform === 'proxmox-pve' || platform === 'proxmox-pbs' || platform === 'proxmox-pmg';
 
-const hasLegacyBackupData = (ctx: BackupV2AdapterContext): boolean =>
+const hasLegacyBackupData = (ctx: BackupAdapterContext): boolean =>
   (ctx.state.backups?.pve?.guestSnapshots || ctx.state.pveBackups?.guestSnapshots || []).length > 0 ||
   (ctx.state.backups?.pve?.storageBackups || ctx.state.pveBackups?.storageBackups || []).length > 0 ||
   (ctx.state.backups?.pbs || ctx.state.pbsBackups || []).length > 0 ||
@@ -245,7 +245,7 @@ const backupCapabilitiesForArtifact = (
   return dedupe(caps);
 };
 
-const locationFromResource = (resource: Resource): BackupRecordV2['location'] => {
+const locationFromResource = (resource: Resource): BackupRecord['location'] => {
   const platformData = asRecord(resource.platformData);
   const proxmoxData = asRecord(platformData.proxmox);
   const kubernetesData = asRecord(platformData.kubernetes);
@@ -313,7 +313,7 @@ const canonicalBackupIdentity = (
   return `${category}:${vmidLabel}:${seconds}`;
 };
 
-const buildPbsIdentitySet = (ctx: BackupV2AdapterContext): Set<string> => {
+const buildPbsIdentitySet = (ctx: BackupAdapterContext): Set<string> => {
   const backups = ctx.state.backups?.pbs ?? ctx.state.pbsBackups;
   const identities = new Set<string>();
   for (const backup of backups || []) {
@@ -348,7 +348,7 @@ const pbsCapabilities = (encrypted: boolean | null, isProtected: boolean): Backu
   return dedupe(caps);
 };
 
-const buildSnapshotRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
+const buildSnapshotRecords = (ctx: BackupAdapterContext): BackupRecord[] => {
   const pve = ctx.state.backups?.pve ?? ctx.state.pveBackups;
   const snapshots = pve?.guestSnapshots || [];
   return snapshots.map((snapshot) => {
@@ -386,7 +386,7 @@ const buildSnapshotRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => 
   });
 };
 
-const buildPveStorageBackupRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
+const buildPveStorageBackupRecords = (ctx: BackupAdapterContext): BackupRecord[] => {
   const pve = ctx.state.backups?.pve ?? ctx.state.pveBackups;
   const pbsIdentitySet = buildPbsIdentitySet(ctx);
   const storageBackups = pve?.storageBackups || [];
@@ -441,7 +441,7 @@ const buildPveStorageBackupRecords = (ctx: BackupV2AdapterContext): BackupRecord
     });
 };
 
-const buildPbsRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
+const buildPbsRecords = (ctx: BackupAdapterContext): BackupRecord[] => {
   const backups = ctx.state.backups?.pbs ?? ctx.state.pbsBackups;
   return (backups || []).map((backup: PBSBackup) => {
     const category = inferCategory(backup.backupType, backup.vmid);
@@ -493,7 +493,7 @@ const buildPbsRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
   });
 };
 
-const buildPmgRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
+const buildPmgRecords = (ctx: BackupAdapterContext): BackupRecord[] => {
   const backups = ctx.state.backups?.pmg ?? ctx.state.pmgBackups;
   return (backups || []).map((backup: PMGBackup) => ({
     id: backup.id || `pmg:${backup.instance}:${backup.node}:${backup.filename}:${backup.backupTime}`,
@@ -696,8 +696,8 @@ const scopeFromDockerArtifact = (
   return scope(containerName || host || 'Container', 'workload', 'container');
 };
 
-const buildKubernetesArtifactRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
-  const records: BackupRecordV2[] = [];
+const buildKubernetesArtifactRecords = (ctx: BackupAdapterContext): BackupRecord[] => {
+  const records: BackupRecord[] = [];
 
   for (const resource of ctx.resources || []) {
     const platform = String(resource.platformType || '');
@@ -820,8 +820,8 @@ const buildKubernetesArtifactRecords = (ctx: BackupV2AdapterContext): BackupReco
   return records;
 };
 
-const buildDockerArtifactRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
-  const records: BackupRecordV2[] = [];
+const buildDockerArtifactRecords = (ctx: BackupAdapterContext): BackupRecord[] => {
+  const records: BackupRecord[] = [];
 
   for (const resource of ctx.resources || []) {
     const platform = String(resource.platformType || '');
@@ -927,9 +927,9 @@ const hasArtifactBackups = (resource: Resource): boolean => {
   return false;
 };
 
-const buildResourceBackupRecords = (ctx: BackupV2AdapterContext): BackupRecordV2[] => {
+const buildResourceBackupRecords = (ctx: BackupAdapterContext): BackupRecord[] => {
   const legacyPresent = hasLegacyBackupData(ctx);
-  const records: BackupRecordV2[] = [];
+  const records: BackupRecord[] = [];
 
   for (const resource of ctx.resources || []) {
     const completedAt = parseResourceLastBackup(resource);
@@ -995,50 +995,50 @@ const buildResourceBackupRecords = (ctx: BackupV2AdapterContext): BackupRecordV2
   return records;
 };
 
-const pveSnapshotsAdapter: BackupV2Adapter = {
+const pveSnapshotsAdapter: BackupAdapter = {
   id: 'legacy-pve-snapshots',
   supports: (ctx) => (ctx.state.backups?.pve?.guestSnapshots || ctx.state.pveBackups?.guestSnapshots || []).length > 0,
   build: buildSnapshotRecords,
 };
 
-const pveStorageBackupsAdapter: BackupV2Adapter = {
+const pveStorageBackupsAdapter: BackupAdapter = {
   id: 'legacy-pve-storage-backups',
   supports: (ctx) =>
     (ctx.state.backups?.pve?.storageBackups || ctx.state.pveBackups?.storageBackups || []).length > 0,
   build: buildPveStorageBackupRecords,
 };
 
-const pbsBackupsAdapter: BackupV2Adapter = {
+const pbsBackupsAdapter: BackupAdapter = {
   id: 'legacy-pbs-backups',
   supports: (ctx) => (ctx.state.backups?.pbs || ctx.state.pbsBackups || []).length > 0,
   build: buildPbsRecords,
 };
 
-const pmgBackupsAdapter: BackupV2Adapter = {
+const pmgBackupsAdapter: BackupAdapter = {
   id: 'legacy-pmg-backups',
   supports: (ctx) => (ctx.state.backups?.pmg || ctx.state.pmgBackups || []).length > 0,
   build: buildPmgRecords,
 };
 
-const kubernetesArtifactBackupsAdapter: BackupV2Adapter = {
+const kubernetesArtifactBackupsAdapter: BackupAdapter = {
   id: 'kubernetes-artifact-backups',
   supports: (ctx) => (ctx.resources || []).some((resource) => extractKubernetesArtifactPayloads(resource).length > 0),
   build: buildKubernetesArtifactRecords,
 };
 
-const dockerArtifactBackupsAdapter: BackupV2Adapter = {
+const dockerArtifactBackupsAdapter: BackupAdapter = {
   id: 'docker-artifact-backups',
   supports: (ctx) => (ctx.resources || []).some((resource) => extractDockerArtifactPayloads(resource).length > 0),
   build: buildDockerArtifactRecords,
 };
 
-const resourceBackupsAdapter: BackupV2Adapter = {
+const resourceBackupsAdapter: BackupAdapter = {
   id: 'resource-backups',
   supports: (ctx) => (ctx.resources || []).some((resource) => parseResourceLastBackup(resource) !== null),
   build: buildResourceBackupRecords,
 };
 
-export const DEFAULT_BACKUP_V2_ADAPTERS: BackupV2Adapter[] = [
+export const DEFAULT_BACKUP_ADAPTERS: BackupAdapter[] = [
   kubernetesArtifactBackupsAdapter,
   dockerArtifactBackupsAdapter,
   resourceBackupsAdapter,
@@ -1048,7 +1048,7 @@ export const DEFAULT_BACKUP_V2_ADAPTERS: BackupV2Adapter[] = [
   pmgBackupsAdapter,
 ];
 
-const mergeBackupRecords = (current: BackupRecordV2, incoming: BackupRecordV2): BackupRecordV2 => ({
+const mergeBackupRecords = (current: BackupRecord, incoming: BackupRecord): BackupRecord => ({
   ...current,
   ...(incoming.source.origin === 'resource' ? incoming : {}),
   mode: incoming.mode || current.mode,
@@ -1071,11 +1071,11 @@ const mergeBackupRecords = (current: BackupRecordV2, incoming: BackupRecordV2): 
   },
 });
 
-export const buildBackupRecordsV2 = (
-  ctx: BackupV2AdapterContext,
-  adapters: BackupV2Adapter[] = DEFAULT_BACKUP_V2_ADAPTERS,
-): BackupRecordV2[] => {
-  const map = new Map<string, BackupRecordV2>();
+export const buildBackupRecords = (
+  ctx: BackupAdapterContext,
+  adapters: BackupAdapter[] = DEFAULT_BACKUP_ADAPTERS,
+): BackupRecord[] => {
+  const map = new Map<string, BackupRecord>();
   for (const adapter of adapters) {
     if (!adapter.supports(ctx)) continue;
     const records = adapter.build(ctx);

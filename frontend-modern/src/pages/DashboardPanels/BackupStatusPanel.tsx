@@ -3,7 +3,7 @@ import { Card } from '@/components/shared/Card';
 import { buildBackupsPath } from '@/routing/resourceLinks';
 import { formatRelativeTime } from '@/utils/format';
 import type { DashboardBackupSummary } from '@/hooks/useDashboardBackups';
-import type { BackupOutcome } from '@/features/storageBackupsV2/models';
+import type { BackupOutcome } from '@/features/storageBackups/models';
 
 interface BackupStatusPanelProps {
   backups: DashboardBackupSummary;
@@ -39,37 +39,29 @@ export function BackupStatusPanel(props: BackupStatusPanelProps) {
   const isStale = createMemo(() => (latestAgeMs() ?? 0) > 24 * 60 * 60_000);
 
   return (
-    <Card>
+    <Card padding="none" class="px-3 py-2.5">
       <div class="flex items-center justify-between gap-3">
-        <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Backup Status</h2>
+        <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Backup Status</h2>
         <a
           href={buildBackupsPath()}
           aria-label="View all backups"
-          class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
         >
           View all →
         </a>
       </div>
-      <div class="mt-2 mb-3 border-b border-gray-100 dark:border-gray-700/50" />
-
       <Show
         when={props.backups.hasData}
-        fallback={<p class="text-sm text-gray-500 dark:text-gray-400">No backup data available</p>}
+        fallback={<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">No backup data available</p>}
       >
-        <div class="space-y-3">
-          <div class="flex items-end justify-between gap-4">
-            <div>
-              <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Total backups</p>
-              <p class="mt-1 text-3xl font-mono font-semibold text-gray-900 dark:text-gray-100">
-                {props.backups.totalBackups}
-              </p>
-            </div>
-            <div class="text-right">
-              <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Last backup</p>
-              <p class="mt-1 text-sm font-mono font-semibold text-gray-700 dark:text-gray-200">
-                {formatRelativeTime(props.backups.latestBackupTimestamp ?? undefined, { compact: true }) || '—'}
-              </p>
-            </div>
+        <div class="space-y-1.5">
+          <div class="flex items-baseline justify-between gap-4">
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              <span class="font-mono font-semibold text-base text-gray-900 dark:text-gray-100">{props.backups.totalBackups}</span> total
+            </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Last: <span class="font-mono font-medium text-gray-700 dark:text-gray-200">{formatRelativeTime(props.backups.latestBackupTimestamp ?? undefined, { compact: true }) || '—'}</span>
+            </p>
           </div>
 
           <Show when={isStale()}>

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const storageDir = path.dirname(fileURLToPath(import.meta.url));
 
-const STORAGE_SHELL_FILES = ['StorageV2.tsx'] as const;
+const STORAGE_SHELL_FILES = ['Storage.tsx'] as const;
 const FORBIDDEN_STORAGE_HELPERS = ['isCephType', 'getCephHealthLabel', 'getCephHealthStyles'] as const;
 
 const findInlineDefinitionLine = (source: string, symbol: string): number | null => {
@@ -35,7 +35,7 @@ describe('Storage code standards guardrails', () => {
         const line = findInlineDefinitionLine(source, helper);
         if (line === null) continue;
         violations.push(
-          `${fileName}:${line} inline ${helper} definition detected; define it in src/features/storageBackupsV2/storageDomain.ts`,
+          `${fileName}:${line} inline ${helper} definition detected; define it in src/features/storageBackups/storageDomain.ts`,
         );
       }
     }

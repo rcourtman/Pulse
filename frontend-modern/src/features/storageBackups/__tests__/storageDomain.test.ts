@@ -3,7 +3,7 @@ import {
   getCephHealthLabel,
   getCephHealthStyles,
   isCephType,
-} from '@/features/storageBackupsV2/storageDomain';
+} from '@/features/storageBackups/storageDomain';
 
 const CEPH_HEALTH_OK_STYLES =
   'bg-green-100 text-green-700 dark:bg-green-900/60 dark:text-green-300 border border-green-200 dark:border-green-800';

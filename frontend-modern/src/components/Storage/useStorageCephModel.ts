@@ -1,33 +1,33 @@
 import { Accessor, createMemo } from 'solid-js';
 import {
   isCephType,
-} from '@/features/storageBackupsV2/storageDomain';
-import type { StorageRecordV2 } from '@/features/storageBackupsV2/models';
+} from '@/features/storageBackups/storageDomain';
+import type { StorageRecord } from '@/features/storageBackups/models';
 import type { CephCluster } from '@/types/api';
 import { formatBytes, formatPercent } from '@/utils/format';
 import {
   getRecordNodeLabel,
   getRecordType,
   getRecordUsagePercent,
-} from './useStorageV2Model';
+} from './useStorageModel';
 
-type UseStorageV2CephModelOptions = {
-  records: Accessor<StorageRecordV2[]>;
+type UseStorageCephModelOptions = {
+  records: Accessor<StorageRecord[]>;
   cephClusters: Accessor<CephCluster[] | undefined>;
 };
 
-export const isCephRecord = (record: StorageRecordV2): boolean => {
+export const isCephRecord = (record: StorageRecord): boolean => {
   if (isCephType(getRecordType(record))) return true;
   return record.capabilities.includes('replication') && record.source.platform.includes('proxmox');
 };
 
-export const getCephClusterKeyFromRecord = (record: StorageRecordV2): string => {
+export const getCephClusterKeyFromRecord = (record: StorageRecord): string => {
   const details = (record.details || {}) as Record<string, unknown>;
   const parent = typeof details.parentId === 'string' ? details.parentId : '';
   return record.refs?.platformEntityId || parent || record.location.label || record.source.platform;
 };
 
-export const useStorageV2CephModel = (options: UseStorageV2CephModelOptions) => {
+export const useStorageCephModel = (options: UseStorageCephModelOptions) => {
   const visibleCephClusters = createMemo<CephCluster[]>(() => {
     const explicit = options.cephClusters() || [];
     if (explicit.length > 0) return explicit;
@@ -115,12 +115,12 @@ export const useStorageV2CephModel = (options: UseStorageV2CephModelOptions) => 
     };
   });
 
-  const resolveCephCluster = (record: StorageRecordV2): CephCluster | null => {
+  const resolveCephCluster = (record: StorageRecord): CephCluster | null => {
     const key = getCephClusterKeyFromRecord(record);
     return cephClusterByKey()[key] || null;
   };
 
-  const getCephSummaryText = (record: StorageRecordV2, cluster: CephCluster | null): string => {
+  const getCephSummaryText = (record: StorageRecord, cluster: CephCluster | null): string => {
     if (cluster && Number.isFinite(cluster.totalBytes)) {
       const total = Math.max(0, cluster.totalBytes || 0);
       const used = Math.max(0, cluster.usedBytes || 0);
@@ -142,7 +142,7 @@ export const useStorageV2CephModel = (options: UseStorageV2CephModelOptions) => 
     return `${formatBytes(used)} / ${formatBytes(total)} (${formatPercent(percent)})`;
   };
 
-  const getCephPoolsText = (record: StorageRecordV2, cluster: CephCluster | null): string => {
+  const getCephPoolsText = (record: StorageRecord, cluster: CephCluster | null): string => {
     if (cluster?.pools?.length) {
       return cluster.pools
         .slice(0, 2)
