@@ -76,7 +76,18 @@ export default function Dashboard() {
     () => initialDataReceived() && resources().length === 0 && !hasConnectionError(),
   );
   const infrastructureTopCPU = createMemo(() => overview().infrastructure.topCPU.slice(0, 5));
+  const infrastructureTopMemory = createMemo(() => overview().infrastructure.topMemory.slice(0, 5));
   const workloadTypes = createMemo(() => Object.entries(overview().workloads.byType));
+  const workloadRunningPercent = createMemo(() => {
+    const { total, running } = overview().workloads;
+    if (total <= 0) return 0;
+    return Math.max(0, Math.min(100, (running / total) * 100));
+  });
+  const workloadStoppedPercent = createMemo(() => {
+    const { total, stopped } = overview().workloads;
+    if (total <= 0) return 0;
+    return Math.max(0, Math.min(100, (stopped / total) * 100));
+  });
   const storageCapacityPercent = createMemo(() => {
     const { totalUsed, totalCapacity } = overview().storage;
     if (totalCapacity <= 0) return 0;
@@ -187,9 +198,10 @@ export default function Dashboard() {
         <Match when={!isLoading() && !hasConnectionError() && !isEmpty()}>
           <section class="space-y-6">
             <section class={`${PANEL_BASE_CLASS} ${healthPanelTintClass()}`} aria-labelledby="environment-overview-heading">
+              <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">DP-HEALTH</p>
               <h2
                 id="environment-overview-heading"
-                class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100"
+                class="mt-1 text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100"
               >
                 Environment Overview
               </h2>
@@ -202,7 +214,7 @@ export default function Dashboard() {
                   </p>
                 </div>
 
-                <div class="md:col-span-2 space-y-2">
+                <div class="space-y-2">
                   <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
                     Status distribution
                   </p>
@@ -217,17 +229,20 @@ export default function Dashboard() {
                     </For>
                   </div>
                 </div>
-              </div>
 
-              <div class="mt-4 flex flex-wrap gap-2">
-                <span class={statusBadgeClass('critical')}>
-                  <span class="font-mono">{overview().health.criticalAlerts}</span>
-                  <span>Critical alerts</span>
-                </span>
-                <span class={statusBadgeClass('warning')}>
-                  <span class="font-mono">{overview().health.warningAlerts}</span>
-                  <span>Warning alerts</span>
-                </span>
+                <div class="space-y-2">
+                  <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Alert summary</p>
+                  <div class="flex flex-wrap gap-2">
+                    <span class={statusBadgeClass('critical')}>
+                      <span class="font-mono">{overview().health.criticalAlerts}</span>
+                      <span>Critical alerts</span>
+                    </span>
+                    <span class={statusBadgeClass('warning')}>
+                      <span class="font-mono">{overview().health.warningAlerts}</span>
+                      <span>Warning alerts</span>
+                    </span>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -237,12 +252,15 @@ export default function Dashboard() {
                 aria-labelledby="infrastructure-panel-heading"
               >
                 <div class="flex items-center justify-between gap-3">
-                  <h2
-                    id="infrastructure-panel-heading"
-                    class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100"
-                  >
-                    Infrastructure
-                  </h2>
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">DP-INFRA</p>
+                    <h2
+                      id="infrastructure-panel-heading"
+                      class="mt-1 text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100"
+                    >
+                      Infrastructure
+                    </h2>
+                  </div>
                   <a
                     href={INFRASTRUCTURE_PATH}
                     aria-label="View all infrastructure"
@@ -251,8 +269,9 @@ export default function Dashboard() {
                     View all →
                   </a>
                 </div>
+                <div class="mt-2 mb-3 border-b border-gray-100 dark:border-gray-700/50" />
 
-                <div class="mt-4 space-y-4">
+                <div class="space-y-4">
                   <div class="space-y-1">
                     <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
                       Total infrastructure
@@ -275,32 +294,76 @@ export default function Dashboard() {
                       <p class="text-sm text-gray-500 dark:text-gray-400">No infrastructure resources</p>
                     </Match>
                     <Match when={overview().infrastructure.total > 0}>
-                      <div class="space-y-2">
-                        <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
-                          Top CPU consumers
-                        </p>
-                        <ul class="space-y-2">
-                          <For each={infrastructureTopCPU()}>
-                            {(entry) => (
-                              <li class="space-y-1">
-                                <div class="flex items-center justify-between gap-3">
-                                  <span class="truncate text-sm text-gray-700 dark:text-gray-200">{entry.name}</span>
-                                  <span class="text-xs sm:text-sm font-mono font-semibold text-gray-700 dark:text-gray-200">
-                                    {formatPercent(entry.percent)}
-                                  </span>
-                                </div>
-                                <div class="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700/70">
-                                  <div
-                                    class={`h-full rounded ${getMetricColorClass(entry.percent, 'cpu')}`}
-                                    style={{
-                                      width: `${Math.max(0, Math.min(100, entry.percent))}%`,
-                                    }}
-                                  />
-                                </div>
-                              </li>
-                            )}
-                          </For>
-                        </ul>
+                      <div class="space-y-4">
+                        <div class="space-y-2">
+                          <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Top CPU consumers
+                          </p>
+                          <Switch>
+                            <Match when={infrastructureTopCPU().length === 0}>
+                              <p class="text-sm text-gray-500 dark:text-gray-400">No CPU metrics available</p>
+                            </Match>
+                            <Match when={infrastructureTopCPU().length > 0}>
+                              <ul class="space-y-2">
+                                <For each={infrastructureTopCPU()}>
+                                  {(entry) => (
+                                    <li class="space-y-1">
+                                      <div class="flex items-center justify-between gap-3">
+                                        <span class="truncate text-sm text-gray-700 dark:text-gray-200">{entry.name}</span>
+                                        <span class="text-xs sm:text-sm font-mono font-semibold text-gray-700 dark:text-gray-200">
+                                          {formatPercent(entry.percent)}
+                                        </span>
+                                      </div>
+                                      <div class="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700/70">
+                                        <div
+                                          class={`h-full rounded ${getMetricColorClass(entry.percent, 'cpu')}`}
+                                          style={{
+                                            width: `${Math.max(0, Math.min(100, entry.percent))}%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </li>
+                                  )}
+                                </For>
+                              </ul>
+                            </Match>
+                          </Switch>
+                        </div>
+
+                        <div class="space-y-2">
+                          <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Top memory consumers
+                          </p>
+                          <Switch>
+                            <Match when={infrastructureTopMemory().length === 0}>
+                              <p class="text-sm text-gray-500 dark:text-gray-400">No memory metrics available</p>
+                            </Match>
+                            <Match when={infrastructureTopMemory().length > 0}>
+                              <ul class="space-y-2">
+                                <For each={infrastructureTopMemory()}>
+                                  {(entry) => (
+                                    <li class="space-y-1">
+                                      <div class="flex items-center justify-between gap-3">
+                                        <span class="truncate text-sm text-gray-700 dark:text-gray-200">{entry.name}</span>
+                                        <span class="text-xs sm:text-sm font-mono font-semibold text-gray-700 dark:text-gray-200">
+                                          {formatPercent(entry.percent)}
+                                        </span>
+                                      </div>
+                                      <div class="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700/70">
+                                        <div
+                                          class={`h-full rounded ${getMetricColorClass(entry.percent, 'memory')}`}
+                                          style={{
+                                            width: `${Math.max(0, Math.min(100, entry.percent))}%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </li>
+                                  )}
+                                </For>
+                              </ul>
+                            </Match>
+                          </Switch>
+                        </div>
                       </div>
                     </Match>
                   </Switch>
@@ -312,12 +375,15 @@ export default function Dashboard() {
                 aria-labelledby="workloads-panel-heading"
               >
                 <div class="flex items-center justify-between gap-3">
-                  <h2
-                    id="workloads-panel-heading"
-                    class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100"
-                  >
-                    Workloads
-                  </h2>
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">DP-WORK</p>
+                    <h2
+                      id="workloads-panel-heading"
+                      class="mt-1 text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100"
+                    >
+                      Workloads
+                    </h2>
+                  </div>
                   <a
                     href={WORKLOADS_PATH}
                     aria-label="View all workloads"
@@ -326,8 +392,9 @@ export default function Dashboard() {
                     View all →
                   </a>
                 </div>
+                <div class="mt-2 mb-3 border-b border-gray-100 dark:border-gray-700/50" />
 
-                <div class="mt-4 space-y-4">
+                <div class="space-y-4">
                   <div class="space-y-1">
                     <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
                       Total workloads
@@ -350,18 +417,47 @@ export default function Dashboard() {
                       <p class="text-sm text-gray-500 dark:text-gray-400">No workloads</p>
                     </Match>
                     <Match when={overview().workloads.total > 0}>
-                      <div class="space-y-2">
-                        <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Type breakdown</p>
-                        <ul class="space-y-1">
-                          <For each={workloadTypes()}>
-                            {([type, count]) => (
-                              <li class="flex items-center justify-between gap-3 text-sm">
-                                <span class="text-gray-700 dark:text-gray-200">{type}</span>
-                                <span class="font-mono font-semibold text-gray-700 dark:text-gray-200">{count}</span>
-                              </li>
-                            )}
-                          </For>
-                        </ul>
+                      <div class="space-y-4">
+                        <div class="space-y-2">
+                          <div class="flex items-center justify-between gap-3">
+                            <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
+                              Running vs stopped
+                            </p>
+                            <span class="text-xs sm:text-sm font-mono font-semibold text-gray-700 dark:text-gray-200">
+                              {formatPercent(workloadRunningPercent())} running
+                            </span>
+                          </div>
+                          <div class="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700/70">
+                            <div class="flex h-full w-full">
+                              <div
+                                class="h-full bg-emerald-500 dark:bg-emerald-400"
+                                style={{
+                                  width: `${workloadRunningPercent()}%`,
+                                }}
+                              />
+                              <div
+                                class="h-full bg-gray-400 dark:bg-gray-500"
+                                style={{
+                                  width: `${workloadStoppedPercent()}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="space-y-2">
+                          <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Type breakdown</p>
+                          <ul class="space-y-1">
+                            <For each={workloadTypes()}>
+                              {([type, count]) => (
+                                <li class="flex items-center justify-between gap-3 text-sm">
+                                  <span class="text-gray-700 dark:text-gray-200">{type}</span>
+                                  <span class="font-mono font-semibold text-gray-700 dark:text-gray-200">{count}</span>
+                                </li>
+                              )}
+                            </For>
+                          </ul>
+                        </div>
                       </div>
                     </Match>
                   </Switch>
@@ -370,9 +466,12 @@ export default function Dashboard() {
 
               <section class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`} aria-labelledby="storage-panel-heading">
                 <div class="flex items-center justify-between gap-3">
-                  <h2 id="storage-panel-heading" class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    Storage
-                  </h2>
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">DP-STORE</p>
+                    <h2 id="storage-panel-heading" class="mt-1 text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      Storage
+                    </h2>
+                  </div>
                   <a
                     href={buildStoragePath()}
                     aria-label="View all storage"
@@ -381,8 +480,9 @@ export default function Dashboard() {
                     View all →
                   </a>
                 </div>
+                <div class="mt-2 mb-3 border-b border-gray-100 dark:border-gray-700/50" />
 
-                <div class="mt-4 space-y-4">
+                <div class="space-y-4">
                   <div class="space-y-1">
                     <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Total pools</p>
                     <p class="text-lg sm:text-xl font-semibold font-mono text-gray-900 dark:text-gray-100">
@@ -435,9 +535,12 @@ export default function Dashboard() {
 
               <section class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`} aria-labelledby="backups-panel-heading">
                 <div class="flex items-center justify-between gap-3">
-                  <h2 id="backups-panel-heading" class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    Backups
-                  </h2>
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">DP-BACKUP</p>
+                    <h2 id="backups-panel-heading" class="mt-1 text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      Backups
+                    </h2>
+                  </div>
                   <a
                     href={buildBackupsPath()}
                     aria-label="View all backups"
@@ -446,8 +549,9 @@ export default function Dashboard() {
                     View all →
                   </a>
                 </div>
+                <div class="mt-2 mb-3 border-b border-gray-100 dark:border-gray-700/50" />
 
-                <div class="mt-4 space-y-1">
+                <div class="space-y-1">
                   <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Summary</p>
                   <p class="text-sm text-gray-700 dark:text-gray-200">
                     Backup details are available on the Backups page
@@ -458,9 +562,12 @@ export default function Dashboard() {
 
             <section class={`${PANEL_BASE_CLASS} bg-white dark:bg-gray-800`} aria-labelledby="alerts-panel-heading">
               <div class="flex items-center justify-between gap-3">
-                <h2 id="alerts-panel-heading" class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  Alerts & Findings
-                </h2>
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">DP-ALERTS</p>
+                  <h2 id="alerts-panel-heading" class="mt-1 text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    Alerts & Findings
+                  </h2>
+                </div>
                 <a
                   href={ALERTS_OVERVIEW_PATH}
                   aria-label="View all alerts"
@@ -469,7 +576,8 @@ export default function Dashboard() {
                   View all →
                 </a>
               </div>
-              <div class="mt-4 flex flex-wrap items-center gap-6">
+              <div class="mt-2 mb-3 border-b border-gray-100 dark:border-gray-700/50" />
+              <div class="flex flex-wrap items-center gap-6">
                 <div class="space-y-1">
                   <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Critical</p>
                   <p class="text-lg sm:text-xl font-semibold font-mono text-red-600 dark:text-red-400">
