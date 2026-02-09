@@ -10,7 +10,7 @@ import {
   WORKLOADS_PATH,
 } from '@/routing/resourceLinks';
 import { formatBytes } from '@/utils/format';
-import { METRIC_THRESHOLDS } from '@/utils/metricThresholds';
+import { getMetricColorClass } from '@/utils/metricThresholds';
 
 const PANEL_BASE_CLASS =
   'border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-5';
@@ -33,18 +33,6 @@ function statusBadgeClass(tone: StatusTone): string {
   }
 }
 
-function infrastructureCpuBarClass(percent: number): string {
-  const thresholds = METRIC_THRESHOLDS.cpu;
-  if (percent > thresholds.critical) return 'bg-red-500/60 dark:bg-red-500/50';
-  if (percent > thresholds.warning) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
-  return 'bg-green-500/60 dark:bg-green-500/50';
-}
-
-function storageCapacityBarClass(percent: number): string {
-  if (percent > 90) return 'bg-red-500/60 dark:bg-red-500/50';
-  if (percent > 80) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
-  return 'bg-green-500/60 dark:bg-green-500/50';
-}
 
 function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
@@ -303,7 +291,7 @@ export default function Dashboard() {
                                 </div>
                                 <div class="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700/70">
                                   <div
-                                    class={`h-full rounded ${infrastructureCpuBarClass(entry.percent)}`}
+                                    class={`h-full rounded ${getMetricColorClass(entry.percent, 'cpu')}`}
                                     style={{
                                       width: `${Math.max(0, Math.min(100, entry.percent))}%`,
                                     }}
@@ -421,7 +409,7 @@ export default function Dashboard() {
                         </p>
                         <div class="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700/70">
                           <div
-                            class={`h-full rounded ${storageCapacityBarClass(storageCapacityPercent())}`}
+                            class={`h-full rounded ${getMetricColorClass(storageCapacityPercent(), 'disk')}`}
                             style={{
                               width: `${storageCapacityPercent()}%`,
                             }}
