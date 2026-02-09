@@ -48,6 +48,16 @@
 
 /* Custom styles */
 @layer base {
+  :root {
+    /*
+      Layout tokens.
+      Goal: keep the app readable (not “widescreen”), but avoid self-inflicted cramping on large monitors.
+    */
+    --pulse-shell-max-width: min(97vw, 1560px);
+    --pulse-shell-padding-inline: clamp(0.75rem, 1.2vw, 1.5rem);
+    --pulse-panel-padding: clamp(0.75rem, 1.4vw, 1.25rem);
+  }
+
   body {
     @apply bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
     /* Ensure body scrollbar follows our styling */
@@ -130,9 +140,9 @@
 
   .pulse-shell {
     width: 100%;
-    max-width: min(95vw, 1400px);
+    max-width: var(--pulse-shell-max-width);
     margin-inline: auto;
-    padding-inline: clamp(1rem, 1.5vw, 2rem);
+    padding-inline: var(--pulse-shell-padding-inline);
     transition: padding-inline 0.3s ease;
   }
 
@@ -144,12 +154,12 @@
 
   /* Full-width mode - removes max-width constraint for large monitors */
   .pulse-shell--full-width {
-    max-width: 100%;
-    padding-inline: clamp(1rem, 2vw, 3rem);
+    --pulse-shell-max-width: 100%;
+    --pulse-shell-padding-inline: clamp(1rem, 2vw, 3rem);
   }
 
   .pulse-panel {
-    padding: clamp(0.75rem, 1.8vw, 1.5rem);
+    padding: var(--pulse-panel-padding);
   }
 
   @media (max-width: 640px) {
