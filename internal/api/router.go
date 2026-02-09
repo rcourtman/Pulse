@@ -6143,6 +6143,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		historySourceMock   = "mock_synthetic"
 	)
 
+	// Metric aliasing: storage metrics are stored under "usage", but some clients request "disk".
+	// Keep metricType unchanged for the response JSON; only alias the lookup/query key.
+	queryMetric := metricType
+	if resourceType == "storage" && metricType == "disk" {
+		queryMetric = "usage"
+	}
+
 	fallbackAllowed := duration <= 24*time.Hour
 	historyMaxPoints := parseWorkloadMaxPoints(query.Get("maxPoints"))
 	buildHistoryPoints := func(points []monitoring.MetricPoint, bucketSecs int64) []map[string]interface{} {
@@ -6547,7 +6554,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
 		case "storage":
 			metrics := monitor.GetStorageMetrics(resourceID, duration)
-			points := metrics[metricType]
+			points := metrics[queryMetric]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(resourceType, resourceID)
 				if live, ok := livePoints[metricType]; ok {
@@ -6674,7 +6681,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	if metricType != "" {
 		source := historySourceStore
 		// Query single metric type
-		points, err := store.Query(resourceType, resourceID, metricType, start, end, stepSecs)
+		points, err := store.Query(resourceType, resourceID, queryMetric, start, end, stepSecs)
 		if err != nil {
 			log.Error().Err(err).
 				Str("resourceType", resourceType).

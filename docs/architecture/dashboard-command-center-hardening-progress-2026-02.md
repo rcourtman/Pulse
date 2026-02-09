@@ -3,7 +3,7 @@
 Linked plan:
 - `docs/architecture/dashboard-command-center-hardening-plan-2026-02.md` (authoritative execution spec)
 
-Status: COMPLETE — GO
+Status: COMPLETE — GO (+ DCC-10 hotfix)
 Date: 2026-02-09
 
 ## Rules
@@ -32,6 +32,7 @@ Date: 2026-02-09
 | DCC-07 | Navigation Activation + Release Gating | DONE | Codex | Claude | APPROVED | DCC-07 Review Evidence |
 | DCC-08 | Regression, Performance, and Accessibility Certification | DONE | Claude | Claude | APPROVED | DCC-08 Review Evidence |
 | DCC-09 | Final Certification + RAT Mapping Update | DONE | Claude | Claude | APPROVED | DCC-09 Review Evidence |
+| DCC-10 | Storage Trend Metric Alignment (hotfix) | DONE | Codex | Claude | APPROVED | DCC-10 Review Evidence |
 
 ---
 
@@ -596,6 +597,54 @@ Rollback (lane-level):
 
 ---
 
+## DCC-10 Checklist: Storage Trend Metric Alignment (hotfix)
+
+- [x] `disk→usage` alias added for `resourceType=storage` in memory fallback path.
+- [x] `disk→usage` alias added for `resourceType=storage` in store query path.
+- [x] Response `metric` field preserves client-requested value (`"disk"`).
+- [x] Regression test added proving storage disk query returns multi-point memory series.
+
+### Required Tests
+
+- [x] `go build ./...` -> exit 0
+- [x] `go test ./internal/api/... -run TestMetricsHistoryStorageDiskAlias -v -count=1` -> exit 0
+- [x] `go test ./internal/api/... -run TestMetricsHistory -v -count=1` -> exit 0 (3 tests)
+
+### Review Gates
+
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### DCC-10 Review Evidence
+
+```markdown
+Files changed:
+- internal/api/router.go (7 insertions, 2 deletions): Added `queryMetric` alias at top of handleMetricsHistory — maps `disk→usage` when `resourceType=storage`. Used in memory fallback storage case (metrics[queryMetric]) and store query path (store.Query(..., queryMetric, ...)). Response JSON still uses original `metricType`.
+- internal/api/metrics_history_fallback_test.go (62 insertions): New test `TestMetricsHistoryStorageDiskAliasUsesMemory` — seeds 5 storage "usage" points via MetricsHistory, queries with `metric=disk`, asserts HTTP 200, source="memory", metric="disk", len(points)>=2.
+
+Commands run + exit codes (reviewer):
+1. `go build ./...` -> exit 0
+2. `go test ./internal/api/... -run TestMetricsHistoryStorageDiskAlias -v -count=1` -> exit 0 (PASS)
+3. `go test ./internal/api/... -run TestMetricsHistory -v -count=1` -> exit 0 (3 tests PASS)
+
+Gate checklist:
+- P0: PASS (all 3 validation commands pass with exit 0; alias applied in both query paths; response preserves client-requested metric name)
+- P1: PASS (no frontend changes; no new API surface; alias is transparent to clients; existing tests unaffected; liveMetricPoints already writes both "disk" and "usage" for storage — no change needed there)
+- P2: PASS (tracker updated; checkpoint commit recorded)
+
+Verdict: APPROVED
+
+Residual risk:
+- If a new storage metric key is added that differs between recording and querying, the same alias pattern would need extending. Currently only "disk"→"usage" is aliased.
+
+Rollback:
+- Revert the checkpoint commit.
+```
+
+---
+
 ## Checkpoint Log
 
 - DCC-00: `NO-OP` (docs/architecture — scope freeze + research contract in Appendix A/B)
@@ -608,4 +657,5 @@ Rollback (lane-level):
 - DCC-07: `83995e33` feat(DCC-07): activate dashboard navigation tab + fix test mocks
 - DCC-08: `NO-OP` (certification-only — full regression suite green)
 - DCC-09: `NO-OP` (docs-only — RAT mapping update + final certification)
+- DCC-10: `ca8790ad` fix(DCC-10): storage metrics history maps disk->usage
 
