@@ -140,7 +140,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25.7'
           cache: true
 
       - name: Run backend tests
@@ -240,7 +240,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25.7'
           cache: true
 
       - name: Build Pulse Docker image for integration tests
@@ -310,7 +310,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25.7'
           cache: true
 
       - name: Set up Node.js

@@ -5,9 +5,22 @@
 
 set -euo pipefail
 
-# Use Go 1.24 if available
+# Prefer the pinned toolchain from go.mod (toolchain directive).
+# If /usr/local/go exists (typical in CI images), prepend it to PATH.
 if [ -x /usr/local/go/bin/go ]; then
-    export PATH=/usr/local/go/bin:$PATH
+	    export PATH=/usr/local/go/bin:$PATH
+fi
+
+# Release artifacts must be built with the vetted toolchain to match security-gate evidence.
+required_go="go1.25.7"
+current_go="$(go env GOVERSION 2>/dev/null || true)"
+if [[ "${PULSE_SKIP_GO_VERSION_CHECK:-false}" != "true" ]]; then
+    if [[ "${current_go}" != "${required_go}" ]]; then
+        echo "Error: Go toolchain must be ${required_go} (got ${current_go:-unknown})." >&2
+        echo "Tip: set GOTOOLCHAIN=auto to allow automatic toolchain download." >&2
+        echo "Override: PULSE_SKIP_GO_VERSION_CHECK=true (not recommended)." >&2
+        exit 1
+    fi
 fi
 
 # Force static binaries so release artifacts run on older glibc hosts

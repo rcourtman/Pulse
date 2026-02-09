@@ -1,8 +1,8 @@
 module github.com/rcourtman/pulse-go-rewrite
 
-go 1.24.0
+go 1.25.0
 
-toolchain go1.24.7
+toolchain go1.25.7
 
 require (
 	github.com/IGLOU-EU/go-wildcard/v2 v2.1.0

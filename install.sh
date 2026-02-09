@@ -2382,7 +2382,8 @@ build_from_source() {
     local original_dir
     original_dir=$(pwd)
     local temp_build=""
-    local GO_MIN_VERSION="1.24"
+    # Keep this aligned with go.mod's toolchain directive for consistent builds and security posture.
+    local GO_MIN_VERSION="1.25.7"
     local GO_INSTALLED=false
     local arch=""
     local go_arch=""
@@ -2432,20 +2433,20 @@ build_from_source() {
             return 1
         fi
 
-        if ! wget -q "https://go.dev/dl/go1.24.7.linux-${go_arch}.tar.gz"; then
+        if ! wget -q "https://go.dev/dl/go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
             print_error "Failed to download Go toolchain"
             cd "$original_dir" >/dev/null 2>&1 || true
             return 1
         fi
 
         rm -rf /usr/local/go
-        if ! tar -C /usr/local -xzf "go1.24.7.linux-${go_arch}.tar.gz"; then
+        if ! tar -C /usr/local -xzf "go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
             print_error "Failed to extract Go toolchain"
-            rm -f "go1.24.7.linux-${go_arch}.tar.gz"
+            rm -f "go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"
             cd "$original_dir" >/dev/null 2>&1 || true
             return 1
         fi
-        rm -f "go1.24.7.linux-${go_arch}.tar.gz"
+        rm -f "go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"
         cd "$original_dir" >/dev/null 2>&1 || true
     fi
 

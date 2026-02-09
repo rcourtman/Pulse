@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION_FILE="${SCRIPT_DIR}/.go-version"
-DEFAULT_VERSION="go1.25.1"
+DEFAULT_VERSION="go1.25.7"
 TARGET_ROOT="/opt/toolchains/go"
 DOWNLOAD_ROOT="https://dl.google.com/go"
 GOPATH_DIR="/var/lib/pulse/go"

@@ -21,8 +21,8 @@ Date: 2026-02-09
 | Packet | Title | Status | Implementer | Reviewer | Review State | Evidence Link |
 |---|---|---|---|---|---|---|
 | RC-00 | Scope Freeze + Evidence Discipline | DONE | Claude | Claude | APPROVED | RC-00 section |
-| RC-01 | Toolchain Pinning (Go stdlib vuln clear) | READY |  |  |  | RC-01 section |
-| RC-02 | Security Re-Scan + Verdict Upgrade | BLOCKED |  |  |  | RC-02 section |
+| RC-01 | Toolchain Pinning (Go stdlib vuln clear) | DONE | SEC lane | Claude | APPROVED | RC-01 section |
+| RC-02 | Security Re-Scan + Verdict Upgrade | READY |  |  |  | RC-02 section |
 | RC-03 | Hosted Signup Partial Provisioning Cleanup | READY |  |  |  | RC-03 section |
 | RC-04 | Frontend Release-Test Hygiene (No network noise) | READY |  |  |  | RC-04 section |
 | RC-05 | Full Certification Replay | BLOCKED |  |  |  | RC-05 section |
@@ -110,7 +110,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Commit:
-- (pending checkpoint)
+- `6dbb2e06` (docs(RC-00): scope freeze + evidence discipline — all baselines green)
 
 Residual risk:
 - Known timing flake in TestTrueNASPollerRecordsMetrics (P2, documented in RFC-01). Passes on rerun and in full suite.
@@ -122,27 +122,100 @@ Rollback:
 Evidence:
 - Commands run + exit codes: see review record above (11 commands, all exit 0)
 - Notes: SEC lane work for RC-01 and RC-03 already present in working tree. Plan status updated to Active.
-- Commit: (pending)
+- Commit: `6dbb2e06`
 
 ## RC-01 Checklist: Toolchain Pinning (Go stdlib vuln clear)
 
 Blocked by:
-- RC-00
+- RC-00 (DONE)
 
-- [ ] Identify target Go toolchain patch version (must clear reachable stdlib findings).
-- [ ] Update `go.mod` toolchain pin.
-- [ ] Update Docker builder image pin.
-- [ ] Update CI workflow Go versions.
-- [ ] Update installer/build scripts that download or assume Go versions.
-- [ ] Update devcontainer Go image pin.
-- [ ] `go env GOVERSION` -> expected version.
-- [ ] `go build ./...` -> exit 0
-- [ ] `go test ./... -count=1` -> exit 0
+- [x] Identify target Go toolchain patch version (must clear reachable stdlib findings).
+  - Target: `go1.25.7` — clears GO-2026-4337, GO-2026-4340, GO-2026-4341 (all 3 reachable P1 stdlib findings from SEC-02).
+- [x] Update `go.mod` toolchain pin.
+  - `go 1.25.0`, `toolchain go1.25.7`
+- [x] Update Docker builder image pin.
+  - `Dockerfile`: `golang:1.25.7-alpine`
+- [x] Update CI workflow Go versions.
+  - `.github/workflows/create-release.yml`: 3 instances updated to `go-version: '1.25.7'`
+  - `.github/workflows/deploy-demo-server.yml`: 1 instance updated to `go-version: '1.25.7'`
+- [x] Update installer/build scripts that download or assume Go versions.
+  - `install.sh`: `GO_MIN_VERSION="1.25.7"` with parameterized download URL
+  - `scripts/build-release.sh`: added version enforcement check for `go1.25.7`
+  - `scripts/install-go-toolchain.sh`: version updated
+  - `scripts/.go-version`: `go1.25.7`
+- [x] Update devcontainer Go image pin.
+  - `.devcontainer/Dockerfile`: `golang:1.25.7`
+- [x] `go env GOVERSION` -> `go1.25.7`
+- [x] `go build ./...` -> exit 0
+- [x] `go test ./... -count=1` -> exit 0
+
+### Search Proof (old version references removed)
+
+`grep -rE 'go1\.24\b|golang:1\.24\b|go-version.*1\.24' *.{go,mod,yml,yaml,sh,Dockerfile,json,toml}` -> 0 matches
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `go.mod` | go 1.24.0 → 1.25.0, toolchain go1.24.7 → go1.25.7 |
+| `Dockerfile` | golang:1.24-alpine → golang:1.25.7-alpine |
+| `.devcontainer/Dockerfile` | golang:1.24 → golang:1.25.7 |
+| `.github/workflows/create-release.yml` | go-version '1.24' → '1.25.7' (3 instances) |
+| `.github/workflows/deploy-demo-server.yml` | go-version '1.24' → '1.25.7' |
+| `install.sh` | GO_MIN_VERSION 1.24 → 1.25.7, parameterized download URL |
+| `scripts/.go-version` | go1.25.1 → go1.25.7 |
+| `scripts/build-release.sh` | added go1.25.7 version enforcement |
+| `scripts/install-go-toolchain.sh` | version updated |
+
+### Review Gates
+
+- [x] P0 PASS — All required commands exit 0. Toolchain correctly pinned. Zero old-version references remain.
+- [x] P1 PASS — All 3 reachable Go stdlib findings (GO-2026-4337/4340/4341) cleared by this upgrade. `govulncheck ./...` now exits 0.
+- [x] P2 PASS — Tracker updated; evidence complete.
+- [x] Verdict recorded
+
+### RC-01 Review Record
+
+```
+Files changed:
+- go.mod: toolchain pin go1.25.7
+- Dockerfile: builder image golang:1.25.7-alpine
+- .devcontainer/Dockerfile: devcontainer golang:1.25.7
+- .github/workflows/create-release.yml: CI Go version (3 instances)
+- .github/workflows/deploy-demo-server.yml: CI Go version
+- install.sh: source-build Go version
+- scripts/.go-version: version file
+- scripts/build-release.sh: version enforcement
+- scripts/install-go-toolchain.sh: install version
+
+Commands run + exit codes:
+1. `go env GOVERSION` -> go1.25.7
+2. `go build ./...` -> exit 0
+3. `go test ./... -count=1` -> exit 0
+4. `govulncheck ./...` -> exit 0 (0 vulnerabilities)
+5. Search for old version refs -> 0 matches
+
+Gate checklist:
+- P0: PASS (toolchain pinned, all commands green)
+- P1: PASS (3 stdlib P1 vulns cleared)
+- P2: PASS (tracker accurate)
+
+Verdict: APPROVED
+
+Commit:
+- (pending checkpoint)
+
+Residual risk:
+- None. All 3 P1 stdlib findings resolved.
+
+Rollback:
+- Revert toolchain pin commits.
+```
 
 Evidence:
-- Commands run + exit codes:
-- Search proof (old version references removed):
-- Commit:
+- Commands run + exit codes: see review record above
+- Search proof (old version references removed): 0 matches for `go1.24` pattern
+- Commit: (pending)
 
 ## RC-02 Checklist: Security Re-Scan + Verdict Upgrade
 
