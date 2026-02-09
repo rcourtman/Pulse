@@ -615,7 +615,7 @@ func TestService_FingerprintLoop_StopAndCancel(t *testing.T) {
 		store.crypto = nil
 
 		service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
-		// Analyzer should NOT be called - background loop only collects fingerprints
+		// Analyzer should be called by automatic refresh for changed/new resources.
 		analyzer := &stubAnalyzer{
 			response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"image"}`,
 		}
@@ -632,7 +632,22 @@ func TestService_FingerprintLoop_StopAndCancel(t *testing.T) {
 			close(done)
 		}()
 
-		time.Sleep(5 * time.Millisecond)
+		// Wait for at least one automatic refresh cycle to run.
+		calls := 0
+		deadline := time.Now().Add(200 * time.Millisecond)
+		for time.Now().Before(deadline) {
+			analyzer.mu.Lock()
+			calls = analyzer.calls
+			analyzer.mu.Unlock()
+			if calls > 0 {
+				break
+			}
+			time.Sleep(2 * time.Millisecond)
+		}
+		if calls == 0 {
+			t.Fatalf("expected automatic discovery refresh to invoke AI analyzer")
+		}
+
 		if stopWithCancel {
 			cancel()
 		} else {
@@ -645,7 +660,7 @@ func TestService_FingerprintLoop_StopAndCancel(t *testing.T) {
 			t.Fatalf("discoveryLoop did not stop")
 		}
 
-		// Verify fingerprints were collected (background loop does NOT make AI calls)
+		// Verify fingerprints were collected.
 		// Key format is type:host:id
 		fp, err := store.GetFingerprint("docker:host1:web")
 		if err != nil {
@@ -655,12 +670,12 @@ func TestService_FingerprintLoop_StopAndCancel(t *testing.T) {
 			t.Fatalf("expected fingerprint to be collected")
 		}
 
-		// Verify NO AI calls were made in background loop
-		analyzer.mu.Lock()
-		calls := analyzer.calls
-		analyzer.mu.Unlock()
-		if calls > 0 {
-			t.Fatalf("expected no AI calls in background loop (fingerprint-only), got %d", calls)
+		discovery, err := store.Get("docker:host1:web")
+		if err != nil {
+			t.Fatalf("Get discovery error: %v", err)
+		}
+		if discovery == nil {
+			t.Fatalf("expected automatic discovery refresh to persist discovery data")
 		}
 	}
 
