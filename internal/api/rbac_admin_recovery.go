@@ -56,6 +56,11 @@ func VerifyRBACIntegrity(provider *TenantRBACProvider, orgID string) RBACIntegri
 
 	// Healthy if db accessible, tables present, and at least 4 built-in roles exist.
 	result.Healthy = result.DBAccessible && result.TablesPresent && result.BuiltInRoleCount >= 4
+	if result.Healthy {
+		RecordRBACIntegrityCheck("healthy")
+	} else {
+		RecordRBACIntegrityCheck("unhealthy")
+	}
 
 	return result
 }

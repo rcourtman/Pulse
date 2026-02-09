@@ -60,6 +60,7 @@ func (p *TenantRBACProvider) GetManager(orgID string) (auth.ExtendedManager, err
 	}
 
 	p.managers[orgID] = manager
+	RecordRBACManagerCreated()
 	return manager, nil
 }
 
@@ -72,6 +73,7 @@ func (p *TenantRBACProvider) RemoveTenant(orgID string) error {
 	manager, exists := p.managers[orgID]
 	if exists {
 		delete(p.managers, orgID)
+		RecordRBACManagerRemoved()
 	}
 	p.mu.Unlock()
 
@@ -99,6 +101,9 @@ func (p *TenantRBACProvider) Close() error {
 			closeErr = errors.Join(closeErr, fmt.Errorf("failed to close RBAC manager for org %s: %w", orgID, err))
 		}
 	}
+
+	ensureRBACMetrics()
+	rbacManagersActive.Set(0)
 
 	return closeErr
 }
