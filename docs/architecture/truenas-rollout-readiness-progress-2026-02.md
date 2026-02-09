@@ -32,6 +32,7 @@ Date: 2026-02-09
 | TRR-03 | Canary Rollout Controls | DONE | Codex | Claude | APPROVED | TRR-03 Review Evidence |
 | TRR-04 | Soak/Failure-Injection Validation | DONE | Codex | Claude | APPROVED | TRR-04 Review Evidence |
 | TRR-05 | Final Rollout Verdict | DONE | Claude | Claude | APPROVED | TRR-05 Review Evidence |
+| TRR-06 | Typed Error Classification Hardening | DONE | Codex | Claude | APPROVED | TRR-06 Review Evidence |
 
 ---
 
@@ -170,7 +171,7 @@ Gate checklist:
 Verdict: APPROVED
 
 Residual risk:
-- classifyTrueNASError uses string matching on error messages — if TrueNAS client error format changes, classification may degrade to "api" fallback (acceptable, no data loss)
+- ~~classifyTrueNASError uses string matching on error messages~~ — RESOLVED in TRR-06: replaced with typed/sentinel classification via `errors.As`/`errors.Is`
 
 Rollback:
 - Revert truenas_poller.go to remove metrics wiring; revert test file; remove Alert Thresholds section from runbook.
@@ -323,7 +324,7 @@ Rollback:
 
 | Risk | Source | Severity | Mitigation |
 |---|---|---|---|
-| classifyTrueNASError uses string matching | TRR-02 | Low | Degrades gracefully to "api" fallback; no data loss |
+| ~~classifyTrueNASError uses string matching~~ | TRR-02 | ~~Low~~ RESOLVED | Replaced with typed/sentinel classification in TRR-06 (`errors.As`/`errors.Is`) |
 | Timeout test uses internal helper | TRR-04 | Low | Test-only code; not production path |
 | Phase 3 (default-on) requires code change | TRR-03 | Low | Deferred to explicit rollout decision; env var override always available |
 | TRR-03 commit included parallel work files | TRR-03 | Info | Scope leak of already-staged license conversion files; functionally harmless |
@@ -367,8 +368,76 @@ No blocking issues remain. Recommend proceeding with Phase 1 (internal/dev deplo
 - TRR-03: `14953c87`
 - TRR-04: `b5cb6c19`
 - TRR-05: `6d3aa97d`
+- TRR-06: `2acd7e02`
 
 ## Current Recommended Next Packet
 
-- LANE COMPLETE. All packets DONE/APPROVED. GO verdict issued.
+- LANE COMPLETE. All packets DONE/APPROVED including post-GO hardening. GO verdict reaffirmed.
 - Next action: Begin Phase 1 deployment (internal/dev) per canary rollout strategy.
+
+---
+
+## TRR-06 Checklist: Typed Error Classification Hardening
+
+- [x] `APIError` typed struct added to `internal/truenas/client.go` for HTTP-level errors.
+- [x] `getJSON` returns `*APIError` instead of `fmt.Errorf` for non-2xx responses.
+- [x] `classifyTrueNASError` replaced string matching with `errors.As`/`errors.Is`.
+- [x] HTTP status classification: 401/403 → auth, 408/504 → timeout, other → api.
+- [x] Transport classification: `url.Error.Timeout()`/`context.DeadlineExceeded` → timeout, `net.OpError` → connection.
+- [x] 13-case table-driven `TestClassifyTrueNASError` covers all paths including wrapped errors.
+- [x] Runbook alert thresholds re-ratified against implemented Prometheus metrics.
+
+### Required Tests
+
+- [x] `go build ./...` -> exit 0
+- [x] `go test ./internal/truenas/... -count=1` -> exit 0 (26 tests)
+- [x] `go test ./internal/monitoring/... -run "TrueNAS|classifyTrueNASError|ClassifyTrueNAS" -count=1` -> exit 0 (11 tests + 13 subtests)
+- [x] `go test ./internal/api/... -run "TrueNAS" -count=1` -> exit 0 (6 tests)
+
+### Review Gates
+
+- [x] P0 PASS
+- [x] P1 PASS
+- [x] P2 PASS
+- [x] Verdict recorded: `APPROVED`
+
+### TRR-06 Review Evidence
+
+```markdown
+Files changed:
+- `internal/truenas/client.go`: Added exported `APIError` struct (StatusCode, Method, Path, Body) with `Error()` method preserving log format. Modified `getJSON` to return `*APIError` for non-2xx HTTP responses instead of plain `fmt.Errorf`. Transport errors continue to use `%w` wrapping preserving error chain.
+- `internal/monitoring/truenas_poller.go`: Replaced `classifyTrueNASError` string-based matching with typed classification: `errors.As(*truenas.APIError)` for HTTP errors (401/403→auth, 408/504→timeout, else→api), `errors.As(*url.Error)+Timeout()` / `errors.Is(context.DeadlineExceeded)` for timeouts, `errors.As(*net.OpError)` for connection errors. Added imports: `context`, `errors`, `net`, `net/url`, `net/http`.
+- `internal/monitoring/truenas_poller_test.go`: Added `TestClassifyTrueNASError` with 13 table-driven subtests: nil→nil, APIError(401)→auth, APIError(403)→auth, APIError(500)→api, APIError(408)→timeout, APIError(504)→timeout, wrapped APIError(401)→auth, DeadlineExceeded→timeout, wrapped DeadlineExceeded→timeout, url.Error(timeout)→timeout, net.OpError→connection, wrapped net.OpError→connection, plain error→api fallback.
+
+Commands run + exit codes (reviewer-rerun):
+1. `go build ./...` -> exit 0
+2. `go test ./internal/truenas/... -count=1 -v` -> exit 0 (26 tests: 7 client + 3 contract + 5 provider + 5 health + 5 integration + 1 skipped)
+3. `go test ./internal/monitoring/... -run "TrueNAS|classifyTrueNASError|ClassifyTrueNAS" -count=1 -v` -> exit 0 (11 tests + 13 subtests)
+4. `go test ./internal/api/... -run "TrueNAS" -count=1 -v` -> exit 0 (6 tests)
+
+Runbook re-ratification:
+- All 7 alert threshold metric names verified against `internal/monitoring/metrics.go`:
+  - `pulse_monitor_poll_total` (line 82) ✓
+  - `pulse_monitor_poll_staleness_seconds` (line 109) ✓
+  - `pulse_monitor_poll_errors_total` (line 91) with `error_type` label ✓
+  - `pulse_monitor_poll_duration_seconds` (line 73) ✓
+- `instance_type="truenas"` label value matches `pollAll()` in `truenas_poller.go:218`
+- `error_type` label values ("auth", "timeout", "connection", "api") flow through `MonitorError.Type` → `PollMetrics.classifyError()` → Prometheus counter
+- Phase-1 verification commands confirmed executable
+
+Gate checklist:
+- P0: PASS (all 3 files verified with expected edits, all 4 validation commands rerun by reviewer with exit 0, checkpoint commit `2acd7e02` created with only scoped files)
+- P1: PASS (all error classification paths tested deterministically including wrapped errors through `fmt.Errorf("...%w")` chains; `APIError.Error()` preserves log format exactly; existing 26 truenas tests + 6 API tests pass unchanged; no regression in failure-injection tests)
+- P2: PASS (progress tracker updated, TRR-02 residual risk resolved, runbook thresholds re-ratified, checkpoint commit recorded)
+
+Verdict: APPROVED
+
+Commit:
+- `2acd7e02` feat(TRR-06): replace string-based TrueNAS error classification with typed/sentinel-driven
+
+Residual risk:
+- None. The string-matching residual from TRR-02 is now fully resolved. All error classification is type-driven via `errors.As`/`errors.Is`.
+
+Rollback:
+- Revert commit `2acd7e02`. This restores the string-based `classifyTrueNASError` — functionally equivalent, just less robust.
+```
