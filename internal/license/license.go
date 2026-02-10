@@ -46,6 +46,7 @@ const (
 	SubStateGrace     = entitlements.SubStateGrace
 	SubStateExpired   = entitlements.SubStateExpired
 	SubStateSuspended = entitlements.SubStateSuspended
+	SubStateCanceled  = entitlements.SubStateCanceled
 )
 
 // LimitCheckResult represents the result of evaluating a limit.
@@ -366,7 +367,8 @@ func (s *Service) HasFeature(feature string) bool {
 	if s.license == nil {
 		// Hosted path: evaluator drives entitlements when no JWT is present.
 		if s.evaluator != nil {
-			return s.evaluator.HasCapability(feature)
+			// Always include free-tier features, regardless of evaluator state.
+			return TierHasFeature(TierFree, feature) || s.evaluator.HasCapability(feature)
 		}
 		// No license activated — still grant free tier features
 		return TierHasFeature(TierFree, feature)
@@ -481,7 +483,7 @@ func (s *Service) Status() *LicenseStatus {
 		// Hosted path: evaluator drives status when no JWT is present.
 		if s.evaluator != nil {
 			status.Tier = TierPro // hosted billing-backed tenants are effectively "pro" for display
-			status.Features = evaluatorFeatures(s.evaluator)
+			status.Features = unionFeatures(TierFeatures[TierFree], evaluatorFeatures(s.evaluator))
 
 			if maxNodes, ok := s.evaluator.GetLimit("max_nodes"); ok {
 				status.MaxNodes = safeIntFromInt64(maxNodes)
@@ -559,6 +561,23 @@ func evaluatorFeatures(eval *entitlements.Evaluator) []string {
 	}
 	sort.Strings(caps)
 	return caps
+}
+
+func unionFeatures(a, b []string) []string {
+	set := make(map[string]struct{}, len(a)+len(b))
+	for _, v := range a {
+		set[v] = struct{}{}
+	}
+	for _, v := range b {
+		set[v] = struct{}{}
+	}
+
+	out := make([]string, 0, len(set))
+	for v := range set {
+		out = append(out, v)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func safeIntFromInt64(v int64) int {

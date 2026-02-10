@@ -101,3 +101,27 @@ func (e *Evaluator) SubscriptionState() SubscriptionState {
 	}
 	return e.source.SubscriptionState()
 }
+
+// TrialStartedAt returns the trial start timestamp (Unix seconds) when available.
+func (e *Evaluator) TrialStartedAt() *int64 {
+	if e == nil || e.source == nil {
+		return nil
+	}
+	return cloneInt64Ptr(e.source.TrialStartedAt())
+}
+
+// TrialEndsAt returns the trial end timestamp (Unix seconds) when available.
+func (e *Evaluator) TrialEndsAt() *int64 {
+	if e == nil || e.source == nil {
+		return nil
+	}
+	return cloneInt64Ptr(e.source.TrialEndsAt())
+}
+
+func cloneInt64Ptr(v *int64) *int64 {
+	if v == nil {
+		return nil
+	}
+	c := *v
+	return &c
+}

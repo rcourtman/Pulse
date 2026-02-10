@@ -20,6 +20,7 @@ type LicenseHandlers struct {
 	mtPersistence *config.MultiTenantPersistence
 	hostedMode    bool
 	services      sync.Map // map[string]*license.Service
+	trialLimiter  *RateLimiter
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -28,6 +29,7 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool) *Li
 	return &LicenseHandlers{
 		mtPersistence: mtp,
 		hostedMode:    hostedMode,
+		trialLimiter:  NewRateLimiter(1, 24*time.Hour), // 1 trial start attempt per org per 24h
 	}
 }
 
@@ -39,6 +41,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*license.Ser
 	// Check if service already exists
 	if v, ok := h.services.Load(orgID); ok {
 		svc := v.(*license.Service)
+		_ = h.ensureEvaluatorForOrg(orgID, svc)
 		// We need persistence too, reconstruct it or cache it?
 		// Reconstructing persistence is cheap (just a struct with path).
 		// But let's recreate it to be safe and stateless here.
@@ -55,13 +58,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*license.Ser
 
 	service := license.NewService()
 
-	// For hosted non-default tenants, derive entitlements from billing state
-	if h.hostedMode && orgID != "default" && orgID != "" {
-		billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
-		dbSource := entitlements.NewDatabaseSource(billingStore, orgID, time.Hour)
-		evaluator := entitlements.NewEvaluator(dbSource)
-		service.SetEvaluator(evaluator)
-	}
+	_ = h.ensureEvaluatorForOrg(orgID, service)
 
 	// Try to load existing license
 	if persistence != nil {
@@ -84,6 +81,42 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*license.Ser
 	return service, persistence, nil
 }
 
+func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *license.Service) error {
+	if h == nil || service == nil || h.mtPersistence == nil {
+		return nil
+	}
+	// Never override token-backed evaluator when a JWT license is present.
+	if service.Current() != nil {
+		return nil
+	}
+
+	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
+
+	// Hosted non-default tenants always consult billing state (fail-open).
+	if h.hostedMode && orgID != "default" && orgID != "" {
+		dbSource := entitlements.NewDatabaseSource(billingStore, orgID, time.Hour)
+		evaluator := entitlements.NewEvaluator(dbSource)
+		service.SetEvaluator(evaluator)
+		return nil
+	}
+
+	// Self-hosted default org: only wire trial evaluator when an explicit, active trial exists.
+	state, err := billingStore.GetBillingState(orgID)
+	if err != nil {
+		return err
+	}
+	if state == nil || state.SubscriptionState == "" {
+		service.SetEvaluator(nil)
+		return nil
+	}
+
+	// Billing state exists: wire evaluator without caching so UI updates immediately after writes.
+	dbSource := entitlements.NewDatabaseSource(billingStore, orgID, 0)
+	evaluator := entitlements.NewEvaluator(dbSource)
+	service.SetEvaluator(evaluator)
+	return nil
+}
+
 func (h *LicenseHandlers) getPersistenceForOrg(orgID string) (*license.Persistence, error) {
 	configPersistence, err := h.mtPersistence.GetPersistence(orgID)
 	if err != nil {
@@ -98,6 +131,94 @@ func (h *LicenseHandlers) getPersistenceForOrg(orgID string) (*license.Persisten
 func (h *LicenseHandlers) Service(ctx context.Context) *license.Service {
 	svc, _, _ := h.getTenantComponents(ctx)
 	return svc
+}
+
+// HandleStartTrial handles POST /api/license/trial/start.
+// This is a one-time, 14-day Pro trial stored locally in billing.json (no phone-home).
+func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h == nil || h.mtPersistence == nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "trial_start_unavailable", "Trial start is unavailable", nil)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	svc, _, err := h.getTenantComponents(r.Context())
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "tenant_error", "Failed to resolve tenant", nil)
+		return
+	}
+	// Don't allow starting a trial when a valid license is already active.
+	if svc.Current() != nil && svc.IsValid() {
+		writeErrorResponse(w, http.StatusConflict, "trial_not_available", "Trial cannot be started while a license is active", nil)
+		return
+	}
+
+	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
+	existing, err := billingStore.GetBillingState(orgID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "billing_state_load_failed", "Failed to load billing state", nil)
+		return
+	}
+	if existing != nil {
+		if existing.TrialStartedAt != nil {
+			writeErrorResponse(w, http.StatusConflict, "trial_already_used", "Trial has already been used for this organization", map[string]string{
+				"org_id": orgID,
+			})
+			return
+		}
+		switch existing.SubscriptionState {
+		case entitlements.SubStateActive, entitlements.SubStateGrace, entitlements.SubStateSuspended:
+			writeErrorResponse(w, http.StatusConflict, "trial_not_available", "Trial cannot be started while a subscription is active", map[string]string{
+				"org_id": orgID,
+			})
+			return
+		}
+	}
+
+	if h.trialLimiter != nil && !h.trialLimiter.Allow(orgID) {
+		w.Header().Set("Retry-After", "86400")
+		writeErrorResponse(w, http.StatusTooManyRequests, "trial_rate_limited", "Trial start rate limit exceeded", map[string]string{
+			"org_id": orgID,
+		})
+		return
+	}
+
+	now := time.Now()
+	startedAt := now.Unix()
+	endsAt := now.Add(14 * 24 * time.Hour).Unix()
+
+	state := &entitlements.BillingState{
+		Capabilities:      append([]string(nil), license.TierFeatures[license.TierPro]...),
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		PlanVersion:       string(entitlements.SubStateTrial),
+		SubscriptionState: entitlements.SubStateTrial,
+		TrialStartedAt:    &startedAt,
+		TrialEndsAt:       &endsAt,
+	}
+
+	if err := billingStore.SaveBillingState(orgID, state); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "billing_state_save_failed", "Failed to save billing state", nil)
+		return
+	}
+
+	// Ensure the in-memory service reflects the trial immediately.
+	// Note: JWT licenses (if present) still take precedence over evaluator.
+	if svc.Current() == nil {
+		eval := entitlements.NewEvaluator(entitlements.NewDatabaseSource(billingStore, orgID, 0))
+		svc.SetEvaluator(eval)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(state)
 }
 
 // HandleLicenseStatus handles GET /api/license/status

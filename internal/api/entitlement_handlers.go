@@ -89,10 +89,22 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 	// Build payload from current license status (evaluator wiring comes in MON-08)
 	status := svc.Status()
 	usage := h.entitlementUsageSnapshot(r.Context())
-	payload := buildEntitlementPayloadWithUsage(status, svc.SubscriptionState(), usage)
+	trialEndsAtUnix := trialEndsAtUnixFromService(svc)
+	payload := buildEntitlementPayloadWithUsage(status, svc.SubscriptionState(), usage, trialEndsAtUnix)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
+}
+
+func trialEndsAtUnixFromService(svc *license.Service) *int64 {
+	if svc == nil {
+		return nil
+	}
+	eval := svc.Evaluator()
+	if eval == nil {
+		return nil
+	}
+	return eval.TrialEndsAt()
 }
 
 type entitlementUsageSnapshot struct {
@@ -132,7 +144,7 @@ func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlem
 // buildEntitlementPayload constructs the normalized payload from LicenseStatus.
 // This provides backward compatibility before the evaluator is wired in.
 func buildEntitlementPayload(status *license.LicenseStatus, subscriptionState string) EntitlementPayload {
-	return buildEntitlementPayloadWithUsage(status, subscriptionState, entitlementUsageSnapshot{})
+	return buildEntitlementPayloadWithUsage(status, subscriptionState, entitlementUsageSnapshot{}, nil)
 }
 
 // buildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.
@@ -140,6 +152,7 @@ func buildEntitlementPayloadWithUsage(
 	status *license.LicenseStatus,
 	subscriptionState string,
 	usage entitlementUsageSnapshot,
+	trialEndsAtUnix *int64,
 ) EntitlementPayload {
 	if status == nil {
 		return EntitlementPayload{
@@ -174,9 +187,10 @@ func buildEntitlementPayloadWithUsage(
 	}
 	payload.SubscriptionState = string(subscription.GetBehavior(license.SubscriptionState(subscriptionState)).State)
 
-	if payload.SubscriptionState == string(license.SubStateTrial) && status.ExpiresAt != nil {
-		if expiresAt, err := time.Parse(time.RFC3339, *status.ExpiresAt); err == nil {
-			expiresAtUnix := expiresAt.Unix()
+	if payload.SubscriptionState == string(license.SubStateTrial) {
+		// Prefer billing-state trial timestamps (hosted/self-hosted trial) over license ExpiresAt.
+		if trialEndsAtUnix != nil {
+			expiresAtUnix := *trialEndsAtUnix
 			payload.TrialExpiresAt = &expiresAtUnix
 
 			daysRemaining := int(math.Ceil(float64(expiresAtUnix-time.Now().Unix()) / 86400.0))
@@ -184,6 +198,17 @@ func buildEntitlementPayloadWithUsage(
 				daysRemaining = 0
 			}
 			payload.TrialDaysRemaining = &daysRemaining
+		} else if status.ExpiresAt != nil {
+			if expiresAt, err := time.Parse(time.RFC3339, *status.ExpiresAt); err == nil {
+				expiresAtUnix := expiresAt.Unix()
+				payload.TrialExpiresAt = &expiresAtUnix
+
+				daysRemaining := int(math.Ceil(float64(expiresAtUnix-time.Now().Unix()) / 86400.0))
+				if daysRemaining < 0 {
+					daysRemaining = 0
+				}
+				payload.TrialDaysRemaining = &daysRemaining
+			}
 		}
 	}
 

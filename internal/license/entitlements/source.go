@@ -9,4 +9,6 @@ type EntitlementSource interface {
 	MetersEnabled() []string
 	PlanVersion() string
 	SubscriptionState() SubscriptionState
+	TrialStartedAt() *int64
+	TrialEndsAt() *int64
 }

@@ -9,6 +9,9 @@ const (
 	SubStateGrace     SubscriptionState = "grace"
 	SubStateExpired   SubscriptionState = "expired"
 	SubStateSuspended SubscriptionState = "suspended"
+	// SubStateCanceled represents an explicit user-initiated cancellation.
+	// For Cloud, this should revoke paid capabilities immediately (no grace).
+	SubStateCanceled SubscriptionState = "canceled"
 )
 
 // LimitCheckResult represents the result of evaluating a limit.

@@ -16,6 +16,8 @@ type mockSource struct {
 	metersEnabled     []string
 	planVersion       string
 	subscriptionState license.SubscriptionState
+	trialStartedAt    *int64
+	trialEndsAt       *int64
 }
 
 func (m mockSource) Capabilities() []string {
@@ -36,6 +38,14 @@ func (m mockSource) PlanVersion() string {
 
 func (m mockSource) SubscriptionState() license.SubscriptionState {
 	return m.subscriptionState
+}
+
+func (m mockSource) TrialStartedAt() *int64 {
+	return m.trialStartedAt
+}
+
+func (m mockSource) TrialEndsAt() *int64 {
+	return m.trialEndsAt
 }
 
 func TestEvaluatorHasCapability(t *testing.T) {

@@ -80,7 +80,7 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	payload := buildEntitlementPayloadWithUsage(status, "", entitlementUsageSnapshot{
 		Nodes:  12,
 		Guests: 44,
-	})
+	}, nil)
 
 	var nodeLimit *LimitStatus
 	var guestLimit *LimitStatus

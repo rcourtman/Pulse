@@ -67,6 +67,13 @@ var StateBehaviors = map[license.SubscriptionState]StateBehavior{
 		ShowWarning:       true,
 		Description:       "Administrative lock; contact support.",
 	},
+	license.SubStateCanceled: {
+		State:             license.SubStateCanceled,
+		Operations:        OpDegraded,
+		FeaturesAvailable: false,
+		ShowWarning:       true,
+		Description:       "Subscription canceled; paid capabilities revoked.",
+	},
 }
 
 // GetBehavior returns the behavior rules for the given state.

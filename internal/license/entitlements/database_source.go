@@ -60,6 +60,16 @@ func (d *DatabaseSource) SubscriptionState() SubscriptionState {
 	return d.currentState().SubscriptionState
 }
 
+// TrialStartedAt returns the stored trial start timestamp (Unix seconds) when present.
+func (d *DatabaseSource) TrialStartedAt() *int64 {
+	return cloneInt64Ptr(d.currentState().TrialStartedAt)
+}
+
+// TrialEndsAt returns the stored trial end timestamp (Unix seconds) when present.
+func (d *DatabaseSource) TrialEndsAt() *int64 {
+	return cloneInt64Ptr(d.currentState().TrialEndsAt)
+}
+
 func (d *DatabaseSource) currentState() BillingState {
 	defaults := d.defaultState()
 	if d == nil {
@@ -67,17 +77,23 @@ func (d *DatabaseSource) currentState() BillingState {
 	}
 
 	cacheTTL := d.cacheTTL
-	if cacheTTL <= 0 {
+	// cacheTTL == 0 means "no caching" (always refresh). cacheTTL < 0 uses defaults.
+	noCache := cacheTTL == 0
+	if cacheTTL < 0 {
+		cacheTTL = defaultDatabaseSourceCacheTTL
+	}
+	if cacheTTL == 0 {
+		// Preserve the no-cache signal below; don't convert to defaults.
 		cacheTTL = defaultDatabaseSourceCacheTTL
 	}
 
 	now := time.Now()
 
 	d.mu.RLock()
-	if d.cache != nil && now.Sub(d.cacheTime) <= cacheTTL {
+	if !noCache && d.cache != nil && now.Sub(d.cacheTime) <= cacheTTL {
 		cached := cloneBillingState(*d.cache)
 		d.mu.RUnlock()
-		return cached
+		return normalizeTrialExpiry(cached, now)
 	}
 
 	var stale BillingState
@@ -90,14 +106,15 @@ func (d *DatabaseSource) currentState() BillingState {
 
 	if d.store == nil {
 		if hasStale {
-			return stale
+			return normalizeTrialExpiry(stale, now)
 		}
-		return defaults
+		return normalizeTrialExpiry(defaults, now)
 	}
 
 	fresh, err := d.store.GetBillingState(d.orgID)
 	if err == nil && fresh != nil {
 		cached := cloneBillingState(*fresh)
+		cached = normalizeTrialExpiry(cached, now)
 		d.mu.Lock()
 		d.cache = &cached
 		d.cacheTime = time.Now()
@@ -106,10 +123,10 @@ func (d *DatabaseSource) currentState() BillingState {
 	}
 
 	if hasStale {
-		return stale
+		return normalizeTrialExpiry(stale, now)
 	}
 
-	return defaults
+	return normalizeTrialExpiry(defaults, now)
 }
 
 func (d *DatabaseSource) defaultState() BillingState {
@@ -132,6 +149,8 @@ func (d *DatabaseSource) defaultState() BillingState {
 	defaults.Capabilities = cloneStringSlice(d.defaults.Capabilities)
 	defaults.Limits = cloneInt64Map(d.defaults.Limits)
 	defaults.MetersEnabled = cloneStringSlice(d.defaults.MetersEnabled)
+	defaults.TrialStartedAt = cloneInt64Ptr(d.defaults.TrialStartedAt)
+	defaults.TrialEndsAt = cloneInt64Ptr(d.defaults.TrialEndsAt)
 
 	return defaults
 }
@@ -143,6 +162,8 @@ func cloneBillingState(state BillingState) BillingState {
 		MetersEnabled:     cloneStringSlice(state.MetersEnabled),
 		PlanVersion:       state.PlanVersion,
 		SubscriptionState: state.SubscriptionState,
+		TrialStartedAt:    cloneInt64Ptr(state.TrialStartedAt),
+		TrialEndsAt:       cloneInt64Ptr(state.TrialEndsAt),
 	}
 }
 
@@ -166,4 +187,21 @@ func cloneInt64Map(values map[string]int64) map[string]int64 {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func normalizeTrialExpiry(state BillingState, now time.Time) BillingState {
+	if state.SubscriptionState != SubStateTrial || state.TrialEndsAt == nil {
+		return state
+	}
+	if now.Unix() < *state.TrialEndsAt {
+		return state
+	}
+
+	// Trial has expired: mark state as expired and strip capabilities.
+	// Free-tier capabilities are granted via tier fallback in license.Service.
+	state.SubscriptionState = SubStateExpired
+	state.Capabilities = nil
+	state.Limits = nil
+	state.MetersEnabled = nil
+	return state
 }

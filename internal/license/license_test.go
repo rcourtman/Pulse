@@ -953,6 +953,7 @@ func TestSubscriptionStateConstants(t *testing.T) {
 		SubStateGrace,
 		SubStateExpired,
 		SubStateSuspended,
+		SubStateCanceled,
 	}
 
 	seen := make(map[string]struct{}, len(states))
@@ -978,6 +979,9 @@ func TestSubscriptionStateConstants(t *testing.T) {
 	}
 	if SubStateSuspended != "suspended" {
 		t.Fatalf("SubStateSuspended = %q, want %q", SubStateSuspended, "suspended")
+	}
+	if SubStateCanceled != "canceled" {
+		t.Fatalf("SubStateCanceled = %q, want %q", SubStateCanceled, "canceled")
 	}
 }
 
@@ -1054,6 +1058,8 @@ type staticEntitlementSource struct {
 	metersEnabled     []string
 	planVersion       string
 	subscriptionState entitlements.SubscriptionState
+	trialStartedAt    *int64
+	trialEndsAt       *int64
 }
 
 func (s staticEntitlementSource) Capabilities() []string {
@@ -1088,6 +1094,14 @@ func (s staticEntitlementSource) SubscriptionState() entitlements.SubscriptionSt
 		return entitlements.SubStateActive
 	}
 	return s.subscriptionState
+}
+
+func (s staticEntitlementSource) TrialStartedAt() *int64 {
+	return s.trialStartedAt
+}
+
+func (s staticEntitlementSource) TrialEndsAt() *int64 {
+	return s.trialEndsAt
 }
 
 func featureSet(features []string) map[string]struct{} {
@@ -1202,7 +1216,8 @@ func TestEvaluatorMatrix(t *testing.T) {
 		if status.Tier != TierPro {
 			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierPro)
 		}
-		assertFeatureSetEq(t, status.Features, []string{FeatureAIPatrol, FeatureAIAutoFix})
+		// Hosted path unions free-tier baseline capabilities with evaluator-provided capabilities.
+		assertFeatureSetEq(t, status.Features, []string{FeatureUpdateAlerts, FeatureSSO, FeatureAIPatrol, FeatureAIAutoFix})
 		if status.MaxNodes != 42 {
 			t.Fatalf("Status().MaxNodes=%d, want %d", status.MaxNodes, 42)
 		}

@@ -96,6 +96,11 @@ func (s *FileBillingStore) billingStatePath(orgID string) (string, error) {
 	if !isValidOrgID(orgID) {
 		return "", fmt.Errorf("invalid organization ID: %s", orgID)
 	}
+	// Default org stores config at the root data dir for backward compatibility,
+	// so billing state for the default org must live alongside other root configs.
+	if orgID == "default" {
+		return filepath.Join(s.resolveDataDir(), "billing.json"), nil
+	}
 	return filepath.Join(s.resolveDataDir(), "orgs", orgID, "billing.json"), nil
 }
 

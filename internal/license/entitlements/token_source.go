@@ -62,3 +62,15 @@ func (t *TokenSource) SubscriptionState() SubscriptionState {
 	}
 	return t.claims.EntitlementSubscriptionState()
 }
+
+// TrialStartedAt returns nil for token-backed entitlements.
+// Trial is managed via billing state, not JWT claims.
+func (t *TokenSource) TrialStartedAt() *int64 {
+	return nil
+}
+
+// TrialEndsAt returns nil for token-backed entitlements.
+// Trial is managed via billing state, not JWT claims.
+func (t *TokenSource) TrialEndsAt() *int64 {
+	return nil
+}

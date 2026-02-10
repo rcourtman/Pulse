@@ -192,7 +192,41 @@ func TestDatabaseSourceFailOpenWithNoCache(t *testing.T) {
 	}
 }
 
+func TestDatabaseSourceTrialExpiryMarksExpiredAndStripsCapabilities(t *testing.T) {
+	expiredAt := time.Now().Add(-1 * time.Hour).Unix()
+	store := &mockBillingStore{
+		state: &BillingState{
+			Capabilities:      []string{"ai_autofix", "relay"},
+			Limits:            map[string]int64{"max_nodes": 50},
+			MetersEnabled:     []string{"active_agents"},
+			PlanVersion:       "trial",
+			SubscriptionState: SubStateTrial,
+			TrialStartedAt:    ptrInt64(time.Now().Add(-15 * 24 * time.Hour).Unix()),
+			TrialEndsAt:       &expiredAt,
+		},
+	}
+
+	source := NewDatabaseSource(store, "org-1", time.Hour)
+
+	if got := source.SubscriptionState(); got != SubStateExpired {
+		t.Fatalf("expected subscription_state %q, got %q", SubStateExpired, got)
+	}
+	if got := source.Capabilities(); got != nil && len(got) != 0 {
+		t.Fatalf("expected capabilities to be stripped on expiry, got %v", got)
+	}
+	if got := source.Limits(); got != nil && len(got) != 0 {
+		t.Fatalf("expected limits to be stripped on expiry, got %v", got)
+	}
+	if got := source.MetersEnabled(); got != nil && len(got) != 0 {
+		t.Fatalf("expected meters_enabled to be stripped on expiry, got %v", got)
+	}
+}
+
 func TestDatabaseSourceImplementsEntitlementSource(t *testing.T) {
 	t.Helper()
 	var _ EntitlementSource = (*DatabaseSource)(nil)
+}
+
+func ptrInt64(v int64) *int64 {
+	return &v
 }
