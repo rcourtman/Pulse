@@ -119,6 +119,7 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 
 | Platform | Command |
 |----------|---------|
+| **LXC** | From Proxmox host: `pct enter <VMID>` then `cat /etc/pulse/.bootstrap_token` or `pulse bootstrap-token` |
 | **Docker** | `docker exec pulse cat /data/.bootstrap_token` or `docker exec pulse /app/pulse bootstrap-token` |
 | **Kubernetes** | `kubectl exec -it <pod> -- cat /data/.bootstrap_token` or `kubectl exec -it <pod> -- /app/pulse bootstrap-token` |
 | **Systemd** | `sudo cat /etc/pulse/.bootstrap_token` or `sudo pulse bootstrap-token` |
