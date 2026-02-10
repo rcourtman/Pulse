@@ -1591,14 +1591,8 @@ func (r *Router) wireAIChatProviders() {
 		log.Debug().Msg("AI chat: Agent profile manager wired")
 	}
 
-	// Wire storage provider
+	// Wire guest config provider (storage provider wiring removed)
 	if r.monitor != nil {
-		storageAdapter := tools.NewStorageMCPAdapter(r.monitor)
-		if storageAdapter != nil {
-			service.SetStorageProvider(storageAdapter)
-			log.Debug().Msg("AI chat: Storage provider wired")
-		}
-
 		guestConfigAdapter := tools.NewGuestConfigMCPAdapter(r.monitor)
 		if guestConfigAdapter != nil {
 			service.SetGuestConfigProvider(guestConfigAdapter)

@@ -218,18 +218,54 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 		}
 	}
 
-	// Find storage pools for this node
-	for _, storage := range state.Storage {
-		if storage.Node == node.Name {
+	// Find storage pools for this node via unified resources
+	// No fallback: if the registry is nil, skip this section.
+	if h.resourceRegistry != nil {
+		for _, r := range h.resourceRegistry.List() {
+			if r.Type != unifiedresources.ResourceTypeStorage {
+				continue
+			}
+			storageNode := r.ParentName
+			if storageNode == "" && len(r.Identity.Hostnames) > 0 {
+				storageNode = r.Identity.Hostnames[0]
+			}
+			if storageNode != node.Name {
+				continue
+			}
+
+			var total, used, available int64
+			var usagePerc float64
+			if r.Metrics != nil && r.Metrics.Disk != nil {
+				if r.Metrics.Disk.Total != nil {
+					total = *r.Metrics.Disk.Total
+				}
+				if r.Metrics.Disk.Used != nil {
+					used = *r.Metrics.Disk.Used
+				}
+				if total > 0 {
+					available = total - used
+				}
+				usagePerc = r.Metrics.Disk.Percent
+				if usagePerc == 0 && total > 0 {
+					usagePerc = (float64(used) / float64(total)) * 100
+				}
+			}
+
+			var storageType, content string
+			if r.Storage != nil {
+				storageType = r.Storage.Type
+				content = r.Storage.Content
+			}
+
 			req.Storage = append(req.Storage, reporting.StorageInfo{
-				Name:      storage.Name,
-				Type:      storage.Type,
-				Status:    storage.Status,
-				Total:     storage.Total,
-				Used:      storage.Used,
-				Available: storage.Free,
-				UsagePerc: storage.Usage,
-				Content:   storage.Content,
+				Name:      r.Name,
+				Type:      storageType,
+				Status:    string(r.Status),
+				Total:     total,
+				Used:      used,
+				Available: available,
+				UsagePerc: usagePerc,
+				Content:   content,
 			})
 		}
 	}
