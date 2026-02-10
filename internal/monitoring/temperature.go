@@ -712,13 +712,33 @@ func extractTempInput(sensorMap map[string]interface{}) float64 {
 			case int:
 				return float64(v)
 			case string:
-				if f, err := strconv.ParseFloat(v, 64); err == nil {
-					return f
+				if parsed, ok := parseStringTemperature(v); ok {
+					return parsed
 				}
 			}
 		}
 	}
 	return math.NaN()
+}
+
+func parseStringTemperature(value string) (float64, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		if _, scanErr := fmt.Sscanf(value, "%f", &parsed); scanErr != nil {
+			return 0, false
+		}
+	}
+
+	if math.Abs(parsed) >= 1000 {
+		parsed = parsed / 1000.0
+	}
+
+	return parsed, true
 }
 
 // extractCoreNumber extracts the core number from a sensor name like "Core 0"

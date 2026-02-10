@@ -119,6 +119,43 @@ func TestTemperatureCollector_ParseSensorsJSON_Complex(t *testing.T) {
 	assert.Equal(t, 60.5, temp.CPUPackage) // Tctl mapped to package
 }
 
+func TestExtractTempInput_StringValues(t *testing.T) {
+	t.Run("parses celsius strings with suffix", func(t *testing.T) {
+		got := extractTempInput(map[string]interface{}{
+			"temp1_input": "+44.5°C",
+		})
+		assert.InDelta(t, 44.5, got, 0.0001)
+	})
+
+	t.Run("parses millidegree strings", func(t *testing.T) {
+		got := extractTempInput(map[string]interface{}{
+			"temp1_input": "39000",
+		})
+		assert.InDelta(t, 39.0, got, 0.0001)
+	})
+}
+
+func TestTemperatureCollector_ParseSensorsJSON_StringTemps(t *testing.T) {
+	tc := &TemperatureCollector{}
+	jsonStr := `{
+		"coretemp-isa-0000": {
+			"Package id 0": { "temp1_input": "+47.0°C" },
+			"Core 0": { "temp2_input": "45.0" }
+		},
+		"nvme-pci-0100": {
+			"Composite": { "temp1_input": "42000" }
+		}
+	}`
+
+	temp, err := tc.parseSensorsJSON(jsonStr)
+	require.NoError(t, err)
+	require.NotNil(t, temp)
+	assert.True(t, temp.Available)
+	assert.InDelta(t, 47.0, temp.CPUPackage, 0.0001)
+	require.Len(t, temp.NVMe, 1)
+	assert.InDelta(t, 42.0, temp.NVMe[0].Temp, 0.0001)
+}
+
 func TestTemperatureCollector_HelperMethods(t *testing.T) {
 	// extractCoreNumber
 	// Private methods are hard to test directly from separate package if using _test,
