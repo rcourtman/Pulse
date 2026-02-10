@@ -12,8 +12,10 @@ import (
 
 func TestListBlockDevices(t *testing.T) {
 	origRun := runCommandOutput
-	t.Cleanup(func() { runCommandOutput = origRun })
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() { runCommandOutput = origRun; runtimeGOOS = origGOOS })
 
+	runtimeGOOS = "linux"
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name != "lsblk" {
 			return nil, errors.New("unexpected command")
@@ -27,6 +29,47 @@ func TestListBlockDevices(t *testing.T) {
 		t.Fatalf("listBlockDevices error: %v", err)
 	}
 	if len(devices) != 2 || devices[0] != "/dev/sda" || devices[1] != "/dev/nvme0n1" {
+		t.Fatalf("unexpected devices: %#v", devices)
+	}
+}
+
+func TestListBlockDevicesFreeBSD(t *testing.T) {
+	origRun := runCommandOutput
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() { runCommandOutput = origRun; runtimeGOOS = origGOOS })
+
+	runtimeGOOS = "freebsd"
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "sysctl" {
+			return nil, errors.New("unexpected command: " + name)
+		}
+		return []byte("ada0 da0 nvd0\n"), nil
+	}
+
+	devices, err := listBlockDevices(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("listBlockDevices error: %v", err)
+	}
+	if len(devices) != 3 || devices[0] != "/dev/ada0" || devices[1] != "/dev/da0" || devices[2] != "/dev/nvd0" {
+		t.Fatalf("unexpected devices: %#v", devices)
+	}
+}
+
+func TestListBlockDevicesFreeBSDWithExcludes(t *testing.T) {
+	origRun := runCommandOutput
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() { runCommandOutput = origRun; runtimeGOOS = origGOOS })
+
+	runtimeGOOS = "freebsd"
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return []byte("ada0 da0 nvd0\n"), nil
+	}
+
+	devices, err := listBlockDevices(context.Background(), []string{"da0"})
+	if err != nil {
+		t.Fatalf("listBlockDevices error: %v", err)
+	}
+	if len(devices) != 2 || devices[0] != "/dev/ada0" || devices[1] != "/dev/nvd0" {
 		t.Fatalf("unexpected devices: %#v", devices)
 	}
 }
