@@ -306,6 +306,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			IncludeServices:     true,
 			IncludeTasks:        true,
 			CollectDiskMetrics:  false,
+			DiskExclude:         cfg.DiskExclude,
 		}
 
 		dockerAgent, err = newDockerAgent(dockerCfg)

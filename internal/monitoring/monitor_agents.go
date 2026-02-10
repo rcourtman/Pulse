@@ -987,6 +987,11 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 
 	disks := make([]models.Disk, 0, len(report.Host.Disks))
 	for _, disk := range report.Host.Disks {
+		// Filter virtual/system filesystems (same as ApplyHostReport) to avoid
+		// inflated disk totals from tmpfs, overlayfs, etc.
+		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip {
+			continue
+		}
 		disks = append(disks, models.Disk{
 			Total:      disk.TotalBytes,
 			Used:       disk.UsedBytes,

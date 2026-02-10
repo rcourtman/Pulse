@@ -50,6 +50,7 @@ type Config struct {
 	IncludeTasks        bool
 	IncludeContainers   bool
 	CollectDiskMetrics  bool
+	DiskExclude         []string // Mount points or path prefixes to exclude from disk monitoring
 	LogLevel            zerolog.Level
 	Logger              *zerolog.Logger
 }
