@@ -108,6 +108,8 @@ func NewStore(config StoreConfig) (*Store, error) {
 			"busy_timeout(30000)",
 			"journal_mode(WAL)",
 			"synchronous(NORMAL)",
+			"auto_vacuum(INCREMENTAL)",
+			"wal_autocheckpoint(1000)",
 		},
 	}.Encode()
 	db, err := sql.Open("sqlite", dsn)
@@ -134,6 +136,10 @@ func NewStore(config StoreConfig) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
+
+	// Clean up stale data from previous runs before starting the background worker.
+	// This prevents accumulation if Pulse was restarted before hourly retention ran.
+	store.runRetention()
 
 	// Start background workers
 	go store.backgroundWorker()
@@ -799,6 +805,16 @@ func (s *Store) runRetention() {
 			Int64("deleted", totalDeleted).
 			Dur("duration", time.Since(start)).
 			Msg("Metrics retention cleanup completed")
+
+		// Reclaim disk space from deleted rows. Without this, the database
+		// file never shrinks — a setup with 50+ resources can bloat to 5GB+
+		// while only holding ~60MB of live data.
+		if _, err := s.db.Exec(`PRAGMA incremental_vacuum(5000)`); err != nil {
+			log.Debug().Err(err).Msg("Incremental vacuum failed")
+		}
+		if _, err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+			log.Debug().Err(err).Msg("WAL checkpoint failed")
+		}
 	}
 }
 
